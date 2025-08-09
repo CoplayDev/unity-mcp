@@ -1,4 +1,5 @@
 from mcp.server.fastmcp import FastMCP, Context
+import time
 from typing import Dict, Any
 from unity_connection import get_unity_connection
 
@@ -40,8 +41,12 @@ def register_manage_editor_tools(mcp: FastMCP):
             }
             params = {k: v for k, v in params.items() if v is not None}
             
-            # Send command to Unity
+            # Send command to Unity (with a single polite retry if reloading)
             response = get_unity_connection().send_command("manage_editor", params)
+            if isinstance(response, dict) and not response.get("success", True) and response.get("state") == "reloading":
+                delay_ms = int(response.get("retry_after_ms", 250))
+                time.sleep(max(0.0, delay_ms / 1000.0))
+                response = get_unity_connection().send_command("manage_editor", params)
 
             # Process response
             if response.get("success"):

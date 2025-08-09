@@ -46,16 +46,22 @@ Restores original files from backup.
 
 ## Finding Unity Package Cache Path
 
-Unity package cache is typically located at:
+Unity stores Git packages under a version-or-hash folder. Expect something like:
 ```
-X:\UnityProject\Library\PackageCache\com.justinpbarnett.unity-mcp@1.0.0
+X:\UnityProject\Library\PackageCache\com.coplaydev.unity-mcp@<version-or-hash>
+```
+Example (hash):
+```
+X:\UnityProject\Library\PackageCache\com.coplaydev.unity-mcp@272123cfd97e
 ```
 
-To find it:
+To find it reliably:
 1. Open Unity Package Manager
 2. Select "Unity MCP" package
-3. Right click on the package and "Show in Explorer"
-4. Navigate to the path above with your username and version
+3. Right click the package and choose "Show in Explorer"
+4. That opens the exact cache folder Unity is using for your project
+
+Note: In recent builds, the Python server sources are also bundled inside the package under `UnityMcpServer~/src`. This is handy for local testing or pointing MCP clients directly at the packaged server.
 
 ## Workflow
 

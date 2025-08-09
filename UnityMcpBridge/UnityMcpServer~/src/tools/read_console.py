@@ -2,6 +2,7 @@
 Defines the read_console tool for accessing Unity Editor console messages.
 """
 from typing import List, Dict, Any
+import time
 from mcp.server.fastmcp import FastMCP, Context
 from unity_connection import get_unity_connection
 
@@ -66,5 +67,10 @@ def register_read_console_tools(mcp: FastMCP):
         if 'count' not in params_dict:
              params_dict['count'] = None 
 
-        # Forward the command using the bridge's send_command method
-        return bridge.send_command("read_console", params_dict) 
+        # Forward the command using the bridge's send_command method (with a single polite retry on reload)
+        resp = bridge.send_command("read_console", params_dict)
+        if isinstance(resp, dict) and not resp.get("success", True) and resp.get("state") == "reloading":
+            delay_ms = int(resp.get("retry_after_ms", 250))
+            time.sleep(max(0.0, delay_ms / 1000.0))
+            resp = bridge.send_command("read_console", params_dict)
+        return resp 

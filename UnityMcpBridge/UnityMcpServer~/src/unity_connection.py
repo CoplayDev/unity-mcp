@@ -2,6 +2,10 @@ import socket
 import json
 import logging
 from dataclasses import dataclass
+from pathlib import Path
+import time
+import random
+import errno
 from typing import Dict, Any
 from config import config
 from port_discovery import PortDiscovery
@@ -105,64 +109,133 @@ class UnityConnection:
             raise
 
     def send_command(self, command_type: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Send a command to Unity and return its response."""
-        if not self.sock and not self.connect():
-            raise ConnectionError("Not connected to Unity")
-        
-        # Special handling for ping command
-        if command_type == "ping":
+        """Send a command with retry/backoff and port rediscovery. Pings only when requested."""
+        # Defensive guard: catch empty/placeholder invocations early
+        if not command_type:
+            raise ValueError("MCP call missing command_type")
+        if params is None:
+            # Return a fast, structured error that clients can display without hanging
+            return {"success": False, "error": "MCP call received with no parameters (client placeholder?)"}
+        attempts = max(config.max_retries, 5)
+        base_backoff = max(0.5, config.retry_delay)
+
+        def read_status_file() -> dict | None:
             try:
-                logger.debug("Sending ping to verify connection")
-                self.sock.sendall(b"ping")
-                response_data = self.receive_full_response(self.sock)
-                response = json.loads(response_data.decode('utf-8'))
-                
-                if response.get("status") != "success":
-                    logger.warning("Ping response was not successful")
-                    self.sock = None
-                    raise ConnectionError("Connection verification failed")
-                    
-                return {"message": "pong"}
-            except Exception as e:
-                logger.error(f"Ping error: {str(e)}")
-                self.sock = None
-                raise ConnectionError(f"Connection verification failed: {str(e)}")
-        
-        # Normal command handling
-        command = {"type": command_type, "params": params or {}}
+                status_files = sorted(Path.home().joinpath('.unity-mcp').glob('unity-mcp-status-*.json'), key=lambda p: p.stat().st_mtime, reverse=True)
+                if not status_files:
+                    return None
+                latest = status_files[0]
+                with latest.open('r') as f:
+                    return json.load(f)
+            except Exception:
+                return None
+
+        last_short_timeout = None
+
+        # Preflight: if Unity reports reloading, return a structured hint so clients can retry politely
         try:
-            # Check for very large content that might cause JSON issues
-            command_size = len(json.dumps(command))
-            
-            if command_size > config.buffer_size / 2:
-                logger.warning(f"Large command detected ({command_size} bytes). This might cause issues.")
-                
-            logger.info(f"Sending command: {command_type} with params size: {command_size} bytes")
-            
-            # Ensure we have a valid JSON string before sending
-            command_json = json.dumps(command, ensure_ascii=False)
-            self.sock.sendall(command_json.encode('utf-8'))
-            
-            response_data = self.receive_full_response(self.sock)
+            status = read_status_file()
+            if status and (status.get('reloading') or status.get('reason') == 'reloading'):
+                return {
+                    "success": False,
+                    "state": "reloading",
+                    "retry_after_ms": int(250),
+                    "error": "Unity domain reload in progress",
+                    "message": "Unity is reloading scripts; please retry shortly"
+                }
+        except Exception:
+            pass
+
+        for attempt in range(attempts + 1):
             try:
-                response = json.loads(response_data.decode('utf-8'))
-            except json.JSONDecodeError as je:
-                logger.error(f"JSON decode error: {str(je)}")
-                # Log partial response for debugging
-                partial_response = response_data.decode('utf-8')[:500] + "..." if len(response_data) > 500 else response_data.decode('utf-8')
-                logger.error(f"Partial response: {partial_response}")
-                raise Exception(f"Invalid JSON response from Unity: {str(je)}")
-            
-            if response.get("status") == "error":
-                error_message = response.get("error") or response.get("message", "Unknown Unity error")
-                logger.error(f"Unity error: {error_message}")
-                raise Exception(error_message)
-            
-            return response.get("result", {})
-        except Exception as e:
-            logger.error(f"Communication error with Unity: {str(e)}")
-            self.sock = None
-            raise Exception(f"Failed to communicate with Unity: {str(e)}")
+                # Ensure connected
+                if not self.sock:
+                    # During retries use short connect timeout
+                    self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    self.sock.settimeout(1.0)
+                    self.sock.connect((self.host, self.port))
+                    # restore steady-state timeout for receive
+                    self.sock.settimeout(config.connection_timeout)
+                    logger.info(f"Connected to Unity at {self.host}:{self.port}")
+
+                # Build payload
+                if command_type == 'ping':
+                    payload = b'ping'
+                else:
+                    command = {"type": command_type, "params": params or {}}
+                    payload = json.dumps(command, ensure_ascii=False).encode('utf-8')
+
+                # Send
+                self.sock.sendall(payload)
+
+                # During retry bursts use a short receive timeout
+                if attempt > 0 and last_short_timeout is None:
+                    last_short_timeout = self.sock.gettimeout()
+                    self.sock.settimeout(1.0)
+                response_data = self.receive_full_response(self.sock)
+                # restore steady-state timeout if changed
+                if last_short_timeout is not None:
+                    self.sock.settimeout(config.connection_timeout)
+                    last_short_timeout = None
+
+                # Parse
+                if command_type == 'ping':
+                    resp = json.loads(response_data.decode('utf-8'))
+                    if resp.get('status') == 'success' and resp.get('result', {}).get('message') == 'pong':
+                        return {"message": "pong"}
+                    raise Exception("Ping unsuccessful")
+
+                resp = json.loads(response_data.decode('utf-8'))
+                if resp.get('status') == 'error':
+                    err = resp.get('error') or resp.get('message', 'Unknown Unity error')
+                    raise Exception(err)
+                return resp.get('result', {})
+            except Exception as e:
+                logger.warning(f"Unity communication attempt {attempt+1} failed: {e}")
+                try:
+                    if self.sock:
+                        self.sock.close()
+                finally:
+                    self.sock = None
+
+                # Re-discover port each time
+                try:
+                    new_port = PortDiscovery.discover_unity_port()
+                    if new_port != self.port:
+                        logger.info(f"Unity port changed {self.port} -> {new_port}")
+                    self.port = new_port
+                except Exception as de:
+                    logger.debug(f"Port discovery failed: {de}")
+
+                if attempt < attempts:
+                    # Heartbeat-aware, jittered backoff
+                    status = read_status_file()
+                    # Base exponential backoff
+                    backoff = base_backoff * (2 ** attempt)
+                    # Decorrelated jitter multiplier
+                    jitter = random.uniform(0.1, 0.3)
+
+                    # Fast‑retry for transient socket failures
+                    fast_error = isinstance(e, (ConnectionRefusedError, ConnectionResetError, TimeoutError))
+                    if not fast_error:
+                        try:
+                            err_no = getattr(e, 'errno', None)
+                            fast_error = err_no in (errno.ECONNREFUSED, errno.ECONNRESET, errno.ETIMEDOUT)
+                        except Exception:
+                            pass
+
+                    # Cap backoff depending on state
+                    if status and status.get('reloading'):
+                        cap = 0.8
+                    elif fast_error:
+                        cap = 0.25
+                    else:
+                        cap = 3.0
+
+                    sleep_s = min(cap, jitter * (2 ** attempt))
+                    time.sleep(sleep_s)
+                    continue
+                raise
 
 # Global Unity connection
 _unity_connection = None

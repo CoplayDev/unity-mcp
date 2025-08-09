@@ -1,6 +1,7 @@
 from mcp.server.fastmcp import FastMCP, Context
 from typing import Dict, Any, List
 from unity_connection import get_unity_connection
+import time
 
 def register_manage_gameobject_tools(mcp: FastMCP):
     """Register all GameObject management tools with the MCP server."""
@@ -126,6 +127,10 @@ def register_manage_gameobject_tools(mcp: FastMCP):
             # Use the get_unity_connection function to retrieve the active connection instance
             # Changed "MANAGE_GAMEOBJECT" to "manage_gameobject" to potentially match Unity expectation
             response = get_unity_connection().send_command("manage_gameobject", params)
+            if isinstance(response, dict) and not response.get("success", True) and response.get("state") == "reloading":
+                delay_ms = int(response.get("retry_after_ms", 250))
+                time.sleep(max(0.0, delay_ms / 1000.0))
+                response = get_unity_connection().send_command("manage_gameobject", params)
 
             # Check if the response indicates success
             # If the response is not successful, raise an exception with the error message

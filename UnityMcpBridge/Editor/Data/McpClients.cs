@@ -9,6 +9,58 @@ namespace UnityMcpBridge.Editor.Data
     {
         public List<McpClient> clients = new()
         {
+            // 1) Cursor
+            new()
+            {
+                name = "Cursor",
+                windowsConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".cursor",
+                    "mcp.json"
+                ),
+                linuxConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".cursor",
+                    "mcp.json"
+                ),
+                mcpType = McpTypes.Cursor,
+                configStatus = "Not Configured",
+            },
+            // 2) Claude Code
+            new()
+            {
+                name = "Claude Code",
+                windowsConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".claude.json"
+                ),
+                linuxConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".claude.json"
+                ),
+                mcpType = McpTypes.ClaudeCode,
+                configStatus = "Not Configured",
+            },
+            // 3) Windsurf
+            new()
+            {
+                name = "Windsurf",
+                windowsConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".codeium",
+                    "windsurf",
+                    "mcp_config.json"
+                ),
+                linuxConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".codeium",
+                    "windsurf",
+                    "mcp_config.json"
+                ),
+                mcpType = McpTypes.Windsurf,
+                configStatus = "Not Configured",
+            },
+            // 4) Claude Desktop
             new()
             {
                 name = "Claude Desktop",
@@ -27,36 +79,7 @@ namespace UnityMcpBridge.Editor.Data
                 mcpType = McpTypes.ClaudeDesktop,
                 configStatus = "Not Configured",
             },
-            new()
-            {
-                name = "Claude Code",
-                windowsConfigPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    ".claude.json"
-                ),
-                linuxConfigPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    ".claude.json"
-                ),
-                mcpType = McpTypes.ClaudeCode,
-                configStatus = "Not Configured",
-            },
-            new()
-            {
-                name = "Cursor",
-                windowsConfigPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    ".cursor",
-                    "mcp.json"
-                ),
-                linuxConfigPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    ".cursor",
-                    "mcp.json"
-                ),
-                mcpType = McpTypes.Cursor,
-                configStatus = "Not Configured",
-            },
+            // 5) VSCode GitHub Copilot
             new()
             {
                 name = "VSCode GitHub Copilot",
@@ -75,24 +98,6 @@ namespace UnityMcpBridge.Editor.Data
                     "settings.json"
                 ),
                 mcpType = McpTypes.VSCode,
-                configStatus = "Not Configured",
-            },
-            new()
-            {
-                name = "Windsurf",
-                windowsConfigPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    ".codeium",
-                    "windsurf",
-                    "mcp_config.json"
-                ),
-                linuxConfigPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    ".codeium",
-                    "windsurf",
-                    "mcp_config.json"
-                ),
-                mcpType = McpTypes.Windsurf,
                 configStatus = "Not Configured",
             },
         };

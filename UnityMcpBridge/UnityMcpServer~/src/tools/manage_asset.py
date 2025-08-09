@@ -6,6 +6,7 @@ from typing import Dict, Any
 from mcp.server.fastmcp import FastMCP, Context
 # from ..unity_connection import get_unity_connection  # Original line that caused error
 from unity_connection import get_unity_connection  # Use absolute import relative to Python dir
+import time
 
 def register_manage_asset_tools(mcp: FastMCP):
     """Registers the manage_asset tool with the MCP server."""
@@ -79,5 +80,14 @@ def register_manage_asset_tools(mcp: FastMCP):
             "manage_asset", # First argument for send_command
             params_dict # Second argument for send_command
         )
+        if isinstance(result, dict) and not result.get("success", True) and result.get("state") == "reloading":
+            delay_ms = int(result.get("retry_after_ms", 250))
+            await asyncio.sleep(max(0.0, delay_ms / 1000.0))
+            result = await loop.run_in_executor(
+                None,
+                connection.send_command,
+                "manage_asset",
+                params_dict
+            )
         # Return the result obtained from Unity
         return result 

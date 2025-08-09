@@ -9,7 +9,7 @@ echo.
 :: Configuration
 set "SCRIPT_DIR=%~dp0"
 set "BRIDGE_SOURCE=%SCRIPT_DIR%UnityMcpBridge"
-set "SERVER_SOURCE=%SCRIPT_DIR%UnityMcpServer\src"
+set "SERVER_SOURCE=%SCRIPT_DIR%UnityMcpBridge\UnityMcpServer~\src"
 set "DEFAULT_BACKUP_DIR=%USERPROFILE%\Desktop\unity-mcp-backup"
 set "DEFAULT_SERVER_PATH=%LOCALAPPDATA%\Programs\UnityMCP\UnityMcpServer\src"
 
@@ -19,7 +19,7 @@ echo.
 
 :: Package cache location
 echo Unity Package Cache Location:
-echo Example: X:\UnityProject\Library\PackageCache\com.justinpbarnett.unity-mcp@1.0.0
+echo Example: X:\UnityProject\Library\PackageCache\com.coplaydev.unity-mcp@1.0.0
 set /p "PACKAGE_CACHE_PATH=Enter Unity package cache path: "
 
 if "%PACKAGE_CACHE_PATH%"=="" (

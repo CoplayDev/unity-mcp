@@ -1,27 +1,33 @@
 from mcp.server.fastmcp import FastMCP, Context
 from typing import Dict, Any
 from unity_connection import get_unity_connection
+import time
 import os
 import base64
 
-def register_manage_shader_tools(mcp: FastMCP):
-    """Register all shader script management tools with the MCP server."""
+def register_manage_script_tools(mcp: FastMCP):
+    """Register all script management tools with the MCP server."""
 
     @mcp.tool()
-    def manage_shader(
+    def manage_script(
         ctx: Context,
         action: str,
         name: str,
         path: str,
         contents: str,
+        script_type: str,
+        namespace: str
     ) -> Dict[str, Any]:
-        """Manages shader scripts in Unity (create, read, update, delete).
+        """Manages C# scripts in Unity (create, read, update, delete).
+        Make reference variables public for easier access in the Unity Editor.
 
         Args:
             action: Operation ('create', 'read', 'update', 'delete').
-            name: Shader name (no .cs extension).
+            name: Script name (no .cs extension).
             path: Asset path (default: "Assets/").
-            contents: Shader code for 'create'/'update'.
+            contents: C# code for 'create'/'update'.
+            script_type: Type hint (e.g., 'MonoBehaviour').
+            namespace: Script namespace.
 
         Returns:
             Dictionary with results ('success', 'message', 'data').
@@ -32,6 +38,8 @@ def register_manage_shader_tools(mcp: FastMCP):
                 "action": action,
                 "name": name,
                 "path": path,
+                "namespace": namespace,
+                "scriptType": script_type
             }
             
             # Base64 encode the contents if they exist to avoid JSON escaping issues
@@ -46,8 +54,12 @@ def register_manage_shader_tools(mcp: FastMCP):
             # Remove None values so they don't get sent as null
             params = {k: v for k, v in params.items() if v is not None}
 
-            # Send command to Unity
-            response = get_unity_connection().send_command("manage_shader", params)
+            # Send command to Unity (with single polite retry if reloading)
+            response = get_unity_connection().send_command("manage_script", params)
+            if isinstance(response, dict) and not response.get("success", True) and response.get("state") == "reloading":
+                delay_ms = int(response.get("retry_after_ms", 250))
+                time.sleep(max(0.0, delay_ms / 1000.0))
+                response = get_unity_connection().send_command("manage_script", params)
             
             # Process response from Unity
             if response.get("success"):
@@ -64,4 +76,4 @@ def register_manage_shader_tools(mcp: FastMCP):
 
         except Exception as e:
             # Handle Python-side errors (e.g., connection issues)
-            return {"success": False, "message": f"Python error managing shader: {str(e)}"}
+            return {"success": False, "message": f"Python error managing script: {str(e)}"}
