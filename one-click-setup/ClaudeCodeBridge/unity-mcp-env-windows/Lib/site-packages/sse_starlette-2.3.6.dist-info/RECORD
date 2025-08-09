@@ -1,0 +1,14 @@
+sse_starlette-2.3.6.dist-info/INSTALLER,sha256=zuuue4knoyJ-UwPPXg8fezS7VCrXJQrAP7zeNuwvFQg,4
+sse_starlette-2.3.6.dist-info/METADATA,sha256=PlXNeVHw0F1qwaUcrLhNCuvxhlYXBk0-McskWVNSodg,10066
+sse_starlette-2.3.6.dist-info/RECORD,,
+sse_starlette-2.3.6.dist-info/WHEEL,sha256=_zCd3N1l69ArxyTb8rzEoP9TpbYXkqRFSNOD5OuxnTs,91
+sse_starlette-2.3.6.dist-info/licenses/AUTHORS,sha256=wv9j0uzxKLvairGyAWgwpdoSQgL7uXFoaFu5lGrtPxo,395
+sse_starlette-2.3.6.dist-info/licenses/LICENSE,sha256=gK9r_Mvr0sFNSquWaVyrmVDhdxkMyA9e-BnpmZaIPo4,1511
+sse_starlette-2.3.6.dist-info/top_level.txt,sha256=-WvV5NMWkq_J766sZPusKqv8pESM-Dxugi96Lp9oer4,14
+sse_starlette/__init__.py,sha256=VWoErqZI1et597ogMbyGjc72cpUfe-FKX8sMDF9VFuM,174
+sse_starlette/__pycache__/__init__.cpython-312.pyc,,
+sse_starlette/__pycache__/event.cpython-312.pyc,,
+sse_starlette/__pycache__/sse.cpython-312.pyc,,
+sse_starlette/event.py,sha256=rqZpR3zxvyLVzuFl6h9YYQZ8sOyWFfACTutGuQYvme0,2193
+sse_starlette/py.typed,sha256=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU,0
+sse_starlette/sse.py,sha256=b3_b5DVEHO-Dn54_Hp1078Fhmulah-fxzDurreqwYLo,9506

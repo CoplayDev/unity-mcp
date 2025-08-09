@@ -1,0 +1,4 @@
+2025-06-07 18:08:23,061 - unity-mcp-server - INFO - Unity MCP Server starting up
+2025-06-07 18:08:23,061 - unity-mcp-server - INFO - Creating new Unity connection
+2025-06-07 18:08:25,091 - unity-mcp-server - ERROR - Failed to connect to Unity: [WinError 10061] No connection could be made because the target machine actively refused it
+2025-06-07 18:08:25,091 - unity-mcp-server - WARNING - Could not connect to Unity on startup: Could not connect to Unity. Ensure the Unity Editor and MCP Bridge are running.
