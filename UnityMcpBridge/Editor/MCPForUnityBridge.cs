@@ -13,6 +13,7 @@ using UnityEngine;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
 using MCPForUnity.Editor.Tools;
+using MCPForUnity.Editor.Tools.MenuItems;
 
 namespace MCPForUnity.Editor
 {
@@ -631,7 +632,7 @@ namespace MCPForUnity.Editor
                     "manage_asset" => ManageAsset.HandleCommand(paramsObject),
                     "manage_shader" => ManageShader.HandleCommand(paramsObject),
                     "read_console" => ReadConsole.HandleCommand(paramsObject),
-                    "execute_menu_item" => ExecuteMenuItem.HandleCommand(paramsObject),
+                    "manage_menu_item" => ManageMenuItem.HandleCommand(paramsObject),
                     _ => throw new ArgumentException(
                         $"Unknown or unsupported command type: {command.type}"
                     ),

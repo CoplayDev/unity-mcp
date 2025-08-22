@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
+using MCPForUnity.Editor.Tools.MenuItems;
 
 namespace MCPForUnity.Editor.Tools
 {
@@ -19,7 +20,7 @@ namespace MCPForUnity.Editor.Tools
             { "HandleManageGameObject", ManageGameObject.HandleCommand },
             { "HandleManageAsset", ManageAsset.HandleCommand },
             { "HandleReadConsole", ReadConsole.HandleCommand },
-            { "HandleExecuteMenuItem", ExecuteMenuItem.HandleCommand },
+            { "HandleManageMenuItem", ManageMenuItem.HandleCommand },
             { "HandleManageShader", ManageShader.HandleCommand},
         };
 

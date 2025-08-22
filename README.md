@@ -42,7 +42,7 @@ MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to 
   *   `manage_asset`: Performs asset operations (import, create, modify, delete, etc.).
   *   `manage_shader`: Performs shader CRUD operations (create, read, modify, delete).
   *   `manage_gameobject`: Manages GameObjects: create, modify, delete, find, and component operations.
-  *   `execute_menu_item`: Executes a menu item via its path (e.g., "File/Save Project").
+  *   `manage_menu_item`: Execute and list Unity Editor menu items (e.g., execute "File/Save Project").
 </details>
 
 ---

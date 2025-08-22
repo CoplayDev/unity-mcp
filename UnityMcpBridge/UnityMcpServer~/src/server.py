@@ -54,18 +54,19 @@ register_all_tools(mcp)
 def asset_creation_strategy() -> str:
     """Guide for discovering and using MCP for Unity tools effectively."""
     return (
-        "Available MCP for Unity Server Tools:\\n\\n"
-        "- `manage_editor`: Controls editor state and queries info.\\n"
-        "- `execute_menu_item`: Executes Unity Editor menu items by path.\\n"
-        "- `read_console`: Reads or clears Unity console messages, with filtering options.\\n"
-        "- `manage_scene`: Manages scenes.\\n"
-        "- `manage_gameobject`: Manages GameObjects in the scene.\\n"
-        "- `manage_script`: Manages C# script files.\\n"
-        "- `manage_asset`: Manages prefabs and assets.\\n"
-        "- `manage_shader`: Manages shaders.\\n\\n"
-        "Tips:\\n"
-        "- Create prefabs for reusable GameObjects.\\n"
-        "- Always include a camera and main light in your scenes.\\n"
+        "Available MCP for Unity Server Tools:\n\n"
+        "- `manage_editor`: Controls editor state and queries info.\n"
+        "- `manage_menu_item`: Executes and lists Unity Editor menu items.\n"
+        "- `read_console`: Reads or clears Unity console messages, with filtering options.\n"
+        "- `manage_scene`: Manages scenes.\n"
+        "- `manage_gameobject`: Manages GameObjects in the scene.\n"
+        "- `manage_script`: Manages C# script files.\n"
+        "- `manage_asset`: Manages prefabs and assets.\n"
+        "- `manage_shader`: Manages shaders.\n\n"
+        "Tips:\n"
+        "- Create prefabs for reusable GameObjects.\n"
+        "- Always include a camera and main light in your scenes.\n"
+        "- List menu items before using them if you are unsure of the menu path.\n"
     )
 
 # Run the server
