@@ -38,8 +38,8 @@ namespace MCPForUnity.Editor.Tools.MenuItems
                         .OfType<MenuItem>()
                         .Select(attr => attr.menuItem))
                     .Where(s => !string.IsNullOrEmpty(s))
-                    .Distinct(StringComparer.Ordinal)
-                    .OrderBy(s => s)
+                    .Distinct(StringComparer.Ordinal) // Ensure no duplicates
+                    .OrderBy(s => s, StringComparer.Ordinal) // Ensure consistent ordering
                     .ToList();
                 return _cached;
             }
