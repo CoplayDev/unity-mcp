@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -11,6 +12,7 @@ namespace MCPForUnity.Editor.Helpers
     {
         private const string RootFolder = "UnityMCP";
         private const string ServerFolder = "UnityMcpServer";
+        private const string VersionFileName = "server_version.txt";
 
         /// <summary>
         /// Ensures the mcp-for-unity-server is installed locally by copying from the embedded package source.
@@ -21,25 +23,74 @@ namespace MCPForUnity.Editor.Helpers
             try
             {
                 string saveLocation = GetSaveLocation();
+                TryCreateMacSymlinkForAppSupport();
                 string destRoot = Path.Combine(saveLocation, ServerFolder);
                 string destSrc = Path.Combine(destRoot, "src");
 
-                if (File.Exists(Path.Combine(destSrc, "server.py")))
-                {
-                    return; // Already installed
-                }
+                // Detect legacy installs and version state (logs)
+                DetectAndLogLegacyInstallStates(destRoot);
 
+                // Resolve embedded source and versions
                 if (!TryGetEmbeddedServerSource(out string embeddedSrc))
                 {
                     throw new Exception("Could not find embedded UnityMcpServer/src in the package.");
                 }
+                string embeddedVer = ReadVersionFile(Path.Combine(embeddedSrc, VersionFileName)) ?? "unknown";
+                string installedVer = ReadVersionFile(Path.Combine(destSrc, VersionFileName));
+
+                bool destHasServer = File.Exists(Path.Combine(destSrc, "server.py"));
+                bool needOverwrite = !destHasServer
+                                     || string.IsNullOrEmpty(installedVer)
+                                     || (!string.IsNullOrEmpty(embeddedVer) && CompareSemverSafe(installedVer, embeddedVer) < 0);
 
                 // Ensure destination exists
                 Directory.CreateDirectory(destRoot);
 
-                // Copy the entire UnityMcpServer folder (parent of src)
-                string embeddedRoot = Path.GetDirectoryName(embeddedSrc) ?? embeddedSrc; // go up from src to UnityMcpServer
-                CopyDirectoryRecursive(embeddedRoot, destRoot);
+                if (needOverwrite)
+                {
+                    // Copy the entire UnityMcpServer folder (parent of src)
+                    string embeddedRoot = Path.GetDirectoryName(embeddedSrc) ?? embeddedSrc; // go up from src to UnityMcpServer
+                    CopyDirectoryRecursive(embeddedRoot, destRoot);
+                    // Write/refresh version file
+                    try { File.WriteAllText(Path.Combine(destSrc, VersionFileName), embeddedVer ?? "unknown"); } catch { }
+                    McpLog.Info($"Installed/updated server to {destRoot} (version {embeddedVer}).");
+                }
+
+                // Cleanup legacy installs that are missing version or older than embedded
+                foreach (var legacyRoot in GetLegacyRootsForDetection())
+                {
+                    try
+                    {
+                        string legacySrc = Path.Combine(legacyRoot, "src");
+                        if (!File.Exists(Path.Combine(legacySrc, "server.py"))) continue;
+                        string legacyVer = ReadVersionFile(Path.Combine(legacySrc, VersionFileName));
+                        bool legacyOlder = string.IsNullOrEmpty(legacyVer)
+                                           || (!string.IsNullOrEmpty(embeddedVer) && CompareSemverSafe(legacyVer, embeddedVer) < 0);
+                        if (legacyOlder)
+                        {
+                            TryKillUvForPath(legacySrc);
+                            try
+                            {
+                                Directory.Delete(legacyRoot, recursive: true);
+                                McpLog.Info($"Removed legacy server at '{legacyRoot}'.");
+                            }
+                            catch (Exception ex)
+                            {
+                                McpLog.Warn($"Failed to remove legacy server at '{legacyRoot}': {ex.Message}");
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                // Clear overrides that might point at legacy locations
+                try
+                {
+                    EditorPrefs.DeleteKey("MCPForUnity.ServerSrc");
+                    EditorPrefs.DeleteKey("MCPForUnity.PythonDirOverride");
+                }
+                catch { }
+                return;
             }
             catch (Exception ex)
             {
@@ -49,11 +100,11 @@ namespace MCPForUnity.Editor.Helpers
 
                 if (hasInstalled || TryGetEmbeddedServerSource(out _))
                 {
-                    Debug.LogWarning($"MCP for Unity: Using existing server; skipped install. Details: {ex.Message}");
+                    McpLog.Warn($"Using existing server; skipped install. Details: {ex.Message}");
                     return;
                 }
 
-                Debug.LogError($"Failed to ensure server installation: {ex.Message}");
+                McpLog.Error($"Failed to ensure server installation: {ex.Message}");
             }
         }
 
@@ -69,9 +120,10 @@ namespace MCPForUnity.Editor.Helpers
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
+                // Use per-user LocalApplicationData for canonical install location
                 var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
                                    ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) ?? string.Empty, "AppData", "Local");
-                return Path.Combine(localAppData, "Programs", RootFolder);
+                return Path.Combine(localAppData, RootFolder);
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
@@ -85,13 +137,58 @@ namespace MCPForUnity.Editor.Helpers
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
-                // Use Application Support for a stable, user-writable location
-                return Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    RootFolder
-                );
+                // On macOS, use LocalApplicationData (~/Library/Application Support)
+                var localAppSupport = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                // Unity/Mono may map LocalApplicationData to ~/.local/share on macOS; normalize to Application Support
+                bool looksLikeXdg = !string.IsNullOrEmpty(localAppSupport) && localAppSupport.Replace('\\', '/').Contains("/.local/share");
+                if (string.IsNullOrEmpty(localAppSupport) || looksLikeXdg)
+                {
+                    // Fallback: construct from $HOME
+                    var home = Environment.GetFolderPath(Environment.SpecialFolder.Personal) ?? string.Empty;
+                    localAppSupport = Path.Combine(home, "Library", "Application Support");
+                }
+                TryCreateMacSymlinkForAppSupport();
+                return Path.Combine(localAppSupport, RootFolder);
             }
             throw new Exception("Unsupported operating system.");
+        }
+
+        /// <summary>
+        /// On macOS, create a no-spaces symlink ~/Library/AppSupport -> ~/Library/Application Support
+        /// to mitigate arg parsing and quoting issues in some MCP clients.
+        /// Safe to call repeatedly.
+        /// </summary>
+        private static void TryCreateMacSymlinkForAppSupport()
+        {
+            try
+            {
+                if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) return;
+                string home = Environment.GetFolderPath(Environment.SpecialFolder.Personal) ?? string.Empty;
+                if (string.IsNullOrEmpty(home)) return;
+
+                string canonical = Path.Combine(home, "Library", "Application Support");
+                string symlink = Path.Combine(home, "Library", "AppSupport");
+
+                // If symlink exists already, nothing to do
+                if (Directory.Exists(symlink) || File.Exists(symlink)) return;
+
+                // Create symlink only if canonical exists
+                if (!Directory.Exists(canonical)) return;
+
+                // Use 'ln -s' to create a directory symlink (macOS)
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "/bin/ln",
+                    Arguments = $"-s \"{canonical}\" \"{symlink}\"",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                using var p = System.Diagnostics.Process.Start(psi);
+                p?.WaitForExit(2000);
+            }
+            catch { /* best-effort */ }
         }
 
         private static bool IsDirectoryWritable(string path)
@@ -115,6 +212,173 @@ namespace MCPForUnity.Editor.Helpers
         {
             return Directory.Exists(location)
                 && File.Exists(Path.Combine(location, ServerFolder, "src", "server.py"));
+        }
+
+        /// <summary>
+        /// Detects legacy installs or older versions and logs findings (no deletion yet).
+        /// </summary>
+        private static void DetectAndLogLegacyInstallStates(string canonicalRoot)
+        {
+            try
+            {
+                string canonicalSrc = Path.Combine(canonicalRoot, "src");
+                // Normalize canonical root for comparisons
+                string normCanonicalRoot = NormalizePathSafe(canonicalRoot);
+                string embeddedSrc = null;
+                TryGetEmbeddedServerSource(out embeddedSrc);
+
+                string embeddedVer = ReadVersionFile(Path.Combine(embeddedSrc ?? string.Empty, VersionFileName));
+                string installedVer = ReadVersionFile(Path.Combine(canonicalSrc, VersionFileName));
+
+                // Legacy paths (macOS/Linux .config; Windows roaming as example)
+                foreach (var legacyRoot in GetLegacyRootsForDetection())
+                {
+                    // Skip logging for the canonical root itself
+                    if (PathsEqualSafe(legacyRoot, normCanonicalRoot))
+                        continue;
+                    string legacySrc = Path.Combine(legacyRoot, "src");
+                    bool hasServer = File.Exists(Path.Combine(legacySrc, "server.py"));
+                    string legacyVer = ReadVersionFile(Path.Combine(legacySrc, VersionFileName));
+
+                    if (hasServer)
+                    {
+                        // Case 1: No version file
+                        if (string.IsNullOrEmpty(legacyVer))
+                        {
+                            McpLog.Info("Detected legacy install without version file at: " + legacyRoot, always: false);
+                        }
+
+                        // Case 2: Lives in legacy path
+                        McpLog.Info("Detected legacy install path: " + legacyRoot, always: false);
+
+                        // Case 3: Has version but appears older than embedded
+                        if (!string.IsNullOrEmpty(embeddedVer) && !string.IsNullOrEmpty(legacyVer) && CompareSemverSafe(legacyVer, embeddedVer) < 0)
+                        {
+                            McpLog.Info($"Legacy install version {legacyVer} is older than embedded {embeddedVer}", always: false);
+                        }
+                    }
+                }
+
+                // Also log if canonical is missing version (treated as older)
+                if (Directory.Exists(canonicalRoot))
+                {
+                    if (string.IsNullOrEmpty(installedVer))
+                    {
+                        McpLog.Info("Canonical install missing version file (treat as older). Path: " + canonicalRoot, always: false);
+                    }
+                    else if (!string.IsNullOrEmpty(embeddedVer) && CompareSemverSafe(installedVer, embeddedVer) < 0)
+                    {
+                        McpLog.Info($"Canonical install version {installedVer} is older than embedded {embeddedVer}", always: false);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                McpLog.Warn("Detect legacy/version state failed: " + ex.Message);
+            }
+        }
+
+        private static string NormalizePathSafe(string path)
+        {
+            try { return string.IsNullOrEmpty(path) ? path : Path.GetFullPath(path.Trim()); }
+            catch { return path; }
+        }
+
+        private static bool PathsEqualSafe(string a, string b)
+        {
+            if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return false;
+            string na = NormalizePathSafe(a);
+            string nb = NormalizePathSafe(b);
+            try
+            {
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    return string.Equals(na, nb, StringComparison.OrdinalIgnoreCase);
+                }
+                return string.Equals(na, nb, StringComparison.Ordinal);
+            }
+            catch { return false; }
+        }
+
+        private static IEnumerable<string> GetLegacyRootsForDetection()
+        {
+            var roots = new System.Collections.Generic.List<string>();
+            string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) ?? string.Empty;
+            // macOS/Linux legacy
+            roots.Add(Path.Combine(home, ".config", "UnityMCP", "UnityMcpServer"));
+            roots.Add(Path.Combine(home, ".local", "share", "UnityMCP", "UnityMcpServer"));
+            // Windows roaming example
+            try
+            {
+                string roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) ?? string.Empty;
+                if (!string.IsNullOrEmpty(roaming))
+                    roots.Add(Path.Combine(roaming, "UnityMCP", "UnityMcpServer"));
+            }
+            catch { }
+            return roots;
+        }
+
+        private static void TryKillUvForPath(string serverSrcPath)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(serverSrcPath)) return;
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
+
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "/usr/bin/pgrep",
+                    Arguments = $"-f \"uv .*--directory {serverSrcPath}\"",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                using var p = System.Diagnostics.Process.Start(psi);
+                if (p == null) return;
+                string outp = p.StandardOutput.ReadToEnd();
+                p.WaitForExit(1500);
+                if (p.ExitCode == 0 && !string.IsNullOrEmpty(outp))
+                {
+                    foreach (var line in outp.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        if (int.TryParse(line.Trim(), out int pid))
+                        {
+                            try { System.Diagnostics.Process.GetProcessById(pid).Kill(); } catch { }
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private static string ReadVersionFile(string path)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
+                string v = File.ReadAllText(path).Trim();
+                return string.IsNullOrEmpty(v) ? null : v;
+            }
+            catch { return null; }
+        }
+
+        private static int CompareSemverSafe(string a, string b)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return 0;
+                var ap = a.Split('.');
+                var bp = b.Split('.');
+                for (int i = 0; i < Math.Max(ap.Length, bp.Length); i++)
+                {
+                    int ai = (i < ap.Length && int.TryParse(ap[i], out var t1)) ? t1 : 0;
+                    int bi = (i < bp.Length && int.TryParse(bp[i], out var t2)) ? t2 : 0;
+                    if (ai != bi) return ai.CompareTo(bi);
+                }
+                return 0;
+            }
+            catch { return 0; }
         }
 
         /// <summary>

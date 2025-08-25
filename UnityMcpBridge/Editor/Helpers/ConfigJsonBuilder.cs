@@ -50,7 +50,41 @@ namespace MCPForUnity.Editor.Helpers
         private static void PopulateUnityNode(JObject unity, string uvPath, string directory, McpClient client, bool isVSCode)
         {
             unity["command"] = uvPath;
-            unity["args"] = JArray.FromObject(new[] { "run", "--directory", directory, "server.py" });
+
+            // For Cursor (non-VSCode) on macOS, prefer a no-spaces symlink path to avoid arg parsing issues in some runners
+            string effectiveDir = directory;
+#if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
+            bool isCursor = !isVSCode && (client == null || client.mcpType != Models.McpTypes.VSCode);
+            if (isCursor && !string.IsNullOrEmpty(directory))
+            {
+                // Replace canonical path segment with the symlink path if present
+                const string canonical = "/Library/Application Support/";
+                const string symlinkSeg = "/Library/AppSupport/";
+                try
+                {
+                    // Normalize to full path style
+                    if (directory.Contains(canonical))
+                    {
+                        effectiveDir = directory.Replace(canonical, symlinkSeg);
+                    }
+                    else
+                    {
+                        // If installer returned XDG-style on macOS, map to canonical symlink
+                        string norm = directory.Replace('\\', '/');
+                        int idx = norm.IndexOf("/.local/share/UnityMCP/", System.StringComparison.Ordinal);
+                        if (idx >= 0)
+                        {
+                            string home = System.Environment.GetFolderPath(System.Environment.SpecialFolder.Personal) ?? string.Empty;
+                            string suffix = norm.Substring(idx + "/.local/share/".Length); // UnityMCP/...
+                            effectiveDir = System.IO.Path.Combine(home, "Library", "AppSupport", suffix).Replace('\\', '/');
+                        }
+                    }
+                }
+                catch { /* fallback to original directory on any error */ }
+            }
+#endif
+
+            unity["args"] = JArray.FromObject(new[] { "run", "--directory", effectiveDir, "server.py" });
 
             if (isVSCode)
             {

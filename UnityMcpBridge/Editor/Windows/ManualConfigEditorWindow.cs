@@ -116,10 +116,13 @@ namespace MCPForUnity.Editor.Windows
                 {
                     displayPath = mcpClient.windowsConfigPath;
                 }
-                else if (
-                    RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
-                    || RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
-                )
+                else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                {
+                    displayPath = string.IsNullOrEmpty(mcpClient.macConfigPath)
+                        ? mcpClient.linuxConfigPath
+                        : mcpClient.macConfigPath;
+                }
+                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
                     displayPath = mcpClient.linuxConfigPath;
                 }

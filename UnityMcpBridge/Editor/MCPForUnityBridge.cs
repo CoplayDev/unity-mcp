@@ -310,7 +310,9 @@ namespace MCPForUnity.Editor
 
                     isRunning = true;
                     isAutoConnectMode = false;
-                    Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: MCPForUnityBridge started on port {currentUnityPort}.");
+                    string platform = Application.platform.ToString();
+                    string serverVer = ReadInstalledServerVersionSafe();
+                    Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: MCPForUnityBridge started on port {currentUnityPort}. (OS={platform}, server={serverVer})");
                     Task.Run(ListenerLoop);
                     EditorApplication.update += ProcessCommands;
                     // Write initial heartbeat immediately
@@ -725,6 +727,22 @@ namespace MCPForUnity.Editor
             {
                 // Best-effort only
             }
+        }
+
+        private static string ReadInstalledServerVersionSafe()
+        {
+            try
+            {
+                string serverSrc = ServerInstaller.GetServerPath();
+                string verFile = Path.Combine(serverSrc, "server_version.txt");
+                if (File.Exists(verFile))
+                {
+                    string v = File.ReadAllText(verFile)?.Trim();
+                    if (!string.IsNullOrEmpty(v)) return v;
+                }
+            }
+            catch { }
+            return "unknown";
         }
 
         private static string ComputeProjectHash(string input)
