@@ -233,7 +233,13 @@ def _err(code: str, message: str, *, expected: Dict[str, Any] | None = None, rew
 
 def register_manage_script_edits_tools(mcp: FastMCP):
     @mcp.tool(description=(
-        "Apply targeted edits to an existing C# script (no full-file overwrite).\n\n"
+        "Structured C# edits (methods/classes) with safer boundaries — prefer this over raw text.\n\n"
+        "Best practices:\n"
+        "- Prefer anchor_* ops for pattern-based insert/replace near stable markers\n"
+        "- Use replace_method/delete_method for whole-method changes (keeps signatures balanced)\n"
+        "- Avoid whole-file regex deletes; validators will guard unbalanced braces\n"
+        "- For tail insertions, prefer anchor/regex_replace on final brace (class closing)\n"
+        "- Pass options.validate='standard' for structural checks; 'relaxed' for interior-only edits\n\n"
         "Canonical fields (use these exact keys):\n"
         "- op: replace_method | insert_method | delete_method | anchor_insert | anchor_delete | anchor_replace\n"
         "- className: string (defaults to 'name' if omitted on method/class ops)\n"
