@@ -61,13 +61,24 @@ def register_manage_script_tools(mcp: FastMCP):
 
     @mcp.tool(description=(
         "Apply small text edits to a C# script identified by URI.\n\n"
+        "⚠️ IMPORTANT: This tool replaces EXACT character positions. Always verify content at target lines/columns BEFORE editing!\n"
+        "Common mistakes:\n"
+        "- Assuming what's on a line without checking\n"
+        "- Using wrong line numbers (they're 1-indexed)\n"
+        "- Miscounting column positions (also 1-indexed, tabs count as 1)\n\n"
+        "RECOMMENDED WORKFLOW:\n"
+        "1) First call resources/read with start_line/line_count to verify exact content\n"
+        "2) Count columns carefully (or use find_in_file to locate patterns)\n"
+        "3) Apply your edit with precise coordinates\n"
+        "4) Consider script_apply_edits with anchors for safer pattern-based replacements\n\n"
         "Args:\n"
         "- uri: unity://path/Assets/... or file://... or Assets/...\n"
-        "- edits: list of {startLine,startCol,endLine,endCol,newText}\n"
-        "- precondition_sha256: optional SHA of current file (whole-file)\n\n"
+        "- edits: list of {startLine,startCol,endLine,endCol,newText} (1-indexed!)\n"
+        "- precondition_sha256: optional SHA of current file (prevents concurrent edit conflicts)\n\n"
         "Notes:\n"
-        "- Path is computed from the URI; it must resolve under Assets/.\n"
-        "- This tool is for precise ranges; for method/class ops use script_apply_edits.\n"
+        "- Path must resolve under Assets/\n"
+        "- For method/class operations, use script_apply_edits (safer, structured edits)\n"
+        "- For pattern-based replacements, consider anchor operations in script_apply_edits\n"
     ))
     def apply_text_edits(
         ctx: Context,
