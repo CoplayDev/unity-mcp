@@ -25,33 +25,33 @@ namespace MCPForUnity.Editor.Helpers
 
                 if (!EditorPrefs.GetBool(key, false) || legacyPresent || canonicalMissing)
                 {
+                    // Marshal the entire flow to the main thread. EnsureServerInstalled may touch Unity APIs.
                     EditorApplication.delayCall += () =>
                     {
-                        // Offload heavy I/O to a background thread, marshal back to main thread for Unity APIs
-                        System.Threading.Tasks.Task.Run(() =>
+                        string error = null;
+                        System.Exception capturedEx = null;
+                        try
                         {
-                            string error = null;
-                            System.Exception capturedEx = null;
-                            try
-                            {
-                                ServerInstaller.EnsureServerInstalled();
-                            }
-                            catch (System.Exception ex)
-                            {
-                                error = ex.Message;
-                                capturedEx = ex;
-                            }
+                            // Ensure any UnityEditor API usage inside runs on the main thread
+                            ServerInstaller.EnsureServerInstalled();
+                        }
+                        catch (System.Exception ex)
+                        {
+                            error = ex.Message;
+                            capturedEx = ex;
+                        }
 
-                            EditorApplication.delayCall += () =>
-                            {
-                                try { EditorPrefs.SetBool(key, true); } catch { }
-                                if (!string.IsNullOrEmpty(error))
-                                {
-                                    Debug.LogWarning($"MCP for Unity: Auto-detect on load failed: {capturedEx}");
-                                    // Alternatively: Debug.LogException(capturedEx);
-                                }
-                            };
-                        });
+                        // Unity APIs must stay on main thread
+                        try { EditorPrefs.SetBool(key, true); } catch { }
+                        // Ensure prefs cleanup happens on main thread
+                        try { EditorPrefs.DeleteKey("MCPForUnity.ServerSrc"); } catch { }
+                        try { EditorPrefs.DeleteKey("MCPForUnity.PythonDirOverride"); } catch { }
+
+                        if (!string.IsNullOrEmpty(error))
+                        {
+                            Debug.LogWarning($"MCP for Unity: Auto-detect on load failed: {capturedEx}");
+                            // Alternatively: Debug.LogException(capturedEx);
+                        }
                     };
                 }
             }
