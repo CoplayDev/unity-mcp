@@ -344,7 +344,7 @@ namespace MCPForUnity.Editor
                     // Mark as stopping early to avoid accept logging during disposal
                     isRunning = false;
                     // Mark heartbeat one last time before stopping
-                    WriteHeartbeat(false);
+                    WriteHeartbeat(false, "stopped");
                     listener?.Stop();
                     listener = null;
                     EditorApplication.update -= ProcessCommands;
@@ -431,7 +431,6 @@ namespace MCPForUnity.Editor
                     return; // abort this client
                 }
 
-                byte[] buffer = new byte[8192];
                 while (isRunning)
                 {
                     try
@@ -562,10 +561,7 @@ namespace MCPForUnity.Editor
                 throw new System.IO.IOException($"Invalid framed length: {payloadLen}");
             }
             if (payloadLen == 0UL)
-            {
-                // Allow zero-length frames (e.g., heartbeats/empty responses)
-                return string.Empty;
-            }
+                throw new System.IO.IOException("Zero-length frames are not allowed");
             if (payloadLen > int.MaxValue)
             {
                 throw new System.IO.IOException("Frame too large for buffer");
@@ -606,118 +602,115 @@ namespace MCPForUnity.Editor
 
         private static void ProcessCommands()
         {
-            List<string> processedIds = new();
+            // Heartbeat without holding the queue lock
+            double now = EditorApplication.timeSinceStartup;
+            if (now >= nextHeartbeatAt)
+            {
+                WriteHeartbeat(false);
+                nextHeartbeatAt = now + 0.5f;
+            }
+
+            // Snapshot under lock, then process outside to reduce contention
+            List<(string id, string text, TaskCompletionSource<string> tcs)> work;
             lock (lockObj)
             {
-                // Periodic heartbeat while editor is idle/processing
-                double now = EditorApplication.timeSinceStartup;
-                if (now >= nextHeartbeatAt)
+                work = commandQueue
+                    .Select(kvp => (kvp.Key, kvp.Value.commandJson, kvp.Value.tcs))
+                    .ToList();
+            }
+
+            foreach (var item in work)
+            {
+                string id = item.id;
+                string commandText = item.text;
+                TaskCompletionSource<string> tcs = item.tcs;
+
+                try
                 {
-                    WriteHeartbeat(false);
-                    nextHeartbeatAt = now + 0.5f;
-                }
-
-                foreach (
-                    KeyValuePair<
-                        string,
-                        (string commandJson, TaskCompletionSource<string> tcs)
-                    > kvp in commandQueue.ToList()
-                )
-                {
-                    string id = kvp.Key;
-                    string commandText = kvp.Value.commandJson;
-                    TaskCompletionSource<string> tcs = kvp.Value.tcs;
-
-                    try
+                    // Special case handling
+                    if (string.IsNullOrEmpty(commandText))
                     {
-                        // Special case handling
-                        if (string.IsNullOrEmpty(commandText))
-                        {
-                            var emptyResponse = new
-                            {
-                                status = "error",
-                                error = "Empty command received",
-                            };
-                            tcs.SetResult(JsonConvert.SerializeObject(emptyResponse));
-                            processedIds.Add(id);
-                            continue;
-                        }
-
-                        // Trim the command text to remove any whitespace
-                        commandText = commandText.Trim();
-
-                        // Non-JSON direct commands handling (like ping)
-                        if (commandText == "ping")
-                        {
-                            var pingResponse = new
-                            {
-                                status = "success",
-                                result = new { message = "pong" },
-                            };
-                            tcs.SetResult(JsonConvert.SerializeObject(pingResponse));
-                            processedIds.Add(id);
-                            continue;
-                        }
-
-                        // Check if the command is valid JSON before attempting to deserialize
-                        if (!IsValidJson(commandText))
-                        {
-                            var invalidJsonResponse = new
-                            {
-                                status = "error",
-                                error = "Invalid JSON format",
-                                receivedText = commandText.Length > 50
-                                    ? commandText[..50] + "..."
-                                    : commandText,
-                            };
-                            tcs.SetResult(JsonConvert.SerializeObject(invalidJsonResponse));
-                            processedIds.Add(id);
-                            continue;
-                        }
-
-                        // Normal JSON command processing
-                        Command command = JsonConvert.DeserializeObject<Command>(commandText);
-                        
-                        if (command == null)
-                        {
-                            var nullCommandResponse = new
-                            {
-                                status = "error",
-                                error = "Command deserialized to null",
-                                details = "The command was valid JSON but could not be deserialized to a Command object",
-                            };
-                            tcs.SetResult(JsonConvert.SerializeObject(nullCommandResponse));
-                        }
-                        else
-                        {
-                            string responseJson = ExecuteCommand(command);
-                            tcs.SetResult(responseJson);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogError($"Error processing command: {ex.Message}\n{ex.StackTrace}");
-
-                        var response = new
+                        var emptyResponse = new
                         {
                             status = "error",
-                            error = ex.Message,
-                            commandType = "Unknown (error during processing)",
-                            receivedText = commandText?.Length > 50
+                            error = "Empty command received",
+                        };
+                        tcs.SetResult(JsonConvert.SerializeObject(emptyResponse));
+                        // Remove quickly under lock
+                        lock (lockObj) { commandQueue.Remove(id); }
+                        continue;
+                    }
+
+                    // Trim the command text to remove any whitespace
+                    commandText = commandText.Trim();
+
+                    // Non-JSON direct commands handling (like ping)
+                    if (commandText == "ping")
+                    {
+                        var pingResponse = new
+                        {
+                            status = "success",
+                            result = new { message = "pong" },
+                        };
+                        tcs.SetResult(JsonConvert.SerializeObject(pingResponse));
+                        lock (lockObj) { commandQueue.Remove(id); }
+                        continue;
+                    }
+
+                    // Check if the command is valid JSON before attempting to deserialize
+                    if (!IsValidJson(commandText))
+                    {
+                        var invalidJsonResponse = new
+                        {
+                            status = "error",
+                            error = "Invalid JSON format",
+                            receivedText = commandText.Length > 50
                                 ? commandText[..50] + "..."
                                 : commandText,
                         };
-                        string responseJson = JsonConvert.SerializeObject(response);
-                        tcs.SetResult(responseJson);
+                        tcs.SetResult(JsonConvert.SerializeObject(invalidJsonResponse));
+                        lock (lockObj) { commandQueue.Remove(id); }
+                        continue;
                     }
 
-                    processedIds.Add(id);
+                    // Normal JSON command processing
+                    Command command = JsonConvert.DeserializeObject<Command>(commandText);
+
+                    if (command == null)
+                    {
+                        var nullCommandResponse = new
+                        {
+                            status = "error",
+                            error = "Command deserialized to null",
+                            details = "The command was valid JSON but could not be deserialized to a Command object",
+                        };
+                        tcs.SetResult(JsonConvert.SerializeObject(nullCommandResponse));
+                    }
+                    else
+                    {
+                        string responseJson = ExecuteCommand(command);
+                        tcs.SetResult(responseJson);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"Error processing command: {ex.Message}\n{ex.StackTrace}");
+
+                    var response = new
+                    {
+                        status = "error",
+                        error = ex.Message,
+                        commandType = "Unknown (error during processing)",
+                        receivedText = commandText?.Length > 50
+                            ? commandText[..50] + "..."
+                            : commandText,
+                    };
+                    string responseJson = JsonConvert.SerializeObject(response);
+                    tcs.SetResult(responseJson);
                 }
 
-                foreach (string id in processedIds)
-                {
-                    commandQueue.Remove(id);
-                }
+                // Remove quickly under lock
+                lock (lockObj) { commandQueue.Remove(id); }
             }
         }
 

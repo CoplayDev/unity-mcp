@@ -27,15 +27,31 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     EditorApplication.delayCall += () =>
                     {
-                        try
+                        // Offload heavy I/O to a background thread, marshal back to main thread for Unity APIs
+                        System.Threading.Tasks.Task.Run(() =>
                         {
-                            ServerInstaller.EnsureServerInstalled();
-                            EditorPrefs.SetBool(key, true);
-                        }
-                        catch (System.Exception ex)
-                        {
-                            Debug.LogWarning("MCP for Unity: Auto-detect on load failed: " + ex.Message);
-                        }
+                            string error = null;
+                            System.Exception capturedEx = null;
+                            try
+                            {
+                                ServerInstaller.EnsureServerInstalled();
+                            }
+                            catch (System.Exception ex)
+                            {
+                                error = ex.Message;
+                                capturedEx = ex;
+                            }
+
+                            EditorApplication.delayCall += () =>
+                            {
+                                try { EditorPrefs.SetBool(key, true); } catch { }
+                                if (!string.IsNullOrEmpty(error))
+                                {
+                                    Debug.LogWarning($"MCP for Unity: Auto-detect on load failed: {capturedEx}");
+                                    // Alternatively: Debug.LogException(capturedEx);
+                                }
+                            };
+                        });
                     };
                 }
             }

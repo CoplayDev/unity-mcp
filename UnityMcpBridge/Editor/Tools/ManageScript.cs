@@ -482,7 +482,7 @@ namespace MCPForUnity.Editor.Tools
         /// <summary>
         /// Apply simple text edits specified by line/column ranges. Applies transactionally and validates result.
         /// </summary>
-        private const int MaxEditPayloadBytes = 15 * 1024;
+        private const int MaxEditPayloadBytes = 64 * 1024;
 
         private static object ApplyTextEdits(
             string fullPath,

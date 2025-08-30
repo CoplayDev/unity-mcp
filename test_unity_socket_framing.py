@@ -8,6 +8,7 @@ try:
 except (IndexError, ValueError):
     SIZE_MB = 5  # e.g., 5 or 10
 FILL = "R"
+MAX_FRAME = 64 * 1024 * 1024
 
 def recv_exact(sock, n):
     buf = bytearray(n)
@@ -45,6 +46,9 @@ def recv_legacy_json(sock, timeout=60):
             return data
 
 def main():
+    # Cap filler to stay within framing limit (reserve small overhead for JSON)
+    safe_max = max(1, MAX_FRAME - 4096)
+    filler_len = min(SIZE_MB * 1024 * 1024, safe_max)
     body = {
         "type": "read_console",
         "params": {
@@ -53,7 +57,7 @@ def main():
             "count": 1000,
             "format": "detailed",
             "includeStacktrace": True,
-            "filterText": FILL * (SIZE_MB * 1024 * 1024)
+            "filterText": FILL * filler_len
         }
     }
     body_bytes = json.dumps(body, ensure_ascii=False).encode("utf-8")
@@ -77,7 +81,7 @@ def main():
             s.sendall(header + body_bytes)
             resp_len = struct.unpack(">Q", recv_exact(s, 8))[0]
             print(f"Response framed length: {resp_len}")
-            MAX_RESP = 128 * 1024 * 1024
+            MAX_RESP = MAX_FRAME
             if resp_len <= 0 or resp_len > MAX_RESP:
                 raise RuntimeError(f"invalid framed length: {resp_len} (max {MAX_RESP})")
             resp = recv_exact(s, resp_len)

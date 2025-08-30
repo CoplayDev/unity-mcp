@@ -36,7 +36,7 @@ public class LongUnityScriptClaudeTest : MonoBehaviour
     {
         if (reachOrigin == null) return null;
         // Dummy: prefer previously seen target within distance
-        if (currentTarget && Vector3.Distance(reachOrigin.position, currentTarget.position) <= maxReachDistance)
+        if (currentTarget != null && Vector3.Distance(reachOrigin.position, currentTarget.position) <= maxReachDistance)
             return currentTarget;
         return null;
     }
@@ -60,7 +60,7 @@ public class LongUnityScriptClaudeTest : MonoBehaviour
     }
 
     // NL tests sometimes add comments above Update() as an anchor
-    public void Update()
+    private void Update()
     {
         if (reachOrigin == null) return;
         var best = FindBestTarget();
