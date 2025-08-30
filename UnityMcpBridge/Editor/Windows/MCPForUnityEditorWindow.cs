@@ -1249,6 +1249,7 @@ namespace MCPForUnity.Editor.Windows
 			}
 			catch (Exception ex)
 			{
+
 				// If write did not complete, attempt restore from backup without deleting current file first
 				try
 				{
@@ -1267,6 +1268,7 @@ namespace MCPForUnity.Editor.Windows
 				// Only remove backup after a confirmed successful write
 				try { if (writeDone && System.IO.File.Exists(backup)) System.IO.File.Delete(backup); } catch { }
 			}
+
 			try
 			{
 				if (IsValidUv(uvPath)) UnityEditor.EditorPrefs.SetString("MCPForUnity.UvPath", uvPath);

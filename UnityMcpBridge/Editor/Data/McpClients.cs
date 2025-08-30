@@ -85,6 +85,7 @@ namespace MCPForUnity.Editor.Data
                     "Claude",
                     "claude_desktop_config.json"
                 ),
+
                 macConfigPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                     "Library",
@@ -98,6 +99,7 @@ namespace MCPForUnity.Editor.Data
                     "Claude",
                     "claude_desktop_config.json"
                 ),
+
                 mcpType = McpTypes.ClaudeDesktop,
                 configStatus = "Not Configured",
             },

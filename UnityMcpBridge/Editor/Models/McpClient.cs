@@ -6,6 +6,7 @@ namespace MCPForUnity.Editor.Models
         public string windowsConfigPath;
         public string macConfigPath;
         public string linuxConfigPath;
+        public string macConfigPath; // optional macOS-specific config path
         public McpTypes mcpType;
         public string configStatus;
         public McpStatus status = McpStatus.NotConfigured;
