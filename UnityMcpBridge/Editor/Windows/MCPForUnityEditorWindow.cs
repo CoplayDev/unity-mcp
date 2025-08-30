@@ -1136,7 +1136,7 @@ namespace MCPForUnity.Editor.Windows
 			catch { }
 
 			// 1) Start from existing, only fill gaps (prefer trusted resolver)
-			string uvPath = FindUvPath();
+			string uvPath = ServerInstaller.FindUvPath();
 			// Optionally trust existingCommand if it looks like uv/uv.exe
 			try
 			{
@@ -1148,7 +1148,6 @@ namespace MCPForUnity.Editor.Windows
 			}
 			catch { }
 			if (uvPath == null) return "UV package manager not found. Please install UV first.";
-
 			string serverSrc = ExtractDirectoryArg(existingArgs);
 			bool serverValid = !string.IsNullOrEmpty(serverSrc)
 				&& System.IO.File.Exists(System.IO.Path.Combine(serverSrc, "server.py"));
