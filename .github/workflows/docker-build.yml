@@ -1,0 +1,348 @@
+name: Docker Build and Test
+
+on:
+  push:
+    branches: [ main, develop, feat/headless-operations ]
+    paths:
+      - 'docker/**'
+      - 'UnityMcpBridge/**'
+      - 'Dockerfile*'
+      - 'docker-compose*.yml'
+      - '.github/workflows/docker-build.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'docker/**'
+      - 'UnityMcpBridge/**'
+      - 'Dockerfile*'
+      - 'docker-compose*.yml'
+  workflow_dispatch:
+    inputs:
+      build_target:
+        description: 'Build target (production/dev)'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+        - production
+        - dev
+        - both
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  UNITY_VERSION: "2022.3.45f1"
+  UNITY_CHANGESET: "63b2b3067b8e"
+
+jobs:
+  # Job 1: Build and Test Docker Images
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [production]
+        # Can expand to include 'dev' target if needed
+    
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      with:
+        install: true
+    
+    - name: Log in to Container Registry
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=raw,value=${{ matrix.target }},enable=true
+    
+    - name: Create build context
+      run: |
+        # Ensure all required files exist
+        mkdir -p docker/scripts
+        mkdir -p tests/docker
+        
+        # List files for debugging
+        echo "Docker files:"
+        find docker -type f -name "*" | head -10
+        echo "Unity MCP Server files:"
+        find UnityMcpBridge/UnityMcpServer~/src -type f -name "*.py" | head -10
+    
+    - name: Build Docker image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: docker/Dockerfile.${{ matrix.target }}
+        target: ${{ matrix.target }}
+        platforms: linux/amd64
+        push: false
+        load: true
+        tags: |
+          unity-mcp:test
+          unity-mcp:${{ matrix.target }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          UNITY_VERSION=${{ env.UNITY_VERSION }}
+          UNITY_CHANGESET=${{ env.UNITY_CHANGESET }}
+          PYTHON_VERSION=3.11
+    
+    - name: Test Docker image build
+      run: |
+        echo "Testing image exists..."
+        docker image inspect unity-mcp:test
+        
+        echo "Image details:"
+        docker image ls unity-mcp:test
+        
+        echo "Image history (top 10 layers):"
+        docker image history unity-mcp:test --no-trunc | head -10
+    
+    - name: Install test dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y curl jq bc
+        
+        # Install Trivy for security scanning
+        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
+    
+    - name: Run security scan
+      id: security-scan
+      run: |
+        echo "Running Trivy security scan..."
+        mkdir -p security-reports
+        
+        # Run Trivy scan
+        trivy image \
+          --format json \
+          --output security-reports/trivy-results.json \
+          --severity HIGH,CRITICAL \
+          --ignore-unfixed \
+          unity-mcp:test
+        
+        # Check for critical vulnerabilities
+        critical_count=$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' security-reports/trivy-results.json 2>/dev/null || echo "0")
+        
+        echo "Critical vulnerabilities found: $critical_count"
+        echo "critical_vulns=$critical_count" >> $GITHUB_OUTPUT
+        
+        if [ "$critical_count" -gt 0 ]; then
+          echo "❌ Critical vulnerabilities found!"
+          jq -r '.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL") | "\(.VulnerabilityID): \(.Title)"' security-reports/trivy-results.json | head -10
+          exit 1
+        else
+          echo "✅ No critical vulnerabilities found"
+        fi
+    
+    - name: Check image size
+      id: size-check
+      run: |
+        echo "Checking image size requirements..."
+        
+        size_bytes=$(docker image inspect unity-mcp:test --format='{{.Size}}')
+        size_gb=$(echo "scale=2; $size_bytes / 1024 / 1024 / 1024" | bc -l)
+        
+        echo "Image size: ${size_gb} GB"
+        echo "image_size_gb=$size_gb" >> $GITHUB_OUTPUT
+        
+        # Check 2GB requirement
+        if (( $(echo "$size_gb > 2.0" | bc -l) )); then
+          echo "❌ Image size (${size_gb}GB) exceeds 2GB limit"
+          exit 1
+        else
+          echo "✅ Image size requirement met: ${size_gb}GB < 2GB"
+        fi
+    
+    - name: Run comprehensive tests
+      id: run-tests
+      timeout-minutes: 10
+      run: |
+        echo "Running Docker test suite..."
+        
+        # Make test runner executable
+        chmod +x tests/docker/run_docker_tests.py
+        
+        # Run tests with timeout
+        if timeout 600 python3 tests/docker/run_docker_tests.py; then
+          echo "✅ All tests passed"
+          echo "tests_passed=true" >> $GITHUB_OUTPUT
+        else
+          echo "❌ Some tests failed"
+          echo "tests_passed=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+    
+    - name: Generate SBOM (Software Bill of Materials)
+      if: success()
+      run: |
+        echo "Generating SBOM..."
+        mkdir -p sbom
+        
+        # Generate SBOM using Trivy
+        trivy image \
+          --format spdx-json \
+          --output sbom/unity-mcp-sbom.spdx.json \
+          unity-mcp:test
+        
+        echo "✅ SBOM generated: sbom/unity-mcp-sbom.spdx.json"
+    
+    - name: Upload security scan results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-reports-${{ matrix.target }}
+        path: security-reports/
+        retention-days: 30
+    
+    - name: Upload SBOM
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbom-${{ matrix.target }}
+        path: sbom/
+        retention-days: 90
+    
+    - name: Push to registry
+      if: github.event_name != 'pull_request' && success()
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: docker/Dockerfile.${{ matrix.target }}
+        target: ${{ matrix.target }}
+        platforms: linux/amd64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          UNITY_VERSION=${{ env.UNITY_VERSION }}
+          UNITY_CHANGESET=${{ env.UNITY_CHANGESET }}
+          PYTHON_VERSION=3.11
+    
+    outputs:
+      image-size: ${{ steps.size-check.outputs.image_size_gb }}
+      critical-vulns: ${{ steps.security-scan.outputs.critical_vulns }}
+      tests-passed: ${{ steps.run-tests.outputs.tests_passed }}
+
+  # Job 2: Integration Tests (if main tests pass)
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: success() && needs.build-and-test.outputs.tests-passed == 'true'
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build test image
+      run: |
+        docker build \
+          -f docker/Dockerfile.production \
+          -t unity-mcp:integration \
+          --target production \
+          .
+    
+    - name: Run integration tests
+      timeout-minutes: 5
+      run: |
+        echo "Running integration test suite..."
+        
+        # Test docker-compose functionality
+        if [ -f docker-compose.production.yml ]; then
+          echo "Testing docker-compose configuration..."
+          docker-compose -f docker-compose.production.yml config
+        fi
+        
+        # Test container can start and respond
+        echo "Testing container startup..."
+        container_name="unity-mcp-integration-test"
+        
+        # Start container
+        docker run -d \
+          --name $container_name \
+          -p 8083:8080 \
+          -e UNITY_PROJECT_PATH= \
+          -e LOG_LEVEL=INFO \
+          unity-mcp:integration
+        
+        # Wait for health check
+        timeout 30 bash -c '
+          until curl -f http://localhost:8083/health >/dev/null 2>&1; do
+            echo "Waiting for health check..."
+            sleep 2
+          done
+        '
+        
+        # Verify health response
+        curl -f http://localhost:8083/health
+        
+        # Cleanup
+        docker stop $container_name
+        docker rm $container_name
+        
+        echo "✅ Integration tests passed"
+
+  # Job 3: Update documentation and create release
+  finalize:
+    runs-on: ubuntu-latest
+    needs: [build-and-test, integration-tests]
+    if: success() && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Update README with build status
+      run: |
+        echo "Updating README with latest build information..."
+        
+        # Update build status badges or information if needed
+        # This is a placeholder for future README updates
+        
+        echo "Build completed successfully at $(date)"
+        echo "Image size: ${{ needs.build-and-test.outputs.image-size }} GB"
+        echo "Security scan: ${{ needs.build-and-test.outputs.critical-vulns }} critical vulnerabilities"
+    
+    - name: Create release tag
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: |
+        echo "Creating release information..."
+        
+        # Extract version from package.json or create timestamp-based tag
+        if [ -f UnityMcpBridge/package.json ]; then
+          version=$(jq -r '.version' UnityMcpBridge/package.json)
+          echo "Package version: $version"
+        else
+          version="docker-$(date +%Y%m%d-%H%M%S)"
+          echo "Generated version: $version"
+        fi
+        
+        echo "version=$version" >> $GITHUB_ENV

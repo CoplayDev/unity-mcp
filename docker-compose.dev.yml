@@ -1,0 +1,78 @@
+# Docker Compose Override for Development
+version: '3.8'
+
+services:
+  unity-mcp-headless:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+      target: dev-base
+    
+    container_name: unity-mcp-headless-dev
+    
+    # Development overrides
+    read_only: false  # Allow writing for development
+    
+    # Expanded resource limits for development
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 8G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    
+    # Development environment
+    environment:
+      - LOG_LEVEL=DEBUG
+      - PYTHONPATH=/app
+      - UNITY_HEADLESS=true
+      - UNITY_MCP_AUTOSTART=true
+      - DEVELOPMENT_MODE=true
+    
+    # Additional development volumes
+    volumes:
+      # Source code mounting for hot reload
+      - "./UnityMcpBridge/UnityMcpServer~/src:/app/server"
+      - "./UnityMcpBridge:/app/unity-mcp-bridge"
+      - "./tests:/app/tests"
+      
+      # Development tools
+      - "./docker:/app/docker"
+      
+      # Larger temp space for development
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 2G
+    
+    # Override command for interactive development
+    command: ["/bin/bash", "-c", "tail -f /dev/null"]
+    
+    # Additional ports for debugging
+    ports:
+      - "8080:8080"
+      - "6400:6400"
+      - "5678:5678"  # Python debugger
+    
+    # Extended health check for development
+    healthcheck:
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 300s
+
+  # Development database (SQLite in volume)
+  dev-db:
+    image: alpine:latest
+    container_name: unity-mcp-dev-db
+    volumes:
+      - "dev-db-data:/data"
+    command: ["tail", "-f", "/dev/null"]
+    profiles:
+      - development
+
+volumes:
+  dev-db-data:
+    driver: local

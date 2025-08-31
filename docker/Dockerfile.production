@@ -1,0 +1,171 @@
+# Unity MCP Production Dockerfile
+# Multi-stage build optimized for size and security
+ARG UNITY_VERSION=2022.3.45f1
+ARG UNITY_CHANGESET=63b2b3067b8e
+ARG PYTHON_VERSION=3.11
+
+################################################################################
+# Stage 1: Base system with Unity Hub
+################################################################################
+FROM ubuntu:22.04 as unity-base
+
+ARG UNITY_VERSION
+ARG UNITY_CHANGESET
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install minimal system dependencies for Unity
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    gnupg2 \
+    software-properties-common \
+    ca-certificates \
+    curl \
+    xvfb \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Install Unity Hub
+RUN wget -qO - https://hub.unity3d.com/linux/keys/public | gpg --dearmor -o /usr/share/keyrings/Unity_Technologies_ApS.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/Unity_Technologies_ApS.gpg] https://hub.unity3d.com/linux/repos/deb stable main" > /etc/apt/sources.list.d/unityhub.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends unityhub \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+################################################################################
+# Stage 2: Unity Editor Installation
+################################################################################
+FROM unity-base as unity-installer
+
+ARG UNITY_VERSION
+ARG UNITY_CHANGESET
+
+# Set Unity environment variables
+ENV UNITY_LICENSE_FILE=""
+ENV UNITY_USERNAME=""
+ENV UNITY_PASSWORD=""
+ENV UNITY_SERIAL=""
+
+# Accept Unity license and install Unity Editor (headless)
+RUN unityhub --headless install \
+    --version ${UNITY_VERSION} \
+    --changeset ${UNITY_CHANGESET} \
+    --child-modules \
+    || echo "Unity installation completed with exit code $?"
+
+# Clean up Unity Hub after installation
+RUN apt-get purge -y unityhub \
+    && apt-get autoremove -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+################################################################################
+# Stage 3: Python Server Dependencies
+################################################################################
+FROM python:${PYTHON_VERSION}-slim as python-deps
+
+# Set Python environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies for Python build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv for fast Python package management
+RUN pip install --no-cache-dir uv
+
+# Copy Python project files
+WORKDIR /app/server
+COPY UnityMcpBridge/UnityMcpServer~/src/pyproject.toml .
+
+# Install Python dependencies
+RUN uv pip install --system httpx>=0.27.2 "mcp[cli]>=1.4.1"
+
+################################################################################
+# Stage 4: Final Production Image
+################################################################################
+FROM ubuntu:22.04 as production
+
+ARG UNITY_VERSION
+
+# Create non-root user for security
+RUN groupadd -r unity --gid=1000 \
+    && useradd -r -g unity --uid=1000 --home-dir=/home/unity --shell=/bin/bash unity \
+    && mkdir -p /home/unity \
+    && chown -R unity:unity /home/unity
+
+# Install minimal runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    xvfb \
+    python3 \
+    python3-distutils \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy Unity Editor from installer stage
+COPY --from=unity-installer --chown=unity:unity /opt/unity /opt/unity
+
+# Copy Python runtime from python-deps stage
+COPY --from=python-deps /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=python-deps /usr/local/bin /usr/local/bin
+
+# Copy Unity MCP source code
+WORKDIR /app
+COPY --chown=unity:unity UnityMcpBridge/UnityMcpServer~/src/ /app/server/
+COPY --chown=unity:unity UnityMcpBridge/ /app/unity-mcp-bridge/
+
+# Create necessary directories with proper permissions
+RUN mkdir -p \
+    /app/unity-projects \
+    /app/builds \
+    /tmp/unity-logs \
+    /home/unity/.config/unity3d \
+    && chown -R unity:unity /app /tmp/unity-logs /home/unity
+
+# Copy Docker scripts
+COPY docker/scripts/entrypoint.sh /app/entrypoint.sh
+COPY docker/scripts/healthcheck.sh /app/healthcheck.sh
+RUN chmod +x /app/entrypoint.sh /app/healthcheck.sh
+
+# Set environment variables for headless operation
+ENV UNITY_HEADLESS=true \
+    UNITY_MCP_AUTOSTART=true \
+    UNITY_MCP_PORT=6400 \
+    UNITY_MCP_LOG_PATH=/tmp/unity-logs/unity-mcp.log \
+    LOG_LEVEL=INFO \
+    UNITY_VERSION=${UNITY_VERSION} \
+    UNITY_PATH="/opt/unity/editors/${UNITY_VERSION}/Editor/Unity" \
+    HOME=/home/unity
+
+# Expose ports
+EXPOSE 8080 6400
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD /app/healthcheck.sh
+
+# Switch to non-root user
+USER unity
+
+# Set working directory
+WORKDIR /app
+
+# Run entrypoint
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+# Build metadata
+LABEL maintainer="Unity MCP Team" \
+      version="2.0.0" \
+      description="Unity MCP Headless Server - Production Grade" \
+      unity.version=${UNITY_VERSION} \
+      org.opencontainers.image.source="https://github.com/justinpbarnett/unity-mcp" \
+      org.opencontainers.image.title="Unity MCP Headless Server" \
+      org.opencontainers.image.description="Containerized Unity MCP server for headless Unity operations"

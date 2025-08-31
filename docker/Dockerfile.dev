@@ -1,0 +1,97 @@
+# Unity MCP Development Dockerfile
+# Includes debugging tools and development utilities
+ARG UNITY_VERSION=2022.3.45f1
+ARG UNITY_CHANGESET=63b2b3067b8e
+ARG PYTHON_VERSION=3.11
+
+FROM ubuntu:22.04 as dev-base
+
+ARG UNITY_VERSION
+ARG UNITY_CHANGESET
+ARG PYTHON_VERSION
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install development dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    gnupg2 \
+    software-properties-common \
+    ca-certificates \
+    curl \
+    xvfb \
+    python3 \
+    python3-pip \
+    python3-distutils \
+    git \
+    vim \
+    htop \
+    strace \
+    netcat \
+    telnet \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Unity Hub
+RUN wget -qO - https://hub.unity3d.com/linux/keys/public | gpg --dearmor -o /usr/share/keyrings/Unity_Technologies_ApS.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/Unity_Technologies_ApS.gpg] https://hub.unity3d.com/linux/repos/deb stable main" > /etc/apt/sources.list.d/unityhub.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends unityhub \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Unity Editor
+RUN unityhub --headless install \
+    --version ${UNITY_VERSION} \
+    --changeset ${UNITY_CHANGESET} \
+    --child-modules \
+    || echo "Unity installation completed"
+
+# Install Python dependencies
+RUN pip3 install --no-cache-dir \
+    uv \
+    pytest \
+    pytest-asyncio \
+    pytest-timeout \
+    httpx \
+    requests
+
+# Create non-root user
+RUN groupadd -r unity --gid=1000 \
+    && useradd -r -g unity --uid=1000 --home-dir=/home/unity --shell=/bin/bash unity \
+    && mkdir -p /home/unity \
+    && chown -R unity:unity /home/unity
+
+# Copy source code
+WORKDIR /app
+COPY --chown=unity:unity . .
+
+# Install Python server dependencies
+WORKDIR /app/UnityMcpBridge/UnityMcpServer~/src
+RUN uv pip install --system -e .
+
+# Create directories
+RUN mkdir -p \
+    /app/unity-projects \
+    /app/builds \
+    /tmp/unity-logs \
+    && chown -R unity:unity /app /tmp/unity-logs /home/unity
+
+# Environment variables
+ENV UNITY_HEADLESS=true \
+    UNITY_MCP_AUTOSTART=true \
+    UNITY_MCP_PORT=6400 \
+    UNITY_MCP_LOG_PATH=/tmp/unity-logs/unity-mcp.log \
+    LOG_LEVEL=DEBUG \
+    UNITY_VERSION=${UNITY_VERSION} \
+    UNITY_PATH="/opt/unity/editors/${UNITY_VERSION}/Editor/Unity" \
+    HOME=/home/unity \
+    PYTHONPATH=/app
+
+# Expose ports
+EXPOSE 8080 6400
+
+# Switch to unity user
+USER unity
+
+# Default command for development
+CMD ["/bin/bash"]

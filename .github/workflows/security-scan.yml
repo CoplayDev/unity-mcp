@@ -1,0 +1,265 @@
+name: Security Scan
+
+on:
+  schedule:
+    # Run security scan daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Type of scan to run'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+        - full
+        - quick
+        - vulnerabilities-only
+  push:
+    branches: [ main ]
+    paths:
+      - 'docker/**'
+      - 'Dockerfile*'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Determine image to scan
+      id: image-info
+      run: |
+        # Check if we should build locally or use registry image
+        if [ "${{ github.event_name }}" == "push" ] || [ "${{ inputs.scan_type }}" == "full" ]; then
+          echo "BUILD_LOCALLY=true" >> $GITHUB_OUTPUT
+          echo "IMAGE_TAG=unity-mcp:security-scan" >> $GITHUB_OUTPUT
+        else
+          echo "BUILD_LOCALLY=false" >> $GITHUB_OUTPUT
+          echo "IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Build image for scanning
+      if: steps.image-info.outputs.BUILD_LOCALLY == 'true'
+      run: |
+        docker build \
+          -f docker/Dockerfile.production \
+          -t unity-mcp:security-scan \
+          --target production \
+          .
+    
+    - name: Install security tools
+      run: |
+        # Install Trivy
+        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
+        
+        # Install additional tools
+        sudo apt-get update
+        sudo apt-get install -y jq curl
+    
+    - name: Run Trivy vulnerability scan
+      run: |
+        echo "Running comprehensive vulnerability scan..."
+        mkdir -p security-reports
+        
+        # Run Trivy scan with comprehensive output
+        trivy image \
+          --format json \
+          --output security-reports/trivy-detailed.json \
+          --severity LOW,MEDIUM,HIGH,CRITICAL \
+          --ignore-unfixed \
+          --timeout 10m \
+          ${{ steps.image-info.outputs.IMAGE_TAG }}
+        
+        # Generate human-readable report
+        trivy image \
+          --format table \
+          --output security-reports/trivy-summary.txt \
+          --severity HIGH,CRITICAL \
+          --ignore-unfixed \
+          ${{ steps.image-info.outputs.IMAGE_TAG }}
+        
+        # Generate SARIF for GitHub Security tab
+        trivy image \
+          --format sarif \
+          --output security-reports/trivy-results.sarif \
+          --severity HIGH,CRITICAL \
+          --ignore-unfixed \
+          ${{ steps.image-info.outputs.IMAGE_TAG }}
+    
+    - name: Analyze vulnerability results
+      id: vuln-analysis
+      run: |
+        echo "Analyzing vulnerability scan results..."
+        
+        # Count vulnerabilities by severity
+        critical=$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' security-reports/trivy-detailed.json)
+        high=$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH")] | length' security-reports/trivy-detailed.json)
+        medium=$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity == "MEDIUM")] | length' security-reports/trivy-detailed.json)
+        low=$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity == "LOW")] | length' security-reports/trivy-detailed.json)
+        
+        echo "Vulnerability Summary:"
+        echo "Critical: $critical"
+        echo "High: $high" 
+        echo "Medium: $medium"
+        echo "Low: $low"
+        
+        # Set outputs
+        echo "critical_vulns=$critical" >> $GITHUB_OUTPUT
+        echo "high_vulns=$high" >> $GITHUB_OUTPUT
+        echo "medium_vulns=$medium" >> $GITHUB_OUTPUT
+        echo "low_vulns=$low" >> $GITHUB_OUTPUT
+        
+        # Determine if scan passes security requirements
+        if [ "$critical" -eq 0 ] && [ "$high" -lt 5 ]; then
+          echo "scan_passed=true" >> $GITHUB_OUTPUT
+          echo "✅ Security scan passed"
+        else
+          echo "scan_passed=false" >> $GITHUB_OUTPUT
+          echo "❌ Security scan failed"
+        fi
+    
+    - name: Run custom security checks
+      run: |
+        echo "Running custom security configuration checks..."
+        
+        # Use our custom security scan script
+        if [ -f docker/scripts/security-scan.sh ]; then
+          chmod +x docker/scripts/security-scan.sh
+          ./docker/scripts/security-scan.sh ${{ steps.image-info.outputs.IMAGE_TAG }}
+        fi
+    
+    - name: Generate security report
+      run: |
+        echo "Generating comprehensive security report..."
+        
+        cat > security-reports/security-summary.md << EOF
+        # Unity MCP Docker Security Report
+        
+        **Scan Date:** $(date)
+        **Image:** ${{ steps.image-info.outputs.IMAGE_TAG }}
+        **Scan Type:** ${{ inputs.scan_type || 'automated' }}
+        
+        ## Vulnerability Summary
+        
+        | Severity | Count |
+        |----------|-------|
+        | Critical | ${{ steps.vuln-analysis.outputs.critical_vulns }} |
+        | High | ${{ steps.vuln-analysis.outputs.high_vulns }} |
+        | Medium | ${{ steps.vuln-analysis.outputs.medium_vulns }} |
+        | Low | ${{ steps.vuln-analysis.outputs.low_vulns }} |
+        
+        ## Security Status
+        
+        $(if [ "${{ steps.vuln-analysis.outputs.scan_passed }}" == "true" ]; then
+          echo "✅ **SECURITY SCAN PASSED**"
+          echo ""
+          echo "The Docker image meets security requirements with no critical vulnerabilities and minimal high-severity issues."
+        else
+          echo "❌ **SECURITY SCAN FAILED**"
+          echo ""
+          echo "The Docker image has security issues that need to be addressed:"
+          if [ "${{ steps.vuln-analysis.outputs.critical_vulns }}" -gt 0 ]; then
+            echo "- ${{ steps.vuln-analysis.outputs.critical_vulns }} critical vulnerabilities found"
+          fi
+          if [ "${{ steps.vuln-analysis.outputs.high_vulns }}" -ge 5 ]; then
+            echo "- ${{ steps.vuln-analysis.outputs.high_vulns }} high-severity vulnerabilities found (limit: 5)"
+          fi
+        fi)
+        
+        ## Recommendations
+        
+        $(if [ "${{ steps.vuln-analysis.outputs.scan_passed }}" != "true" ]; then
+          echo "1. Review and update base images to latest secure versions"
+          echo "2. Update application dependencies to latest versions"
+          echo "3. Consider using distroless or minimal base images"
+          echo "4. Implement regular security scanning in CI/CD pipeline"
+        else
+          echo "1. Continue regular security scanning"
+          echo "2. Monitor for new vulnerabilities in dependencies"
+          echo "3. Keep base images updated"
+        fi)
+        
+        ## Detailed Reports
+        
+        - Full vulnerability details: \`trivy-detailed.json\`
+        - Summary report: \`trivy-summary.txt\`  
+        - SARIF report: \`trivy-results.sarif\`
+        
+        ---
+        *Report generated by Unity MCP Security Scanner*
+        EOF
+    
+    - name: Upload security scan results to GitHub Security tab
+      if: always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: security-reports/trivy-results.sarif
+        category: docker-security-scan
+    
+    - name: Upload security reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-scan-reports-${{ github.run_number }}
+        path: security-reports/
+        retention-days: 90
+    
+    - name: Comment on PR with security results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          
+          // Read the security summary
+          let summary = '';
+          try {
+            summary = fs.readFileSync('security-reports/security-summary.md', 'utf8');
+          } catch (error) {
+            summary = 'Security scan completed. Check artifacts for detailed results.';
+          }
+          
+          // Create comment
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `## 🔒 Security Scan Results\n\n${summary}`
+          });
+    
+    - name: Fail workflow if security scan fails
+      if: steps.vuln-analysis.outputs.scan_passed == 'false'
+      run: |
+        echo "❌ Security scan failed with:"
+        echo "- Critical vulnerabilities: ${{ steps.vuln-analysis.outputs.critical_vulns }}"
+        echo "- High vulnerabilities: ${{ steps.vuln-analysis.outputs.high_vulns }}"
+        echo ""
+        echo "Please review the security report and address vulnerabilities before proceeding."
+        exit 1
+    
+    - name: Success notification
+      if: steps.vuln-analysis.outputs.scan_passed == 'true'
+      run: |
+        echo "✅ Security scan completed successfully!"
+        echo "Image is ready for production use."

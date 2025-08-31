@@ -1,0 +1,117 @@
+# Unity MCP Production Demo Dockerfile
+# Simulates production environment with faster build time
+FROM python:3.11-slim as production-demo
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies (production-like)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    xvfb \
+    procps \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user for security
+RUN groupadd -r unity --gid=1000 \
+    && useradd -r -g unity --uid=1000 --home-dir=/home/unity --shell=/bin/bash unity \
+    && mkdir -p /home/unity \
+    && chown -R unity:unity /home/unity
+
+# Install uv for fast Python package management
+RUN pip install --no-cache-dir uv
+
+# Install Python dependencies
+WORKDIR /app/server
+COPY UnityMcpBridge/UnityMcpServer~/src/pyproject.toml .
+RUN uv pip install --system httpx>=0.27.2 "mcp[cli]>=1.4.1"
+
+# Copy Unity MCP source code
+COPY --chown=unity:unity UnityMcpBridge/UnityMcpServer~/src/ /app/server/
+COPY --chown=unity:unity UnityMcpBridge/ /app/unity-mcp-bridge/
+
+# Create Unity mock script for demonstration
+RUN echo '#!/bin/bash\n\
+echo "Unity Mock Editor - Production Demo Mode"\n\
+echo "Arguments: $@"\n\
+echo "Simulating Unity startup..."\n\
+sleep 2\n\
+echo "Unity Mock Editor ready"\n\
+# Keep running to simulate Unity process\n\
+while true; do\n\
+  sleep 60\n\
+done\n\
+' > /usr/local/bin/unity-editor && chmod +x /usr/local/bin/unity-editor
+
+# Create necessary directories with proper permissions
+RUN mkdir -p \
+    /app/unity-projects \
+    /app/builds \
+    /tmp/unity-logs \
+    /home/unity/.config/unity3d \
+    && chown -R unity:unity /app /tmp/unity-logs /home/unity
+
+# Copy Docker scripts
+COPY docker/scripts/healthcheck.sh /app/healthcheck.sh
+RUN chmod +x /app/healthcheck.sh
+
+# Create production-like entrypoint
+RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
+echo "Starting Unity MCP Production Demo..."\n\
+\n\
+# Create log directory\n\
+mkdir -p /tmp/unity-logs\n\
+\n\
+# Start mock Unity (simulates the actual Unity process)\n\
+echo "Starting Unity Mock Editor..."\n\
+unity-editor -batchmode -nographics &\n\
+UNITY_PID=$!\n\
+echo "Unity Mock started with PID $UNITY_PID"\n\
+\n\
+# Start the headless HTTP server\n\
+echo "Starting Unity MCP Headless HTTP Server..."\n\
+cd /app/server\n\
+python3 headless_server.py --host 0.0.0.0 --port 8080 --unity-port 6400 --log-level INFO &\n\
+SERVER_PID=$!\n\
+echo "Headless server started with PID $SERVER_PID"\n\
+\n\
+# Wait for both processes\n\
+wait\n\
+' > /app/entrypoint-demo.sh && chmod +x /app/entrypoint-demo.sh
+
+# Set environment variables for headless operation
+ENV UNITY_HEADLESS=true \
+    UNITY_MCP_AUTOSTART=true \
+    UNITY_MCP_PORT=6400 \
+    UNITY_MCP_LOG_PATH=/tmp/unity-logs/unity-mcp.log \
+    LOG_LEVEL=INFO \
+    UNITY_PATH="/usr/local/bin/unity-editor" \
+    HOME=/home/unity
+
+# Expose ports
+EXPOSE 8080 6400
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD /app/healthcheck.sh
+
+# Switch to non-root user
+USER unity
+
+# Set working directory
+WORKDIR /app
+
+# Run entrypoint
+CMD ["/app/entrypoint-demo.sh"]
+
+# Build metadata
+LABEL maintainer="Unity MCP Team" \
+      version="2.0.0-demo" \
+      description="Unity MCP Production Demo - Simulated Unity Environment"

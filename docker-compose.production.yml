@@ -1,0 +1,203 @@
+# Docker Compose for Unity MCP Production Deployment
+
+services:
+  unity-mcp-headless:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.production
+      args:
+        UNITY_VERSION: "2022.3.45f1"
+        UNITY_CHANGESET: "63b2b3067b8e"
+        PYTHON_VERSION: "3.11"
+      cache_from:
+        - unity-mcp:latest
+    image: unity-mcp:latest
+    container_name: unity-mcp-headless-prod
+    restart: unless-stopped
+    
+    # Security hardening
+    read_only: true
+    tmpfs:
+      - /tmp:size=1G,mode=1777
+      - /home/unity/.config:size=100M,mode=0755
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    
+    # Network configuration
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+      - "${UNITY_MCP_PORT:-6400}:6400"
+    
+    # Environment configuration
+    environment:
+      # Unity configuration
+      - UNITY_HEADLESS=true
+      - UNITY_MCP_AUTOSTART=true
+      - UNITY_MCP_PORT=${UNITY_MCP_PORT:-6400}
+      - UNITY_MCP_LOG_PATH=/tmp/unity-logs/unity-mcp.log
+      
+      # License configuration
+      - UNITY_LICENSE_FILE=${UNITY_LICENSE_FILE:-}
+      - UNITY_USERNAME=${UNITY_USERNAME:-}
+      - UNITY_PASSWORD=${UNITY_PASSWORD:-}
+      - UNITY_SERIAL=${UNITY_SERIAL:-}
+      
+      # Server configuration
+      - HTTP_PORT=${HTTP_PORT:-8080}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MAX_CONCURRENT_COMMANDS=${MAX_CONCURRENT_COMMANDS:-5}
+      
+      # Project configuration
+      - UNITY_PROJECT_PATH=${UNITY_PROJECT_PATH:-}
+    
+    # Volume mounts
+    volumes:
+      # Unity projects (read-only)
+      - "${UNITY_PROJECTS_PATH:-./unity-projects}:/app/unity-projects:ro"
+      
+      # Build outputs
+      - "${BUILDS_PATH:-./builds}:/app/builds"
+      
+      # Logs
+      - "${LOGS_PATH:-./logs}:/tmp/unity-logs"
+      
+      # Unity license file (if using file-based licensing)
+      - "${UNITY_LICENSE_FILE:-/dev/null}:/secrets/unity.ulf:ro"
+      
+      # Unity preferences (persistent)
+      - "unity-prefs:/home/unity/.config/unity3d"
+    
+    # Health check configuration
+    healthcheck:
+      test: ["CMD", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    networks:
+      - unity-network
+
+  # Optional: Redis for advanced queuing
+  redis:
+    image: redis:7-alpine
+    container_name: unity-mcp-redis-prod
+    restart: unless-stopped
+    
+    # Security hardening
+    read_only: true
+    tmpfs:
+      - /tmp:size=100M,mode=1777
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    
+    # Configuration
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    
+    volumes:
+      - "redis-data:/data"
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+    
+    networks:
+      - unity-network
+    
+    profiles:
+      - full  # Start with --profile full
+
+  # Optional: Monitoring with Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: unity-mcp-prometheus
+    restart: unless-stopped
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    
+    volumes:
+      - "${PROMETHEUS_CONFIG:-./monitoring/prometheus.yml}:/etc/prometheus/prometheus.yml:ro"
+      - "prometheus-data:/prometheus"
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    networks:
+      - unity-network
+    
+    profiles:
+      - monitoring  # Start with --profile monitoring
+
+# Network configuration
+networks:
+  unity-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# Volume definitions
+volumes:
+  redis-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  unity-prefs:
+    driver: local
