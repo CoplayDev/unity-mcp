@@ -1,9 +1,9 @@
 # Unity MCP CI/CD Test Dockerfile
 # Minimal version for GitHub Actions testing
 ARG PYTHON_VERSION=3.11
-ARG UNITY_VERSION=2022.3.45f1
+ARG UNITY_VERSION=6000.0.3f1
 
-FROM ubuntu:22.04 as production
+FROM ubuntu:22.04 AS production
 
 ARG UNITY_VERSION
 

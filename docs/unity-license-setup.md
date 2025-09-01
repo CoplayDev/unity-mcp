@@ -6,7 +6,7 @@ This guide explains how to configure Unity licensing for the Unity MCP Docker bu
 
 - Unity Hub installed locally
 - Unity account (free or paid)
-- Unity 2022.3.45f1 installed (or matching version in Dockerfile)
+- Unity 6000.0.3f1 installed (or matching version in Dockerfile)
 
 ## Getting Your Unity License File
 
@@ -27,7 +27,7 @@ This guide explains how to configure Unity licensing for the Unity MCP Docker bu
 # Generate license request
 /path/to/Unity -batchmode -createManualActivationFile -logFile -
 
-# This creates Unity_v2022.x.alf
+# This creates Unity_v6000.x.alf
 # Upload this file at https://license.unity3d.com/manual
 # Download the resulting .ulf file
 ```
@@ -42,11 +42,10 @@ export DOCKER_BUILDKIT=1
 
 # Build with license file
 docker build \
-  --secret id=unity_license,src=/path/to/Unity_v2022.x.ulf \
+  --secret id=unity_license,src=/path/to/Unity_v6000.x.ulf \
   -f docker/Dockerfile.production \
   -t unity-mcp:production \
-  --build-arg UNITY_VERSION=2022.3.45f1 \
-  --build-arg UNITY_CHANGESET=63b2b3067b8e \
+  --build-arg UNITY_VERSION=6000.0.3f1 \
   .
 ```
 
@@ -54,9 +53,8 @@ docker build \
 
 Create a `.env` file:
 ```env
-UNITY_LICENSE_FILE=/path/to/Unity_v2022.x.ulf
-UNITY_VERSION=2022.3.45f1
-UNITY_CHANGESET=63b2b3067b8e
+UNITY_LICENSE_FILE=/path/to/Unity_v6000.x.ulf
+UNITY_VERSION=6000.0.3f1
 ```
 
 Then use the production compose file:
@@ -74,7 +72,7 @@ docker run -d \
   -p 8080:8080 \
   -p 6400:6400 \
   -e UNITY_LICENSE_FILE=/tmp/unity.ulf \
-  -v /path/to/Unity_v2022.x.ulf:/tmp/unity.ulf:ro \
+  -v /path/to/Unity_v6000.x.ulf:/tmp/unity.ulf:ro \
   -v /path/to/unity-project:/app/unity-projects/my-project \
   unity-mcp:production
 ```

@@ -1,7 +1,7 @@
 # Unity MCP Production Dockerfile
 # Multi-stage build optimized for size and security
-ARG UNITY_VERSION=2022.3.45f1
-ARG UNITY_CHANGESET=63b2b3067b8e
+ARG UNITY_VERSION=6000.0.3f1
+ARG UNITY_CHANGESET=""
 ARG PYTHON_VERSION=3.11
 
 ################################################################################

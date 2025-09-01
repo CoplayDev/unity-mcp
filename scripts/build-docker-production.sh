@@ -12,8 +12,8 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Default values
-UNITY_VERSION="2022.3.45f1"
-UNITY_CHANGESET="63b2b3067b8e"
+UNITY_VERSION="6000.0.3f1"
+UNITY_CHANGESET=""
 IMAGE_TAG="unity-mcp:production"
 DOCKERFILE="docker/Dockerfile.production"
 
@@ -49,9 +49,9 @@ find_license_file() {
     # Check common locations
     local possible_locations=(
         "$HOME/Unity_v${UNITY_VERSION}.ulf"
-        "$HOME/Unity_v2022.x.ulf"
+        "$HOME/Unity_v6000.x.ulf"
         "$HOME/.local/share/unity3d/Unity/Unity_lic.ulf"
-        "./Unity_v2022.x.ulf"
+        "./Unity_v6000.x.ulf"
         "./unity.ulf"
     )
     
@@ -158,7 +158,7 @@ main() {
             error "No Unity authentication method provided!"
             echo ""
             echo "Please provide one of the following:"
-            echo "  1. Unity license file: --license /path/to/Unity_v2022.x.ulf"
+            echo "  1. Unity license file: --license /path/to/Unity_v6000.x.ulf"
             echo "  2. Unity credentials: --username YOUR_EMAIL --password YOUR_PASSWORD"
             echo "  3. Unity serial: --serial YOUR-SERIAL-KEY"
             echo ""
@@ -179,7 +179,7 @@ main() {
         -t "$IMAGE_TAG" \
         --target production \
         --build-arg UNITY_VERSION="$UNITY_VERSION" \
-        --build-arg UNITY_CHANGESET="$UNITY_CHANGESET" \
+
         --build-arg PYTHON_VERSION=3.11 \
         .
     

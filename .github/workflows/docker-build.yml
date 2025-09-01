@@ -31,8 +31,8 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  UNITY_VERSION: "2022.3.45f1"
-  UNITY_CHANGESET: "63b2b3067b8e"
+  UNITY_VERSION: "6000.0.3f1"
+  UNITY_CHANGESET: ""
 
 jobs:
   # Job 1: Build and Test Docker Images
@@ -110,6 +110,19 @@ jobs:
       id: build
       run: |
         echo "Building Docker image with CI Dockerfile..."
+        echo "Current directory: $(pwd)"
+        echo "Docker version: $(docker --version)"
+        
+        # First test if Dockerfile exists
+        if [ ! -f "docker/Dockerfile.ci" ]; then
+          echo "ERROR: docker/Dockerfile.ci not found!"
+          ls -la docker/
+          exit 1
+        fi
+        
+        echo "Dockerfile found, starting build..."
+        set -x  # Enable verbose output
+        
         docker build \
           -f docker/Dockerfile.ci \
           -t unity-mcp:test \
@@ -117,14 +130,20 @@ jobs:
           --target production \
           --build-arg UNITY_VERSION=${{ env.UNITY_VERSION }} \
           --build-arg PYTHON_VERSION=3.11 \
-          . 2>&1 | tee build.log
+          --progress=plain \
+          .
         
-        # Check if build succeeded
-        if [ ${PIPESTATUS[0]} -ne 0 ]; then
-          echo "Build failed. Last 100 lines of output:"
-          tail -n 100 build.log
+        build_exit_code=$?
+        set +x  # Disable verbose output
+        
+        if [ $build_exit_code -ne 0 ]; then
+          echo "Build failed with exit code: $build_exit_code"
           exit 1
         fi
+        
+        echo "Verifying built image..."
+        docker image ls unity-mcp:test
+        docker image inspect unity-mcp:test
         
         echo "Build completed successfully"
     
