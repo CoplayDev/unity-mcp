@@ -131,6 +131,7 @@ jobs:
           --build-arg UNITY_VERSION=${{ env.UNITY_VERSION }} \
           --build-arg PYTHON_VERSION=3.11 \
           --progress=plain \
+          --load \
           .
         
         build_exit_code=$?
