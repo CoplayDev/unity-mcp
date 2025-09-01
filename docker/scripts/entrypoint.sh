@@ -66,6 +66,12 @@ trap cleanup SIGTERM SIGINT SIGHUP
 validate_environment() {
     log "Validating environment..."
     
+    # Check if CI mode
+    if [[ "${CI_MODE:-false}" == "true" ]]; then
+        log "Running in CI mode - skipping Unity validation"
+        return 0
+    fi
+    
     # Check if Unity executable exists
     if [[ ! -f "$UNITY_PATH" ]]; then
         error "Unity Editor not found at $UNITY_PATH"
@@ -200,10 +206,21 @@ start_headless_server() {
         --max-concurrent "${MAX_CONCURRENT_COMMANDS:-5}"
     )
     
-    info "Server command: python3 headless_server.py ${server_args[*]}"
+    # Use mock server in CI mode
+    if [[ "${CI_MODE:-false}" == "true" ]]; then
+        info "CI Mode: Using mock server"
+        if [[ -f "/app/mock_headless_server.py" ]]; then
+            python3 /app/mock_headless_server.py "${server_args[@]}" &
+        else
+            error "Mock server not found at /app/mock_headless_server.py"
+            return 1
+        fi
+    else
+        info "Server command: python3 headless_server.py ${server_args[*]}"
+        # Start the real server
+        python3 headless_server.py "${server_args[@]}" &
+    fi
     
-    # Start the server
-    python3 headless_server.py "${server_args[@]}" &
     SERVER_PID=$!
     
     log "Headless server started with PID: $SERVER_PID"
@@ -241,19 +258,30 @@ main() {
     # Validate environment
     validate_environment
     
-    # Activate Unity license
-    activate_unity_license
-    
-    # Start Unity Editor
-    if ! start_unity; then
-        error "Failed to start Unity Editor"
-        exit 1
-    fi
-    
-    # Start headless server
-    if ! start_headless_server; then
-        error "Failed to start headless server"
-        exit 1
+    # Check if CI mode
+    if [[ "${CI_MODE:-false}" == "true" ]]; then
+        log "Running in CI mode - skipping Unity operations"
+        
+        # Start headless server only
+        if ! start_headless_server; then
+            error "Failed to start headless server"
+            exit 1
+        fi
+    else
+        # Activate Unity license
+        activate_unity_license
+        
+        # Start Unity Editor
+        if ! start_unity; then
+            error "Failed to start Unity Editor"
+            exit 1
+        fi
+        
+        # Start headless server
+        if ! start_headless_server; then
+            error "Failed to start headless server"
+            exit 1
+        fi
     fi
     
     log "All services started successfully"

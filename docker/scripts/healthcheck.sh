@@ -19,12 +19,21 @@ check_health() {
             local response=$(curl -s --max-time $TIMEOUT "$HEALTH_URL" 2>/dev/null || echo "{}")
             
             # Check if response contains expected fields
-            if echo "$response" | grep -q '"status".*"healthy"' && \
-               echo "$response" | grep -q '"unity_connected".*true'; then
-                echo "Health check passed"
-                return 0
+            if echo "$response" | grep -q '"status".*"healthy"'; then
+                # In CI mode, we don't expect Unity to be connected
+                if [[ "${CI_MODE:-false}" == "true" ]]; then
+                    echo "Health check passed (CI mode)"
+                    return 0
+                elif echo "$response" | grep -q '"unity_connected".*true'; then
+                    echo "Health check passed"
+                    return 0
+                else
+                    echo "Health check failed: Unity not connected"
+                    echo "Response: $response"
+                    return 1
+                fi
             else
-                echo "Health check failed: Unity not connected or unhealthy status"
+                echo "Health check failed: unhealthy status"
                 echo "Response: $response"
                 return 1
             fi
@@ -48,19 +57,22 @@ check_processes() {
     local unity_running=false
     local server_running=false
     
-    # Check for Unity process
-    if pgrep -f "Unity.*-batchmode" >/dev/null 2>&1; then
-        unity_running=true
+    # In CI mode, we don't expect Unity to be running
+    if [[ "${CI_MODE:-false}" != "true" ]]; then
+        # Check for Unity process
+        if pgrep -f "Unity.*-batchmode" >/dev/null 2>&1; then
+            unity_running=true
+        fi
+        
+        if [[ "$unity_running" == "false" ]]; then
+            echo "Unity process not found"
+            return 1
+        fi
     fi
     
-    # Check for Python server process
-    if pgrep -f "headless_server.py" >/dev/null 2>&1; then
+    # Check for Python server process (either real or mock)
+    if pgrep -f "headless_server.py" >/dev/null 2>&1 || pgrep -f "mock_headless_server.py" >/dev/null 2>&1; then
         server_running=true
-    fi
-    
-    if [[ "$unity_running" == "false" ]]; then
-        echo "Unity process not found"
-        return 1
     fi
     
     if [[ "$server_running" == "false" ]]; then

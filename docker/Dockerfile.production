@@ -48,12 +48,33 @@ ENV UNITY_USERNAME=""
 ENV UNITY_PASSWORD=""
 ENV UNITY_SERIAL=""
 
-# Accept Unity license and install Unity Editor (headless)
-RUN unityhub --headless install \
-    --version ${UNITY_VERSION} \
-    --changeset ${UNITY_CHANGESET} \
-    --child-modules \
-    || echo "Unity installation completed with exit code $?"
+# Install Unity Editor with Unity Hub
+# This requires valid Unity credentials to be provided as build args or environment variables
+RUN --mount=type=secret,id=unity_license,target=/tmp/unity_license.ulf \
+    --mount=type=secret,id=unity_username \
+    --mount=type=secret,id=unity_password \
+    --mount=type=secret,id=unity_serial \
+    if [ -f /tmp/unity_license.ulf ]; then \
+        echo "Using Unity license file"; \
+        export UNITY_LICENSE_FILE=/tmp/unity_license.ulf; \
+    elif [ -f /run/secrets/unity_username ] && [ -f /run/secrets/unity_password ]; then \
+        echo "Using Unity Hub credentials"; \
+        export UNITY_USERNAME=$(cat /run/secrets/unity_username); \
+        export UNITY_PASSWORD=$(cat /run/secrets/unity_password); \
+    elif [ -f /run/secrets/unity_serial ]; then \
+        echo "Using Unity serial"; \
+        export UNITY_SERIAL=$(cat /run/secrets/unity_serial); \
+    fi && \
+    unityhub --headless install \
+        --version ${UNITY_VERSION} \
+        --changeset ${UNITY_CHANGESET} \
+        --module linux-il2cpp \
+        --module linux-server \
+        --childModules
+
+# Verify Unity installation
+RUN test -f /opt/unity/editors/${UNITY_VERSION}/Editor/Unity || \
+    (echo "ERROR: Unity installation failed. Please ensure valid Unity credentials are provided." && exit 1)
 
 # Clean up Unity Hub after installation
 RUN apt-get purge -y unityhub \

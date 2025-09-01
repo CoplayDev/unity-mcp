@@ -97,13 +97,21 @@ class DockerTestRunner:
         """Test that Docker image builds successfully"""
         self.log("Testing Docker build...")
         
+        # Use CI Dockerfile if available (for GitHub Actions)
+        dockerfile_ci = self.project_root / "docker" / "Dockerfile.ci"
         dockerfile_prod = self.project_root / "docker" / "Dockerfile.production"
-        if not dockerfile_prod.exists():
-            raise Exception("Production Dockerfile not found")
+        
+        if os.environ.get("CI") == "true" and dockerfile_ci.exists():
+            dockerfile = dockerfile_ci
+            self.log("Using CI Dockerfile for testing")
+        elif dockerfile_prod.exists():
+            dockerfile = dockerfile_prod
+        else:
+            raise Exception("No suitable Dockerfile found")
         
         build_cmd = [
             "docker", "build",
-            "-f", str(dockerfile_prod),
+            "-f", str(dockerfile),
             "-t", self.test_image_name,
             "--target", "production",
             "."
@@ -182,8 +190,13 @@ class DockerTestRunner:
             "-p", f"{self.unity_port}:6400",
             "-e", "UNITY_PROJECT_PATH=",  # No Unity project for faster startup
             "-e", "LOG_LEVEL=DEBUG",
-            self.test_image_name
         ]
+        
+        # Add CI_MODE if running in CI
+        if os.environ.get("CI") == "true":
+            run_cmd.extend(["-e", "CI_MODE=true"])
+        
+        run_cmd.append(self.test_image_name)
         
         self.run_command(run_cmd)
         
