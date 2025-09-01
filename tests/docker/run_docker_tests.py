@@ -121,6 +121,8 @@ class DockerTestRunner:
         result = self.run_command(build_cmd, timeout=1800)
         
         if "Successfully built" not in result.stdout and "Successfully tagged" not in result.stdout:
+            self.log(f"Build stdout: {result.stdout[-500:]}")  # Last 500 chars
+            self.log(f"Build stderr: {result.stderr[-500:]}")  # Last 500 chars
             raise Exception("Build did not complete successfully")
         
         # Verify image exists

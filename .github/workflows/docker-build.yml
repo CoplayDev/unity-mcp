@@ -86,29 +86,47 @@ jobs:
         mkdir -p tests/docker
         
         # List files for debugging
-        echo "Docker files:"
-        find docker -type f -name "*" | head -10
-        echo "Unity MCP Server files:"
-        find UnityMcpBridge/UnityMcpServer~/src -type f -name "*.py" | head -10
+        echo "=== Docker files ==="
+        find docker -type f -name "*" | sort
+        
+        echo -e "\n=== Unity MCP Server structure ==="
+        if [ -d "UnityMcpBridge/UnityMcpServer~/src" ]; then
+          find UnityMcpBridge/UnityMcpServer~/src -type f -name "*" | sort
+        else
+          echo "ERROR: UnityMcpBridge/UnityMcpServer~/src directory not found!"
+          ls -la UnityMcpBridge/ || echo "UnityMcpBridge directory not found"
+        fi
+        
+        echo -e "\n=== Checking required files ==="
+        for file in docker/Dockerfile.ci docker/scripts/entrypoint.sh docker/scripts/healthcheck.sh docker/scripts/mock_headless_server.py; do
+          if [ -f "$file" ]; then
+            echo "✓ $file exists"
+          else
+            echo "✗ $file missing!"
+          fi
+        done
     
     - name: Build Docker image
       id: build
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        file: docker/Dockerfile.ci
-        target: production
-        platforms: linux/amd64
-        push: false
-        load: true
-        tags: |
-          unity-mcp:test
-          unity-mcp:${{ matrix.target }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-        build-args: |
-          UNITY_VERSION=${{ env.UNITY_VERSION }}
-          PYTHON_VERSION=3.11
+      run: |
+        echo "Building Docker image with CI Dockerfile..."
+        docker build \
+          -f docker/Dockerfile.ci \
+          -t unity-mcp:test \
+          -t unity-mcp:${{ matrix.target }} \
+          --target production \
+          --build-arg UNITY_VERSION=${{ env.UNITY_VERSION }} \
+          --build-arg PYTHON_VERSION=3.11 \
+          . 2>&1 | tee build.log
+        
+        # Check if build succeeded
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then
+          echo "Build failed. Last 100 lines of output:"
+          tail -n 100 build.log
+          exit 1
+        fi
+        
+        echo "Build completed successfully"
     
     - name: Test Docker image build
       run: |
