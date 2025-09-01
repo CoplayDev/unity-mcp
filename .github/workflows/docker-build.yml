@@ -126,6 +126,7 @@ jobs:
         docker build \
           -f docker/Dockerfile.ci \
           -t unity-mcp:test \
+          -t unity-mcp:latest \
           -t unity-mcp:${{ matrix.target }} \
           --target production \
           --build-arg UNITY_VERSION=${{ env.UNITY_VERSION }} \
@@ -306,11 +307,19 @@ jobs:
     
     - name: Build test image
       run: |
-        docker build \
-          -f docker/Dockerfile.ci \
-          -t unity-mcp:integration \
-          --target production \
-          .
+        # Check if image already exists from build step
+        if docker image inspect unity-mcp:test >/dev/null 2>&1; then
+          echo "Using existing image from build step"
+          docker tag unity-mcp:test unity-mcp:integration
+        else
+          echo "Building integration test image"
+          docker build \
+            -f docker/Dockerfile.ci \
+            -t unity-mcp:integration \
+            --target production \
+            --load \
+            .
+        fi
     
     - name: Run integration tests
       timeout-minutes: 5

@@ -97,6 +97,18 @@ class DockerTestRunner:
         """Test that Docker image builds successfully"""
         self.log("Testing Docker build...")
         
+        # In CI, check if image already exists from previous build step
+        if os.environ.get("CI") == "true":
+            try:
+                self.run_command(["docker", "image", "inspect", "unity-mcp:test"])
+                self.log("Using pre-built CI image: unity-mcp:test")
+                # Tag it with our test name
+                self.run_command(["docker", "tag", "unity-mcp:test", self.test_image_name])
+                self.log("✅ Docker build test passed (using pre-built image)")
+                return True
+            except subprocess.CalledProcessError:
+                self.log("Pre-built image not found, building from scratch...")
+        
         # Use CI Dockerfile if available (for GitHub Actions)
         dockerfile_ci = self.project_root / "docker" / "Dockerfile.ci"
         dockerfile_prod = self.project_root / "docker" / "Dockerfile.production"
@@ -113,14 +125,19 @@ class DockerTestRunner:
             "docker", "build",
             "-f", str(dockerfile),
             "-t", self.test_image_name,
-            "--target", "production",
-            "."
+            "--target", "production"
         ]
+        
+        # Add --load flag if using buildx (common in CI)
+        if os.environ.get("CI") == "true":
+            build_cmd.append("--load")
+            
+        build_cmd.append(".")
         
         self.log(f"Building image: {' '.join(build_cmd)}")
         result = self.run_command(build_cmd, timeout=1800)
         
-        if "Successfully built" not in result.stdout and "Successfully tagged" not in result.stdout:
+        if result.returncode != 0 or ("Successfully built" not in result.stdout and "Successfully tagged" not in result.stdout):
             self.log(f"Build stdout: {result.stdout[-500:]}")  # Last 500 chars
             self.log(f"Build stderr: {result.stderr[-500:]}")  # Last 500 chars
             raise Exception("Build did not complete successfully")
