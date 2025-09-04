@@ -66,6 +66,41 @@ To find it reliably:
 
 Note: In recent builds, the Python server sources are also bundled inside the package under `UnityMcpServer~/src`. This is handy for local testing or pointing MCP clients directly at the packaged server.
 
+## CI Test Workflow (GitHub Actions)
+
+We provide a CI job to run a Natural Language Editing mini-suite against the Unity test project. It spins up a headless Unity container and connects via the MCP bridge.
+
+- Trigger: Workflow dispatch (`Claude NL suite (Unity live)`).
+- Image: `UNITY_IMAGE` (UnityCI) pulled by tag; the job resolves a digest at runtime. Logs are sanitized.
+- Reports: JUnit at `reports/junit-nl-suite.xml`, Markdown at `reports/junit-nl-suite.md`.
+- Publishing: JUnit is normalized to `reports/junit-for-actions.xml` and published; artifacts upload all files under `reports/`.
+
+### Test target script
+- The repo includes a long, standalone C# script used to exercise larger edits and windows:
+  - `TestProjects/UnityMCPTests/Assets/Scripts/LongUnityScriptClaudeTest.cs`
+  Use this file locally and in CI to validate multi-edit batches, anchor inserts, and windowed reads on a sizable script.
+
+### Add a new NL test
+- Edit `.claude/prompts/nl-unity-claude-tests-mini.md` (or `nl-unity-suite-full.md` for the larger suite).
+- Follow the conventions: single `<testsuite>` root, one `<testcase>` per sub-test, end system-out with `VERDICT: PASS|FAIL`.
+- Keep edits minimal and reversible; include evidence windows and compact diffs.
+
+### Run the suite
+1) Push your branch, then manually run the workflow from the Actions tab.
+2) The job writes reports into `reports/` and uploads artifacts.
+3) The “JUnit Test Report” check summarizes results; open the Job Summary for full markdown.
+
+### View results
+- Job Summary: inline markdown summary of the run on the Actions tab in GitHub
+- Check: “JUnit Test Report” on the PR/commit.
+- Artifacts: `claude-nl-suite-artifacts` includes XML and MD.
+
+
+### MCP Connection Debugging
+- *Enable debug logs* in the Unity MCP window (inside the Editor) to view connection status, auto-setup results, and MCP client paths. It shows:
+  - bridge startup/port, client connections, strict framing negotiation, and parsed frames
+  - auto-config path detection (Windows/macOS/Linux), uv/claude resolution, and surfaced errors
+- In CI, the job tails Unity logs (redacted for serial/license/password/token) and prints socket/status JSON diagnostics if startup fails.
 ## Workflow
 
 1. **Make changes** to your source code in this directory

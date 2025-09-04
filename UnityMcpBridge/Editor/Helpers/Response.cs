@@ -35,10 +35,10 @@ namespace MCPForUnity.Editor.Helpers
         /// <summary>
         /// Creates a standardized error response object.
         /// </summary>
-        /// <param name="errorMessage">A message describing the error.</param>
+        /// <param name="errorCodeOrMessage">A message describing the error.</param>
         /// <param name="data">Optional additional data (e.g., error details) to include.</param>
         /// <returns>An object representing the error response.</returns>
-        public static object Error(string errorMessage, object data = null)
+        public static object Error(string errorCodeOrMessage, object data = null)
         {
             if (data != null)
             {
@@ -46,13 +46,16 @@ namespace MCPForUnity.Editor.Helpers
                 return new
                 {
                     success = false,
-                    error = errorMessage,
+                    // Preserve original behavior while adding a machine-parsable code field.
+                    // If callers pass a code string, it will be echoed in both code and error.
+                    code = errorCodeOrMessage,
+                    error = errorCodeOrMessage,
                     data = data,
                 };
             }
             else
             {
-                return new { success = false, error = errorMessage };
+                return new { success = false, code = errorCodeOrMessage, error = errorCodeOrMessage };
             }
         }
     }

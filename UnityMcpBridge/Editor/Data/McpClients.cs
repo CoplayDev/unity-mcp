@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 using MCPForUnity.Editor.Models;
 
 namespace MCPForUnity.Editor.Data
@@ -14,6 +15,11 @@ namespace MCPForUnity.Editor.Data
             {
                 name = "Cursor",
                 windowsConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".cursor",
+                    "mcp.json"
+                ),
+                macConfigPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                     ".cursor",
                     "mcp.json"
@@ -34,6 +40,10 @@ namespace MCPForUnity.Editor.Data
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                     ".claude.json"
                 ),
+                macConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".claude.json"
+                ),
                 linuxConfigPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                     ".claude.json"
@@ -46,6 +56,12 @@ namespace MCPForUnity.Editor.Data
             {
                 name = "Windsurf",
                 windowsConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".codeium",
+                    "windsurf",
+                    "mcp_config.json"
+                ),
+                macConfigPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                     ".codeium",
                     "windsurf",
@@ -69,12 +85,21 @@ namespace MCPForUnity.Editor.Data
                     "Claude",
                     "claude_desktop_config.json"
                 ),
+
+                macConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    "Library",
+                    "Application Support",
+                    "Claude",
+                    "claude_desktop_config.json"
+                ),
                 linuxConfigPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                     ".config",
                     "Claude",
                     "claude_desktop_config.json"
                 ),
+
                 mcpType = McpTypes.ClaudeDesktop,
                 configStatus = "Not Configured",
             },
@@ -82,12 +107,23 @@ namespace MCPForUnity.Editor.Data
             new()
             {
                 name = "VSCode GitHub Copilot",
+                // Windows path is canonical under %AppData%\Code\User
                 windowsConfigPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                     "Code",
                     "User",
                     "mcp.json"
                 ),
+                // macOS: ~/Library/Application Support/Code/User/mcp.json
+                macConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    "Library",
+                    "Application Support",
+                    "Code",
+                    "User",
+                    "mcp.json"
+                ),
+                // Linux: ~/.config/Code/User/mcp.json
                 linuxConfigPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                     ".config",
@@ -103,6 +139,12 @@ namespace MCPForUnity.Editor.Data
             {
                 name = "Kiro",
                 windowsConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".kiro",
+                    "settings",
+                    "mcp.json"
+                ),
+                macConfigPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                     ".kiro",
                     "settings",

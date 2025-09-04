@@ -90,25 +90,21 @@ namespace MCPForUnity.Editor.Windows
                 EditorStyles.boldLabel
             );
             EditorGUILayout.LabelField(
-                "a) Open VSCode Settings (File > Preferences > Settings)",
+                "a) Open or create your VSCode MCP config file (mcp.json) at the path below",
                 instructionStyle
             );
             EditorGUILayout.LabelField(
-                "b) Click on the 'Open Settings (JSON)' button in the top right",
+                "b) Paste the JSON shown below into mcp.json",
                 instructionStyle
             );
             EditorGUILayout.LabelField(
-                "c) Add the MCP configuration shown below to your settings.json file",
-                instructionStyle
-            );
-            EditorGUILayout.LabelField(
-                "d) Save the file and restart VSCode",
+                "c) Save the file and restart VSCode",
                 instructionStyle
             );
             EditorGUILayout.Space(5);
             
             EditorGUILayout.LabelField(
-                "3. VSCode settings.json location:",
+                "3. VSCode mcp.json location:",
                 EditorStyles.boldLabel
             );
 
@@ -121,7 +117,7 @@ namespace MCPForUnity.Editor.Windows
                     System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData),
                     "Code",
                     "User",
-                    "settings.json"
+                    "mcp.json"
                 );
             }
             else 
@@ -132,7 +128,7 @@ namespace MCPForUnity.Editor.Windows
                     "Application Support",
                     "Code",
                     "User",
-                    "settings.json"
+                    "mcp.json"
                 );
             }
 
@@ -205,7 +201,7 @@ namespace MCPForUnity.Editor.Windows
             EditorGUILayout.Space(10);
 
             EditorGUILayout.LabelField(
-                "4. Add this configuration to your settings.json:",
+                "4. Add this configuration to your mcp.json:",
                 EditorStyles.boldLabel
             );
 

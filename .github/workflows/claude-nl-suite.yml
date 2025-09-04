@@ -1,0 +1,543 @@
+name: Claude NL/T Full Suite (Unity live)
+
+on:
+    workflow_dispatch: {}
+  
+permissions:
+    contents: read
+    checks: write
+  
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+  
+env:
+    UNITY_VERSION: 2021.3.45f1
+    UNITY_IMAGE: unityci/editor:ubuntu-2021.3.45f1-linux-il2cpp-3
+    UNITY_CACHE_ROOT: /home/runner/work/_temp/_github_home
+  
+jobs:
+    nl-suite:
+      if: github.event_name == 'workflow_dispatch'
+      runs-on: ubuntu-latest
+      timeout-minutes: 60
+      env:
+        JUNIT_OUT: reports/junit-nl-suite.xml
+        MD_OUT:    reports/junit-nl-suite.md
+  
+      steps:
+        # ---------- Secrets check ----------
+        - name: Detect secrets (outputs)
+          id: detect
+          env:
+            UNITY_LICENSE:  ${{ secrets.UNITY_LICENSE }}
+            UNITY_EMAIL:    ${{ secrets.UNITY_EMAIL }}
+            UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+            UNITY_SERIAL:   ${{ secrets.UNITY_SERIAL }}
+            ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          run: |
+            set -e
+            if [ -n "$ANTHROPIC_API_KEY" ]; then echo "anthropic_ok=true" >> "$GITHUB_OUTPUT"; else echo "anthropic_ok=false" >> "$GITHUB_OUTPUT"; fi
+            if [ -n "$UNITY_LICENSE" ] || { [ -n "$UNITY_EMAIL" ] && [ -n "$UNITY_PASSWORD" ]; } || [ -n "$UNITY_SERIAL" ]; then
+              echo "unity_ok=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "unity_ok=false" >> "$GITHUB_OUTPUT"
+            fi
+  
+        - uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
+  
+        # ---------- Python env for MCP server (uv) ----------
+        - uses: astral-sh/setup-uv@v4
+          with:
+            python-version: '3.11'
+  
+        - name: Install MCP server
+          run: |
+            set -eux
+            uv venv
+            echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> "$GITHUB_ENV"
+            echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+            if [ -f UnityMcpBridge/UnityMcpServer~/src/pyproject.toml ]; then
+              uv pip install -e UnityMcpBridge/UnityMcpServer~/src
+            elif [ -f UnityMcpBridge/UnityMcpServer~/src/requirements.txt ]; then
+              uv pip install -r UnityMcpBridge/UnityMcpServer~/src/requirements.txt
+            elif [ -f UnityMcpBridge/UnityMcpServer~/pyproject.toml ]; then
+              uv pip install -e UnityMcpBridge/UnityMcpServer~/
+            elif [ -f UnityMcpBridge/UnityMcpServer~/requirements.txt ]; then
+              uv pip install -r UnityMcpBridge/UnityMcpServer~/requirements.txt
+            else
+              echo "No MCP Python deps found (skipping)"
+            fi
+  
+        # ---------- License prime on host (GameCI) ----------
+        - name: Prime Unity license on host (GameCI)
+          if: steps.detect.outputs.unity_ok == 'true'
+          uses: game-ci/unity-test-runner@v4
+          env:
+            UNITY_LICENSE:  ${{ secrets.UNITY_LICENSE }}
+            UNITY_EMAIL:    ${{ secrets.UNITY_EMAIL }}
+            UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+            UNITY_SERIAL:   ${{ secrets.UNITY_SERIAL }}
+          with:
+            projectPath: TestProjects/UnityMCPTests
+            testMode: EditMode
+            customParameters: -runTests -testFilter __NoSuchTest__ -batchmode -nographics
+            unityVersion: ${{ env.UNITY_VERSION }}
+  
+        # (Optional) Inspect license caches
+        - name: Inspect GameCI license caches (host)
+          if: steps.detect.outputs.unity_ok == 'true'
+          run: |
+            set -eux
+            find "${{ env.UNITY_CACHE_ROOT }}" -maxdepth 4 \( -path "*/.cache" -prune -o -type f \( -name '*.ulf' -o -name 'user.json' \) -print \) 2>/dev/null || true
+  
+        # ---------- Clean old MCP status ----------
+        - name: Clean old MCP status
+          run: |
+            set -eux
+            mkdir -p "$HOME/.unity-mcp"
+            rm -f "$HOME/.unity-mcp"/unity-mcp-status-*.json || true
+  
+        # ---------- Start headless Unity (persistent bridge) ----------
+        - name: Start Unity (persistent bridge)
+          if: steps.detect.outputs.unity_ok == 'true'
+          env:
+            UNITY_EMAIL:    ${{ secrets.UNITY_EMAIL }}
+            UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+            UNITY_SERIAL:   ${{ secrets.UNITY_SERIAL }}
+          run: |
+            set -eu
+            if [ ! -d "${{ github.workspace }}/TestProjects/UnityMCPTests/ProjectSettings" ]; then
+              echo "Unity project not found; failing fast."
+              exit 1
+            fi
+            mkdir -p "$HOME/.unity-mcp"
+            MANUAL_ARG=()
+            if [ -f "${UNITY_CACHE_ROOT}/.local/share/unity3d/Unity_lic.ulf" ]; then
+              MANUAL_ARG=(-manualLicenseFile /root/.local/share/unity3d/Unity_lic.ulf)
+            fi
+            EBL_ARGS=()
+            [ -n "${UNITY_SERIAL:-}" ]   && EBL_ARGS+=(-serial "$UNITY_SERIAL")
+            [ -n "${UNITY_EMAIL:-}" ]    && EBL_ARGS+=(-username "$UNITY_EMAIL")
+            [ -n "${UNITY_PASSWORD:-}" ] && EBL_ARGS+=(-password "$UNITY_PASSWORD")
+            docker rm -f unity-mcp >/dev/null 2>&1 || true
+            docker run -d --name unity-mcp --network host \
+              -e HOME=/root \
+              -e UNITY_MCP_ALLOW_BATCH=1 -e UNITY_MCP_STATUS_DIR=/root/.unity-mcp \
+              -e UNITY_MCP_BIND_HOST=127.0.0.1 \
+              -v "${{ github.workspace }}:/workspace" -w /workspace \
+              -v "${{ env.UNITY_CACHE_ROOT }}:/root" \
+              -v "$HOME/.unity-mcp:/root/.unity-mcp" \
+              ${{ env.UNITY_IMAGE }} /opt/unity/Editor/Unity -batchmode -nographics -logFile - \
+                -stackTraceLogType Full \
+                -projectPath /workspace/TestProjects/UnityMCPTests \
+                "${MANUAL_ARG[@]}" \
+                "${EBL_ARGS[@]}" \
+                -executeMethod MCPForUnity.Editor.MCPForUnityBridge.StartAutoConnect
+  
+        # ---------- Wait for Unity bridge ----------
+        - name: Wait for Unity bridge (robust)
+          if: steps.detect.outputs.unity_ok == 'true'
+          run: |
+            set -euo pipefail
+            if ! docker ps --format '{{.Names}}' | grep -qx 'unity-mcp'; then
+              echo "Unity container failed to start"; docker ps -a || true; exit 1
+            fi
+            docker logs -f unity-mcp 2>&1 | sed -E 's/((serial|license|password|token)[^[:space:]]*)/[REDACTED]/ig' & LOGPID=$!
+            deadline=$((SECONDS+420)); READY=0
+            try_connect_host() {
+              P="$1"
+              timeout 1 bash -lc "exec 3<>/dev/tcp/127.0.0.1/$P; head -c 8 <&3 >/dev/null" && return 0 || true
+              if command -v nc >/dev/null 2>&1; then nc -6 -z ::1 "$P" && return 0 || true; fi
+              return 1
+            }
+            while [ $SECONDS -lt $deadline ]; do
+              if docker logs unity-mcp 2>&1 | grep -qE "MCP Bridge listening|Bridge ready|Server started"; then
+                READY=1; echo "Bridge ready (log markers)"; break
+              fi
+              PORT=$(python3 -c "import os,glob,json,sys,time; b=os.path.expanduser('~/.unity-mcp'); fs=sorted(glob.glob(os.path.join(b,'unity-mcp-status-*.json')), key=os.path.getmtime, reverse=True); print(next((json.load(open(f,'r',encoding='utf-8')).get('unity_port') for f in fs if time.time()-os.path.getmtime(f)<=300 and json.load(open(f,'r',encoding='utf-8')).get('unity_port')), '' ))" 2>/dev/null || true)
+              if [ -n "${PORT:-}" ] && { try_connect_host "$PORT" || docker exec unity-mcp bash -lc "timeout 1 bash -lc 'exec 3<>/dev/tcp/127.0.0.1/$PORT' || (command -v nc >/dev/null 2>&1 && nc -6 -z ::1 $PORT)"; }; then
+                READY=1; echo "Bridge ready on port $PORT"; break
+              fi
+              if docker logs unity-mcp 2>&1 | grep -qE "No valid Unity Editor license|Token not found in cache|com\.unity\.editor\.headless"; then
+                echo "Licensing error detected"; break
+              fi
+              sleep 2
+            done
+            kill $LOGPID || true
+            if [ "$READY" != "1" ]; then
+              echo "Bridge not ready; diagnostics:"
+              echo "== status files =="; ls -la "$HOME/.unity-mcp" || true
+              echo "== status contents =="; for f in "$HOME"/.unity-mcp/unity-mcp-status-*.json; do [ -f "$f" ] && { echo "--- $f"; sed -n '1,120p' "$f"; }; done
+              echo "== sockets (inside container) =="; docker exec unity-mcp bash -lc 'ss -lntp || netstat -tulpen || true'
+              echo "== tail of Unity log =="
+              docker logs --tail 200 unity-mcp | sed -E 's/((serial|license|password|token)[^[:space:]]*)/[REDACTED]/ig' || true
+              exit 1
+            fi
+  
+        # ---------- MCP client config ----------
+        - name: Write MCP config (.claude/mcp.json)
+          run: |
+            set -eux
+            mkdir -p .claude
+            cat > .claude/mcp.json <<JSON
+            {
+              "mcpServers": {
+                "unity": {
+                  "command": "uv",
+                  "args": ["run","--active","--directory","UnityMcpBridge/UnityMcpServer~/src","python","server.py"],
+                  "transport": { "type": "stdio" },
+                  "env": {
+                    "PYTHONUNBUFFERED": "1",
+                    "MCP_LOG_LEVEL": "debug",
+                    "UNITY_PROJECT_ROOT": "$GITHUB_WORKSPACE/TestProjects/UnityMCPTests"
+                  }
+                }
+              }
+            }
+            JSON
+  
+        # ---------- Reports & helper ----------
+        - name: Prepare reports and dirs
+          run: |
+            set -eux
+            rm -f reports/*.xml reports/*.md || true
+            mkdir -p reports reports/_snapshots scripts
+  
+        - name: Create report skeletons
+          run: |
+            set -eu
+            cat > "$JUNIT_OUT" <<'XML'
+            <?xml version="1.0" encoding="UTF-8"?>
+            <testsuites><testsuite name="UnityMCP.NL-T" tests="1" failures="1" errors="0" skipped="0" time="0">
+              <testcase name="NL-Suite.Bootstrap" classname="UnityMCP.NL-T">
+                <failure message="bootstrap">Bootstrap placeholder; suite will append real tests.</failure>
+              </testcase>
+            </testsuite></testsuites>
+            XML
+            printf '# Unity NL/T Editing Suite Test Results\n\n' > "$MD_OUT"
+  
+        - name: Write safe revert helper (scripts/nlt-revert.sh)
+          shell: bash
+          run: |
+            set -eux
+            cat > scripts/nlt-revert.sh <<'BASH'
+            #!/usr/bin/env bash
+            set -euo pipefail
+            sub="${1:-}"; target_rel="${2:-}"; snap="${3:-}"
+            WS="${GITHUB_WORKSPACE:-$PWD}"
+            ROOT="$WS/TestProjects/UnityMCPTests"
+            t_abs="$(realpath -m "$WS/$target_rel")"
+            s_abs="$(realpath -m "$WS/$snap")"
+            if [[ "$t_abs" != "$ROOT/Assets/"* ]]; then
+              echo "refuse: target outside allowed scope: $t_abs" >&2; exit 2
+            fi
+            mkdir -p "$(dirname "$s_abs")"
+            case "$sub" in
+              snapshot)
+                cp -f "$t_abs" "$s_abs"
+                sha=$(sha256sum "$s_abs" | awk '{print $1}')
+                echo "snapshot_sha=$sha"
+                ;;
+              restore)
+                if [[ ! -f "$s_abs" ]]; then echo "snapshot missing: $s_abs" >&2; exit 3; fi
+                cp -f "$s_abs" "$t_abs"
+                touch "$t_abs"
+                sha=$(sha256sum "$t_abs" | awk '{print $1}')
+                echo "restored_sha=$sha"
+                ;;
+              *)
+                echo "usage: $0 snapshot|restore <target_rel_path> <snapshot_path>" >&2; exit 1
+                ;;
+            esac
+            BASH
+            chmod +x scripts/nlt-revert.sh
+
+        # ---------- Snapshot baseline (pre-agent) ----------
+        - name: Snapshot baseline (pre-agent)
+          if: steps.detect.outputs.anthropic_ok == 'true' && steps.detect.outputs.unity_ok == 'true'
+          shell: bash
+          run: |
+            set -euo pipefail
+            TARGET="TestProjects/UnityMCPTests/Assets/Scripts/LongUnityScriptClaudeTest.cs"
+            SNAP="reports/_snapshots/LongUnityScriptClaudeTest.cs.baseline"
+            scripts/nlt-revert.sh snapshot "$TARGET" "$SNAP"
+  
+              
+        # ---------- Run suite ----------
+        - name: Run Claude NL suite (single pass)
+          uses: anthropics/claude-code-base-action@beta
+          if: steps.detect.outputs.anthropic_ok == 'true' && steps.detect.outputs.unity_ok == 'true'
+          continue-on-error: true
+          with:
+            use_node_cache: false
+            prompt_file: .claude/prompts/nl-unity-suite-full-additive.md
+            mcp_config: .claude/mcp.json
+            allowed_tools: >-
+              Write,
+              Bash(scripts/nlt-revert.sh:*),
+              mcp__unity__manage_editor,
+              mcp__unity__list_resources,
+              mcp__unity__read_resource,
+              mcp__unity__apply_text_edits,
+              mcp__unity__script_apply_edits,
+              mcp__unity__validate_script,
+              mcp__unity__find_in_file,
+              mcp__unity__read_console,
+              mcp__unity__get_sha
+            disallowed_tools: TodoWrite,Task
+            model: claude-3-7-sonnet-latest
+            timeout_minutes: "30"
+            anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+  
+        # ---------- Merge testcase fragments into JUnit ----------
+        - name: Normalize/assemble JUnit in-place (single file)
+          if: always()
+          shell: bash
+          run: |
+            python3 - <<'PY'
+            from pathlib import Path
+            import xml.etree.ElementTree as ET
+            import re, os
+            def localname(tag: str) -> str: return tag.rsplit('}', 1)[-1] if '}' in tag else tag
+            src = Path(os.environ.get('JUNIT_OUT', 'reports/junit-nl-suite.xml'))
+            if not src.exists(): raise SystemExit(0)
+            tree = ET.parse(src); root = tree.getroot()
+            suite = root.find('./*') if localname(root.tag) == 'testsuites' else root
+            if suite is None: raise SystemExit(0)
+            fragments = sorted(Path('reports').glob('*_results.xml'))
+            added = 0
+            for frag in fragments:
+                try:
+                    froot = ET.parse(frag).getroot()
+                    if localname(froot.tag) == 'testcase':
+                        suite.append(froot); added += 1
+                    else:
+                        for tc in froot.findall('.//testcase'):
+                            suite.append(tc); added += 1
+                except Exception:
+                    txt = Path(frag).read_text(encoding='utf-8', errors='replace')
+                    for m in re.findall(r'<testcase[\\s\\S]*?</testcase>', txt, flags=re.DOTALL):
+                        try: suite.append(ET.fromstring(m)); added += 1
+                        except Exception: pass
+            if added:
+                # Drop bootstrap placeholder and recompute counts
+                removed_bootstrap = 0
+                for tc in list(suite.findall('.//testcase')):
+                    name = (tc.get('name') or '')
+                    if name == 'NL-Suite.Bootstrap':
+                        suite.remove(tc)
+                        removed_bootstrap += 1
+                testcases = suite.findall('.//testcase')
+                tests_cnt = len(testcases)
+                failures_cnt = sum(1 for tc in testcases if (tc.find('failure') is not None or tc.find('error') is not None))
+                suite.set('tests', str(tests_cnt))
+                suite.set('failures', str(failures_cnt))
+                suite.set('errors', str(0))
+                suite.set('skipped', str(0))
+                tree.write(src, encoding='utf-8', xml_declaration=True)
+                print(f"Added {added} testcase fragments; removed bootstrap={removed_bootstrap}; tests={tests_cnt}; failures={failures_cnt}")
+            PY
+  
+        # ---------- Markdown summary from JUnit ----------
+        - name: Build markdown summary from JUnit
+          if: always()
+          shell: bash
+          run: |
+            python3 - <<'PY'
+            import xml.etree.ElementTree as ET
+            from pathlib import Path
+            import os, html
+
+            def localname(tag: str) -> str:
+                return tag.rsplit('}', 1)[-1] if '}' in tag else tag
+
+            src = Path(os.environ.get('JUNIT_OUT', 'reports/junit-nl-suite.xml'))
+            md_out = Path(os.environ.get('MD_OUT', 'reports/junit-nl-suite.md'))
+            # Ensure destination directory exists even if earlier prep steps were skipped
+            md_out.parent.mkdir(parents=True, exist_ok=True)
+
+            if not src.exists():
+                md_out.write_text("# Unity NL/T Editing Suite Test Results\n\n(No JUnit found)\n", encoding='utf-8')
+                raise SystemExit(0)
+
+            tree = ET.parse(src)
+            root = tree.getroot()
+            suite = root.find('./*') if localname(root.tag) == 'testsuites' else root
+            cases = [] if suite is None else list(suite.findall('.//testcase'))
+
+            total = len(cases)
+            failures = sum(1 for tc in cases if (tc.find('failure') is not None or tc.find('error') is not None))
+            passed = total - failures
+
+            desired = ['NL-0','NL-1','NL-2','NL-3','NL-4','T-A','T-B','T-C','T-D','T-E','T-F','T-G','T-H','T-I','T-J']
+            name_to_case = {(tc.get('name') or ''): tc for tc in cases}
+
+            def status_for(prefix: str):
+                for name, tc in name_to_case.items():
+                    if name.startswith(prefix):
+                        return not ((tc.find('failure') is not None) or (tc.find('error') is not None))
+                return None
+
+            lines = []
+            lines += [
+                '# Unity NL/T Editing Suite Test Results',
+                '',
+                f'Totals: {passed} passed, {failures} failed, {total} total',
+                '',
+                '## Test Checklist'
+            ]
+            for p in desired:
+                st = status_for(p)
+                lines.append(f"- [x] {p}" if st is True else (f"- [ ] {p} (fail)" if st is False else f"- [ ] {p} (not run)"))
+            lines.append('')
+
+            # Rich per-test system-out details
+            lines.append('## Test Details')
+
+            def order_key(n: str):
+                try:
+                    if n.startswith('NL-') and n[3].isdigit():
+                        return (0, int(n.split('.')[0].split('-')[1]))
+                except Exception:
+                    pass
+                if n.startswith('T-') and len(n) > 2 and n[2].isalpha():
+                    return (1, ord(n[2]))
+                return (2, n)
+
+            MAX_CHARS = 2000
+            for name in sorted(name_to_case.keys(), key=order_key):
+                tc = name_to_case[name]
+                status_badge = "PASS" if (tc.find('failure') is None and tc.find('error') is None) else "FAIL"
+                lines.append(f"### {name} — {status_badge}")
+                so = tc.find('system-out')
+                text = '' if so is None or so.text is None else so.text.replace('\r\n','\n')
+                # Unescape XML entities so code reads naturally (e.g., => instead of =&gt;)
+                if text:
+                    text = html.unescape(text)
+                if text.strip():
+                    t = text.strip()
+                    if len(t) > MAX_CHARS:
+                        t = t[:MAX_CHARS] + "\n…(truncated)"
+                    # Use a safer fence if content contains triple backticks
+                    fence = '```'
+                    if '```' in t:
+                        fence = '````'
+                    lines.append(fence)
+                    lines.append(t)
+                    lines.append(fence)
+                else:
+                    lines.append('(no system-out)')
+                node = tc.find('failure') or tc.find('error')
+                if node is not None:
+                    msg = (node.get('message') or '').strip()
+                    body = (node.text or '').strip()
+                    if msg: lines.append(f"- Message: {msg}")
+                    if body: lines.append(f"- Detail: {body.splitlines()[0][:500]}")
+                lines.append('')
+
+            md_out.write_text('\n'.join(lines), encoding='utf-8')
+            PY
+  
+        - name: "Debug: list report files"
+          if: always()
+          shell: bash
+          run: |
+            set -eux
+            ls -la reports || true
+            shopt -s nullglob
+            for f in reports/*.xml; do
+              echo "===== $f ====="
+              head -n 40 "$f" || true
+            done
+  
+        # ---------- Collect execution transcript (if present) ----------
+        - name: Collect action execution transcript
+          if: always()
+          shell: bash
+          run: |
+            set -eux
+            if [ -f "$RUNNER_TEMP/claude-execution-output.json" ]; then
+              cp "$RUNNER_TEMP/claude-execution-output.json" reports/claude-execution-output.json
+            elif [ -f "/home/runner/work/_temp/claude-execution-output.json" ]; then
+              cp "/home/runner/work/_temp/claude-execution-output.json" reports/claude-execution-output.json
+            fi
+  
+        - name: Sanitize markdown (normalize newlines)
+          if: always()
+          run: |
+            set -eu
+            python3 - <<'PY'
+            from pathlib import Path
+            rp=Path('reports'); rp.mkdir(parents=True, exist_ok=True)
+            for p in rp.glob('*.md'):
+                b=p.read_bytes().replace(b'\x00', b'')
+                s=b.decode('utf-8','replace').replace('\r\n','\n')
+                p.write_text(s, encoding='utf-8', newline='\n')
+            PY
+  
+        - name: NL/T details → Job Summary
+          if: always()
+          run: |
+            echo "## Unity NL/T Editing Suite — Summary" >> $GITHUB_STEP_SUMMARY
+            python3 - <<'PY' >> $GITHUB_STEP_SUMMARY
+            from pathlib import Path
+            p = Path('reports/junit-nl-suite.md')
+            if p.exists():
+                text = p.read_bytes().decode('utf-8', 'replace')
+                MAX = 65000
+                print(text[:MAX])
+                if len(text) > MAX:
+                    print("\n\n_…truncated; full report in artifacts._")
+            else:
+                print("_No markdown report found._")
+            PY
+  
+        - name: Fallback JUnit if missing
+          if: always()
+          run: |
+            set -eu
+            mkdir -p reports
+            if [ ! -f "$JUNIT_OUT" ]; then
+              printf '%s\n' \
+                '<?xml version="1.0" encoding="UTF-8"?>' \
+                '<testsuite name="UnityMCP.NL-T" tests="1" failures="1" time="0">' \
+                '  <testcase classname="UnityMCP.NL-T" name="NL-Suite.Execution" time="0.0">' \
+                '    <failure><![CDATA[No JUnit was produced by the NL suite step. See the step logs.]]></failure>' \
+                '  </testcase>' \
+                '</testsuite>' \
+                > "$JUNIT_OUT"
+            fi
+  
+        - name: Publish JUnit report
+          if: always()
+          uses: mikepenz/action-junit-report@v5
+          with:
+            report_paths: '${{ env.JUNIT_OUT }}'
+            include_passed: true
+            detailed_summary: true
+            annotate_notice: true
+            require_tests: false
+            fail_on_parse_error: true
+  
+        - name: Upload artifacts (reports + fragments + transcript)
+          if: always()
+          uses: actions/upload-artifact@v4
+          with:
+            name: claude-nl-suite-artifacts
+            path: |
+              ${{ env.JUNIT_OUT }}
+              ${{ env.MD_OUT }}
+              reports/*_results.xml
+              reports/claude-execution-output.json
+            retention-days: 7
+  
+        # ---------- Always stop Unity ----------
+        - name: Stop Unity
+          if: always()
+          run: |
+            docker logs --tail 400 unity-mcp | sed -E 's/((serial|license|password|token)[^[:space:]]*)/[REDACTED]/ig' || true
+            docker rm -f unity-mcp || true
+  

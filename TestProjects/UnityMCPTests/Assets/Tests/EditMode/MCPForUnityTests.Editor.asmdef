@@ -3,6 +3,7 @@
   "rootNamespace": "",
   "references": [
     "MCPForUnity.Editor",
+    "TestAsmdef",
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner"
   ],

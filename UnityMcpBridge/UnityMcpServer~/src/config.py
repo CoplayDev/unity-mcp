@@ -17,6 +17,9 @@ class ServerConfig:
     # Connection settings
     connection_timeout: float = 60.0  # default steady-state timeout; retries use shorter timeouts
     buffer_size: int = 16 * 1024 * 1024  # 16MB buffer
+    # Framed receive behavior
+    framed_receive_timeout: float = 2.0  # max seconds to wait while consuming heartbeats only
+    max_heartbeat_frames: int = 16       # cap heartbeat frames consumed before giving up
     
     # Logging settings
     log_level: str = "INFO"

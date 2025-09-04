@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditorInternal; // Required for tag management
@@ -89,6 +90,8 @@ namespace MCPForUnity.Editor.Tools
                 // Editor State/Info
                 case "get_state":
                     return GetEditorState();
+                case "get_project_root":
+                    return GetProjectRoot();
                 case "get_windows":
                     return GetEditorWindows();
                 case "get_active_tool":
@@ -137,7 +140,7 @@ namespace MCPForUnity.Editor.Tools
 
                 default:
                     return Response.Error(
-                        $"Unknown action: '{action}'. Supported actions include play, pause, stop, get_state, get_windows, get_active_tool, get_selection, set_active_tool, add_tag, remove_tag, get_tags, add_layer, remove_layer, get_layers."
+                        $"Unknown action: '{action}'. Supported actions include play, pause, stop, get_state, get_project_root, get_windows, get_active_tool, get_selection, set_active_tool, add_tag, remove_tag, get_tags, add_layer, remove_layer, get_layers."
                     );
             }
         }
@@ -162,6 +165,25 @@ namespace MCPForUnity.Editor.Tools
             catch (Exception e)
             {
                 return Response.Error($"Error getting editor state: {e.Message}");
+            }
+        }
+
+        private static object GetProjectRoot()
+        {
+            try
+            {
+                // Application.dataPath points to <Project>/Assets
+                string assetsPath = Application.dataPath.Replace('\\', '/');
+                string projectRoot = Directory.GetParent(assetsPath)?.FullName.Replace('\\', '/');
+                if (string.IsNullOrEmpty(projectRoot))
+                {
+                    return Response.Error("Could not determine project root from Application.dataPath");
+                }
+                return Response.Success("Project root resolved.", new { projectRoot });
+            }
+            catch (Exception e)
+            {
+                return Response.Error($"Error getting project root: {e.Message}");
             }
         }
 

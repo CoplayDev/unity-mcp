@@ -1,3 +1,4 @@
+#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -5,6 +6,7 @@ using System.Reflection;
 using Newtonsoft.Json; // Added for JsonSerializationException
 using Newtonsoft.Json.Linq;
 using UnityEditor;
+using UnityEditor.Compilation; // For CompilationPipeline
 using UnityEditor.SceneManagement;
 using UnityEditorInternal;
 using UnityEngine;
@@ -19,10 +21,29 @@ namespace MCPForUnity.Editor.Tools
     /// </summary>
     public static class ManageGameObject
     {
+        // Shared JsonSerializer to avoid per-call allocation overhead
+        private static readonly JsonSerializer InputSerializer = JsonSerializer.Create(new JsonSerializerSettings
+        {
+            Converters = new List<JsonConverter>
+            {
+                new Vector3Converter(),
+                new Vector2Converter(), 
+                new QuaternionConverter(),
+                new ColorConverter(),
+                new RectConverter(),
+                new BoundsConverter(),
+                new UnityEngineObjectConverter()
+            }
+        });
+        
         // --- Main Handler ---
 
         public static object HandleCommand(JObject @params)
         {
+            if (@params == null)
+            {
+                return Response.Error("Parameters cannot be null.");
+            }
 
             string action = @params["action"]?.ToString().ToLower();
             if (string.IsNullOrEmpty(action))
@@ -283,11 +304,16 @@ namespace MCPForUnity.Editor.Tools
                         newGo = GameObject.CreatePrimitive(type);
                         // Set name *after* creation for primitives
                         if (!string.IsNullOrEmpty(name))
+                        {
                             newGo.name = name;
+                        }
                         else
+                        {
+                            UnityEngine.Object.DestroyImmediate(newGo); // cleanup leak
                             return Response.Error(
                                 "'name' parameter is required when creating a primitive."
-                            ); // Name is essential
+                            );
+                        }
                         createdNewObject = true;
                     }
                     catch (ArgumentException)
@@ -759,6 +785,7 @@ namespace MCPForUnity.Editor.Tools
             }
 
             // Set Component Properties
+            var componentErrors = new List<object>();
             if (@params["componentProperties"] is JObject componentPropertiesObj)
             {
                 foreach (var prop in componentPropertiesObj.Properties())
@@ -773,10 +800,24 @@ namespace MCPForUnity.Editor.Tools
                             propertiesToSet
                         );
                         if (setResult != null)
-                            return setResult;
-                        modified = true;
+                        {
+                            componentErrors.Add(setResult);
+                        }
+                        else
+                        {
+                            modified = true;
+                        }
                     }
                 }
+            }
+
+            // Return component errors if any occurred (after processing all components)
+            if (componentErrors.Count > 0)
+            {
+                return Response.Error(
+                    $"One or more component property operations failed on '{targetGo.name}'.",
+                    new { componentErrors = componentErrors }
+                );
             }
 
             if (!modified)
@@ -1096,6 +1137,29 @@ namespace MCPForUnity.Editor.Tools
         }
 
         // --- Internal Helpers ---
+
+        /// <summary>
+        /// Parses a JArray like [x, y, z] into a Vector3.
+        /// </summary>
+        private static Vector3? ParseVector3(JArray array)
+        {
+            if (array != null && array.Count == 3)
+            {
+                try
+                {
+                    return new Vector3(
+                        array[0].ToObject<float>(),
+                        array[1].ToObject<float>(),
+                        array[2].ToObject<float>()
+                    );
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"Failed to parse JArray as Vector3: {array}. Error: {ex.Message}");
+                }
+            }
+            return null;
+        }
 
         /// <summary>
         /// Finds a single GameObject based on token (ID, name, path) and search method.
@@ -1464,7 +1528,18 @@ namespace MCPForUnity.Editor.Tools
             Component targetComponentInstance = null
         )
         {
-            Component targetComponent = targetComponentInstance ?? targetGo.GetComponent(compName);
+            Component targetComponent = targetComponentInstance;
+            if (targetComponent == null)
+            {
+                if (ComponentResolver.TryResolve(compName, out var compType, out var compError))
+                {
+                    targetComponent = targetGo.GetComponent(compType);
+                }
+                else
+                {
+                    targetComponent = targetGo.GetComponent(compName); // fallback to string-based lookup
+                }
+            }
             if (targetComponent == null)
             {
                 return Response.Error(
@@ -1474,6 +1549,7 @@ namespace MCPForUnity.Editor.Tools
 
             Undo.RecordObject(targetComponent, "Set Component Properties");
 
+            var failures = new List<string>();
             foreach (var prop in propertiesToSet.Properties())
             {
                 string propName = prop.Name;
@@ -1481,14 +1557,16 @@ namespace MCPForUnity.Editor.Tools
 
                 try
                 {
-                    if (!SetProperty(targetComponent, propName, propValue))
+                    bool setResult = SetProperty(targetComponent, propName, propValue);
+                    if (!setResult)
                     {
-                        // Log warning if property could not be set
-                        Debug.LogWarning(
-                            $"[ManageGameObject] Could not set property '{propName}' on component '{compName}' ('{targetComponent.GetType().Name}'). Property might not exist, be read-only, or type mismatch."
-                        );
-                        // Optionally return an error here instead of just logging
-                        // return Response.Error($"Could not set property '{propName}' on component '{compName}'.");
+                        var availableProperties = ComponentResolver.GetAllComponentProperties(targetComponent.GetType());
+                        var suggestions = ComponentResolver.GetAIPropertySuggestions(propName, availableProperties);
+                        var msg = suggestions.Any()
+                            ? $"Property '{propName}' not found. Did you mean: {string.Join(", ", suggestions)}? Available: [{string.Join(", ", availableProperties)}]"
+                            : $"Property '{propName}' not found. Available: [{string.Join(", ", availableProperties)}]";
+                        Debug.LogWarning($"[ManageGameObject] {msg}");
+                        failures.Add(msg);
                     }
                 }
                 catch (Exception e)
@@ -1496,12 +1574,13 @@ namespace MCPForUnity.Editor.Tools
                     Debug.LogError(
                         $"[ManageGameObject] Error setting property '{propName}' on '{compName}': {e.Message}"
                     );
-                    // Optionally return an error here
-                    // return Response.Error($"Error setting property '{propName}' on '{compName}': {e.Message}");
+                    failures.Add($"Error setting '{propName}': {e.Message}");
                 }
             }
             EditorUtility.SetDirty(targetComponent);
-            return null; // Success (or partial success if warnings were logged)
+            return failures.Count == 0
+                ? null
+                : Response.Error($"One or more properties failed on '{compName}'.", new { errors = failures });
         }
 
         /// <summary>
@@ -1513,25 +1592,8 @@ namespace MCPForUnity.Editor.Tools
             BindingFlags flags =
                 BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase;
 
-             // --- Use a dedicated serializer for input conversion ---
-             // Define this somewhere accessible, maybe static readonly field
-             JsonSerializerSettings inputSerializerSettings = new JsonSerializerSettings
-             {
-                 Converters = new List<JsonConverter>
-                 {
-                    // Add specific converters needed for INPUT deserialization if different from output
-                    new Vector3Converter(),
-                    new Vector2Converter(),
-                    new QuaternionConverter(),
-                    new ColorConverter(),
-                    new RectConverter(),
-                    new BoundsConverter(),
-                    new UnityEngineObjectConverter() // Crucial for finding references from instructions
-                 }
-                 // No ReferenceLoopHandling needed typically for input
-             };
-             JsonSerializer inputSerializer = JsonSerializer.Create(inputSerializerSettings);
-             // --- End Serializer Setup ---
+             // Use shared serializer to avoid per-call allocation
+             var inputSerializer = InputSerializer;
 
             try
             {
@@ -1572,6 +1634,20 @@ namespace MCPForUnity.Editor.Tools
                          else {
                              Debug.LogWarning($"[SetProperty] Conversion failed for field '{memberName}' (Type: {fieldInfo.FieldType.Name}) from token: {value.ToString(Formatting.None)}");
                          }
+                    }
+                    else
+                    {
+                        // Try NonPublic [SerializeField] fields
+                        var npField = type.GetField(memberName, BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                        if (npField != null && npField.GetCustomAttribute<SerializeField>() != null)
+                        {
+                            object convertedValue = ConvertJTokenToType(value, npField.FieldType, inputSerializer);
+                            if (convertedValue != null || value.Type == JTokenType.Null)
+                            {
+                                npField.SetValue(target, convertedValue);
+                                return true;
+                            }
+                        }
                     }
                 }
             }
@@ -2070,83 +2146,287 @@ namespace MCPForUnity.Editor.Tools
 
 
         /// <summary>
-        /// Helper to find a Type by name, searching relevant assemblies.
+        /// Robust component resolver that avoids Assembly.LoadFrom and works with asmdefs.
+        /// Searches already-loaded assemblies, prioritizing runtime script assemblies.
         /// </summary>
         private static Type FindType(string typeName)
         {
-            if (string.IsNullOrEmpty(typeName))
-                return null;
-
-             // Handle fully qualified names first
-            Type type = Type.GetType(typeName);
-            if (type != null) return type;
-
-             // Handle common namespaces implicitly (add more as needed)
-             string[] namespaces = { "UnityEngine", "UnityEngine.UI", "UnityEngine.AI", "UnityEngine.Animations", "UnityEngine.Audio", "UnityEngine.EventSystems", "UnityEngine.InputSystem", "UnityEngine.Networking", "UnityEngine.Rendering", "UnityEngine.SceneManagement", "UnityEngine.Tilemaps", "UnityEngine.U2D", "UnityEngine.Video", "UnityEditor", "UnityEditor.AI", "UnityEditor.Animations", "UnityEditor.Experimental.GraphView", "UnityEditor.IMGUI.Controls", "UnityEditor.PackageManager.UI", "UnityEditor.SceneManagement", "UnityEditor.UI", "UnityEditor.U2D", "UnityEditor.VersionControl" }; // Add more relevant namespaces
-
-             foreach (string ns in namespaces) {
-                 type = Type.GetType($"{ns}.{typeName}, {ns.Split('.')[0]}.CoreModule") ?? // Heuristic: Check CoreModule first for UnityEngine/UnityEditor
-                        Type.GetType($"{ns}.{typeName}, {ns.Split('.')[0]}"); // Try assembly matching namespace root
-                 if (type != null) return type;
-             }
-
-
-             // If not found, search all loaded assemblies (slower, last resort)
-             // Prioritize assemblies likely to contain game/editor types
-             Assembly[] priorityAssemblies = {
-                 Assembly.Load("Assembly-CSharp"), // Main game scripts
-                 Assembly.Load("Assembly-CSharp-Editor"), // Main editor scripts
-                 // Add other important project assemblies if known
-             };
-             foreach (var assembly in priorityAssemblies.Where(a => a != null))
-             {
-                 type = assembly.GetType(typeName) ?? assembly.GetType("UnityEngine." + typeName) ?? assembly.GetType("UnityEditor." + typeName);
-                 if (type != null) return type;
-             }
-
-             // Search remaining assemblies
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies().Except(priorityAssemblies))
+            if (ComponentResolver.TryResolve(typeName, out Type resolvedType, out string error))
             {
-                 try { // Protect against assembly loading errors
-                     type = assembly.GetType(typeName);
-                     if (type != null) return type;
-                     // Also check with common namespaces if simple name given
-                     foreach (string ns in namespaces) {
-                         type = assembly.GetType($"{ns}.{typeName}");
-                         if (type != null) return type;
-                     }
-                 } catch (Exception ex) {
-                      Debug.LogWarning($"[FindType] Error searching assembly {assembly.FullName}: {ex.Message}");
-                 }
+                return resolvedType;
+            }
+            
+            // Log the resolver error if type wasn't found
+            if (!string.IsNullOrEmpty(error))
+            {
+                Debug.LogWarning($"[FindType] {error}");
+            }
+            
+            return null;
+        }
+    }
+    
+    /// <summary>
+    /// Robust component resolver that avoids Assembly.LoadFrom and supports assembly definitions.
+    /// Prioritizes runtime (Player) assemblies over Editor assemblies.
+    /// </summary>
+    internal static class ComponentResolver
+    {
+        private static readonly Dictionary<string, Type> CacheByFqn = new(StringComparer.Ordinal);
+        private static readonly Dictionary<string, Type> CacheByName = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Resolve a Component/MonoBehaviour type by short or fully-qualified name.
+        /// Prefers runtime (Player) script assemblies; falls back to Editor assemblies.
+        /// Never uses Assembly.LoadFrom.
+        /// </summary>
+        public static bool TryResolve(string nameOrFullName, out Type type, out string error)
+        {
+            error = string.Empty;
+            type = null!;
+
+            // Handle null/empty input
+            if (string.IsNullOrWhiteSpace(nameOrFullName))
+            {
+                error = "Component name cannot be null or empty";
+                return false;
             }
 
-             Debug.LogWarning($"[FindType] Type not found after extensive search: '{typeName}'");
-            return null; // Not found
+            // 1) Exact cache hits
+            if (CacheByFqn.TryGetValue(nameOrFullName, out type)) return true;
+            if (!nameOrFullName.Contains(".") && CacheByName.TryGetValue(nameOrFullName, out type)) return true;
+            type = Type.GetType(nameOrFullName, throwOnError: false);
+            if (IsValidComponent(type)) { Cache(type); return true; }
+
+            // 2) Search loaded assemblies (prefer Player assemblies)
+            var candidates = FindCandidates(nameOrFullName);
+            if (candidates.Count == 1) { type = candidates[0]; Cache(type); return true; }
+            if (candidates.Count > 1) { error = Ambiguity(nameOrFullName, candidates); type = null!; return false; }
+
+#if UNITY_EDITOR
+            // 3) Last resort: Editor-only TypeCache (fast index)
+            var tc = TypeCache.GetTypesDerivedFrom<Component>()
+                              .Where(t => NamesMatch(t, nameOrFullName));
+            candidates = PreferPlayer(tc).ToList();
+            if (candidates.Count == 1) { type = candidates[0]; Cache(type); return true; }
+            if (candidates.Count > 1) { error = Ambiguity(nameOrFullName, candidates); type = null!; return false; }
+#endif
+
+            error = $"Component type '{nameOrFullName}' not found in loaded runtime assemblies. " +
+                    "Use a fully-qualified name (Namespace.TypeName) and ensure the script compiled.";
+            type = null!;
+            return false;
+        }
+
+        private static bool NamesMatch(Type t, string q) =>
+            t.Name.Equals(q, StringComparison.Ordinal) ||
+            (t.FullName?.Equals(q, StringComparison.Ordinal) ?? false);
+
+        private static bool IsValidComponent(Type t) =>
+            t != null && typeof(Component).IsAssignableFrom(t);
+
+        private static void Cache(Type t)
+        {
+            if (t.FullName != null) CacheByFqn[t.FullName] = t;
+            CacheByName[t.Name] = t;
+        }
+
+        private static List<Type> FindCandidates(string query)
+        {
+            bool isShort = !query.Contains('.');
+            var loaded = AppDomain.CurrentDomain.GetAssemblies();
+
+#if UNITY_EDITOR
+            // Names of Player (runtime) script assemblies (asmdefs + Assembly-CSharp)
+            var playerAsmNames = new HashSet<string>(
+                UnityEditor.Compilation.CompilationPipeline.GetAssemblies(UnityEditor.Compilation.AssembliesType.Player).Select(a => a.name),
+                StringComparer.Ordinal);
+
+            IEnumerable<System.Reflection.Assembly> playerAsms = loaded.Where(a => playerAsmNames.Contains(a.GetName().Name));
+            IEnumerable<System.Reflection.Assembly> editorAsms = loaded.Except(playerAsms);
+#else
+            IEnumerable<System.Reflection.Assembly> playerAsms = loaded;
+            IEnumerable<System.Reflection.Assembly> editorAsms = Array.Empty<System.Reflection.Assembly>();
+#endif
+            static IEnumerable<Type> SafeGetTypes(System.Reflection.Assembly a)
+            {
+                try { return a.GetTypes(); }
+                catch (ReflectionTypeLoadException rtle) { return rtle.Types.Where(t => t != null)!; }
+            }
+
+            Func<Type, bool> match = isShort
+                ? (t => t.Name.Equals(query, StringComparison.Ordinal))
+                : (t => t.FullName!.Equals(query, StringComparison.Ordinal));
+
+            var fromPlayer = playerAsms.SelectMany(SafeGetTypes)
+                                       .Where(IsValidComponent)
+                                       .Where(match);
+            var fromEditor = editorAsms.SelectMany(SafeGetTypes)
+                                       .Where(IsValidComponent)
+                                       .Where(match);
+
+            var list = new List<Type>(fromPlayer);
+            if (list.Count == 0) list.AddRange(fromEditor);
+            return list;
+        }
+
+#if UNITY_EDITOR
+        private static IEnumerable<Type> PreferPlayer(IEnumerable<Type> seq)
+        {
+            var player = new HashSet<string>(
+                UnityEditor.Compilation.CompilationPipeline.GetAssemblies(UnityEditor.Compilation.AssembliesType.Player).Select(a => a.name),
+                StringComparer.Ordinal);
+
+            return seq.OrderBy(t => player.Contains(t.Assembly.GetName().Name) ? 0 : 1);
+        }
+#endif
+
+        private static string Ambiguity(string query, IEnumerable<Type> cands)
+        {
+            var lines = cands.Select(t => $"{t.FullName} (assembly {t.Assembly.GetName().Name})");
+            return $"Multiple component types matched '{query}':\n - " + string.Join("\n - ", lines) +
+                   "\nProvide a fully qualified type name to disambiguate.";
         }
 
         /// <summary>
-        /// Parses a JArray like [x, y, z] into a Vector3.
+        /// Gets all accessible property and field names from a component type.
         /// </summary>
-        private static Vector3? ParseVector3(JArray array)
+        public static List<string> GetAllComponentProperties(Type componentType)
         {
-            if (array != null && array.Count == 3)
+            if (componentType == null) return new List<string>();
+
+            var properties = componentType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                                         .Where(p => p.CanRead && p.CanWrite)
+                                         .Select(p => p.Name);
+
+            var fields = componentType.GetFields(BindingFlags.Public | BindingFlags.Instance)
+                                     .Where(f => !f.IsInitOnly && !f.IsLiteral)
+                                     .Select(f => f.Name);
+
+            // Also include SerializeField private fields (common in Unity)
+            var serializeFields = componentType.GetFields(BindingFlags.NonPublic | BindingFlags.Instance)
+                                              .Where(f => f.GetCustomAttribute<SerializeField>() != null)
+                                              .Select(f => f.Name);
+
+            return properties.Concat(fields).Concat(serializeFields).Distinct().OrderBy(x => x).ToList();
+        }
+
+        /// <summary>
+        /// Uses AI to suggest the most likely property matches for a user's input.
+        /// </summary>
+        public static List<string> GetAIPropertySuggestions(string userInput, List<string> availableProperties)
+        {
+            if (string.IsNullOrWhiteSpace(userInput) || !availableProperties.Any())
+                return new List<string>();
+
+            // Simple caching to avoid repeated AI calls for the same input
+            var cacheKey = $"{userInput.ToLowerInvariant()}:{string.Join(",", availableProperties)}";
+            if (PropertySuggestionCache.TryGetValue(cacheKey, out var cached))
+                return cached;
+
+            try
             {
-                try
+                var prompt = $"A Unity developer is trying to set a component property but used an incorrect name.\n\n" +
+                             $"User requested: \"{userInput}\"\n" +
+                             $"Available properties: [{string.Join(", ", availableProperties)}]\n\n" +
+                             $"Find 1-3 most likely matches considering:\n" +
+                             $"- Unity Inspector display names vs actual field names (e.g., \"Max Reach Distance\" → \"maxReachDistance\")\n" +
+                             $"- camelCase vs PascalCase vs spaces\n" +
+                             $"- Similar meaning/semantics\n" +
+                             $"- Common Unity naming patterns\n\n" +
+                             $"Return ONLY the matching property names, comma-separated, no quotes or explanation.\n" +
+                             $"If confidence is low (<70%), return empty string.\n\n" +
+                             $"Examples:\n" +
+                             $"- \"Max Reach Distance\" → \"maxReachDistance\"\n" +
+                             $"- \"Health Points\" → \"healthPoints, hp\"\n" +
+                             $"- \"Move Speed\" → \"moveSpeed, movementSpeed\"";
+
+                // For now, we'll use a simple rule-based approach that mimics AI behavior
+                // This can be replaced with actual AI calls later
+                var suggestions = GetRuleBasedSuggestions(userInput, availableProperties);
+                
+                PropertySuggestionCache[cacheKey] = suggestions;
+                return suggestions;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[AI Property Matching] Error getting suggestions for '{userInput}': {ex.Message}");
+                return new List<string>();
+            }
+        }
+
+        private static readonly Dictionary<string, List<string>> PropertySuggestionCache = new();
+
+        /// <summary>
+        /// Rule-based suggestions that mimic AI behavior for property matching.
+        /// This provides immediate value while we could add real AI integration later.
+        /// </summary>
+        private static List<string> GetRuleBasedSuggestions(string userInput, List<string> availableProperties)
+        {
+            var suggestions = new List<string>();
+            var cleanedInput = userInput.ToLowerInvariant().Replace(" ", "").Replace("-", "").Replace("_", "");
+
+            foreach (var property in availableProperties)
+            {
+                var cleanedProperty = property.ToLowerInvariant().Replace(" ", "").Replace("-", "").Replace("_", "");
+                
+                // Exact match after cleaning
+                if (cleanedProperty == cleanedInput)
                 {
-                    // Use ToObject for potentially better handling than direct indexing
-                    return new Vector3(
-                        array[0].ToObject<float>(),
-                        array[1].ToObject<float>(),
-                        array[2].ToObject<float>()
-                    );
+                    suggestions.Add(property);
+                    continue;
                 }
-                catch (Exception ex)
+
+                // Check if property contains all words from input
+                var inputWords = userInput.ToLowerInvariant().Split(new[] { ' ', '-', '_' }, StringSplitOptions.RemoveEmptyEntries);
+                if (inputWords.All(word => cleanedProperty.Contains(word.ToLowerInvariant())))
                 {
-                     Debug.LogWarning($"Failed to parse JArray as Vector3: {array}. Error: {ex.Message}");
+                    suggestions.Add(property);
+                    continue;
+                }
+
+                // Levenshtein distance for close matches
+                if (LevenshteinDistance(cleanedInput, cleanedProperty) <= Math.Max(2, cleanedInput.Length / 4))
+                {
+                    suggestions.Add(property);
                 }
             }
-            return null;
+
+            // Prioritize exact matches, then by similarity
+            return suggestions.OrderBy(s => LevenshteinDistance(cleanedInput, s.ToLowerInvariant().Replace(" ", "")))
+                             .Take(3)
+                             .ToList();
         }
+
+        /// <summary>
+        /// Calculates Levenshtein distance between two strings for similarity matching.
+        /// </summary>
+        private static int LevenshteinDistance(string s1, string s2)
+        {
+            if (string.IsNullOrEmpty(s1)) return s2?.Length ?? 0;
+            if (string.IsNullOrEmpty(s2)) return s1.Length;
+
+            var matrix = new int[s1.Length + 1, s2.Length + 1];
+
+            for (int i = 0; i <= s1.Length; i++) matrix[i, 0] = i;
+            for (int j = 0; j <= s2.Length; j++) matrix[0, j] = j;
+
+            for (int i = 1; i <= s1.Length; i++)
+            {
+                for (int j = 1; j <= s2.Length; j++)
+                {
+                    int cost = (s2[j - 1] == s1[i - 1]) ? 0 : 1;
+                    matrix[i, j] = Math.Min(Math.Min(
+                        matrix[i - 1, j] + 1,      // deletion
+                        matrix[i, j - 1] + 1),     // insertion
+                        matrix[i - 1, j - 1] + cost); // substitution
+                }
+            }
+
+            return matrix[s1.Length, s2.Length];
+        }
+
+        // Removed duplicate ParseVector3 - using the one at line 1114
 
         // Removed GetGameObjectData, GetComponentData, and related private helpers/caching/serializer setup.
         // They are now in Helpers.GameObjectSerializer

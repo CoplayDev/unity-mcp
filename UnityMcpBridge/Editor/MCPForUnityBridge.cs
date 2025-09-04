@@ -36,6 +36,8 @@ namespace MCPForUnity.Editor
         > commandQueue = new();
         private static int currentUnityPort = 6400; // Dynamic port, starts with default
         private static bool isAutoConnectMode = false;
+        private const ulong MaxFrameBytes = 64UL * 1024 * 1024; // 64 MiB hard cap for framed payloads
+        private const int FrameIOTimeoutMs = 30000; // Per-read timeout to avoid stalled clients
         
         // Debug helpers
         private static bool IsDebugEnabled()
@@ -47,7 +49,7 @@ namespace MCPForUnity.Editor
         {
             if (IsDebugEnabled())
             {
-                Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: [{stage}]");
+                McpLog.Info($"[{stage}]", always: false);
             }
         }
 
@@ -97,8 +99,9 @@ namespace MCPForUnity.Editor
 
         static MCPForUnityBridge()
         {
-            // Skip bridge in headless/batch environments (CI/builds)
-            if (Application.isBatchMode)
+            // Skip bridge in headless/batch environments (CI/builds) unless explicitly allowed via env
+            // CI override: set UNITY_MCP_ALLOW_BATCH=1 to allow the bridge in batch mode
+            if (Application.isBatchMode && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("UNITY_MCP_ALLOW_BATCH")))
             {
                 return;
             }
@@ -228,7 +231,10 @@ namespace MCPForUnity.Editor
                 // Don't restart if already running on a working port
                 if (isRunning && listener != null)
                 {
-                    Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: MCPForUnityBridge already running on port {currentUnityPort}");
+                    if (IsDebugEnabled())
+                    {
+                        Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: MCPForUnityBridge already running on port {currentUnityPort}");
+                    }
                     return;
                 }
 
@@ -311,7 +317,9 @@ namespace MCPForUnity.Editor
 
                     isRunning = true;
                     isAutoConnectMode = false;
-                    Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: MCPForUnityBridge started on port {currentUnityPort}.");
+                    string platform = Application.platform.ToString();
+                    string serverVer = ReadInstalledServerVersionSafe();
+                    Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: MCPForUnityBridge started on port {currentUnityPort}. (OS={platform}, server={serverVer})");
                     Task.Run(ListenerLoop);
                     EditorApplication.update += ProcessCommands;
                     // Write initial heartbeat immediately
@@ -340,11 +348,11 @@ namespace MCPForUnity.Editor
                     // Mark as stopping early to avoid accept logging during disposal
                     isRunning = false;
                     // Mark heartbeat one last time before stopping
-                    WriteHeartbeat(false);
+                    WriteHeartbeat(false, "stopped");
                     listener?.Stop();
                     listener = null;
                     EditorApplication.update -= ProcessCommands;
-                    Debug.Log("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: MCPForUnityBridge stopped.");
+                    if (IsDebugEnabled()) Debug.Log("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: MCPForUnityBridge stopped.");
                 }
                 catch (Exception ex)
                 {
@@ -385,7 +393,7 @@ namespace MCPForUnity.Editor
                 {
                     if (isRunning)
                     {
-                        Debug.LogError($"Listener error: {ex.Message}");
+                        if (IsDebugEnabled()) Debug.LogError($"Listener error: {ex.Message}");
                     }
                 }
             }
@@ -396,22 +404,56 @@ namespace MCPForUnity.Editor
             using (client)
             using (NetworkStream stream = client.GetStream())
             {
-                byte[] buffer = new byte[8192];
+                // Framed I/O only; legacy mode removed
+                try
+                {
+                    if (IsDebugEnabled())
+                    {
+                        var ep = client.Client?.RemoteEndPoint?.ToString() ?? "unknown";
+                        Debug.Log($"<b><color=#2EA3FF>UNITY-MCP</color></b>: Client connected {ep}");
+                    }
+                }
+                catch { }
+                // Strict framing: always require FRAMING=1 and frame all I/O
+                try
+                {
+                    client.NoDelay = true;
+                }
+                catch { }
+                try
+                {
+                    string handshake = "WELCOME UNITY-MCP 1 FRAMING=1\n";
+                    byte[] handshakeBytes = System.Text.Encoding.ASCII.GetBytes(handshake);
+                    using var cts = new CancellationTokenSource(FrameIOTimeoutMs);
+#if NETSTANDARD2_1 || NET6_0_OR_GREATER
+                    await stream.WriteAsync(handshakeBytes.AsMemory(0, handshakeBytes.Length), cts.Token).ConfigureAwait(false);
+#else
+                    await stream.WriteAsync(handshakeBytes, 0, handshakeBytes.Length, cts.Token).ConfigureAwait(false);
+#endif
+                    if (IsDebugEnabled()) MCPForUnity.Editor.Helpers.McpLog.Info("Sent handshake FRAMING=1 (strict)", always: false);
+                }
+                catch (Exception ex)
+                {
+                    if (IsDebugEnabled()) MCPForUnity.Editor.Helpers.McpLog.Warn($"Handshake failed: {ex.Message}");
+                    return; // abort this client
+                }
+
                 while (isRunning)
                 {
                     try
                     {
-                        int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
-                        if (bytesRead == 0)
-                        {
-                            break; // Client disconnected
-                        }
+                        // Strict framed mode only: enforced framed I/O for this connection
+                        string commandText = await ReadFrameAsUtf8Async(stream, FrameIOTimeoutMs);
 
-                        string commandText = System.Text.Encoding.UTF8.GetString(
-                            buffer,
-                            0,
-                            bytesRead
-                        );
+                        try
+                        {
+                            if (IsDebugEnabled())
+                            {
+                                var preview = commandText.Length > 120 ? commandText.Substring(0, 120) + "…" : commandText;
+                                MCPForUnity.Editor.Helpers.McpLog.Info($"recv framed: {preview}", always: false);
+                            }
+                        }
+                        catch { }
                         string commandId = Guid.NewGuid().ToString();
                         TaskCompletionSource<string> tcs = new();
 
@@ -423,7 +465,7 @@ namespace MCPForUnity.Editor
                                 /*lang=json,strict*/
                                 "{\"status\":\"success\",\"result\":{\"message\":\"pong\"}}"
                             );
-                            await stream.WriteAsync(pingResponseBytes, 0, pingResponseBytes.Length);
+                            await WriteFrameAsync(stream, pingResponseBytes);
                             continue;
                         }
 
@@ -434,131 +476,264 @@ namespace MCPForUnity.Editor
 
                         string response = await tcs.Task;
                         byte[] responseBytes = System.Text.Encoding.UTF8.GetBytes(response);
-                        await stream.WriteAsync(responseBytes, 0, responseBytes.Length);
+                        await WriteFrameAsync(stream, responseBytes);
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogError($"Client handler error: {ex.Message}");
+                        // Treat common disconnects/timeouts as benign; only surface hard errors
+                        string msg = ex.Message ?? string.Empty;
+                        bool isBenign =
+                            msg.IndexOf("Connection closed before reading expected bytes", StringComparison.OrdinalIgnoreCase) >= 0
+                            || msg.IndexOf("Read timed out", StringComparison.OrdinalIgnoreCase) >= 0
+                            || ex is System.IO.IOException;
+                        if (isBenign)
+                        {
+                            if (IsDebugEnabled()) MCPForUnity.Editor.Helpers.McpLog.Info($"Client handler: {msg}", always: false);
+                        }
+                        else
+                        {
+                            MCPForUnity.Editor.Helpers.McpLog.Error($"Client handler error: {msg}");
+                        }
                         break;
                     }
                 }
             }
         }
 
-        private static void ProcessCommands()
+        // Timeout-aware exact read helper with cancellation; avoids indefinite stalls and background task leaks
+        private static async System.Threading.Tasks.Task<byte[]> ReadExactAsync(NetworkStream stream, int count, int timeoutMs, CancellationToken cancel = default)
         {
-            List<string> processedIds = new();
-            lock (lockObj)
+            byte[] buffer = new byte[count];
+            int offset = 0;
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+            while (offset < count)
             {
-                // Periodic heartbeat while editor is idle/processing
-                double now = EditorApplication.timeSinceStartup;
-                if (now >= nextHeartbeatAt)
+                int remaining = count - offset;
+                int remainingTimeout = timeoutMs <= 0
+                    ? Timeout.Infinite
+                    : timeoutMs - (int)stopwatch.ElapsedMilliseconds;
+
+                // If a finite timeout is configured and already elapsed, fail immediately
+                if (remainingTimeout != Timeout.Infinite && remainingTimeout <= 0)
                 {
-                    WriteHeartbeat(false);
-                    nextHeartbeatAt = now + 0.5f;
+                    throw new System.IO.IOException("Read timed out");
                 }
 
-                foreach (
-                    KeyValuePair<
-                        string,
-                        (string commandJson, TaskCompletionSource<string> tcs)
-                    > kvp in commandQueue.ToList()
-                )
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+                if (remainingTimeout != Timeout.Infinite)
                 {
-                    string id = kvp.Key;
-                    string commandText = kvp.Value.commandJson;
-                    TaskCompletionSource<string> tcs = kvp.Value.tcs;
+                    cts.CancelAfter(remainingTimeout);
+                }
 
-                    try
+                try
+                {
+#if NETSTANDARD2_1 || NET6_0_OR_GREATER
+                    int read = await stream.ReadAsync(buffer.AsMemory(offset, remaining), cts.Token).ConfigureAwait(false);
+#else
+                    int read = await stream.ReadAsync(buffer, offset, remaining, cts.Token).ConfigureAwait(false);
+#endif
+                    if (read == 0)
                     {
-                        // Special case handling
-                        if (string.IsNullOrEmpty(commandText))
-                        {
-                            var emptyResponse = new
-                            {
-                                status = "error",
-                                error = "Empty command received",
-                            };
-                            tcs.SetResult(JsonConvert.SerializeObject(emptyResponse));
-                            processedIds.Add(id);
-                            continue;
-                        }
-
-                        // Trim the command text to remove any whitespace
-                        commandText = commandText.Trim();
-
-                        // Non-JSON direct commands handling (like ping)
-                        if (commandText == "ping")
-                        {
-                            var pingResponse = new
-                            {
-                                status = "success",
-                                result = new { message = "pong" },
-                            };
-                            tcs.SetResult(JsonConvert.SerializeObject(pingResponse));
-                            processedIds.Add(id);
-                            continue;
-                        }
-
-                        // Check if the command is valid JSON before attempting to deserialize
-                        if (!IsValidJson(commandText))
-                        {
-                            var invalidJsonResponse = new
-                            {
-                                status = "error",
-                                error = "Invalid JSON format",
-                                receivedText = commandText.Length > 50
-                                    ? commandText[..50] + "..."
-                                    : commandText,
-                            };
-                            tcs.SetResult(JsonConvert.SerializeObject(invalidJsonResponse));
-                            processedIds.Add(id);
-                            continue;
-                        }
-
-                        // Normal JSON command processing
-                        Command command = JsonConvert.DeserializeObject<Command>(commandText);
-                        
-                        if (command == null)
-                        {
-                            var nullCommandResponse = new
-                            {
-                                status = "error",
-                                error = "Command deserialized to null",
-                                details = "The command was valid JSON but could not be deserialized to a Command object",
-                            };
-                            tcs.SetResult(JsonConvert.SerializeObject(nullCommandResponse));
-                        }
-                        else
-                        {
-                            string responseJson = ExecuteCommand(command);
-                            tcs.SetResult(responseJson);
-                        }
+                        throw new System.IO.IOException("Connection closed before reading expected bytes");
                     }
-                    catch (Exception ex)
-                    {
-                        Debug.LogError($"Error processing command: {ex.Message}\n{ex.StackTrace}");
+                    offset += read;
+                }
+                catch (OperationCanceledException) when (!cancel.IsCancellationRequested)
+                {
+                    throw new System.IO.IOException("Read timed out");
+                }
+            }
 
-                        var response = new
+            return buffer;
+        }
+
+        private static async System.Threading.Tasks.Task WriteFrameAsync(NetworkStream stream, byte[] payload)
+        {
+            using var cts = new CancellationTokenSource(FrameIOTimeoutMs);
+            await WriteFrameAsync(stream, payload, cts.Token);
+        }
+
+        private static async System.Threading.Tasks.Task WriteFrameAsync(NetworkStream stream, byte[] payload, CancellationToken cancel)
+        {
+            if (payload == null)
+            {
+                throw new System.ArgumentNullException(nameof(payload));
+            }
+            if ((ulong)payload.LongLength > MaxFrameBytes)
+            {
+                throw new System.IO.IOException($"Frame too large: {payload.LongLength}");
+            }
+            byte[] header = new byte[8];
+            WriteUInt64BigEndian(header, (ulong)payload.LongLength);
+#if NETSTANDARD2_1 || NET6_0_OR_GREATER
+            await stream.WriteAsync(header.AsMemory(0, header.Length), cancel).ConfigureAwait(false);
+            await stream.WriteAsync(payload.AsMemory(0, payload.Length), cancel).ConfigureAwait(false);
+#else
+            await stream.WriteAsync(header, 0, header.Length, cancel).ConfigureAwait(false);
+            await stream.WriteAsync(payload, 0, payload.Length, cancel).ConfigureAwait(false);
+#endif
+        }
+
+        private static async System.Threading.Tasks.Task<string> ReadFrameAsUtf8Async(NetworkStream stream, int timeoutMs)
+        {
+            byte[] header = await ReadExactAsync(stream, 8, timeoutMs);
+            ulong payloadLen = ReadUInt64BigEndian(header);
+             if (payloadLen > MaxFrameBytes)
+            {
+                throw new System.IO.IOException($"Invalid framed length: {payloadLen}");
+            }
+            if (payloadLen == 0UL)
+                throw new System.IO.IOException("Zero-length frames are not allowed");
+            if (payloadLen > int.MaxValue)
+            {
+                throw new System.IO.IOException("Frame too large for buffer");
+            }
+            int count = (int)payloadLen;
+            byte[] payload = await ReadExactAsync(stream, count, timeoutMs);
+            return System.Text.Encoding.UTF8.GetString(payload);
+        }
+
+        private static ulong ReadUInt64BigEndian(byte[] buffer)
+        {
+            if (buffer == null || buffer.Length < 8) return 0UL;
+            return ((ulong)buffer[0] << 56)
+                 | ((ulong)buffer[1] << 48)
+                 | ((ulong)buffer[2] << 40)
+                 | ((ulong)buffer[3] << 32)
+                 | ((ulong)buffer[4] << 24)
+                 | ((ulong)buffer[5] << 16)
+                 | ((ulong)buffer[6] << 8)
+                 | buffer[7];
+        }
+
+        private static void WriteUInt64BigEndian(byte[] dest, ulong value)
+        {
+            if (dest == null || dest.Length < 8)
+            {
+                throw new System.ArgumentException("Destination buffer too small for UInt64");
+            }
+            dest[0] = (byte)(value >> 56);
+            dest[1] = (byte)(value >> 48);
+            dest[2] = (byte)(value >> 40);
+            dest[3] = (byte)(value >> 32);
+            dest[4] = (byte)(value >> 24);
+            dest[5] = (byte)(value >> 16);
+            dest[6] = (byte)(value >> 8);
+            dest[7] = (byte)(value);
+        }
+
+        private static void ProcessCommands()
+        {
+            // Heartbeat without holding the queue lock
+            double now = EditorApplication.timeSinceStartup;
+            if (now >= nextHeartbeatAt)
+            {
+                WriteHeartbeat(false);
+                nextHeartbeatAt = now + 0.5f;
+            }
+
+            // Snapshot under lock, then process outside to reduce contention
+            List<(string id, string text, TaskCompletionSource<string> tcs)> work;
+            lock (lockObj)
+            {
+                work = commandQueue
+                    .Select(kvp => (kvp.Key, kvp.Value.commandJson, kvp.Value.tcs))
+                    .ToList();
+            }
+
+            foreach (var item in work)
+            {
+                string id = item.id;
+                string commandText = item.text;
+                TaskCompletionSource<string> tcs = item.tcs;
+
+                try
+                {
+                    // Special case handling
+                    if (string.IsNullOrEmpty(commandText))
+                    {
+                        var emptyResponse = new
                         {
                             status = "error",
-                            error = ex.Message,
-                            commandType = "Unknown (error during processing)",
-                            receivedText = commandText?.Length > 50
+                            error = "Empty command received",
+                        };
+                        tcs.SetResult(JsonConvert.SerializeObject(emptyResponse));
+                        // Remove quickly under lock
+                        lock (lockObj) { commandQueue.Remove(id); }
+                        continue;
+                    }
+
+                    // Trim the command text to remove any whitespace
+                    commandText = commandText.Trim();
+
+                    // Non-JSON direct commands handling (like ping)
+                    if (commandText == "ping")
+                    {
+                        var pingResponse = new
+                        {
+                            status = "success",
+                            result = new { message = "pong" },
+                        };
+                        tcs.SetResult(JsonConvert.SerializeObject(pingResponse));
+                        lock (lockObj) { commandQueue.Remove(id); }
+                        continue;
+                    }
+
+                    // Check if the command is valid JSON before attempting to deserialize
+                    if (!IsValidJson(commandText))
+                    {
+                        var invalidJsonResponse = new
+                        {
+                            status = "error",
+                            error = "Invalid JSON format",
+                            receivedText = commandText.Length > 50
                                 ? commandText[..50] + "..."
                                 : commandText,
                         };
-                        string responseJson = JsonConvert.SerializeObject(response);
-                        tcs.SetResult(responseJson);
+                        tcs.SetResult(JsonConvert.SerializeObject(invalidJsonResponse));
+                        lock (lockObj) { commandQueue.Remove(id); }
+                        continue;
                     }
 
-                    processedIds.Add(id);
+                    // Normal JSON command processing
+                    Command command = JsonConvert.DeserializeObject<Command>(commandText);
+
+                    if (command == null)
+                    {
+                        var nullCommandResponse = new
+                        {
+                            status = "error",
+                            error = "Command deserialized to null",
+                            details = "The command was valid JSON but could not be deserialized to a Command object",
+                        };
+                        tcs.SetResult(JsonConvert.SerializeObject(nullCommandResponse));
+                    }
+                    else
+                    {
+                        string responseJson = ExecuteCommand(command);
+                        tcs.SetResult(responseJson);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"Error processing command: {ex.Message}\n{ex.StackTrace}");
+
+                    var response = new
+                    {
+                        status = "error",
+                        error = ex.Message,
+                        commandType = "Unknown (error during processing)",
+                        receivedText = commandText?.Length > 50
+                            ? commandText[..50] + "..."
+                            : commandText,
+                    };
+                    string responseJson = JsonConvert.SerializeObject(response);
+                    tcs.SetResult(responseJson);
                 }
 
-                foreach (string id in processedIds)
-                {
-                    commandQueue.Remove(id);
-                }
+                // Remove quickly under lock
+                lock (lockObj) { commandQueue.Remove(id); }
             }
         }
 
@@ -708,7 +883,12 @@ namespace MCPForUnity.Editor
         {
             try
             {
-                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".unity-mcp");
+                // Allow override of status directory (useful in CI/containers)
+                string dir = Environment.GetEnvironmentVariable("UNITY_MCP_STATUS_DIR");
+                if (string.IsNullOrWhiteSpace(dir))
+                {
+                    dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".unity-mcp");
+                }
                 Directory.CreateDirectory(dir);
                 string filePath = Path.Combine(dir, $"unity-mcp-status-{ComputeProjectHash(Application.dataPath)}.json");
                 var payload = new
@@ -726,6 +906,22 @@ namespace MCPForUnity.Editor
             {
                 // Best-effort only
             }
+        }
+
+        private static string ReadInstalledServerVersionSafe()
+        {
+            try
+            {
+                string serverSrc = ServerInstaller.GetServerPath();
+                string verFile = Path.Combine(serverSrc, "server_version.txt");
+                if (File.Exists(verFile))
+                {
+                    string v = File.ReadAllText(verFile)?.Trim();
+                    if (!string.IsNullOrEmpty(v)) return v;
+                }
+            }
+            catch { }
+            return "unknown";
         }
 
         private static string ComputeProjectHash(string input)

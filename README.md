@@ -1,6 +1,6 @@
 # MCP for Unity ✨
 
-#### Proudly sponsored and maintained by [Coplay](https://www.coplay.dev/?ref=unity-mcp), the AI assistant for Unity. [Read the backstory here.](https://www.coplay.dev/blog/coplay-and-open-source-unity-mcp-join-forces)
+#### Proudly sponsored and maintained by [Coplay](https://www.coplay.dev/?ref=unity-mcp) -- the best AI assistant for Unity. [Read the backstory here.](https://www.coplay.dev/blog/coplay-and-open-source-unity-mcp-join-forces)
 
 [![Discord](https://img.shields.io/badge/discord-join-red.svg?logo=discord&logoColor=white)](https://discord.gg/y4p8KfzrN4)
 [![](https://img.shields.io/badge/Unity-000000?style=flat&logo=unity&logoColor=blue 'Unity')](https://unity.com/releases/editor/archive)
@@ -43,6 +43,9 @@ MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to 
   *   `manage_shader`: Performs shader CRUD operations (create, read, modify, delete).
   *   `manage_gameobject`: Manages GameObjects: create, modify, delete, find, and component operations.
   *   `manage_menu_item`: Execute and list Unity Editor menu items (e.g., execute "File/Save Project").
+  *   `apply_text_edits`: Precise text edits with precondition hashes and atomic multi-edit batches.
+  *   `script_apply_edits`: Structured C# method/class edits (insert/replace/delete) with safer boundaries.
+  *   `validate_script`: Fast validation (basic/standard) to catch syntax/structure issues before/after writes.
 </details>
 
 ---
