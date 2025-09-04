@@ -37,13 +37,13 @@ namespace MCPForUnity.Editor
         private static bool isAutoConnectMode = false;
         private const ulong MaxFrameBytes = 64UL * 1024 * 1024; // 64 MiB hard cap for framed payloads
         private const int FrameIOTimeoutMs = 30000; // Per-read timeout to avoid stalled clients
-        
+
         // Debug helpers
         private static bool IsDebugEnabled()
         {
             try { return EditorPrefs.GetBool("MCPForUnity.DebugLogs", false); } catch { return false; }
         }
-        
+
         private static void LogBreadcrumb(string stage)
         {
             if (IsDebugEnabled())
@@ -62,7 +62,7 @@ namespace MCPForUnity.Editor
         public static void StartAutoConnect()
         {
             Stop(); // Stop current connection
-            
+
             try
             {
                 // Prefer stored project port and start using the robust Start() path (with retries/options)
@@ -251,7 +251,7 @@ namespace MCPForUnity.Editor
                     const int maxImmediateRetries = 3;
                     const int retrySleepMs = 75;
                     int attempt = 0;
-                    for (;;)
+                    for (; ; )
                     {
                         try
                         {
@@ -578,7 +578,7 @@ namespace MCPForUnity.Editor
         {
             byte[] header = await ReadExactAsync(stream, 8, timeoutMs);
             ulong payloadLen = ReadUInt64BigEndian(header);
-             if (payloadLen > MaxFrameBytes)
+            if (payloadLen > MaxFrameBytes)
             {
                 throw new System.IO.IOException($"Invalid framed length: {payloadLen}");
             }
@@ -795,22 +795,7 @@ namespace MCPForUnity.Editor
                 JObject paramsObject = command.@params ?? new JObject();
 
                 // Route command based on the new tool structure from the refactor plan
-                object result = command.type switch
-                {
-                    // Maps the command type (tool name) to the corresponding handler's static HandleCommand method
-                    // Assumes each handler class has a static method named 'HandleCommand' that takes JObject parameters
-                    "manage_script" => ManageScript.HandleCommand(paramsObject),
-                    "manage_scene" => ManageScene.HandleCommand(paramsObject),
-                    "manage_editor" => ManageEditor.HandleCommand(paramsObject),
-                    "manage_gameobject" => ManageGameObject.HandleCommand(paramsObject),
-                    "manage_asset" => ManageAsset.HandleCommand(paramsObject),
-                    "manage_shader" => ManageShader.HandleCommand(paramsObject),
-                    "read_console" => ReadConsole.HandleCommand(paramsObject),
-                    "execute_menu_item" => ExecuteMenuItem.HandleCommand(paramsObject),
-                    _ => throw new ArgumentException(
-                        $"Unknown or unsupported command type: {command.type}"
-                    ),
-                };
+                object result = CommandRegistry.GetHandler(command.type)(paramsObject);
 
                 // Standard success response format
                 var response = new { status = "success", result };
