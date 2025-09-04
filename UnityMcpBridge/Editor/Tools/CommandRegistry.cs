@@ -32,7 +32,7 @@ namespace MCPForUnity.Editor.Tools
         {
             if (!_handlers.TryGetValue(commandName, out var handler))
             {
-                throw new InvalidOperation(
+                throw new InvalidOperationException(
                     $"Unknown or unsupported command type: {command.type}");
             }
 
