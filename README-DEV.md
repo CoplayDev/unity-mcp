@@ -66,6 +66,38 @@ To find it reliably:
 
 Note: In recent builds, the Python server sources are also bundled inside the package under `UnityMcpServer~/src`. This is handy for local testing or pointing MCP clients directly at the packaged server.
 
+## MCP Bridge Stress Test
+
+An on-demand stress utility exercises the MCP bridge with multiple concurrent clients while triggering periodic asset refreshes and script reloads.
+
+### Script
+- `tools/stress_mcp.py`
+
+### What it does
+- Starts N TCP clients against the Unity MCP bridge (default port auto-discovered from `~/.unity-mcp/unity-mcp-status-*.json`).
+- Sends a mix of framed `ping`, `execute_menu_item` (e.g., `Assets/Refresh`), and small `manage_gameobject` requests.
+- In parallel, toggles a comment in a large C# file to encourage domain reloads, and triggers `Assets/Refresh` via MCP.
+
+### Usage (local)
+```bash
+python3 tools/stress_mcp.py --duration 60 --clients 8
+```
+
+Flags:
+- `--project` Unity project path (auto-detected to the included test project by default)
+- `--unity-file` C# file to toggle (defaults to the long test script)
+- `--clients` number of concurrent clients (default 10)
+- `--duration` seconds to run (default 60)
+
+Expected outcome:
+- No Unity Editor crashes during reload churn
+- Clients reconnect cleanly after reloads
+- Script prints a JSON summary of request counts and disconnects
+
+CI guidance:
+- Keep this out of default PR CI due to Unity/editor requirements and runtime variability.
+- Optionally run it as a manual workflow or nightly job on a Unity-capable runner.
+
 ## CI Test Workflow (GitHub Actions)
 
 We provide a CI job to run a Natural Language Editing mini-suite against the Unity test project. It spins up a headless Unity container and connects via the MCP bridge.
