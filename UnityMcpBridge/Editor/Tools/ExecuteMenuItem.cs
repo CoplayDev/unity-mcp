@@ -96,14 +96,15 @@ namespace MCPForUnity.Editor.Tools
 
             try
             {
-                // Trace incoming execute requests
-                Debug.Log($"[ExecuteMenuItem] Request to execute menu: '{menuPath}'");
+                // Trace incoming execute requests (debug-gated)
+                McpLog.Info($"[ExecuteMenuItem] Request to execute menu: '{menuPath}'", always: false);
 
                 // Execute synchronously. This code runs on the Editor main thread in our bridge path.
                 bool executed = EditorApplication.ExecuteMenuItem(menuPath);
                 if (executed)
                 {
-                    Debug.Log($"[ExecuteMenuItem] Executed successfully: '{menuPath}'");
+                    // Success trace (debug-gated)
+                    McpLog.Info($"[ExecuteMenuItem] Executed successfully: '{menuPath}'", always: false);
                     return Response.Success(
                         $"Executed menu item: '{menuPath}'",
                         new { executed = true, menuPath }
