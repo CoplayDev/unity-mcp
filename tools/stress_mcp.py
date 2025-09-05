@@ -3,10 +3,7 @@ import asyncio
 import argparse
 import json
 import os
-import random
-import socket
 import struct
-import sys
 import time
 from pathlib import Path
 
@@ -78,27 +75,8 @@ def make_ping_frame() -> bytes:
 
 
 def make_execute_menu_item(menu_path: str) -> bytes:
-    payload = {
-        "type": "execute_menu_item",
-        "params": {"action": "execute", "menu_path": menu_path},
-    }
-    return json.dumps(payload).encode("utf-8")
-
-
-def make_manage_gameobject_modify_dummy(target_name: str) -> bytes:
-    payload = {
-        "type": "manage_gameobject",
-        "params": {
-            "action": "modify",
-            "target": target_name,
-            "search_method": "by_name",
-            # Intentionally small and sometimes invalid to exercise error paths safely
-            "componentProperties": {
-                "Transform": {"localScale": {"x": 1.0, "y": 1.0, "z": 1.0}},
-                "Rigidbody": {"velocity": "invalid_type"},
-            },
-        },
-    }
+    # Retained for manual debugging; not used in normal stress runs
+    payload = {"type": "execute_menu_item", "params": {"action": "execute", "menu_path": menu_path}}
     return json.dumps(payload).encode("utf-8")
 
 
@@ -112,26 +90,13 @@ async def client_loop(idx: int, host: str, port: int, stop_time: float, stats: d
             await write_frame(writer, make_ping_frame())
             _ = await read_frame(reader)  # ignore content
 
-            # Main activity loop
+            # Main activity loop (keep-alive + light load). Edit spam handled by reload_churn_task.
             while time.time() < stop_time:
-                r = random.random()
-                if r < 0.70:
-                    # Ping
-                    await write_frame(writer, make_ping_frame())
-                    _ = await read_frame(reader)
-                    stats["pings"] += 1
-                elif r < 0.90:
-                    # Lightweight menu execute: Assets/Refresh
-                    await write_frame(writer, make_execute_menu_item("Assets/Refresh"))
-                    _ = await read_frame(reader)
-                    stats["menus"] += 1
-                else:
-                    # Small manage_gameobject request (may legitimately error if target not found)
-                    await write_frame(writer, make_manage_gameobject_modify_dummy("__MCP_Stress_Object__"))
-                    _ = await read_frame(reader)
-                    stats["mods"] += 1
-
-                await asyncio.sleep(0.01)
+                # Ping-only; edits are sent via reload_churn_task to avoid console spam
+                await write_frame(writer, make_ping_frame())
+                _ = await read_frame(reader)
+                stats["pings"] += 1
+                await asyncio.sleep(0.02)
 
         except (ConnectionError, OSError, asyncio.IncompleteReadError):
             stats["disconnects"] += 1
@@ -150,38 +115,116 @@ async def client_loop(idx: int, host: str, port: int, stop_time: float, stats: d
                 pass
 
 
-async def reload_churn_task(project_path: str, stop_time: float, unity_file: str | None, host: str, port: int):
-    # Toggle a comment in a large .cs file to force a recompilation; then request Assets/Refresh
+async def reload_churn_task(project_path: str, stop_time: float, unity_file: str | None, host: str, port: int, stats: dict):
+    # Use script edit tool to touch a C# file, which triggers compilation reliably
     path = Path(unity_file) if unity_file else None
-    toggle = True
+    seq = 0
     while time.time() < stop_time:
         try:
             if path and path.exists():
-                s = path.read_text(encoding="utf-8", errors="ignore")
-                marker_on = "// MCP_STRESS_ON"
-                marker_off = "// MCP_STRESS_OFF"
-                if toggle:
-                    if marker_on not in s:
-                        path.write_text(s + ("\n" if not s.endswith("\n") else "") + marker_on + "\n", encoding="utf-8")
-                else:
-                    if marker_off not in s:
-                        path.write_text(s + ("\n" if not s.endswith("\n") else "") + marker_off + "\n", encoding="utf-8")
-                toggle = not toggle
+                # Build a tiny ApplyTextEdits request that toggles a trailing comment
+                relative = None
+                try:
+                    # Derive Unity-relative path under Assets/
+                    p = str(path)
+                    idx = p.rfind("Assets/")
+                    if idx >= 0:
+                        relative = p[idx:]
+                except Exception:
+                    pass
 
-            # Ask Unity to refresh assets (safe, Editor main thread)
-            try:
-                reader, writer = await asyncio.open_connection(host, port)
-                await do_handshake(reader)
-                await write_frame(writer, make_execute_menu_item("Assets/Refresh"))
-                _ = await read_frame(reader)
-                writer.close()
-                await writer.wait_closed()
-            except Exception:
-                pass
+                if relative:
+                    # Derive name and directory for ManageScript and compute precondition SHA + EOF position
+                    name_base = Path(relative).stem
+                    dir_path = str(Path(relative).parent).replace('\\', '/')
+
+                    # 1) Read current contents via manage_script.read to compute SHA and true EOF location
+                    try:
+                        reader, writer = await asyncio.open_connection(host, port)
+                        await do_handshake(reader)
+                        read_payload = {
+                            "type": "manage_script",
+                            "params": {
+                                "action": "read",
+                                "name": name_base,
+                                "path": dir_path
+                            }
+                        }
+                        await write_frame(writer, json.dumps(read_payload).encode("utf-8"))
+                        resp = await read_frame(reader)
+                        writer.close()
+                        await writer.wait_closed()
+
+                        read_obj = json.loads(resp.decode("utf-8", errors="ignore"))
+                        result = read_obj.get("result", read_obj) if isinstance(read_obj, dict) else {}
+                        if not result.get("success"):
+                            stats["apply_errors"] = stats.get("apply_errors", 0) + 1
+                            await asyncio.sleep(0.5)
+                            continue
+                        data_obj = result.get("data", {})
+                        contents = data_obj.get("contents") or ""
+                    except Exception:
+                        stats["apply_errors"] = stats.get("apply_errors", 0) + 1
+                        await asyncio.sleep(0.5)
+                        continue
+
+                    # Compute SHA and EOF insertion point
+                    import hashlib
+                    sha = hashlib.sha256(contents.encode("utf-8")).hexdigest()
+                    lines = contents.splitlines(keepends=True)
+                    # Insert at true EOF (safe against header guards)
+                    end_line = len(lines) + 1  # 1-based exclusive end
+                    end_col = 1
+
+                    # Build a unique marker append; ensure it begins with a newline if needed
+                    marker = f"// MCP_STRESS seq={seq} time={int(time.time())}"
+                    seq += 1
+                    insert_text = ("\n" if not contents.endswith("\n") else "") + marker + "\n"
+
+                    # 2) Apply text edits with immediate refresh and precondition
+                    apply_payload = {
+                        "type": "manage_script",
+                        "params": {
+                            "action": "apply_text_edits",
+                            "name": name_base,
+                            "path": dir_path,
+                            "edits": [
+                                {
+                                    "startLine": end_line,
+                                    "startCol": end_col,
+                                    "endLine": end_line,
+                                    "endCol": end_col,
+                                    "newText": insert_text
+                                }
+                            ],
+                            "precondition_sha256": sha,
+                            "options": {"refresh": "immediate", "validate": "standard"}
+                        }
+                    }
+
+                    try:
+                        reader, writer = await asyncio.open_connection(host, port)
+                        await do_handshake(reader)
+                        await write_frame(writer, json.dumps(apply_payload).encode("utf-8"))
+                        resp = await read_frame(reader)
+                        try:
+                            data = json.loads(resp.decode("utf-8", errors="ignore"))
+                            result = data.get("result", data) if isinstance(data, dict) else {}
+                            ok = bool(result.get("success", False))
+                            if ok:
+                                stats["applies"] = stats.get("applies", 0) + 1
+                            else:
+                                stats["apply_errors"] = stats.get("apply_errors", 0) + 1
+                        except Exception:
+                            stats["apply_errors"] = stats.get("apply_errors", 0) + 1
+                        writer.close()
+                        await writer.wait_closed()
+                    except Exception:
+                        stats["apply_errors"] = stats.get("apply_errors", 0) + 1
 
         except Exception:
             pass
-        await asyncio.sleep(10.0)
+        await asyncio.sleep(1.0)
 
 
 async def main():
@@ -204,7 +247,7 @@ async def main():
         tasks.append(asyncio.create_task(client_loop(i, args.host, port, stop_time, stats)))
 
     # Spawn reload churn task
-    tasks.append(asyncio.create_task(reload_churn_task(args.project, stop_time, args.unity_file, args.host, port)))
+    tasks.append(asyncio.create_task(reload_churn_task(args.project, stop_time, args.unity_file, args.host, port, stats)))
 
     await asyncio.gather(*tasks, return_exceptions=True)
     print(json.dumps({"port": port, "stats": stats}, indent=2))

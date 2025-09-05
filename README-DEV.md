@@ -68,33 +68,54 @@ Note: In recent builds, the Python server sources are also bundled inside the pa
 
 ## MCP Bridge Stress Test
 
-An on-demand stress utility exercises the MCP bridge with multiple concurrent clients while triggering periodic asset refreshes and script reloads.
+An on-demand stress utility exercises the MCP bridge with multiple concurrent clients while triggering real script reloads via immediate script edits (no menu calls required).
 
 ### Script
 - `tools/stress_mcp.py`
 
 ### What it does
 - Starts N TCP clients against the Unity MCP bridge (default port auto-discovered from `~/.unity-mcp/unity-mcp-status-*.json`).
-- Sends a mix of framed `ping`, `execute_menu_item` (e.g., `Assets/Refresh`), and small `manage_gameobject` requests.
-- In parallel, toggles a comment in a large C# file to encourage domain reloads, and triggers `Assets/Refresh` via MCP.
+- Sends lightweight framed `ping` keepalives to maintain concurrency.
+- In parallel, appends a unique marker comment to a target C# file using `manage_script.apply_text_edits` with:
+  - `options.refresh = "immediate"` to force an import/compile immediately (triggers domain reload), and
+  - `precondition_sha256` computed from the current file contents to avoid drift.
+- Uses EOF insertion to avoid header/`using`-guard edits.
 
 ### Usage (local)
 ```bash
-python3 tools/stress_mcp.py --duration 60 --clients 8
+# Recommended: use the included large script in the test project
+python3 tools/stress_mcp.py \
+  --duration 60 \
+  --clients 8 \
+  --unity-file "TestProjects/UnityMCPTests/Assets/Scripts/LongUnityScriptClaudeTest.cs"
 ```
 
 Flags:
 - `--project` Unity project path (auto-detected to the included test project by default)
-- `--unity-file` C# file to toggle (defaults to the long test script)
+- `--unity-file` C# file to edit (defaults to the long test script)
 - `--clients` number of concurrent clients (default 10)
 - `--duration` seconds to run (default 60)
 
-Expected outcome:
+### Expected outcome
 - No Unity Editor crashes during reload churn
-- Clients reconnect cleanly after reloads
-- Script prints a JSON summary of request counts and disconnects
+- Immediate reloads after each applied edit (no `Assets/Refresh` menu calls)
+- Some transient disconnects or a few failed calls may occur during domain reload; the tool retries and continues
+- JSON summary printed at the end, e.g.:
+  - `{"port": 6400, "stats": {"pings": 28566, "applies": 69, "disconnects": 0, "errors": 0}}`
 
-CI guidance:
+### Notes and troubleshooting
+- Immediate vs debounced:
+  - The tool sets `options.refresh = "immediate"` so changes compile instantly. If you only need churn (not per-edit confirmation), switch to debounced to reduce mid-reload failures.
+- Precondition required:
+  - `apply_text_edits` requires `precondition_sha256` on larger files. The tool reads the file first to compute the SHA.
+- Edit location:
+  - To avoid header guards or complex ranges, the tool appends a one-line marker at EOF each cycle.
+- Read API:
+  - The bridge currently supports `manage_script.read` for file reads. You may see a deprecation warning; it's harmless for this internal tool.
+- Transient failures:
+  - Occasional `apply_errors` often indicate the connection reloaded mid-reply. Edits still typically apply; the loop continues on the next iteration.
+
+### CI guidance
 - Keep this out of default PR CI due to Unity/editor requirements and runtime variability.
 - Optionally run it as a manual workflow or nightly job on a Unity-capable runner.
 
