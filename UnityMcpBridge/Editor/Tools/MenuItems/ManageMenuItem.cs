@@ -41,7 +41,7 @@ namespace MCPForUnity.Editor.Tools.MenuItems
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ManageMenuItem] Action '{action}' failed: {e}");
+                McpLog.Error($"[ManageMenuItem] Action '{action}' failed: {e}");
                 return Response.Error($"Internal error: {e.Message}");
             }
         }

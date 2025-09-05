@@ -45,12 +45,12 @@ namespace MCPForUnity.Editor.Tools.MenuItems
                         bool executed = EditorApplication.ExecuteMenuItem(menuPath);
                         if (!executed)
                         {
-                            Debug.LogError($"[MenuItemExecutor] Failed to execute menu item via delayCall: '{menuPath}'. It might be invalid, disabled, or context-dependent.");
+                            McpLog.Error($"[MenuItemExecutor] Failed to execute menu item via delayCall: '{menuPath}'. It might be invalid, disabled, or context-dependent.");
                         }
                     }
                     catch (Exception delayEx)
                     {
-                        Debug.LogError($"[MenuItemExecutor] Exception during delayed execution of '{menuPath}': {delayEx}");
+                        McpLog.Error($"[MenuItemExecutor] Exception during delayed execution of '{menuPath}': {delayEx}");
                     }
                 };
 
@@ -58,7 +58,7 @@ namespace MCPForUnity.Editor.Tools.MenuItems
             }
             catch (Exception e)
             {
-                Debug.LogError($"[MenuItemExecutor] Failed to setup execution for '{menuPath}': {e}");
+                McpLog.Error($"[MenuItemExecutor] Failed to setup execution for '{menuPath}': {e}");
                 return Response.Error($"Error setting up execution for menu item '{menuPath}': {e.Message}");
             }
         }
