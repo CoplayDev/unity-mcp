@@ -23,6 +23,8 @@ namespace MCPForUnity.Editor
         private static bool isRunning = false;
         private static readonly object lockObj = new();
         private static readonly object startStopLock = new();
+        private static readonly object clientsLock = new();
+        private static readonly System.Collections.Generic.HashSet<TcpClient> activeClients = new();
         private static CancellationTokenSource cts;
         private static Task listenerTask;
         private static int processingCommands = 0;
@@ -196,9 +198,15 @@ namespace MCPForUnity.Editor
             }
 
             isStarting = true;
-            // Attempt start; if it succeeds, remove the hook to avoid overhead
-            Start();
-            isStarting = false;
+            try
+            {
+                // Attempt start; if it succeeds, remove the hook to avoid overhead
+                Start();
+            }
+            finally
+            {
+                isStarting = false;
+            }
             if (isRunning)
             {
                 EditorApplication.update -= EnsureStartedOnEditorIdle;
@@ -378,6 +386,18 @@ namespace MCPForUnity.Editor
                 }
             }
 
+            // Proactively close all active client sockets to unblock any pending reads
+            TcpClient[] toClose;
+            lock (clientsLock)
+            {
+                toClose = activeClients.ToArray();
+                activeClients.Clear();
+            }
+            foreach (var c in toClose)
+            {
+                try { c.Close(); } catch { }
+            }
+
             // Give the background loop a short window to exit without blocking the editor
             if (toWait != null)
             {
@@ -440,6 +460,9 @@ namespace MCPForUnity.Editor
             using (client)
             using (NetworkStream stream = client.GetStream())
             {
+                lock (clientsLock) { activeClients.Add(client); }
+                try
+                {
                 // Framed I/O only; legacy mode removed
                 try
                 {
@@ -479,7 +502,7 @@ namespace MCPForUnity.Editor
                     try
                     {
                         // Strict framed mode only: enforced framed I/O for this connection
-                        string commandText = await ReadFrameAsUtf8Async(stream, FrameIOTimeoutMs);
+                        string commandText = await ReadFrameAsUtf8Async(stream, FrameIOTimeoutMs, token).ConfigureAwait(false);
 
                         try
                         {
@@ -491,7 +514,7 @@ namespace MCPForUnity.Editor
                         }
                         catch { }
                         string commandId = Guid.NewGuid().ToString();
-                        TaskCompletionSource<string> tcs = new();
+                        var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
 
                         // Special handling for ping command to avoid JSON parsing
                         if (commandText.Trim() == "ping")
@@ -510,7 +533,7 @@ namespace MCPForUnity.Editor
                             commandQueue[commandId] = (commandText, tcs);
                         }
 
-                        string response = await tcs.Task;
+                        string response = await tcs.Task.ConfigureAwait(false);
                         byte[] responseBytes = System.Text.Encoding.UTF8.GetBytes(response);
                         await WriteFrameAsync(stream, responseBytes);
                     }
@@ -532,6 +555,11 @@ namespace MCPForUnity.Editor
                         }
                         break;
                     }
+                }
+                }
+                finally
+                {
+                    lock (clientsLock) { activeClients.Remove(client); }
                 }
             }
         }
@@ -611,9 +639,9 @@ namespace MCPForUnity.Editor
 #endif
         }
 
-        private static async System.Threading.Tasks.Task<string> ReadFrameAsUtf8Async(NetworkStream stream, int timeoutMs)
+        private static async System.Threading.Tasks.Task<string> ReadFrameAsUtf8Async(NetworkStream stream, int timeoutMs, CancellationToken cancel)
         {
-            byte[] header = await ReadExactAsync(stream, 8, timeoutMs);
+            byte[] header = await ReadExactAsync(stream, 8, timeoutMs, cancel).ConfigureAwait(false);
             ulong payloadLen = ReadUInt64BigEndian(header);
              if (payloadLen > MaxFrameBytes)
             {
@@ -626,7 +654,7 @@ namespace MCPForUnity.Editor
                 throw new System.IO.IOException("Frame too large for buffer");
             }
             int count = (int)payloadLen;
-            byte[] payload = await ReadExactAsync(stream, count, timeoutMs);
+            byte[] payload = await ReadExactAsync(stream, count, timeoutMs, cancel).ConfigureAwait(false);
             return System.Text.Encoding.UTF8.GetString(payload);
         }
 

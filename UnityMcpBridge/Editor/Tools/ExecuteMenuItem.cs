@@ -27,7 +27,7 @@ namespace MCPForUnity.Editor.Tools
         /// </summary>
         public static object HandleCommand(JObject @params)
         {
-            string action = @params["action"]?.ToString().ToLower() ?? "execute"; // Default action
+            string action = (@params["action"]?.ToString())?.ToLowerInvariant() ?? "execute"; // Default action
 
             try
             {

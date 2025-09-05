@@ -261,6 +261,31 @@ namespace MCPForUnityTests.Editor.Tools
             // The collect-and-continue behavior means we should get an error response 
             // that contains info about the failed properties, but valid ones were still applied
             // This proves the collect-and-continue behavior is working
+
+            // Harden: verify structured error response with failures list contains both invalid fields
+            var successProp = result.GetType().GetProperty("success");
+            Assert.IsNotNull(successProp, "Result should expose 'success' property");
+            Assert.IsFalse((bool)successProp.GetValue(result), "Result.success should be false for partial failure");
+
+            var dataProp = result.GetType().GetProperty("data");
+            Assert.IsNotNull(dataProp, "Result should include 'data' with errors");
+            var dataVal = dataProp.GetValue(result);
+            Assert.IsNotNull(dataVal, "Result.data should not be null");
+            var errorsProp = dataVal.GetType().GetProperty("errors");
+            Assert.IsNotNull(errorsProp, "Result.data should include 'errors' list");
+            var errorsEnum = errorsProp.GetValue(dataVal) as System.Collections.IEnumerable;
+            Assert.IsNotNull(errorsEnum, "errors should be enumerable");
+
+            bool foundRotatoin = false;
+            bool foundInvalidProp = false;
+            foreach (var err in errorsEnum)
+            {
+                string s = err?.ToString() ?? string.Empty;
+                if (s.Contains("rotatoin")) foundRotatoin = true;
+                if (s.Contains("invalidProp")) foundInvalidProp = true;
+            }
+            Assert.IsTrue(foundRotatoin, "errors should mention the misspelled 'rotatoin' property");
+            Assert.IsTrue(foundInvalidProp, "errors should mention the 'invalidProp' property");
         }
 
         [Test] 
@@ -307,6 +332,28 @@ namespace MCPForUnityTests.Editor.Tools
             
             // The key test: processing continued after the exception and set useGravity
             // This proves the collect-and-continue behavior works even with exceptions
+
+            // Harden: verify structured error response contains velocity failure
+            var successProp2 = result.GetType().GetProperty("success");
+            Assert.IsNotNull(successProp2, "Result should expose 'success' property");
+            Assert.IsFalse((bool)successProp2.GetValue(result), "Result.success should be false when an exception occurs for a property");
+
+            var dataProp2 = result.GetType().GetProperty("data");
+            Assert.IsNotNull(dataProp2, "Result should include 'data' with errors");
+            var dataVal2 = dataProp2.GetValue(result);
+            Assert.IsNotNull(dataVal2, "Result.data should not be null");
+            var errorsProp2 = dataVal2.GetType().GetProperty("errors");
+            Assert.IsNotNull(errorsProp2, "Result.data should include 'errors' list");
+            var errorsEnum2 = errorsProp2.GetValue(dataVal2) as System.Collections.IEnumerable;
+            Assert.IsNotNull(errorsEnum2, "errors should be enumerable");
+
+            bool foundVelocityError = false;
+            foreach (var err in errorsEnum2)
+            {
+                string s = err?.ToString() ?? string.Empty;
+                if (s.Contains("velocity")) { foundVelocityError = true; break; }
+            }
+            Assert.IsTrue(foundVelocityError, "errors should include a message referencing 'velocity'");
         }
     }
 }
