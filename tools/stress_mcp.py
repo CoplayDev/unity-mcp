@@ -119,19 +119,27 @@ async def reload_churn_task(project_path: str, stop_time: float, unity_file: str
     # Use script edit tool to touch a C# file, which triggers compilation reliably
     path = Path(unity_file) if unity_file else None
     seq = 0
+    proj_root = Path(project_path).resolve() if project_path else None
     while time.time() < stop_time:
         try:
             if path and path.exists():
                 # Build a tiny ApplyTextEdits request that toggles a trailing comment
                 relative = None
                 try:
-                    # Derive Unity-relative path under Assets/
-                    p = str(path)
-                    idx = p.rfind("Assets/")
-                    if idx >= 0:
-                        relative = p[idx:]
+                    # Derive Unity-relative path under Assets/ (cross-platform)
+                    resolved = path.resolve()
+                    parts = list(resolved.parts)
+                    if "Assets" in parts:
+                        i = parts.index("Assets")
+                        relative = Path(*parts[i:]).as_posix()
+                    elif proj_root and str(resolved).startswith(str(proj_root)):
+                        rel = resolved.relative_to(proj_root)
+                        parts2 = list(rel.parts)
+                        if "Assets" in parts2:
+                            i2 = parts2.index("Assets")
+                            relative = Path(*parts2[i2:]).as_posix()
                 except Exception:
-                    pass
+                    relative = None
 
                 if relative:
                     # Derive name and directory for ManageScript and compute precondition SHA + EOF position
