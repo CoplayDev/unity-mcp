@@ -6,6 +6,8 @@ from typing import AsyncIterator, Dict, Any, List
 from config import config
 from tools import register_all_tools
 from unity_connection import get_unity_connection, UnityConnection
+from telemetry import record_telemetry, record_milestone, RecordType, MilestoneType
+import time
 
 # Configure logging using settings from config
 logging.basicConfig(
@@ -22,12 +24,38 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
     """Handle server startup and shutdown."""
     global _unity_connection
     logger.info("MCP for Unity Server starting up")
+    
+    # Record server startup telemetry
+    start_time = time.time()
+    record_telemetry(RecordType.STARTUP, {
+        "server_version": "3.0.2",
+        "startup_time": start_time
+    })
+    
+    # Record first startup milestone
+    record_milestone(MilestoneType.FIRST_STARTUP)
+    
     try:
         _unity_connection = get_unity_connection()
         logger.info("Connected to Unity on startup")
+        
+        # Record successful Unity connection
+        record_telemetry(RecordType.UNITY_CONNECTION, {
+            "status": "connected",
+            "connection_time_ms": (time.time() - start_time) * 1000
+        })
+        
     except Exception as e:
         logger.warning(f"Could not connect to Unity on startup: {str(e)}")
         _unity_connection = None
+        
+        # Record connection failure
+        record_telemetry(RecordType.UNITY_CONNECTION, {
+            "status": "failed",
+            "error": str(e)[:200],
+            "connection_time_ms": (time.time() - start_time) * 1000
+        })
+        
     try:
         # Yield the connection object so it can be attached to the context
         # The key 'bridge' matches how tools like read_console expect to access it (ctx.bridge)

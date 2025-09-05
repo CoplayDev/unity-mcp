@@ -5,6 +5,16 @@ import base64
 import os
 from urllib.parse import urlparse, unquote
 
+try:
+    from telemetry_decorator import telemetry_tool
+    from telemetry import record_milestone, MilestoneType
+    HAS_TELEMETRY = True
+except ImportError:
+    HAS_TELEMETRY = False
+    def telemetry_tool(tool_name: str):
+        def decorator(func):
+            return func
+        return decorator
 
 def register_manage_script_tools(mcp: FastMCP):
     """Register all script management tools with the MCP server."""
@@ -80,6 +90,7 @@ def register_manage_script_tools(mcp: FastMCP):
         "- For method/class operations, use script_apply_edits (safer, structured edits)\n"
         "- For pattern-based replacements, consider anchor operations in script_apply_edits\n"
     ))
+    @telemetry_tool("apply_text_edits")
     def apply_text_edits(
         ctx: Context,
         uri: str,
@@ -346,6 +357,7 @@ def register_manage_script_tools(mcp: FastMCP):
         "Args: path (e.g., 'Assets/Scripts/My.cs'), contents (string), script_type, namespace.\n"
         "Rules: path must be under Assets/. Contents will be Base64-encoded over transport.\n"
     ))
+    @telemetry_tool("create_script")
     def create_script(
         ctx: Context,
         path: str,
@@ -424,6 +436,7 @@ def register_manage_script_tools(mcp: FastMCP):
         "Args: name (no .cs), path (Assets/...), contents (for create), script_type, namespace.\n"
         "Notes: prefer apply_text_edits (ranges) or script_apply_edits (structured) for edits.\n"
     ))
+    @telemetry_tool("manage_script")
     def manage_script(
         ctx: Context,
         action: str,

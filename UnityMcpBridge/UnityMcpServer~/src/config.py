@@ -33,6 +33,10 @@ class ServerConfig:
     # Number of polite retries when Unity reports reloading
     # 40 × 250ms ≈ 10s default window
     reload_max_retries: int = 40
+    
+    # Telemetry settings
+    telemetry_enabled: bool = True
+    telemetry_endpoint: str = "https://api-prod.coplay.dev/telemetry/events"
 
 # Create a global config instance
 config = ServerConfig() 

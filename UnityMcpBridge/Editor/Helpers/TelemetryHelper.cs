@@ -1,0 +1,188 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace MCPForUnity.Editor.Helpers
+{
+    /// <summary>
+    /// Unity Bridge telemetry helper for collecting usage analytics
+    /// Following privacy-first approach with easy opt-out mechanisms
+    /// </summary>
+    public static class TelemetryHelper
+    {
+        private const string TELEMETRY_DISABLED_KEY = "MCPForUnity.TelemetryDisabled";
+        private const string CUSTOMER_UUID_KEY = "MCPForUnity.CustomerUUID";
+        
+        /// <summary>
+        /// Check if telemetry is enabled (can be disabled via Environment Variable or EditorPrefs)
+        /// </summary>
+        public static bool IsEnabled
+        {
+            get
+            {
+                // Check environment variables first
+                var envDisable = Environment.GetEnvironmentVariable("DISABLE_TELEMETRY");
+                if (!string.IsNullOrEmpty(envDisable) && 
+                    (envDisable.ToLower() == "true" || envDisable == "1"))
+                {
+                    return false;
+                }
+                
+                var unityMcpDisable = Environment.GetEnvironmentVariable("UNITY_MCP_DISABLE_TELEMETRY");
+                if (!string.IsNullOrEmpty(unityMcpDisable) && 
+                    (unityMcpDisable.ToLower() == "true" || unityMcpDisable == "1"))
+                {
+                    return false;
+                }
+                
+                // Check EditorPrefs
+                return !UnityEditor.EditorPrefs.GetBool(TELEMETRY_DISABLED_KEY, false);
+            }
+        }
+        
+        /// <summary>
+        /// Get or generate customer UUID for anonymous tracking
+        /// </summary>
+        public static string GetCustomerUUID()
+        {
+            var uuid = UnityEditor.EditorPrefs.GetString(CUSTOMER_UUID_KEY, "");
+            if (string.IsNullOrEmpty(uuid))
+            {
+                uuid = System.Guid.NewGuid().ToString();
+                UnityEditor.EditorPrefs.SetString(CUSTOMER_UUID_KEY, uuid);
+            }
+            return uuid;
+        }
+        
+        /// <summary>
+        /// Disable telemetry (stored in EditorPrefs)
+        /// </summary>
+        public static void DisableTelemetry()
+        {
+            UnityEditor.EditorPrefs.SetBool(TELEMETRY_DISABLED_KEY, true);
+        }
+        
+        /// <summary>
+        /// Enable telemetry (stored in EditorPrefs)
+        /// </summary>
+        public static void EnableTelemetry()
+        {
+            UnityEditor.EditorPrefs.SetBool(TELEMETRY_DISABLED_KEY, false);
+        }
+        
+        /// <summary>
+        /// Send telemetry data to Python server for processing
+        /// This is a lightweight bridge - the actual telemetry logic is in Python
+        /// </summary>
+        public static void RecordEvent(string eventType, Dictionary<string, object> data = null)
+        {
+            if (!IsEnabled)
+                return;
+                
+            try
+            {
+                var telemetryData = new Dictionary<string, object>
+                {
+                    ["event_type"] = eventType,
+                    ["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                    ["customer_uuid"] = GetCustomerUUID(),
+                    ["unity_version"] = Application.unityVersion,
+                    ["platform"] = Application.platform.ToString(),
+                    ["source"] = "unity_bridge"
+                };
+                
+                if (data != null)
+                {
+                    telemetryData["data"] = data;
+                }
+                
+                // Send to Python server via existing bridge communication
+                // The Python server will handle actual telemetry transmission
+                SendTelemetryToPythonServer(telemetryData);
+            }
+            catch (Exception e)
+            {
+                // Never let telemetry errors interfere with functionality
+                if (IsDebugEnabled())
+                {
+                    Debug.LogWarning($"Telemetry error (non-blocking): {e.Message}");
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Record bridge startup event
+        /// </summary>
+        public static void RecordBridgeStartup()
+        {
+            RecordEvent("bridge_startup", new Dictionary<string, object>
+            {
+                ["bridge_version"] = "3.0.2",
+                ["auto_connect"] = MCPForUnityBridge.IsAutoConnectMode
+            });
+        }
+        
+        /// <summary>
+        /// Record bridge connection event
+        /// </summary>
+        public static void RecordBridgeConnection(bool success, string error = null)
+        {
+            var data = new Dictionary<string, object>
+            {
+                ["success"] = success
+            };
+            
+            if (!string.IsNullOrEmpty(error))
+            {
+                data["error"] = error.Substring(0, Math.Min(200, error.Length));
+            }
+            
+            RecordEvent("bridge_connection", data);
+        }
+        
+        /// <summary>
+        /// Record tool execution from Unity side
+        /// </summary>
+        public static void RecordToolExecution(string toolName, bool success, float durationMs, string error = null)
+        {
+            var data = new Dictionary<string, object>
+            {
+                ["tool_name"] = toolName,
+                ["success"] = success,
+                ["duration_ms"] = Math.Round(durationMs, 2)
+            };
+            
+            if (!string.IsNullOrEmpty(error))
+            {
+                data["error"] = error.Substring(0, Math.Min(200, error.Length));
+            }
+            
+            RecordEvent("tool_execution_unity", data);
+        }
+        
+        private static void SendTelemetryToPythonServer(Dictionary<string, object> telemetryData)
+        {
+            // This would integrate with the existing bridge communication system
+            // For now, we'll just log it when debug is enabled
+            if (IsDebugEnabled())
+            {
+                Debug.Log($"<b><color=#2EA3FF>MCP-TELEMETRY</color></b>: {telemetryData["event_type"]}");
+            }
+            
+            // TODO: Integrate with MCPForUnityBridge command system
+            // We would send this as a special telemetry command to the Python server
+        }
+        
+        private static bool IsDebugEnabled()
+        {
+            try 
+            { 
+                return UnityEditor.EditorPrefs.GetBool("MCPForUnity.DebugLogs", false); 
+            } 
+            catch 
+            { 
+                return false; 
+            }
+        }
+    }
+}

@@ -69,10 +69,16 @@ namespace MCPForUnity.Editor
                 currentUnityPort = PortManager.GetPortWithFallback();
                 Start();
                 isAutoConnectMode = true;
+                
+                // Record telemetry for bridge startup
+                TelemetryHelper.RecordBridgeStartup();
             }
             catch (Exception ex)
             {
                 Debug.LogError($"Auto-connect failed: {ex.Message}");
+                
+                // Record telemetry for connection failure
+                TelemetryHelper.RecordBridgeConnection(false, ex.Message);
                 throw;
             }
         }
