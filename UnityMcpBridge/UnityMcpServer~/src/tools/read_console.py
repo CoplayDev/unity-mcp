@@ -76,10 +76,22 @@ def register_read_console_tools(mcp: FastMCP):
         # Use centralized retry helper (tolerate legacy list payloads from some agents)
         resp = send_command_with_retry("read_console", params_dict)
         if isinstance(resp, dict) and resp.get("success") and not include_stacktrace:
-            lines = resp.get("data", {}).get("lines", [])
-            trimmed = [
-                {"level": l.get("level") or l.get("type"), "message": l.get("message") or l.get("text")}
-                for l in lines
-            ]
+            data = resp.get("data", {}) or {}
+            lines = data.get("lines")
+            if lines is None:
+                # Some handlers return the raw list under data
+                lines = data if isinstance(data, list) else []
+
+            def _entry(x: Any) -> Dict[str, Any]:
+                if isinstance(x, dict):
+                    return {
+                        "level": x.get("level") or x.get("type"),
+                        "message": x.get("message") or x.get("text"),
+                    }
+                if isinstance(x, (list, tuple)) and len(x) >= 2:
+                    return {"level": x[0], "message": x[1]}
+                return {"level": None, "message": str(x)}
+
+            trimmed = [_entry(l) for l in (lines or [])]
             return {"success": True, "data": {"lines": trimmed}}
         return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}
