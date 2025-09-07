@@ -16,6 +16,22 @@ Quick deployment and testing tools for MCP for Unity core changes.
 
 ---
 
+## Switching MCP package sources quickly
+
+Run this from the unity-mcp repo, not your game's roote directory. Use `mcp_source.py` to quickly switch between different MCP for Unity package sources:
+
+**Usage:**
+```bash
+python mcp_source.py [--manifest /path/to/manifest.json] [--repo /path/to/unity-mcp] [--choice 1|2|3]
+```
+
+**Options:**
+- **1** Upstream main (CoplayDev/unity-mcp)
+- **2** Remote current branch (origin + branch)
+- **3** Local workspace (file: UnityMcpBridge)
+
+After switching, open Package Manager and Refresh to re-resolve packages.
+
 ## Development Deployment Scripts
 
 These deployment scripts help you quickly test changes to MCP for Unity core code.
@@ -56,15 +72,6 @@ python3 prune_tool_results.py < reports/claude-execution-output.json > reports/c
 
 The script reads a conversation from `stdin` and writes the pruned version to `stdout`, making logs much easier to inspect or archive.
 
-### Lean Tool Responses
-To keep live conversations small, server tools now emit minimal payloads by default:
-
-* `find_in_file` – first match positions only (`startLine/Col`, `endLine/Col`).
-* `read_console` – full entries by default; pass `include_stacktrace=False` to trim to `{level, message}` (use `count` to limit).
-* `validate_script` – diagnostics summarized as `{warnings, errors}` counts.
-* `get_sha` – `{sha256, lengthBytes}` only.
-* `read_resource` – returns only `metadata.sha256` and byte length unless `include_text` or window arguments are provided.
-
 These defaults dramatically cut token usage without affecting essential information.
 
 ## Finding Unity Package Cache Path
@@ -89,12 +96,12 @@ Note: In recent builds, the Python server sources are also bundled inside the pa
 
 ## CI Test Workflow (GitHub Actions)
 
-We provide a CI job to run a Natural Language Editing mini-suite against the Unity test project. It spins up a headless Unity container and connects via the MCP bridge.
+We provide a CI job to run a Natural Language Editing suite against the Unity test project. It spins up a headless Unity container and connects via the MCP bridge. To run from your fork, you need the following GitHub "secrets": an `ANTHROPIC_API_KEY` and Unity credentials (usually `UNITY_EMAIL` + `UNITY_PASSWORD` or `UNITY_LICENSE` / `UNITY_SERIAL`.) These are redacted in logs so never visible.
 
- - Trigger: Workflow dispatch (`Claude NL suite (Unity live)`).
+***To run it***
+ - Trigger: In GitHun "Actions" for the repo, trigger `workflow dispatch` (`Claude NL/T Full Suite (Unity live)`).
  - Image: `UNITY_IMAGE` (UnityCI) pulled by tag; the job resolves a digest at runtime. Logs are sanitized.
- - Execution: runs in two passes (NL then T) so each session stays lean.
- - Tool permissions are pinned via `.claude/settings.json`, allowing Unity MCP tools and edits under `reports/` only.
+ - Execution: single pass with immediate per‑test fragment emissions (strict single `<testcase>` per file). A placeholder guard fails fast if any fragment is a bare ID. Staging (`reports/_staging`) is promoted to `reports/` to reduce partial writes.
  - Reports: JUnit at `reports/junit-nl-suite.xml`, Markdown at `reports/junit-nl-suite.md`.
  - Publishing: JUnit is normalized to `reports/junit-for-actions.xml` and published; artifacts upload all files under `reports/`.
 
@@ -103,10 +110,9 @@ We provide a CI job to run a Natural Language Editing mini-suite against the Uni
   - `TestProjects/UnityMCPTests/Assets/Scripts/LongUnityScriptClaudeTest.cs`
   Use this file locally and in CI to validate multi-edit batches, anchor inserts, and windowed reads on a sizable script.
 
-### Add a new NL test
-- Edit `.claude/prompts/nl-unity-claude-tests-mini.md` for quick experiments, or `.claude/prompts/nl-unity-suite-nl.md` and `.claude/prompts/nl-unity-suite-t.md` for the full NL and T suites.
-- Follow the conventions: single `<testsuite>` root, one `<testcase>` per sub-test, end system-out with `VERDICT: PASS|FAIL`.
-- Keep edits minimal and reversible; include evidence windows and compact diffs.
+### Adjust tests / prompts
+- Edit `.claude/prompts/nl-unity-suite-t.md` to modify the NL/T steps. Follow the conventions: emit one XML fragment per test under `reports/<TESTID>_results.xml`, each containing exactly one `<testcase>` with a `name` that begins with the test ID. No prologue/epilogue or code fences.
+- Keep edits minimal and reversible; include concise evidence.
 
 ### Run the suite
 1) Push your branch, then manually run the workflow from the Actions tab.
@@ -117,7 +123,6 @@ We provide a CI job to run a Natural Language Editing mini-suite against the Uni
 - Job Summary: inline markdown summary of the run on the Actions tab in GitHub
 - Check: “JUnit Test Report” on the PR/commit.
 - Artifacts: `claude-nl-suite-artifacts` includes XML and MD.
-
 
 ### MCP Connection Debugging
 - *Enable debug logs* in the Unity MCP window (inside the Editor) to view connection status, auto-setup results, and MCP client paths. It shows:
@@ -131,24 +136,6 @@ We provide a CI job to run a Natural Language Editing mini-suite against the Uni
 3. **Test** in Unity (restart Unity Editor first)
 4. **Iterate** - repeat steps 1-3 as needed
 5. **Restore** original files when done using `restore-dev.bat`
-
-
-## Switching MCP package sources quickly
-
-Use `mcp_source.py` to quickly switch between different MCP for Unity package sources:
-
-**Usage:**
-```bash
-python mcp_source.py [--manifest /path/to/manifest.json] [--repo /path/to/unity-mcp] [--choice 1|2|3]
-```
-
-**Options:**
-- **1** Upstream main (CoplayDev/unity-mcp)
-- **2** Remote current branch (origin + branch)
-- **3** Local workspace (file: UnityMcpBridge)
-
-After switching, open Package Manager and Refresh to re-resolve packages.
-
 
 ## Troubleshooting
 
