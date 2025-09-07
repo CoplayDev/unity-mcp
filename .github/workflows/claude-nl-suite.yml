@@ -329,7 +329,7 @@ jobs:
           run: |
             set -eux
             rm -f reports/*.xml reports/*.md || true
-            mkdir -p reports reports/_snapshots
+            mkdir -p reports reports/_snapshots reports/_staging
   
         - name: Create report skeletons
           run: |
@@ -490,6 +490,46 @@ jobs:
               echo "::error::Still missing T fragments: ${missing[*]}"
               exit 1
             fi
+
+        - name: Finalize staged report fragments (promote to reports/)
+          if: always()
+          shell: bash
+          run: |
+            python3 - <<'PY'
+            from pathlib import Path
+            import xml.etree.ElementTree as ET, re
+
+            def id_from_filename(p: Path):
+              n = p.name
+              m = re.match(r'NL(\d+)_results\.xml$', n, re.I)
+              if m:
+                return f"NL-{int(m.group(1))}"
+              m = re.match(r'T([A-J])_results\.xml$', n, re.I)
+              if m:
+                return f"T-{m.group(1).upper()}"
+              return None
+
+            src_dir = Path('reports/_staging')
+            dst_dir = Path('reports')
+            dst_dir.mkdir(parents=True, exist_ok=True)
+
+            for frag in sorted(src_dir.glob('*_results.xml')):
+              try:
+                tree = ET.parse(frag); root = tree.getroot()
+              except Exception:
+                continue
+              if root.tag != 'testcase':
+                continue
+              file_id = id_from_filename(frag)
+              old = root.get('name') or ''
+              if file_id:
+                title = re.sub(r'^\s*(NL-\d+|T-[A-Z])\s*[—–:\-]\s*', '', old).strip()
+                new = f"{file_id} — {title}" if title else file_id
+                if new != old and new:
+                  root.set('name', new)
+              out = dst_dir / frag.name
+              tree.write(out, encoding='utf-8', xml_declaration=False)
+            PY
 
         - name: Canonicalize testcase names (NL/T prefixes)
           if: always()
