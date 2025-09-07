@@ -40,11 +40,16 @@ def register_read_console_tools(mcp: FastMCP):
         # Get the connection instance
         bridge = get_unity_connection()
 
-        # Set defaults if values are None
+        # Set defaults if values are None (conservative but useful for CI)
         action = action if action is not None else 'get'
         types = types if types is not None else ['error']
+        # Normalize types if passed as a single string
+        if isinstance(types, str):
+            types = [types]
         format = format if format is not None else 'json'
         include_stacktrace = include_stacktrace if include_stacktrace is not None else True
+        # Default count to a higher value unless explicitly provided
+        count = 50 if count is None else count
 
         # Normalize action if it's a string
         if isinstance(action, str):
@@ -68,7 +73,7 @@ def register_read_console_tools(mcp: FastMCP):
         if 'count' not in params_dict:
              params_dict['count'] = None 
 
-        # Use centralized retry helper
+        # Use centralized retry helper (tolerate legacy list payloads from some agents)
         resp = send_command_with_retry("read_console", params_dict)
         if isinstance(resp, dict) and resp.get("success") and not include_stacktrace:
             lines = resp.get("data", {}).get("lines", [])
