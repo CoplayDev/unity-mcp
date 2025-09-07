@@ -417,8 +417,25 @@ jobs:
 
         # (moved) Assert T coverage after staged fragments are promoted
 
+        - name: Check T coverage incomplete (pre-retry)
+          id: t_cov
+          if: always()
+          shell: bash
+          run: |
+            set -euo pipefail
+            missing=()
+            for id in T-A T-B T-C T-D T-E T-F T-G T-H T-I T-J; do
+              if [[ ! -s "reports/${id}_results.xml" && ! -s "reports/_staging/${id}_results.xml" ]]; then
+                missing+=("$id")
+              fi
+            done
+            echo "missing=${#missing[@]}" >> "$GITHUB_OUTPUT"
+            if (( ${#missing[@]} )); then
+              echo "list=${missing[*]}" >> "$GITHUB_OUTPUT"
+            fi
+
         - name: Retry T pass (Sonnet) if incomplete
-          if: failure()
+          if: steps.t_cov.outputs.missing != '0'
           uses: anthropics/claude-code-base-action@beta
           with:
             use_node_cache: false
