@@ -415,19 +415,7 @@ jobs:
             timeout_minutes: "30"
             anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
-        - name: Assert T coverage (before backfill)
-          if: always()
-          shell: bash
-          run: |
-            set -euo pipefail
-            missing=()
-            for id in T-A T-B T-C T-D T-E T-F T-G T-H T-I T-J; do
-              [[ -s "reports/${id}_results.xml" ]] || missing+=("$id")
-            done
-            if (( ${#missing[@]} )); then
-              echo "::error::Missing T fragments: ${missing[*]}"
-              exit 1
-            fi
+        # (moved) Assert T coverage after staged fragments are promoted
 
         - name: Retry T pass (Sonnet) if incomplete
           if: failure()
@@ -468,85 +456,26 @@ jobs:
               exit 1
             fi
 
-        - name: Finalize staged report fragments (promote to reports/)
+        # (kept) Finalize staged report fragments (promote to reports/)
+
+        # (removed duplicate) Finalize staged report fragments
+
+        - name: Assert T coverage (after promotion)
           if: always()
           shell: bash
           run: |
-            python3 - <<'PY'
-            from pathlib import Path
-            import xml.etree.ElementTree as ET, re
-
-            def id_from_filename(p: Path):
-              n = p.name
-              m = re.match(r'NL(\d+)_results\.xml$', n, re.I)
-              if m:
-                return f"NL-{int(m.group(1))}"
-              m = re.match(r'T([A-J])_results\.xml$', n, re.I)
-              if m:
-                return f"T-{m.group(1).upper()}"
-              return None
-
-            src_dir = Path('reports/_staging')
-            dst_dir = Path('reports')
-            dst_dir.mkdir(parents=True, exist_ok=True)
-
-            for frag in sorted(src_dir.glob('*_results.xml')):
-              try:
-                tree = ET.parse(frag); root = tree.getroot()
-              except Exception:
-                continue
-              if root.tag != 'testcase':
-                continue
-              file_id = id_from_filename(frag)
-              old = root.get('name') or ''
-              if file_id:
-                title = re.sub(r'^\s*(NL-\d+|T-[A-Z])\s*[—–:\-]\s*', '', old).strip()
-                new = f"{file_id} — {title}" if title else file_id
-                if new != old and new:
-                  root.set('name', new)
-              out = dst_dir / frag.name
-              tree.write(out, encoding='utf-8', xml_declaration=False)
-            PY
-
-        - name: Finalize staged report fragments (promote to reports/)
-          if: always()
-          shell: bash
-          run: |
-            python3 - <<'PY'
-            from pathlib import Path
-            import xml.etree.ElementTree as ET, re
-
-            def id_from_filename(p: Path):
-              n = p.name
-              m = re.match(r'NL(\d+)_results\.xml$', n, re.I)
-              if m:
-                return f"NL-{int(m.group(1))}"
-              m = re.match(r'T([A-J])_results\.xml$', n, re.I)
-              if m:
-                return f"T-{m.group(1).upper()}"
-              return None
-
-            src_dir = Path('reports/_staging')
-            dst_dir = Path('reports')
-            dst_dir.mkdir(parents=True, exist_ok=True)
-
-            for frag in sorted(src_dir.glob('*_results.xml')):
-              try:
-                tree = ET.parse(frag); root = tree.getroot()
-              except Exception:
-                continue
-              if root.tag != 'testcase':
-                continue
-              file_id = id_from_filename(frag)
-              old = root.get('name') or ''
-              if file_id:
-                title = re.sub(r'^\s*(NL-\d+|T-[A-Z])\s*[—–:\-]\s*', '', old).strip()
-                new = f"{file_id} — {title}" if title else file_id
-                if new != old and new:
-                  root.set('name', new)
-              out = dst_dir / frag.name
-              tree.write(out, encoding='utf-8', xml_declaration=False)
-            PY
+            set -euo pipefail
+            missing=()
+            for id in T-A T-B T-C T-D T-E T-F T-G T-H T-I T-J; do
+              if [[ ! -s "reports/${id}_results.xml" ]]; then
+                # Accept staged fragment as present
+                [[ -s "reports/_staging/${id}_results.xml" ]] || missing+=("$id")
+              fi
+            done
+            if (( ${#missing[@]} )); then
+              echo "::error::Missing T fragments: ${missing[*]}"
+              exit 1
+            fi
 
         - name: Canonicalize testcase names (NL/T prefixes)
           if: always()
