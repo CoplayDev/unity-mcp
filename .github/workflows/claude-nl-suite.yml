@@ -388,32 +388,9 @@ jobs:
               - Stop after NL-4_results.xml is written.
             timeout_minutes: "30"
             anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-        - name: Run Claude T pass A-E
-          uses: anthropics/claude-code-base-action@beta
-          if: steps.detect.outputs.anthropic_ok == 'true' && steps.detect.outputs.unity_ok == 'true'
-          continue-on-error: true
-          with:
-            use_node_cache: false
-            prompt_file: .claude/prompts/nl-unity-suite-t.md
-            mcp_config: .claude/mcp.json
-            settings: .claude/settings.json
-            allowed_tools: "mcp__unity,Edit(reports/**),MultiEdit(reports/**)"
-            disallowed_tools: "Bash,WebFetch,WebSearch,Task,TodoWrite,NotebookEdit,NotebookRead"
-            model: claude-3-5-haiku-20241022
-            append_system_prompt: |
-              You are running the T pass (A–E) only.
-              Output requirements:
-              - Emit exactly 5 test fragments: T-A, T-B, T-C, T-D, T-E.
-              - Write each fragment to reports/${ID}_results.xml (e.g., T-A_results.xml).
-              - Prefer a single MultiEdit(reports/**) call that writes all five files in one batch.
-              - If MultiEdit is not used, emit individual writes for any missing IDs until all five exist.
-              - Do not emit any NL-* fragments.
-              Stop condition:
-              - After T-E_results.xml is written, stop.
-            timeout_minutes: "30"
-            anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+    
 
-        - name: Run Claude T pass F-J
+        - name: Run Claude T pass A-J
           uses: anthropics/claude-code-base-action@beta
           if: steps.detect.outputs.anthropic_ok == 'true' && steps.detect.outputs.unity_ok == 'true'
           continue-on-error: true
@@ -426,12 +403,12 @@ jobs:
             disallowed_tools: "Bash,WebFetch,WebSearch,Task,TodoWrite,NotebookEdit,NotebookRead"
             model: claude-3-5-haiku-20241022
             append_system_prompt: |
-              You are running the T pass (F–J) only.
+              You are running the T pass (A–J) only.
               Output requirements:
-              - Emit exactly 5 test fragments: T-F, T-G, T-H, T-I, T-J.
-              - Write each fragment to reports/${ID}_results.xml (e.g., T-F_results.xml).
-              - Prefer a single MultiEdit(reports/**) call that writes all five files in one batch.
-              - If MultiEdit is not used, emit individual writes for any missing IDs until all five exist.
+              - Emit exactly 10 test fragments: T-A, T-B, T-C, T-D, T-E, T-F, T-G, T-H, T-I, T-J.
+              - Write each fragment to reports/${ID}_results.xml (e.g., T-A_results.xml).
+              - Prefer a single MultiEdit(reports/**) call that writes all ten files in one batch.
+              - If MultiEdit is not used, emit individual writes for any missing IDs until all ten exist.
               - Do not emit any NL-* fragments.
               Stop condition:
               - After T-J_results.xml is written, stop.
