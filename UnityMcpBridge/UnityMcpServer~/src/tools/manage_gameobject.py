@@ -22,9 +22,6 @@ def register_manage_gameobject_tools(mcp: FastMCP):
         scale: List[float] = None,
         components_to_add: List[str] = None,  # List of component names to add
         primitive_type: str = None,
-        save_as_prefab: bool = False,
-        prefab_path: str = None,
-        prefab_folder: str = "Assets/Prefabs",
         # --- Parameters for 'modify' ---
         set_active: bool = None,
         layer: str = None,  # Layer name
@@ -39,7 +36,11 @@ def register_manage_gameobject_tools(mcp: FastMCP):
         component_name: str = None,
         includeNonPublicSerialized: bool = None, # Controls serialization of private [SerializeField] fields
     ) -> Dict[str, Any]:
-        """Manages GameObjects: create, modify, delete, find, and component operations.
+        """
+        Manages GameObjects in Unity scenes.
+
+        NOTE: For prefab operations (create, modify, open, save prefabs), use the 'manage_prefab' tool instead.
+        This tool focuses on scene GameObjects and can instantiate existing prefabs into scenes.
 
         Args:
             action: Operation (e.g., 'create', 'modify', 'find', 'add_component', 'remove_component', 'set_component_property', 'get_components').
@@ -92,9 +93,6 @@ def register_manage_gameobject_tools(mcp: FastMCP):
                 "scale": scale,
                 "componentsToAdd": components_to_add,
                 "primitiveType": primitive_type,
-                "saveAsPrefab": save_as_prefab,
-                "prefabPath": prefab_path,
-                "prefabFolder": prefab_folder,
                 "setActive": set_active,
                 "layer": layer,
                 "componentsToRemove": components_to_remove,
@@ -107,22 +105,6 @@ def register_manage_gameobject_tools(mcp: FastMCP):
                 "includeNonPublicSerialized": includeNonPublicSerialized
             }
             params = {k: v for k, v in params.items() if v is not None}
-            
-            # --- Handle Prefab Path Logic ---
-            if action == "create" and params.get("saveAsPrefab"): # Check if 'saveAsPrefab' is explicitly True in params
-                if "prefabPath" not in params:
-                    if "name" not in params or not params["name"]:
-                        return {"success": False, "message": "Cannot create default prefab path: 'name' parameter is missing."}
-                    # Use the provided prefab_folder (which has a default) and the name to construct the path
-                    constructed_path = f"{prefab_folder}/{params['name']}.prefab"
-                    # Ensure clean path separators (Unity prefers '/')
-                    params["prefabPath"] = constructed_path.replace("\\", "/")
-                elif not params["prefabPath"].lower().endswith(".prefab"):
-                    return {"success": False, "message": f"Invalid prefab_path: '{params['prefabPath']}' must end with .prefab"}
-            # Ensure prefab_folder itself isn't sent if prefabPath was constructed or provided
-            # The C# side only needs the final prefabPath
-            params.pop("prefab_folder", None) 
-            # --------------------------------
             
             # Use centralized retry helper
             response = send_command_with_retry("manage_gameobject", params)

@@ -6,6 +6,7 @@ from .manage_editor import register_manage_editor_tools
 from .manage_gameobject import register_manage_gameobject_tools
 from .manage_asset import register_manage_asset_tools
 from .manage_shader import register_manage_shader_tools
+from .manage_prefab import register_manage_prefab_tools
 from .read_console import register_read_console_tools
 from .execute_menu_item import register_execute_menu_item_tools
 from .resource_tools import register_resource_tools
@@ -23,6 +24,7 @@ def register_all_tools(mcp):
     register_manage_gameobject_tools(mcp)
     register_manage_asset_tools(mcp)
     register_manage_shader_tools(mcp)
+    register_manage_prefab_tools(mcp)
     register_read_console_tools(mcp)
     register_execute_menu_item_tools(mcp)
     # Expose resource wrappers as normal tools so IDEs without resources primitive can use them

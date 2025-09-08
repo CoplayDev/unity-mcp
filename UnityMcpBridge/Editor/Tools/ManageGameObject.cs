@@ -77,46 +77,12 @@ namespace MCPForUnity.Editor.Tools
                 if (action == "modify" || action == "set_component_property")
                 {
                     Debug.Log(
-                        $"[ManageGameObject->ManageAsset] Redirecting action '{action}' for prefab '{targetPath}' to ManageAsset."
+                        $"[ManageGameObject->ManagePrefab] Redirecting action '{action}' for prefab '{targetPath}' to ManagePrefab."
                     );
-                    // Prepare params for ManageAsset.ModifyAsset
-                    JObject assetParams = new JObject();
-                    assetParams["action"] = "modify"; // ManageAsset uses "modify"
-                    assetParams["path"] = targetPath;
-
-                    // Extract properties.
-                    // For 'set_component_property', combine componentName and componentProperties.
-                    // For 'modify', directly use componentProperties.
-                    JObject properties = null;
-                    if (action == "set_component_property")
-                    {
-                        string compName = @params["componentName"]?.ToString();
-                        JObject compProps = @params["componentProperties"]?[compName] as JObject; // Handle potential nesting
-                        if (string.IsNullOrEmpty(compName))
-                            return Response.Error(
-                                "Missing 'componentName' for 'set_component_property' on prefab."
-                            );
-                        if (compProps == null)
-                            return Response.Error(
-                                $"Missing or invalid 'componentProperties' for component '{compName}' for 'set_component_property' on prefab."
-                            );
-
-                        properties = new JObject();
-                        properties[compName] = compProps;
-                    }
-                    else // action == "modify"
-                    {
-                        properties = @params["componentProperties"] as JObject;
-                        if (properties == null)
-                            return Response.Error(
-                                "Missing 'componentProperties' for 'modify' action on prefab."
-                            );
-                    }
-
-                    assetParams["properties"] = properties;
-
-                    // Call ManageAsset handler
-                    return ManageAsset.HandleCommand(assetParams);
+                    // Redirect to ManagePrefab for prefab operations
+                    return Response.Error(
+                        $"Action '{action}' on prefab '{targetPath}' should be performed using the 'manage_prefab' tool instead of 'manage_gameobject'."
+                    );
                 }
                 else if (
                     action == "delete"
@@ -127,7 +93,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     // Explicitly block other modifications on the prefab asset itself via manage_gameobject
                     return Response.Error(
-                        $"Action '{action}' on a prefab asset ('{targetPath}') should be performed using the 'manage_asset' command."
+                        $"Action '{action}' on a prefab asset ('{targetPath}') should be performed using the 'manage_prefab' tool."
                     );
                 }
                 // Allow 'create' (instantiation) and 'find' to proceed, although finding a prefab asset by path might be less common via manage_gameobject.
@@ -183,8 +149,7 @@ namespace MCPForUnity.Editor.Tools
                 return Response.Error("'name' parameter is required for 'create' action.");
             }
 
-            // Get prefab creation parameters
-            bool saveAsPrefab = @params["saveAsPrefab"]?.ToObject<bool>() ?? false;
+            // Check for prefab path parameter (for instantiation only)
             string prefabPath = @params["prefabPath"]?.ToString();
             string tag = @params["tag"]?.ToString(); // Get tag for creation
             string primitiveType = @params["primitiveType"]?.ToString(); // Keep primitiveType check
@@ -478,96 +443,19 @@ namespace MCPForUnity.Editor.Tools
                 }
             }
 
-            // Save as Prefab ONLY if we *created* a new object AND saveAsPrefab is true
-            GameObject finalInstance = newGo; // Use this for selection and return data
-            if (createdNewObject && saveAsPrefab)
-            {
-                string finalPrefabPath = prefabPath; // Use a separate variable for saving path
-                // This check should now happen *before* attempting to save
-                if (string.IsNullOrEmpty(finalPrefabPath))
-                {
-                    // Clean up the created object before returning error
-                    UnityEngine.Object.DestroyImmediate(newGo);
-                    return Response.Error(
-                        "'prefabPath' is required when 'saveAsPrefab' is true and creating a new object."
-                    );
-                }
-                // Ensure the *saving* path ends with .prefab
-                if (!finalPrefabPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
-                {
-                    Debug.Log(
-                        $"[ManageGameObject.Create] Appending .prefab extension to save path: '{finalPrefabPath}' -> '{finalPrefabPath}.prefab'"
-                    );
-                    finalPrefabPath += ".prefab";
-                }
-
-                try
-                {
-                    // Ensure directory exists using the final saving path
-                    string directoryPath = System.IO.Path.GetDirectoryName(finalPrefabPath);
-                    if (
-                        !string.IsNullOrEmpty(directoryPath)
-                        && !System.IO.Directory.Exists(directoryPath)
-                    )
-                    {
-                        System.IO.Directory.CreateDirectory(directoryPath);
-                        AssetDatabase.Refresh(); // Refresh asset database to recognize the new folder
-                        Debug.Log(
-                            $"[ManageGameObject.Create] Created directory for prefab: {directoryPath}"
-                        );
-                    }
-                    // Use SaveAsPrefabAssetAndConnect with the final saving path
-                    finalInstance = PrefabUtility.SaveAsPrefabAssetAndConnect(
-                        newGo,
-                        finalPrefabPath,
-                        InteractionMode.UserAction
-                    );
-
-                    if (finalInstance == null)
-                    {
-                        // Destroy the original if saving failed somehow (shouldn't usually happen if path is valid)
-                        UnityEngine.Object.DestroyImmediate(newGo);
-                        return Response.Error(
-                            $"Failed to save GameObject '{name}' as prefab at '{finalPrefabPath}'. Check path and permissions."
-                        );
-                    }
-                    Debug.Log(
-                        $"[ManageGameObject.Create] GameObject '{name}' saved as prefab to '{finalPrefabPath}' and instance connected."
-                    );
-                    // Mark the new prefab asset as dirty? Not usually necessary, SaveAsPrefabAsset handles it.
-                    // EditorUtility.SetDirty(finalInstance); // Instance is handled by SaveAsPrefabAssetAndConnect
-                }
-                catch (Exception e)
-                {
-                    // Clean up the instance if prefab saving fails
-                    UnityEngine.Object.DestroyImmediate(newGo); // Destroy the original attempt
-                    return Response.Error($"Error saving prefab '{finalPrefabPath}': {e.Message}");
-                }
-            }
+            GameObject finalInstance = newGo;
 
             // Select the instance in the scene (either prefab instance or newly created/saved one)
             Selection.activeGameObject = finalInstance;
 
-            // Determine appropriate success message using the potentially updated or original path
-            string messagePrefabPath =
-                finalInstance == null
-                    ? originalPrefabPath
-                    : AssetDatabase.GetAssetPath(
-                        PrefabUtility.GetCorrespondingObjectFromSource(finalInstance)
-                            ?? (UnityEngine.Object)finalInstance
-                    );
+            // Determine appropriate success message
             string successMessage;
-            if (!createdNewObject && !string.IsNullOrEmpty(messagePrefabPath)) // Instantiated existing prefab
+            if (!createdNewObject && !string.IsNullOrEmpty(originalPrefabPath)) // Instantiated existing prefab
             {
                 successMessage =
-                    $"Prefab '{messagePrefabPath}' instantiated successfully as '{finalInstance.name}'.";
+                    $"Prefab '{originalPrefabPath}' instantiated successfully as '{finalInstance.name}'.";
             }
-            else if (createdNewObject && saveAsPrefab && !string.IsNullOrEmpty(messagePrefabPath)) // Created new and saved as prefab
-            {
-                successMessage =
-                    $"GameObject '{finalInstance.name}' created and saved as prefab to '{messagePrefabPath}'.";
-            }
-            else // Created new primitive or empty GO, didn't save as prefab
+            else // Created new primitive or empty GameObject
             {
                 successMessage =
                     $"GameObject '{finalInstance.name}' created successfully in scene.";

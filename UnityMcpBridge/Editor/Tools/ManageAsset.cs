@@ -231,14 +231,9 @@ namespace MCPForUnity.Editor.Tools
                 }
                 else if (lowerAssetType == "prefab")
                 {
-                    // Creating prefabs usually involves saving an existing GameObject hierarchy.
-                    // A common pattern is to create an empty GameObject, configure it, and then save it.
                     return Response.Error(
-                        "Creating prefabs programmatically usually requires a source GameObject. Use manage_gameobject to create/configure, then save as prefab via a separate mechanism or future enhancement."
+                        "Prefab creation should be performed using the 'manage_prefab' tool instead of 'manage_asset'."
                     );
-                    // Example (conceptual):
-                    // GameObject source = GameObject.Find(properties["sourceGameObject"].ToString());
-                    // if(source != null) PrefabUtility.SaveAsPrefabAsset(source, fullPath);
                 }
                 // TODO: Add more asset types (Animation Controller, Scene, etc.)
                 else
