@@ -314,6 +314,11 @@ namespace MCPForUnity.Editor.Helpers
                 string roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) ?? string.Empty;
                 if (!string.IsNullOrEmpty(roaming))
                     roots.Add(Path.Combine(roaming, "UnityMCP", "UnityMcpServer"));
+                // Windows legacy: early installers/dev scripts used %LOCALAPPDATA%\Programs\UnityMCP\UnityMcpServer
+                // Detect this location so we can clean up older copies during install/update.
+                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) ?? string.Empty;
+                if (!string.IsNullOrEmpty(localAppData))
+                    roots.Add(Path.Combine(localAppData, "Programs", "UnityMCP", "UnityMcpServer"));
             }
             catch { }
             return roots;
