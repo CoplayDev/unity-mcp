@@ -74,7 +74,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
     start_clk = time.perf_counter()
     try:
         from pathlib import Path
-        ver_path = Path(__file__).parent / "server-version.txt"
+        ver_path = Path(__file__).parent / "server_version.txt"
         server_version = ver_path.read_text(encoding="utf-8").strip()
     except Exception:
         server_version = "unknown"
@@ -167,7 +167,7 @@ def asset_creation_strategy() -> str:
     return (
         "Available MCP for Unity Server Tools:\n\n"
         "- `manage_editor`: Controls editor state and queries info.\n"
-        "- `manage_menu_item`: Executes and lists Unity Editor menu items.\n"
+        "- `manage_menu_item`: Executes, lists and checks for the existence of Unity Editor menu items.\n"
         "- `read_console`: Reads or clears Unity console messages, with filtering options.\n"
         "- `manage_scene`: Manages scenes.\n"
         "- `manage_gameobject`: Manages GameObjects in the scene.\n"
