@@ -26,7 +26,7 @@ namespace MCPForUnity.Editor.Tools.MenuItems
         /// <summary>
         /// Rebuilds the cached list from reflection.
         /// </summary>
-        public static List<string> Refresh()
+        private static List<string> Refresh()
         {
             try
             {
@@ -49,15 +49,6 @@ namespace MCPForUnity.Editor.Tools.MenuItems
                 _cached = _cached ?? new List<string>();
                 return _cached;
             }
-        }
-
-        /// <summary>
-        /// Command wrapper that forces a refresh and returns the list.
-        /// </summary>
-        public static object RefreshCommand()
-        {
-            var list = Refresh();
-            return Response.Success("Menu items refreshed.", list);
         }
 
         /// <summary>

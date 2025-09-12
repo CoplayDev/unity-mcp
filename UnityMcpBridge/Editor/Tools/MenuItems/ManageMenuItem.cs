@@ -33,8 +33,6 @@ namespace MCPForUnity.Editor.Tools.MenuItems
                         return MenuItemsReader.List(@params);
                     case "exists":
                         return MenuItemsReader.Exists(@params);
-                    case "refresh":
-                        return MenuItemsReader.RefreshCommand();
                     default:
                         return Response.Error($"Unknown action: '{action}'. Valid actions are: execute, list, exists, refresh.");
                 }

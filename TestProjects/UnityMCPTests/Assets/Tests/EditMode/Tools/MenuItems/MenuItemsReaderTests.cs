@@ -11,17 +11,6 @@ namespace MCPForUnityTests.Editor.Tools.MenuItems
         private static JObject ToJO(object o) => JObject.FromObject(o);
 
         [Test]
-        public void Refresh_ReturnsSuccessAndListShape()
-        {
-            var res = MenuItemsReader.RefreshCommand();
-            var jo = ToJO(res);
-            Assert.IsTrue((bool)jo["success"], "Expected success true");
-            Assert.IsNotNull(jo["data"], "Expected data field present");
-            Assert.AreEqual(JTokenType.Array, jo["data"].Type, "Expected data to be an array");
-            StringAssert.Contains("refreshed", (string)jo["message"], "Expected refresh message");
-        }
-
-        [Test]
         public void List_NoSearch_ReturnsSuccessAndArray()
         {
             var res = MenuItemsReader.List(new JObject());
