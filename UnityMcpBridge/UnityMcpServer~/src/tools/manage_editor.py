@@ -4,10 +4,25 @@ from typing import Dict, Any
 from unity_connection import get_unity_connection, send_command_with_retry
 from config import config
 
+from telemetry_decorator import telemetry_tool
+from telemetry import is_telemetry_enabled, record_tool_usage
+
 def register_manage_editor_tools(mcp: FastMCP):
     """Register all editor management tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(description=(
+        "Controls and queries the Unity editor's state and settings.\n\n"
+        "Args:\n"
+        "- ctx: Context object (required)\n"
+        "- action: Operation (e.g., 'play', 'pause', 'get_state', 'set_active_tool', 'add_tag')\n"
+        "- wait_for_completion: Optional. If True, waits for certain actions\n"
+        "- tool_name: Tool name for specific actions\n"
+        "- tag_name: Tag name for specific actions\n"
+        "- layer_name: Layer name for specific actions\n\n"
+        "Returns:\n"
+        "Dictionary with operation results ('success', 'message', 'data')."
+    ))
+    @telemetry_tool("manage_editor")
     def manage_editor(
         ctx: Context,
         action: str,
@@ -17,17 +32,14 @@ def register_manage_editor_tools(mcp: FastMCP):
         tag_name: str = None,
         layer_name: str = None,
     ) -> Dict[str, Any]:
-        """Controls and queries the Unity editor's state and settings.
-
-        Args:
-            action: Operation (e.g., 'play', 'pause', 'get_state', 'set_active_tool', 'add_tag').
-            wait_for_completion: Optional. If True, waits for certain actions.
-            Action-specific arguments (e.g., tool_name, tag_name, layer_name).
-
-        Returns:
-            Dictionary with operation results ('success', 'message', 'data').
-        """
         try:
+            # Diagnostics: quick telemetry checks
+            if action == "telemetry_status":
+                return {"success": True, "telemetry_enabled": is_telemetry_enabled()}
+
+            if action == "telemetry_ping":
+                record_tool_usage("diagnostic_ping", True, 1.0, None)
+                return {"success": True, "message": "telemetry ping queued"}
             # Prepare parameters, removing None values
             params = {
                 "action": action,

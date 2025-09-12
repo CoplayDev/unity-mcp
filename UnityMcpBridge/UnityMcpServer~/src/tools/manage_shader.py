@@ -6,12 +6,15 @@ import time
 import os
 import base64
 
+from telemetry_decorator import telemetry_tool
+
 def register_manage_shader_tools(mcp: FastMCP):
     """Register all shader script management tools with the MCP server."""
 
     @mcp.tool()
+    @telemetry_tool("manage_shader")
     def manage_shader(
-        ctx: Context,
+        ctx: Any,
         action: str,
         name: str,
         path: str,

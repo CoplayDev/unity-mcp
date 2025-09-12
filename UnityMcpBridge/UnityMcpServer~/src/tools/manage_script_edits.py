@@ -1,9 +1,11 @@
 from mcp.server.fastmcp import FastMCP, Context
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 import base64
 import re
 import os
 from unity_connection import send_command_with_retry
+
+from telemetry_decorator import telemetry_tool
 
 
 def _apply_edits_locally(original_text: str, edits: List[Dict[str, Any]]) -> str:
@@ -316,22 +318,42 @@ def register_manage_script_edits_tools(mcp: FastMCP):
         "Do NOT use: new_method, anchor_method, content, newText (aliases accepted but normalized).\n\n"
         "Examples:\n"
         "1) Replace a method:\n"
-        "{ 'name':'SmartReach','path':'Assets/Scripts/Interaction','edits':[\n"
-        "  { 'op':'replace_method','className':'SmartReach','methodName':'HasTarget',\n"
-        "    'replacement':'public bool HasTarget(){ return currentTarget!=null; }' }\n"
-        "], 'options':{'validate':'standard','refresh':'immediate'} }\n\n"
+        "{\n"
+        "  \"name\": \"SmartReach\",\n"
+        "  \"path\": \"Assets/Scripts/Interaction\",\n"
+        "  \"edits\": [\n"
+        "    {\n"
+        "      \"op\": \"replace_method\",\n"
+        "      \"className\": \"SmartReach\",\n"
+        "      \"methodName\": \"HasTarget\",\n"
+        "      \"replacement\": \"public bool HasTarget(){ return currentTarget!=null; }\"\n"
+        "    }\n"
+        "  ],\n"
+        "  \"options\": {\"validate\": \"standard\", \"refresh\": \"immediate\"}\n"
+        "}\n\n"
         "2) Insert a method after another:\n"
-        "{ 'name':'SmartReach','path':'Assets/Scripts/Interaction','edits':[\n"
-        "  { 'op':'insert_method','className':'SmartReach','replacement':'public void PrintSeries(){ Debug.Log(seriesName); }',\n"
-        "    'position':'after','afterMethodName':'GetCurrentTarget' }\n"
-        "] }\n"
+        "{\n"
+        "  \"name\": \"SmartReach\",\n"
+        "  \"path\": \"Assets/Scripts/Interaction\",\n"
+        "  \"edits\": [\n"
+        "    {\n"
+        "      \"op\": \"insert_method\",\n"
+        "      \"className\": \"SmartReach\",\n"
+        "      \"replacement\": \"public void PrintSeries(){ Debug.Log(seriesName); }\",\n"
+        "      \"position\": \"after\",\n"
+        "      \"afterMethodName\": \"GetCurrentTarget\"\n"
+        "    }\n"
+        "  ]\n"
+        "}\n\n"
+        "Note: 'options' must be an object/dict, not a string. Use proper JSON syntax.\n"
     ))
+    @telemetry_tool("script_apply_edits")
     def script_apply_edits(
         ctx: Context,
         name: str,
         path: str,
         edits: List[Dict[str, Any]],
-        options: Dict[str, Any] | None = None,
+        options: Optional[Dict[str, Any]] = None,
         script_type: str = "MonoBehaviour",
         namespace: str = "",
     ) -> Dict[str, Any]:

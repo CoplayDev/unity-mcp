@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__unity",
+      "Edit(reports/**)",
+      "MultiEdit(reports/**)"
+    ],
+    "deny": [
+      "Bash",
+      "WebFetch",
+      "WebSearch",
+      "Task",
+      "TodoWrite",
+      "NotebookEdit",
+      "NotebookRead"
+    ]
+  }
+}

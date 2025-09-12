@@ -814,9 +814,34 @@ namespace MCPForUnity.Editor.Tools
             // Return component errors if any occurred (after processing all components)
             if (componentErrors.Count > 0)
             {
+                // Aggregate flattened error strings to make tests/API assertions simpler
+                var aggregatedErrors = new System.Collections.Generic.List<string>();
+                foreach (var errorObj in componentErrors)
+                {
+                    try
+                    {
+                        var dataProp = errorObj?.GetType().GetProperty("data");
+                        var dataVal = dataProp?.GetValue(errorObj);
+                        if (dataVal != null)
+                        {
+                            var errorsProp = dataVal.GetType().GetProperty("errors");
+                            var errorsEnum = errorsProp?.GetValue(dataVal) as System.Collections.IEnumerable;
+                            if (errorsEnum != null)
+                            {
+                                foreach (var item in errorsEnum)
+                                {
+                                    var s = item?.ToString();
+                                    if (!string.IsNullOrEmpty(s)) aggregatedErrors.Add(s);
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
                 return Response.Error(
                     $"One or more component property operations failed on '{targetGo.name}'.",
-                    new { componentErrors = componentErrors }
+                    new { componentErrors = componentErrors, errors = aggregatedErrors }
                 );
             }
 

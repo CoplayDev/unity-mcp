@@ -3,9 +3,8 @@ Resource wrapper tools so clients that do not expose MCP resources primitives
 can still list and read files via normal tools. These call into the same
 safe path logic (re-implemented here to avoid importing server.py).
 """
-from __future__ import annotations
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import re
 from pathlib import Path
 from urllib.parse import urlparse, unquote
@@ -14,8 +13,33 @@ import hashlib
 import os
 
 from mcp.server.fastmcp import FastMCP, Context
+from telemetry_decorator import telemetry_tool
 from unity_connection import send_command_with_retry
 
+
+def _coerce_int(value: Any, default: Optional[int] = None, minimum: Optional[int] = None) -> Optional[int]:
+    """Safely coerce various inputs (str/float/etc.) to an int.
+    Returns default on failure; clamps to minimum when provided.
+    """
+    if value is None:
+        return default
+    try:
+        # Avoid treating booleans as ints implicitly
+        if isinstance(value, bool):
+            return default
+        if isinstance(value, int):
+            result = int(value)
+        else:
+            s = str(value).strip()
+            if s.lower() in ("", "none", "null"):
+                return default
+            # Allow "10.0" or similar inputs
+            result = int(float(s))
+        if minimum is not None and result < minimum:
+            return minimum
+        return result
+    except Exception:
+        return default
 
 def _resolve_project_root(override: str | None) -> Path:
     # 1) Explicit override
@@ -114,12 +138,13 @@ def register_resource_tools(mcp: FastMCP) -> None:
         "Security: restricted to Assets/ subtree; symlinks are resolved and must remain under Assets/.\n"
         "Notes: Only .cs files are returned by default; always appends unity://spec/script-edits.\n"
     ))
+    @telemetry_tool("list_resources")
     async def list_resources(
-        ctx: Context | None = None,
-        pattern: str | None = "*.cs",
+        ctx: Optional[Context] = None,
+        pattern: Optional[str] = "*.cs",
         under: str = "Assets",
-        limit: int = 200,
-        project_root: str | None = None,
+        limit: Any = 200,
+        project_root: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Lists project URIs (unity://path/...) under a folder (default: Assets).
@@ -141,6 +166,7 @@ def register_resource_tools(mcp: FastMCP) -> None:
                 return {"success": False, "error": "Listing is restricted to Assets/"}
 
             matches: List[str] = []
+            limit_int = _coerce_int(limit, default=200, minimum=1)
             for p in base.rglob("*"):
                 if not p.is_file():
                     continue
@@ -157,7 +183,7 @@ def register_resource_tools(mcp: FastMCP) -> None:
                     continue
                 rel = p.relative_to(project).as_posix()
                 matches.append(f"unity://path/{rel}")
-                if len(matches) >= max(1, limit):
+                if len(matches) >= max(1, limit_int):
                     break
 
             # Always include the canonical spec resource so NL clients can discover it
@@ -174,15 +200,16 @@ def register_resource_tools(mcp: FastMCP) -> None:
         "Security: uri must resolve under Assets/.\n"
         "Examples: head_bytes=1024; start_line=100,line_count=40; tail_lines=120.\n"
     ))
+    @telemetry_tool("read_resource")
     async def read_resource(
         uri: str,
-        ctx: Context | None = None,
-        start_line: int | None = None,
-        line_count: int | None = None,
-        head_bytes: int | None = None,
-        tail_lines: int | None = None,
-        project_root: str | None = None,
-        request: str | None = None,
+        ctx: Optional[Context] = None,
+        start_line: Any = None,
+        line_count: Any = None,
+        head_bytes: Any = None,
+        tail_lines: Any = None,
+        project_root: Optional[str] = None,
+        request: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Reads a resource by unity://path/... URI with optional slicing.
@@ -291,36 +318,51 @@ def register_resource_tools(mcp: FastMCP) -> None:
                         start_line = max(1, hit_line - half)
                         line_count = window
 
-            # Mutually exclusive windowing options precedence:
-            # 1) head_bytes, 2) tail_lines, 3) start_line+line_count, else full text
-            if head_bytes and head_bytes > 0:
-                raw = p.read_bytes()[: head_bytes]
-                text = raw.decode("utf-8", errors="replace")
-            else:
-                text = p.read_text(encoding="utf-8")
-                if tail_lines is not None and tail_lines > 0:
-                    lines = text.splitlines()
-                    n = max(0, tail_lines)
-                    text = "\n".join(lines[-n:])
-                elif start_line is not None and line_count is not None and line_count >= 0:
-                    lines = text.splitlines()
-                    s = max(0, start_line - 1)
-                    e = min(len(lines), s + line_count)
-                    text = "\n".join(lines[s:e])
+            # Coerce numeric inputs defensively (string/float -> int)
+            start_line = _coerce_int(start_line)
+            line_count = _coerce_int(line_count)
+            head_bytes = _coerce_int(head_bytes, minimum=1)
+            tail_lines = _coerce_int(tail_lines, minimum=1)
 
-            sha = hashlib.sha256(text.encode("utf-8")).hexdigest()
-            return {"success": True, "data": {"text": text, "metadata": {"sha256": sha}}}
+            # Compute SHA over full file contents (metadata-only default)
+            full_bytes = p.read_bytes()
+            full_sha = hashlib.sha256(full_bytes).hexdigest()
+
+            # Selection only when explicitly requested via windowing args or request text hints
+            selection_requested = bool(head_bytes or tail_lines or (start_line is not None and line_count is not None) or request)
+            if selection_requested:
+                # Mutually exclusive windowing options precedence:
+                # 1) head_bytes, 2) tail_lines, 3) start_line+line_count, else full text
+                if head_bytes and head_bytes > 0:
+                    raw = full_bytes[: head_bytes]
+                    text = raw.decode("utf-8", errors="replace")
+                else:
+                    text = full_bytes.decode("utf-8", errors="replace")
+                    if tail_lines is not None and tail_lines > 0:
+                        lines = text.splitlines()
+                        n = max(0, tail_lines)
+                        text = "\n".join(lines[-n:])
+                    elif start_line is not None and line_count is not None and line_count >= 0:
+                        lines = text.splitlines()
+                        s = max(0, start_line - 1)
+                        e = min(len(lines), s + line_count)
+                        text = "\n".join(lines[s:e])
+                return {"success": True, "data": {"text": text, "metadata": {"sha256": full_sha, "lengthBytes": len(full_bytes)}}}
+            else:
+                # Default: metadata only
+                return {"success": True, "data": {"metadata": {"sha256": full_sha, "lengthBytes": len(full_bytes)}}}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
     @mcp.tool()
+    @telemetry_tool("find_in_file")
     async def find_in_file(
         uri: str,
         pattern: str,
-        ctx: Context | None = None,
-        ignore_case: bool | None = True,
-        project_root: str | None = None,
-        max_results: int | None = 200,
+        ctx: Optional[Context] = None,
+        ignore_case: Optional[bool] = True,
+        project_root: Optional[str] = None,
+        max_results: Any = 200,
     ) -> Dict[str, Any]:
         """
         Searches a file with a regex pattern and returns line numbers and excerpts.
@@ -343,11 +385,20 @@ def register_resource_tools(mcp: FastMCP) -> None:
             rx = re.compile(pattern, flags)
 
             results = []
+            max_results_int = _coerce_int(max_results, default=200, minimum=1)
             lines = text.splitlines()
             for i, line in enumerate(lines, start=1):
-                if rx.search(line):
-                    results.append({"line": i, "text": line})
-                    if max_results and len(results) >= max_results:
+                m = rx.search(line)
+                if m:
+                    start_col = m.start() + 1  # 1-based
+                    end_col = m.end() + 1      # 1-based, end exclusive
+                    results.append({
+                        "startLine": i,
+                        "startCol": start_col,
+                        "endLine": i,
+                        "endCol": end_col,
+                    })
+                    if max_results_int and len(results) >= max_results_int:
                         break
 
             return {"success": True, "data": {"matches": results, "count": len(results)}}

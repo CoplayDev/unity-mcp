@@ -4,12 +4,15 @@ from unity_connection import get_unity_connection, send_command_with_retry
 from config import config
 import time
 
+from telemetry_decorator import telemetry_tool
+
 def register_manage_gameobject_tools(mcp: FastMCP):
     """Register all GameObject management tools with the MCP server."""
 
     @mcp.tool()
+    @telemetry_tool("manage_gameobject")
     def manage_gameobject(
-        ctx: Context,
+        ctx: Any,
         action: str,
         target: str = None,  # GameObject identifier by name or path
         search_method: str = None,
@@ -119,9 +122,9 @@ def register_manage_gameobject_tools(mcp: FastMCP):
                     params["prefabPath"] = constructed_path.replace("\\", "/")
                 elif not params["prefabPath"].lower().endswith(".prefab"):
                     return {"success": False, "message": f"Invalid prefab_path: '{params['prefabPath']}' must end with .prefab"}
-            # Ensure prefab_folder itself isn't sent if prefabPath was constructed or provided
+            # Ensure prefabFolder itself isn't sent if prefabPath was constructed or provided
             # The C# side only needs the final prefabPath
-            params.pop("prefab_folder", None) 
+            params.pop("prefabFolder", None) 
             # --------------------------------
             
             # Use centralized retry helper

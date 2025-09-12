@@ -15,7 +15,7 @@ class ServerConfig:
     mcp_port: int = 6500
     
     # Connection settings
-    connection_timeout: float = 60.0  # default steady-state timeout; retries use shorter timeouts
+    connection_timeout: float = 1.0  # short initial timeout; retries use shorter timeouts
     buffer_size: int = 16 * 1024 * 1024  # 16MB buffer
     # Framed receive behavior
     framed_receive_timeout: float = 2.0  # max seconds to wait while consuming heartbeats only
@@ -33,6 +33,11 @@ class ServerConfig:
     # Number of polite retries when Unity reports reloading
     # 40 × 250ms ≈ 10s default window
     reload_max_retries: int = 40
+    
+    # Telemetry settings
+    telemetry_enabled: bool = True
+    # Align with telemetry.py default Cloud Run endpoint
+    telemetry_endpoint: str = "https://unity-mcp-telemetry-375728817078.us-central1.run.app/telemetry/events"
 
 # Create a global config instance
 config = ServerConfig() 

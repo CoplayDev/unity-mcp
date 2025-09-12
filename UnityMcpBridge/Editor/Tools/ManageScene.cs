@@ -16,15 +16,46 @@ namespace MCPForUnity.Editor.Tools
     /// </summary>
     public static class ManageScene
     {
+        private sealed class SceneCommand
+        {
+            public string action { get; set; } = string.Empty;
+            public string name { get; set; } = string.Empty;
+            public string path { get; set; } = string.Empty;
+            public int? buildIndex { get; set; }
+        }
+
+        private static SceneCommand ToSceneCommand(JObject p)
+        {
+            if (p == null) return new SceneCommand();
+            int? BI(JToken t)
+            {
+                if (t == null || t.Type == JTokenType.Null) return null;
+                var s = t.ToString().Trim();
+                if (s.Length == 0) return null;
+                if (int.TryParse(s, out var i)) return i;
+                if (double.TryParse(s, out var d)) return (int)d;
+                return t.Type == JTokenType.Integer ? t.Value<int>() : (int?)null;
+            }
+            return new SceneCommand
+            {
+                action = (p["action"]?.ToString() ?? string.Empty).Trim().ToLowerInvariant(),
+                name = p["name"]?.ToString() ?? string.Empty,
+                path = p["path"]?.ToString() ?? string.Empty,
+                buildIndex = BI(p["buildIndex"] ?? p["build_index"])
+            };
+        }
+
         /// <summary>
         /// Main handler for scene management actions.
         /// </summary>
         public static object HandleCommand(JObject @params)
         {
-            string action = @params["action"]?.ToString().ToLower();
-            string name = @params["name"]?.ToString();
-            string path = @params["path"]?.ToString(); // Relative to Assets/
-            int? buildIndex = @params["buildIndex"]?.ToObject<int?>();
+            try { McpLog.Info("[ManageScene] HandleCommand: start", always: false); } catch { }
+            var cmd = ToSceneCommand(@params);
+            string action = cmd.action;
+            string name = string.IsNullOrEmpty(cmd.name) ? null : cmd.name;
+            string path = string.IsNullOrEmpty(cmd.path) ? null : cmd.path; // Relative to Assets/
+            int? buildIndex = cmd.buildIndex;
             // bool loadAdditive = @params["loadAdditive"]?.ToObject<bool>() ?? false; // Example for future extension
 
             // Ensure path is relative to Assets/, removing any leading "Assets/"
@@ -76,6 +107,7 @@ namespace MCPForUnity.Editor.Tools
             }
 
             // Route action
+            try { McpLog.Info($"[ManageScene] Route action='{action}' name='{name}' path='{path}' buildIndex={(buildIndex.HasValue ? buildIndex.Value.ToString() : "null")}", always: false); } catch { }
             switch (action)
             {
                 case "create":
@@ -98,9 +130,15 @@ namespace MCPForUnity.Editor.Tools
                     // Save current scene, optionally to a new path
                     return SaveScene(fullPath, relativePath);
                 case "get_hierarchy":
-                    return GetSceneHierarchy();
+                    try { McpLog.Info("[ManageScene] get_hierarchy: entering", always: false); } catch { }
+                    var gh = GetSceneHierarchy();
+                    try { McpLog.Info("[ManageScene] get_hierarchy: exiting", always: false); } catch { }
+                    return gh;
                 case "get_active":
-                    return GetActiveSceneInfo();
+                    try { McpLog.Info("[ManageScene] get_active: entering", always: false); } catch { }
+                    var ga = GetActiveSceneInfo();
+                    try { McpLog.Info("[ManageScene] get_active: exiting", always: false); } catch { }
+                    return ga;
                 case "get_build_settings":
                     return GetBuildSettingsScenes();
                 // Add cases for modifying build settings, additive loading, unloading etc.
@@ -294,7 +332,9 @@ namespace MCPForUnity.Editor.Tools
         {
             try
             {
+                try { McpLog.Info("[ManageScene] get_active: querying EditorSceneManager.GetActiveScene", always: false); } catch { }
                 Scene activeScene = EditorSceneManager.GetActiveScene();
+                try { McpLog.Info($"[ManageScene] get_active: got scene valid={activeScene.IsValid()} loaded={activeScene.isLoaded} name='{activeScene.name}'", always: false); } catch { }
                 if (!activeScene.IsValid())
                 {
                     return Response.Error("No active scene found.");
@@ -314,6 +354,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception e)
             {
+                try { McpLog.Error($"[ManageScene] get_active: exception {e.Message}"); } catch { }
                 return Response.Error($"Error getting active scene info: {e.Message}");
             }
         }
@@ -348,7 +389,9 @@ namespace MCPForUnity.Editor.Tools
         {
             try
             {
+                try { McpLog.Info("[ManageScene] get_hierarchy: querying EditorSceneManager.GetActiveScene", always: false); } catch { }
                 Scene activeScene = EditorSceneManager.GetActiveScene();
+                try { McpLog.Info($"[ManageScene] get_hierarchy: got scene valid={activeScene.IsValid()} loaded={activeScene.isLoaded} name='{activeScene.name}'", always: false); } catch { }
                 if (!activeScene.IsValid() || !activeScene.isLoaded)
                 {
                     return Response.Error(
@@ -356,16 +399,21 @@ namespace MCPForUnity.Editor.Tools
                     );
                 }
 
+                try { McpLog.Info("[ManageScene] get_hierarchy: fetching root objects", always: false); } catch { }
                 GameObject[] rootObjects = activeScene.GetRootGameObjects();
+                try { McpLog.Info($"[ManageScene] get_hierarchy: rootCount={rootObjects?.Length ?? 0}", always: false); } catch { }
                 var hierarchy = rootObjects.Select(go => GetGameObjectDataRecursive(go)).ToList();
 
-                return Response.Success(
+                var resp = Response.Success(
                     $"Retrieved hierarchy for scene '{activeScene.name}'.",
                     hierarchy
                 );
+                try { McpLog.Info("[ManageScene] get_hierarchy: success", always: false); } catch { }
+                return resp;
             }
             catch (Exception e)
             {
+                try { McpLog.Error($"[ManageScene] get_hierarchy: exception {e.Message}"); } catch { }
                 return Response.Error($"Error getting scene hierarchy: {e.Message}");
             }
         }

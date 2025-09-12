@@ -1347,6 +1347,10 @@ namespace MCPForUnity.Editor.Tools
                     appliedCount = replacements.Count;
                 }
 
+                // Guard against structural imbalance before validation
+                if (!CheckBalancedDelimiters(working, out int lineBal, out char expectedBal))
+                    return Response.Error("unbalanced_braces", new { status = "unbalanced_braces", line = lineBal, expected = expectedBal.ToString() });
+
                 // No-op guard for structured edits: if text unchanged, return explicit no-op
                 if (string.Equals(working, original, StringComparison.Ordinal))
                 {
