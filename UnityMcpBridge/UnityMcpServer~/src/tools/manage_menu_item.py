@@ -2,10 +2,13 @@
 Defines the manage_menu_item tool for executing and reading Unity Editor menu items.
 """
 import asyncio
-from typing import Any
+from typing import Annotated, Any, Literal
+
 from mcp.server.fastmcp import FastMCP, Context
-from unity_connection import get_unity_connection, async_send_command_with_retry
 from telemetry_decorator import telemetry_tool
+
+from unity_connection import get_unity_connection, async_send_command_with_retry
+
 
 def register_manage_menu_item_tools(mcp: FastMCP):
     """Registers the manage_menu_item tool with the MCP server."""
@@ -13,28 +16,27 @@ def register_manage_menu_item_tools(mcp: FastMCP):
     @mcp.tool()
     @telemetry_tool("manage_menu_item")
     async def manage_menu_item(
-        ctx: Any,
-        action: str,
-        menu_path: str | None = None,
-        search: str | None = None,
-        refresh: bool = False,
+        ctx: Context,
+        action: Annotated[Literal["execute", "list", "exists"], "One of 'execute', 'list', 'exists'"],
+        menu_path: Annotated[str | None,
+                             "Menu path for 'execute' or 'exists' (e.g., 'File/Save Project')"] = None,
+        search: Annotated[str | None,
+                          "Optional filter string for 'list' (e.g., 'Save')"] = None,
+        refresh: Annotated[bool | None,
+                           "Optional flag to force refresh of the menu cache when listing"] = None,
     ) -> dict[str, Any]:
-        """Manage Unity menu items (execute/list/exists/refresh).
+        """Manage Unity menu items (execute/list/exists).
 
         Args:
             ctx: The MCP context.
-            action: One of 'execute', 'list', 'exists', 'refresh'.
+            action: One of 'execute', 'list', 'exists'.
             menu_path: Menu path for 'execute' or 'exists' (e.g., "File/Save Project").
             search: Optional filter string for 'list'.
-            refresh: Optional flag to force refresh of the menu cache.
+            refresh: Optional flag to force refresh of the menu cache when listing.
 
         Returns:
             A dictionary with operation results ('success', 'data', 'error').
         """
-        action = (action or "").lower()
-        if not action:
-            return {"success": False, "error": "action is required (execute|list|exists|refresh)"}
-
         # Prepare parameters for the C# handler
         params_dict: dict[str, Any] = {
             "action": action,
