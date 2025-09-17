@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
-using UnityEngine;
 using MCPForUnity.Editor.Helpers;
 
 namespace MCPForUnity.Editor.Tools.MenuItems

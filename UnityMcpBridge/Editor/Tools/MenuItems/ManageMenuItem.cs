@@ -1,15 +1,9 @@
 using System;
 using Newtonsoft.Json.Linq;
-using UnityEditor;
-using UnityEngine;
 using MCPForUnity.Editor.Helpers;
 
 namespace MCPForUnity.Editor.Tools.MenuItems
 {
-    /// <summary>
-    /// Facade handler for managing Unity Editor menu items.
-    /// Routes actions to read or execute implementations.
-    /// </summary>
     public static class ManageMenuItem
     {
         /// <summary>
