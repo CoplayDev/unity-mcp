@@ -87,7 +87,7 @@ MCP for Unity connects your tools using two components:
         **Method 1: NuGet for Unity (Recommended)**
         1. Install [NuGetForUnity](https://github.com/GlitchEnzo/NuGetForUnity)
         2. Go to `Window > NuGet Package Manager`
-        3. Search for `Microsoft.CodeAnalysis.CSharp` and install the package
+        3. Search for `Microsoft.CodeAnalysis.CSharp`, select version 3.11.0 and install the package
         5. Go to `Player Settings > Scripting Define Symbols`
         6. Add `USE_ROSLYN`
         7. Restart Unity
