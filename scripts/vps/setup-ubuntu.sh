@@ -335,7 +335,7 @@ UNITY_MCP_AUTOSTART=true
 UNITY_MCP_PORT=6400
 UNITY_MCP_LOG_PATH=/opt/unity-mcp/logs/unity-mcp.log
 LOG_LEVEL=INFO
-MAX_CLIENTS=5
+MAX_CLIENTS=10
 HOST=0.0.0.0
 PORT=8080
 DISPLAY=:99
@@ -352,7 +352,7 @@ sudo tee /opt/unity-mcp/config/server.conf > /dev/null << 'EOF'
 [server]
 host = 0.0.0.0
 port = 8080
-max_clients = 5
+max_clients = 10
 unity_project_path = /opt/unity-mcp/projects/shared
 
 [unity]

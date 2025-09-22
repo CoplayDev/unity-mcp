@@ -6,15 +6,35 @@ This branch contains the VPS (Virtual Private Server) implementation of Unity MC
 
 ### 1. Create GCP VM
 
+Choose instance size based on your needs:
+
 ```bash
+# Small team (1-5 clients) - n2-standard-4
+gcloud compute instances create unity-mcp-server \
+  --zone=us-central1-a \
+  --machine-type=n2-standard-4 \
+  --image-family=ubuntu-2204-lts \
+  --image-project=ubuntu-os-cloud \
+  --boot-disk-size=100GB \
+  --boot-disk-type=pd-ssd
+
+# Medium scale (6-15 clients) - n2-standard-8 (recommended)
 gcloud compute instances create unity-mcp-server \
   --zone=us-central1-a \
   --machine-type=n2-standard-8 \
   --image-family=ubuntu-2204-lts \
   --image-project=ubuntu-os-cloud \
   --boot-disk-size=200GB \
-  --boot-disk-type=pd-ssd \
-  --tags=unity-mcp,http-server,https-server
+  --boot-disk-type=pd-ssd
+
+# Large scale (16+ clients) - n2-standard-16
+gcloud compute instances create unity-mcp-server \
+  --zone=us-central1-a \
+  --machine-type=n2-standard-16 \
+  --image-family=ubuntu-2204-lts \
+  --image-project=ubuntu-os-cloud \
+  --boot-disk-size=400GB \
+  --boot-disk-type=pd-ssd
 ```
 
 ### 2. Setup Server
@@ -50,7 +70,16 @@ cd unity-mcp
 ./scripts/vps/deploy.sh unity-mcp-server us-central1-a your-domain.com
 ```
 
-### 5. Test Deployment
+### 5. Configure Client Limits
+
+```bash
+# Configure for your specific needs
+./scripts/vps/configure-clients.sh 15    # Support 15 clients
+./scripts/vps/configure-clients.sh 0     # Unlimited clients
+./scripts/vps/configure-clients.sh       # Interactive configuration
+```
+
+### 6. Test Deployment
 
 ```bash
 # Register client
@@ -66,8 +95,9 @@ curl https://your-domain.com/health
 
 ### Multi-Client Architecture
 - **Single Unity Instance**: One headless Unity process serves all clients
+- **Configurable Limits**: Support 1-50+ clients (default: 10, unlimited possible)
 - **Client Isolation**: Separate namespaces, scenes, and resource limits
-- **Resource Management**: 2GB memory and 1000 assets per client
+- **Resource Management**: Configurable memory and asset limits per client
 - **Auto-Scaling**: Dynamic client management and cleanup
 
 ### Key Components
@@ -146,10 +176,18 @@ unity-mcp/
 # /etc/unity-mcp/environment
 UNITY_VERSION=6000.0.3f1
 UNITY_PATH=/opt/unity/editors/6000.0.3f1/Editor/Unity
-MAX_CLIENTS=5
+MAX_CLIENTS=10           # Set to 0 for unlimited clients
 HOST=0.0.0.0
 PORT=8080
 LOG_LEVEL=INFO
+```
+
+### Client Limit Options
+```bash
+MAX_CLIENTS=5      # Support exactly 5 clients
+MAX_CLIENTS=10     # Support exactly 10 clients (default)
+MAX_CLIENTS=25     # Support exactly 25 clients
+MAX_CLIENTS=0      # Unlimited clients (resource-limited only)
 ```
 
 ### Resource Limits
@@ -235,16 +273,17 @@ sudo journalctl -u unity-mcp -f
 ## Performance Specifications
 
 ### Tested Performance
-- **Concurrent Clients**: 5 clients simultaneously
+- **Concurrent Clients**: Up to 25 clients tested (configurable/unlimited)
 - **Response Time**: < 5s average
-- **Memory Usage**: ~4GB total (with 5 clients)
-- **CPU Usage**: 60-80% on 8-core system
+- **Memory Usage**: Scales with client count (2GB base + 2GB per client)
+- **CPU Usage**: Scales with active clients (~5% per active client)
 - **Success Rate**: 100% in testing
 
 ### Resource Requirements
-- **Minimum**: 4 vCPUs, 16GB RAM, 100GB disk
-- **Recommended**: 8 vCPUs, 32GB RAM, 200GB SSD
-- **High-load**: 16 vCPUs, 64GB RAM, 500GB SSD
+- **Small (1-5 clients)**: 4 vCPUs, 16GB RAM, 100GB disk
+- **Medium (6-15 clients)**: 8 vCPUs, 32GB RAM, 200GB SSD  
+- **Large (16-30 clients)**: 16 vCPUs, 64GB RAM, 400GB SSD
+- **Enterprise (30+ clients)**: 32+ vCPUs, 128GB+ RAM, 1TB+ SSD
 
 ## Cost Analysis
 

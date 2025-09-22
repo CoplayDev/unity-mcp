@@ -5,7 +5,7 @@ This guide covers deploying Unity MCP on a Google Cloud Platform Virtual Private
 ## Overview
 
 The Unity MCP VPS deployment provides:
-- **Multi-client support**: Up to 5 concurrent clients
+- **Configurable multi-client support**: 1 to unlimited concurrent clients
 - **Client isolation**: Separate namespaces and resource allocation
 - **Scene management**: Individual scenes per client project
 - **Resource monitoring**: Memory, CPU, and asset tracking
@@ -57,9 +57,17 @@ The Unity MCP VPS deployment provides:
 
 ### Machine Specifications
 
-- **Type**: n2-standard-8 (8 vCPUs, 32GB RAM)
+Choose based on your expected client count:
+
+| Client Count | Instance Type | vCPUs | RAM | Disk | Est. Cost/Month |
+|-------------|---------------|-------|-----|------|-----------------|
+| **1-5** | n2-standard-4 | 4 | 16GB | 100GB | ~$120 |
+| **6-15** | n2-standard-8 | 8 | 32GB | 200GB | ~$240 |
+| **16-30** | n2-standard-16 | 16 | 64GB | 400GB | ~$480 |
+| **30+** | n2-standard-32+ | 32+ | 128GB+ | 800GB+ | ~$960+ |
+
+**Recommended for most use cases**: n2-standard-8
 - **OS**: Ubuntu 22.04 LTS  
-- **Disk**: 200GB SSD
 - **Region**: Choose closest to your users
 
 ### Using gcloud CLI

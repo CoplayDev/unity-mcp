@@ -67,13 +67,16 @@ class ServerStats:
 class MultiClientUnityServer:
     """Multi-tenant Unity MCP server for VPS deployment"""
     
-    def __init__(self, max_clients: int = 5, unity_project_path: str = "/opt/unity-mcp/projects/shared"):
+    def __init__(self, max_clients: int = None, unity_project_path: str = "/opt/unity-mcp/projects/shared"):
+        # Default to 10 clients, but allow unlimited if set to 0
+        if max_clients is None:
+            max_clients = int(os.getenv('MAX_CLIENTS', 10))
         self.max_clients = max_clients
         self.unity_project_path = unity_project_path
         self.stats = ServerStats()
         
         # Core managers
-        self.client_manager = ClientIsolationManager(max_clients)
+        self.client_manager = ClientIsolationManager(self.max_clients)
         self.scene_manager = SceneManager()
         
         # Unity process management
@@ -93,7 +96,7 @@ class MultiClientUnityServer:
         # Graceful shutdown
         self.shutdown_event = asyncio.Event()
         
-        logger.info(f"MultiClientUnityServer initialized for {max_clients} clients")
+        logger.info(f"MultiClientUnityServer initialized for {self.max_clients} clients ({'unlimited' if self.max_clients == 0 else 'limited'})")
         
     def setup_routes(self):
         """Setup HTTP API routes"""
@@ -292,9 +295,9 @@ unity_mcp_response_time_seconds {self.stats.avg_response_time}
             data = await request.json()
             project_name = data.get('project_name', f'project_{int(time.time())}')
             
-            if len(self.client_manager.clients) >= self.max_clients:
+            if self.max_clients > 0 and len(self.client_manager.clients) >= self.max_clients:
                 return web.json_response(
-                    {'error': 'Maximum clients reached', 'max_clients': self.max_clients},
+                    {'error': f'Maximum clients reached ({self.max_clients} clients)', 'max_clients': self.max_clients},
                     status=503
                 )
                 
@@ -628,7 +631,7 @@ unity_mcp_response_time_seconds {self.stats.avg_response_time}
 
 if __name__ == '__main__':
     # Configuration from environment
-    max_clients = int(os.getenv('MAX_CLIENTS', 5))
+    max_clients = int(os.getenv('MAX_CLIENTS', 10))
     host = os.getenv('HOST', '0.0.0.0')
     port = int(os.getenv('PORT', 8080))
     unity_project = os.getenv('UNITY_PROJECT_PATH', '/opt/unity-mcp/projects/shared')

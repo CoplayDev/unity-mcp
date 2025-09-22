@@ -66,7 +66,8 @@ class ResourceMonitor:
 class ClientIsolationManager:
     """Manages client isolation and resource allocation"""
     
-    def __init__(self, max_clients: int = 5):
+    def __init__(self, max_clients: int = 10):
+        # max_clients = 0 means unlimited clients
         self.max_clients = max_clients
         self.clients: Dict[str, ClientContext] = {}
         self.scene_locks: Dict[str, str] = {}  # scene_name -> client_id
@@ -75,8 +76,8 @@ class ClientIsolationManager:
         
     async def register_client(self, client_id: str, project_name: str) -> ClientContext:
         """Register new client with isolated resources"""
-        if len(self.clients) >= self.max_clients:
-            raise Exception("Maximum client limit reached")
+        if self.max_clients > 0 and len(self.clients) >= self.max_clients:
+            raise Exception(f"Maximum client limit reached ({self.max_clients} clients)")
             
         # Create isolated directories
         project_path = os.path.join(self.base_path, project_name)
