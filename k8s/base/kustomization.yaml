@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: unity-mcp-server-base
+
+resources:
+  - deployment.yaml
+  - service.yaml
+  - configmap.yaml
+  - hpa.yaml
+  - rbac.yaml
+  - poddisruptionbudget.yaml
+
+commonLabels:
+  app.kubernetes.io/name: unity-mcp-server
+  app.kubernetes.io/component: headless-server
+  app.kubernetes.io/part-of: unity-mcp
+  app.kubernetes.io/version: "2.0.0"
+
+images:
+  - name: gcr.io/PROJECT_ID/unity-mcp
+    newTag: production

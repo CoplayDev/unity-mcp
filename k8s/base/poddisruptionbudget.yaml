@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: unity-mcp-server-pdb
+  labels:
+    app: unity-mcp-server
+    component: disruption-budget
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: unity-mcp-server
+      component: headless

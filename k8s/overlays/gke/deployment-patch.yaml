@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unity-mcp-server
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+spec:
+  template:
+    metadata:
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-nodepool: unity-workers
+        node.kubernetes.io/instance-type: n1-standard-4
+      tolerations:
+      - key: unity-workload
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+      containers:
+      - name: unity-mcp-server
+        resources:
+          requests:
+            cpu: 1500m
+            memory: 3Gi
+            ephemeral-storage: 2Gi
+          limits:
+            cpu: 3000m
+            memory: 6Gi
+            ephemeral-storage: 10Gi
+        env:
+        - name: GCP_PROJECT_ID
+          valueFrom:
+            configMapKeyRef:
+              name: gke-config
+              key: GCP_PROJECT_ID
+        - name: GKE_CLUSTER_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: gke-config
+              key: GKE_CLUSTER_NAME
+        - name: GKE_CLUSTER_ZONE
+          valueFrom:
+            configMapKeyRef:
+              name: gke-config
+              key: GKE_CLUSTER_ZONE
+        - name: ENABLE_STACKDRIVER_LOGGING
+          value: "true"
+        - name: ENABLE_STACKDRIVER_METRICS
+          value: "true"

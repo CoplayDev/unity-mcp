@@ -1,0 +1,130 @@
+# Unity MCP with Real Unity Headless Server
+# Uses GameCI's Unity Docker images for reliable Unity installation
+ARG UNITY_VERSION=2023.2.20f1
+ARG PYTHON_VERSION=3.11
+
+################################################################################
+# Stage 1: Unity Editor Base (GameCI)
+################################################################################
+FROM unityci/editor:${UNITY_VERSION}-base-3.0 as unity-editor
+
+# Stage 2: Python Dependencies
+################################################################################
+FROM python:${PYTHON_VERSION}-slim as python-deps
+
+# Set Python environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies for Python build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv for fast Python package management
+RUN pip install --no-cache-dir uv
+
+# Copy Python project files
+WORKDIR /app/server
+COPY UnityMcpBridge/UnityMcpServer~/src/pyproject.toml .
+
+# Install Python dependencies
+RUN uv pip install --system httpx>=0.27.2 "mcp[cli]>=1.4.1"
+
+################################################################################
+# Stage 3: Final Production Image with Real Unity
+################################################################################
+FROM ubuntu:22.04 as production
+
+ARG UNITY_VERSION
+ARG PYTHON_VERSION
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    xvfb \
+    python3 \
+    python3-distutils \
+    libglu1-mesa \
+    libasound2 \
+    libxss1 \
+    libgbm1 \
+    libgtk-3-0 \
+    libgconf-2-4 \
+    xauth \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user for security
+RUN groupadd -r unity --gid=1000 \
+    && useradd -r -g unity --uid=1000 --home-dir=/home/unity --shell=/bin/bash unity \
+    && mkdir -p /home/unity \
+    && chown -R unity:unity /home/unity
+
+# Copy Unity Editor from GameCI image
+COPY --from=unity-editor --chown=unity:unity /opt/unity /opt/unity
+
+# Copy Python runtime from python-deps stage
+COPY --from=python-deps /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=python-deps /usr/local/bin /usr/local/bin
+
+# Copy Unity MCP source code
+WORKDIR /app
+COPY --chown=unity:unity UnityMcpBridge/UnityMcpServer~/src/ /app/server/
+COPY --chown=unity:unity UnityMcpBridge/ /app/unity-mcp-bridge/
+
+# Create necessary directories with proper permissions
+RUN mkdir -p \
+    /app/unity-projects \
+    /app/builds \
+    /tmp/unity-logs \
+    /home/unity/.config/unity3d \
+    && chown -R unity:unity /app /tmp/unity-logs /home/unity
+
+# Copy Docker scripts
+COPY docker/scripts/entrypoint.sh /app/entrypoint.sh
+COPY docker/scripts/healthcheck.sh /app/healthcheck.sh
+RUN chmod +x /app/entrypoint.sh /app/healthcheck.sh
+
+# Set environment variables for headless operation with real Unity
+ENV UNITY_HEADLESS=true \
+    UNITY_MCP_AUTOSTART=true \
+    UNITY_MCP_PORT=6400 \
+    UNITY_MCP_LOG_PATH=/tmp/unity-logs/unity-mcp.log \
+    LOG_LEVEL=INFO \
+    UNITY_VERSION=${UNITY_VERSION} \
+    UNITY_PATH="/opt/unity/editors/${UNITY_VERSION}/Editor/Unity" \
+    HOME=/home/unity \
+    DISPLAY=:99
+
+# Create Unity license directory (for runtime license activation)
+RUN mkdir -p /home/unity/.local/share/unity3d/Unity \
+    && chown -R unity:unity /home/unity/.local
+
+# Expose ports
+EXPOSE 8080 6400
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD /app/healthcheck.sh
+
+# Switch to non-root user
+USER unity
+
+# Set working directory
+WORKDIR /app
+
+# Run entrypoint which will handle Unity licensing and start the server
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+# Build metadata
+LABEL maintainer="Unity MCP Team" \
+      version="2.0.0" \
+      description="Unity MCP Headless Server - Real Unity with GameCI Base" \
+      unity.version=${UNITY_VERSION} \
+      org.opencontainers.image.source="https://github.com/justinpbarnett/unity-mcp" \
+      org.opencontainers.image.title="Unity MCP Headless Server" \
+      org.opencontainers.image.description="Containerized Unity MCP server with real Unity Editor for headless operations"

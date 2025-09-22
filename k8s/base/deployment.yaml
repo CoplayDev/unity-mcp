@@ -1,0 +1,224 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unity-mcp-server
+  labels:
+    app: unity-mcp-server
+    component: headless
+    tier: backend
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: unity-mcp-server
+      component: headless
+  template:
+    metadata:
+      labels:
+        app: unity-mcp-server
+        component: headless
+        tier: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: unity-mcp-server
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      initContainers:
+      - name: unity-license-setup
+        image: gcr.io/PROJECT_ID/unity-mcp:production
+        imagePullPolicy: IfNotPresent
+        command: ["/app/unity-license-activator.sh", "activate"]
+        env:
+        - name: UNITY_PATH
+          value: "/opt/unity/editors/6000.0.3f1/Editor/Unity"
+        - name: UNITY_VERSION
+          value: "6000.0.3f1"
+        - name: HOME
+          value: "/home/unity"
+        envFrom:
+        - configMapRef:
+            name: unity-mcp-config
+        - secretRef:
+            name: unity-license
+            optional: true
+        volumeMounts:
+        - name: unity-home
+          mountPath: /home/unity
+        - name: unity-logs
+          mountPath: /tmp/unity-logs
+        - name: unity-license-secret
+          mountPath: /var/secrets/unity
+          readOnly: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+      containers:
+      - name: unity-mcp-server
+        image: gcr.io/PROJECT_ID/unity-mcp:production
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        - name: unity-mcp
+          containerPort: 6400
+          protocol: TCP
+        env:
+        - name: UNITY_PATH
+          value: "/opt/unity/editors/6000.0.3f1/Editor/Unity"
+        - name: UNITY_VERSION
+          value: "6000.0.3f1"
+        - name: HOME
+          value: "/home/unity"
+        - name: UNITY_HEADLESS
+          value: "true"
+        - name: UNITY_MCP_AUTOSTART
+          value: "true"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        envFrom:
+        - configMapRef:
+            name: unity-mcp-config
+        - secretRef:
+            name: unity-license
+            optional: true
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 120
+          periodSeconds: 30
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 12
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 2Gi
+            ephemeral-storage: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+            ephemeral-storage: 8Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: unity-home
+          mountPath: /home/unity
+        - name: unity-logs
+          mountPath: /tmp/unity-logs
+        - name: unity-projects
+          mountPath: /app/unity-projects
+        - name: unity-builds
+          mountPath: /app/builds
+        - name: tmp
+          mountPath: /tmp
+        - name: unity-license-secret
+          mountPath: /var/secrets/unity
+          readOnly: true
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 10"]
+      volumes:
+      - name: unity-home
+        emptyDir:
+          sizeLimit: 1Gi
+      - name: unity-logs
+        emptyDir:
+          sizeLimit: 2Gi
+      - name: unity-projects
+        emptyDir:
+          sizeLimit: 5Gi
+      - name: unity-builds
+        emptyDir:
+          sizeLimit: 10Gi
+      - name: tmp
+        emptyDir:
+          sizeLimit: 2Gi
+      - name: unity-license-secret
+        secret:
+          secretName: unity-license
+          optional: true
+      terminationGracePeriodSeconds: 60
+      restartPolicy: Always
+      dnsPolicy: ClusterFirst
+      nodeSelector:
+        cloud.google.com/gke-nodepool: unity-workers
+      tolerations:
+      - key: unity-workload
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - unity-mcp-server
+              topologyKey: kubernetes.io/hostname

@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: unity-mcp-config
+data:
+  # GKE Optimized Settings
+  MAX_CONCURRENT_COMMANDS: "10"
+  UNITY_MCP_WORKER_THREADS: "6"
+  MEMORY_LIMIT_MB: "5120"  # 5GB
+  
+  # GKE Monitoring
+  ENABLE_STACKDRIVER_LOGGING: "true"
+  ENABLE_STACKDRIVER_METRICS: "true"
+  STACKDRIVER_LOG_LEVEL: "INFO"
+  
+  # Performance Optimizations
+  UNITY_MCP_QUEUE_SIZE: "20"
+  HEALTH_CHECK_INTERVAL: "15"
+  
+  # Load Balancer Health Checks
+  READINESS_TIMEOUT: "90"
+  STARTUP_TIMEOUT: "150"

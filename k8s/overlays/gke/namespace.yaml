@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: unity-mcp
+  labels:
+    name: unity-mcp
+    environment: production
+    platform: gke
+  annotations:
+    iam.gke.io/gcp-service-account: unity-mcp-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com

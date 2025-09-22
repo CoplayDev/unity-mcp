@@ -1,0 +1,12 @@
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: unity-mcp-ssl-cert
+  namespace: unity-mcp
+  labels:
+    app: unity-mcp-server
+    component: ssl-cert
+spec:
+  domains:
+    - unity-mcp.YOUR_DOMAIN.com
+    - api.unity-mcp.YOUR_DOMAIN.com

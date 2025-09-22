@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: unity-mcp-server
+  labels:
+    app: unity-mcp-server
+    component: service-account
+  annotations:
+    iam.gke.io/gcs-fuse-csi-driver: "PROJECT_ID"
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: unity-mcp-server
+  labels:
+    app: unity-mcp-server
+    component: rbac
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods/status"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: unity-mcp-server
+  labels:
+    app: unity-mcp-server
+    component: rbac
+subjects:
+- kind: ServiceAccount
+  name: unity-mcp-server
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: unity-mcp-server
+  apiGroup: rbac.authorization.k8s.io

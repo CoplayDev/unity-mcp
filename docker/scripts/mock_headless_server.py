@@ -33,6 +33,44 @@ class MockHeadlessHandler(BaseHTTPRequestHandler):
                 "uptime_seconds": int(time.time() - SERVER_START_TIME)
             }
             self.wfile.write(json.dumps(health_data).encode())
+        elif self.path == '/ready':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            ready_data = {
+                "server_ready": True,
+                "unity_ready": False,  # Mock server doesn't have real Unity
+                "timestamp": time.time(),
+                "mode": "ci-mock",
+                "uptime_seconds": int(time.time() - SERVER_START_TIME),
+                "system_resources": {
+                    "memory_ok": True,
+                    "disk_ok": True,
+                    "cpu_ok": True
+                }
+            }
+            self.wfile.write(json.dumps(ready_data).encode())
+        elif self.path == '/metrics':
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain')
+            self.end_headers()
+            metrics_data = f"""# HELP unity_mcp_requests_total Total number of requests
+# TYPE unity_mcp_requests_total counter
+unity_mcp_requests_total 0
+
+# HELP unity_mcp_uptime_seconds Server uptime in seconds
+# TYPE unity_mcp_uptime_seconds gauge
+unity_mcp_uptime_seconds {int(time.time() - SERVER_START_TIME)}
+
+# HELP unity_mcp_server_ready Server readiness status
+# TYPE unity_mcp_server_ready gauge
+unity_mcp_server_ready 1
+
+# HELP unity_mcp_unity_ready Unity readiness status
+# TYPE unity_mcp_unity_ready gauge
+unity_mcp_unity_ready 0
+"""
+            self.wfile.write(metrics_data.encode())
         else:
             self.send_error(404, "Not Found")
     

@@ -1,0 +1,40 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: unity-mcp-server-gke
+
+namespace: unity-mcp
+
+resources:
+  - ../../base
+  - namespace.yaml
+  - backend-config.yaml
+  - ingress.yaml
+  - managed-cert.yaml
+  - network-policy.yaml
+  - monitoring.yaml
+
+patchesStrategicMerge:
+  - deployment-patch.yaml
+  - configmap-patch.yaml
+
+configMapGenerator:
+  - name: gke-config
+    literals:
+      - GCP_PROJECT_ID=YOUR_PROJECT_ID
+      - GKE_CLUSTER_NAME=unity-mcp-cluster
+      - GKE_CLUSTER_ZONE=us-central1-b
+
+images:
+  - name: gcr.io/PROJECT_ID/unity-mcp
+    newName: gcr.io/YOUR_PROJECT_ID/unity-mcp
+    newTag: production
+
+replicas:
+  - name: unity-mcp-server
+    count: 2
+
+commonLabels:
+  environment: production
+  platform: gke

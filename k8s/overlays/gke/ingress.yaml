@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: unity-mcp-ingress
+  namespace: unity-mcp
+  labels:
+    app: unity-mcp-server
+    component: ingress
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+    kubernetes.io/ingress.global-static-ip-name: "unity-mcp-ip"
+    networking.gke.io/managed-certificates: "unity-mcp-ssl-cert"
+    cloud.google.com/backend-config: '{"default": "unity-mcp-backend-config"}'
+    cloud.google.com/neg: '{"ingress": true}'
+spec:
+  rules:
+  - host: unity-mcp.YOUR_DOMAIN.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: unity-mcp-server
+            port:
+              name: http
+  - host: api.unity-mcp.YOUR_DOMAIN.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: unity-mcp-server
+            port:
+              name: http

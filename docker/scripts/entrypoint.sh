@@ -79,7 +79,7 @@ validate_environment() {
     fi
     
     # Check Unity license configuration
-    if [[ -z "$UNITY_LICENSE_FILE" && -z "$UNITY_USERNAME" && -z "$UNITY_SERIAL" ]]; then
+    if [[ -z "${UNITY_LICENSE_FILE:-}" && -z "${UNITY_USERNAME:-}" && -z "${UNITY_SERIAL:-}" ]]; then
         warn "No Unity license configuration found. Unity may fail to start."
         warn "Set UNITY_LICENSE_FILE, or UNITY_USERNAME/UNITY_PASSWORD/UNITY_SERIAL"
     fi
@@ -97,12 +97,12 @@ validate_environment() {
 activate_unity_license() {
     log "Configuring Unity license..."
     
-    if [[ -n "$UNITY_LICENSE_FILE" && -f "$UNITY_LICENSE_FILE" ]]; then
+    if [[ -n "${UNITY_LICENSE_FILE:-}" && -f "${UNITY_LICENSE_FILE:-}" ]]; then
         log "Using Unity license file: $UNITY_LICENSE_FILE"
         return 0
     fi
     
-    if [[ -n "$UNITY_USERNAME" && -n "$UNITY_PASSWORD" && -n "$UNITY_SERIAL" ]]; then
+    if [[ -n "${UNITY_USERNAME:-}" && -n "${UNITY_PASSWORD:-}" && -n "${UNITY_SERIAL:-}" ]]; then
         log "Attempting Unity license activation with credentials..."
         
         # Attempt to activate license
@@ -211,8 +211,10 @@ start_headless_server() {
         info "CI Mode: Using mock server"
         if [[ -f "/app/mock_headless_server.py" ]]; then
             python3 /app/mock_headless_server.py "${server_args[@]}" &
+        elif [[ -f "/app/server/mock_headless_server.py" ]]; then
+            python3 /app/server/mock_headless_server.py "${server_args[@]}" &
         else
-            error "Mock server not found at /app/mock_headless_server.py"
+            error "Mock server not found"
             return 1
         fi
     else

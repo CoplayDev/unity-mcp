@@ -1,0 +1,30 @@
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: unity-mcp-backend-config
+  namespace: unity-mcp
+  labels:
+    app: unity-mcp-server
+    component: backend-config
+spec:
+  healthCheck:
+    checkIntervalSec: 15
+    timeoutSec: 10
+    healthyThreshold: 1
+    unhealthyThreshold: 3
+    type: HTTP
+    requestPath: /health
+    port: 8080
+  sessionAffinity:
+    affinityType: "CLIENT_IP"
+    affinityCookieTtlSec: 300
+  timeoutSec: 30
+  connectionDraining:
+    drainingTimeoutSec: 60
+  logging:
+    enable: true
+    sampleRate: 1.0
+  cdn:
+    enabled: false
+  iap:
+    enabled: false

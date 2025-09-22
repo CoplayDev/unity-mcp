@@ -1,0 +1,52 @@
+[Unit]
+Description=Unity MCP Multi-Client Server
+Documentation=https://github.com/CoplayDev/unity-mcp
+After=network.target xvfb.service
+Wants=xvfb.service
+
+[Service]
+Type=simple
+User=unity
+Group=unity
+WorkingDirectory=/opt/unity-mcp/server
+Environment="PATH=/opt/unity-mcp/venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=/etc/unity-mcp/environment
+ExecStartPre=/bin/bash -c 'while ! pgrep -x "Xvfb" > /dev/null; do sleep 1; done'
+ExecStart=/opt/unity-mcp/venv/bin/python multi_client_server.py
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=append:/opt/unity-mcp/logs/server.log
+StandardError=append:/opt/unity-mcp/logs/server-error.log
+SyslogIdentifier=unity-mcp
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/unity-mcp /var/log/unity-mcp /tmp
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+RestrictNamespaces=true
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=16G
+CPUQuota=400%
+
+# Health monitoring
+WatchdogSec=60
+
+[Install]
+WantedBy=multi-user.target

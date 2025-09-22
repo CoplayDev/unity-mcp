@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: ServiceMonitor
+metadata:
+  name: unity-mcp-server-monitor
+  namespace: unity-mcp
+  labels:
+    app: unity-mcp-server
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: unity-mcp-server
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: unity-mcp-server-alerts
+  namespace: unity-mcp
+  labels:
+    app: unity-mcp-server
+    component: alerts
+spec:
+  groups:
+  - name: unity-mcp-server
+    interval: 30s
+    rules:
+    - alert: UnityMcpServerDown
+      expr: up{job="unity-mcp-server"} == 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: Unity MCP Server is down
+        description: "Unity MCP Server has been down for more than 2 minutes"
+    
+    - alert: UnityMcpHighCPU
+      expr: rate(container_cpu_usage_seconds_total{pod=~"unity-mcp-server-.*"}[5m]) > 0.8
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: Unity MCP Server high CPU usage
+        description: "Unity MCP Server CPU usage is above 80% for more than 5 minutes"
+    
+    - alert: UnityMcpHighMemory
+      expr: container_memory_usage_bytes{pod=~"unity-mcp-server-.*"} / container_spec_memory_limit_bytes > 0.9
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: Unity MCP Server high memory usage
+        description: "Unity MCP Server memory usage is above 90% for more than 5 minutes"
+    
+    - alert: UnityMcpPodCrashLoop
+      expr: rate(kube_pod_container_status_restarts_total{pod=~"unity-mcp-server-.*"}[5m]) > 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: Unity MCP Server pod crash looping
+        description: "Unity MCP Server pod is crash looping"

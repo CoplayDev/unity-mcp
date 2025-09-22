@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: unity-mcp-config
+  labels:
+    app: unity-mcp-server
+    component: config
+data:
+  # Server Configuration
+  HTTP_PORT: "8080"
+  UNITY_MCP_PORT: "6400"
+  LOG_LEVEL: "INFO"
+  MAX_CONCURRENT_COMMANDS: "5"
+  
+  # Unity Configuration
+  UNITY_HEADLESS: "true"
+  UNITY_MCP_AUTOSTART: "true"
+  UNITY_MCP_LOG_PATH: "/tmp/unity-logs/unity-mcp.log"
+  UNITY_PROJECT_PATH: ""
+  
+  # Performance Configuration
+  UNITY_MCP_TIMEOUT: "300"
+  UNITY_MCP_QUEUE_SIZE: "10"
+  UNITY_MCP_WORKER_THREADS: "4"
+  
+  # Health Check Configuration
+  HEALTH_CHECK_INTERVAL: "30"
+  READINESS_TIMEOUT: "120"
+  STARTUP_TIMEOUT: "180"
+  
+  # Resource Monitoring
+  MEMORY_LIMIT_MB: "3584"  # 3.5GB (leaving buffer for 4GB limit)
+  CPU_THROTTLE_THRESHOLD: "80"
+  DISK_USAGE_THRESHOLD: "85"
+  
+  # GKE Specific Configuration
+  ENABLE_STACKDRIVER_LOGGING: "true"
+  ENABLE_STACKDRIVER_METRICS: "true"
+  GCP_PROJECT_ID: "PROJECT_ID"
+  
+  # Security Configuration
+  ENABLE_CORS: "false"
+  ALLOWED_ORIGINS: ""
+  API_KEY_REQUIRED: "false"
+  
+  # Debugging
+  ENABLE_DEBUG_LOGS: "false"
+  UNITY_LOG_VERBOSE: "false"
+  MCP_DEBUG_MODE: "false"

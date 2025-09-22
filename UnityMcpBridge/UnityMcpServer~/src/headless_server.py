@@ -238,6 +238,87 @@ class HeadlessUnityServer:
                 "timestamp": datetime.utcnow().isoformat()
             }
     
+    def readiness_check(self) -> Dict[str, Any]:
+        """Readiness check for Kubernetes readiness probes."""
+        try:
+            # Check server health
+            health = self.health_check()
+            
+            # Additional readiness checks
+            server_ready = True
+            unity_ready = health.get("unity_connected", False)
+            
+            # Check if we're not overloaded
+            if self.active_commands >= self.max_concurrent_commands:
+                server_ready = False
+            
+            # Check uptime (server should be running for at least 30 seconds to be ready)
+            uptime = time.time() - self.start_time
+            if uptime < 30:
+                server_ready = False
+            
+            # System resource checks (if available)
+            system_resources = self._check_system_resources()
+            
+            overall_ready = server_ready and (unity_ready or os.getenv("CI_MODE", "false") == "true")
+            
+            return {
+                "server_ready": server_ready,
+                "unity_ready": unity_ready,
+                "overall_ready": overall_ready,
+                "uptime_seconds": int(uptime),
+                "active_commands": self.active_commands,
+                "max_commands": self.max_concurrent_commands,
+                "system_resources": system_resources,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        except Exception as e:
+            logger.error(f"Readiness check failed: {e}")
+            return {
+                "server_ready": False,
+                "unity_ready": False,
+                "overall_ready": False,
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+    
+    def _check_system_resources(self) -> Dict[str, Any]:
+        """Check system resource availability."""
+        resources: Dict[str, Any] = {
+            "memory_ok": True,
+            "disk_ok": True,
+            "cpu_ok": True
+        }
+        
+        try:
+            import psutil
+            
+            # Memory check
+            memory = psutil.virtual_memory()
+            memory_ok = memory.percent <= 90
+            resources["memory_ok"] = memory_ok
+            resources["memory_percent"] = memory.percent
+            
+            # Disk check
+            disk = psutil.disk_usage('/')
+            disk_ok = disk.percent <= 85
+            resources["disk_ok"] = disk_ok
+            resources["disk_percent"] = disk.percent
+            
+            # CPU check (average over last minute)
+            cpu_percent = psutil.cpu_percent(interval=1)
+            cpu_ok = cpu_percent <= 95
+            resources["cpu_ok"] = cpu_ok
+            resources["cpu_percent"] = cpu_percent
+            
+        except ImportError:
+            # psutil not available, assume resources are OK
+            logger.debug("psutil not available for resource checking")
+        except Exception as e:
+            logger.warning(f"Resource check failed: {e}")
+        
+        return resources
+    
     def server_status(self) -> Dict[str, Any]:
         """Detailed server status including performance metrics."""
         return {
@@ -380,6 +461,9 @@ class HeadlessHTTPHandler(http.server.BaseHTTPRequestHandler):
             
             if path == '/health':
                 result = self.server_instance.health_check()
+                self._send_json_response(result)
+            elif path == '/ready':
+                result = self.server_instance.readiness_check()
                 self._send_json_response(result)
             elif path == '/status':
                 result = self.server_instance.server_status()
