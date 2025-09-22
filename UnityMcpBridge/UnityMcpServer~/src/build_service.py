@@ -103,20 +103,27 @@ class UnityBuildService:
     async def create_build(self, build_request_data: Dict[str, Any]) -> Dict[str, str]:
         """Create a new build job from API request"""
         try:
-            # Validate request data
-            required_fields = ['user_id', 'game_id', 'game_name', 'game_type', 'asset_set', 'assets']
-            for field in required_fields:
-                if field not in build_request_data:
-                    raise ValueError(f"Missing required field: {field}")
+            # Import security utilities
+            from security_utils import InputValidator, SecurityAuditLogger
             
-            # Create build request
+            # Validate and sanitize input
+            validator = InputValidator()
+            audit_logger = SecurityAuditLogger()
+            
+            # Log the request for security audit
+            audit_logger.log_build_request(build_request_data)
+            
+            # Validate and sanitize the request
+            sanitized_data = validator.validate_build_request(build_request_data)
+            
+            # Create build request with sanitized data
             build_request = BuildRequest(
-                user_id=build_request_data['user_id'],
-                game_id=build_request_data['game_id'],
-                game_name=build_request_data['game_name'],
-                game_type=build_request_data['game_type'],
-                asset_set=build_request_data['asset_set'],
-                assets=build_request_data['assets']
+                user_id=sanitized_data['user_id'],
+                game_id=sanitized_data['game_id'],
+                game_name=sanitized_data['game_name'],
+                game_type=sanitized_data['game_type'],
+                asset_set=sanitized_data['asset_set'],
+                assets=sanitized_data['assets']
             )
             
             # Create build job
@@ -276,25 +283,47 @@ class UnityBuildService:
             await self._process_build_queue()
             
     async def _download_assets(self, build_job: BuildJob):
-        """Download assets for the build"""
+        """Download assets for the build with security validation"""
         build_job.build_log.append("Downloading assets...")
         
-        assets_dir = self.base_build_dir / "assets" / build_job.build_id
+        try:
+            from security_utils import SecureFileHandler, InputValidator
+        except ImportError:
+            logger.warning("Security utilities not available, using basic validation")
+            SecureFileHandler = None
+            InputValidator = None
+        
+        # Create secure asset directory
+        if SecureFileHandler:
+            assets_dir = SecureFileHandler.create_secure_path(
+                self.base_build_dir / "assets", build_job.build_id
+            )
+        else:
+            assets_dir = self.base_build_dir / "assets" / build_job.build_id
         assets_dir.mkdir(exist_ok=True)
         
         session_timeout = aiohttp.ClientTimeout(total=300)  # 5 minutes per asset
+        max_file_size = int(os.getenv('MAX_ASSET_SIZE_MB', '100')) * 1024 * 1024  # Convert to bytes
         
         async with aiohttp.ClientSession(timeout=session_timeout) as session:
             for slot_index, asset_slot in enumerate(build_job.request.assets):
-                slot_dir = assets_dir / f"slot_{slot_index}"
+                if SecureFileHandler:
+                    slot_dir = SecureFileHandler.create_secure_path(assets_dir, f"slot_{slot_index}")
+                else:
+                    slot_dir = assets_dir / f"slot_{slot_index}"
                 slot_dir.mkdir(exist_ok=True)
                 
                 for asset_index, asset_url in enumerate(asset_slot):
                     try:
-                        # Download asset
+                        # Download asset with size limits
                         async with session.get(asset_url) as response:
                             if response.status != 200:
                                 raise Exception(f"Failed to download asset: HTTP {response.status}")
+                                
+                            # Check content length if provided
+                            content_length = response.headers.get('content-length')
+                            if content_length and int(content_length) > max_file_size:
+                                raise Exception(f"Asset too large: {content_length} bytes (max {max_file_size})")
                                 
                             # Determine file extension from URL or content type
                             content_type = response.headers.get('content-type', '')
@@ -308,14 +337,32 @@ class UnityBuildService:
                                 ext = '.asset'
                                 
                             asset_filename = f"asset_{asset_index}{ext}"
-                            asset_path = slot_dir / asset_filename
                             
+                            if SecureFileHandler:
+                                asset_path = SecureFileHandler.create_secure_path(slot_dir, asset_filename)
+                            else:
+                                asset_path = slot_dir / asset_filename
+                            
+                            # Download with size checking
+                            downloaded_size = 0
                             async with aiofiles.open(asset_path, 'wb') as f:
                                 async for chunk in response.content.iter_chunked(8192):
+                                    downloaded_size += len(chunk)
+                                    if downloaded_size > max_file_size:
+                                        await f.close()
+                                        asset_path.unlink(missing_ok=True)  # Delete partial file
+                                        raise Exception(f"Asset too large during download: {downloaded_size} bytes")
                                     await f.write(chunk)
+                            
+                            # Validate downloaded file
+                            if SecureFileHandler and not SecureFileHandler.validate_file_size(
+                                asset_path, int(os.getenv('MAX_ASSET_SIZE_MB', '100'))
+                            ):
+                                asset_path.unlink(missing_ok=True)
+                                raise Exception("Downloaded file exceeds size limit")
                                     
                             build_job.assets_downloaded.append(str(asset_path))
-                            build_job.build_log.append(f"Downloaded asset: {asset_url} -> {asset_filename}")
+                            build_job.build_log.append(f"Downloaded asset: {asset_url} -> {asset_filename} ({downloaded_size} bytes)")
                             
                     except Exception as e:
                         error_msg = f"Failed to download asset {asset_url}: {str(e)}"

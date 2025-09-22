@@ -578,15 +578,31 @@ unity_mcp_response_time_seconds {self.stats.avg_response_time}
             # Parse request body
             build_data = await request.json()
             
+            # Validate required fields
+            required_fields = ['user_id', 'game_id', 'game_name', 'game_type', 'asset_set', 'assets']
+            for field in required_fields:
+                if field not in build_data:
+                    return web.json_response({'error': f'Missing required field: {field}'}, status=400)
+            
+            # Validate assets format
+            if not isinstance(build_data['assets'], list):
+                return web.json_response({'error': 'assets must be a list'}, status=400)
+            
+            for i, slot in enumerate(build_data['assets']):
+                if not isinstance(slot, list):
+                    return web.json_response({'error': f'assets[{i}] must be a list of URLs'}, status=400)
+                for j, asset_url in enumerate(slot):
+                    if not isinstance(asset_url, str):
+                        return web.json_response({'error': f'assets[{i}][{j}] must be a string URL'}, status=400)
+            
             # Create build
             result = await self.build_service.create_build(build_data)
             
             return web.json_response(result, status=200)
             
         except json.JSONDecodeError:
+            logger.warning("Invalid JSON in build request")
             return web.json_response({'error': 'Invalid JSON'}, status=400)
-        except ValueError as e:
-            return web.json_response({'error': str(e)}, status=400)
         except Exception as e:
             logger.error(f"Failed to create build: {str(e)}")
             return web.json_response({'error': 'Internal server error'}, status=502)
@@ -603,7 +619,8 @@ unity_mcp_response_time_seconds {self.stats.avg_response_time}
             status = await self.build_service.get_build_status(build_id)
             
             if status is None:
-                return web.json_response({'error': 'Build not found'}, status=404)
+                logger.warning(f"Build not found: {build_id}")
+                return web.json_response({'error': 'Build not found'}, status=502)
                 
             return web.json_response(status, status=200)
             
@@ -623,9 +640,10 @@ unity_mcp_response_time_seconds {self.stats.avg_response_time}
             success = await self.build_service.stop_build(build_id)
             
             if not success:
-                return web.json_response({'error': 'Build not found'}, status=404)
+                logger.warning(f"Build not found for stop request: {build_id}")
+                return web.json_response({'error': 'Build not found'}, status=502)
                 
-            return web.json_response({'status': 'Build stopped'}, status=200)
+            return web.json_response({'message': 'Build stopped successfully'}, status=200)
             
         except Exception as e:
             logger.error(f"Failed to stop build: {str(e)}")
