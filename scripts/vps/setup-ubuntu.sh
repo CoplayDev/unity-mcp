@@ -340,6 +340,11 @@ HOST=0.0.0.0
 PORT=8080
 DISPLAY=:99
 HOME=/home/unity
+
+# Build Service Configuration
+BUILD_SERVICE_API_KEY=your-secure-api-key-here
+BASE_GAME_URL=https://your-domain.com/games
+MAX_CONCURRENT_BUILDS=3
 EOF
 
 sudo chown unity:unity /etc/unity-mcp/environment

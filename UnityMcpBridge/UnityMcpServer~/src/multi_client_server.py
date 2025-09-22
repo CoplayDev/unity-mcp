@@ -26,6 +26,7 @@ try:
     from unity_connection import get_unity_connection, send_command_with_retry
     from client_manager import ClientIsolationManager
     from scene_manager import SceneManager
+    from build_service import UnityBuildService
 except ImportError as e:
     print(f"Warning: Could not import MCP components: {e}")
     # Provide mock implementations for testing
@@ -78,6 +79,7 @@ class MultiClientUnityServer:
         # Core managers
         self.client_manager = ClientIsolationManager(self.max_clients)
         self.scene_manager = SceneManager()
+        self.build_service = UnityBuildService(self.client_manager, self.scene_manager)
         
         # Unity process management
         self.unity_process = None
@@ -119,9 +121,15 @@ class MultiClientUnityServer:
         self.app.router.add_get('/api/clients/{client_id}/scenes', self.list_scenes)
         self.app.router.add_post('/api/clients/{client_id}/scenes/{scene_name}/load', self.load_scene)
         
+        # Build Service endpoints (Unity Build Service API)
+        self.app.router.add_post('/build', self.create_build)
+        self.app.router.add_get('/build/{build_id}/status', self.get_build_status)
+        self.app.router.add_put('/build/{build_id}/stop', self.stop_build)
+        
         # Admin endpoints
         self.app.router.add_post('/api/admin/restart-unity', self.restart_unity)
         self.app.router.add_post('/api/admin/cleanup-idle', self.cleanup_idle_clients)
+        self.app.router.add_get('/api/admin/build-stats', self.get_build_stats)
         
         logger.info("API routes configured")
         
@@ -558,6 +566,81 @@ unity_mcp_response_time_seconds {self.stats.avg_response_time}
             logger.error(f"Failed to load scene: {str(e)}")
             return web.json_response({'error': str(e)}, status=500)
             
+    # Unity Build Service API endpoints
+    async def create_build(self, request):
+        """POST /build - Create a new build job"""
+        try:
+            # Check authentication
+            auth_header = request.headers.get('Authorization', '')
+            if not self.build_service.authenticate_request(auth_header):
+                return web.json_response({'error': 'Unauthorized'}, status=403)
+                
+            # Parse request body
+            build_data = await request.json()
+            
+            # Create build
+            result = await self.build_service.create_build(build_data)
+            
+            return web.json_response(result, status=200)
+            
+        except json.JSONDecodeError:
+            return web.json_response({'error': 'Invalid JSON'}, status=400)
+        except ValueError as e:
+            return web.json_response({'error': str(e)}, status=400)
+        except Exception as e:
+            logger.error(f"Failed to create build: {str(e)}")
+            return web.json_response({'error': 'Internal server error'}, status=502)
+            
+    async def get_build_status(self, request):
+        """GET /build/{build_id}/status - Get build status"""
+        try:
+            # Check authentication
+            auth_header = request.headers.get('Authorization', '')
+            if not self.build_service.authenticate_request(auth_header):
+                return web.json_response({'error': 'Unauthorized'}, status=403)
+                
+            build_id = request.match_info['build_id']
+            status = await self.build_service.get_build_status(build_id)
+            
+            if status is None:
+                return web.json_response({'error': 'Build not found'}, status=404)
+                
+            return web.json_response(status, status=200)
+            
+        except Exception as e:
+            logger.error(f"Failed to get build status: {str(e)}")
+            return web.json_response({'error': 'Internal server error'}, status=502)
+            
+    async def stop_build(self, request):
+        """PUT /build/{build_id}/stop - Stop/cancel a build"""
+        try:
+            # Check authentication
+            auth_header = request.headers.get('Authorization', '')
+            if not self.build_service.authenticate_request(auth_header):
+                return web.json_response({'error': 'Unauthorized'}, status=403)
+                
+            build_id = request.match_info['build_id']
+            success = await self.build_service.stop_build(build_id)
+            
+            if not success:
+                return web.json_response({'error': 'Build not found'}, status=404)
+                
+            return web.json_response({'status': 'Build stopped'}, status=200)
+            
+        except Exception as e:
+            logger.error(f"Failed to stop build: {str(e)}")
+            return web.json_response({'error': 'Internal server error'}, status=502)
+            
+    async def get_build_stats(self, request):
+        """GET /api/admin/build-stats - Get build service statistics"""
+        try:
+            stats = self.build_service.get_build_statistics()
+            return web.json_response(stats)
+            
+        except Exception as e:
+            logger.error(f"Failed to get build stats: {str(e)}")
+            return web.json_response({'error': str(e)}, status=500)
+            
     async def setup_signal_handlers(self):
         """Setup graceful shutdown signal handlers"""
         loop = asyncio.get_event_loop()
@@ -619,11 +702,18 @@ unity_mcp_response_time_seconds {self.stats.avg_response_time}
             await runner.cleanup()
             
     async def periodic_cleanup(self):
-        """Periodic cleanup of idle clients"""
+        """Periodic cleanup of idle clients and old builds"""
         while not self.shutdown_event.is_set():
             try:
                 await asyncio.sleep(300)  # 5 minutes
+                
+                # Cleanup idle clients
                 await self.client_manager.cleanup_idle_clients()
+                
+                # Cleanup old builds (every hour)
+                if hasattr(self, 'build_service') and time.time() % 3600 < 300:
+                    await self.build_service.cleanup_old_builds(24)  # 24 hours
+                    
             except asyncio.CancelledError:
                 break
             except Exception as e:

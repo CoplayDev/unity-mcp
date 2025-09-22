@@ -123,6 +123,15 @@ gcloud compute ssh unity@${SERVER_HOST} --zone=${SERVER_ZONE} --command="
     cp -r /opt/unity-mcp/UnityMcpBridge/Runtime/* /opt/unity-mcp/projects/shared/Assets/Scripts/
 "
 
+# Step 7.5: Set up build service directories and permissions
+log "🏗️  Setting up Build Service..."
+gcloud compute ssh unity@${SERVER_HOST} --zone=${SERVER_ZONE} --command="
+    sudo mkdir -p /var/www/html/games && \
+    sudo chown -R unity:unity /var/www/html/games && \
+    mkdir -p /opt/unity-mcp/builds/{assets,games,templates} && \
+    chown -R unity:unity /opt/unity-mcp/builds
+"
+
 # Step 8: Test the installation
 log "🧪 Testing Unity MCP installation..."
 gcloud compute ssh unity@${SERVER_HOST} --zone=${SERVER_ZONE} --command="
