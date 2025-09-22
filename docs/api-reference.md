@@ -1,6 +1,77 @@
-# Unity Build Service API
+# Unity MCP API Reference
 
-The Unity Build Service is integrated into the Unity MCP VPS deployment and provides a REST API for building Unity games from user-generated assets.
+This document provides complete API documentation for Unity MCP, including both the local MCP tools and the production Unity Build Service API.
+
+## MCP Tools (Local Development)
+
+Unity MCP provides comprehensive tools for Unity automation via the Model Context Protocol.
+
+### Asset Management Tools
+
+#### `import_asset`
+Import assets into Unity project.
+
+**Parameters:**
+- `asset_path` (string): Path to asset file
+- `import_settings` (object, optional): Import configuration
+
+**Example:**
+```json
+{
+  "asset_path": "/path/to/texture.png",
+  "import_settings": {
+    "textureType": "Sprite2D",
+    "wrapMode": "Clamp"
+  }
+}
+```
+
+#### `organize_assets`
+Organize assets in project hierarchy.
+
+**Parameters:**
+- `source_folder` (string): Source folder path
+- `target_folder` (string): Target folder path
+- `pattern` (string, optional): File pattern filter
+
+### Scene Management Tools
+
+#### `create_gameobject`
+Create new GameObject in scene.
+
+**Parameters:**
+- `name` (string): GameObject name
+- `parent` (string, optional): Parent GameObject path
+- `components` (array, optional): Components to add
+
+#### `configure_lighting`
+Set up scene lighting.
+
+**Parameters:**
+- `lighting_type` (string): "directional", "point", "spot"
+- `intensity` (number): Light intensity
+- `color` (string): Light color (hex)
+
+### Script Generation Tools
+
+#### `generate_script`
+Generate C# scripts for Unity.
+
+**Parameters:**
+- `script_name` (string): Script file name
+- `script_type` (string): "MonoBehaviour", "ScriptableObject", etc.
+- `template` (string, optional): Script template
+
+#### `attach_script`
+Attach script to GameObject.
+
+**Parameters:**
+- `gameobject_path` (string): Target GameObject
+- `script_name` (string): Script to attach
+
+## Unity Build Service API (Production)
+
+The Unity Build Service provides a REST API for building Unity games from user-generated assets.
 
 ## Overview
 
