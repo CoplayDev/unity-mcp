@@ -115,7 +115,7 @@ namespace MCPForUnity.Editor.Tools
         {
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for reimport.");
-            string fullPath = SanitizeAssetPath(path);
+            string fullPath = AssetPathUtility.SanitizeAssetPath(path);
             if (!AssetExists(fullPath))
                 return Response.Error($"Asset not found at path: {fullPath}");
 
@@ -154,7 +154,7 @@ namespace MCPForUnity.Editor.Tools
             if (string.IsNullOrEmpty(assetType))
                 return Response.Error("'assetType' is required for create.");
 
-            string fullPath = SanitizeAssetPath(path);
+            string fullPath = AssetPathUtility.SanitizeAssetPath(path);
             string directory = Path.GetDirectoryName(fullPath);
 
             // Ensure directory exists
@@ -280,7 +280,7 @@ namespace MCPForUnity.Editor.Tools
         {
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for create_folder.");
-            string fullPath = SanitizeAssetPath(path);
+            string fullPath = AssetPathUtility.SanitizeAssetPath(path);
             string parentDir = Path.GetDirectoryName(fullPath);
             string folderName = Path.GetFileName(fullPath);
 
@@ -338,7 +338,7 @@ namespace MCPForUnity.Editor.Tools
             if (properties == null || !properties.HasValues)
                 return Response.Error("'properties' are required for modify.");
 
-            string fullPath = SanitizeAssetPath(path);
+            string fullPath = AssetPathUtility.SanitizeAssetPath(path);
             if (!AssetExists(fullPath))
                 return Response.Error($"Asset not found at path: {fullPath}");
 
@@ -372,7 +372,7 @@ namespace MCPForUnity.Editor.Tools
                             {
                                 targetComponent = gameObject.GetComponent(compType);
                             }
-                            
+
                             // Only warn about resolution failure if component also not found
                             if (targetComponent == null && !resolved)
                             {
@@ -495,7 +495,7 @@ namespace MCPForUnity.Editor.Tools
         {
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for delete.");
-            string fullPath = SanitizeAssetPath(path);
+            string fullPath = AssetPathUtility.SanitizeAssetPath(path);
             if (!AssetExists(fullPath))
                 return Response.Error($"Asset not found at path: {fullPath}");
 
@@ -526,7 +526,7 @@ namespace MCPForUnity.Editor.Tools
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for duplicate.");
 
-            string sourcePath = SanitizeAssetPath(path);
+            string sourcePath = AssetPathUtility.SanitizeAssetPath(path);
             if (!AssetExists(sourcePath))
                 return Response.Error($"Source asset not found at path: {sourcePath}");
 
@@ -538,7 +538,7 @@ namespace MCPForUnity.Editor.Tools
             }
             else
             {
-                destPath = SanitizeAssetPath(destinationPath);
+                destPath = AssetPathUtility.SanitizeAssetPath(destinationPath);
                 if (AssetExists(destPath))
                     return Response.Error($"Asset already exists at destination path: {destPath}");
                 // Ensure destination directory exists
@@ -576,8 +576,8 @@ namespace MCPForUnity.Editor.Tools
             if (string.IsNullOrEmpty(destinationPath))
                 return Response.Error("'destination' path is required for move/rename.");
 
-            string sourcePath = SanitizeAssetPath(path);
-            string destPath = SanitizeAssetPath(destinationPath);
+            string sourcePath = AssetPathUtility.SanitizeAssetPath(path);
+            string destPath = AssetPathUtility.SanitizeAssetPath(destinationPath);
 
             if (!AssetExists(sourcePath))
                 return Response.Error($"Source asset not found at path: {sourcePath}");
@@ -642,7 +642,7 @@ namespace MCPForUnity.Editor.Tools
             string[] folderScope = null;
             if (!string.IsNullOrEmpty(pathScope))
             {
-                folderScope = new string[] { SanitizeAssetPath(pathScope) };
+                folderScope = new string[] { AssetPathUtility.SanitizeAssetPath(pathScope) };
                 if (!AssetDatabase.IsValidFolder(folderScope[0]))
                 {
                     // Maybe the user provided a file path instead of a folder?
@@ -732,7 +732,7 @@ namespace MCPForUnity.Editor.Tools
         {
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for get_info.");
-            string fullPath = SanitizeAssetPath(path);
+            string fullPath = AssetPathUtility.SanitizeAssetPath(path);
             if (!AssetExists(fullPath))
                 return Response.Error($"Asset not found at path: {fullPath}");
 
@@ -761,7 +761,7 @@ namespace MCPForUnity.Editor.Tools
                 return Response.Error("'path' is required for get_components.");
 
             // 2. Sanitize and check existence
-            string fullPath = SanitizeAssetPath(path);
+            string fullPath = AssetPathUtility.SanitizeAssetPath(path);
             if (!AssetExists(fullPath))
                 return Response.Error($"Asset not found at path: {fullPath}");
 
@@ -829,18 +829,6 @@ namespace MCPForUnity.Editor.Tools
         /// <summary>
         /// Ensures the asset path starts with "Assets/".
         /// </summary>
-        private static string SanitizeAssetPath(string path)
-        {
-            if (string.IsNullOrEmpty(path))
-                return path;
-            path = path.Replace('\\', '/'); // Normalize separators
-            if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
-            {
-                return "Assets/" + path.TrimStart('/');
-            }
-            return path;
-        }
-
         /// <summary>
         /// Checks if an asset exists at the given path (file or folder).
         /// </summary>
@@ -930,16 +918,18 @@ namespace MCPForUnity.Editor.Tools
                         );
                     }
                 }
-            } else if (properties["color"] is JArray colorArr) //Use color now with examples set in manage_asset.py
+            }
+            else if (properties["color"] is JArray colorArr) //Use color now with examples set in manage_asset.py
             {
-                string propName =  "_Color"; 
-                try {
+                string propName = "_Color";
+                try
+                {
                     if (colorArr.Count >= 3)
                     {
                         Color newColor = new Color(
                             colorArr[0].ToObject<float>(),
-                            colorArr[1].ToObject<float>(), 
-                            colorArr[2].ToObject<float>(), 
+                            colorArr[1].ToObject<float>(),
+                            colorArr[2].ToObject<float>(),
                             colorArr.Count > 3 ? colorArr[3].ToObject<float>() : 1.0f
                         );
                         if (mat.HasProperty(propName) && mat.GetColor(propName) != newColor)
@@ -948,8 +938,9 @@ namespace MCPForUnity.Editor.Tools
                             modified = true;
                         }
                     }
-                } 
-                catch (Exception ex) {
+                }
+                catch (Exception ex)
+                {
                     Debug.LogWarning(
                         $"Error parsing color property '{propName}': {ex.Message}"
                     );
@@ -989,7 +980,7 @@ namespace MCPForUnity.Editor.Tools
                 if (!string.IsNullOrEmpty(texPath))
                 {
                     Texture newTex = AssetDatabase.LoadAssetAtPath<Texture>(
-                        SanitizeAssetPath(texPath)
+                        AssetPathUtility.SanitizeAssetPath(texPath)
                     );
                     if (
                         newTex != null
@@ -1217,7 +1208,7 @@ namespace MCPForUnity.Editor.Tools
                     && token.Type == JTokenType.String
                 )
                 {
-                    string assetPath = SanitizeAssetPath(token.ToString());
+                    string assetPath = AssetPathUtility.SanitizeAssetPath(token.ToString());
                     UnityEngine.Object loadedAsset = AssetDatabase.LoadAssetAtPath(
                         assetPath,
                         targetType
@@ -1337,4 +1328,3 @@ namespace MCPForUnity.Editor.Tools
         }
     }
 }
-

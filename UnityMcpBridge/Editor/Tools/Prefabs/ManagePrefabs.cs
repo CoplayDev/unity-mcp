@@ -57,7 +57,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 return Response.Error("'path' parameter is required for open_stage.");
             }
 
-            string sanitizedPath = SanitizeAssetPath(path);
+            string sanitizedPath = AssetPathUtility.SanitizeAssetPath(path);
             GameObject prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(sanitizedPath);
             if (prefabAsset == null)
             {
@@ -257,20 +257,5 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             };
         }
 
-        private static string SanitizeAssetPath(string path)
-        {
-            if (string.IsNullOrEmpty(path))
-            {
-                return path;
-            }
-
-            path = path.Replace('\\', '/');
-            if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
-            {
-                return "Assets/" + path.TrimStart('/');
-            }
-
-            return path;
-        }
     }
 }
