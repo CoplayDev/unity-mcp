@@ -110,6 +110,14 @@ namespace MCPForUnity.Editor.Setup
             );
             EditorGUILayout.Space();
             
+            // IMPORTANT: Dependency requirement warning
+            EditorGUILayout.HelpBox(
+                "⚠️ IMPORTANT: This package CANNOT be used without installing the required dependencies first!\n\n" +
+                "MCP for Unity requires external dependencies that must be manually installed on your system before it will function.",
+                MessageType.Warning
+            );
+            EditorGUILayout.Space();
+            
             EditorGUILayout.LabelField("What is MCP for Unity?", EditorStyles.boldLabel);
             EditorGUILayout.LabelField(
                 "MCP for Unity is a bridge that connects AI assistants like Claude Code, Cursor, and VSCode to your Unity Editor, " +
@@ -118,16 +126,25 @@ namespace MCPForUnity.Editor.Setup
             );
             EditorGUILayout.Space();
             
+            EditorGUILayout.LabelField("REQUIRED Dependencies (Must be installed manually):", EditorStyles.boldLabel);
+            var originalColor = GUI.color;
+            GUI.color = Color.red;
+            EditorGUILayout.LabelField("• Python 3.10 or later", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("• UV package manager", EditorStyles.boldLabel);
+            GUI.color = originalColor;
+            EditorGUILayout.Space();
+            
             EditorGUILayout.LabelField("Setup Process:", EditorStyles.boldLabel);
             EditorGUILayout.LabelField("1. Check system dependencies (Python & UV)", EditorStyles.label);
-            EditorGUILayout.LabelField("2. Get installation guidance if needed", EditorStyles.label);
+            EditorGUILayout.LabelField("2. Install missing dependencies manually", EditorStyles.label);
             EditorGUILayout.LabelField("3. Configure your AI clients", EditorStyles.label);
             EditorGUILayout.LabelField("4. Start using AI assistance in Unity!", EditorStyles.label);
             EditorGUILayout.Space();
             
             EditorGUILayout.HelpBox(
-                "This wizard will guide you through each step. You can complete setup at your own pace.",
-                MessageType.Info
+                "This package will NOT work until you complete ALL dependency installation steps. " +
+                "The wizard provides installation guidance, but you must install dependencies manually.",
+                MessageType.Error
             );
         }
 
@@ -166,8 +183,18 @@ namespace MCPForUnity.Editor.Setup
             {
                 EditorGUILayout.Space();
                 EditorGUILayout.HelpBox(
-                    "Some dependencies are missing. The next step will help you install them.",
-                    MessageType.Warning
+                    "⚠️ CRITICAL: MCP for Unity CANNOT function with missing dependencies!\n\n" +
+                    "The package will not work until ALL required dependencies are manually installed on your system. " +
+                    "The next step provides installation guidance.",
+                    MessageType.Error
+                );
+            }
+            else
+            {
+                EditorGUILayout.Space();
+                EditorGUILayout.HelpBox(
+                    "✅ All dependencies detected! MCP for Unity can now function properly.",
+                    MessageType.Info
                 );
             }
         }
@@ -231,9 +258,10 @@ namespace MCPForUnity.Editor.Setup
             EditorGUILayout.Space();
             
             EditorGUILayout.HelpBox(
-                "Please install the missing dependencies manually using the instructions below. " +
-                "After installation, you can check dependencies again and proceed to client configuration.",
-                MessageType.Warning
+                "🚨 PACKAGE WILL NOT WORK: You MUST install the missing dependencies manually!\n\n" +
+                "MCP for Unity cannot function without these dependencies. Follow the instructions below carefully. " +
+                "After installation, check dependencies again to verify successful installation.",
+                MessageType.Error
             );
             EditorGUILayout.Space();
             
@@ -340,12 +368,32 @@ namespace MCPForUnity.Editor.Setup
             else
             {
                 EditorGUILayout.HelpBox(
-                    "Setup incomplete. Some dependencies may still be missing. Please review the previous steps.",
-                    MessageType.Warning
+                    "🚨 SETUP INCOMPLETE - PACKAGE WILL NOT WORK!\n\n" +
+                    "MCP for Unity CANNOT function because required dependencies are still missing. " +
+                    "The package is non-functional until ALL dependencies are properly installed.",
+                    MessageType.Error
                 );
                 
                 EditorGUILayout.Space();
-                if (GUILayout.Button("Go Back to Dependency Check"))
+                EditorGUILayout.LabelField("Missing Dependencies:", EditorStyles.boldLabel);
+                var missingDeps = _dependencyResult.GetMissingRequired();
+                foreach (var dep in missingDeps)
+                {
+                    var originalColor = GUI.color;
+                    GUI.color = Color.red;
+                    EditorGUILayout.LabelField($"✗ {dep.Name}", EditorStyles.boldLabel);
+                    GUI.color = originalColor;
+                }
+                
+                EditorGUILayout.Space();
+                EditorGUILayout.HelpBox(
+                    "You must install ALL missing dependencies before MCP for Unity will work. " +
+                    "Go back to the installation guide and complete the required installations.",
+                    MessageType.Error
+                );
+                
+                EditorGUILayout.Space();
+                if (GUILayout.Button("Go Back to Install Dependencies", GUILayout.Height(30)))
                 {
                     _currentStep = 1;
                 }
@@ -364,17 +412,20 @@ namespace MCPForUnity.Editor.Setup
             EditorGUILayout.Space();
             
             // Check if dependencies are ready first
+            _dependencyResult = DependencyManager.CheckAllDependencies(); // Refresh check
             if (!_dependencyResult.IsSystemReady)
             {
                 EditorGUILayout.HelpBox(
-                    "Dependencies are not fully installed yet. Please complete dependency installation before configuring clients.",
-                    MessageType.Warning
+                    "🚨 CANNOT CONFIGURE CLIENTS: Dependencies are not installed!\n\n" +
+                    "MCP for Unity requires ALL dependencies to be installed before client configuration can work. " +
+                    "Please complete dependency installation first.",
+                    MessageType.Error
                 );
                 
-                if (GUILayout.Button("Go Back to Check Dependencies"))
+                EditorGUILayout.Space();
+                if (GUILayout.Button("Go Back to Install Dependencies", GUILayout.Height(30)))
                 {
                     _currentStep = 1; // Go back to dependency check
-                    _dependencyResult = DependencyManager.CheckAllDependencies();
                 }
                 return;
             }
@@ -546,9 +597,13 @@ namespace MCPForUnity.Editor.Setup
             if (GUILayout.Button("Skip Setup"))
             {
                 bool dismiss = EditorUtility.DisplayDialog(
-                    "Skip Setup",
-                    "Are you sure you want to skip the setup? You can run it again later from the Window menu.",
-                    "Skip",
+                    "Skip Setup - Package Will Not Work!",
+                    "⚠️ WARNING: If you skip setup, MCP for Unity will NOT function!\n\n" +
+                    "This package requires Python 3.10+ and UV package manager to work. " +
+                    "Without completing setup and installing dependencies, the package is completely non-functional.\n\n" +
+                    "You can run setup again later from Window > MCP for Unity > Setup Wizard.\n\n" +
+                    "Are you sure you want to skip setup and leave the package non-functional?",
+                    "Skip (Package Won't Work)",
                     "Cancel"
                 );
                 
@@ -562,13 +617,30 @@ namespace MCPForUnity.Editor.Setup
             // Next/Finish button
             string nextButtonText = _currentStep == _stepTitles.Length - 1 ? "Finish" : "Next";
             
+            // Disable finish button if dependencies are missing
+            bool canFinish = _currentStep != _stepTitles.Length - 1 || _dependencyResult.IsSystemReady;
+            GUI.enabled = canFinish;
+            
             if (GUILayout.Button(nextButtonText))
             {
                 if (_currentStep == _stepTitles.Length - 1)
                 {
-                    // Finish setup
-                    SetupWizard.MarkSetupCompleted();
-                    Close();
+                    // Only allow finish if dependencies are ready
+                    if (_dependencyResult.IsSystemReady)
+                    {
+                        SetupWizard.MarkSetupCompleted();
+                        Close();
+                    }
+                    else
+                    {
+                        EditorUtility.DisplayDialog(
+                            "Cannot Complete Setup",
+                            "Cannot finish setup because required dependencies are still missing!\n\n" +
+                            "MCP for Unity will not work without ALL dependencies installed. " +
+                            "Please install Python 3.10+ and UV package manager first.",
+                            "OK"
+                        );
+                    }
                 }
                 else
                 {
