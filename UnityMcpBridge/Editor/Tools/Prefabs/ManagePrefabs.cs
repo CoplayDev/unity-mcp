@@ -158,7 +158,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             string requestedPath = @params["prefabPath"]?.ToString();
             if (string.IsNullOrWhiteSpace(requestedPath))
             {
-                return Response.Error("'prefabPath' (or 'path') parameter is required for create_from_gameobject.");
+                return Response.Error("'prefabPath' parameter is required for create_from_gameobject.");
             }
 
             string sanitizedPath = AssetPathUtility.SanitizeAssetPath(requestedPath);
