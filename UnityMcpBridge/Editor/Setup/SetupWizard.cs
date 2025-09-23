@@ -103,32 +103,14 @@ namespace MCPForUnity.Editor.Setup
             {
                 var setupState = GetSetupState();
 
-                // Don't show setup if user has dismissed it or if already completed for this version
-                if (!setupState.ShouldShowSetup(PACKAGE_VERSION))
-                {
-                    McpLog.Info("Setup wizard not needed - already completed or dismissed", always: false);
-                    return;
-                }
-
-                // Check if dependencies are missing
+                // Always show setup wizard on package import/reinstall - ignore previous completion
+                McpLog.Info("Package imported - showing setup wizard", always: false);
+                
+                // Get current dependency status for the wizard
                 var dependencyResult = DependencyManager.CheckAllDependencies();
-                if (dependencyResult.IsSystemReady)
-                {
-                    McpLog.Info("All dependencies available - marking setup as completed", always: false);
-                    setupState.MarkSetupCompleted(PACKAGE_VERSION);
-                    SaveSetupState();
-                    return;
-                }
-
-                // Show setup wizard if dependencies are missing
-                var missingRequired = dependencyResult.GetMissingRequired();
-                if (missingRequired.Count > 0)
-                {
-                    McpLog.Info($"Missing required dependencies: {string.Join(", ", missingRequired.ConvertAll(d => d.Name))}");
-                    
-                    // Delay showing the wizard slightly to ensure Unity is fully loaded
-                    EditorApplication.delayCall += () => ShowSetupWizard(dependencyResult);
-                }
+                
+                // Delay showing the wizard slightly to ensure Unity is fully loaded
+                EditorApplication.delayCall += () => ShowSetupWizard(dependencyResult);
             }
             catch (Exception ex)
             {
@@ -230,26 +212,12 @@ namespace MCPForUnity.Editor.Setup
         }
 
         /// <summary>
-        /// Reset setup and show wizard again
-        /// </summary>
-        [MenuItem("Window/MCP for Unity/Reset Setup", priority = 2)]
-        public static void ResetAndShowSetup()
-        {
-            ResetSetupState();
-            _hasCheckedThisSession = false;
-            ShowSetupWizard();
-        }
-
-        /// <summary>
         /// Check dependencies and show status
         /// </summary>
         [MenuItem("Window/MCP for Unity/Check Dependencies", priority = 3)]
         public static void CheckDependencies()
         {
             var result = DependencyManager.CheckAllDependencies();
-            var diagnostics = DependencyManager.GetDependencyDiagnostics();
-            
-            Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Dependency Check Results\n{diagnostics}");
             
             if (!result.IsSystemReady)
             {
@@ -273,6 +241,15 @@ namespace MCPForUnity.Editor.Setup
                     "OK"
                 );
             }
+        }
+
+        /// <summary>
+        /// Open MCP Client Configuration window
+        /// </summary>
+        [MenuItem("Window/MCP for Unity/MCP Client Configuration", priority = 4)]
+        public static void OpenClientConfiguration()
+        {
+            Windows.MCPForUnityEditorWindow.ShowWindow();
         }
     }
 }

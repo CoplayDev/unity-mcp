@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using MCPForUnity.Editor.Dependencies;
 using MCPForUnity.Editor.Dependencies.Models;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Installation;
+using MCPForUnity.Editor.Data;
+using MCPForUnity.Editor.Models;
 using UnityEditor;
 using UnityEngine;
 
@@ -17,15 +20,14 @@ namespace MCPForUnity.Editor.Setup
         private DependencyCheckResult _dependencyResult;
         private Vector2 _scrollPosition;
         private int _currentStep = 0;
-        private bool _isInstalling = false;
-        private string _installationStatus = "";
-        private InstallationOrchestrator _orchestrator;
+        private McpClients _mcpClients;
+        private int _selectedClientIndex = 0;
 
         private readonly string[] _stepTitles = {
             "Welcome",
             "Dependency Check",
             "Installation Options",
-            "Installation Progress",
+            "Client Configuration",
             "Complete"
         };
 
@@ -45,18 +47,7 @@ namespace MCPForUnity.Editor.Setup
                 _dependencyResult = DependencyManager.CheckAllDependencies();
             }
             
-            _orchestrator = new InstallationOrchestrator();
-            _orchestrator.OnProgressUpdate += OnInstallationProgress;
-            _orchestrator.OnInstallationComplete += OnInstallationComplete;
-        }
-
-        private void OnDisable()
-        {
-            if (_orchestrator != null)
-            {
-                _orchestrator.OnProgressUpdate -= OnInstallationProgress;
-                _orchestrator.OnInstallationComplete -= OnInstallationComplete;
-            }
+            _mcpClients = new McpClients();
         }
 
         private void OnGUI()
@@ -71,7 +62,7 @@ namespace MCPForUnity.Editor.Setup
                 case 0: DrawWelcomeStep(); break;
                 case 1: DrawDependencyCheckStep(); break;
                 case 2: DrawInstallationOptionsStep(); break;
-                case 3: DrawInstallationProgressStep(); break;
+                case 3: DrawClientConfigurationStep(); break;
                 case 4: DrawCompleteStep(); break;
             }
             
@@ -114,26 +105,28 @@ namespace MCPForUnity.Editor.Setup
             EditorGUILayout.Space();
             
             EditorGUILayout.LabelField(
-                "This wizard will help you set up the required dependencies for MCP for Unity to work properly.",
+                "This wizard will help you set up MCP for Unity to connect AI assistants with your Unity Editor.",
                 EditorStyles.wordWrappedLabel
             );
             EditorGUILayout.Space();
             
             EditorGUILayout.LabelField("What is MCP for Unity?", EditorStyles.boldLabel);
             EditorGUILayout.LabelField(
-                "MCP for Unity is a bridge that connects AI assistants like Claude Desktop to your Unity Editor, " +
+                "MCP for Unity is a bridge that connects AI assistants like Claude Code, Cursor, and VSCode to your Unity Editor, " +
                 "allowing them to help you with Unity development tasks directly.",
                 EditorStyles.wordWrappedLabel
             );
             EditorGUILayout.Space();
             
-            EditorGUILayout.LabelField("Required Dependencies:", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField("• Python 3.10 or later", EditorStyles.label);
-            EditorGUILayout.LabelField("• UV package manager", EditorStyles.label);
+            EditorGUILayout.LabelField("Setup Process:", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("1. Check system dependencies (Python & UV)", EditorStyles.label);
+            EditorGUILayout.LabelField("2. Get installation guidance if needed", EditorStyles.label);
+            EditorGUILayout.LabelField("3. Configure your AI clients", EditorStyles.label);
+            EditorGUILayout.LabelField("4. Start using AI assistance in Unity!", EditorStyles.label);
             EditorGUILayout.Space();
             
             EditorGUILayout.HelpBox(
-                "This wizard will check for these dependencies and guide you through installation if needed.",
+                "This wizard will guide you through each step. You can complete setup at your own pace.",
                 MessageType.Info
             );
         }
@@ -218,13 +211,15 @@ namespace MCPForUnity.Editor.Setup
 
         private void DrawInstallationOptionsStep()
         {
-            EditorGUILayout.LabelField("Installation Options", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Installation Guide", EditorStyles.boldLabel);
             EditorGUILayout.Space();
             
             var missingDeps = _dependencyResult.GetMissingRequired();
             if (missingDeps.Count == 0)
             {
                 EditorGUILayout.HelpBox("All required dependencies are already available!", MessageType.Info);
+                EditorGUILayout.Space();
+                EditorGUILayout.LabelField("You can proceed to configure your AI clients in the next step.", EditorStyles.wordWrappedLabel);
                 return;
             }
             
@@ -235,43 +230,33 @@ namespace MCPForUnity.Editor.Setup
             }
             EditorGUILayout.Space();
             
-            EditorGUILayout.LabelField("Installation Methods:", EditorStyles.boldLabel);
-            
-            // Automatic installation option
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.LabelField("Automatic Installation (Recommended)", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField(
-                "The wizard will attempt to install missing dependencies automatically.",
-                EditorStyles.wordWrappedLabel
+            EditorGUILayout.HelpBox(
+                "Please install the missing dependencies manually using the instructions below. " +
+                "After installation, you can check dependencies again and proceed to client configuration.",
+                MessageType.Warning
             );
             EditorGUILayout.Space();
             
-            if (GUILayout.Button("Start Automatic Installation", GUILayout.Height(30)))
-            {
-                StartAutomaticInstallation();
-            }
-            EditorGUILayout.EndVertical();
-            
-            EditorGUILayout.Space();
-            
-            // Manual installation option
+            // Manual installation guidance
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.LabelField("Manual Installation", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField(
-                "Install dependencies manually using the platform-specific instructions below.",
-                EditorStyles.wordWrappedLabel
-            );
-            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Installation Instructions", EditorStyles.boldLabel);
             
             var recommendations = DependencyManager.GetInstallationRecommendations();
             EditorGUILayout.LabelField(recommendations, EditorStyles.wordWrappedLabel);
             
             EditorGUILayout.Space();
-            if (GUILayout.Button("Open Installation URLs"))
+            if (GUILayout.Button("Open Installation URLs", GUILayout.Height(30)))
             {
                 OpenInstallationUrls();
             }
             EditorGUILayout.EndVertical();
+            
+            EditorGUILayout.Space();
+            if (GUILayout.Button("Check Dependencies Again", GUILayout.Height(30)))
+            {
+                _dependencyResult = DependencyManager.CheckAllDependencies();
+                Repaint();
+            }
         }
 
         private void DrawInstallationProgressStep()
@@ -318,32 +303,229 @@ namespace MCPForUnity.Editor.Setup
             EditorGUILayout.LabelField("Setup Complete!", EditorStyles.boldLabel);
             EditorGUILayout.Space();
             
+            // Refresh dependency check for final status
+            _dependencyResult = DependencyManager.CheckAllDependencies();
+            
             if (_dependencyResult.IsSystemReady)
             {
                 EditorGUILayout.HelpBox(
-                    "✓ All dependencies are now available! MCP for Unity is ready to use.",
+                    "🎉 Congratulations! MCP for Unity is now fully set up and ready to use.",
                     MessageType.Info
                 );
                 
                 EditorGUILayout.Space();
-                EditorGUILayout.LabelField("Next Steps:", EditorStyles.boldLabel);
-                EditorGUILayout.LabelField("1. Configure your AI assistant (Claude Desktop, Cursor, etc.)", EditorStyles.label);
-                EditorGUILayout.LabelField("2. Add MCP for Unity to your AI assistant's configuration", EditorStyles.label);
-                EditorGUILayout.LabelField("3. Start using AI assistance in Unity!", EditorStyles.label);
+                EditorGUILayout.LabelField("What's been configured:", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField("✓ Python and UV dependencies verified", EditorStyles.label);
+                EditorGUILayout.LabelField("✓ MCP server ready", EditorStyles.label);
+                EditorGUILayout.LabelField("✓ AI client configuration completed", EditorStyles.label);
                 
                 EditorGUILayout.Space();
+                EditorGUILayout.LabelField("You can now:", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField("• Ask your AI assistant to help with Unity development", EditorStyles.label);
+                EditorGUILayout.LabelField("• Use natural language to control Unity Editor", EditorStyles.label);
+                EditorGUILayout.LabelField("• Get AI assistance with scripts, scenes, and assets", EditorStyles.label);
+                
+                EditorGUILayout.Space();
+                EditorGUILayout.BeginHorizontal();
                 if (GUILayout.Button("Open Documentation"))
                 {
                     Application.OpenURL("https://github.com/CoplayDev/unity-mcp");
                 }
+                if (GUILayout.Button("Open Client Configuration"))
+                {
+                    Windows.MCPForUnityEditorWindow.ShowWindow();
+                }
+                EditorGUILayout.EndHorizontal();
             }
             else
             {
                 EditorGUILayout.HelpBox(
-                    "Some dependencies are still missing. Please install them manually or try the automatic installation again.",
+                    "Setup incomplete. Some dependencies may still be missing. Please review the previous steps.",
                     MessageType.Warning
                 );
+                
+                EditorGUILayout.Space();
+                if (GUILayout.Button("Go Back to Dependency Check"))
+                {
+                    _currentStep = 1;
+                }
             }
+        }
+
+        private void DrawClientConfigurationStep()
+        {
+            EditorGUILayout.LabelField("AI Client Configuration", EditorStyles.boldLabel);
+            EditorGUILayout.Space();
+            
+            EditorGUILayout.LabelField(
+                "Configure your AI assistants (Claude Desktop, Cursor, VSCode, etc.) to connect with MCP for Unity.",
+                EditorStyles.wordWrappedLabel
+            );
+            EditorGUILayout.Space();
+            
+            // Check if dependencies are ready first
+            if (!_dependencyResult.IsSystemReady)
+            {
+                EditorGUILayout.HelpBox(
+                    "Dependencies are not fully installed yet. Please complete dependency installation before configuring clients.",
+                    MessageType.Warning
+                );
+                
+                if (GUILayout.Button("Go Back to Check Dependencies"))
+                {
+                    _currentStep = 1; // Go back to dependency check
+                    _dependencyResult = DependencyManager.CheckAllDependencies();
+                }
+                return;
+            }
+            
+            // Show available clients
+            EditorGUILayout.LabelField("Available AI Clients:", EditorStyles.boldLabel);
+            EditorGUILayout.Space();
+            
+            // Client selector
+            if (_mcpClients.clients.Count > 0)
+            {
+                string[] clientNames = _mcpClients.clients.Select(c => c.name).ToArray();
+                _selectedClientIndex = EditorGUILayout.Popup("Select Client", _selectedClientIndex, clientNames);
+                _selectedClientIndex = Mathf.Clamp(_selectedClientIndex, 0, _mcpClients.clients.Count - 1);
+                
+                EditorGUILayout.Space();
+                
+                var selectedClient = _mcpClients.clients[_selectedClientIndex];
+                DrawClientConfigurationPanel(selectedClient);
+            }
+            
+            EditorGUILayout.Space();
+            
+            // Batch configuration option
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.LabelField("Quick Setup", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(
+                "Automatically configure all detected AI clients at once.",
+                EditorStyles.wordWrappedLabel
+            );
+            EditorGUILayout.Space();
+            
+            if (GUILayout.Button("Auto-Configure All Detected Clients", GUILayout.Height(30)))
+            {
+                ConfigureAllClients();
+            }
+            EditorGUILayout.EndVertical();
+            
+            EditorGUILayout.Space();
+            EditorGUILayout.HelpBox(
+                "After configuration, restart your AI client for changes to take effect.",
+                MessageType.Info
+            );
+        }
+
+        private void DrawClientConfigurationPanel(McpClient client)
+        {
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            
+            EditorGUILayout.LabelField($"{client.name} Configuration", EditorStyles.boldLabel);
+            EditorGUILayout.Space();
+            
+            // Show client status
+            var statusColor = GetClientStatusColor(client);
+            var originalColor = GUI.color;
+            GUI.color = statusColor;
+            EditorGUILayout.LabelField($"Status: {client.configStatus}", EditorStyles.label);
+            GUI.color = originalColor;
+            
+            EditorGUILayout.Space();
+            
+            // Configuration button
+            if (GUILayout.Button($"Configure {client.name}", GUILayout.Height(25)))
+            {
+                ConfigureClient(client);
+            }
+            
+            // Manual setup option
+            if (client.mcpType != McpTypes.ClaudeCode)
+            {
+                if (GUILayout.Button("Show Manual Setup Instructions", GUILayout.Height(25)))
+                {
+                    ShowManualClientSetup(client);
+                }
+            }
+            
+            EditorGUILayout.EndVertical();
+        }
+
+        private Color GetClientStatusColor(McpClient client)
+        {
+            return client.status switch
+            {
+                McpStatus.Configured => Color.green,
+                McpStatus.Running => Color.green,
+                McpStatus.Connected => Color.green,
+                McpStatus.IncorrectPath => Color.yellow,
+                McpStatus.CommunicationError => Color.yellow,
+                McpStatus.NoResponse => Color.yellow,
+                _ => Color.red
+            };
+        }
+
+        private void ConfigureClient(McpClient client)
+        {
+            try
+            {
+                EditorUtility.DisplayDialog(
+                    "Client Configuration",
+                    $"To configure {client.name}, please:\n\n" +
+                    "1. Open the MCP Client Configuration window from Window > MCP for Unity > MCP Client Configuration\n" +
+                    "2. Select your client and click 'Auto Configure'\n" +
+                    "3. Follow any manual setup instructions if needed",
+                    "Open Configuration Window",
+                    "OK"
+                );
+                
+                // Open the main MCP window
+                Windows.MCPForUnityEditorWindow.ShowWindow();
+            }
+            catch (Exception ex)
+            {
+                EditorUtility.DisplayDialog(
+                    "Configuration Error",
+                    $"Failed to open configuration window: {ex.Message}",
+                    "OK"
+                );
+            }
+        }
+
+        private void ConfigureAllClients()
+        {
+            bool openWindow = EditorUtility.DisplayDialog(
+                "Auto-Configure All Clients",
+                "This will open the MCP Client Configuration window where you can configure all detected AI clients.\n\n" +
+                "Would you like to continue?",
+                "Open Configuration Window",
+                "Cancel"
+            );
+            
+            if (openWindow)
+            {
+                // Open the main MCP window
+                Windows.MCPForUnityEditorWindow.ShowWindow();
+            }
+        }
+
+        private void ShowManualClientSetup(McpClient client)
+        {
+            EditorUtility.DisplayDialog(
+                "Manual Setup Instructions",
+                $"For manual setup of {client.name}:\n\n" +
+                "1. Open Window > MCP for Unity > MCP Client Configuration\n" +
+                "2. Select your client and click 'Manual Setup'\n" +
+                "3. Follow the detailed configuration instructions",
+                "Open Configuration Window",
+                "OK"
+            );
+            
+            // Open the main MCP window
+            Windows.MCPForUnityEditorWindow.ShowWindow();
         }
 
         private void DrawFooter()
@@ -352,7 +534,7 @@ namespace MCPForUnity.Editor.Setup
             EditorGUILayout.BeginHorizontal();
             
             // Back button
-            GUI.enabled = _currentStep > 0 && !_isInstalling;
+            GUI.enabled = _currentStep > 0;
             if (GUILayout.Button("Back"))
             {
                 _currentStep--;
@@ -361,7 +543,6 @@ namespace MCPForUnity.Editor.Setup
             GUILayout.FlexibleSpace();
             
             // Skip/Dismiss button
-            GUI.enabled = !_isInstalling;
             if (GUILayout.Button("Skip Setup"))
             {
                 bool dismiss = EditorUtility.DisplayDialog(
@@ -379,7 +560,6 @@ namespace MCPForUnity.Editor.Setup
             }
             
             // Next/Finish button
-            GUI.enabled = !_isInstalling;
             string nextButtonText = _currentStep == _stepTitles.Length - 1 ? "Finish" : "Next";
             
             if (GUILayout.Button(nextButtonText))
@@ -398,16 +578,6 @@ namespace MCPForUnity.Editor.Setup
             
             GUI.enabled = true;
             EditorGUILayout.EndHorizontal();
-        }
-
-        private void StartAutomaticInstallation()
-        {
-            _currentStep = 3; // Go to progress step
-            _isInstalling = true;
-            _installationStatus = "Starting installation...";
-            
-            var missingDeps = _dependencyResult.GetMissingRequired();
-            _orchestrator.StartInstallation(missingDeps);
         }
 
         private void OpenInstallationUrls()
@@ -437,29 +607,6 @@ namespace MCPForUnity.Editor.Setup
             {
                 Application.OpenURL(uvUrl);
             }
-        }
-
-        private void OnInstallationProgress(string status)
-        {
-            _installationStatus = status;
-            Repaint();
-        }
-
-        private void OnInstallationComplete(bool success, string message)
-        {
-            _isInstalling = false;
-            _installationStatus = message;
-            
-            if (success)
-            {
-                _dependencyResult = DependencyManager.CheckAllDependencies();
-                if (_dependencyResult.IsSystemReady)
-                {
-                    _currentStep = 4; // Go to complete step
-                }
-            }
-            
-            Repaint();
         }
     }
 }
