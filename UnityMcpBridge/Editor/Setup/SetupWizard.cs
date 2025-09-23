@@ -88,7 +88,7 @@ namespace MCPForUnity.Editor.Setup
         /// <summary>
         /// Force show setup wizard (for manual invocation)
         /// </summary>
-        [MenuItem("Window/MCP for Unity/Setup Wizard (Required)", priority = 1)]
+        [MenuItem("Window/MCP for Unity/Setup Wizard", priority = 1)]
         public static void ShowSetupWizardManual()
         {
             ShowSetupWizard();

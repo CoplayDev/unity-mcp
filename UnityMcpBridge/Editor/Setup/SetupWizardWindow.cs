@@ -347,7 +347,7 @@ namespace MCPForUnity.Editor.Setup
             
             EditorGUILayout.Space();
             EditorGUILayout.HelpBox(
-                "💡 After configuration, restart your AI client for changes to take effect.",
+                "💡 Most AI clients will auto-detect the configuration. You may need to restart your client if it doesn't appear automatically.",
                 MessageType.Info
             );
         }
