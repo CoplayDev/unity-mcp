@@ -45,10 +45,21 @@ namespace MCPForUnity.Editor.Windows
         // UI state
         private int selectedClientIndex = 0;
 
-        [MenuItem("Window/MCP for Unity")]
+        [MenuItem("Window/MCP for Unity", priority = 0)]
         public static void ShowWindow()
         {
             GetWindow<MCPForUnityEditorWindow>("MCP for Unity");
+        }
+
+        /// <summary>
+        /// Show MCP Client Configuration window
+        /// </summary>
+        [MenuItem("Window/MCP for Unity/MCP Client Configuration", priority = 3)]
+        public static void ShowClientConfiguration()
+        {
+            var window = GetWindow<MCPForUnityEditorWindow>("MCP for Unity");
+            window.Show();
+            window.Focus();
         }
 
         private void OnEnable()

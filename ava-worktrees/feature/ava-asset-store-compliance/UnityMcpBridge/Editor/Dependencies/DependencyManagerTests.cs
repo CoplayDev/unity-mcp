@@ -12,8 +12,10 @@ namespace MCPForUnity.Editor.Dependencies
     {
         /// <summary>
         /// Test basic dependency detection functionality
+        /// Only available in development builds
         /// </summary>
-        [UnityEditor.MenuItem("Window/MCP for Unity/Run Dependency Tests", priority = 100)]
+        #if UNITY_EDITOR && MCP_DEVELOPMENT_MODE
+        [UnityEditor.MenuItem("Window/MCP for Unity/Development/Run Dependency Tests", priority = 100)]
         public static void RunBasicTests()
         {
             Debug.Log("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Running Dependency Manager Tests...");
@@ -62,8 +64,9 @@ namespace MCPForUnity.Editor.Dependencies
         
         /// <summary>
         /// Test setup wizard functionality
+        /// Only available in development builds
         /// </summary>
-        [UnityEditor.MenuItem("Window/MCP for Unity/Test Setup Wizard", priority = 101)]
+        [UnityEditor.MenuItem("Window/MCP for Unity/Development/Test Setup Wizard", priority = 101)]
         public static void TestSetupWizard()
         {
             Debug.Log("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Testing Setup Wizard...");
@@ -82,8 +85,9 @@ namespace MCPForUnity.Editor.Dependencies
         
         /// <summary>
         /// Reset setup state for testing
+        /// Only available in development builds
         /// </summary>
-        [UnityEditor.MenuItem("Window/MCP for Unity/Reset Setup State (Test)", priority = 102)]
+        [UnityEditor.MenuItem("Window/MCP for Unity/Development/Reset Setup State (Test)", priority = 102)]
         public static void ResetSetupStateForTesting()
         {
             Debug.Log("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Resetting setup state for testing...");
@@ -98,5 +102,6 @@ namespace MCPForUnity.Editor.Dependencies
                 Debug.LogError($"<b><color=#FF6B6B>MCP-FOR-UNITY</color></b>: Setup state reset failed: {ex.Message}");
             }
         }
+        #endif
     }
 }

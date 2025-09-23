@@ -221,7 +221,7 @@ namespace MCPForUnity.Editor.Setup
         }
 
         /// <summary>
-        /// Force show setup wizard (for manual invocation)
+        /// Show setup wizard (for manual invocation)
         /// </summary>
         [MenuItem("Window/MCP for Unity/Setup Wizard", priority = 1)]
         public static void ShowSetupWizardManual()
@@ -230,20 +230,9 @@ namespace MCPForUnity.Editor.Setup
         }
 
         /// <summary>
-        /// Reset setup and show wizard again
-        /// </summary>
-        [MenuItem("Window/MCP for Unity/Reset Setup", priority = 2)]
-        public static void ResetAndShowSetup()
-        {
-            ResetSetupState();
-            _hasCheckedThisSession = false;
-            ShowSetupWizard();
-        }
-
-        /// <summary>
         /// Check dependencies and show status
         /// </summary>
-        [MenuItem("Window/MCP for Unity/Check Dependencies", priority = 3)]
+        [MenuItem("Window/MCP for Unity/Check Dependencies", priority = 2)]
         public static void CheckDependencies()
         {
             var result = DependencyManager.CheckAllDependencies();
@@ -274,5 +263,18 @@ namespace MCPForUnity.Editor.Setup
                 );
             }
         }
+
+        #if UNITY_EDITOR && MCP_DEVELOPMENT_MODE
+        /// <summary>
+        /// Reset setup and show wizard again (development only)
+        /// </summary>
+        [MenuItem("Window/MCP for Unity/Development/Reset Setup", priority = 10)]
+        public static void ResetAndShowSetup()
+        {
+            ResetSetupState();
+            _hasCheckedThisSession = false;
+            ShowSetupWizard();
+        }
+        #endif
     }
 }
