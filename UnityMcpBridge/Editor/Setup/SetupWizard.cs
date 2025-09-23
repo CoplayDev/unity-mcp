@@ -2,6 +2,7 @@ using System;
 using MCPForUnity.Editor.Dependencies;
 using MCPForUnity.Editor.Dependencies.Models;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Windows;
 using UnityEditor;
 using UnityEngine;
 
