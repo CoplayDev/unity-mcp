@@ -142,44 +142,7 @@ namespace MCPForUnity.Editor.Setup
             }
         }
 
-        private void DrawInstallationProgressStep()
-        {
-            EditorGUILayout.LabelField("Installation Progress", EditorStyles.boldLabel);
-            EditorGUILayout.Space();
-            
-            if (_isInstalling)
-            {
-                EditorGUILayout.LabelField("Installing dependencies...", EditorStyles.boldLabel);
-                EditorGUILayout.Space();
-                
-                // Show progress
-                var rect = EditorGUILayout.GetControlRect(false, 20);
-                EditorGUI.ProgressBar(rect, 0.5f, "Installing...");
-                
-                EditorGUILayout.Space();
-                EditorGUILayout.LabelField(_installationStatus, EditorStyles.wordWrappedLabel);
-                
-                EditorGUILayout.Space();
-                EditorGUILayout.HelpBox(
-                    "Please wait while dependencies are being installed. This may take a few minutes.",
-                    MessageType.Info
-                );
-            }
-            else
-            {
-                EditorGUILayout.LabelField("Installation completed!", EditorStyles.boldLabel);
-                EditorGUILayout.Space();
-                
-                if (GUILayout.Button("Check Dependencies Again"))
-                {
-                    _dependencyResult = DependencyManager.CheckAllDependencies();
-                    if (_dependencyResult.IsSystemReady)
-                    {
-                        _currentStep = 4; // Go to complete step
-                    }
-                }
-            }
-        }
+
 
         private void DrawCompleteStep()
         {
