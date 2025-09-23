@@ -54,7 +54,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             string prefabPath = @params["prefabPath"]?.ToString();
             if (string.IsNullOrEmpty(prefabPath))
             {
-                return Response.Error("'path' parameter is required for open_stage.");
+                return Response.Error("'prefabPath' parameter is required for open_stage.");
             }
 
             string sanitizedPath = AssetPathUtility.SanitizeAssetPath(prefabPath);
@@ -155,7 +155,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 );
             }
 
-            string requestedPath = @params["prefabPath"]?.ToString() ?? @params["path"]?.ToString();
+            string requestedPath = @params["prefabPath"]?.ToString();
             if (string.IsNullOrWhiteSpace(requestedPath))
             {
                 return Response.Error("'prefabPath' (or 'path') parameter is required for create_from_gameobject.");
@@ -225,6 +225,18 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
         private static GameObject FindSceneObjectByName(string name, bool includeInactive)
         {
+            PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
+            if (stage?.prefabContentsRoot != null)
+            {
+                foreach (Transform transform in stage.prefabContentsRoot.GetComponentsInChildren<Transform>(includeInactive))
+                {
+                    if (transform.name == name)
+                    {
+                        return transform.gameObject;
+                    }
+                }
+            }
+
             Scene activeScene = SceneManager.GetActiveScene();
             foreach (GameObject root in activeScene.GetRootGameObjects())
             {
