@@ -1,15 +1,17 @@
 using System;
+using System.IO;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace MCPForUnity.Editor.Tools.Prefabs
 {
     public static class ManagePrefabs
     {
-        private const string SupportedActions = "open_stage, close_stage, save_open_stage, apply_instance_overrides, revert_instance_overrides";
+        private const string SupportedActions = "open_stage, close_stage, save_open_stage, create_from_gameobject";
 
         public static object HandleCommand(JObject @params)
         {
@@ -34,10 +36,8 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                         return CloseStage(@params);
                     case "save_open_stage":
                         return SaveOpenStage();
-                    case "apply_instance_overrides":
-                        return ApplyInstanceOverrides(@params);
-                    case "revert_instance_overrides":
-                        return RevertInstanceOverrides(@params);
+                    case "create_from_gameobject":
+                        return CreatePrefabFromGameObject(@params);
                     default:
                         return Response.Error($"Unknown action: '{action}'. Valid actions are: {SupportedActions}.");
                 }
@@ -51,13 +51,13 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
         private static object OpenStage(JObject @params)
         {
-            string path = @params["path"]?.ToString();
-            if (string.IsNullOrEmpty(path))
+            string prefabPath = @params["prefabPath"]?.ToString();
+            if (string.IsNullOrEmpty(prefabPath))
             {
                 return Response.Error("'path' parameter is required for open_stage.");
             }
 
-            string sanitizedPath = AssetPathUtility.SanitizeAssetPath(path);
+            string sanitizedPath = AssetPathUtility.SanitizeAssetPath(prefabPath);
             GameObject prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(sanitizedPath);
             if (prefabAsset == null)
             {
@@ -125,119 +125,120 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             }
         }
 
-        private static object ApplyInstanceOverrides(JObject @params)
+        private static object CreatePrefabFromGameObject(JObject @params)
         {
-            if (!TryGetPrefabInstance(@params, out GameObject instanceRoot, out string error))
+            string targetName = @params["target"]?.ToString() ?? @params["name"]?.ToString();
+            if (string.IsNullOrEmpty(targetName))
             {
-                return Response.Error(error);
+                return Response.Error("'target' parameter is required for create_from_gameobject.");
             }
 
-            PrefabUtility.ApplyPrefabInstance(instanceRoot, InteractionMode.AutomatedAction);
-            string prefabAssetPath = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(instanceRoot);
+            bool includeInactive = @params["searchInactive"]?.ToObject<bool>() ?? false;
+            GameObject sourceObject = FindSceneObjectByName(targetName, includeInactive);
+            if (sourceObject == null)
+            {
+                return Response.Error($"GameObject '{targetName}' not found in the active scene.");
+            }
 
-            return Response.Success(
-                $"Applied overrides on prefab instance '{instanceRoot.name}'.",
-                new
+            if (PrefabUtility.IsPartOfPrefabAsset(sourceObject))
+            {
+                return Response.Error(
+                    $"GameObject '{sourceObject.name}' is part of a prefab asset. Open the prefab stage to save changes instead."
+                );
+            }
+
+            PrefabInstanceStatus status = PrefabUtility.GetPrefabInstanceStatus(sourceObject);
+            if (status != PrefabInstanceStatus.NotAPrefab)
+            {
+                return Response.Error(
+                    $"GameObject '{sourceObject.name}' is already linked to an existing prefab instance."
+                );
+            }
+
+            string requestedPath = @params["prefabPath"]?.ToString() ?? @params["path"]?.ToString();
+            if (string.IsNullOrWhiteSpace(requestedPath))
+            {
+                return Response.Error("'prefabPath' (or 'path') parameter is required for create_from_gameobject.");
+            }
+
+            string sanitizedPath = AssetPathUtility.SanitizeAssetPath(requestedPath);
+            if (!sanitizedPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+            {
+                sanitizedPath += ".prefab";
+            }
+
+            bool allowOverwrite = @params["allowOverwrite"]?.ToObject<bool>() ?? false;
+            string finalPath = sanitizedPath;
+
+            if (!allowOverwrite && AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(finalPath) != null)
+            {
+                finalPath = AssetDatabase.GenerateUniqueAssetPath(finalPath);
+            }
+
+            EnsureAssetDirectoryExists(finalPath);
+
+            try
+            {
+                GameObject connectedInstance = PrefabUtility.SaveAsPrefabAssetAndConnect(
+                    sourceObject,
+                    finalPath,
+                    InteractionMode.AutomatedAction
+                );
+
+                if (connectedInstance == null)
                 {
-                    prefabAssetPath,
-                    instanceId = instanceRoot.GetInstanceID()
+                    return Response.Error($"Failed to save prefab asset at '{finalPath}'.");
                 }
-            );
+
+                Selection.activeGameObject = connectedInstance;
+
+                return Response.Success(
+                    $"Prefab created at '{finalPath}' and instance linked.",
+                    new
+                    {
+                        prefabPath = finalPath,
+                        instanceId = connectedInstance.GetInstanceID()
+                    }
+                );
+            }
+            catch (Exception e)
+            {
+                return Response.Error($"Error saving prefab asset at '{finalPath}': {e.Message}");
+            }
         }
 
-        private static object RevertInstanceOverrides(JObject @params)
+        private static void EnsureAssetDirectoryExists(string assetPath)
         {
-            if (!TryGetPrefabInstance(@params, out GameObject instanceRoot, out string error))
+            string directory = Path.GetDirectoryName(assetPath);
+            if (string.IsNullOrEmpty(directory))
             {
-                return Response.Error(error);
+                return;
             }
 
-            PrefabUtility.RevertPrefabInstance(instanceRoot, InteractionMode.AutomatedAction);
-
-            return Response.Success(
-                $"Reverted overrides on prefab instance '{instanceRoot.name}'.",
-                new
-                {
-                    instanceId = instanceRoot.GetInstanceID()
-                }
-            );
+            string fullDirectory = Path.Combine(Directory.GetCurrentDirectory(), directory);
+            if (!Directory.Exists(fullDirectory))
+            {
+                Directory.CreateDirectory(fullDirectory);
+                AssetDatabase.Refresh();
+            }
         }
 
-        private static bool TryGetPrefabInstance(JObject @params, out GameObject instanceRoot, out string error)
+        private static GameObject FindSceneObjectByName(string name, bool includeInactive)
         {
-            instanceRoot = null;
-            error = null;
-
-            JToken instanceIdToken = @params["instanceId"] ?? @params["instanceID"];
-            if (instanceIdToken != null && instanceIdToken.Type == JTokenType.Integer)
+            Scene activeScene = SceneManager.GetActiveScene();
+            foreach (GameObject root in activeScene.GetRootGameObjects())
             {
-                int instanceId = instanceIdToken.Value<int>();
-                if (!TryResolveInstance(instanceId, out instanceRoot, out error))
+                foreach (Transform transform in root.GetComponentsInChildren<Transform>(includeInactive))
                 {
-                    return false;
+                    GameObject candidate = transform.gameObject;
+                    if (candidate.name == name)
+                    {
+                        return candidate;
+                    }
                 }
-                return true;
             }
 
-            string targetName = @params["target"]?.ToString();
-            if (!string.IsNullOrEmpty(targetName))
-            {
-                GameObject target = GameObject.Find(targetName);
-                if (target == null)
-                {
-                    error = $"GameObject '{targetName}' not found in the current scene.";
-                    return false;
-                }
-
-                instanceRoot = GetPrefabInstanceRoot(target, out error);
-                return instanceRoot != null;
-            }
-
-            error = "Parameter 'instanceId' (or 'target') is required for this action.";
-            return false;
-        }
-
-        private static bool TryResolveInstance(int instanceId, out GameObject instanceRoot, out string error)
-        {
-            instanceRoot = null;
-            error = null;
-
-            GameObject obj = EditorUtility.InstanceIDToObject(instanceId) as GameObject;
-            if (obj == null)
-            {
-                error = $"No GameObject found for instanceId {instanceId}.";
-                return false;
-            }
-
-            instanceRoot = GetPrefabInstanceRoot(obj, out error);
-            return instanceRoot != null;
-        }
-
-        private static GameObject GetPrefabInstanceRoot(GameObject obj, out string error)
-        {
-            error = null;
-
-            if (!PrefabUtility.IsPartOfPrefabInstance(obj))
-            {
-                error = $"GameObject '{obj.name}' is not part of a prefab instance.";
-                return null;
-            }
-
-            GameObject root = PrefabUtility.GetOutermostPrefabInstanceRoot(obj);
-            if (root == null)
-            {
-                error = $"Failed to resolve prefab instance root for '{obj.name}'.";
-                return null;
-            }
-
-            PrefabInstanceStatus status = PrefabUtility.GetPrefabInstanceStatus(root);
-            if (status == PrefabInstanceStatus.NotAPrefab)
-            {
-                error = $"GameObject '{obj.name}' is not recognised as a prefab instance.";
-                return null;
-            }
-
-            return root;
+            return null;
         }
 
         private static object SerializeStage(PrefabStage stage)

@@ -46,7 +46,7 @@ namespace MCPForUnityTests.Editor.Tools
                 var openParams = new JObject
                 {
                     ["action"] = "open_stage",
-                    ["path"] = prefabPath
+                    ["prefabPath"] = prefabPath
                 };
 
                 var openResult = ToJObject(ManagePrefabs.HandleCommand(openParams));
@@ -94,7 +94,7 @@ namespace MCPForUnityTests.Editor.Tools
                 ManagePrefabs.HandleCommand(new JObject
                 {
                     ["action"] = "open_stage",
-                    ["path"] = prefabPath
+                    ["prefabPath"] = prefabPath
                 });
 
                 var closeResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
@@ -122,7 +122,7 @@ namespace MCPForUnityTests.Editor.Tools
                 ManagePrefabs.HandleCommand(new JObject
                 {
                     ["action"] = "open_stage",
-                    ["path"] = prefabPath
+                    ["prefabPath"] = prefabPath
                 });
 
                 PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
@@ -162,62 +162,60 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
-        public void ApplyInstanceOverrides_UpdatesPrefabAsset()
+        public void CreateFromGameObject_CreatesPrefabAndLinksInstance()
         {
-            string prefabPath = CreateTestPrefab("ApplyOverridesCube");
-            GameObject prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            EnsureTempDirectoryExists();
+            StageUtility.GoToMainStage();
 
-            GameObject instance = (GameObject)PrefabUtility.InstantiatePrefab(prefabAsset);
-            instance.name = "ApplyOverridesInstance";
+            string prefabPath = Path.Combine(TempDirectory, "SceneObjectSaved.prefab").Replace('\\', '/');
+            GameObject sceneObject = new GameObject("ScenePrefabSource");
 
             try
             {
-                instance.transform.localScale = new Vector3(3f, 3f, 3f);
-
-                var applyResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
                 {
-                    ["action"] = "apply_instance_overrides",
-                    ["instanceId"] = instance.GetInstanceID()
+                    ["action"] = "create_from_gameobject",
+                    ["target"] = sceneObject.name,
+                    ["prefabPath"] = prefabPath
                 }));
 
-                Assert.IsTrue(applyResult.Value<bool>("success"), "apply_instance_overrides should succeed for prefab instance.");
+                Assert.IsTrue(result.Value<bool>("success"), "create_from_gameobject should succeed for a valid scene object.");
 
-                GameObject reloaded = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-                Assert.AreEqual(new Vector3(3f, 3f, 3f), reloaded.transform.localScale, "Prefab asset should reflect applied overrides.");
+                var data = result["data"] as JObject;
+                Assert.IsNotNull(data, "Response data should include prefab information.");
+
+                string savedPath = data.Value<string>("prefabPath");
+                Assert.AreEqual(prefabPath, savedPath, "Returned prefab path should match the requested path.");
+
+                GameObject prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(savedPath);
+                Assert.IsNotNull(prefabAsset, "Prefab asset should exist at the saved path.");
+
+                int instanceId = data.Value<int>("instanceId");
+                var linkedInstance = EditorUtility.InstanceIDToObject(instanceId) as GameObject;
+                Assert.IsNotNull(linkedInstance, "Linked instance should resolve from instanceId.");
+                Assert.AreEqual(savedPath, PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(linkedInstance), "Instance should be connected to the new prefab.");
+
+                sceneObject = linkedInstance;
             }
             finally
             {
-                UnityEngine.Object.DestroyImmediate(instance);
-                AssetDatabase.DeleteAsset(prefabPath);
-            }
-        }
-
-        [Test]
-        public void RevertInstanceOverrides_RevertsToPrefabDefaults()
-        {
-            string prefabPath = CreateTestPrefab("RevertOverridesCube");
-            GameObject prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-
-            GameObject instance = (GameObject)PrefabUtility.InstantiatePrefab(prefabAsset);
-            instance.name = "RevertOverridesInstance";
-
-            try
-            {
-                instance.transform.localScale = new Vector3(4f, 4f, 4f);
-
-                var revertResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(prefabPath) != null)
                 {
-                    ["action"] = "revert_instance_overrides",
-                    ["instanceId"] = instance.GetInstanceID()
-                }));
+                    AssetDatabase.DeleteAsset(prefabPath);
+                }
 
-                Assert.IsTrue(revertResult.Value<bool>("success"), "revert_instance_overrides should succeed for prefab instance.");
-                Assert.AreEqual(Vector3.one, instance.transform.localScale, "Prefab instance should revert to default scale.");
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(instance);
-                AssetDatabase.DeleteAsset(prefabPath);
+                if (sceneObject != null)
+                {
+                    if (PrefabUtility.IsPartOfPrefabInstance(sceneObject))
+                    {
+                        PrefabUtility.UnpackPrefabInstance(
+                            sceneObject,
+                            PrefabUnpackMode.Completely,
+                            InteractionMode.AutomatedAction
+                        );
+                    }
+                    UnityEngine.Object.DestroyImmediate(sceneObject, true);
+                }
             }
         }
 

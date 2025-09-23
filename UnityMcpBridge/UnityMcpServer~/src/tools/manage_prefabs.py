@@ -1,4 +1,4 @@
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from mcp.server.fastmcp import FastMCP, Context
 
 from telemetry_decorator import telemetry_tool
@@ -8,47 +8,46 @@ from unity_connection import send_command_with_retry
 def register_manage_prefabs_tools(mcp: FastMCP) -> None:
     """Register prefab management tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(description="Bridge for prefab management commands (stage control and creation).")
     @telemetry_tool("manage_prefabs")
     def manage_prefabs(
         ctx: Context,
-        action: Literal["open_stage", "close_stage", "save_open_stage", "apply_instance_overrides", "revert_instance_overrides"],
-        path: str | None = None,
-        mode: str | None = None,
-        save_before_close: bool | None = None,
-        instance_id: int | None = None,
-        target: str | None = None,
+        action: Annotated[Literal[
+            "open_stage",
+            "close_stage",
+            "save_open_stage",
+            "apply_instance_overrides",
+            "revert_instance_overrides",
+            "create_from_gameobject",
+        ], "One of open_stage, close_stage, save_open_stage, apply_instance_overrides, revert_instance_overrides, create_from_gameobject"],
+        prefab_path: Annotated[str | None,
+                               "Prefab asset path relative to Assets e.g. Assets/Prefabs/favorite.prefab"] = None,
+        mode: Annotated[str | None,
+                        "Optional prefab stage mode (only 'InIsolation' is currently supported)"] = None,
+        save_before_close: Annotated[bool | None,
+                                     "When true, `close_stage` will save the prefab before exiting the stage."] = None,
+        target: Annotated[str | None,
+                          "Scene GameObject name required for create_from_gameobject"] = None,
+        allow_overwrite: Annotated[bool | None,
+                                   "Allow replacing an existing prefab at the same path"] = None,
+        search_inactive: Annotated[bool | None,
+                                   "Include inactive objects when resolving the target name"] = None,
     ) -> dict[str, Any]:
-        """Bridge for prefab management commands (stage control, instance overrides).
-
-        Args:
-            action: One of the supported prefab actions ("open_stage", "close_stage", "save_open_stage",
-                "apply_instance_overrides", "revert_instance_overrides").
-            path: Prefab asset path (used by "open_stage").
-            mode: Optional prefab stage mode (currently only "InIsolation" is supported by the C# side).
-            save_before_close: When true, `close_stage` will save the prefab before exiting the stage.
-            instance_id: Prefab instance ID for apply/revert overrides. Accepts int-like values.
-            target: Scene GameObject name/path to resolve prefab instance when `instance_id` isn't provided.
-        Returns:
-            Dictionary mirroring the Unity bridge response.
-        """
         try:
-            params: dict[str, str] = {"action": action}
+            params: dict[str, Any] = {"action": action}
 
-            if path:
-                params["path"] = path
+            if prefab_path:
+                params["prefabPath"] = prefab_path
             if mode:
                 params["mode"] = mode
             if save_before_close is not None:
                 params["saveBeforeClose"] = bool(save_before_close)
-
-            coerced_instance_id = int(instance_id)
-            if coerced_instance_id is not None:
-                params["instanceId"] = coerced_instance_id
-
             if target:
                 params["target"] = target
-
+            if allow_overwrite is not None:
+                params["allowOverwrite"] = bool(allow_overwrite)
+            if search_inactive is not None:
+                params["searchInactive"] = bool(search_inactive)
             response = send_command_with_retry("manage_prefabs", params)
 
             if isinstance(response, dict) and response.get("success"):
