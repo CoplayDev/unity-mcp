@@ -1,10 +1,7 @@
 using System;
-using System.Linq;
 using MCPForUnity.Editor.Dependencies;
 using MCPForUnity.Editor.Dependencies.Models;
 using MCPForUnity.Editor.Helpers;
-using MCPForUnity.Editor.Data;
-using MCPForUnity.Editor.Models;
 using UnityEditor;
 using UnityEngine;
 
@@ -18,8 +15,6 @@ namespace MCPForUnity.Editor.Setup
         private DependencyCheckResult _dependencyResult;
         private Vector2 _scrollPosition;
         private int _currentStep = 0;
-        private McpClients _mcpClients;
-        private int _selectedClientIndex = 0;
 
         private readonly string[] _stepTitles = {
             "Setup",
@@ -42,8 +37,6 @@ namespace MCPForUnity.Editor.Setup
             {
                 _dependencyResult = DependencyManager.CheckAllDependencies();
             }
-            
-            _mcpClients = new McpClients();
         }
 
         private void OnGUI()
@@ -192,7 +185,11 @@ namespace MCPForUnity.Editor.Setup
         {
             DrawSectionTitle("Setup Complete");
             
-            _dependencyResult = DependencyManager.CheckAllDependencies();
+            // Refresh dependency check with caching to avoid heavy operations on every repaint
+            if (_dependencyResult == null || (DateTime.UtcNow - _dependencyResult.CheckedAt).TotalSeconds > 2)
+            {
+                _dependencyResult = DependencyManager.CheckAllDependencies();
+            }
             
             if (_dependencyResult.IsSystemReady)
             {
@@ -302,8 +299,11 @@ namespace MCPForUnity.Editor.Setup
         {
             DrawSectionTitle("Client Configuration");
             
-            // Check dependencies first
-            _dependencyResult = DependencyManager.CheckAllDependencies();
+            // Check dependencies first (with caching to avoid heavy operations on every repaint)
+            if (_dependencyResult == null || (DateTime.UtcNow - _dependencyResult.CheckedAt).TotalSeconds > 2)
+            {
+                _dependencyResult = DependencyManager.CheckAllDependencies();
+            }
             if (!_dependencyResult.IsSystemReady)
             {
                 DrawErrorStatus("Cannot Configure - Dependencies Missing");
