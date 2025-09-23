@@ -1,5 +1,6 @@
 using System;
 using MCPForUnity.Editor.Dependencies;
+using MCPForUnity.Editor.Dependencies.Models;
 using MCPForUnity.Editor.Helpers;
 using UnityEditor;
 using UnityEngine;
