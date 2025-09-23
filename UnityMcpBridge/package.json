@@ -2,7 +2,7 @@
   "name": "com.coplaydev.unity-mcp",
   "version": "3.4.0",
   "displayName": "MCP for Unity",
-  "description": "⚠️ REQUIRES MANUAL DEPENDENCY INSTALLATION: This package CANNOT function without Python 3.10+ and UV package manager installed on your system first!\n\nA bridge that connects AI assistants to Unity via the MCP (Model Context Protocol). Allows MCP clients like Claude Code, Cursor, and VSCode to directly control your Unity Editor.\n\n🚨 IMPORTANT: You MUST manually install Python 3.10+ and UV package manager before this package will work. The setup wizard provides installation guidance.\n\nJoin Our Discord: https://discord.gg/y4p8KfzrN4",
+  "description": "A bridge that connects AI assistants to Unity via the MCP (Model Context Protocol). Allows AI clients like Claude Code, Cursor, and VSCode to directly control your Unity Editor for enhanced development workflows.\n\nFeatures automated setup wizard, cross-platform support, and seamless integration with popular AI development tools.\n\nJoin Our Discord: https://discord.gg/y4p8KfzrN4",
   "unity": "2021.3",
   "documentationUrl": "https://github.com/CoplayDev/unity-mcp",
   "licensesUrl": "https://github.com/CoplayDev/unity-mcp/blob/main/LICENSE",
