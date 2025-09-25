@@ -13,7 +13,7 @@ from unity_connection import get_unity_connection, async_send_command_with_retry
 def register_manage_menu_item_tools(mcp: FastMCP):
     """Registers the manage_menu_item tool with the MCP server."""
 
-    @mcp.tool(description="Manage Unity menu items (execute/list/exists)")
+    @mcp.tool(description="Manage Unity menu items (execute/list/exists). If you're not sure what menu item to use, use the 'list' action to find it before using 'execute'.")
     @telemetry_tool("manage_menu_item")
     async def manage_menu_item(
         ctx: Context,
