@@ -8,18 +8,29 @@ namespace MCPForUnityTests.Editor.Tools
     public class CommandRegistryTests
     {
         [Test]
-        public void GetHandler_ReturnsNull_ForUnknownCommand()
+        public void GetHandler_ThrowException_ForUnknownCommand()
         {
             var unknown = "HandleDoesNotExist";
-            var handler = CommandRegistry.GetHandler(unknown);
-            Assert.IsNull(handler, "Expected null handler for unknown command name.");
+            try
+            {
+                var handler = CommandRegistry.GetHandler(unknown);
+                Assert.Fail("Should throw InvalidOperation for unknown handler.");
+            }
+            catch (InvalidOperationException)
+            {
+
+            }
+            catch
+            {
+                Assert.Fail("Should throw InvalidOperation for unknown handler.");
+            }
         }
 
         [Test]
         public void GetHandler_ReturnsManageGameObjectHandler()
         {
-            var handler = CommandRegistry.GetHandler("HandleManageGameObject");
-            Assert.IsNotNull(handler, "Expected a handler for HandleManageGameObject.");
+            var handler = CommandRegistry.GetHandler("manage_gameobject");
+            Assert.IsNotNull(handler, "Expected a handler for manage_gameobject.");
 
             var methodInfo = handler.Method;
             Assert.AreEqual("HandleCommand", methodInfo.Name, "Handler method name should be HandleCommand.");
