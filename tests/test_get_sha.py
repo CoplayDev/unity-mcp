@@ -71,4 +71,5 @@ def test_get_sha_param_shape_and_routing(monkeypatch):
     assert captured["params"]["name"] == "A"
     assert captured["params"]["path"].endswith("Assets/Scripts")
     assert resp["success"] is True
+    assert resp["data"] == {"sha256": "abc", "lengthBytes": 1}
 
