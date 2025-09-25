@@ -13,7 +13,7 @@ from unity_connection import get_unity_connection, async_send_command_with_retry
 def register_manage_menu_item_tools(mcp: FastMCP):
     """Registers the manage_menu_item tool with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(description="Manage Unity menu items (execute/list/exists)")
     @telemetry_tool("manage_menu_item")
     async def manage_menu_item(
         ctx: Context,
@@ -25,18 +25,6 @@ def register_manage_menu_item_tools(mcp: FastMCP):
         refresh: Annotated[bool | None,
                            "Optional flag to force refresh of the menu cache when listing"] = None,
     ) -> dict[str, Any]:
-        """Manage Unity menu items (execute/list/exists).
-
-        Args:
-            ctx: The MCP context.
-            action: One of 'execute', 'list', 'exists'.
-            menu_path: Menu path for 'execute' or 'exists' (e.g., "File/Save Project").
-            search: Optional filter string for 'list'.
-            refresh: Optional flag to force refresh of the menu cache when listing.
-
-        Returns:
-            A dictionary with operation results ('success', 'data', 'error').
-        """
         # Prepare parameters for the C# handler
         params_dict: dict[str, Any] = {
             "action": action,
