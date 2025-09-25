@@ -20,7 +20,7 @@ namespace MCPForUnity.Editor.Tools
             { "manage_gameobject", ManageGameObject.HandleCommand },
             { "manage_asset", ManageAsset.HandleCommand },
             { "read_console", ReadConsole.HandleCommand },
-            { "execute_menu_item", ExecuteMenuItem.HandleCommand },
+            { "manage_menu_item", ManageMenuItem.HandleCommand },
             { "manage_shader", ManageShader.HandleCommand},
         };
 
