@@ -7,13 +7,6 @@ on:
       - TestProjects/UnityMCPTests/**
       - UnityMcpBridge/Editor/**
       - .github/workflows/unity-tests.yml
-  pull_request:
-    types: [opened, synchronize, reopened, edited]
-    branches: [ main ]
-    paths:
-      - TestProjects/UnityMCPTests/**
-      - UnityMcpBridge/Editor/**
-      - .github/workflows/unity-tests.yml
 
 jobs:
   testAllModes:
