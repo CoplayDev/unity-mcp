@@ -39,7 +39,7 @@ namespace MCPForUnity.Editor.Tools.MenuItems
                 bool executed = EditorApplication.ExecuteMenuItem(menuPath);
                 if (!executed)
                 {
-                    McpLog.Error($"[MenuItemExecutor] Failed to execute menu item via delayCall: '{menuPath}'. It might be invalid, disabled, or context-dependent.");
+                    McpLog.Error($"[MenuItemExecutor] Failed to execute menu item '{menuPath}'. It might be invalid, disabled, or context-dependent.");
                     return Response.Error($"Failed to execute menu item '{menuPath}'. It might be invalid, disabled, or context-dependent.");
                 }
                 return Response.Success($"Attempted to execute menu item: '{menuPath}'. Check Unity logs for confirmation or errors.");
