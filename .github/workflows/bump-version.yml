@@ -70,6 +70,9 @@ jobs:
           echo "Updating UnityMcpBridge/UnityMcpServer~/src/pyproject.toml to $NEW_VERSION"
           sed -i '0,/^version = ".*"/s//version = "'"$NEW_VERSION"'"/' "UnityMcpBridge/UnityMcpServer~/src/pyproject.toml"
 
+          echo "Updating UnityMcpBridge/UnityMcpServer~/src/server_version.txt to $NEW_VERSION"
+          echo "$NEW_VERSION" > "UnityMcpBridge/UnityMcpServer~/src/server_version.txt"
+
       - name: Commit and push changes
         env:
           NEW_VERSION: ${{ steps.compute.outputs.new_version }}
@@ -78,7 +81,7 @@ jobs:
           set -euo pipefail
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add UnityMcpBridge/package.json "UnityMcpBridge/UnityMcpServer~/src/pyproject.toml"
+          git add UnityMcpBridge/package.json "UnityMcpBridge/UnityMcpServer~/src/pyproject.toml" "UnityMcpBridge/UnityMcpServer~/src/server_version.txt"
           if git diff --cached --quiet; then
             echo "No version changes to commit."
           else
