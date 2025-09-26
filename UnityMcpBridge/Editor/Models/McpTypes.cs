@@ -4,10 +4,10 @@ namespace MCPForUnity.Editor.Models
     {
         ClaudeCode,
         ClaudeDesktop,
+        Codex,
         Cursor,
+        Kiro,
         VSCode,
         Windsurf,
-        Kiro,
     }
 }
-
