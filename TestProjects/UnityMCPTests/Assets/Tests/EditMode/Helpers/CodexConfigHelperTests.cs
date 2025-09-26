@@ -82,5 +82,22 @@ namespace MCPForUnityTests.Editor.Helpers
             Assert.AreEqual("uv", command);
             CollectionAssert.AreEqual(new[] { "run", "--directory", "/abs/path", "server.py" }, args);
         }
+
+        [Test]
+        public void TryParseCodexServer_SingleQuotedArgsWithApostrophes_ParsesSuccessfully()
+        {
+            string toml = string.Join("\n", new[]
+            {
+                "[mcp_servers.unityMCP]",
+                "command = 'uv'",
+                "args = ['run', '--directory', '/Users/O''Connor/codex', 'server.py']"
+            });
+
+            bool result = CodexConfigHelper.TryParseCodexServer(toml, out string command, out string[] args);
+
+            Assert.IsTrue(result, "Parser should accept single-quoted arrays with escaped apostrophes");
+            Assert.AreEqual("uv", command);
+            CollectionAssert.AreEqual(new[] { "run", "--directory", "/Users/O'Connor/codex", "server.py" }, args);
+        }
     }
 }

@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using MCPForUnity.External.Tommy;
 using Newtonsoft.Json;
 
 namespace MCPForUnity.Editor.Helpers
@@ -60,8 +62,7 @@ namespace MCPForUnity.Editor.Helpers
             bool replaced = false;
             while ((line = reader.ReadLine()) != null)
             {
-                string sanitizedLine = StripTomlComment(line);
-                string trimmed = sanitizedLine.Trim();
+                string trimmed = line.Trim();
                 bool isSection = trimmed.StartsWith("[") && trimmed.EndsWith("]") && !trimmed.StartsWith("[[");
                 if (isSection)
                 {
@@ -105,141 +106,110 @@ namespace MCPForUnity.Editor.Helpers
         {
             command = null;
             args = null;
-            if (string.IsNullOrEmpty(toml)) return false;
+            if (string.IsNullOrWhiteSpace(toml)) return false;
 
-            using StringReader reader = new StringReader(toml);
-            string line;
-            bool inTarget = false;
-            while ((line = reader.ReadLine()) != null)
+            try
             {
-                string trimmed = line.Trim();
-                if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith("#")) continue;
+                using var reader = new StringReader(toml);
+                TomlTable root = TOML.Parse(reader);
+                if (root == null) return false;
 
-                string headerCandidate = StripTomlComment(trimmed).Trim();
-                bool isSection = headerCandidate.StartsWith("[") && headerCandidate.EndsWith("]") && !headerCandidate.StartsWith("[[");
-                if (isSection)
+                if (!TryGetTable(root, "mcp_servers", out var servers)
+                    && !TryGetTable(root, "mcpServers", out servers))
                 {
-                    inTarget = string.Equals(headerCandidate, "[mcp_servers.unityMCP]", StringComparison.OrdinalIgnoreCase);
-                    continue;
+                    return false;
                 }
 
-                if (!inTarget) continue;
+                if (!TryGetTable(servers, "unityMCP", out var unity))
+                {
+                    return false;
+                }
 
-                if (trimmed.StartsWith("command", StringComparison.OrdinalIgnoreCase))
-                {
-                    int eq = trimmed.IndexOf('=');
-                    if (eq >= 0)
-                    {
-                        string raw = trimmed[(eq + 1)..];
-                        command = ParseTomlStringValue(raw);
-                    }
-                }
-                else if (trimmed.StartsWith("args", StringComparison.OrdinalIgnoreCase))
-                {
-                    int eq = trimmed.IndexOf('=');
-                    if (eq >= 0)
-                    {
-                        string raw = trimmed[(eq + 1)..].Trim();
-                        string aggregated = CollectTomlArray(raw, reader);
-                        args = ParseTomlStringArray(aggregated);
-                    }
-                }
+                command = GetTomlString(unity, "command");
+                args = GetTomlStringArray(unity, "args");
+
+                return !string.IsNullOrEmpty(command) && args != null;
             }
-
-            return !string.IsNullOrEmpty(command) && args != null;
+            catch (TomlParseException)
+            {
+                return false;
+            }
+            catch (TomlSyntaxException)
+            {
+                return false;
+            }
+            catch (FormatException)
+            {
+                return false;
+            }
         }
 
-        private static string CollectTomlArray(string firstSegment, StringReader reader)
+        private static bool TryGetTable(TomlTable parent, string key, out TomlTable table)
         {
-            StringBuilder buffer = new StringBuilder();
-            string sanitizedFirst = StripTomlComment(firstSegment ?? string.Empty).Trim();
-            buffer.Append(sanitizedFirst);
+            table = null;
+            if (parent == null) return false;
 
-            if (IsTomlArrayComplete(buffer.ToString()))
+            if (parent.TryGetNode(key, out var node))
             {
-                return buffer.ToString();
-            }
-
-            string nextLine;
-            while ((nextLine = reader.ReadLine()) != null)
-            {
-                string sanitizedNext = StripTomlComment(nextLine).Trim();
-                buffer.AppendLine();
-                buffer.Append(sanitizedNext);
-
-                if (IsTomlArrayComplete(buffer.ToString()))
+                if (node is TomlTable tbl)
                 {
-                    break;
+                    table = tbl;
+                    return true;
+                }
+
+                if (node is TomlArray array)
+                {
+                    var firstTable = array.Children.OfType<TomlTable>().FirstOrDefault();
+                    if (firstTable != null)
+                    {
+                        table = firstTable;
+                        return true;
+                    }
                 }
             }
 
-            return buffer.ToString();
+            return false;
         }
 
-        private static bool IsTomlArrayComplete(string text)
+        private static string GetTomlString(TomlTable table, string key)
         {
-            if (string.IsNullOrWhiteSpace(text)) return false;
-
-            bool inDouble = false;
-            bool inSingle = false;
-            bool escape = false;
-            int depth = 0;
-            bool sawOpen = false;
-
-            foreach (char c in text)
+            if (table != null && table.TryGetNode(key, out var node))
             {
-                if (escape)
-                {
-                    escape = false;
-                    continue;
-                }
+                if (node is TomlString str) return str.Value;
+                if (node.HasValue) return node.ToString();
+            }
+            return null;
+        }
 
-                if (c == '\\')
+        private static string[] GetTomlStringArray(TomlTable table, string key)
+        {
+            if (table == null) return null;
+            if (!table.TryGetNode(key, out var node)) return null;
+
+            if (node is TomlArray array)
+            {
+                List<string> values = new List<string>();
+                foreach (TomlNode element in array.Children)
                 {
-                    if (inDouble)
+                    if (element is TomlString str)
                     {
-                        escape = true;
+                        values.Add(str.Value);
                     }
-                    continue;
-                }
-
-                if (c == '"' && !inSingle)
-                {
-                    inDouble = !inDouble;
-                    continue;
-                }
-
-                if (c == '\'' && !inDouble)
-                {
-                    inSingle = !inSingle;
-                    continue;
-                }
-
-                if (inDouble || inSingle)
-                {
-                    continue;
-                }
-
-                if (c == '[')
-                {
-                    depth++;
-                    sawOpen = true;
-                }
-                else if (c == ']')
-                {
-                    if (depth > 0)
+                    else if (element.HasValue)
                     {
-                        depth--;
+                        values.Add(element.ToString());
                     }
                 }
+
+                return values.Count > 0 ? values.ToArray() : Array.Empty<string>();
             }
 
-            if (!sawOpen) return false;
+            if (node is TomlString single)
+            {
+                return new[] { single.Value };
+            }
 
-            if (depth > 0) return false;
-
-            int closingIndex = text.LastIndexOf(']');
-            return closingIndex >= 0;
+            return null;
         }
 
         private static string FormatTomlStringArray(IEnumerable<string> values)
@@ -269,111 +239,5 @@ namespace MCPForUnity.Editor.Helpers
                 .Replace("\"", "\\\"");
         }
 
-        private static string ParseTomlStringValue(string value)
-        {
-            if (value == null) return null;
-            string trimmed = StripTomlComment(value).Trim();
-            if (trimmed.Length >= 2 && trimmed[0] == '"' && trimmed[^1] == '"')
-            {
-                return UnescapeTomlBasicString(trimmed.Substring(1, trimmed.Length - 2));
-            }
-            if (trimmed.Length >= 2 && trimmed[0] == '\'' && trimmed[^1] == '\'')
-            {
-                return trimmed.Substring(1, trimmed.Length - 2);
-            }
-            return trimmed.Trim();
-        }
-
-        private static string[] ParseTomlStringArray(string value)
-        {
-            if (value == null) return null;
-            string cleaned = StripTomlComment(value).Trim();
-            if (!cleaned.StartsWith("[") || !cleaned.EndsWith("]")) return null;
-
-            cleaned = Regex.Replace(cleaned, @",(?=\s*\])", string.Empty);
-
-            try
-            {
-                return JsonConvert.DeserializeObject<string[]>(cleaned);
-            }
-            catch
-            {
-                if (cleaned.IndexOf('"') < 0 && cleaned.IndexOf('\'') >= 0)
-                {
-                    string normalized = Regex.Replace(
-                        cleaned,
-                        @"'((?:[^']|'')*)'",
-                        m => JsonConvert.SerializeObject(m.Groups[1].Value.Replace("''", "'"))
-                    );
-                    try { return JsonConvert.DeserializeObject<string[]>(normalized); } catch { }
-                }
-            }
-            return null;
-        }
-
-        private static string StripTomlComment(string value)
-        {
-            if (string.IsNullOrEmpty(value)) return string.Empty;
-            bool inDouble = false;
-            bool inSingle = false;
-            bool escape = false;
-            for (int i = 0; i < value.Length; i++)
-            {
-                char c = value[i];
-                if (escape)
-                {
-                    escape = false;
-                    continue;
-                }
-                if (c == '\\' && inDouble)
-                {
-                    escape = true;
-                    continue;
-                }
-                if (c == '"' && !inSingle)
-                {
-                    inDouble = !inDouble;
-                    continue;
-                }
-                if (c == '\'' && !inDouble)
-                {
-                    inSingle = !inSingle;
-                    continue;
-                }
-                if (c == '#' && !inSingle && !inDouble)
-                {
-                    return value.Substring(0, i).TrimEnd();
-                }
-            }
-            return value.Trim();
-        }
-
-        private static string UnescapeTomlBasicString(string value)
-        {
-            if (string.IsNullOrEmpty(value)) return string.Empty;
-            StringBuilder sb = new StringBuilder(value.Length);
-            for (int i = 0; i < value.Length; i++)
-            {
-                char c = value[i];
-                if (c == '\\' && i + 1 < value.Length)
-                {
-                    char next = value[++i];
-                    sb.Append(next switch
-                    {
-                        '\\' => '\\',
-                        '"' => '"',
-                        'n' => '\n',
-                        'r' => '\r',
-                        't' => '\t',
-                        'b' => '\b',
-                        'f' => '\f',
-                        _ => next
-                    });
-                    continue;
-                }
-                sb.Append(c);
-            }
-            return sb.ToString();
-        }
     }
 }
