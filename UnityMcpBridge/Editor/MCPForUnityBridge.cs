@@ -64,7 +64,7 @@ namespace MCPForUnity.Editor
         {
             try { return EditorPrefs.GetBool("MCPForUnity.DebugLogs", false); } catch { return false; }
         }
-        
+
         private static void LogBreadcrumb(string stage)
         {
             if (IsDebugEnabled())
@@ -83,7 +83,7 @@ namespace MCPForUnity.Editor
         public static void StartAutoConnect()
         {
             Stop(); // Stop current connection
-            
+
             try
             {
                 // Prefer stored project port and start using the robust Start() path (with retries/options)
@@ -315,7 +315,7 @@ namespace MCPForUnity.Editor
                     const int maxImmediateRetries = 3;
                     const int retrySleepMs = 75;
                     int attempt = 0;
-                    for (;;)
+                    for (; ; )
                     {
                         try
                         {
@@ -756,7 +756,7 @@ namespace MCPForUnity.Editor
         {
             byte[] header = await ReadExactAsync(stream, 8, timeoutMs, cancel).ConfigureAwait(false);
             ulong payloadLen = ReadUInt64BigEndian(header);
-             if (payloadLen > MaxFrameBytes)
+            if (payloadLen > MaxFrameBytes)
             {
                 throw new System.IO.IOException($"Invalid framed length: {payloadLen}");
             }

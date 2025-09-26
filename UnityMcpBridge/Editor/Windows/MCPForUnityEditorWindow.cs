@@ -568,8 +568,9 @@ namespace MCPForUnity.Editor.Windows
                             }
                             else
                             {
-                                // For Cursor/others, skip if already configured
-                                if (!IsCursorConfigured(pythonDir))
+                                CheckMcpConfiguration(client);
+                                bool alreadyConfigured = client.status == McpStatus.Configured;
+                                if (!alreadyConfigured)
                                 {
                                     ConfigureMcpClient(client);
                                     anyRegistered = true;
@@ -581,7 +582,10 @@ namespace MCPForUnity.Editor.Windows
                             MCPForUnity.Editor.Helpers.McpLog.Warn($"Auto-setup client '{client.name}' failed: {ex.Message}");
                         }
                     }
-                    lastClientRegisteredOk = anyRegistered || IsCursorConfigured(pythonDir) || IsClaudeConfigured();
+					lastClientRegisteredOk = anyRegistered
+						|| IsCursorConfigured(pythonDir)
+						|| CodexConfigHelper.IsCodexConfigured(pythonDir)
+						|| IsClaudeConfigured();
                 }
 
                 // Ensure the bridge is listening and has a fresh saved port
@@ -658,7 +662,9 @@ namespace MCPForUnity.Editor.Windows
                         }
                         else
                         {
-                            if (!IsCursorConfigured(pythonDir))
+                            CheckMcpConfiguration(client);
+                            bool alreadyConfigured = client.status == McpStatus.Configured;
+                            if (!alreadyConfigured)
                             {
                                 ConfigureMcpClient(client);
                                 anyRegistered = true;
@@ -670,7 +676,10 @@ namespace MCPForUnity.Editor.Windows
                         UnityEngine.Debug.LogWarning($"Setup client '{client.name}' failed: {ex.Message}");
                     }
                 }
-                lastClientRegisteredOk = anyRegistered || IsCursorConfigured(pythonDir) || IsClaudeConfigured();
+				lastClientRegisteredOk = anyRegistered
+					|| IsCursorConfigured(pythonDir)
+					|| CodexConfigHelper.IsCodexConfigured(pythonDir)
+					|| IsClaudeConfigured();
 
                 // Restart/ensure bridge
                 MCPForUnityBridge.StartAutoConnect();
@@ -686,11 +695,11 @@ namespace MCPForUnity.Editor.Windows
             }
         }
 
-        private static bool IsCursorConfigured(string pythonDir)
-        {
-            try
-            {
-                string configPath = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+		private static bool IsCursorConfigured(string pythonDir)
+		{
+			try
+			{
+				string configPath = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
                     ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), 
                         ".cursor", "mcp.json")
                     : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), 
@@ -708,24 +717,9 @@ namespace MCPForUnity.Editor.Windows
                 string[] strArgs = ((System.Collections.Generic.IEnumerable<object>)args)
                     .Select(x => x?.ToString() ?? string.Empty)
                     .ToArray();
-                string dir = ExtractDirectoryArg(strArgs);
+                string dir = McpConfigFileHelper.ExtractDirectoryArg(strArgs);
                 if (string.IsNullOrEmpty(dir)) return false;
-                return PathsEqual(dir, pythonDir);
-            }
-            catch { return false; }
-        }
-
-        private static bool PathsEqual(string a, string b)
-        {
-            if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return false;
-            try
-            {
-                string na = System.IO.Path.GetFullPath(a.Trim());
-                string nb = System.IO.Path.GetFullPath(b.Trim());
-                if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
-                    return string.Equals(na, nb, StringComparison.OrdinalIgnoreCase);
-                // Default to ordinal on Unix; optionally detect FS case-sensitivity at runtime if needed
-                return string.Equals(na, nb, StringComparison.Ordinal);
+                return McpConfigFileHelper.PathsEqual(dir, pythonDir);
             }
             catch { return false; }
         }
@@ -1136,19 +1130,6 @@ namespace MCPForUnity.Editor.Windows
 			catch { return false; }
 		}
 
-		private static string ExtractDirectoryArg(string[] args)
-		{
-			if (args == null) return null;
-			for (int i = 0; i < args.Length - 1; i++)
-			{
-				if (string.Equals(args[i], "--directory", StringComparison.OrdinalIgnoreCase))
-				{
-					return args[i + 1];
-				}
-			}
-			return null;
-		}
-
 		private static bool ArgsEqual(string[] a, string[] b)
 		{
 			if (a == null || b == null) return a == b;
@@ -1236,48 +1217,7 @@ namespace MCPForUnity.Editor.Windows
 			}
 			catch { }
 			if (uvPath == null) return "UV package manager not found. Please install UV first.";
-			string serverSrc = ExtractDirectoryArg(existingArgs);
-			bool serverValid = !string.IsNullOrEmpty(serverSrc)
-				&& System.IO.File.Exists(System.IO.Path.Combine(serverSrc, "server.py"));
-			if (!serverValid)
-			{
-				// Prefer the provided pythonDir if valid; fall back to resolver
-				if (!string.IsNullOrEmpty(pythonDir) && System.IO.File.Exists(System.IO.Path.Combine(pythonDir, "server.py")))
-				{
-					serverSrc = pythonDir;
-				}
-				else
-				{
-					serverSrc = ResolveServerSrc();
-				}
-			}
-
-			// macOS normalization: map XDG-style ~/.local/share to canonical Application Support
-			try
-			{
-				if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX)
-					&& !string.IsNullOrEmpty(serverSrc))
-				{
-					string norm = serverSrc.Replace('\\', '/');
-					int idx = norm.IndexOf("/.local/share/UnityMCP/", StringComparison.Ordinal);
-					if (idx >= 0)
-					{
-						string home = Environment.GetFolderPath(Environment.SpecialFolder.Personal) ?? string.Empty;
-						string suffix = norm.Substring(idx + "/.local/share/".Length); // UnityMCP/...
-						serverSrc = System.IO.Path.Combine(home, "Library", "Application Support", suffix);
-					}
-				}
-			}
-			catch { }
-
-			// Hard-block PackageCache on Windows unless dev override is set
-			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-				&& !string.IsNullOrEmpty(serverSrc)
-				&& serverSrc.IndexOf(@"\Library\PackageCache\", StringComparison.OrdinalIgnoreCase) >= 0
-				&& !UnityEditor.EditorPrefs.GetBool("MCPForUnity.UseEmbeddedServer", false))
-			{
-				serverSrc = ServerInstaller.GetServerPath();
-			}
+			string serverSrc = McpConfigFileHelper.ResolveServerDirectory(pythonDir, existingArgs);
 
 			// 2) Canonical args order
 			var newArgs = new[] { "run", "--directory", serverSrc, "server.py" };
@@ -1301,60 +1241,7 @@ namespace MCPForUnity.Editor.Windows
 
 			string mergedJson = JsonConvert.SerializeObject(existingRoot, jsonSettings);
 			
-			// Robust atomic write without redundant backup or race on existence
-			string tmp = configPath + ".tmp";
-			string backup = configPath + ".backup";
-			bool writeDone = false;
-			try
-			{
-				// Write to temp file first (in same directory for atomicity)
-				System.IO.File.WriteAllText(tmp, mergedJson, new System.Text.UTF8Encoding(false));
-
-				try
-				{
-					// Try atomic replace; creates 'backup' only on success (platform-dependent)
-					System.IO.File.Replace(tmp, configPath, backup);
-					writeDone = true;
-				}
-				catch (System.IO.FileNotFoundException)
-				{
-					// Destination didn't exist; fall back to move
-					System.IO.File.Move(tmp, configPath);
-                    writeDone = true;
-				}
-				catch (System.PlatformNotSupportedException)
-				{
-					// Fallback: rename existing to backup, then move tmp into place
-					if (System.IO.File.Exists(configPath))
-					{
-						try { if (System.IO.File.Exists(backup)) System.IO.File.Delete(backup); } catch { }
-						System.IO.File.Move(configPath, backup);
-					}
-					System.IO.File.Move(tmp, configPath);
-					writeDone = true;
-				}
-			}
-			catch (Exception ex)
-			{
-
-				// If write did not complete, attempt restore from backup without deleting current file first
-				try
-				{
-					if (!writeDone && System.IO.File.Exists(backup))
-					{
-						try { System.IO.File.Copy(backup, configPath, true); } catch { }
-					}
-				}
-				catch { }
-				throw new Exception($"Failed to write config file '{configPath}': {ex.Message}", ex);
-			}
-			finally
-			{
-				// Best-effort cleanup of temp
-				try { if (System.IO.File.Exists(tmp)) System.IO.File.Delete(tmp); } catch { }
-				// Only remove backup after a confirmed successful write
-				try { if (writeDone && System.IO.File.Exists(backup)) System.IO.File.Delete(backup); } catch { }
-			}
+			McpConfigFileHelper.WriteAtomicFile(configPath, mergedJson);
 
 			try
 			{
@@ -1377,54 +1264,27 @@ namespace MCPForUnity.Editor.Windows
         }
 
         // New method to show manual instructions without changing status
-        private void ShowManualInstructionsWindow(string configPath, McpClient mcpClient)
-        {
-            // Get the Python directory path using Package Manager API
-            string pythonDir = FindPackagePythonDirectory();
-            // Build manual JSON centrally using the shared builder
-            string uvPathForManual = FindUvPath();
-            if (uvPathForManual == null)
-            {
-                UnityEngine.Debug.LogError("UV package manager not found. Cannot generate manual configuration.");
-                return;
-            }
-
-            string manualConfigJson = ConfigJsonBuilder.BuildManualConfigJson(uvPathForManual, pythonDir, mcpClient);
-            ManualConfigEditorWindow.ShowWindow(configPath, manualConfigJson, mcpClient);
-        }
-
-		private static string ResolveServerSrc()
+		private void ShowManualInstructionsWindow(string configPath, McpClient mcpClient)
 		{
-			try
+			// Get the Python directory path using Package Manager API
+			string pythonDir = FindPackagePythonDirectory();
+			// Build manual JSON centrally using the shared builder
+			string uvPathForManual = FindUvPath();
+			if (uvPathForManual == null)
 			{
-				string remembered = UnityEditor.EditorPrefs.GetString("MCPForUnity.ServerSrc", string.Empty);
-				if (!string.IsNullOrEmpty(remembered) && File.Exists(Path.Combine(remembered, "server.py")))
-				{
-					return remembered;
-				}
-
-				ServerInstaller.EnsureServerInstalled();
-				string installed = ServerInstaller.GetServerPath();
-				if (File.Exists(Path.Combine(installed, "server.py")))
-				{
-					return installed;
-				}
-
-				bool useEmbedded = UnityEditor.EditorPrefs.GetBool("MCPForUnity.UseEmbeddedServer", false);
-				if (useEmbedded && ServerPathResolver.TryFindEmbeddedServerSource(out string embedded)
-					&& File.Exists(Path.Combine(embedded, "server.py")))
-				{
-					return embedded;
-				}
-
-				return installed;
+				UnityEngine.Debug.LogError("UV package manager not found. Cannot generate manual configuration.");
+				return;
 			}
-			catch { return ServerInstaller.GetServerPath(); }
+
+			string manualConfig = mcpClient?.mcpType == McpTypes.Codex
+				? CodexConfigHelper.BuildCodexServerBlock(uvPathForManual, McpConfigFileHelper.ResolveServerDirectory(pythonDir, null)).TrimEnd() + Environment.NewLine
+				: ConfigJsonBuilder.BuildManualConfigJson(uvPathForManual, pythonDir, mcpClient);
+			ManualConfigEditorWindow.ShowWindow(configPath, manualConfig, mcpClient);
 		}
 
-		private string FindPackagePythonDirectory()
+        private string FindPackagePythonDirectory()
         {
-			string pythonDir = ResolveServerSrc();
+            string pythonDir = McpConfigFileHelper.ResolveServerSource();
 
             try
             {
@@ -1508,12 +1368,12 @@ namespace MCPForUnity.Editor.Windows
             }
         }
 
-        private string ConfigureMcpClient(McpClient mcpClient)
-        {
-            try
-            {
-                // Determine the config file path based on OS
-                string configPath;
+		private string ConfigureMcpClient(McpClient mcpClient)
+		{
+			try
+			{
+				// Determine the config file path based on OS
+				string configPath;
 
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
@@ -1541,21 +1401,23 @@ namespace MCPForUnity.Editor.Windows
                 // Create directory if it doesn't exist
                 Directory.CreateDirectory(Path.GetDirectoryName(configPath));
 
-                // Find the server.py file location using the same logic as FindPackagePythonDirectory
-                string pythonDir = FindPackagePythonDirectory();
+				// Find the server.py file location using the same logic as FindPackagePythonDirectory
+				string pythonDir = FindPackagePythonDirectory();
 
-                if (pythonDir == null || !File.Exists(Path.Combine(pythonDir, "server.py")))
-                {
-                    ShowManualInstructionsWindow(configPath, mcpClient);
-                    return "Manual Configuration Required";
-                }
+				if (pythonDir == null || !File.Exists(Path.Combine(pythonDir, "server.py")))
+				{
+					ShowManualInstructionsWindow(configPath, mcpClient);
+					return "Manual Configuration Required";
+				}
 
-                string result = WriteToConfig(pythonDir, configPath, mcpClient);
+				string result = mcpClient.mcpType == McpTypes.Codex
+					? ConfigureCodexClient(pythonDir, configPath, mcpClient)
+					: WriteToConfig(pythonDir, configPath, mcpClient);
 
-                // Update the client status after successful configuration
-                if (result == "Configured successfully")
-                {
-                    mcpClient.SetStatus(McpStatus.Configured);
+				// Update the client status after successful configuration
+				if (result == "Configured successfully")
+				{
+					mcpClient.SetStatus(McpStatus.Configured);
                 }
 
                 return result;
@@ -1588,8 +1450,82 @@ namespace MCPForUnity.Editor.Windows
                     $"Failed to configure {mcpClient.name}: {e.Message}\n{e.StackTrace}"
                 );
                 return $"Failed to configure {mcpClient.name}";
-            }
-        }
+			}
+		}
+
+		private string ConfigureCodexClient(string pythonDir, string configPath, McpClient mcpClient)
+		{
+			try { if (EditorPrefs.GetBool("MCPForUnity.LockCursorConfig", false)) return "Skipped (locked)"; } catch { }
+
+			string existingToml = string.Empty;
+			if (File.Exists(configPath))
+			{
+				try
+				{
+					existingToml = File.ReadAllText(configPath);
+				}
+				catch (Exception e)
+				{
+					if (debugLogsEnabled)
+					{
+						UnityEngine.Debug.LogWarning($"UnityMCP: Failed to read Codex config '{configPath}': {e.Message}");
+					}
+					existingToml = string.Empty;
+				}
+			}
+
+			string existingCommand = null;
+			string[] existingArgs = null;
+			if (!string.IsNullOrWhiteSpace(existingToml))
+			{
+				CodexConfigHelper.TryParseCodexServer(existingToml, out existingCommand, out existingArgs);
+			}
+
+			string uvPath = ServerInstaller.FindUvPath();
+			try
+			{
+				var name = Path.GetFileName((existingCommand ?? string.Empty).Trim()).ToLowerInvariant();
+				if ((name == "uv" || name == "uv.exe") && ValidateUvBinarySafe(existingCommand))
+				{
+					uvPath = existingCommand;
+				}
+			}
+			catch { }
+
+			if (uvPath == null)
+			{
+				return "UV package manager not found. Please install UV first.";
+			}
+
+			string serverSrc = McpConfigFileHelper.ResolveServerDirectory(pythonDir, existingArgs);
+			var newArgs = new[] { "run", "--directory", serverSrc, "server.py" };
+
+			bool changed = true;
+			if (!string.IsNullOrEmpty(existingCommand) && existingArgs != null)
+			{
+				changed = !string.Equals(existingCommand, uvPath, StringComparison.Ordinal)
+					|| !ArgsEqual(existingArgs, newArgs);
+			}
+
+			if (!changed)
+			{
+				return "Configured successfully";
+			}
+
+			string codexBlock = CodexConfigHelper.BuildCodexServerBlock(uvPath, serverSrc);
+			string updatedToml = CodexConfigHelper.UpsertCodexServerBlock(existingToml, codexBlock);
+
+			McpConfigFileHelper.WriteAtomicFile(configPath, updatedToml);
+
+			try
+			{
+				if (IsValidUv(uvPath)) EditorPrefs.SetString("MCPForUnity.UvPath", uvPath);
+				EditorPrefs.SetString("MCPForUnity.ServerSrc", serverSrc);
+			}
+			catch { }
+
+			return "Configured successfully";
+		}
 
         private void ShowCursorManualConfigurationInstructions(
             string configPath,
@@ -1721,28 +1657,36 @@ namespace MCPForUnity.Editor.Windows
                 string[] args = null;
                 bool configExists = false;
                 
-                switch (mcpClient.mcpType)
-                {
-                    case McpTypes.VSCode:
-                        dynamic config = JsonConvert.DeserializeObject(configJson);
-                        
-                        // New schema: top-level servers
-                        if (config?.servers?.unityMCP != null)
-                        {
-                            args = config.servers.unityMCP.args.ToObject<string[]>();
-                            configExists = true;
-                        }
-                        // Back-compat: legacy mcp.servers
-                        else if (config?.mcp?.servers?.unityMCP != null)
-                        {
-                            args = config.mcp.servers.unityMCP.args.ToObject<string[]>();
-                            configExists = true;
-                        }
-                        break;
-                        
-                    default:
-                        // Standard MCP configuration check for Claude Desktop, Cursor, etc.
-                        McpConfig standardConfig = JsonConvert.DeserializeObject<McpConfig>(configJson);
+				switch (mcpClient.mcpType)
+				{
+					case McpTypes.VSCode:
+						dynamic config = JsonConvert.DeserializeObject(configJson);
+						
+						// New schema: top-level servers
+						if (config?.servers?.unityMCP != null)
+						{
+							args = config.servers.unityMCP.args.ToObject<string[]>();
+							configExists = true;
+						}
+						// Back-compat: legacy mcp.servers
+						else if (config?.mcp?.servers?.unityMCP != null)
+						{
+							args = config.mcp.servers.unityMCP.args.ToObject<string[]>();
+							configExists = true;
+						}
+						break;
+
+					case McpTypes.Codex:
+						if (CodexConfigHelper.TryParseCodexServer(configJson, out _, out var codexArgs))
+						{
+							args = codexArgs;
+							configExists = true;
+						}
+						break;
+						
+					default:
+						// Standard MCP configuration check for Claude Desktop, Cursor, etc.
+						McpConfig standardConfig = JsonConvert.DeserializeObject<McpConfig>(configJson);
                         
                         if (standardConfig?.mcpServers?.unityMCP != null)
                         {
@@ -1755,8 +1699,8 @@ namespace MCPForUnity.Editor.Windows
                 // Common logic for checking configuration status
                 if (configExists)
                 {
-                    string configuredDir = ExtractDirectoryArg(args);
-                    bool matches = !string.IsNullOrEmpty(configuredDir) && PathsEqual(configuredDir, pythonDir);
+                    string configuredDir = McpConfigFileHelper.ExtractDirectoryArg(args);
+                    bool matches = !string.IsNullOrEmpty(configuredDir) && McpConfigFileHelper.PathsEqual(configuredDir, pythonDir);
                     if (matches)
                     {
                         mcpClient.SetStatus(McpStatus.Configured);
@@ -1766,7 +1710,9 @@ namespace MCPForUnity.Editor.Windows
                         // Attempt auto-rewrite once if the package path changed
                         try
                         {
-                            string rewriteResult = WriteToConfig(pythonDir, configPath, mcpClient);
+                            string rewriteResult = mcpClient.mcpType == McpTypes.Codex
+                                ? ConfigureCodexClient(pythonDir, configPath, mcpClient)
+                                : WriteToConfig(pythonDir, configPath, mcpClient);
                             if (rewriteResult == "Configured successfully")
                             {
                                 if (debugLogsEnabled)

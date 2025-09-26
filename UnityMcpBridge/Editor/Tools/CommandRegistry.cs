@@ -14,14 +14,14 @@ namespace MCPForUnity.Editor.Tools
         // to the corresponding static HandleCommand method in the appropriate tool class.
         private static readonly Dictionary<string, Func<JObject, object>> _handlers = new()
         {
-            { "HandleManageScript", ManageScript.HandleCommand },
-            { "HandleManageScene", ManageScene.HandleCommand },
-            { "HandleManageEditor", ManageEditor.HandleCommand },
-            { "HandleManageGameObject", ManageGameObject.HandleCommand },
-            { "HandleManageAsset", ManageAsset.HandleCommand },
-            { "HandleReadConsole", ReadConsole.HandleCommand },
-            { "HandleManageMenuItem", ManageMenuItem.HandleCommand },
-            { "HandleManageShader", ManageShader.HandleCommand},
+            { "manage_script", ManageScript.HandleCommand },
+            { "manage_scene", ManageScene.HandleCommand },
+            { "manage_editor", ManageEditor.HandleCommand },
+            { "manage_gameobject", ManageGameObject.HandleCommand },
+            { "manage_asset", ManageAsset.HandleCommand },
+            { "read_console", ReadConsole.HandleCommand },
+            { "manage_menu_item", ManageMenuItem.HandleCommand },
+            { "manage_shader", ManageShader.HandleCommand},
         };
 
         /// <summary>
@@ -31,17 +31,18 @@ namespace MCPForUnity.Editor.Tools
         /// <returns>The command handler function if found, null otherwise.</returns>
         public static Func<JObject, object> GetHandler(string commandName)
         {
-            // Use case-insensitive comparison for flexibility, although Python side should be consistent
-            return _handlers.TryGetValue(commandName, out var handler) ? handler : null;
-            // Consider adding logging here if a handler is not found
-            /*
-            if (_handlers.TryGetValue(commandName, out var handler)) {
-                return handler;
-            } else {
-                UnityEngine.Debug.LogError($\"[CommandRegistry] No handler found for command: {commandName}\");
-                return null;
+            if (!_handlers.TryGetValue(commandName, out var handler))
+            {
+                throw new InvalidOperationException(
+                    $"Unknown or unsupported command type: {commandName}");
             }
-            */
+
+            return handler;
+        }
+
+        public static void Add(string commandName, Func<JObject, object> handler)
+        {
+            _handlers.Add(commandName, handler);
         }
     }
 }

@@ -46,6 +46,8 @@ namespace MCPForUnityTests.Editor.Windows
             EditorPrefs.SetString("MCPForUnity.ServerSrc", _serverSrcDir);
             // Ensure no lock is enabled
             EditorPrefs.SetBool("MCPForUnity.LockCursorConfig", false);
+            // Disable auto-registration to avoid hitting user configs during tests
+            EditorPrefs.SetBool("MCPForUnity.AutoRegisterEnabled", false);
         }
 
         [TearDown]
@@ -54,6 +56,7 @@ namespace MCPForUnityTests.Editor.Windows
             // Clean up editor preferences set during SetUp
             EditorPrefs.DeleteKey("MCPForUnity.ServerSrc");
             EditorPrefs.DeleteKey("MCPForUnity.LockCursorConfig");
+            EditorPrefs.DeleteKey("MCPForUnity.AutoRegisterEnabled");
 
             // Remove temp files
             try { if (Directory.Exists(_tempRoot)) Directory.Delete(_tempRoot, true); } catch { }
