@@ -1401,7 +1401,18 @@ namespace MCPForUnity.External.Tommy
                 return false;
             }
 
-            if (c == quote) return true;
+            if (c == quote)
+            {
+                if (!isNonLiteral && reader.Peek() == quote)
+                {
+                    reader.Read();
+                    col++;
+                    sb.Append(quote);
+                    return false;
+                }
+
+                return true;
+            }
             if (isNonLiteral && c == TomlSyntax.ESCAPE_SYMBOL)
                 escaped = true;
             if (c == TomlSyntax.NEWLINE_CHARACTER)
