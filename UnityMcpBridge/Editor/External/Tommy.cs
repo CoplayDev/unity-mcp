@@ -347,7 +347,7 @@ namespace MCPForUnity.External.Tommy
                 return;
             }
 
-            if (Comment is not null)
+            if (!(Comment is null))
             {
                 tw.WriteLine();
                 Comment.AsComment(tw);
@@ -363,7 +363,7 @@ namespace MCPForUnity.External.Tommy
 
             foreach (var tomlNode in RawArray)
             {
-                if (tomlNode is not TomlTable tbl)
+                if (!(tomlNode is TomlTable tbl))
                     throw new TomlFormatException("The array is marked as array table but contains non-table nodes!");
 
                 // Ensure it's parsed as a section
@@ -1676,7 +1676,7 @@ namespace MCPForUnity.External.Tommy
 
                     if (node.HasValue)
                     {
-                        if (node is not TomlArray { IsTableArray: true } array)
+                        if (!(node is TomlArray { IsTableArray: true } array))
                         {
                             AddError($"The key {".".Join(path)} has a value assigned to it!");
                             return null;
