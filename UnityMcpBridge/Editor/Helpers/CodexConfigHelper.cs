@@ -114,10 +114,11 @@ namespace MCPForUnity.Editor.Helpers
                 string trimmed = line.Trim();
                 if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith("#")) continue;
 
-                bool isSection = trimmed.StartsWith("[") && trimmed.EndsWith("]") && !trimmed.StartsWith("[[");
+                string headerCandidate = StripTomlComment(trimmed).Trim();
+                bool isSection = headerCandidate.StartsWith("[") && headerCandidate.EndsWith("]") && !headerCandidate.StartsWith("[[");
                 if (isSection)
                 {
-                    inTarget = string.Equals(trimmed, "[mcp_servers.unityMCP]", StringComparison.OrdinalIgnoreCase);
+                    inTarget = string.Equals(headerCandidate, "[mcp_servers.unityMCP]", StringComparison.OrdinalIgnoreCase);
                     continue;
                 }
 

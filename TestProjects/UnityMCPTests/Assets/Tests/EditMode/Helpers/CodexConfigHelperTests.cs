@@ -65,6 +65,22 @@ namespace MCPForUnityTests.Editor.Helpers
             Assert.AreEqual("uv", command);
             CollectionAssert.AreEqual(new[] { "run", "--directory", "/abs/path", "server.py" }, args);
         }
+
+        [Test]
+        public void TryParseCodexServer_HeaderWithComment_StillDetected()
+        {
+            string toml = string.Join("\n", new[]
+            {
+                "[mcp_servers.unityMCP] # annotated header",
+                "command = \"uv\"",
+                "args = [\"run\", \"--directory\", \"/abs/path\", \"server.py\"]"
+            });
+
+            bool result = CodexConfigHelper.TryParseCodexServer(toml, out string command, out string[] args);
+
+            Assert.IsTrue(result, "Parser should recognize section headers even with inline comments");
+            Assert.AreEqual("uv", command);
+            CollectionAssert.AreEqual(new[] { "run", "--directory", "/abs/path", "server.py" }, args);
+        }
     }
 }
-
