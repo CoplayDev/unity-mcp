@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 
 namespace MCPForUnity.Editor.Helpers
@@ -136,13 +137,107 @@ namespace MCPForUnity.Editor.Helpers
                     int eq = trimmed.IndexOf('=');
                     if (eq >= 0)
                     {
-                        string raw = trimmed[(eq + 1)..];
-                        args = ParseTomlStringArray(raw);
+                        string raw = trimmed[(eq + 1)..].Trim();
+                        string aggregated = CollectTomlArray(raw, reader);
+                        args = ParseTomlStringArray(aggregated);
                     }
                 }
             }
 
             return !string.IsNullOrEmpty(command) && args != null;
+        }
+
+        private static string CollectTomlArray(string firstSegment, StringReader reader)
+        {
+            StringBuilder buffer = new StringBuilder();
+            string sanitizedFirst = StripTomlComment(firstSegment ?? string.Empty).Trim();
+            buffer.Append(sanitizedFirst);
+
+            if (IsTomlArrayComplete(buffer.ToString()))
+            {
+                return buffer.ToString();
+            }
+
+            string nextLine;
+            while ((nextLine = reader.ReadLine()) != null)
+            {
+                string sanitizedNext = StripTomlComment(nextLine).Trim();
+                buffer.AppendLine();
+                buffer.Append(sanitizedNext);
+
+                if (IsTomlArrayComplete(buffer.ToString()))
+                {
+                    break;
+                }
+            }
+
+            return buffer.ToString();
+        }
+
+        private static bool IsTomlArrayComplete(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return false;
+
+            bool inDouble = false;
+            bool inSingle = false;
+            bool escape = false;
+            int depth = 0;
+            bool sawOpen = false;
+
+            foreach (char c in text)
+            {
+                if (escape)
+                {
+                    escape = false;
+                    continue;
+                }
+
+                if (c == '\\')
+                {
+                    if (inDouble)
+                    {
+                        escape = true;
+                    }
+                    continue;
+                }
+
+                if (c == '"' && !inSingle)
+                {
+                    inDouble = !inDouble;
+                    continue;
+                }
+
+                if (c == '\'' && !inDouble)
+                {
+                    inSingle = !inSingle;
+                    continue;
+                }
+
+                if (inDouble || inSingle)
+                {
+                    continue;
+                }
+
+                if (c == '[')
+                {
+                    depth++;
+                    sawOpen = true;
+                }
+                else if (c == ']')
+                {
+                    if (depth > 0)
+                    {
+                        depth--;
+                    }
+                }
+            }
+
+            if (!sawOpen) return false;
+
+            if (depth > 0) return false;
+
+            int closingIndex = text.LastIndexOf(']');
+            return closingIndex >= 0;
         }
 
         private static string FormatTomlStringArray(IEnumerable<string> values)
@@ -192,6 +287,9 @@ namespace MCPForUnity.Editor.Helpers
             if (value == null) return null;
             string cleaned = StripTomlComment(value).Trim();
             if (!cleaned.StartsWith("[") || !cleaned.EndsWith("]")) return null;
+
+            cleaned = Regex.Replace(cleaned, @",(?=\s*\])", string.Empty);
+
             try
             {
                 return JsonConvert.DeserializeObject<string[]>(cleaned);
