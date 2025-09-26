@@ -1,0 +1,28 @@
+{
+  "name": "com.coplaydev.unity-mcp",
+  "version": "3.4.0",
+  "displayName": "MCP for Unity",
+  "description": "A bridge that connects an LLM to Unity via the MCP (Model Context Protocol). This allows MCP Clients like Claude Desktop or Cursor to directly control your Unity Editor.\n\nRequires Python 3.10+ and UV package manager to be installed separately.\n\nJoin Our Discord: https://discord.gg/y4p8KfzrN4",
+  "unity": "2021.3",
+  "documentationUrl": "https://github.com/CoplayDev/unity-mcp",
+  "licensesUrl": "https://github.com/CoplayDev/unity-mcp/blob/main/LICENSE",
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.0.2"
+  },
+  "keywords": [
+    "unity",
+    "ai",
+    "llm",
+    "mcp",
+    "model-context-protocol",
+    "mcp-server",
+    "mcp-client",
+    "setup-wizard",
+    "dependency-management"
+  ],
+  "author": {
+    "name": "Coplay",
+    "email": "support@coplay.dev",
+    "url": "https://coplay.dev"
+  }
+}
