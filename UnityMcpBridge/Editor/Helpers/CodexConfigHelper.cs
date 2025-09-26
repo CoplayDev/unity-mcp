@@ -300,8 +300,12 @@ namespace MCPForUnity.Editor.Helpers
             {
                 if (cleaned.IndexOf('"') < 0 && cleaned.IndexOf('\'') >= 0)
                 {
-                    string alt = cleaned.Replace('\'', '\"');
-                    try { return JsonConvert.DeserializeObject<string[]>(alt); } catch { }
+                    string normalized = Regex.Replace(
+                        cleaned,
+                        @"'((?:[^']|'')*)'",
+                        m => JsonConvert.SerializeObject(m.Groups[1].Value.Replace("''", "'"))
+                    );
+                    try { return JsonConvert.DeserializeObject<string[]>(normalized); } catch { }
                 }
             }
             return null;
