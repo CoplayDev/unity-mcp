@@ -568,12 +568,8 @@ namespace MCPForUnity.Editor.Windows
                             }
                             else
                             {
-                                bool alreadyConfigured = client.mcpType switch
-                                {
-                                    McpTypes.Codex => CodexConfigHelper.IsCodexConfigured(pythonDir),
-                                    _ => IsCursorConfigured(pythonDir)
-                                };
-
+                                CheckMcpConfiguration(client);
+                                bool alreadyConfigured = client.status == McpStatus.Configured;
                                 if (!alreadyConfigured)
                                 {
                                     ConfigureMcpClient(client);
@@ -666,12 +662,8 @@ namespace MCPForUnity.Editor.Windows
                         }
                         else
                         {
-                            bool alreadyConfigured = client.mcpType switch
-                            {
-                                McpTypes.Codex => CodexConfigHelper.IsCodexConfigured(pythonDir),
-                                _ => IsCursorConfigured(pythonDir)
-                            };
-
+                            CheckMcpConfiguration(client);
+                            bool alreadyConfigured = client.status == McpStatus.Configured;
                             if (!alreadyConfigured)
                             {
                                 ConfigureMcpClient(client);
@@ -1147,54 +1139,6 @@ namespace MCPForUnity.Editor.Windows
 				if (!string.Equals(a[i], b[i], StringComparison.Ordinal)) return false;
 			}
 			return true;
-		}
-
-		private static void WriteAtomicFile(string path, string contents)
-		{
-			string tmp = path + ".tmp";
-			string backup = path + ".backup";
-			bool writeDone = false;
-			try
-			{
-				File.WriteAllText(tmp, contents, new UTF8Encoding(false));
-				try
-				{
-					File.Replace(tmp, path, backup);
-					writeDone = true;
-				}
-				catch (FileNotFoundException)
-				{
-					File.Move(tmp, path);
-					writeDone = true;
-				}
-				catch (PlatformNotSupportedException)
-				{
-					if (File.Exists(path))
-					{
-						try { if (File.Exists(backup)) File.Delete(backup); } catch { }
-						File.Move(path, backup);
-					}
-					File.Move(tmp, path);
-					writeDone = true;
-				}
-			}
-			catch (Exception ex)
-			{
-				try
-				{
-					if (!writeDone && File.Exists(backup))
-					{
-						try { File.Copy(backup, path, true); } catch { }
-					}
-				}
-				catch { }
-				throw new Exception($"Failed to write config file '{path}': {ex.Message}", ex);
-			}
-			finally
-			{
-				try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
-				try { if (writeDone && File.Exists(backup)) File.Delete(backup); } catch { }
-			}
 		}
 
         private string WriteToConfig(string pythonDir, string configPath, McpClient mcpClient = null)
