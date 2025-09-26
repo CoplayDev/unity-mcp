@@ -1766,7 +1766,9 @@ namespace MCPForUnity.Editor.Windows
                         // Attempt auto-rewrite once if the package path changed
                         try
                         {
-                            string rewriteResult = WriteToConfig(pythonDir, configPath, mcpClient);
+                            string rewriteResult = mcpClient.mcpType == McpTypes.Codex
+                                ? ConfigureCodexClient(pythonDir, configPath, mcpClient)
+                                : WriteToConfig(pythonDir, configPath, mcpClient);
                             if (rewriteResult == "Configured successfully")
                             {
                                 if (debugLogsEnabled)
