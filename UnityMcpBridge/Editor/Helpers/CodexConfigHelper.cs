@@ -60,7 +60,8 @@ namespace MCPForUnity.Editor.Helpers
             bool replaced = false;
             while ((line = reader.ReadLine()) != null)
             {
-                string trimmed = line.Trim();
+                string sanitizedLine = StripTomlComment(line);
+                string trimmed = sanitizedLine.Trim();
                 bool isSection = trimmed.StartsWith("[") && trimmed.EndsWith("]") && !trimmed.StartsWith("[[");
                 if (isSection)
                 {
