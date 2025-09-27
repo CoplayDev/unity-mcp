@@ -10,7 +10,7 @@ from unity_connection import send_command_with_retry
 def register_manage_editor_tools(mcp: FastMCP):
     """Register all editor management tools with the MCP server."""
 
-    @mcp.tool(description="Controls and queries the Unity editor's state and settings")
+    @mcp.tool(name="manage_editor", description="Controls and queries the Unity editor's state and settings")
     @telemetry_tool("manage_editor")
     def manage_editor(
         ctx: Context,

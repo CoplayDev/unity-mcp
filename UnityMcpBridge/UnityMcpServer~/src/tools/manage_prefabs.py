@@ -9,7 +9,7 @@ from unity_connection import send_command_with_retry
 def register_manage_prefabs_tools(mcp: FastMCP) -> None:
     """Register prefab management tools with the MCP server."""
 
-    @mcp.tool(description="Bridge for prefab management commands (stage control and creation).")
+    @mcp.tool(name="manage_prefabs", description="Bridge for prefab management commands (stage control and creation).")
     @telemetry_tool("manage_prefabs")
     def manage_prefabs(
         ctx: Context,

@@ -12,7 +12,7 @@ from unity_connection import send_command_with_retry
 def register_read_console_tools(mcp: FastMCP):
     """Registers the read_console tool with the MCP server."""
 
-    @mcp.tool(description="Gets messages from or clears the Unity Editor console.")
+    @mcp.tool(name="read_console", description="Gets messages from or clears the Unity Editor console.")
     @telemetry_tool("read_console")
     def read_console(
         ctx: Context,

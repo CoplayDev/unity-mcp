@@ -13,7 +13,7 @@ from telemetry_decorator import telemetry_tool
 def register_manage_asset_tools(mcp: FastMCP):
     """Registers the manage_asset tool with the MCP server."""
 
-    @mcp.tool(description="Performs asset operations (import, create, modify, delete, etc.) in Unity.")
+    @mcp.tool(name="manage_asset", description="Performs asset operations (import, create, modify, delete, etc.) in Unity.")
     @telemetry_tool("manage_asset")
     async def manage_asset(
         ctx: Context,

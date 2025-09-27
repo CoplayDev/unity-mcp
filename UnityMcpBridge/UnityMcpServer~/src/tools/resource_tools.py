@@ -136,7 +136,7 @@ def _resolve_safe_path_from_uri(uri: str, project: Path) -> Path | None:
 def register_resource_tools(mcp: FastMCP) -> None:
     """Registers list_resources and read_resource wrapper tools."""
 
-    @mcp.tool(description=("List project URIs (unity://path/...) under a folder (default: Assets). Only .cs files are returned by default; always appends unity://spec/script-edits.\n"))
+    @mcp.tool(name="list_resources", description=("List project URIs (unity://path/...) under a folder (default: Assets). Only .cs files are returned by default; always appends unity://spec/script-edits.\n"))
     @telemetry_tool("list_resources")
     async def list_resources(
         ctx: Context,
@@ -188,7 +188,7 @@ def register_resource_tools(mcp: FastMCP) -> None:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    @mcp.tool(description=("Reads a resource by unity://path/... URI with optional slicing."))
+    @mcp.tool(name="read_resource", description=("Reads a resource by unity://path/... URI with optional slicing."))
     @telemetry_tool("read_resource")
     async def read_resource(
         ctx: Context,
@@ -347,7 +347,7 @@ def register_resource_tools(mcp: FastMCP) -> None:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    @mcp.tool(description="Searches a file with a regex pattern and returns line numbers and excerpts.")
+    @mcp.tool(name="find_in_file", description="Searches a file with a regex pattern and returns line numbers and excerpts.")
     @telemetry_tool("find_in_file")
     async def find_in_file(
         ctx: Context,

@@ -10,7 +10,7 @@ from unity_connection import send_command_with_retry
 def register_manage_shader_tools(mcp: FastMCP):
     """Register all shader script management tools with the MCP server."""
 
-    @mcp.tool(description="Manages shader scripts in Unity (create, read, update, delete).")
+    @mcp.tool(name="manage_shader", description="Manages shader scripts in Unity (create, read, update, delete).")
     @telemetry_tool("manage_shader")
     def manage_shader(
         ctx: Context,

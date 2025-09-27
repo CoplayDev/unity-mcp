@@ -9,7 +9,7 @@ from unity_connection import send_command_with_retry
 def register_manage_scene_tools(mcp: FastMCP):
     """Register all scene management tools with the MCP server."""
 
-    @mcp.tool(description="Manage Unity scenes")
+    @mcp.tool(name="manage_scene", description="Manage Unity scenes")
     @telemetry_tool("manage_scene")
     def manage_scene(
         ctx: Context,

@@ -73,7 +73,7 @@ def register_manage_script_tools(mcp: FastMCP):
         directory = os.path.dirname(effective_path)
         return name, directory
 
-    @mcp.tool(description=(
+    @mcp.tool(name="apply_text_edits", description=(
         "Apply small text edits to a C# script identified by URI.\n\n"
         "IMPORTANT: This tool replaces EXACT character positions. Always verify content at target lines/columns BEFORE editing!\n"
         "RECOMMENDED WORKFLOW:\n"
@@ -364,7 +364,7 @@ def register_manage_script_tools(mcp: FastMCP):
             return resp
         return {"success": False, "message": str(resp)}
 
-    @mcp.tool(description=("Create a new C# script at the given project path."))
+    @mcp.tool(name="create_script", description=("Create a new C# script at the given project path."))
     @telemetry_tool("create_script")
     def create_script(
         ctx: Context,
@@ -401,7 +401,7 @@ def register_manage_script_tools(mcp: FastMCP):
         resp = send_command_with_retry("manage_script", params)
         return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}
 
-    @mcp.tool(description=("Delete a C# script by URI or Assets-relative path."))
+    @mcp.tool(name="delete_script", description=("Delete a C# script by URI or Assets-relative path."))
     @telemetry_tool("delete_script")
     def delete_script(
         ctx: Context,
@@ -415,7 +415,7 @@ def register_manage_script_tools(mcp: FastMCP):
         resp = send_command_with_retry("manage_script", params)
         return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}
 
-    @mcp.tool(description=("Validate a C# script and return diagnostics."))
+    @mcp.tool(name="validate_script", description=("Validate a C# script and return diagnostics."))
     @telemetry_tool("validate_script")
     def validate_script(
         ctx: Context,
@@ -448,7 +448,7 @@ def register_manage_script_tools(mcp: FastMCP):
             return {"success": True, "data": {"warnings": warnings, "errors": errors}}
         return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}
 
-    @mcp.tool(description=("Compatibility router for legacy script operations. Prefer apply_text_edits (ranges) or script_apply_edits (structured) for edits."))
+    @mcp.tool(name="manage_script", description=("Compatibility router for legacy script operations. Prefer apply_text_edits (ranges) or script_apply_edits (structured) for edits."))
     @telemetry_tool("manage_script")
     def manage_script(
         ctx: Context,
@@ -569,7 +569,7 @@ def register_manage_script_tools(mcp: FastMCP):
                 "message": f"Python error managing script: {str(e)}",
             }
 
-    @mcp.tool(description=(
+    @mcp.tool(name="manage_script_capabilities", description=(
         "Get manage_script capabilities (supported ops, limits, and guards).\n\n"
         "Returns:\n- ops: list of supported structured ops\n- text_ops: list of supported text ops\n- max_edit_payload_bytes: server edit payload cap\n- guards: header/using guard enabled flag\n"
     ))
@@ -596,7 +596,7 @@ def register_manage_script_tools(mcp: FastMCP):
         except Exception as e:
             return {"success": False, "error": f"capabilities error: {e}"}
 
-    @mcp.tool(description="Get SHA256 and basic metadata for a Unity C# script without returning file contents")
+    @mcp.tool(name="get_sha", description="Get SHA256 and basic metadata for a Unity C# script without returning file contents")
     @telemetry_tool("get_sha")
     def get_sha(
         ctx: Context,

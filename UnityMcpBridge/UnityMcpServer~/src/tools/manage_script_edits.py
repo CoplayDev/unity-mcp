@@ -307,7 +307,7 @@ def _err(code: str, message: str, *, expected: Dict[str, Any] | None = None, rew
 
 
 def register_manage_script_edits_tools(mcp: FastMCP):
-    @mcp.tool(description=(
+    @mcp.tool(name="script_apply_edits", description=(
         "Structured C# edits (methods/classes) with safer boundaries — prefer this over raw text.\n\n"
         "Best practices:\n"
         "- Prefer anchor_* ops for pattern-based insert/replace near stable markers\n"

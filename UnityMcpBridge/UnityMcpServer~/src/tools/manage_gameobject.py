@@ -9,7 +9,7 @@ from unity_connection import send_command_with_retry
 def register_manage_gameobject_tools(mcp: FastMCP):
     """Register all GameObject management tools with the MCP server."""
 
-    @mcp.tool(description="Manage GameObjects. Note: for 'get_components', the `data` field contains a dictionary of component names and their serialized properties.")
+    @mcp.tool(name="manage_gameobject", description="Manage GameObjects. Note: for 'get_components', the `data` field contains a dictionary of component names and their serialized properties.")
     @telemetry_tool("manage_gameobject")
     def manage_gameobject(
         ctx: Context,
