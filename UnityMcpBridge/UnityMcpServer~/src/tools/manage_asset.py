@@ -6,7 +6,7 @@ from typing import Annotated, Any, Literal
 
 from mcp.server.fastmcp import FastMCP, Context
 
-from unity_connection import get_unity_connection, async_send_command_with_retry
+from unity_connection import async_send_command_with_retry
 from telemetry_decorator import telemetry_tool
 
 
