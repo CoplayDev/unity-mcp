@@ -1,6 +1,6 @@
 import base64
 import re
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP, Context
 from telemetry_decorator import telemetry_tool
@@ -8,7 +8,7 @@ from telemetry_decorator import telemetry_tool
 from unity_connection import send_command_with_retry
 
 
-def _apply_edits_locally(original_text: str, edits: List[Dict[str, Any]]) -> str:
+def _apply_edits_locally(original_text: str, edits: list[dict[str, Any]]) -> str:
     text = original_text
     for edit in edits or []:
         op = (
@@ -217,7 +217,7 @@ def _extract_code_after(keyword: str, request: str) -> str:
 # Removed _is_structurally_balanced - validation now handled by C# side using Unity's compiler services
 
 
-def _normalize_script_locator(name: str, path: str) -> Tuple[str, str]:
+def _normalize_script_locator(name: str, path: str) -> tuple[str, str]:
     """Best-effort normalization of script "name" and "path".
 
     Accepts any of:
@@ -274,7 +274,7 @@ def _normalize_script_locator(name: str, path: str) -> Tuple[str, str]:
     return base_name, (p or "Assets")
 
 
-def _with_norm(resp: Dict[str, Any] | Any, edits: List[Dict[str, Any]], routing: str | None = None) -> Dict[str, Any] | Any:
+def _with_norm(resp: dict[str, Any] | Any, edits: list[dict[str, Any]], routing: str | None = None) -> dict[str, Any] | Any:
     if not isinstance(resp, dict):
         return resp
     data = resp.setdefault("data", {})
@@ -284,11 +284,11 @@ def _with_norm(resp: Dict[str, Any] | Any, edits: List[Dict[str, Any]], routing:
     return resp
 
 
-def _err(code: str, message: str, *, expected: Dict[str, Any] | None = None, rewrite: Dict[str, Any] | None = None,
-         normalized: List[Dict[str, Any]] | None = None, routing: str | None = None, extra: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {"success": False,
+def _err(code: str, message: str, *, expected: dict[str, Any] | None = None, rewrite: dict[str, Any] | None = None,
+         normalized: list[dict[str, Any]] | None = None, routing: str | None = None, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload: dict[str, Any] = {"success": False,
                                "code": code, "message": message}
-    data: Dict[str, Any] = {}
+    data: dict[str, Any] = {}
     if expected:
         data["expected"] = expected
     if rewrite:
@@ -308,64 +308,64 @@ def _err(code: str, message: str, *, expected: Dict[str, Any] | None = None, rew
 
 def register_manage_script_edits_tools(mcp: FastMCP):
     @mcp.tool(name="script_apply_edits", description=(
-        "Structured C# edits (methods/classes) with safer boundaries — prefer this over raw text.\n\n"
-        "Best practices:\n"
-        "- Prefer anchor_* ops for pattern-based insert/replace near stable markers\n"
-        "- Use replace_method/delete_method for whole-method changes (keeps signatures balanced)\n"
-        "- Avoid whole-file regex deletes; validators will guard unbalanced braces\n"
-        "- For tail insertions, prefer anchor/regex_replace on final brace (class closing)\n"
-        "- Pass options.validate='standard' for structural checks; 'relaxed' for interior-only edits\n\n"
-        "Canonical fields (use these exact keys):\n"
-        "- op: replace_method | insert_method | delete_method | anchor_insert | anchor_delete | anchor_replace\n"
-        "- className: string (defaults to 'name' if omitted on method/class ops)\n"
-        "- methodName: string (required for replace_method, delete_method)\n"
-        "- replacement: string (required for replace_method, insert_method)\n"
-        "- position: start | end | after | before (insert_method only)\n"
-        "- afterMethodName / beforeMethodName: string (required when position='after'/'before')\n"
-        "- anchor: regex string (for anchor_* ops)\n"
-        "- text: string (for anchor_insert/anchor_replace)\n\n"
-        "Do NOT use: new_method, anchor_method, content, newText (aliases accepted but normalized).\n\n"
-        "Examples:\n"
-        "1) Replace a method:\n"
-        "{\n"
-        "  \"name\": \"SmartReach\",\n"
-        "  \"path\": \"Assets/Scripts/Interaction\",\n"
-        "  \"edits\": [\n"
-        "    {\n"
-        "      \"op\": \"replace_method\",\n"
-        "      \"className\": \"SmartReach\",\n"
-        "      \"methodName\": \"HasTarget\",\n"
-        "      \"replacement\": \"public bool HasTarget(){ return currentTarget!=null; }\"\n"
-        "    }\n"
-        "  ],\n"
-        "  \"options\": {\"validate\": \"standard\", \"refresh\": \"immediate\"}\n"
-        "}\n\n"
-        "2) Insert a method after another:\n"
-        "{\n"
-        "  \"name\": \"SmartReach\",\n"
-        "  \"path\": \"Assets/Scripts/Interaction\",\n"
-        "  \"edits\": [\n"
-        "    {\n"
-        "      \"op\": \"insert_method\",\n"
-        "      \"className\": \"SmartReach\",\n"
-        "      \"replacement\": \"public void PrintSeries(){ Debug.Log(seriesName); }\",\n"
-        "      \"position\": \"after\",\n"
-        "      \"afterMethodName\": \"GetCurrentTarget\"\n"
-        "    }\n"
-        "  ]\n"
-        "}\n\n"
-        "Note: 'options' must be an object/dict, not a string. Use proper JSON syntax.\n"
+        """Structured C# edits (methods/classes) with safer boundaries — prefer this over raw text.
+        Best practices:
+        - Prefer anchor_* ops for pattern-based insert/replace near stable markers
+        - Use replace_method/delete_method for whole-method changes (keeps signatures balanced)
+        - Avoid whole-file regex deletes; validators will guard unbalanced braces
+        - For tail insertions, prefer anchor/regex_replace on final brace (class closing)
+        - Pass options.validate='standard' for structural checks; 'relaxed' for interior-only edits
+        Canonical fields (use these exact keys):
+        - op: replace_method | insert_method | delete_method | anchor_insert | anchor_delete | anchor_replace
+        - className: string (defaults to 'name' if omitted on method/class ops)
+        - methodName: string (required for replace_method, delete_method)
+        - replacement: string (required for replace_method, insert_method)
+        - position: start | end | after | before (insert_method only)
+        - afterMethodName / beforeMethodName: string (required when position='after'/'before')
+        - anchor: regex string (for anchor_* ops)
+        - text: string (for anchor_insert/anchor_replace)
+        Do NOT use: new_method, anchor_method, content, newText (aliases accepted but normalized).
+        Examples:
+        1) Replace a method:
+        {
+          "name": "SmartReach",
+          "path": "Assets/Scripts/Interaction",
+          "edits": [
+          {
+            "op": "replace_method",
+            "className": "SmartReach",
+            "methodName": "HasTarget",
+            "replacement": "public bool HasTarget(){ return currentTarget!=null; }"
+          }
+        ],
+        "options": {"validate": "standard", "refresh": "immediate"}
+        }
+        "2) Insert a method after another:
+        {
+          "name": "SmartReach",
+          "path": "Assets/Scripts/Interaction",
+          "edits": [
+          {
+            "op": "insert_method",
+            "className": "SmartReach",
+            "replacement": "public void PrintSeries(){ Debug.Log(seriesName); }",
+            "position": "after",
+            "afterMethodName": "GetCurrentTarget"
+          }
+        ],
+        }
+      ]"""
     ))
     @telemetry_tool("script_apply_edits")
     def script_apply_edits(
         ctx: Context,
         name: str,
         path: str,
-        edits: List[Dict[str, Any]],
-        options: Optional[Dict[str, Any]] = None,
+        edits: list[dict[str, Any]],
+        options: dict[str, Any] | None = None,
         script_type: str = "MonoBehaviour",
         namespace: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         ctx.info(f"Processing script_apply_edits: {name}")
         # Normalize locator first so downstream calls target the correct script file.
         name, path = _normalize_script_locator(name, path)
@@ -373,7 +373,7 @@ def register_manage_script_edits_tools(mcp: FastMCP):
         # No NL path: clients must provide structured edits in 'edits'.
 
         # Normalize unsupported or aliased ops to known structured/text paths
-        def _unwrap_and_alias(edit: Dict[str, Any]) -> Dict[str, Any]:
+        def _unwrap_and_alias(edit: dict[str, Any]) -> dict[str, Any]:
             # Unwrap single-key wrappers like {"replace_method": {...}}
             for wrapper_key in (
                 "replace_method", "insert_method", "delete_method",
@@ -463,7 +463,7 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                     e["text"] = edit.get("newText", "")
             return e
 
-        normalized_edits: List[Dict[str, Any]] = []
+        normalized_edits: list[dict[str, Any]] = []
         for raw in edits or []:
             e = _unwrap_and_alias(raw)
             op = (e.get("op") or e.get("operation") or e.get(
@@ -499,7 +499,7 @@ def register_manage_script_edits_tools(mcp: FastMCP):
         normalized_for_echo = edits
 
         # Validate required fields and produce machine-parsable hints
-        def error_with_hint(message: str, expected: Dict[str, Any], suggestion: Dict[str, Any]) -> Dict[str, Any]:
+        def error_with_hint(message: str, expected: dict[str, Any], suggestion: dict[str, Any]) -> dict[str, Any]:
             return _err("missing_field", message, expected=expected, rewrite=suggestion, normalized=normalized_for_echo)
 
         for e in edits or []:
@@ -578,7 +578,7 @@ def register_manage_script_edits_tools(mcp: FastMCP):
             opts2 = dict(options or {})
             # For structured edits, prefer immediate refresh to avoid missed reloads when Editor is unfocused
             opts2.setdefault("refresh", "immediate")
-            params_struct: Dict[str, Any] = {
+            params_struct: dict[str, Any] = {
                 "action": "edit",
                 "name": name,
                 "path": path,
@@ -625,14 +625,14 @@ def register_manage_script_edits_tools(mcp: FastMCP):
             try:
                 base_text = contents
 
-                def line_col_from_index(idx: int) -> Tuple[int, int]:
+                def line_col_from_index(idx: int) -> tuple[int, int]:
                     line = base_text.count("\n", 0, idx) + 1
                     last_nl = base_text.rfind("\n", 0, idx)
                     col = (idx - (last_nl + 1)) + \
                         1 if last_nl >= 0 else idx + 1
                     return line, col
 
-                at_edits: List[Dict[str, Any]] = []
+                at_edits: list[dict[str, Any]] = []
                 import re as _re
                 for e in text_edits:
                     opx = (e.get("op") or e.get("operation") or e.get(
@@ -715,7 +715,7 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                 import hashlib
                 sha = hashlib.sha256(base_text.encode("utf-8")).hexdigest()
                 if at_edits:
-                    params_text: Dict[str, Any] = {
+                    params_text: dict[str, Any] = {
                         "action": "apply_text_edits",
                         "name": name,
                         "path": path,
@@ -737,7 +737,7 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                 opts2 = dict(options or {})
                 # Prefer debounced background refresh unless explicitly overridden
                 opts2.setdefault("refresh", "debounced")
-                params_struct: Dict[str, Any] = {
+                params_struct: dict[str, Any] = {
                     "action": "edit",
                     "name": name,
                     "path": path,
@@ -766,7 +766,7 @@ def register_manage_script_edits_tools(mcp: FastMCP):
             try:
                 base_text = contents
 
-                def line_col_from_index(idx: int) -> Tuple[int, int]:
+                def line_col_from_index(idx: int) -> tuple[int, int]:
                     # 1-based line/col against base buffer
                     line = base_text.count("\n", 0, idx) + 1
                     last_nl = base_text.rfind("\n", 0, idx)
@@ -774,7 +774,7 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                         1 if last_nl >= 0 else idx + 1
                     return line, col
 
-                at_edits: List[Dict[str, Any]] = []
+                at_edits: list[dict[str, Any]] = []
                 import re as _re
                 for e in edits or []:
                     op = (e.get("op") or e.get("operation") or e.get(
@@ -863,7 +863,7 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                 # Send to Unity with precondition SHA to enforce guards and immediate refresh
                 import hashlib
                 sha = hashlib.sha256(base_text.encode("utf-8")).hexdigest()
-                params: Dict[str, Any] = {
+                params: dict[str, Any] = {
                     "action": "apply_text_edits",
                     "name": name,
                     "path": path,
@@ -971,5 +971,3 @@ def register_manage_script_edits_tools(mcp: FastMCP):
             normalized_for_echo,
             routing="text",
         )
-
-    # safe_script_edit removed to simplify API; clients should call script_apply_edits directly
