@@ -513,8 +513,12 @@ def register_manage_script_tools(mcp: FastMCP):
             }
 
     @mcp.tool(name="manage_script_capabilities", description=(
-        "Get manage_script capabilities (supported ops, limits, and guards).\n\n"
-        "Returns:\n- ops: list of supported structured ops\n- text_ops: list of supported text ops\n- max_edit_payload_bytes: server edit payload cap\n- guards: header/using guard enabled flag\n"
+        """Get manage_script capabilities (supported ops, limits, and guards).
+        Returns:
+            - ops: list of supported structured ops
+            - text_ops: list of supported text ops
+            - max_edit_payload_bytes: server edit payload cap
+            - guards: header/using guard enabled flag"""
     ))
     @telemetry_tool("manage_script_capabilities")
     def manage_script_capabilities(ctx: Context) -> dict[str, Any]:
