@@ -97,8 +97,6 @@ def register_manage_asset_tools(mcp: FastMCP):
 
         # Get the current asyncio event loop
         loop = asyncio.get_running_loop()
-        # Get the Unity connection instance
-        connection = get_unity_connection()
 
         # Use centralized async retry helper to avoid blocking the event loop
         result = await async_send_command_with_retry("manage_asset", params_dict, loop=loop)
