@@ -1,5 +1,5 @@
 import base64
-from typing import Dict, Any
+from typing import Annotated, Any, Literal
 
 from mcp.server.fastmcp import FastMCP, Context
 from telemetry_decorator import telemetry_tool
@@ -10,26 +10,16 @@ from unity_connection import send_command_with_retry
 def register_manage_shader_tools(mcp: FastMCP):
     """Register all shader script management tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(description="Manages shader scripts in Unity (create, read, update, delete).")
     @telemetry_tool("manage_shader")
     def manage_shader(
         ctx: Context,
-        action: str,
-        name: str,
-        path: str,
-        contents: str,
-    ) -> Dict[str, Any]:
-        """Manages shader scripts in Unity (create, read, update, delete).
-
-        Args:
-            action: Operation ('create', 'read', 'update', 'delete').
-            name: Shader name (no .cs extension).
-            path: Asset path (default: "Assets/").
-            contents: Shader code for 'create'/'update'.
-
-        Returns:
-            Dictionary with results ('success', 'message', 'data').
-        """
+        action: Annotated[Literal['create', 'read', 'update', 'delete'], "Operation"],
+        name: Annotated[str, "Shader name (no .cs extension)"],
+        path: Annotated[str, "Asset path (default: \"Assets/\")"],
+        contents: Annotated[str,
+                            "Shader code for 'create'/'update'"] | None = None,
+    ) -> dict[str, Any]:
         try:
             # Prepare parameters for Unity
             params = {
