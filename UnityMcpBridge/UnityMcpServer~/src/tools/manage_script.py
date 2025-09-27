@@ -92,12 +92,12 @@ def register_manage_script_tools(mcp: FastMCP):
         ctx: Context,
         uri: Annotated[str, "URI of the script to edit under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
         edits: Annotated[list[dict[str, Any]], "List of edits to apply to the script, i.e. a list of {startLine,startCol,endLine,endCol,newText} (1-indexed!)"],
-        precondition_sha256: Annotated[str | None,
-                                       "Optional SHA256 of the script to edit, used to prevent concurrent edits"] = None,
-        strict: Annotated[bool | None,
-                          "Optional strict flag, used to enforce strict mode"] = None,
-        options: Annotated[dict[str, Any] | None,
-                           "Optional options, used to pass additional options to the script editor"] = None,
+        precondition_sha256: Annotated[str,
+                                       "Optional SHA256 of the script to edit, used to prevent concurrent edits"] | None = None,
+        strict: Annotated[bool,
+                          "Optional strict flag, used to enforce strict mode"] | None = None,
+        options: Annotated[dict[str, Any],
+                           "Optional options, used to pass additional options to the script editor"] | None = None,
     ) -> dict[str, Any]:
         ctx.info(f"Processing apply_text_edits: {uri}")
         name, directory = _split_uri(uri)
@@ -370,8 +370,8 @@ def register_manage_script_tools(mcp: FastMCP):
         ctx: Context,
         path: Annotated[str, "Path under Assets/ to create the script at, e.g., 'Assets/Scripts/My.cs'"],
         contents: Annotated[str, "Contents of the script to create. Note, this is Base64 encoded over transport."],
-        script_type: Annotated[str | None, "Script type (e.g., 'C#')"] = None,
-        namespace: Annotated[str | None, "Namespace for the script"] = None,
+        script_type: Annotated[str, "Script type (e.g., 'C#')"] | None = None,
+        namespace: Annotated[str, "Namespace for the script"] | None = None,
     ) -> dict[str, Any]:
         ctx.info(f"Processing create_script: {path}")
         name = os.path.splitext(os.path.basename(path))[0]
@@ -460,10 +460,9 @@ def register_manage_script_tools(mcp: FastMCP):
         path: Annotated[str, "Asset path (default: 'Assets/')", "Path under Assets/ to create the script at, e.g., 'Assets/Scripts/My.cs'"],
         contents: Annotated[str, "Contents of the script to create",
                             "C# code for 'create'/'update'"] | None = None,
-        script_type: Annotated[str | None,
-                               "Script type (e.g., 'C#')", "Type hint (e.g., 'MonoBehaviour')"] | None = None,
-        namespace: Annotated[str | None, "Namespace for the script",
-                             "Script namespace"] | None = None,
+        script_type: Annotated[str, "Script type (e.g., 'C#')",
+                               "Type hint (e.g., 'MonoBehaviour')"] | None = None,
+        namespace: Annotated[str, "Namespace for the script"] | None = None,
     ) -> dict[str, Any]:
         ctx.info(f"Processing manage_script: {action}")
         try:

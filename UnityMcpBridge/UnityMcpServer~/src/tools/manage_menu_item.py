@@ -18,12 +18,12 @@ def register_manage_menu_item_tools(mcp: FastMCP):
     async def manage_menu_item(
         ctx: Context,
         action: Annotated[Literal["execute", "list", "exists"], "Operations"],
-        menu_path: Annotated[str | None,
-                             "Menu path for 'execute' or 'exists' (e.g., 'File/Save Project')"] = None,
-        search: Annotated[str | None,
-                          "Optional filter string for 'list' (e.g., 'Save')"] = None,
-        refresh: Annotated[bool | None,
-                           "Optional flag to force refresh of the menu cache when listing"] = None,
+        menu_path: Annotated[str,
+                             "Menu path for 'execute' or 'exists' (e.g., 'File/Save Project')"] | None = None,
+        search: Annotated[str,
+                          "Optional filter string for 'list' (e.g., 'Save')"] | None = None,
+        refresh: Annotated[bool,
+                           "Optional flag to force refresh of the menu cache when listing"] | None = None,
     ) -> dict[str, Any]:
         ctx.info(f"Processing manage_menu_item: {action}")
         # Prepare parameters for the C# handler

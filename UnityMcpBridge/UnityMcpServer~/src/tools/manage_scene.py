@@ -18,7 +18,7 @@ def register_manage_scene_tools(mcp: FastMCP):
                         "Scene name. Not required get_active/get_build_settings"] | None = None,
         path: Annotated[str,
                         "Asset path for scene operations (default: 'Assets/')"] | None = None,
-        build_index: Annotated[int | None,
+        build_index: Annotated[int,
                                "Build index for load/build settings actions"] | None = None,
     ) -> dict[str, Any]:
         ctx.info(f"Processing manage_scene: {action}")
