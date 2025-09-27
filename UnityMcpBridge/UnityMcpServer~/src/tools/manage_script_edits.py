@@ -1,6 +1,7 @@
 import base64
+import hashlib
 import re
-from typing import Any
+from typing import Annotated, Any
 
 from mcp.server.fastmcp import FastMCP, Context
 from telemetry_decorator import telemetry_tool
@@ -110,7 +111,6 @@ def _find_best_anchor_match(pattern: str, text: str, flags: int, prefer_last: bo
     Returns:
         Match object of the best match, or None if no match found
     """
-    import re
 
     # Find all matches
     matches = list(re.finditer(pattern, text, flags))
@@ -324,7 +324,6 @@ def register_manage_script_edits_tools(mcp: FastMCP):
         - afterMethodName / beforeMethodName: string (required when position='after'/'before')
         - anchor: regex string (for anchor_* ops)
         - text: string (for anchor_insert/anchor_replace)
-        Do NOT use: new_method, anchor_method, content, newText (aliases accepted but normalized).
         Examples:
         1) Replace a method:
         {
@@ -359,20 +358,21 @@ def register_manage_script_edits_tools(mcp: FastMCP):
     @telemetry_tool("script_apply_edits")
     def script_apply_edits(
         ctx: Context,
-        name: str,
-        path: str,
-        edits: list[dict[str, Any]],
-        options: dict[str, Any] | None = None,
-        script_type: str = "MonoBehaviour",
-        namespace: str = "",
+        name: Annotated[str, "Name of the script to edit"],
+        path: Annotated[str, "Path to the script to edit under Assets/ directory"],
+        edits: Annotated[list[dict[str, Any]], "List of edits to apply to the script"],
+        options: Annotated[dict[str, Any],
+                           "Options for the script edit"] | None = None,
+        script_type: Annotated[str,
+                               "Type of the script to edit"] = "MonoBehaviour",
+        namespace: Annotated[str,
+                             "Namespace of the script to edit"] | None = None,
     ) -> dict[str, Any]:
         ctx.info(f"Processing script_apply_edits: {name}")
         # Normalize locator first so downstream calls target the correct script file.
         name, path = _normalize_script_locator(name, path)
-
-        # No NL path: clients must provide structured edits in 'edits'.
-
         # Normalize unsupported or aliased ops to known structured/text paths
+
         def _unwrap_and_alias(edit: dict[str, Any]) -> dict[str, Any]:
             # Unwrap single-key wrappers like {"replace_method": {...}}
             for wrapper_key in (
@@ -633,7 +633,6 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                     return line, col
 
                 at_edits: list[dict[str, Any]] = []
-                import re as _re
                 for e in text_edits:
                     opx = (e.get("op") or e.get("operation") or e.get(
                         "type") or e.get("mode") or "").strip().lower()
@@ -642,8 +641,8 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                     if opx == "anchor_insert":
                         anchor = e.get("anchor") or ""
                         position = (e.get("position") or "after").lower()
-                        flags = _re.MULTILINE | (
-                            _re.IGNORECASE if e.get("ignore_case") else 0)
+                        flags = re.MULTILINE | (
+                            re.IGNORECASE if e.get("ignore_case") else 0)
                         try:
                             # Use improved anchor matching logic
                             m = _find_best_anchor_match(
@@ -677,8 +676,8 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                     elif opx == "regex_replace":
                         pattern = e.get("pattern") or ""
                         try:
-                            regex_obj = _re.compile(pattern, _re.MULTILINE | (
-                                _re.IGNORECASE if e.get("ignore_case") else 0))
+                            regex_obj = re.compile(pattern, re.MULTILINE | (
+                                re.IGNORECASE if e.get("ignore_case") else 0))
                         except Exception as ex:
                             return _with_norm(_err("bad_regex", f"Invalid regex pattern: {ex}", normalized=normalized_for_echo, routing="mixed/text-first", extra={"hint": "Escape special chars or prefer structured delete for methods."}), normalized_for_echo, routing="mixed/text-first")
                         m = regex_obj.search(base_text)
@@ -687,7 +686,7 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                         # Expand $1, $2... in replacement using this match
 
                         def _expand_dollars(rep: str, _m=m) -> str:
-                            return _re.sub(r"\$(\d+)", lambda g: _m.group(int(g.group(1))) or "", rep)
+                            return re.sub(r"\$(\d+)", lambda g: _m.group(int(g.group(1))) or "", rep)
                         repl = _expand_dollars(text_field)
                         sl, sc = line_col_from_index(m.start())
                         el, ec = line_col_from_index(m.end())
@@ -712,7 +711,6 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                     else:
                         return _with_norm(_err("unknown_op", f"Unsupported text edit op: {opx}", normalized=normalized_for_echo, routing="mixed/text-first"), normalized_for_echo, routing="mixed/text-first")
 
-                import hashlib
                 sha = hashlib.sha256(base_text.encode("utf-8")).hexdigest()
                 if at_edits:
                     params_text: dict[str, Any] = {
@@ -787,8 +785,8 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                         position = (e.get("position") or "after").lower()
                         # Use improved anchor matching logic with helpful errors, honoring ignore_case
                         try:
-                            flags = _re.MULTILINE | (
-                                _re.IGNORECASE if e.get("ignore_case") else 0)
+                            flags = re.MULTILINE | (
+                                re.IGNORECASE if e.get("ignore_case") else 0)
                             m = _find_best_anchor_match(
                                 anchor, base_text, flags, prefer_last=True)
                         except Exception as ex:
@@ -826,11 +824,11 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                     elif op == "regex_replace":
                         pattern = e.get("pattern") or ""
                         repl = text_field
-                        flags = _re.MULTILINE | (
-                            _re.IGNORECASE if e.get("ignore_case") else 0)
+                        flags = re.MULTILINE | (
+                            re.IGNORECASE if e.get("ignore_case") else 0)
                         # Early compile for clearer error messages
                         try:
-                            regex_obj = _re.compile(pattern, flags)
+                            regex_obj = re.compile(pattern, flags)
                         except Exception as ex:
                             return _with_norm(_err("bad_regex", f"Invalid regex pattern: {ex}", normalized=normalized_for_echo, routing="text", extra={"hint": "Escape special chars or prefer structured delete for methods."}), normalized_for_echo, routing="text")
                         # Use smart anchor matching for consistent behavior with anchor_insert
@@ -841,7 +839,7 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                         # Expand $1, $2... backrefs in replacement using the first match (consistent with mixed-path behavior)
 
                         def _expand_dollars(rep: str, _m=m) -> str:
-                            return _re.sub(r"\$(\d+)", lambda g: _m.group(int(g.group(1))) or "", rep)
+                            return re.sub(r"\$(\d+)", lambda g: _m.group(int(g.group(1))) or "", rep)
                         repl_expanded = _expand_dollars(repl)
                         # Let C# side handle validation using Unity's built-in compiler services
                         sl, sc = line_col_from_index(m.start())
@@ -860,8 +858,6 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                 if not at_edits:
                     return _with_norm({"success": False, "code": "no_spans", "message": "No applicable text edit spans computed (anchor not found or zero-length)."}, normalized_for_echo, routing="text")
 
-                # Send to Unity with precondition SHA to enforce guards and immediate refresh
-                import hashlib
                 sha = hashlib.sha256(base_text.encode("utf-8")).hexdigest()
                 params: dict[str, Any] = {
                     "action": "apply_text_edits",
@@ -936,7 +932,6 @@ def register_manage_script_edits_tools(mcp: FastMCP):
         options.setdefault("validate", "standard")
         options.setdefault("refresh", "debounced")
 
-        import hashlib
         # Compute the SHA of the current file contents for the precondition
         old_lines = contents.splitlines(keepends=True)
         end_line = len(old_lines) + 1  # 1-based exclusive end
