@@ -1,6 +1,6 @@
 import base64
 import os
-from typing import Dict, Any, List
+from typing import Annotated, Any, Literal
 from urllib.parse import urlparse, unquote
 
 from mcp.server.fastmcp import FastMCP, Context
@@ -75,34 +75,30 @@ def register_manage_script_tools(mcp: FastMCP):
 
     @mcp.tool(description=(
         "Apply small text edits to a C# script identified by URI.\n\n"
-        "⚠️ IMPORTANT: This tool replaces EXACT character positions. Always verify content at target lines/columns BEFORE editing!\n"
-        "Common mistakes:\n"
-        "- Assuming what's on a line without checking\n"
-        "- Using wrong line numbers (they're 1-indexed)\n"
-        "- Miscounting column positions (also 1-indexed, tabs count as 1)\n\n"
+        "IMPORTANT: This tool replaces EXACT character positions. Always verify content at target lines/columns BEFORE editing!\n"
         "RECOMMENDED WORKFLOW:\n"
         "1) First call resources/read with start_line/line_count to verify exact content\n"
         "2) Count columns carefully (or use find_in_file to locate patterns)\n"
         "3) Apply your edit with precise coordinates\n"
         "4) Consider script_apply_edits with anchors for safer pattern-based replacements\n\n"
-        "Args:\n"
-        "- uri: unity://path/Assets/... or file://... or Assets/...\n"
-        "- edits: list of {startLine,startCol,endLine,endCol,newText} (1-indexed!)\n"
-        "- precondition_sha256: optional SHA of current file (prevents concurrent edit conflicts)\n\n"
         "Notes:\n"
-        "- Path must resolve under Assets/\n"
         "- For method/class operations, use script_apply_edits (safer, structured edits)\n"
         "- For pattern-based replacements, consider anchor operations in script_apply_edits\n"
+        "- Lines, columns are 1-indexed\n"
+        "- Tabs count as 1 column\n"
     ))
     @telemetry_tool("apply_text_edits")
     def apply_text_edits(
         ctx: Context,
-        uri: str,
-        edits: List[Dict[str, Any]],
-        precondition_sha256: str | None = None,
-        strict: bool | None = None,
-        options: Dict[str, Any] | None = None,
-    ) -> Dict[str, Any]:
+        uri: Annotated[str, "URI of the script to edit under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
+        edits: Annotated[list[dict[str, Any]], "List of edits to apply to the script, i.e. a list of {startLine,startCol,endLine,endCol,newText} (1-indexed!)"],
+        precondition_sha256: Annotated[str | None,
+                                       "Optional SHA256 of the script to edit, used to prevent concurrent edits"] = None,
+        strict: Annotated[bool | None,
+                          "Optional strict flag, used to enforce strict mode"] = None,
+        options: Annotated[dict[str, Any] | None,
+                           "Optional options, used to pass additional options to the script editor"] = None,
+    ) -> dict[str, Any]:
         """Apply small text edits to a C# script identified by URI."""
         name, directory = _split_uri(uri)
 
@@ -110,14 +106,14 @@ def register_manage_script_tools(mcp: FastMCP):
         # - Accept LSP-style range objects: {range:{start:{line,character}, end:{...}}, newText|text}
         # - Accept index ranges as a 2-int array: {range:[startIndex,endIndex], text}
         # If normalization is required, read current contents to map indices -> 1-based line/col.
-        def _needs_normalization(arr: List[Dict[str, Any]]) -> bool:
+        def _needs_normalization(arr: list[dict[str, Any]]) -> bool:
             for e in arr or []:
                 if ("startLine" not in e) or ("startCol" not in e) or ("endLine" not in e) or ("endCol" not in e) or ("newText" not in e and "text" in e):
                     return True
             return False
 
-        normalized_edits: List[Dict[str, Any]] = []
-        warnings: List[str] = []
+        normalized_edits: list[dict[str, Any]] = []
+        warnings: list[str] = []
         if _needs_normalization(edits):
             # Read file to support index->line/col conversion when needed
             read_resp = send_command_with_retry("manage_script", {
@@ -243,7 +239,7 @@ def register_manage_script_tools(mcp: FastMCP):
                 normalized_edits.append(e2)
 
         # Preflight: detect overlapping ranges among normalized line/col spans
-        def _pos_tuple(e: Dict[str, Any], key_start: bool) -> tuple[int, int]:
+        def _pos_tuple(e: dict[str, Any], key_start: bool) -> tuple[int, int]:
             return (
                 int(e.get("startLine", 1)) if key_start else int(
                     e.get("endLine", 1)),
@@ -286,7 +282,7 @@ def register_manage_script_tools(mcp: FastMCP):
         # preserves existing call-count expectations in clients/tests.
 
         # Default options: for multi-span batches, prefer atomic to avoid mid-apply imbalance
-        opts: Dict[str, Any] = dict(options or {})
+        opts: dict[str, Any] = dict(options or {})
         try:
             if len(normalized_edits) > 1 and "applyMode" not in opts:
                 opts["applyMode"] = "atomic"
@@ -368,20 +364,15 @@ def register_manage_script_tools(mcp: FastMCP):
             return resp
         return {"success": False, "message": str(resp)}
 
-    @mcp.tool(description=(
-        "Create a new C# script at the given project path.\n\n"
-        "Args: path (e.g., 'Assets/Scripts/My.cs'), contents (string), script_type, namespace.\n"
-        "Rules: path must be under Assets/. Contents will be Base64-encoded over transport.\n"
-    ))
+    @mcp.tool(description=("Create a new C# script at the given project path."))
     @telemetry_tool("create_script")
     def create_script(
         ctx: Context,
-        path: str,
-        contents: str = "",
-        script_type: str | None = None,
-        namespace: str | None = None,
-    ) -> Dict[str, Any]:
-        """Create a new C# script at the given path."""
+        path: Annotated[str, "Path under Assets/ to create the script at, e.g., 'Assets/Scripts/My.cs'"],
+        contents: Annotated[str, "Contents of the script to create. Note, this is Base64 encoded over transport."],
+        script_type: Annotated[str | None, "Script type (e.g., 'C#')"] = None,
+        namespace: Annotated[str | None, "Namespace for the script"] = None,
+    ) -> dict[str, Any]:
         name = os.path.splitext(os.path.basename(path))[0]
         directory = os.path.dirname(path)
         # Local validation to avoid round-trips on obviously bad input
@@ -395,7 +386,7 @@ def register_manage_script_tools(mcp: FastMCP):
             return {"success": False, "code": "bad_path", "message": "path must include a script file name."}
         if not norm_path.lower().endswith(".cs"):
             return {"success": False, "code": "bad_extension", "message": "script file must end with .cs."}
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "action": "create",
             "name": name,
             "path": directory,
@@ -410,13 +401,12 @@ def register_manage_script_tools(mcp: FastMCP):
         resp = send_command_with_retry("manage_script", params)
         return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}
 
-    @mcp.tool(description=(
-        "Delete a C# script by URI or Assets-relative path.\n\n"
-        "Args: uri (unity://path/... or file://... or Assets/...).\n"
-        "Rules: Target must resolve under Assets/.\n"
-    ))
+    @mcp.tool(description=("Delete a C# script by URI or Assets-relative path."))
     @telemetry_tool("delete_script")
-    def delete_script(ctx: Context, uri: str) -> Dict[str, Any]:
+    def delete_script(
+        ctx: Context,
+        uri: Annotated[str, "URI of the script to delete under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."]
+    ) -> dict[str, Any]:
         """Delete a C# script by URI."""
         name, directory = _split_uri(uri)
         if not directory or directory.split("/")[0].lower() != "assets":
@@ -425,18 +415,16 @@ def register_manage_script_tools(mcp: FastMCP):
         resp = send_command_with_retry("manage_script", params)
         return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}
 
-    @mcp.tool(description=(
-        "Validate a C# script and return diagnostics.\n\n"
-        "Args: uri, level=('basic'|'standard'), include_diagnostics (bool, optional).\n"
-        "- basic: quick syntax checks.\n"
-        "- standard: deeper checks (performance hints, common pitfalls).\n"
-        "- include_diagnostics: when true, returns full diagnostics and summary; default returns counts only.\n"
-    ))
+    @mcp.tool(description=("Validate a C# script and return diagnostics."))
     @telemetry_tool("validate_script")
     def validate_script(
-        ctx: Context, uri: str, level: str = "basic", include_diagnostics: bool = False
-    ) -> Dict[str, Any]:
-        """Validate a C# script and return diagnostics."""
+        ctx: Context,
+        uri: Annotated[str, "URI of the script to validate under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
+        level: Annotated[Literal['basic', 'standard'],
+                         "Validation level"] = "basic",
+        include_diagnostics: Annotated[bool,
+                                       "Include full diagnostics and summary"] = False
+    ) -> dict[str, Any]:
         name, directory = _split_uri(uri)
         if not directory or directory.split("/")[0].lower() != "assets":
             return {"success": False, "code": "path_outside_assets", "message": "URI must resolve under 'Assets/'."}
@@ -460,39 +448,20 @@ def register_manage_script_tools(mcp: FastMCP):
             return {"success": True, "data": {"warnings": warnings, "errors": errors}}
         return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}
 
-    @mcp.tool(description=(
-        "Compatibility router for legacy script operations.\n\n"
-        "Actions: create|read|delete (update is routed to apply_text_edits with precondition).\n"
-        "Args: name (no .cs), path (Assets/...), contents (for create), script_type, namespace.\n"
-        "Notes: prefer apply_text_edits (ranges) or script_apply_edits (structured) for edits.\n"
-    ))
+    @mcp.tool(description=("Compatibility router for legacy script operations. Prefer apply_text_edits (ranges) or script_apply_edits (structured) for edits."))
     @telemetry_tool("manage_script")
     def manage_script(
         ctx: Context,
-        action: str,
-        name: str,
-        path: str,
-        contents: str = "",
-        script_type: str | None = None,
-        namespace: str | None = None,
-    ) -> Dict[str, Any]:
-        """Compatibility router for legacy script operations.
-
-        IMPORTANT:
-        - Direct file reads should use resources/read.
-        - Edits should use apply_text_edits.
-
-        Args:
-            action: Operation ('create', 'read', 'delete').
-            name: Script name (no .cs extension).
-            path: Asset path (default: "Assets/").
-            contents: C# code for 'create'/'update'.
-            script_type: Type hint (e.g., 'MonoBehaviour').
-            namespace: Script namespace.
-
-        Returns:
-            Dictionary with results ('success', 'message', 'data').
-        """
+        action: Annotated[Literal['create', 'read', 'delete'], "Operation"],
+        name: Annotated[str, "Script name (no .cs extension)", "Name of the script to create"],
+        path: Annotated[str, "Asset path (default: 'Assets/')", "Path under Assets/ to create the script at, e.g., 'Assets/Scripts/My.cs'"],
+        contents: Annotated[str, "Contents of the script to create",
+                            "C# code for 'create'/'update'"] | None = None,
+        script_type: Annotated[str | None,
+                               "Script type (e.g., 'C#')", "Type hint (e.g., 'MonoBehaviour')"] | None = None,
+        namespace: Annotated[str | None, "Namespace for the script",
+                             "Script namespace"] | None = None,
+    ) -> dict[str, Any]:
         try:
             # Graceful migration for legacy 'update': route to apply_text_edits (whole-file replace)
             if action == 'update':
@@ -605,7 +574,7 @@ def register_manage_script_tools(mcp: FastMCP):
         "Returns:\n- ops: list of supported structured ops\n- text_ops: list of supported text ops\n- max_edit_payload_bytes: server edit payload cap\n- guards: header/using guard enabled flag\n"
     ))
     @telemetry_tool("manage_script_capabilities")
-    def manage_script_capabilities(ctx: Context) -> Dict[str, Any]:
+    def manage_script_capabilities(ctx: Context) -> dict[str, Any]:
         try:
             # Keep in sync with server/Editor ManageScript implementation
             ops = [
@@ -627,14 +596,12 @@ def register_manage_script_tools(mcp: FastMCP):
         except Exception as e:
             return {"success": False, "error": f"capabilities error: {e}"}
 
-    @mcp.tool(description=(
-        "Get SHA256 and basic metadata for a Unity C# script without returning file contents.\n\n"
-        "Args: uri (unity://path/Assets/... or file://... or Assets/...).\n"
-        "Returns: {sha256, lengthBytes}."
-    ))
+    @mcp.tool(description="Get SHA256 and basic metadata for a Unity C# script without returning file contents")
     @telemetry_tool("get_sha")
-    def get_sha(ctx: Context, uri: str) -> Dict[str, Any]:
-        """Return SHA256 and basic metadata for a script."""
+    def get_sha(
+        ctx: Context,
+        uri: Annotated[str, "URI of the script to edit under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."]
+    ) -> dict[str, Any]:
         try:
             name, directory = _split_uri(uri)
             params = {"action": "get_sha", "name": name, "path": directory}
