@@ -1,7 +1,7 @@
 """
 Defines the read_console tool for accessing Unity Editor console messages.
 """
-from typing import List, Dict, Any
+from typing import Annotated, Any, Literal
 
 from mcp.server.fastmcp import FastMCP, Context
 from telemetry_decorator import telemetry_tool
@@ -12,19 +12,23 @@ from unity_connection import send_command_with_retry
 def register_read_console_tools(mcp: FastMCP):
     """Registers the read_console tool with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(description="Gets messages from or clears the Unity Editor console.")
     @telemetry_tool("read_console")
     def read_console(
         ctx: Context,
-        action: str = None,
-        types: List[str] = None,
-        count: Any = None,
-        filter_text: str = None,
-        since_timestamp: str = None,
-        format: str = None,
-        include_stacktrace: bool = None
-    ) -> Dict[str, Any]:
-        """Gets messages from or clears the Unity Editor console.
+        action: Annotated[Literal['get', 'clear'], "Operation"],
+        types: Annotated[list[Literal['error', 'warning',
+                                      'log', 'all']], "Message types to get"] | None = None,
+        count: Annotated[int, "Max messages to return"] | None = None,
+        filter_text: Annotated[str, "Text filter for messages"] | None = None,
+        since_timestamp: Annotated[str,
+                                   "Get messages after this timestamp (ISO 8601)"] | None = None,
+        format: Annotated[Literal['plain', 'detailed',
+                                  'json'], "Output format"] | None = None,
+        include_stacktrace: Annotated[bool,
+                                      "Include stack traces in output"] | None = None
+    ) -> dict[str, Any]:
+        """
 
         Args:
             ctx: The MCP context.
