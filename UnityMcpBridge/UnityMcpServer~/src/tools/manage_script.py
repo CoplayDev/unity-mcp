@@ -74,18 +74,18 @@ def register_manage_script_tools(mcp: FastMCP):
         return name, directory
 
     @mcp.tool(name="apply_text_edits", description=(
-        "Apply small text edits to a C# script identified by URI.\n\n"
-        "IMPORTANT: This tool replaces EXACT character positions. Always verify content at target lines/columns BEFORE editing!\n"
-        "RECOMMENDED WORKFLOW:\n"
-        "1) First call resources/read with start_line/line_count to verify exact content\n"
-        "2) Count columns carefully (or use find_in_file to locate patterns)\n"
-        "3) Apply your edit with precise coordinates\n"
-        "4) Consider script_apply_edits with anchors for safer pattern-based replacements\n\n"
-        "Notes:\n"
-        "- For method/class operations, use script_apply_edits (safer, structured edits)\n"
-        "- For pattern-based replacements, consider anchor operations in script_apply_edits\n"
-        "- Lines, columns are 1-indexed\n"
-        "- Tabs count as 1 column\n"
+        """Apply small text edits to a C# script identified by URI.
+        IMPORTANT: This tool replaces EXACT character positions. Always verify content at target lines/columns BEFORE editing!
+        RECOMMENDED WORKFLOW:
+            1. First call resources/read with start_line/line_count to verify exact content
+            2. Count columns carefully (or use find_in_file to locate patterns)
+            3. Apply your edit with precise coordinates
+            4. Consider script_apply_edits with anchors for safer pattern-based replacements
+        Notes:
+            - For method/class operations, use script_apply_edits (safer, structured edits)
+            - For pattern-based replacements, consider anchor operations in script_apply_edits
+            - Lines, columns are 1-indexed
+            - Tabs count as 1 column"""
     ))
     @telemetry_tool("apply_text_edits")
     def apply_text_edits(
