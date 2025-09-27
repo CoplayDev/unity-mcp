@@ -2,7 +2,7 @@
 Defines the manage_asset tool for interacting with Unity assets.
 """
 import asyncio
-from typing import Dict, Any
+from typing import Annotated, Any, Literal
 
 from mcp.server.fastmcp import FastMCP, Context
 
@@ -13,23 +13,29 @@ from telemetry_decorator import telemetry_tool
 def register_manage_asset_tools(mcp: FastMCP):
     """Registers the manage_asset tool with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(description="Performs asset operations (import, create, modify, delete, etc.) in Unity.")
     @telemetry_tool("manage_asset")
     async def manage_asset(
         ctx: Context,
-        action: str,
-        path: str,
-        asset_type: str = None,
-        properties: Dict[str, Any] = None,
-        destination: str = None,
-        generate_preview: bool = False,
-        search_pattern: str = None,
-        filter_type: str = None,
-        filter_date_after: str = None,
-        page_size: Any = None,
-        page_number: Any = None
-    ) -> Dict[str, Any]:
-        """Performs asset operations (import, create, modify, delete, etc.) in Unity.
+        action: Annotated[Literal["import", "create", "modify", "delete", "duplicate", "move", "rename", "search", "get_info", "create_folder", "get_components"], "Operations"],
+        path: Annotated[str, "Asset path (e.g., 'Materials/MyMaterial.mat') or search scope."],
+        asset_type: Annotated[str,
+                              "Asset type (e.g., 'Material', 'Folder') - required for 'create'."] | None = None,
+        properties: Annotated[dict[str, Any],
+                              "Dictionary of properties for 'create'/'modify'."] | None = None,
+        destination: Annotated[str,
+                               "Target path for 'duplicate'/'move'."] | None = None,
+        generate_preview: Annotated[bool,
+                                    "When true, `close_stage` will save the prefab before exiting the stage."] = False,
+        search_pattern: Annotated[str,
+                                  "Search pattern (e.g., '*.prefab')."] | None = None,
+        filter_type: Annotated[str, "Filter type for search"] | None = None,
+        filter_date_after: Annotated[str,
+                                     "Date after which to filter"] | None = None,
+        page_size: Annotated[int, "Page size for pagination"] | None = None,
+        page_number: Annotated[int, "Page number for pagination"] | None = None
+    ) -> dict[str, Any]:
+        """ (import, create, modify, delete, etc.) in Unity.
 
         Args:
             ctx: The MCP context.

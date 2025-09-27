@@ -13,7 +13,7 @@ def register_manage_scene_tools(mcp: FastMCP):
     @telemetry_tool("manage_scene")
     def manage_scene(
         ctx: Context,
-        action: Annotated[Literal["create", "load", "save", "get_hierarchy", "get_active", "get_build_settings"], "Operation"],
+        action: Annotated[Literal["create", "load", "save", "get_hierarchy", "get_active", "get_build_settings"], "Operations"],
         name: Annotated[str, "Scene name (no extension) for create/load/save"],
         path: Annotated[str, "Asset path for scene operations (default: 'Assets/')"],
         build_index: Annotated[int | None,

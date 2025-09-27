@@ -17,7 +17,7 @@ def register_manage_menu_item_tools(mcp: FastMCP):
     @telemetry_tool("manage_menu_item")
     async def manage_menu_item(
         ctx: Context,
-        action: Annotated[Literal["execute", "list", "exists"], "Operation"],
+        action: Annotated[Literal["execute", "list", "exists"], "Operations"],
         menu_path: Annotated[str | None,
                              "Menu path for 'execute' or 'exists' (e.g., 'File/Save Project')"] = None,
         search: Annotated[str | None,

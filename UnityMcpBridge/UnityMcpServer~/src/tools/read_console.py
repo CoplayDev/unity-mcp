@@ -16,7 +16,7 @@ def register_read_console_tools(mcp: FastMCP):
     @telemetry_tool("read_console")
     def read_console(
         ctx: Context,
-        action: Annotated[Literal['get', 'clear'], "Operation"],
+        action: Annotated[Literal['get', 'clear'], "Operations"],
         types: Annotated[list[Literal['error', 'warning',
                                       'log', 'all']], "Message types to get"] | None = None,
         count: Annotated[int, "Max messages to return"] | None = None,
