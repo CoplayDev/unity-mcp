@@ -14,7 +14,7 @@ def register_manage_shader_tools(mcp: FastMCP):
     @telemetry_tool("manage_shader")
     def manage_shader(
         ctx: Context,
-        action: Annotated[Literal['create', 'read', 'update', 'delete'], "Operations"],
+        action: Annotated[Literal['create', 'read', 'update', 'delete'], "Perform CRUD operations on shader scripts."],
         name: Annotated[str, "Shader name (no .cs extension)"],
         path: Annotated[str, "Asset path (default: \"Assets/\")"],
         contents: Annotated[str,

@@ -17,7 +17,7 @@ def register_manage_asset_tools(mcp: FastMCP):
     @telemetry_tool("manage_asset")
     async def manage_asset(
         ctx: Context,
-        action: Annotated[Literal["import", "create", "modify", "delete", "duplicate", "move", "rename", "search", "get_info", "create_folder", "get_components"], "Operations"],
+        action: Annotated[Literal["import", "create", "modify", "delete", "duplicate", "move", "rename", "search", "get_info", "create_folder", "get_components"], "Perform CRUD operations on assets."],
         path: Annotated[str, "Asset path (e.g., 'Materials/MyMaterial.mat') or search scope."],
         asset_type: Annotated[str,
                               "Asset type (e.g., 'Material', 'Folder') - required for 'create'."] | None = None,

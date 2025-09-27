@@ -16,7 +16,7 @@ def register_read_console_tools(mcp: FastMCP):
     @telemetry_tool("read_console")
     def read_console(
         ctx: Context,
-        action: Annotated[Literal['get', 'clear'], "Operations"],
+        action: Annotated[Literal['get', 'clear'], "Get or clear the Unity Editor console."],
         types: Annotated[list[Literal['error', 'warning',
                                       'log', 'all']], "Message types to get"] | None = None,
         count: Annotated[int, "Max messages to return"] | None = None,

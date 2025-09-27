@@ -455,7 +455,7 @@ def register_manage_script_tools(mcp: FastMCP):
     @telemetry_tool("manage_script")
     def manage_script(
         ctx: Context,
-        action: Annotated[Literal['create', 'read', 'delete'], "Operations"],
+        action: Annotated[Literal['create', 'read', 'delete'], "Perform CRUD operations on C# scripts."],
         name: Annotated[str, "Script name (no .cs extension)", "Name of the script to create"],
         path: Annotated[str, "Asset path (default: 'Assets/')", "Path under Assets/ to create the script at, e.g., 'Assets/Scripts/My.cs'"],
         contents: Annotated[str, "Contents of the script to create",

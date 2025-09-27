@@ -18,7 +18,7 @@ def register_manage_prefabs_tools(mcp: FastMCP) -> None:
             "close_stage",
             "save_open_stage",
             "create_from_gameobject",
-        ], "Operations"],
+        ], "Manage prefabs (stage control and creation)."],
         prefab_path: Annotated[str,
                                "Prefab asset path relative to Assets e.g. Assets/Prefabs/favorite.prefab"] | None = None,
         mode: Annotated[str,

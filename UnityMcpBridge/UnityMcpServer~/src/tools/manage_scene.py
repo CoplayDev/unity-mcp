@@ -13,7 +13,7 @@ def register_manage_scene_tools(mcp: FastMCP):
     @telemetry_tool("manage_scene")
     def manage_scene(
         ctx: Context,
-        action: Annotated[Literal["create", "load", "save", "get_hierarchy", "get_active", "get_build_settings"], "Operations"],
+        action: Annotated[Literal["create", "load", "save", "get_hierarchy", "get_active", "get_build_settings"], "Perform CRUD operations on Unity scenes."],
         name: Annotated[str,
                         "Scene name. Not required get_active/get_build_settings"] | None = None,
         path: Annotated[str,

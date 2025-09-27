@@ -15,7 +15,7 @@ def register_manage_editor_tools(mcp: FastMCP):
     def manage_editor(
         ctx: Context,
         action: Annotated[Literal["telemetry_status", "telemetry_ping", "play", "pause", "stop", "get_state", "get_project_root", "get_windows",
-                                  "get_active_tool", "get_selection", "get_prefab_stage", "set_active_tool", "add_tag", "remove_tag", "get_tags", "add_layer", "remove_layer", "get_layers"], "Operations"],
+                                  "get_active_tool", "get_selection", "get_prefab_stage", "set_active_tool", "add_tag", "remove_tag", "get_tags", "add_layer", "remove_layer", "get_layers"], "Get and update the Unity Editor state."],
         wait_for_completion: Annotated[bool,
                                        "Optional. If True, waits for certain actions"] | None = None,
         tool_name: Annotated[str,

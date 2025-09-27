@@ -13,7 +13,7 @@ def register_manage_gameobject_tools(mcp: FastMCP):
     @telemetry_tool("manage_gameobject")
     def manage_gameobject(
         ctx: Context,
-        action: Literal["create", "modify", "delete", "find", "add_component", "remove_component", "set_component_property", "get_components"],
+        action: Annotated[Literal["create", "modify", "delete", "find", "add_component", "remove_component", "set_component_property", "get_components"], "Perform CRUD operations on GameObjects and components."],
         target: Annotated[str,
                           "GameObject identifier by name or path for modify/delete/component actions"] | None = None,
         search_method: Annotated[str,
