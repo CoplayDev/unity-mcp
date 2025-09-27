@@ -14,10 +14,12 @@ def register_manage_scene_tools(mcp: FastMCP):
     def manage_scene(
         ctx: Context,
         action: Annotated[Literal["create", "load", "save", "get_hierarchy", "get_active", "get_build_settings"], "Operations"],
-        name: Annotated[str, "Scene name (no extension) for create/load/save"],
-        path: Annotated[str, "Asset path for scene operations (default: 'Assets/')"],
+        name: Annotated[str,
+                        "Scene name. Not required get_active/get_build_settings"] | None = None,
+        path: Annotated[str,
+                        "Asset path for scene operations (default: 'Assets/')"] | None = None,
         build_index: Annotated[int | None,
-                               "Build index for load/build settings actions"] = None,
+                               "Build index for load/build settings actions"] | None = None,
     ) -> dict[str, Any]:
         try:
             # Coerce numeric inputs defensively
