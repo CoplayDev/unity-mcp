@@ -15,13 +15,15 @@ def register_manage_editor_tools(mcp: FastMCP):
     def manage_editor(
         ctx: Context,
         action: Annotated[Literal["telemetry_status", "telemetry_ping", "play", "pause", "stop", "get_state", "get_project_root", "get_windows",
-                                  "get_active_tool", "get_selection", "get_prefab_stage", "set_active_tool", "add_tag", "remove_tag", "get_tags", "add_layer", "remove_layer", "get_layers"], "Operations"] = None,
+                                  "get_active_tool", "get_selection", "get_prefab_stage", "set_active_tool", "add_tag", "remove_tag", "get_tags", "add_layer", "remove_layer", "get_layers"], "Operations"],
         wait_for_completion: Annotated[bool,
-                                       "Optional. If True, waits for certain actions"] = None,
-        # --- Parameters for specific actions ---
-        tool_name: Annotated[str, "Tool name for specific actions"] = None,
-        tag_name: Annotated[str, "Tag name for specific actions"] = None,
-        layer_name: Annotated[str, "Layer name for specific actions"] = None,
+                                       "Optional. If True, waits for certain actions"] | None = None,
+        tool_name: Annotated[str,
+                             "Tool name when setting active tool"] | None = None,
+        tag_name: Annotated[str,
+                            "Tag name when adding and removing tags"] | None = None,
+        layer_name: Annotated[str,
+                              "Layer name when adding and removing layers"] | None = None,
     ) -> dict[str, Any]:
         try:
             # Diagnostics: quick telemetry checks
