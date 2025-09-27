@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal
 from mcp.server.fastmcp import FastMCP, Context
 from telemetry_decorator import telemetry_tool
 
-from unity_connection import get_unity_connection, async_send_command_with_retry
+from unity_connection import async_send_command_with_retry
 
 
 def register_manage_menu_item_tools(mcp: FastMCP):
@@ -38,8 +38,6 @@ def register_manage_menu_item_tools(mcp: FastMCP):
 
         # Get the current asyncio event loop
         loop = asyncio.get_running_loop()
-        # Touch the connection to ensure availability (mirrors other tools' pattern)
-        _ = get_unity_connection()
 
         # Use centralized async retry helper
         result = await async_send_command_with_retry("manage_menu_item", params_dict, loop=loop)

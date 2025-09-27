@@ -29,9 +29,6 @@ def register_read_console_tools(mcp: FastMCP):
                                       "Include stack traces in output"] | None = None
     ) -> dict[str, Any]:
         ctx.info(f"Processing read_console: {action}")
-        # Get the connection instance
-        bridge = get_unity_connection()
-
         # Set defaults if values are None
         action = action if action is not None else 'get'
         types = types if types is not None else ['error', 'warning', 'log']

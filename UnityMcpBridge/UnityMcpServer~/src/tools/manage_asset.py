@@ -26,7 +26,7 @@ def register_manage_asset_tools(mcp: FastMCP):
         destination: Annotated[str,
                                "Target path for 'duplicate'/'move'."] | None = None,
         generate_preview: Annotated[bool,
-                                    "When true, `close_stage` will save the prefab before exiting the stage."] = False,
+                                    "Generate a preview/thumbnail for the asset when supported."] = False,
         search_pattern: Annotated[str,
                                   "Search pattern (e.g., '*.prefab')."] | None = None,
         filter_type: Annotated[str, "Filter type for search"] | None = None,
