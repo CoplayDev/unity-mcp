@@ -1,8 +1,6 @@
 from mcp.server.fastmcp import FastMCP, Context
 from typing import Dict, Any
-from unity_connection import get_unity_connection, send_command_with_retry
-from config import config
-import time
+from unity_connection import send_command_with_retry
 
 from telemetry_decorator import telemetry_tool
 

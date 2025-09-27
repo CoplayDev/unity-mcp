@@ -4,7 +4,7 @@ can still list and read files via normal tools. These call into the same
 safe path logic (re-implemented here to avoid importing server.py).
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Any
 import re
 from pathlib import Path
 from urllib.parse import urlparse, unquote
@@ -17,7 +17,7 @@ from telemetry_decorator import telemetry_tool
 from unity_connection import send_command_with_retry
 
 
-def _coerce_int(value: Any, default: Optional[int] = None, minimum: Optional[int] = None) -> Optional[int]:
+def _coerce_int(value: Any, default: int | None = None, minimum: int | None = None) -> int | None:
     """Safely coerce various inputs (str/float/etc.) to an int.
     Returns default on failure; clamps to minimum when provided.
     """
@@ -41,6 +41,7 @@ def _coerce_int(value: Any, default: Optional[int] = None, minimum: Optional[int
     except Exception:
         return default
 
+
 def _resolve_project_root(override: str | None) -> Path:
     # 1) Explicit override
     if override:
@@ -52,14 +53,17 @@ def _resolve_project_root(override: str | None) -> Path:
     if env:
         env_path = Path(env).expanduser()
         # If UNITY_PROJECT_ROOT is relative, resolve against repo root (cwd's repo) instead of src dir
-        pr = (Path.cwd() / env_path).resolve() if not env_path.is_absolute() else env_path.resolve()
+        pr = (Path.cwd(
+        ) / env_path).resolve() if not env_path.is_absolute() else env_path.resolve()
         if (pr / "Assets").exists():
             return pr
     # 3) Ask Unity via manage_editor.get_project_root
     try:
-        resp = send_command_with_retry("manage_editor", {"action": "get_project_root"})
+        resp = send_command_with_retry(
+            "manage_editor", {"action": "get_project_root"})
         if isinstance(resp, dict) and resp.get("success"):
-            pr = Path(resp.get("data", {}).get("projectRoot", "")).expanduser().resolve()
+            pr = Path(resp.get("data", {}).get(
+                "projectRoot", "")).expanduser().resolve()
             if pr and (pr / "Assets").exists():
                 return pr
     except Exception:
@@ -140,12 +144,12 @@ def register_resource_tools(mcp: FastMCP) -> None:
     ))
     @telemetry_tool("list_resources")
     async def list_resources(
-        ctx: Optional[Context] = None,
-        pattern: Optional[str] = "*.cs",
+        ctx: Context | None = None,
+        pattern: str | None = "*.cs",
         under: str = "Assets",
         limit: Any = 200,
-        project_root: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        project_root: str | None = None,
+    ) -> dict[str, Any]:
         """
         Lists project URIs (unity://path/...) under a folder (default: Assets).
         - pattern: glob like *.cs or *.shader (None to list all files)
@@ -165,7 +169,7 @@ def register_resource_tools(mcp: FastMCP) -> None:
             except ValueError:
                 return {"success": False, "error": "Listing is restricted to Assets/"}
 
-            matches: List[str] = []
+            matches: list[str] = []
             limit_int = _coerce_int(limit, default=200, minimum=1)
             for p in base.rglob("*"):
                 if not p.is_file():
@@ -203,14 +207,14 @@ def register_resource_tools(mcp: FastMCP) -> None:
     @telemetry_tool("read_resource")
     async def read_resource(
         uri: str,
-        ctx: Optional[Context] = None,
+        ctx: Context | None = None,
         start_line: Any = None,
         line_count: Any = None,
         head_bytes: Any = None,
         tail_lines: Any = None,
-        project_root: Optional[str] = None,
-        request: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        project_root: str | None = None,
+        request: str | None = None,
+    ) -> dict[str, Any]:
         """
         Reads a resource by unity://path/... URI with optional slicing.
         One of line window (start_line/line_count) or head_bytes can be used to limit size.
@@ -300,14 +304,16 @@ def register_resource_tools(mcp: FastMCP) -> None:
                 m = re.search(r"first\s+(\d+)\s*bytes", req)
                 if m:
                     head_bytes = int(m.group(1))
-                m = re.search(r"show\s+(\d+)\s+lines\s+around\s+([A-Za-z_][A-Za-z0-9_]*)", req)
+                m = re.search(
+                    r"show\s+(\d+)\s+lines\s+around\s+([A-Za-z_][A-Za-z0-9_]*)", req)
                 if m:
                     window = int(m.group(1))
                     method = m.group(2)
                     # naive search for method header to get a line number
                     text_all = p.read_text(encoding="utf-8")
                     lines_all = text_all.splitlines()
-                    pat = re.compile(rf"^\s*(?:\[[^\]]+\]\s*)*(?:public|private|protected|internal|static|virtual|override|sealed|async|extern|unsafe|new|partial).*?\b{re.escape(method)}\s*\(", re.MULTILINE)
+                    pat = re.compile(
+                        rf"^\s*(?:\[[^\]]+\]\s*)*(?:public|private|protected|internal|static|virtual|override|sealed|async|extern|unsafe|new|partial).*?\b{re.escape(method)}\s*\(", re.MULTILINE)
                     hit_line = None
                     for i, line in enumerate(lines_all, start=1):
                         if pat.search(line):
@@ -329,7 +335,8 @@ def register_resource_tools(mcp: FastMCP) -> None:
             full_sha = hashlib.sha256(full_bytes).hexdigest()
 
             # Selection only when explicitly requested via windowing args or request text hints
-            selection_requested = bool(head_bytes or tail_lines or (start_line is not None and line_count is not None) or request)
+            selection_requested = bool(head_bytes or tail_lines or (
+                start_line is not None and line_count is not None) or request)
             if selection_requested:
                 # Mutually exclusive windowing options precedence:
                 # 1) head_bytes, 2) tail_lines, 3) start_line+line_count, else full text
@@ -354,16 +361,16 @@ def register_resource_tools(mcp: FastMCP) -> None:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    @mcp.tool()
+    @mcp.tool(description="Searches a file with a regex pattern and returns line numbers and excerpts.")
     @telemetry_tool("find_in_file")
     async def find_in_file(
         uri: str,
         pattern: str,
-        ctx: Optional[Context] = None,
-        ignore_case: Optional[bool] = True,
-        project_root: Optional[str] = None,
+        ctx: Context | None = None,
+        ignore_case: bool | None = True,
+        project_root: str | None = None,
         max_results: Any = 200,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Searches a file with a regex pattern and returns line numbers and excerpts.
         - uri: unity://path/Assets/... or file path form supported by read_resource
@@ -404,5 +411,3 @@ def register_resource_tools(mcp: FastMCP) -> None:
             return {"success": True, "data": {"matches": results, "count": len(results)}}
         except Exception as e:
             return {"success": False, "error": str(e)}
-
-

@@ -2,10 +2,8 @@
 Defines the read_console tool for accessing Unity Editor console messages.
 """
 from typing import List, Dict, Any
-import time
 from mcp.server.fastmcp import FastMCP, Context
-from unity_connection import get_unity_connection, send_command_with_retry
-from config import config
+from unity_connection import send_command_with_retry
 from telemetry_decorator import telemetry_tool
 
 def register_read_console_tools(mcp: FastMCP):

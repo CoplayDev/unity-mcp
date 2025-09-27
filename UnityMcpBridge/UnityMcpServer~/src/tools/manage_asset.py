@@ -4,11 +4,7 @@ Defines the manage_asset tool for interacting with Unity assets.
 import asyncio  # Added: Import asyncio for running sync code in async
 from typing import Dict, Any
 from mcp.server.fastmcp import FastMCP, Context
-# from ..unity_connection import get_unity_connection  # Original line that caused error
 from unity_connection import get_unity_connection, async_send_command_with_retry  # Use centralized retry helper
-from config import config
-import time
-
 from telemetry_decorator import telemetry_tool
 
 def register_manage_asset_tools(mcp: FastMCP):
@@ -17,7 +13,7 @@ def register_manage_asset_tools(mcp: FastMCP):
     @mcp.tool()
     @telemetry_tool("manage_asset")
     async def manage_asset(
-        ctx: Any,
+        ctx: Context,
         action: str,
         path: str,
         asset_type: str = None,
