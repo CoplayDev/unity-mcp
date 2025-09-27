@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Tools.MenuItems;
+using MCPForUnity.Editor.Tools.Prefabs;
 
 namespace MCPForUnity.Editor.Tools
 {
@@ -22,6 +23,7 @@ namespace MCPForUnity.Editor.Tools
             { "read_console", ReadConsole.HandleCommand },
             { "manage_menu_item", ManageMenuItem.HandleCommand },
             { "manage_shader", ManageShader.HandleCommand},
+            { "manage_prefabs", ManagePrefabs.HandleCommand},
         };
 
         /// <summary>
