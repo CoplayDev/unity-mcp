@@ -99,7 +99,7 @@ def register_manage_script_tools(mcp: FastMCP):
         options: Annotated[dict[str, Any] | None,
                            "Optional options, used to pass additional options to the script editor"] = None,
     ) -> dict[str, Any]:
-        """Apply small text edits to a C# script identified by URI."""
+        ctx.info(f"Processing apply_text_edits: {uri}")
         name, directory = _split_uri(uri)
 
         # Normalize common aliases/misuses for resilience:
@@ -373,6 +373,7 @@ def register_manage_script_tools(mcp: FastMCP):
         script_type: Annotated[str | None, "Script type (e.g., 'C#')"] = None,
         namespace: Annotated[str | None, "Namespace for the script"] = None,
     ) -> dict[str, Any]:
+        ctx.info(f"Processing create_script: {path}")
         name = os.path.splitext(os.path.basename(path))[0]
         directory = os.path.dirname(path)
         # Local validation to avoid round-trips on obviously bad input
@@ -408,6 +409,7 @@ def register_manage_script_tools(mcp: FastMCP):
         uri: Annotated[str, "URI of the script to delete under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."]
     ) -> dict[str, Any]:
         """Delete a C# script by URI."""
+        ctx.info(f"Processing delete_script: {uri}")
         name, directory = _split_uri(uri)
         if not directory or directory.split("/")[0].lower() != "assets":
             return {"success": False, "code": "path_outside_assets", "message": "URI must resolve under 'Assets/'."}
@@ -425,6 +427,7 @@ def register_manage_script_tools(mcp: FastMCP):
         include_diagnostics: Annotated[bool,
                                        "Include full diagnostics and summary"] = False
     ) -> dict[str, Any]:
+        ctx.info(f"Processing validate_script: {uri}")
         name, directory = _split_uri(uri)
         if not directory or directory.split("/")[0].lower() != "assets":
             return {"success": False, "code": "path_outside_assets", "message": "URI must resolve under 'Assets/'."}
@@ -462,6 +465,7 @@ def register_manage_script_tools(mcp: FastMCP):
         namespace: Annotated[str | None, "Namespace for the script",
                              "Script namespace"] | None = None,
     ) -> dict[str, Any]:
+        ctx.info(f"Processing manage_script: {action}")
         try:
             # Graceful migration for legacy 'update': route to apply_text_edits (whole-file replace)
             if action == 'update':
@@ -575,6 +579,7 @@ def register_manage_script_tools(mcp: FastMCP):
     ))
     @telemetry_tool("manage_script_capabilities")
     def manage_script_capabilities(ctx: Context) -> dict[str, Any]:
+        ctx.info("Processing manage_script_capabilities")
         try:
             # Keep in sync with server/Editor ManageScript implementation
             ops = [
@@ -602,6 +607,7 @@ def register_manage_script_tools(mcp: FastMCP):
         ctx: Context,
         uri: Annotated[str, "URI of the script to edit under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."]
     ) -> dict[str, Any]:
+        ctx.info(f"Processing get_sha: {uri}")
         try:
             name, directory = _split_uri(uri)
             params = {"action": "get_sha", "name": name, "path": directory}

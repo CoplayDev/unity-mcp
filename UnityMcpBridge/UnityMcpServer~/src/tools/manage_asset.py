@@ -35,25 +35,7 @@ def register_manage_asset_tools(mcp: FastMCP):
         page_size: Annotated[int, "Page size for pagination"] | None = None,
         page_number: Annotated[int, "Page number for pagination"] | None = None
     ) -> dict[str, Any]:
-        """ (import, create, modify, delete, etc.) in Unity.
-
-        Args:
-            ctx: The MCP context.
-            action: Operation to perform (e.g., 'import', 'create', 'modify', 'delete', 'duplicate', 'move', 'rename', 'search', 'get_info', 'create_folder', 'get_components').
-            path: Asset path (e.g., "Materials/MyMaterial.mat") or search scope.
-            asset_type: Asset type (e.g., 'Material', 'Folder') - required for 'create'.
-            properties: Dictionary of properties for 'create'/'modify'.
-                example properties for Material: {"color": [1, 0, 0, 1], "shader": "Standard"}.
-                example properties for Texture: {"width": 1024, "height": 1024, "format": "RGBA32"}.
-                example properties for PhysicsMaterial: {"bounciness": 1.0, "staticFriction": 0.5, "dynamicFriction": 0.5}.
-            destination: Target path for 'duplicate'/'move'.
-            search_pattern: Search pattern (e.g., '*.prefab').
-            filter_*: Filters for search (type, date).
-            page_*: Pagination for search.
-
-        Returns:
-            A dictionary with operation results ('success', 'data', 'error').
-        """
+        ctx.info(f"Processing manage_asset: {action}")
         # Ensure properties is a dict if None
         if properties is None:
             properties = {}

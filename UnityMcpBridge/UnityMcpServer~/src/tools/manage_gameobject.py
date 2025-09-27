@@ -66,6 +66,7 @@ def register_manage_gameobject_tools(mcp: FastMCP):
         includeNonPublicSerialized: Annotated[bool,
                                               "Controls whether serialization of private [SerializeField] fields is included"] = None,
     ) -> dict[str, Any]:
+        ctx.info(f"Processing manage_gameobject: {action}")
         try:
             # Prepare parameters, removing None values
             params = {

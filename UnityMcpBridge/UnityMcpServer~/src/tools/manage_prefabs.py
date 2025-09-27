@@ -32,6 +32,7 @@ def register_manage_prefabs_tools(mcp: FastMCP) -> None:
         search_inactive: Annotated[bool | None,
                                    "Include inactive objects when resolving the target name"] = None,
     ) -> dict[str, Any]:
+        ctx.info(f"Processing manage_prefabs: {action}")
         try:
             params: dict[str, Any] = {"action": action}
 

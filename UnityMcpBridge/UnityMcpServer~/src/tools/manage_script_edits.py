@@ -366,6 +366,7 @@ def register_manage_script_edits_tools(mcp: FastMCP):
         script_type: str = "MonoBehaviour",
         namespace: str = "",
     ) -> Dict[str, Any]:
+        ctx.info(f"Processing script_apply_edits: {name}")
         # Normalize locator first so downstream calls target the correct script file.
         name, path = _normalize_script_locator(name, path)
 

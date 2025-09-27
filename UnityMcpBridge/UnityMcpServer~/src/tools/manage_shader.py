@@ -20,6 +20,7 @@ def register_manage_shader_tools(mcp: FastMCP):
         contents: Annotated[str,
                             "Shader code for 'create'/'update'"] | None = None,
     ) -> dict[str, Any]:
+        ctx.info(f"Processing manage_shader: {action}")
         try:
             # Prepare parameters for Unity
             params = {

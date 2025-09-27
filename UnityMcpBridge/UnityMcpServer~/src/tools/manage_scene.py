@@ -21,6 +21,7 @@ def register_manage_scene_tools(mcp: FastMCP):
         build_index: Annotated[int | None,
                                "Build index for load/build settings actions"] | None = None,
     ) -> dict[str, Any]:
+        ctx.info(f"Processing manage_scene: {action}")
         try:
             # Coerce numeric inputs defensively
             def _coerce_int(value, default=None):

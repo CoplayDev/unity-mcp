@@ -25,6 +25,7 @@ def register_manage_editor_tools(mcp: FastMCP):
         layer_name: Annotated[str,
                               "Layer name when adding and removing layers"] | None = None,
     ) -> dict[str, Any]:
+        ctx.info(f"Processing manage_editor: {action}")
         try:
             # Diagnostics: quick telemetry checks
             if action == "telemetry_status":

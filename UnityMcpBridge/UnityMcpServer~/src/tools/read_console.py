@@ -28,22 +28,7 @@ def register_read_console_tools(mcp: FastMCP):
         include_stacktrace: Annotated[bool,
                                       "Include stack traces in output"] | None = None
     ) -> dict[str, Any]:
-        """
-
-        Args:
-            ctx: The MCP context.
-            action: Operation ('get' or 'clear').
-            types: Message types to get ('error', 'warning', 'log', 'all').
-            count: Max messages to return.
-            filter_text: Text filter for messages.
-            since_timestamp: Get messages after this timestamp (ISO 8601).
-            format: Output format ('plain', 'detailed', 'json').
-            include_stacktrace: Include stack traces in output.
-
-        Returns:
-            Dictionary with results. For 'get', includes 'data' (messages).
-        """
-
+        ctx.info(f"Processing read_console: {action}")
         # Get the connection instance
         bridge = get_unity_connection()
 

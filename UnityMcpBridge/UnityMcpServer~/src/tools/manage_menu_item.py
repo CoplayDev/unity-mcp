@@ -25,6 +25,7 @@ def register_manage_menu_item_tools(mcp: FastMCP):
         refresh: Annotated[bool | None,
                            "Optional flag to force refresh of the menu cache when listing"] = None,
     ) -> dict[str, Any]:
+        ctx.info(f"Processing manage_menu_item: {action}")
         # Prepare parameters for the C# handler
         params_dict: dict[str, Any] = {
             "action": action,
