@@ -1,4 +1,5 @@
 import logging
+
 from .manage_script_edits import register_manage_script_edits_tools
 from .manage_script import register_manage_script_tools
 from .manage_scene import register_manage_scene_tools
@@ -12,6 +13,7 @@ from .manage_menu_item import register_manage_menu_item_tools
 from .resource_tools import register_resource_tools
 
 logger = logging.getLogger("mcp-for-unity-server")
+
 
 def register_all_tools(mcp):
     """Register all refactored tools with the MCP server."""

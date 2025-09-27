@@ -1,8 +1,10 @@
-from mcp.server.fastmcp import FastMCP, Context
 from typing import Dict, Any
+
+from mcp.server.fastmcp import FastMCP, Context
+from telemetry_decorator import telemetry_tool
+
 from unity_connection import send_command_with_retry
 
-from telemetry_decorator import telemetry_tool
 
 def register_manage_scene_tools(mcp: FastMCP):
     """Register all scene management tools with the MCP server."""
@@ -54,7 +56,7 @@ def register_manage_scene_tools(mcp: FastMCP):
                 params["path"] = path
             if coerced_build_index is not None:
                 params["buildIndex"] = coerced_build_index
-            
+
             # Use centralized retry helper
             response = send_command_with_retry("manage_scene", params)
 

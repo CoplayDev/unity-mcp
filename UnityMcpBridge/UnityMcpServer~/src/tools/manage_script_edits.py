@@ -1,10 +1,11 @@
-from mcp.server.fastmcp import FastMCP, Context
-from typing import Dict, Any, List, Tuple, Optional
 import base64
 import re
-from unity_connection import send_command_with_retry
+from typing import Dict, Any, List, Tuple, Optional
 
+from mcp.server.fastmcp import FastMCP, Context
 from telemetry_decorator import telemetry_tool
+
+from unity_connection import send_command_with_retry
 
 
 def _apply_edits_locally(original_text: str, edits: List[Dict[str, Any]]) -> str:
@@ -28,7 +29,8 @@ def _apply_edits_locally(original_text: str, edits: List[Dict[str, Any]]) -> str
 
         if op == "prepend":
             prepend_text = edit.get("text", "")
-            text = (prepend_text if prepend_text.endswith("\n") else prepend_text + "\n") + text
+            text = (prepend_text if prepend_text.endswith(
+                "\n") else prepend_text + "\n") + text
         elif op == "append":
             append_text = edit.get("text", "")
             if not text.endswith("\n"):
@@ -40,10 +42,12 @@ def _apply_edits_locally(original_text: str, edits: List[Dict[str, Any]]) -> str
             anchor = edit.get("anchor", "")
             position = (edit.get("position") or "before").lower()
             insert_text = edit.get("text", "")
-            flags = re.MULTILINE | (re.IGNORECASE if edit.get("ignore_case") else 0)
-            
+            flags = re.MULTILINE | (
+                re.IGNORECASE if edit.get("ignore_case") else 0)
+
             # Find the best match using improved heuristics
-            match = _find_best_anchor_match(anchor, text, flags, bool(edit.get("prefer_last", True)))
+            match = _find_best_anchor_match(
+                anchor, text, flags, bool(edit.get("prefer_last", True)))
             if not match:
                 if edit.get("allow_noop", True):
                     continue
@@ -52,15 +56,16 @@ def _apply_edits_locally(original_text: str, edits: List[Dict[str, Any]]) -> str
             text = text[:idx] + insert_text + text[idx:]
         elif op == "replace_range":
             start_line = int(edit.get("startLine", 1))
-            start_col  = int(edit.get("startCol", 1))
-            end_line   = int(edit.get("endLine", start_line))
-            end_col    = int(edit.get("endCol", 1))
+            start_col = int(edit.get("startCol", 1))
+            end_line = int(edit.get("endLine", start_line))
+            end_col = int(edit.get("endCol", 1))
             replacement = edit.get("text", "")
             lines = text.splitlines(keepends=True)
             max_line = len(lines) + 1  # 1-based, exclusive end
             if (start_line < 1 or end_line < start_line or end_line > max_line
                     or start_col < 1 or end_col < 1):
                 raise RuntimeError("replace_range out of bounds")
+
             def index_of(line: int, col: int) -> int:
                 if line <= len(lines):
                     return sum(len(l) for l in lines[: line - 1]) + (col - 1)
@@ -80,48 +85,50 @@ def _apply_edits_locally(original_text: str, edits: List[Dict[str, Any]]) -> str
             text = re.sub(pattern, repl_py, text, count=count, flags=flags)
         else:
             allowed = "anchor_insert, prepend, append, replace_range, regex_replace"
-            raise RuntimeError(f"unknown edit op: {op}; allowed: {allowed}. Use 'op' (aliases accepted: type/mode/operation).")
+            raise RuntimeError(
+                f"unknown edit op: {op}; allowed: {allowed}. Use 'op' (aliases accepted: type/mode/operation).")
     return text
 
 
 def _find_best_anchor_match(pattern: str, text: str, flags: int, prefer_last: bool = True):
     """
     Find the best anchor match using improved heuristics.
-    
+
     For patterns like \\s*}\\s*$ that are meant to find class-ending braces,
     this function uses heuristics to choose the most semantically appropriate match:
-    
+
     1. If prefer_last=True, prefer the last match (common for class-end insertions)
     2. Use indentation levels to distinguish class vs method braces
     3. Consider context to avoid matches inside strings/comments
-    
+
     Args:
         pattern: Regex pattern to search for
         text: Text to search in  
         flags: Regex flags
         prefer_last: If True, prefer the last match over the first
-        
+
     Returns:
         Match object of the best match, or None if no match found
     """
     import re
-    
+
     # Find all matches
     matches = list(re.finditer(pattern, text, flags))
     if not matches:
         return None
-    
+
     # If only one match, return it
     if len(matches) == 1:
         return matches[0]
-    
+
     # For patterns that look like they're trying to match closing braces at end of lines
-    is_closing_brace_pattern = '}' in pattern and ('$' in pattern or pattern.endswith(r'\s*'))
-    
+    is_closing_brace_pattern = '}' in pattern and (
+        '$' in pattern or pattern.endswith(r'\s*'))
+
     if is_closing_brace_pattern and prefer_last:
         # Use heuristics to find the best closing brace match
         return _find_best_closing_brace_match(matches, text)
-    
+
     # Default behavior: use last match if prefer_last, otherwise first match
     return matches[-1] if prefer_last else matches[0]
 
@@ -129,68 +136,70 @@ def _find_best_anchor_match(pattern: str, text: str, flags: int, prefer_last: bo
 def _find_best_closing_brace_match(matches, text: str):
     """
     Find the best closing brace match using C# structure heuristics.
-    
+
     Enhanced heuristics for scope-aware matching:
     1. Prefer matches with lower indentation (likely class-level)
     2. Prefer matches closer to end of file  
     3. Avoid matches that seem to be inside method bodies
     4. For #endregion patterns, ensure class-level context
     5. Validate insertion point is at appropriate scope
-    
+
     Args:
         matches: List of regex match objects
         text: The full text being searched
-        
+
     Returns:
         The best match object
     """
     if not matches:
         return None
-        
+
     scored_matches = []
     lines = text.splitlines()
-    
+
     for match in matches:
         score = 0
         start_pos = match.start()
-        
+
         # Find which line this match is on
         lines_before = text[:start_pos].count('\n')
         line_num = lines_before
-        
+
         if line_num < len(lines):
             line_content = lines[line_num]
-            
+
             # Calculate indentation level (lower is better for class braces)
             indentation = len(line_content) - len(line_content.lstrip())
-            
+
             # Prefer lower indentation (class braces are typically less indented than method braces)
-            score += max(0, 20 - indentation)  # Max 20 points for indentation=0
-            
+            # Max 20 points for indentation=0
+            score += max(0, 20 - indentation)
+
             # Prefer matches closer to end of file (class closing braces are typically at the end)
             distance_from_end = len(lines) - line_num
-            score += max(0, 10 - distance_from_end)  # More points for being closer to end
-            
+            # More points for being closer to end
+            score += max(0, 10 - distance_from_end)
+
             # Look at surrounding context to avoid method braces
             context_start = max(0, line_num - 3)
-            context_end = min(len(lines), line_num + 2) 
+            context_end = min(len(lines), line_num + 2)
             context_lines = lines[context_start:context_end]
-            
+
             # Penalize if this looks like it's inside a method (has method-like patterns above)
             for context_line in context_lines:
                 if re.search(r'\b(void|public|private|protected)\s+\w+\s*\(', context_line):
                     score -= 5  # Penalty for being near method signatures
-                    
+
             # Bonus if this looks like a class-ending brace (very minimal indentation and near EOF)
             if indentation <= 4 and distance_from_end <= 3:
                 score += 15  # Bonus for likely class-ending brace
-        
+
         scored_matches.append((score, match))
-    
+
     # Return the match with the highest score
     scored_matches.sort(key=lambda x: x[0], reverse=True)
     best_match = scored_matches[0][1]
-    
+
     return best_match
 
 
@@ -206,7 +215,6 @@ def _extract_code_after(keyword: str, request: str) -> str:
         return request[idx + len(keyword):].strip()
     return ""
 # Removed _is_structurally_balanced - validation now handled by C# side using Unity's compiler services
-
 
 
 def _normalize_script_locator(name: str, path: str) -> Tuple[str, str]:
@@ -257,7 +265,8 @@ def _normalize_script_locator(name: str, path: str) -> Tuple[str, str]:
             parts = candidate.split("/")
             file_name = parts[-1]
             dir_path = "/".join(parts[:-1]) if len(parts) > 1 else "Assets"
-            base = file_name[:-3] if file_name.lower().endswith(".cs") else file_name
+            base = file_name[:-
+                             3] if file_name.lower().endswith(".cs") else file_name
             return base, dir_path
 
     # Fall back: remove extension from name if present and return given path
@@ -277,7 +286,8 @@ def _with_norm(resp: Dict[str, Any] | Any, edits: List[Dict[str, Any]], routing:
 
 def _err(code: str, message: str, *, expected: Dict[str, Any] | None = None, rewrite: Dict[str, Any] | None = None,
          normalized: List[Dict[str, Any]] | None = None, routing: str | None = None, extra: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {"success": False, "code": code, "message": message}
+    payload: Dict[str, Any] = {"success": False,
+                               "code": code, "message": message}
     data: Dict[str, Any] = {}
     if expected:
         data["expected"] = expected
@@ -365,9 +375,9 @@ def register_manage_script_edits_tools(mcp: FastMCP):
         def _unwrap_and_alias(edit: Dict[str, Any]) -> Dict[str, Any]:
             # Unwrap single-key wrappers like {"replace_method": {...}}
             for wrapper_key in (
-                "replace_method","insert_method","delete_method",
-                "replace_class","delete_class",
-                "anchor_insert","anchor_replace","anchor_delete",
+                "replace_method", "insert_method", "delete_method",
+                "replace_class", "delete_class",
+                "anchor_insert", "anchor_replace", "anchor_delete",
             ):
                 if wrapper_key in edit and isinstance(edit[wrapper_key], dict):
                     inner = dict(edit[wrapper_key])
@@ -376,7 +386,8 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                     break
 
             e = dict(edit)
-            op = (e.get("op") or e.get("operation") or e.get("type") or e.get("mode") or "").strip().lower()
+            op = (e.get("op") or e.get("operation") or e.get(
+                "type") or e.get("mode") or "").strip().lower()
             if op:
                 e["op"] = op
 
@@ -454,10 +465,11 @@ def register_manage_script_edits_tools(mcp: FastMCP):
         normalized_edits: List[Dict[str, Any]] = []
         for raw in edits or []:
             e = _unwrap_and_alias(raw)
-            op = (e.get("op") or e.get("operation") or e.get("type") or e.get("mode") or "").strip().lower()
+            op = (e.get("op") or e.get("operation") or e.get(
+                "type") or e.get("mode") or "").strip().lower()
 
             # Default className to script name if missing on structured method/class ops
-            if op in ("replace_class","delete_class","replace_method","delete_method","insert_method") and not e.get("className"):
+            if op in ("replace_class", "delete_class", "replace_method", "delete_method", "insert_method") and not e.get("className"):
                 e["className"] = name
 
             # Map common aliases for text ops
@@ -474,7 +486,8 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                 if "text" in e:
                     e["replacement"] = e.get("text", "")
                 elif "insert" in e or "content" in e:
-                    e["replacement"] = e.get("insert") or e.get("content") or ""
+                    e["replacement"] = e.get(
+                        "insert") or e.get("content") or ""
             if op == "anchor_insert" and not (e.get("text") or e.get("insert") or e.get("content") or e.get("replacement")):
                 e["op"] = "anchor_delete"
                 normalized_edits.append(e)
@@ -494,40 +507,46 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                 if not e.get("methodName"):
                     return error_with_hint(
                         "replace_method requires 'methodName'.",
-                        {"op": "replace_method", "required": ["className", "methodName", "replacement"]},
+                        {"op": "replace_method", "required": [
+                            "className", "methodName", "replacement"]},
                         {"edits[0].methodName": "HasTarget"}
                     )
                 if not (e.get("replacement") or e.get("text")):
                     return error_with_hint(
                         "replace_method requires 'replacement' (inline or base64).",
-                        {"op": "replace_method", "required": ["className", "methodName", "replacement"]},
+                        {"op": "replace_method", "required": [
+                            "className", "methodName", "replacement"]},
                         {"edits[0].replacement": "public bool X(){ return true; }"}
                     )
             elif op == "insert_method":
                 if not (e.get("replacement") or e.get("text")):
                     return error_with_hint(
                         "insert_method requires a non-empty 'replacement'.",
-                        {"op": "insert_method", "required": ["className", "replacement"], "position": {"after_requires": "afterMethodName", "before_requires": "beforeMethodName"}},
+                        {"op": "insert_method", "required": ["className", "replacement"], "position": {
+                            "after_requires": "afterMethodName", "before_requires": "beforeMethodName"}},
                         {"edits[0].replacement": "public void PrintSeries(){ Debug.Log(\"1,2,3\"); }"}
                     )
                 pos = (e.get("position") or "").lower()
                 if pos == "after" and not e.get("afterMethodName"):
                     return error_with_hint(
                         "insert_method with position='after' requires 'afterMethodName'.",
-                        {"op": "insert_method", "position": {"after_requires": "afterMethodName"}},
+                        {"op": "insert_method", "position": {
+                            "after_requires": "afterMethodName"}},
                         {"edits[0].afterMethodName": "GetCurrentTarget"}
                     )
                 if pos == "before" and not e.get("beforeMethodName"):
                     return error_with_hint(
                         "insert_method with position='before' requires 'beforeMethodName'.",
-                        {"op": "insert_method", "position": {"before_requires": "beforeMethodName"}},
+                        {"op": "insert_method", "position": {
+                            "before_requires": "beforeMethodName"}},
                         {"edits[0].beforeMethodName": "GetCurrentTarget"}
                     )
             elif op == "delete_method":
                 if not e.get("methodName"):
                     return error_with_hint(
                         "delete_method requires 'methodName'.",
-                        {"op": "delete_method", "required": ["className", "methodName"]},
+                        {"op": "delete_method", "required": [
+                            "className", "methodName"]},
                         {"edits[0].methodName": "PrintSeries"}
                     )
             elif op in ("anchor_insert", "anchor_replace", "anchor_delete"):
@@ -545,9 +564,10 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                     )
 
         # Decide routing: structured vs text vs mixed
-        STRUCT = {"replace_class","delete_class","replace_method","delete_method","insert_method","anchor_delete","anchor_replace","anchor_insert"}
-        TEXT = {"prepend","append","replace_range","regex_replace"}
-        ops_set = { (e.get("op") or "").lower() for e in edits or [] }
+        STRUCT = {"replace_class", "delete_class", "replace_method", "delete_method",
+                  "insert_method", "anchor_delete", "anchor_replace", "anchor_insert"}
+        TEXT = {"prepend", "append", "replace_range", "regex_replace"}
+        ops_set = {(e.get("op") or "").lower() for e in edits or []}
         all_struct = ops_set.issubset(STRUCT)
         all_text = ops_set.issubset(TEXT)
         mixed = not (all_struct or all_text)
@@ -566,7 +586,8 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                 "edits": edits,
                 "options": opts2,
             }
-            resp_struct = send_command_with_retry("manage_script", params_struct)
+            resp_struct = send_command_with_retry(
+                "manage_script", params_struct)
             if isinstance(resp_struct, dict) and resp_struct.get("success"):
                 pass  # Optional sentinel reload removed (deprecated)
             return _with_norm(resp_struct if isinstance(resp_struct, dict) else {"success": False, "message": str(resp_struct)}, normalized_for_echo, routing="structured")
@@ -582,10 +603,12 @@ def register_manage_script_edits_tools(mcp: FastMCP):
         if not isinstance(read_resp, dict) or not read_resp.get("success"):
             return read_resp if isinstance(read_resp, dict) else {"success": False, "message": str(read_resp)}
 
-        data = read_resp.get("data") or read_resp.get("result", {}).get("data") or {}
+        data = read_resp.get("data") or read_resp.get(
+            "result", {}).get("data") or {}
         contents = data.get("contents")
         if contents is None and data.get("contentsEncoded") and data.get("encodedContents"):
-            contents = base64.b64decode(data["encodedContents"]).decode("utf-8")
+            contents = base64.b64decode(
+                data["encodedContents"]).decode("utf-8")
         if contents is None:
             return {"success": False, "message": "No contents returned from Unity read."}
 
@@ -594,28 +617,36 @@ def register_manage_script_edits_tools(mcp: FastMCP):
 
         # If we have a mixed batch (TEXT + STRUCT), apply text first with precondition, then structured
         if mixed:
-            text_edits = [e for e in edits or [] if (e.get("op") or "").lower() in TEXT]
-            struct_edits = [e for e in edits or [] if (e.get("op") or "").lower() in STRUCT]
+            text_edits = [e for e in edits or [] if (
+                e.get("op") or "").lower() in TEXT]
+            struct_edits = [e for e in edits or [] if (
+                e.get("op") or "").lower() in STRUCT]
             try:
                 base_text = contents
+
                 def line_col_from_index(idx: int) -> Tuple[int, int]:
                     line = base_text.count("\n", 0, idx) + 1
                     last_nl = base_text.rfind("\n", 0, idx)
-                    col = (idx - (last_nl + 1)) + 1 if last_nl >= 0 else idx + 1
+                    col = (idx - (last_nl + 1)) + \
+                        1 if last_nl >= 0 else idx + 1
                     return line, col
 
                 at_edits: List[Dict[str, Any]] = []
                 import re as _re
                 for e in text_edits:
-                    opx = (e.get("op") or e.get("operation") or e.get("type") or e.get("mode") or "").strip().lower()
-                    text_field = e.get("text") or e.get("insert") or e.get("content") or e.get("replacement") or ""
+                    opx = (e.get("op") or e.get("operation") or e.get(
+                        "type") or e.get("mode") or "").strip().lower()
+                    text_field = e.get("text") or e.get("insert") or e.get(
+                        "content") or e.get("replacement") or ""
                     if opx == "anchor_insert":
                         anchor = e.get("anchor") or ""
                         position = (e.get("position") or "after").lower()
-                        flags = _re.MULTILINE | (_re.IGNORECASE if e.get("ignore_case") else 0)
+                        flags = _re.MULTILINE | (
+                            _re.IGNORECASE if e.get("ignore_case") else 0)
                         try:
                             # Use improved anchor matching logic
-                            m = _find_best_anchor_match(anchor, base_text, flags, prefer_last=True)
+                            m = _find_best_anchor_match(
+                                anchor, base_text, flags, prefer_last=True)
                         except Exception as ex:
                             return _with_norm(_err("bad_regex", f"Invalid anchor regex: {ex}", normalized=normalized_for_echo, routing="mixed/text-first", extra={"hint": "Escape parentheses/braces or use a simpler anchor."}), normalized_for_echo, routing="mixed/text-first")
                         if not m:
@@ -628,10 +659,11 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                         if not text_field_norm.endswith("\n"):
                             text_field_norm = text_field_norm + "\n"
                         sl, sc = line_col_from_index(idx)
-                        at_edits.append({"startLine": sl, "startCol": sc, "endLine": sl, "endCol": sc, "newText": text_field_norm})
+                        at_edits.append(
+                            {"startLine": sl, "startCol": sc, "endLine": sl, "endCol": sc, "newText": text_field_norm})
                         # do not mutate base_text when building atomic spans
                     elif opx == "replace_range":
-                        if all(k in e for k in ("startLine","startCol","endLine","endCol")):
+                        if all(k in e for k in ("startLine", "startCol", "endLine", "endCol")):
                             at_edits.append({
                                 "startLine": int(e.get("startLine", 1)),
                                 "startCol": int(e.get("startCol", 1)),
@@ -644,31 +676,37 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                     elif opx == "regex_replace":
                         pattern = e.get("pattern") or ""
                         try:
-                            regex_obj = _re.compile(pattern, _re.MULTILINE | (_re.IGNORECASE if e.get("ignore_case") else 0))
+                            regex_obj = _re.compile(pattern, _re.MULTILINE | (
+                                _re.IGNORECASE if e.get("ignore_case") else 0))
                         except Exception as ex:
                             return _with_norm(_err("bad_regex", f"Invalid regex pattern: {ex}", normalized=normalized_for_echo, routing="mixed/text-first", extra={"hint": "Escape special chars or prefer structured delete for methods."}), normalized_for_echo, routing="mixed/text-first")
                         m = regex_obj.search(base_text)
                         if not m:
                             continue
                         # Expand $1, $2... in replacement using this match
+
                         def _expand_dollars(rep: str, _m=m) -> str:
                             return _re.sub(r"\$(\d+)", lambda g: _m.group(int(g.group(1))) or "", rep)
                         repl = _expand_dollars(text_field)
                         sl, sc = line_col_from_index(m.start())
                         el, ec = line_col_from_index(m.end())
-                        at_edits.append({"startLine": sl, "startCol": sc, "endLine": el, "endCol": ec, "newText": repl})
+                        at_edits.append(
+                            {"startLine": sl, "startCol": sc, "endLine": el, "endCol": ec, "newText": repl})
                         # do not mutate base_text when building atomic spans
-                    elif opx in ("prepend","append"):
+                    elif opx in ("prepend", "append"):
                         if opx == "prepend":
                             sl, sc = 1, 1
-                            at_edits.append({"startLine": sl, "startCol": sc, "endLine": sl, "endCol": sc, "newText": text_field})
+                            at_edits.append(
+                                {"startLine": sl, "startCol": sc, "endLine": sl, "endCol": sc, "newText": text_field})
                             # prepend can be applied atomically without local mutation
                         else:
                             # Insert at true EOF position (handles both \n and \r\n correctly)
                             eof_idx = len(base_text)
                             sl, sc = line_col_from_index(eof_idx)
-                            new_text = ("\n" if not base_text.endswith("\n") else "") + text_field
-                            at_edits.append({"startLine": sl, "startCol": sc, "endLine": sl, "endCol": sc, "newText": new_text})
+                            new_text = ("\n" if not base_text.endswith(
+                                "\n") else "") + text_field
+                            at_edits.append(
+                                {"startLine": sl, "startCol": sc, "endLine": sl, "endCol": sc, "newText": new_text})
                             # do not mutate base_text when building atomic spans
                     else:
                         return _with_norm(_err("unknown_op", f"Unsupported text edit op: {opx}", normalized=normalized_for_echo, routing="mixed/text-first"), normalized_for_echo, routing="mixed/text-first")
@@ -686,7 +724,8 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                         "precondition_sha256": sha,
                         "options": {"refresh": (options or {}).get("refresh", "debounced"), "validate": (options or {}).get("validate", "standard"), "applyMode": ("atomic" if len(at_edits) > 1 else (options or {}).get("applyMode", "sequential"))}
                     }
-                    resp_text = send_command_with_retry("manage_script", params_text)
+                    resp_text = send_command_with_retry(
+                        "manage_script", params_text)
                     if not (isinstance(resp_text, dict) and resp_text.get("success")):
                         return _with_norm(resp_text if isinstance(resp_text, dict) else {"success": False, "message": str(resp_text)}, normalized_for_echo, routing="mixed/text-first")
                     # Optional sentinel reload removed (deprecated)
@@ -706,7 +745,8 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                     "edits": struct_edits,
                     "options": opts2
                 }
-                resp_struct = send_command_with_retry("manage_script", params_struct)
+                resp_struct = send_command_with_retry(
+                    "manage_script", params_struct)
                 if isinstance(resp_struct, dict) and resp_struct.get("success"):
                     pass  # Optional sentinel reload removed (deprecated)
                 return _with_norm(resp_struct if isinstance(resp_struct, dict) else {"success": False, "message": str(resp_struct)}, normalized_for_echo, routing="mixed/text-first")
@@ -716,32 +756,40 @@ def register_manage_script_edits_tools(mcp: FastMCP):
         # If the edits are text-ops, prefer sending them to Unity's apply_text_edits with precondition
         # so header guards and validation run on the C# side.
         # Supported conversions: anchor_insert, replace_range, regex_replace (first match only).
-        text_ops = { (e.get("op") or e.get("operation") or e.get("type") or e.get("mode") or "").strip().lower() for e in (edits or []) }
-        structured_kinds = {"replace_class","delete_class","replace_method","delete_method","insert_method","anchor_insert"}
+        text_ops = {(e.get("op") or e.get("operation") or e.get("type") or e.get(
+            "mode") or "").strip().lower() for e in (edits or [])}
+        structured_kinds = {"replace_class", "delete_class",
+                            "replace_method", "delete_method", "insert_method", "anchor_insert"}
         if not text_ops.issubset(structured_kinds):
             # Convert to apply_text_edits payload
             try:
                 base_text = contents
+
                 def line_col_from_index(idx: int) -> Tuple[int, int]:
                     # 1-based line/col against base buffer
                     line = base_text.count("\n", 0, idx) + 1
                     last_nl = base_text.rfind("\n", 0, idx)
-                    col = (idx - (last_nl + 1)) + 1 if last_nl >= 0 else idx + 1
+                    col = (idx - (last_nl + 1)) + \
+                        1 if last_nl >= 0 else idx + 1
                     return line, col
 
                 at_edits: List[Dict[str, Any]] = []
                 import re as _re
                 for e in edits or []:
-                    op = (e.get("op") or e.get("operation") or e.get("type") or e.get("mode") or "").strip().lower()
+                    op = (e.get("op") or e.get("operation") or e.get(
+                        "type") or e.get("mode") or "").strip().lower()
                     # aliasing for text field
-                    text_field = e.get("text") or e.get("insert") or e.get("content") or ""
+                    text_field = e.get("text") or e.get(
+                        "insert") or e.get("content") or ""
                     if op == "anchor_insert":
                         anchor = e.get("anchor") or ""
                         position = (e.get("position") or "after").lower()
                         # Use improved anchor matching logic with helpful errors, honoring ignore_case
                         try:
-                            flags = _re.MULTILINE | (_re.IGNORECASE if e.get("ignore_case") else 0)
-                            m = _find_best_anchor_match(anchor, base_text, flags, prefer_last=True)
+                            flags = _re.MULTILINE | (
+                                _re.IGNORECASE if e.get("ignore_case") else 0)
+                            m = _find_best_anchor_match(
+                                anchor, base_text, flags, prefer_last=True)
                         except Exception as ex:
                             return _with_norm(_err("bad_regex", f"Invalid anchor regex: {ex}", normalized=normalized_for_echo, routing="text", extra={"hint": "Escape parentheses/braces or use a simpler anchor."}), normalized_for_echo, routing="text")
                         if not m:
@@ -777,17 +825,20 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                     elif op == "regex_replace":
                         pattern = e.get("pattern") or ""
                         repl = text_field
-                        flags = _re.MULTILINE | (_re.IGNORECASE if e.get("ignore_case") else 0)
+                        flags = _re.MULTILINE | (
+                            _re.IGNORECASE if e.get("ignore_case") else 0)
                         # Early compile for clearer error messages
                         try:
                             regex_obj = _re.compile(pattern, flags)
                         except Exception as ex:
                             return _with_norm(_err("bad_regex", f"Invalid regex pattern: {ex}", normalized=normalized_for_echo, routing="text", extra={"hint": "Escape special chars or prefer structured delete for methods."}), normalized_for_echo, routing="text")
                         # Use smart anchor matching for consistent behavior with anchor_insert
-                        m = _find_best_anchor_match(pattern, base_text, flags, prefer_last=True)
+                        m = _find_best_anchor_match(
+                            pattern, base_text, flags, prefer_last=True)
                         if not m:
                             continue
                         # Expand $1, $2... backrefs in replacement using the first match (consistent with mixed-path behavior)
+
                         def _expand_dollars(rep: str, _m=m) -> str:
                             return _re.sub(r"\$(\d+)", lambda g: _m.group(int(g.group(1))) or "", rep)
                         repl_expanded = _expand_dollars(repl)
@@ -829,7 +880,8 @@ def register_manage_script_edits_tools(mcp: FastMCP):
                 if isinstance(resp, dict) and resp.get("success"):
                     pass  # Optional sentinel reload removed (deprecated)
                 return _with_norm(
-                    resp if isinstance(resp, dict) else {"success": False, "message": str(resp)},
+                    resp if isinstance(resp, dict) else {
+                        "success": False, "message": str(resp)},
                     normalized_for_echo,
                     routing="text"
                 )
@@ -842,7 +894,8 @@ def register_manage_script_edits_tools(mcp: FastMCP):
             try:
                 preview_text = _apply_edits_locally(contents, edits)
                 import difflib
-                diff = list(difflib.unified_diff(contents.splitlines(), preview_text.splitlines(), fromfile="before", tofile="after", n=2))
+                diff = list(difflib.unified_diff(contents.splitlines(
+                ), preview_text.splitlines(), fromfile="before", tofile="after", n=2))
                 if len(diff) > 800:
                     diff = diff[:800] + ["... (diff truncated) ..."]
                 if preview:
@@ -869,7 +922,8 @@ def register_manage_script_edits_tools(mcp: FastMCP):
             import difflib
             a = contents.splitlines()
             b = new_contents.splitlines()
-            diff = list(difflib.unified_diff(a, b, fromfile="before", tofile="after", n=3))
+            diff = list(difflib.unified_diff(
+                a, b, fromfile="before", tofile="after", n=3))
             # Limit diff size to keep responses small
             if len(diff) > 2000:
                 diff = diff[:2000] + ["... (diff truncated) ..."]
@@ -911,13 +965,10 @@ def register_manage_script_edits_tools(mcp: FastMCP):
         if isinstance(write_resp, dict) and write_resp.get("success"):
             pass  # Optional sentinel reload removed (deprecated)
         return _with_norm(
-            write_resp if isinstance(write_resp, dict) 
-                      else {"success": False, "message": str(write_resp)},
+            write_resp if isinstance(write_resp, dict)
+            else {"success": False, "message": str(write_resp)},
             normalized_for_echo,
             routing="text",
         )
-
-
-
 
     # safe_script_edit removed to simplify API; clients should call script_apply_edits directly

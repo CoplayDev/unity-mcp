@@ -1,9 +1,11 @@
-from mcp.server.fastmcp import FastMCP, Context
 from typing import Dict, Any
-from unity_connection import send_command_with_retry
 
+from mcp.server.fastmcp import FastMCP, Context
 from telemetry_decorator import telemetry_tool
 from telemetry import is_telemetry_enabled, record_tool_usage
+
+from unity_connection import send_command_with_retry
+
 
 def register_manage_editor_tools(mcp: FastMCP):
     """Register all editor management tools with the MCP server."""
@@ -26,7 +28,7 @@ def register_manage_editor_tools(mcp: FastMCP):
         action: str,
         wait_for_completion: bool = None,
         # --- Parameters for specific actions ---
-        tool_name: str = None, 
+        tool_name: str = None,
         tag_name: str = None,
         layer_name: str = None,
     ) -> Dict[str, Any]:
@@ -42,16 +44,16 @@ def register_manage_editor_tools(mcp: FastMCP):
             params = {
                 "action": action,
                 "waitForCompletion": wait_for_completion,
-                "toolName": tool_name, # Corrected parameter name to match C#
+                "toolName": tool_name,  # Corrected parameter name to match C#
                 "tagName": tag_name,   # Pass tag name
-                "layerName": layer_name, # Pass layer name
+                "layerName": layer_name,  # Pass layer name
                 # Add other parameters based on the action being performed
                 # "width": width,
                 # "height": height,
                 # etc.
             }
             params = {k: v for k, v in params.items() if v is not None}
-            
+
             # Send command using centralized retry helper
             response = send_command_with_retry("manage_editor", params)
 

@@ -1,11 +1,14 @@
 """
 Defines the manage_asset tool for interacting with Unity assets.
 """
-import asyncio  # Added: Import asyncio for running sync code in async
+import asyncio
 from typing import Dict, Any
+
 from mcp.server.fastmcp import FastMCP, Context
-from unity_connection import get_unity_connection, async_send_command_with_retry  # Use centralized retry helper
+
+from unity_connection import get_unity_connection, async_send_command_with_retry
 from telemetry_decorator import telemetry_tool
+
 
 def register_manage_asset_tools(mcp: FastMCP):
     """Registers the manage_asset tool with the MCP server."""
@@ -48,7 +51,7 @@ def register_manage_asset_tools(mcp: FastMCP):
         # Ensure properties is a dict if None
         if properties is None:
             properties = {}
-            
+
         # Coerce numeric inputs defensively
         def _coerce_int(value, default=None):
             if value is None:
@@ -82,7 +85,7 @@ def register_manage_asset_tools(mcp: FastMCP):
             "pageSize": page_size,
             "pageNumber": page_number
         }
-        
+
         # Remove None values to avoid sending unnecessary nulls
         params_dict = {k: v for k, v in params_dict.items() if v is not None}
 
@@ -90,7 +93,7 @@ def register_manage_asset_tools(mcp: FastMCP):
         loop = asyncio.get_running_loop()
         # Get the Unity connection instance
         connection = get_unity_connection()
-        
+
         # Use centralized async retry helper to avoid blocking the event loop
         result = await async_send_command_with_retry("manage_asset", params_dict, loop=loop)
         # Return the result obtained from Unity

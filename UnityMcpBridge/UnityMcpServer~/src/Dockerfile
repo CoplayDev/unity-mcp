@@ -24,4 +24,4 @@ RUN uv pip install --system -e .
 
 
 # Command to run the server
-CMD ["uv", "run", "server.py"] 
+CMD ["uv", "run", "server.py"]

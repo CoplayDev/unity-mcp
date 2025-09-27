@@ -1,8 +1,10 @@
-from mcp.server.fastmcp import FastMCP, Context
 from typing import Dict, Any, List
+
+from mcp.server.fastmcp import FastMCP, Context
+from telemetry_decorator import telemetry_tool
+
 from unity_connection import send_command_with_retry
 
-from telemetry_decorator import telemetry_tool
 
 def register_manage_gameobject_tools(mcp: FastMCP):
     """Register all GameObject management tools with the MCP server."""
@@ -15,9 +17,12 @@ def register_manage_gameobject_tools(mcp: FastMCP):
         target: str = None,  # GameObject identifier by name or path
         search_method: str = None,
         # --- Combined Parameters for Create/Modify ---
-        name: str = None,  # Used for both 'create' (new object name) and 'modify' (rename)
-        tag: str = None,  # Used for both 'create' (initial tag) and 'modify' (change tag)
-        parent: str = None,  # Used for both 'create' (initial parent) and 'modify' (change parent)
+        # Used for both 'create' (new object name) and 'modify' (rename)
+        name: str = None,
+        # Used for both 'create' (initial tag) and 'modify' (change tag)
+        tag: str = None,
+        # Used for both 'create' (initial parent) and 'modify' (change parent)
+        parent: str = None,
         position: List[float] = None,
         rotation: List[float] = None,
         scale: List[float] = None,
@@ -38,7 +43,8 @@ def register_manage_gameobject_tools(mcp: FastMCP):
         search_inactive: bool = False,
         # -- Component Management Arguments --
         component_name: str = None,
-        includeNonPublicSerialized: bool = None, # Controls serialization of private [SerializeField] fields
+        # Controls serialization of private [SerializeField] fields
+        includeNonPublicSerialized: bool = None,
     ) -> Dict[str, Any]:
         """Manages GameObjects: create, modify, delete, find, and component operations.
 
@@ -108,9 +114,10 @@ def register_manage_gameobject_tools(mcp: FastMCP):
                 "includeNonPublicSerialized": includeNonPublicSerialized
             }
             params = {k: v for k, v in params.items() if v is not None}
-            
+
             # --- Handle Prefab Path Logic ---
-            if action == "create" and params.get("saveAsPrefab"): # Check if 'saveAsPrefab' is explicitly True in params
+            # Check if 'saveAsPrefab' is explicitly True in params
+            if action == "create" and params.get("saveAsPrefab"):
                 if "prefabPath" not in params:
                     if "name" not in params or not params["name"]:
                         return {"success": False, "message": "Cannot create default prefab path: 'name' parameter is missing."}
@@ -122,9 +129,9 @@ def register_manage_gameobject_tools(mcp: FastMCP):
                     return {"success": False, "message": f"Invalid prefab_path: '{params['prefabPath']}' must end with .prefab"}
             # Ensure prefabFolder itself isn't sent if prefabPath was constructed or provided
             # The C# side only needs the final prefabPath
-            params.pop("prefabFolder", None) 
+            params.pop("prefabFolder", None)
             # --------------------------------
-            
+
             # Use centralized retry helper
             response = send_command_with_retry("manage_gameobject", params)
 
@@ -135,4 +142,4 @@ def register_manage_gameobject_tools(mcp: FastMCP):
             return response if isinstance(response, dict) else {"success": False, "message": str(response)}
 
         except Exception as e:
-            return {"success": False, "message": f"Python error managing GameObject: {str(e)}"} 
+            return {"success": False, "message": f"Python error managing GameObject: {str(e)}"}

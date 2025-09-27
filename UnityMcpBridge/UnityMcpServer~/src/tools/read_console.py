@@ -2,9 +2,12 @@
 Defines the read_console tool for accessing Unity Editor console messages.
 """
 from typing import List, Dict, Any
+
 from mcp.server.fastmcp import FastMCP, Context
-from unity_connection import send_command_with_retry
 from telemetry_decorator import telemetry_tool
+
+from unity_connection import send_command_with_retry
+
 
 def register_read_console_tools(mcp: FastMCP):
     """Registers the read_console tool with the MCP server."""
@@ -36,7 +39,7 @@ def register_read_console_tools(mcp: FastMCP):
         Returns:
             Dictionary with results. For 'get', includes 'data' (messages).
         """
-        
+
         # Get the connection instance
         bridge = get_unity_connection()
 
@@ -49,7 +52,7 @@ def register_read_console_tools(mcp: FastMCP):
         # Normalize action if it's a string
         if isinstance(action, str):
             action = action.lower()
-        
+
         # Coerce count defensively (string/float -> int)
         def _coerce_int(value, default=None):
             if value is None:
@@ -80,11 +83,12 @@ def register_read_console_tools(mcp: FastMCP):
         }
 
         # Remove None values unless it's 'count' (as None might mean 'all')
-        params_dict = {k: v for k, v in params_dict.items() if v is not None or k == 'count'} 
-        
+        params_dict = {k: v for k, v in params_dict.items()
+                       if v is not None or k == 'count'}
+
         # Add count back if it was None, explicitly sending null might be important for C# logic
         if 'count' not in params_dict:
-             params_dict['count'] = None 
+            params_dict['count'] = None
 
         # Use centralized retry helper
         resp = send_command_with_retry("read_console", params_dict)

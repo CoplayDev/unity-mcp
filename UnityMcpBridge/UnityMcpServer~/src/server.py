@@ -1,10 +1,9 @@
-from mcp.server.fastmcp import FastMCP, Context, Image
+from mcp.server.fastmcp import FastMCP
 import logging
 from logging.handlers import RotatingFileHandler
 import os
-from dataclasses import dataclass
 from contextlib import asynccontextmanager
-from typing import AsyncIterator, Dict, Any, List
+from typing import AsyncIterator, Dict, Any
 from config import config
 from tools import register_all_tools
 from unity_connection import get_unity_connection, UnityConnection
@@ -150,7 +149,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
 
 # Initialize MCP server
 mcp = FastMCP(
-    "mcp-for-unity-server",
+    name="mcp-for-unity-server",
     description="Unity Editor integration via Model Context Protocol",
     lifespan=server_lifespan
 )

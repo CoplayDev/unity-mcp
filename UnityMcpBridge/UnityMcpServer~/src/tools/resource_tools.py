@@ -3,17 +3,17 @@ Resource wrapper tools so clients that do not expose MCP resources primitives
 can still list and read files via normal tools. These call into the same
 safe path logic (re-implemented here to avoid importing server.py).
 """
-
-from typing import Any
-import re
-from pathlib import Path
-from urllib.parse import urlparse, unquote
 import fnmatch
 import hashlib
 import os
+from pathlib import Path
+import re
+from typing import Any
+from urllib.parse import urlparse, unquote
 
 from mcp.server.fastmcp import FastMCP, Context
 from telemetry_decorator import telemetry_tool
+
 from unity_connection import send_command_with_retry
 
 

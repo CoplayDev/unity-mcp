@@ -1,20 +1,23 @@
-from mcp.server.fastmcp import FastMCP, Context
-from typing import Dict, Any, List
-from unity_connection import send_command_with_retry
 import base64
 import os
+from typing import Dict, Any, List
 from urllib.parse import urlparse, unquote
+
+from mcp.server.fastmcp import FastMCP, Context
+
+from unity_connection import send_command_with_retry
 
 try:
     from telemetry_decorator import telemetry_tool
-    from telemetry import record_milestone, MilestoneType
     HAS_TELEMETRY = True
 except ImportError:
     HAS_TELEMETRY = False
+
     def telemetry_tool(tool_name: str):
         def decorator(func):
             return func
         return decorator
+
 
 def register_manage_script_tools(mcp: FastMCP):
     """Register all script management tools with the MCP server."""
@@ -32,7 +35,7 @@ def register_manage_script_tools(mcp: FastMCP):
         """
         raw_path: str
         if uri.startswith("unity://path/"):
-            raw_path = uri[len("unity://path/") :]
+            raw_path = uri[len("unity://path/"):]
         elif uri.startswith("file://"):
             parsed = urlparse(uri)
             host = (parsed.netloc or "").strip()
@@ -56,7 +59,8 @@ def register_manage_script_tools(mcp: FastMCP):
 
         # If an 'Assets' segment exists, compute path relative to it (case-insensitive)
         parts = [p for p in norm.split("/") if p not in ("", ".")]
-        idx = next((i for i, seg in enumerate(parts) if seg.lower() == "assets"), None)
+        idx = next((i for i, seg in enumerate(parts)
+                   if seg.lower() == "assets"), None)
         assets_rel = "/".join(parts[idx:]) if idx is not None else None
 
         effective_path = assets_rel if assets_rel else norm
@@ -127,7 +131,8 @@ def register_manage_script_tools(mcp: FastMCP):
             contents = data.get("contents")
             if not contents and data.get("contentsEncoded"):
                 try:
-                    contents = base64.b64decode(data.get("encodedContents", "").encode("utf-8")).decode("utf-8", "replace")
+                    contents = base64.b64decode(data.get("encodedContents", "").encode(
+                        "utf-8")).decode("utf-8", "replace")
                 except Exception:
                     contents = contents or ""
 
@@ -151,7 +156,7 @@ def register_manage_script_tools(mcp: FastMCP):
                 if "startLine" in e2 and "startCol" in e2 and "endLine" in e2 and "endCol" in e2:
                     # Guard: explicit fields must be 1-based.
                     zero_based = False
-                    for k in ("startLine","startCol","endLine","endCol"):
+                    for k in ("startLine", "startCol", "endLine", "endCol"):
                         try:
                             if int(e2.get(k, 1)) < 1:
                                 zero_based = True
@@ -161,13 +166,14 @@ def register_manage_script_tools(mcp: FastMCP):
                         if strict:
                             return {"success": False, "code": "zero_based_explicit_fields", "message": "Explicit line/col fields are 1-based; received zero-based.", "data": {"normalizedEdits": normalized_edits}}
                         # Normalize by clamping to 1 and warn
-                        for k in ("startLine","startCol","endLine","endCol"):
+                        for k in ("startLine", "startCol", "endLine", "endCol"):
                             try:
                                 if int(e2.get(k, 1)) < 1:
                                     e2[k] = 1
                             except Exception:
                                 pass
-                        warnings.append("zero_based_explicit_fields_normalized")
+                        warnings.append(
+                            "zero_based_explicit_fields_normalized")
                     normalized_edits.append(e2)
                     continue
 
@@ -205,17 +211,18 @@ def register_manage_script_tools(mcp: FastMCP):
                     "success": False,
                     "code": "missing_field",
                     "message": "apply_text_edits requires startLine/startCol/endLine/endCol/newText or a normalizable 'range'",
-                    "data": {"expected": ["startLine","startCol","endLine","endCol","newText"], "got": e}
+                    "data": {"expected": ["startLine", "startCol", "endLine", "endCol", "newText"], "got": e}
                 }
         else:
             # Even when edits appear already in explicit form, validate 1-based coordinates.
             normalized_edits = []
             for e in edits or []:
                 e2 = dict(e)
-                has_all = all(k in e2 for k in ("startLine","startCol","endLine","endCol"))
+                has_all = all(k in e2 for k in (
+                    "startLine", "startCol", "endLine", "endCol"))
                 if has_all:
                     zero_based = False
-                    for k in ("startLine","startCol","endLine","endCol"):
+                    for k in ("startLine", "startCol", "endLine", "endCol"):
                         try:
                             if int(e2.get(k, 1)) < 1:
                                 zero_based = True
@@ -224,21 +231,24 @@ def register_manage_script_tools(mcp: FastMCP):
                     if zero_based:
                         if strict:
                             return {"success": False, "code": "zero_based_explicit_fields", "message": "Explicit line/col fields are 1-based; received zero-based.", "data": {"normalizedEdits": [e2]}}
-                        for k in ("startLine","startCol","endLine","endCol"):
+                        for k in ("startLine", "startCol", "endLine", "endCol"):
                             try:
                                 if int(e2.get(k, 1)) < 1:
                                     e2[k] = 1
                             except Exception:
                                 pass
                         if "zero_based_explicit_fields_normalized" not in warnings:
-                            warnings.append("zero_based_explicit_fields_normalized")
+                            warnings.append(
+                                "zero_based_explicit_fields_normalized")
                 normalized_edits.append(e2)
 
         # Preflight: detect overlapping ranges among normalized line/col spans
         def _pos_tuple(e: Dict[str, Any], key_start: bool) -> tuple[int, int]:
             return (
-                int(e.get("startLine", 1)) if key_start else int(e.get("endLine", 1)),
-                int(e.get("startCol", 1)) if key_start else int(e.get("endCol", 1)),
+                int(e.get("startLine", 1)) if key_start else int(
+                    e.get("endLine", 1)),
+                int(e.get("startCol", 1)) if key_start else int(
+                    e.get("endCol", 1)),
             )
 
         def _le(a: tuple[int, int], b: tuple[int, int]) -> bool:
@@ -320,10 +330,16 @@ def register_manage_script_tools(mcp: FastMCP):
             if resp.get("success") and (options or {}).get("force_sentinel_reload"):
                 # Optional: flip sentinel via menu if explicitly requested
                 try:
-                    import threading, time, json, glob, os
+                    import threading
+                    import time
+                    import json
+                    import glob
+                    import os
+
                     def _latest_status() -> dict | None:
                         try:
-                            files = sorted(glob.glob(os.path.expanduser("~/.unity-mcp/unity-mcp-status-*.json")), key=os.path.getmtime, reverse=True)
+                            files = sorted(glob.glob(os.path.expanduser(
+                                "~/.unity-mcp/unity-mcp-status-*.json")), key=os.path.getmtime, reverse=True)
                             if not files:
                                 return None
                             with open(files[0], "r") as f:
@@ -369,7 +385,8 @@ def register_manage_script_tools(mcp: FastMCP):
         name = os.path.splitext(os.path.basename(path))[0]
         directory = os.path.dirname(path)
         # Local validation to avoid round-trips on obviously bad input
-        norm_path = os.path.normpath((path or "").replace("\\", "/")).replace("\\", "/")
+        norm_path = os.path.normpath(
+            (path or "").replace("\\", "/")).replace("\\", "/")
         if not directory or directory.split("/")[0].lower() != "assets":
             return {"success": False, "code": "path_outside_assets", "message": f"path must be under 'Assets/'; got '{path}'."}
         if ".." in norm_path.split("/") or norm_path.startswith("/"):
@@ -386,7 +403,8 @@ def register_manage_script_tools(mcp: FastMCP):
             "scriptType": script_type,
         }
         if contents:
-            params["encodedContents"] = base64.b64encode(contents.encode("utf-8")).decode("utf-8")
+            params["encodedContents"] = base64.b64encode(
+                contents.encode("utf-8")).decode("utf-8")
             params["contentsEncoded"] = True
         params = {k: v for k, v in params.items() if v is not None}
         resp = send_command_with_retry("manage_script", params)
@@ -433,8 +451,10 @@ def register_manage_script_tools(mcp: FastMCP):
         resp = send_command_with_retry("manage_script", params)
         if isinstance(resp, dict) and resp.get("success"):
             diags = resp.get("data", {}).get("diagnostics", []) or []
-            warnings = sum(1 for d in diags if str(d.get("severity", "")).lower() == "warning")
-            errors = sum(1 for d in diags if str(d.get("severity", "")).lower() in ("error", "fatal"))
+            warnings = sum(1 for d in diags if str(
+                d.get("severity", "")).lower() == "warning")
+            errors = sum(1 for d in diags if str(
+                d.get("severity", "")).lower() in ("error", "fatal"))
             if include_diagnostics:
                 return {"success": True, "data": {"diagnostics": diags, "summary": {"warnings": warnings, "errors": errors}}}
             return {"success": True, "data": {"warnings": warnings, "errors": errors}}
@@ -488,7 +508,8 @@ def register_manage_script_tools(mcp: FastMCP):
                     data = read_resp.get("data", {})
                     current = data.get("contents")
                     if not current and data.get("contentsEncoded"):
-                        current = base64.b64decode(data.get("encodedContents", "").encode("utf-8")).decode("utf-8", "replace")
+                        current = base64.b64decode(data.get("encodedContents", "").encode(
+                            "utf-8")).decode("utf-8", "replace")
                     if current is None:
                         return {"success": False, "code": "deprecated_update", "message": "Use apply_text_edits; current file read returned no contents."}
 
@@ -517,14 +538,17 @@ def register_manage_script_tools(mcp: FastMCP):
                     # Preflight size vs. default cap (256 KiB) to avoid opaque server errors
                     try:
                         import json as _json
-                        payload_bytes = len(_json.dumps({"edits": edits}, ensure_ascii=False).encode("utf-8"))
+                        payload_bytes = len(_json.dumps(
+                            {"edits": edits}, ensure_ascii=False).encode("utf-8"))
                         if payload_bytes > 256 * 1024:
                             return {"success": False, "code": "payload_too_large", "message": f"Edit payload {payload_bytes} bytes exceeds 256 KiB cap; try structured ops or chunking."}
                     except Exception:
                         pass
-                    routed = send_command_with_retry("manage_script", route_params)
+                    routed = send_command_with_retry(
+                        "manage_script", route_params)
                     if isinstance(routed, dict):
-                        routed.setdefault("message", "Routed legacy update to apply_text_edits")
+                        routed.setdefault(
+                            "message", "Routed legacy update to apply_text_edits")
                         return routed
                     return {"success": False, "message": str(routed)}
                 except Exception as e:
@@ -542,7 +566,8 @@ def register_manage_script_tools(mcp: FastMCP):
             # Base64 encode the contents if they exist to avoid JSON escaping issues
             if contents:
                 if action == 'create':
-                    params["encodedContents"] = base64.b64encode(contents.encode('utf-8')).decode('utf-8')
+                    params["encodedContents"] = base64.b64encode(
+                        contents.encode('utf-8')).decode('utf-8')
                     params["contentsEncoded"] = True
                 else:
                     params["contents"] = contents
@@ -554,7 +579,8 @@ def register_manage_script_tools(mcp: FastMCP):
             if isinstance(response, dict):
                 if response.get("success"):
                     if response.get("data", {}).get("contentsEncoded"):
-                        decoded_contents = base64.b64decode(response["data"]["encodedContents"]).decode('utf-8')
+                        decoded_contents = base64.b64decode(
+                            response["data"]["encodedContents"]).decode('utf-8')
                         response["data"]["contents"] = decoded_contents
                         del response["data"]["encodedContents"]
                         del response["data"]["contentsEncoded"]
@@ -583,10 +609,10 @@ def register_manage_script_tools(mcp: FastMCP):
         try:
             # Keep in sync with server/Editor ManageScript implementation
             ops = [
-                "replace_class","delete_class","replace_method","delete_method",
-                "insert_method","anchor_insert","anchor_delete","anchor_replace"
+                "replace_class", "delete_class", "replace_method", "delete_method",
+                "insert_method", "anchor_insert", "anchor_delete", "anchor_replace"
             ]
-            text_ops = ["replace_range","regex_replace","prepend","append"]
+            text_ops = ["replace_range", "regex_replace", "prepend", "append"]
             # Match ManageScript.MaxEditPayloadBytes if exposed; hardcode a sensible default fallback
             max_edit_payload_bytes = 256 * 1024
             guards = {"using_guard": True}
@@ -615,7 +641,8 @@ def register_manage_script_tools(mcp: FastMCP):
             resp = send_command_with_retry("manage_script", params)
             if isinstance(resp, dict) and resp.get("success"):
                 data = resp.get("data", {})
-                minimal = {"sha256": data.get("sha256"), "lengthBytes": data.get("lengthBytes")}
+                minimal = {"sha256": data.get(
+                    "sha256"), "lengthBytes": data.get("lengthBytes")}
                 return {"success": True, "data": minimal}
             return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}
         except Exception as e:

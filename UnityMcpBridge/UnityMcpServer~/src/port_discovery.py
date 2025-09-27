@@ -11,31 +11,31 @@ What changed and why:
   (quick socket connect + ping) before choosing it.
 """
 
+import glob
 import json
-import os
 import logging
 from pathlib import Path
-from typing import Optional, List
-import glob
 import socket
+from typing import Optional, List
 
 logger = logging.getLogger("mcp-for-unity-server")
+
 
 class PortDiscovery:
     """Handles port discovery from Unity Bridge registry"""
     REGISTRY_FILE = "unity-mcp-port.json"  # legacy single-project file
     DEFAULT_PORT = 6400
     CONNECT_TIMEOUT = 0.3  # seconds, keep this snappy during discovery
-    
+
     @staticmethod
     def get_registry_path() -> Path:
         """Get the path to the port registry file"""
         return Path.home() / ".unity-mcp" / PortDiscovery.REGISTRY_FILE
-    
+
     @staticmethod
     def get_registry_dir() -> Path:
         return Path.home() / ".unity-mcp"
-    
+
     @staticmethod
     def list_candidate_files() -> List[Path]:
         """Return candidate registry files, newest first.
@@ -52,7 +52,7 @@ class PortDiscovery:
             # Put legacy at the end so hashed, per-project files win
             hashed.append(legacy)
         return hashed
-    
+
     @staticmethod
     def _try_probe_unity_mcp(port: int) -> bool:
         """Quickly check if a MCP for Unity listener is on this port.
@@ -78,7 +78,8 @@ class PortDiscovery:
         try:
             base = PortDiscovery.get_registry_dir()
             status_files = sorted(
-                (Path(p) for p in glob.glob(str(base / "unity-mcp-status-*.json"))),
+                (Path(p)
+                 for p in glob.glob(str(base / "unity-mcp-status-*.json"))),
                 key=lambda p: p.stat().st_mtime,
                 reverse=True,
             )
@@ -88,14 +89,14 @@ class PortDiscovery:
                 return json.load(f)
         except Exception:
             return None
-    
+
     @staticmethod
     def discover_unity_port() -> int:
         """
         Discover Unity port by scanning per-project and legacy registry files.
         Prefer the newest file whose port responds; fall back to first parsed
         value; finally default to 6400.
-        
+
         Returns:
             Port number to connect to
         """
@@ -120,26 +121,29 @@ class PortDiscovery:
                     if first_seen_port is None:
                         first_seen_port = unity_port
                     if PortDiscovery._try_probe_unity_mcp(unity_port):
-                        logger.info(f"Using Unity port from {path.name}: {unity_port}")
+                        logger.info(
+                            f"Using Unity port from {path.name}: {unity_port}")
                         return unity_port
             except Exception as e:
                 logger.warning(f"Could not read port registry {path}: {e}")
 
         if first_seen_port is not None:
-            logger.info(f"No responsive port found; using first seen value {first_seen_port}")
+            logger.info(
+                f"No responsive port found; using first seen value {first_seen_port}")
             return first_seen_port
 
         # Fallback to default port
-        logger.info(f"No port registry found; using default port {PortDiscovery.DEFAULT_PORT}")
+        logger.info(
+            f"No port registry found; using default port {PortDiscovery.DEFAULT_PORT}")
         return PortDiscovery.DEFAULT_PORT
-    
+
     @staticmethod
     def get_port_config() -> Optional[dict]:
         """
         Get the most relevant port configuration from registry.
         Returns the most recent hashed file's config if present,
         otherwise the legacy file's config. Returns None if nothing exists.
-        
+
         Returns:
             Port configuration dict or None if not found
         """
@@ -151,5 +155,6 @@ class PortDiscovery:
                 with open(path, 'r') as f:
                     return json.load(f)
             except Exception as e:
-                logger.warning(f"Could not read port configuration {path}: {e}")
+                logger.warning(
+                    f"Could not read port configuration {path}: {e}")
         return None
