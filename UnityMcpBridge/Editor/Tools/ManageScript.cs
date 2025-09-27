@@ -90,7 +90,7 @@ namespace MCPForUnity.Editor.Tools
                         return false;
                     }
                     var atAssets = string.Equals(
-                        di.FullName.Replace('\\','/'),
+                        di.FullName.Replace('\\', '/'),
                         assets,
                         StringComparison.OrdinalIgnoreCase
                     );
@@ -115,7 +115,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 return Response.Error("invalid_params", "Parameters cannot be null.");
             }
-            
+
             // Extract parameters
             string action = @params["action"]?.ToString()?.ToLower();
             string name = @params["name"]?.ToString();
@@ -207,81 +207,81 @@ namespace MCPForUnity.Editor.Tools
                 case "delete":
                     return DeleteScript(fullPath, relativePath);
                 case "apply_text_edits":
-                {
-                    var textEdits = @params["edits"] as JArray;
-                    string precondition = @params["precondition_sha256"]?.ToString();
-                    // Respect optional options
-                    string refreshOpt = @params["options"]?["refresh"]?.ToString()?.ToLowerInvariant();
-                    string validateOpt = @params["options"]?["validate"]?.ToString()?.ToLowerInvariant();
-                    return ApplyTextEdits(fullPath, relativePath, name, textEdits, precondition, refreshOpt, validateOpt);
-                }
+                    {
+                        var textEdits = @params["edits"] as JArray;
+                        string precondition = @params["precondition_sha256"]?.ToString();
+                        // Respect optional options
+                        string refreshOpt = @params["options"]?["refresh"]?.ToString()?.ToLowerInvariant();
+                        string validateOpt = @params["options"]?["validate"]?.ToString()?.ToLowerInvariant();
+                        return ApplyTextEdits(fullPath, relativePath, name, textEdits, precondition, refreshOpt, validateOpt);
+                    }
                 case "validate":
-                {
-                    string level = @params["level"]?.ToString()?.ToLowerInvariant() ?? "standard";
-                    var chosen = level switch
                     {
-                        "basic" => ValidationLevel.Basic,
-                        "standard" => ValidationLevel.Standard,
-                        "strict" => ValidationLevel.Strict,
-                        "comprehensive" => ValidationLevel.Comprehensive,
-                        _ => ValidationLevel.Standard
-                    };
-                    string fileText;
-                    try { fileText = File.ReadAllText(fullPath); }
-                    catch (Exception ex) { return Response.Error($"Failed to read script: {ex.Message}"); }
+                        string level = @params["level"]?.ToString()?.ToLowerInvariant() ?? "standard";
+                        var chosen = level switch
+                        {
+                            "basic" => ValidationLevel.Basic,
+                            "standard" => ValidationLevel.Standard,
+                            "strict" => ValidationLevel.Strict,
+                            "comprehensive" => ValidationLevel.Comprehensive,
+                            _ => ValidationLevel.Standard
+                        };
+                        string fileText;
+                        try { fileText = File.ReadAllText(fullPath); }
+                        catch (Exception ex) { return Response.Error($"Failed to read script: {ex.Message}"); }
 
-                    bool ok = ValidateScriptSyntax(fileText, chosen, out string[] diagsRaw);
-                    var diags = (diagsRaw ?? Array.Empty<string>()).Select(s =>
-                    {
-                        var m = Regex.Match(
-                            s,
-                            @"^(ERROR|WARNING|INFO): (.*?)(?: \(Line (\d+)\))?$",
-                            RegexOptions.CultureInvariant | RegexOptions.Multiline,
-                            TimeSpan.FromMilliseconds(250)
-                        );
-                        string severity = m.Success ? m.Groups[1].Value.ToLowerInvariant() : "info";
-                        string message = m.Success ? m.Groups[2].Value : s;
-                        int lineNum = m.Success && int.TryParse(m.Groups[3].Value, out var l) ? l : 0;
-                        return new { line = lineNum, col = 0, severity, message };
-                    }).ToArray();
+                        bool ok = ValidateScriptSyntax(fileText, chosen, out string[] diagsRaw);
+                        var diags = (diagsRaw ?? Array.Empty<string>()).Select(s =>
+                        {
+                            var m = Regex.Match(
+                                s,
+                                @"^(ERROR|WARNING|INFO): (.*?)(?: \(Line (\d+)\))?$",
+                                RegexOptions.CultureInvariant | RegexOptions.Multiline,
+                                TimeSpan.FromMilliseconds(250)
+                            );
+                            string severity = m.Success ? m.Groups[1].Value.ToLowerInvariant() : "info";
+                            string message = m.Success ? m.Groups[2].Value : s;
+                            int lineNum = m.Success && int.TryParse(m.Groups[3].Value, out var l) ? l : 0;
+                            return new { line = lineNum, col = 0, severity, message };
+                        }).ToArray();
 
-                    var result = new { diagnostics = diags };
-                    return ok ? Response.Success("Validation completed.", result)
-                               : Response.Error("Validation failed.", result);
-                }
+                        var result = new { diagnostics = diags };
+                        return ok ? Response.Success("Validation completed.", result)
+                                   : Response.Error("Validation failed.", result);
+                    }
                 case "edit":
                     Debug.LogWarning("manage_script.edit is deprecated; prefer apply_text_edits. Serving structured edit for backward compatibility.");
                     var structEdits = @params["edits"] as JArray;
                     var options = @params["options"] as JObject;
                     return EditScript(fullPath, relativePath, name, structEdits, options);
                 case "get_sha":
-                {
-                    try
                     {
-                        if (!File.Exists(fullPath))
-                            return Response.Error($"Script not found at '{relativePath}'.");
-
-                        string text = File.ReadAllText(fullPath);
-                        string sha = ComputeSha256(text);
-                        var fi = new FileInfo(fullPath);
-                        long lengthBytes;
-                        try { lengthBytes = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetByteCount(text); }
-                        catch { lengthBytes = fi.Exists ? fi.Length : 0; }
-                        var data = new
+                        try
                         {
-                            uri = $"unity://path/{relativePath}",
-                            path = relativePath,
-                            sha256 = sha,
-                            lengthBytes,
-                            lastModifiedUtc = fi.Exists ? fi.LastWriteTimeUtc.ToString("o") : string.Empty
-                        };
-                        return Response.Success($"SHA computed for '{relativePath}'.", data);
+                            if (!File.Exists(fullPath))
+                                return Response.Error($"Script not found at '{relativePath}'.");
+
+                            string text = File.ReadAllText(fullPath);
+                            string sha = ComputeSha256(text);
+                            var fi = new FileInfo(fullPath);
+                            long lengthBytes;
+                            try { lengthBytes = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetByteCount(text); }
+                            catch { lengthBytes = fi.Exists ? fi.Length : 0; }
+                            var data = new
+                            {
+                                uri = $"unity://path/{relativePath}",
+                                path = relativePath,
+                                sha256 = sha,
+                                lengthBytes,
+                                lastModifiedUtc = fi.Exists ? fi.LastWriteTimeUtc.ToString("o") : string.Empty
+                            };
+                            return Response.Success($"SHA computed for '{relativePath}'.", data);
+                        }
+                        catch (Exception ex)
+                        {
+                            return Response.Error($"Failed to compute SHA: {ex.Message}");
+                        }
                     }
-                    catch (Exception ex)
-                    {
-                        return Response.Error($"Failed to compute SHA: {ex.Message}");
-                    }
-                }
                 default:
                     return Response.Error(
                         $"Unknown action: '{action}'. Valid actions are: create, delete, apply_text_edits, validate, read (deprecated), update (deprecated), edit (deprecated)."
@@ -505,7 +505,7 @@ namespace MCPForUnity.Editor.Tools
             try
             {
                 var di = new DirectoryInfo(Path.GetDirectoryName(fullPath) ?? "");
-                while (di != null && !string.Equals(di.FullName.Replace('\\','/'), Application.dataPath.Replace('\\','/'), StringComparison.OrdinalIgnoreCase))
+                while (di != null && !string.Equals(di.FullName.Replace('\\', '/'), Application.dataPath.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase))
                 {
                     if (di.Exists && (di.Attributes & FileAttributes.ReparsePoint) != 0)
                         return Response.Error("Refusing to edit a symlinked script path.");
@@ -640,7 +640,7 @@ namespace MCPForUnity.Editor.Tools
                                 };
                                 structEdits.Add(op);
                                 // Reuse structured path
-                                return EditScript(fullPath, relativePath, name, structEdits, new JObject{ ["refresh"] = "immediate", ["validate"] = "standard" });
+                                return EditScript(fullPath, relativePath, name, structEdits, new JObject { ["refresh"] = "immediate", ["validate"] = "standard" });
                             }
                         }
                     }
@@ -656,7 +656,7 @@ namespace MCPForUnity.Editor.Tools
             spans = spans.OrderByDescending(t => t.start).ToList();
             for (int i = 1; i < spans.Count; i++)
             {
-                 if (spans[i].end > spans[i - 1].start)
+                if (spans[i].end > spans[i - 1].start)
                 {
                     var conflict = new[] { new { startA = spans[i].start, endA = spans[i].end, startB = spans[i - 1].start, endB = spans[i - 1].end } };
                     return Response.Error("overlap", new { status = "overlap", conflicts = conflict, hint = "Sort ranges descending by start and compute from the same snapshot." });
@@ -942,8 +942,10 @@ namespace MCPForUnity.Editor.Tools
                 if (c == '\'') { inChr = true; esc = false; continue; }
                 if (c == '/' && n == '/') { while (i < end && text[i] != '\n') i++; continue; }
                 if (c == '/' && n == '*') { i += 2; while (i + 1 < end && !(text[i] == '*' && text[i + 1] == '/')) i++; i++; continue; }
-                if (c == '{') brace++; else if (c == '}') brace--;
-                else if (c == '(') paren++; else if (c == ')') paren--;
+                if (c == '{') brace++;
+                else if (c == '}') brace--;
+                else if (c == '(') paren++;
+                else if (c == ')') paren--;
                 else if (c == '[') bracket++; else if (c == ']') bracket--;
                 // Allow temporary negative balance - will check tolerance at end
             }
@@ -1035,291 +1037,291 @@ namespace MCPForUnity.Editor.Tools
                     switch (mode)
                     {
                         case "replace_class":
-                        {
-                            string className = op.Value<string>("className");
-                            string ns = op.Value<string>("namespace");
-                            string replacement = ExtractReplacement(op);
-
-                            if (string.IsNullOrWhiteSpace(className))
-                                return Response.Error("replace_class requires 'className'.");
-                            if (replacement == null)
-                                return Response.Error("replace_class requires 'replacement' (inline or base64).");
-
-                            if (!TryComputeClassSpan(working, className, ns, out var spanStart, out var spanLength, out var why))
-                                return Response.Error($"replace_class failed: {why}");
-
-                            if (!ValidateClassSnippet(replacement, className, out var vErr))
-                                return Response.Error($"Replacement snippet invalid: {vErr}");
-
-                            if (applySequentially)
                             {
-                                working = working.Remove(spanStart, spanLength).Insert(spanStart, NormalizeNewlines(replacement));
-                                appliedCount++;
+                                string className = op.Value<string>("className");
+                                string ns = op.Value<string>("namespace");
+                                string replacement = ExtractReplacement(op);
+
+                                if (string.IsNullOrWhiteSpace(className))
+                                    return Response.Error("replace_class requires 'className'.");
+                                if (replacement == null)
+                                    return Response.Error("replace_class requires 'replacement' (inline or base64).");
+
+                                if (!TryComputeClassSpan(working, className, ns, out var spanStart, out var spanLength, out var why))
+                                    return Response.Error($"replace_class failed: {why}");
+
+                                if (!ValidateClassSnippet(replacement, className, out var vErr))
+                                    return Response.Error($"Replacement snippet invalid: {vErr}");
+
+                                if (applySequentially)
+                                {
+                                    working = working.Remove(spanStart, spanLength).Insert(spanStart, NormalizeNewlines(replacement));
+                                    appliedCount++;
+                                }
+                                else
+                                {
+                                    replacements.Add((spanStart, spanLength, NormalizeNewlines(replacement)));
+                                }
+                                break;
                             }
-                            else
-                            {
-                                replacements.Add((spanStart, spanLength, NormalizeNewlines(replacement)));
-                            }
-                            break;
-                        }
 
                         case "delete_class":
-                        {
-                            string className = op.Value<string>("className");
-                            string ns = op.Value<string>("namespace");
-                            if (string.IsNullOrWhiteSpace(className))
-                                return Response.Error("delete_class requires 'className'.");
-
-                            if (!TryComputeClassSpan(working, className, ns, out var s, out var l, out var why))
-                                return Response.Error($"delete_class failed: {why}");
-
-                            if (applySequentially)
                             {
-                                working = working.Remove(s, l);
-                                appliedCount++;
+                                string className = op.Value<string>("className");
+                                string ns = op.Value<string>("namespace");
+                                if (string.IsNullOrWhiteSpace(className))
+                                    return Response.Error("delete_class requires 'className'.");
+
+                                if (!TryComputeClassSpan(working, className, ns, out var s, out var l, out var why))
+                                    return Response.Error($"delete_class failed: {why}");
+
+                                if (applySequentially)
+                                {
+                                    working = working.Remove(s, l);
+                                    appliedCount++;
+                                }
+                                else
+                                {
+                                    replacements.Add((s, l, string.Empty));
+                                }
+                                break;
                             }
-                            else
-                            {
-                                replacements.Add((s, l, string.Empty));
-                            }
-                            break;
-                        }
 
                         case "replace_method":
-                        {
-                            string className = op.Value<string>("className");
-                            string ns = op.Value<string>("namespace");
-                            string methodName = op.Value<string>("methodName");
-                            string replacement = ExtractReplacement(op);
-                            string returnType = op.Value<string>("returnType");
-                            string parametersSignature = op.Value<string>("parametersSignature");
-                            string attributesContains = op.Value<string>("attributesContains");
-
-                            if (string.IsNullOrWhiteSpace(className)) return Response.Error("replace_method requires 'className'.");
-                            if (string.IsNullOrWhiteSpace(methodName)) return Response.Error("replace_method requires 'methodName'.");
-                            if (replacement == null) return Response.Error("replace_method requires 'replacement' (inline or base64).");
-
-                            if (!TryComputeClassSpan(working, className, ns, out var clsStart, out var clsLen, out var whyClass))
-                                return Response.Error($"replace_method failed to locate class: {whyClass}");
-
-                            if (!TryComputeMethodSpan(working, clsStart, clsLen, methodName, returnType, parametersSignature, attributesContains, out var mStart, out var mLen, out var whyMethod))
                             {
-                                bool hasDependentInsert = edits.Any(j => j is JObject jo &&
-                                    string.Equals(jo.Value<string>("className"), className, StringComparison.Ordinal) &&
-                                    string.Equals(jo.Value<string>("methodName"), methodName, StringComparison.Ordinal) &&
-                                    ((jo.Value<string>("mode") ?? jo.Value<string>("op") ?? string.Empty).ToLowerInvariant() == "insert_method"));
-                                string hint = hasDependentInsert && !applySequentially ? " Hint: This batch inserts this method. Use options.applyMode='sequential' or split into separate calls." : string.Empty;
-                                return Response.Error($"replace_method failed: {whyMethod}.{hint}");
-                            }
+                                string className = op.Value<string>("className");
+                                string ns = op.Value<string>("namespace");
+                                string methodName = op.Value<string>("methodName");
+                                string replacement = ExtractReplacement(op);
+                                string returnType = op.Value<string>("returnType");
+                                string parametersSignature = op.Value<string>("parametersSignature");
+                                string attributesContains = op.Value<string>("attributesContains");
 
-                            if (applySequentially)
-                            {
-                                working = working.Remove(mStart, mLen).Insert(mStart, NormalizeNewlines(replacement));
-                                appliedCount++;
+                                if (string.IsNullOrWhiteSpace(className)) return Response.Error("replace_method requires 'className'.");
+                                if (string.IsNullOrWhiteSpace(methodName)) return Response.Error("replace_method requires 'methodName'.");
+                                if (replacement == null) return Response.Error("replace_method requires 'replacement' (inline or base64).");
+
+                                if (!TryComputeClassSpan(working, className, ns, out var clsStart, out var clsLen, out var whyClass))
+                                    return Response.Error($"replace_method failed to locate class: {whyClass}");
+
+                                if (!TryComputeMethodSpan(working, clsStart, clsLen, methodName, returnType, parametersSignature, attributesContains, out var mStart, out var mLen, out var whyMethod))
+                                {
+                                    bool hasDependentInsert = edits.Any(j => j is JObject jo &&
+                                        string.Equals(jo.Value<string>("className"), className, StringComparison.Ordinal) &&
+                                        string.Equals(jo.Value<string>("methodName"), methodName, StringComparison.Ordinal) &&
+                                        ((jo.Value<string>("mode") ?? jo.Value<string>("op") ?? string.Empty).ToLowerInvariant() == "insert_method"));
+                                    string hint = hasDependentInsert && !applySequentially ? " Hint: This batch inserts this method. Use options.applyMode='sequential' or split into separate calls." : string.Empty;
+                                    return Response.Error($"replace_method failed: {whyMethod}.{hint}");
+                                }
+
+                                if (applySequentially)
+                                {
+                                    working = working.Remove(mStart, mLen).Insert(mStart, NormalizeNewlines(replacement));
+                                    appliedCount++;
+                                }
+                                else
+                                {
+                                    replacements.Add((mStart, mLen, NormalizeNewlines(replacement)));
+                                }
+                                break;
                             }
-                            else
-                            {
-                                replacements.Add((mStart, mLen, NormalizeNewlines(replacement)));
-                            }
-                            break;
-                        }
 
                         case "delete_method":
-                        {
-                            string className = op.Value<string>("className");
-                            string ns = op.Value<string>("namespace");
-                            string methodName = op.Value<string>("methodName");
-                            string returnType = op.Value<string>("returnType");
-                            string parametersSignature = op.Value<string>("parametersSignature");
-                            string attributesContains = op.Value<string>("attributesContains");
-
-                            if (string.IsNullOrWhiteSpace(className)) return Response.Error("delete_method requires 'className'.");
-                            if (string.IsNullOrWhiteSpace(methodName)) return Response.Error("delete_method requires 'methodName'.");
-
-                            if (!TryComputeClassSpan(working, className, ns, out var clsStart, out var clsLen, out var whyClass))
-                                return Response.Error($"delete_method failed to locate class: {whyClass}");
-
-                            if (!TryComputeMethodSpan(working, clsStart, clsLen, methodName, returnType, parametersSignature, attributesContains, out var mStart, out var mLen, out var whyMethod))
                             {
-                                bool hasDependentInsert = edits.Any(j => j is JObject jo &&
-                                    string.Equals(jo.Value<string>("className"), className, StringComparison.Ordinal) &&
-                                    string.Equals(jo.Value<string>("methodName"), methodName, StringComparison.Ordinal) &&
-                                    ((jo.Value<string>("mode") ?? jo.Value<string>("op") ?? string.Empty).ToLowerInvariant() == "insert_method"));
-                                string hint = hasDependentInsert && !applySequentially ? " Hint: This batch inserts this method. Use options.applyMode='sequential' or split into separate calls." : string.Empty;
-                                return Response.Error($"delete_method failed: {whyMethod}.{hint}");
-                            }
+                                string className = op.Value<string>("className");
+                                string ns = op.Value<string>("namespace");
+                                string methodName = op.Value<string>("methodName");
+                                string returnType = op.Value<string>("returnType");
+                                string parametersSignature = op.Value<string>("parametersSignature");
+                                string attributesContains = op.Value<string>("attributesContains");
 
-                            if (applySequentially)
-                            {
-                                working = working.Remove(mStart, mLen);
-                                appliedCount++;
+                                if (string.IsNullOrWhiteSpace(className)) return Response.Error("delete_method requires 'className'.");
+                                if (string.IsNullOrWhiteSpace(methodName)) return Response.Error("delete_method requires 'methodName'.");
+
+                                if (!TryComputeClassSpan(working, className, ns, out var clsStart, out var clsLen, out var whyClass))
+                                    return Response.Error($"delete_method failed to locate class: {whyClass}");
+
+                                if (!TryComputeMethodSpan(working, clsStart, clsLen, methodName, returnType, parametersSignature, attributesContains, out var mStart, out var mLen, out var whyMethod))
+                                {
+                                    bool hasDependentInsert = edits.Any(j => j is JObject jo &&
+                                        string.Equals(jo.Value<string>("className"), className, StringComparison.Ordinal) &&
+                                        string.Equals(jo.Value<string>("methodName"), methodName, StringComparison.Ordinal) &&
+                                        ((jo.Value<string>("mode") ?? jo.Value<string>("op") ?? string.Empty).ToLowerInvariant() == "insert_method"));
+                                    string hint = hasDependentInsert && !applySequentially ? " Hint: This batch inserts this method. Use options.applyMode='sequential' or split into separate calls." : string.Empty;
+                                    return Response.Error($"delete_method failed: {whyMethod}.{hint}");
+                                }
+
+                                if (applySequentially)
+                                {
+                                    working = working.Remove(mStart, mLen);
+                                    appliedCount++;
+                                }
+                                else
+                                {
+                                    replacements.Add((mStart, mLen, string.Empty));
+                                }
+                                break;
                             }
-                            else
-                            {
-                                replacements.Add((mStart, mLen, string.Empty));
-                            }
-                            break;
-                        }
 
                         case "insert_method":
-                        {
-                            string className = op.Value<string>("className");
-                            string ns = op.Value<string>("namespace");
-                            string position = (op.Value<string>("position") ?? "end").ToLowerInvariant();
-                            string afterMethodName = op.Value<string>("afterMethodName");
-                            string afterReturnType = op.Value<string>("afterReturnType");
-                            string afterParameters = op.Value<string>("afterParametersSignature");
-                            string afterAttributesContains = op.Value<string>("afterAttributesContains");
-                            string snippet = ExtractReplacement(op);
-                            // Harden: refuse empty replacement for inserts
-                            if (snippet == null || snippet.Trim().Length == 0)
-                                return Response.Error("insert_method requires a non-empty 'replacement' text.");
-
-                            if (string.IsNullOrWhiteSpace(className)) return Response.Error("insert_method requires 'className'.");
-                            if (snippet == null) return Response.Error("insert_method requires 'replacement' (inline or base64) containing a full method declaration.");
-
-                            if (!TryComputeClassSpan(working, className, ns, out var clsStart, out var clsLen, out var whyClass))
-                                return Response.Error($"insert_method failed to locate class: {whyClass}");
-
-                            if (position == "after")
                             {
-                                if (string.IsNullOrEmpty(afterMethodName)) return Response.Error("insert_method with position='after' requires 'afterMethodName'.");
-                                if (!TryComputeMethodSpan(working, clsStart, clsLen, afterMethodName, afterReturnType, afterParameters, afterAttributesContains, out var aStart, out var aLen, out var whyAfter))
-                                    return Response.Error($"insert_method(after) failed to locate anchor method: {whyAfter}");
-                                int insAt = aStart + aLen;
-                                string text = NormalizeNewlines("\n\n" + snippet.TrimEnd() + "\n");
-                                if (applySequentially)
-                                {
-                                    working = working.Insert(insAt, text);
-                                    appliedCount++;
-                                }
-                                else
-                                {
-                                    replacements.Add((insAt, 0, text));
-                                }
-                            }
-                            else if (!TryFindClassInsertionPoint(working, clsStart, clsLen, position, out var insAt, out var whyIns))
-                                return Response.Error($"insert_method failed: {whyIns}");
-                            else
-                            {
-                                string text = NormalizeNewlines("\n\n" + snippet.TrimEnd() + "\n");
-                                if (applySequentially)
-                                {
-                                    working = working.Insert(insAt, text);
-                                    appliedCount++;
-                                }
-                                else
-                                {
-                                    replacements.Add((insAt, 0, text));
-                                }
-                            }
-                            break;
-                        }
+                                string className = op.Value<string>("className");
+                                string ns = op.Value<string>("namespace");
+                                string position = (op.Value<string>("position") ?? "end").ToLowerInvariant();
+                                string afterMethodName = op.Value<string>("afterMethodName");
+                                string afterReturnType = op.Value<string>("afterReturnType");
+                                string afterParameters = op.Value<string>("afterParametersSignature");
+                                string afterAttributesContains = op.Value<string>("afterAttributesContains");
+                                string snippet = ExtractReplacement(op);
+                                // Harden: refuse empty replacement for inserts
+                                if (snippet == null || snippet.Trim().Length == 0)
+                                    return Response.Error("insert_method requires a non-empty 'replacement' text.");
 
-                        case "anchor_insert":
-                        {
-                            string anchor = op.Value<string>("anchor");
-                            string position = (op.Value<string>("position") ?? "before").ToLowerInvariant();
-                            string text = op.Value<string>("text") ?? ExtractReplacement(op);
-                            if (string.IsNullOrWhiteSpace(anchor)) return Response.Error("anchor_insert requires 'anchor' (regex).");
-                            if (string.IsNullOrEmpty(text)) return Response.Error("anchor_insert requires non-empty 'text'.");
+                                if (string.IsNullOrWhiteSpace(className)) return Response.Error("insert_method requires 'className'.");
+                                if (snippet == null) return Response.Error("insert_method requires 'replacement' (inline or base64) containing a full method declaration.");
 
-                            try
-                            {
-                                var rx = new Regex(anchor, RegexOptions.Multiline, TimeSpan.FromSeconds(2));
-                                var m = rx.Match(working);
-                                if (!m.Success) return Response.Error($"anchor_insert: anchor not found: {anchor}");
-                                int insAt = position == "after" ? m.Index + m.Length : m.Index;
-                                string norm = NormalizeNewlines(text);
-                                if (!norm.EndsWith("\n"))
-                                {
-                                    norm += "\n";
-                                }
+                                if (!TryComputeClassSpan(working, className, ns, out var clsStart, out var clsLen, out var whyClass))
+                                    return Response.Error($"insert_method failed to locate class: {whyClass}");
 
-                                // Duplicate guard: if identical snippet already exists within this class, skip insert
-                                if (TryComputeClassSpan(working, name, null, out var clsStartDG, out var clsLenDG, out _))
+                                if (position == "after")
                                 {
-                                    string classSlice = working.Substring(clsStartDG, Math.Min(clsLenDG, working.Length - clsStartDG));
-                                    if (classSlice.IndexOf(norm, StringComparison.Ordinal) >= 0)
+                                    if (string.IsNullOrEmpty(afterMethodName)) return Response.Error("insert_method with position='after' requires 'afterMethodName'.");
+                                    if (!TryComputeMethodSpan(working, clsStart, clsLen, afterMethodName, afterReturnType, afterParameters, afterAttributesContains, out var aStart, out var aLen, out var whyAfter))
+                                        return Response.Error($"insert_method(after) failed to locate anchor method: {whyAfter}");
+                                    int insAt = aStart + aLen;
+                                    string text = NormalizeNewlines("\n\n" + snippet.TrimEnd() + "\n");
+                                    if (applySequentially)
                                     {
-                                        // Do not insert duplicate; treat as no-op
-                                        break;
+                                        working = working.Insert(insAt, text);
+                                        appliedCount++;
+                                    }
+                                    else
+                                    {
+                                        replacements.Add((insAt, 0, text));
                                     }
                                 }
-                                if (applySequentially)
-                                {
-                                    working = working.Insert(insAt, norm);
-                                    appliedCount++;
-                                }
+                                else if (!TryFindClassInsertionPoint(working, clsStart, clsLen, position, out var insAt, out var whyIns))
+                                    return Response.Error($"insert_method failed: {whyIns}");
                                 else
                                 {
-                                    replacements.Add((insAt, 0, norm));
+                                    string text = NormalizeNewlines("\n\n" + snippet.TrimEnd() + "\n");
+                                    if (applySequentially)
+                                    {
+                                        working = working.Insert(insAt, text);
+                                        appliedCount++;
+                                    }
+                                    else
+                                    {
+                                        replacements.Add((insAt, 0, text));
+                                    }
                                 }
+                                break;
                             }
-                            catch (Exception ex)
+
+                        case "anchor_insert":
                             {
-                                return Response.Error($"anchor_insert failed: {ex.Message}");
+                                string anchor = op.Value<string>("anchor");
+                                string position = (op.Value<string>("position") ?? "before").ToLowerInvariant();
+                                string text = op.Value<string>("text") ?? ExtractReplacement(op);
+                                if (string.IsNullOrWhiteSpace(anchor)) return Response.Error("anchor_insert requires 'anchor' (regex).");
+                                if (string.IsNullOrEmpty(text)) return Response.Error("anchor_insert requires non-empty 'text'.");
+
+                                try
+                                {
+                                    var rx = new Regex(anchor, RegexOptions.Multiline, TimeSpan.FromSeconds(2));
+                                    var m = rx.Match(working);
+                                    if (!m.Success) return Response.Error($"anchor_insert: anchor not found: {anchor}");
+                                    int insAt = position == "after" ? m.Index + m.Length : m.Index;
+                                    string norm = NormalizeNewlines(text);
+                                    if (!norm.EndsWith("\n"))
+                                    {
+                                        norm += "\n";
+                                    }
+
+                                    // Duplicate guard: if identical snippet already exists within this class, skip insert
+                                    if (TryComputeClassSpan(working, name, null, out var clsStartDG, out var clsLenDG, out _))
+                                    {
+                                        string classSlice = working.Substring(clsStartDG, Math.Min(clsLenDG, working.Length - clsStartDG));
+                                        if (classSlice.IndexOf(norm, StringComparison.Ordinal) >= 0)
+                                        {
+                                            // Do not insert duplicate; treat as no-op
+                                            break;
+                                        }
+                                    }
+                                    if (applySequentially)
+                                    {
+                                        working = working.Insert(insAt, norm);
+                                        appliedCount++;
+                                    }
+                                    else
+                                    {
+                                        replacements.Add((insAt, 0, norm));
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    return Response.Error($"anchor_insert failed: {ex.Message}");
+                                }
+                                break;
                             }
-                            break;
-                        }
 
                         case "anchor_delete":
-                        {
-                            string anchor = op.Value<string>("anchor");
-                            if (string.IsNullOrWhiteSpace(anchor)) return Response.Error("anchor_delete requires 'anchor' (regex).");
-                            try
                             {
-                                var rx = new Regex(anchor, RegexOptions.Multiline, TimeSpan.FromSeconds(2));
-                                var m = rx.Match(working);
-                                if (!m.Success) return Response.Error($"anchor_delete: anchor not found: {anchor}");
-                                int delAt = m.Index;
-                                int delLen = m.Length;
-                                if (applySequentially)
+                                string anchor = op.Value<string>("anchor");
+                                if (string.IsNullOrWhiteSpace(anchor)) return Response.Error("anchor_delete requires 'anchor' (regex).");
+                                try
                                 {
-                                    working = working.Remove(delAt, delLen);
-                                    appliedCount++;
+                                    var rx = new Regex(anchor, RegexOptions.Multiline, TimeSpan.FromSeconds(2));
+                                    var m = rx.Match(working);
+                                    if (!m.Success) return Response.Error($"anchor_delete: anchor not found: {anchor}");
+                                    int delAt = m.Index;
+                                    int delLen = m.Length;
+                                    if (applySequentially)
+                                    {
+                                        working = working.Remove(delAt, delLen);
+                                        appliedCount++;
+                                    }
+                                    else
+                                    {
+                                        replacements.Add((delAt, delLen, string.Empty));
+                                    }
                                 }
-                                else
+                                catch (Exception ex)
                                 {
-                                    replacements.Add((delAt, delLen, string.Empty));
+                                    return Response.Error($"anchor_delete failed: {ex.Message}");
                                 }
+                                break;
                             }
-                            catch (Exception ex)
-                            {
-                                return Response.Error($"anchor_delete failed: {ex.Message}");
-                            }
-                            break;
-                        }
 
                         case "anchor_replace":
-                        {
-                            string anchor = op.Value<string>("anchor");
-                            string replacement = op.Value<string>("text") ?? op.Value<string>("replacement") ?? ExtractReplacement(op) ?? string.Empty;
-                            if (string.IsNullOrWhiteSpace(anchor)) return Response.Error("anchor_replace requires 'anchor' (regex).");
-                            try
                             {
-                                var rx = new Regex(anchor, RegexOptions.Multiline, TimeSpan.FromSeconds(2));
-                                var m = rx.Match(working);
-                                if (!m.Success) return Response.Error($"anchor_replace: anchor not found: {anchor}");
-                                int at = m.Index;
-                                int len = m.Length;
-                                string norm = NormalizeNewlines(replacement);
-                                if (applySequentially)
+                                string anchor = op.Value<string>("anchor");
+                                string replacement = op.Value<string>("text") ?? op.Value<string>("replacement") ?? ExtractReplacement(op) ?? string.Empty;
+                                if (string.IsNullOrWhiteSpace(anchor)) return Response.Error("anchor_replace requires 'anchor' (regex).");
+                                try
                                 {
-                                    working = working.Remove(at, len).Insert(at, norm);
-                                    appliedCount++;
+                                    var rx = new Regex(anchor, RegexOptions.Multiline, TimeSpan.FromSeconds(2));
+                                    var m = rx.Match(working);
+                                    if (!m.Success) return Response.Error($"anchor_replace: anchor not found: {anchor}");
+                                    int at = m.Index;
+                                    int len = m.Length;
+                                    string norm = NormalizeNewlines(replacement);
+                                    if (applySequentially)
+                                    {
+                                        working = working.Remove(at, len).Insert(at, norm);
+                                        appliedCount++;
+                                    }
+                                    else
+                                    {
+                                        replacements.Add((at, len, norm));
+                                    }
                                 }
-                                else
+                                catch (Exception ex)
                                 {
-                                    replacements.Add((at, len, norm));
+                                    return Response.Error($"anchor_replace failed: {ex.Message}");
                                 }
+                                break;
                             }
-                            catch (Exception ex)
-                            {
-                                return Response.Error($"anchor_replace failed: {ex.Message}");
-                            }
-                            break;
-                        }
 
                         default:
                             return Response.Error($"Unknown edit mode: '{mode}'. Allowed: replace_class, delete_class, replace_method, delete_method, insert_method, anchor_insert, anchor_delete, anchor_replace.");
@@ -1703,7 +1705,7 @@ namespace MCPForUnity.Editor.Tools
             }
 
             // Tolerate generic constraints between params and body: multiple 'where T : ...'
-            for (;;)
+            for (; ; )
             {
                 // Skip whitespace/comments before checking for 'where'
                 for (; i < searchEnd; i++)
