@@ -105,7 +105,7 @@ namespace MCPForUnity.Editor.Dependencies
             {
                 var result = CheckAllDependencies();
                 var missing = result.GetMissingRequired();
-                
+
                 if (missing.Count == 0)
                 {
                     return "All required dependencies are available.";
@@ -128,7 +128,7 @@ namespace MCPForUnity.Editor.Dependencies
             try
             {
                 var detector = GetCurrentPlatformDetector();
-                
+
                 return dependencyName.ToLowerInvariant() switch
                 {
                     "python" => detector.DetectPython().IsAvailable,
@@ -228,7 +228,7 @@ namespace MCPForUnity.Editor.Dependencies
             {
                 var result = CheckAllDependencies();
                 var detector = GetCurrentPlatformDetector();
-                
+
                 var diagnostics = new System.Text.StringBuilder();
                 diagnostics.AppendLine($"Platform: {detector.PlatformName}");
                 diagnostics.AppendLine($"Check Time: {result.CheckedAt:yyyy-MM-dd HH:mm:ss} UTC");
@@ -240,19 +240,19 @@ namespace MCPForUnity.Editor.Dependencies
                     diagnostics.AppendLine($"=== {dep.Name} ===");
                     diagnostics.AppendLine($"Available: {dep.IsAvailable}");
                     diagnostics.AppendLine($"Required: {dep.IsRequired}");
-                    
+
                     if (!string.IsNullOrEmpty(dep.Version))
                         diagnostics.AppendLine($"Version: {dep.Version}");
-                    
+
                     if (!string.IsNullOrEmpty(dep.Path))
                         diagnostics.AppendLine($"Path: {dep.Path}");
-                    
+
                     if (!string.IsNullOrEmpty(dep.Details))
                         diagnostics.AppendLine($"Details: {dep.Details}");
-                    
+
                     if (!string.IsNullOrEmpty(dep.ErrorMessage))
                         diagnostics.AppendLine($"Error: {dep.ErrorMessage}");
-                    
+
                     diagnostics.AppendLine();
                 }
 
@@ -276,7 +276,7 @@ namespace MCPForUnity.Editor.Dependencies
         private static void GenerateRecommendations(DependencyCheckResult result, IPlatformDetector detector)
         {
             var missing = result.GetMissingDependencies();
-            
+
             if (missing.Count == 0)
             {
                 result.RecommendedActions.Add("All dependencies are available. You can start using MCP for Unity.");

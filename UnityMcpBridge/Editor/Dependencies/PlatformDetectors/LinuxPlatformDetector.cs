@@ -49,7 +49,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                 }
 
                 // Try PATH resolution using 'which' command
-                if (TryFindInPath("python3", out string pathResult) || 
+                if (TryFindInPath("python3", out string pathResult) ||
                     TryFindInPath("python", out pathResult))
                 {
                     if (TryValidatePython(pathResult, out string version, out string fullPath))
@@ -121,14 +121,14 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                 {
                     status.IsAvailable = true;
                     status.Path = serverPath;
-                    
+
                     // Try to get version
                     string versionFile = Path.Combine(serverPath, "server_version.txt");
                     if (File.Exists(versionFile))
                     {
                         status.Version = File.ReadAllText(versionFile).Trim();
                     }
-                    
+
                     status.Details = $"MCP Server found at {serverPath}";
                 }
                 else
@@ -211,7 +211,7 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
                     "/snap/bin",
                     Path.Combine(homeDir, ".local", "bin")
                 };
-                
+
                 string currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
                 psi.EnvironmentVariables["PATH"] = string.Join(":", pathAdditions) + ":" + currentPath;
 
@@ -225,7 +225,7 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
                 {
                     version = output.Substring(7); // Remove "Python " prefix
                     fullPath = pythonPath;
-                    
+
                     // Validate minimum version (3.10+)
                     if (TryParseVersion(version, out var major, out var minor))
                     {
@@ -303,7 +303,7 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
                     "/snap/bin",
                     Path.Combine(homeDir, ".local", "bin")
                 };
-                
+
                 string currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
                 psi.EnvironmentVariables["PATH"] = string.Join(":", pathAdditions) + ":" + currentPath;
 

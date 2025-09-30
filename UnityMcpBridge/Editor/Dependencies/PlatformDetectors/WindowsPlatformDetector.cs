@@ -30,15 +30,15 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                 {
                     "python.exe",
                     "python3.exe",
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), 
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                         "Programs", "Python", "Python313", "python.exe"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), 
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                         "Programs", "Python", "Python312", "python.exe"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), 
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                         "Programs", "Python", "Python311", "python.exe"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), 
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                         "Python313", "python.exe"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), 
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                         "Python312", "python.exe")
                 };
 
@@ -55,7 +55,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                 }
 
                 // Try PATH resolution using 'where' command
-                if (TryFindInPath("python.exe", out string pathResult) || 
+                if (TryFindInPath("python.exe", out string pathResult) ||
                     TryFindInPath("python3.exe", out pathResult))
                 {
                     if (TryValidatePython(pathResult, out string version, out string fullPath))
@@ -127,14 +127,14 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                 {
                     status.IsAvailable = true;
                     status.Path = serverPath;
-                    
+
                     // Try to get version
                     string versionFile = Path.Combine(serverPath, "server_version.txt");
                     if (File.Exists(versionFile))
                     {
                         status.Version = File.ReadAllText(versionFile).Trim();
                     }
-                    
+
                     status.Details = $"MCP Server found at {serverPath}";
                 }
                 else
@@ -213,7 +213,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                 {
                     version = output.Substring(7); // Remove "Python " prefix
                     fullPath = pythonPath;
-                    
+
                     // Validate minimum version (3.10+)
                     if (TryParseVersion(version, out var major, out var minor))
                     {

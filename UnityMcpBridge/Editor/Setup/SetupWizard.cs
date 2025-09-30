@@ -42,7 +42,7 @@ namespace MCPForUnity.Editor.Setup
             {
                 // Always show setup wizard on package import
                 McpLog.Info("Package imported - showing setup wizard", always: false);
-                
+
                 var dependencyResult = DependencyManager.CheckAllDependencies();
                 EditorApplication.delayCall += () => ShowSetupWizard(dependencyResult);
             }
@@ -102,7 +102,7 @@ namespace MCPForUnity.Editor.Setup
         public static void CheckDependencies()
         {
             var result = DependencyManager.CheckAllDependencies();
-            
+
             if (!result.IsSystemReady)
             {
                 bool showWizard = EditorUtility.DisplayDialog(
@@ -111,7 +111,7 @@ namespace MCPForUnity.Editor.Setup
                     "Open Setup Wizard",
                     "Close"
                 );
-                
+
                 if (showWizard)
                 {
                     ShowSetupWizard(result);
