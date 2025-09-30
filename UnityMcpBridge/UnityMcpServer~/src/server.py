@@ -1,3 +1,4 @@
+from telemetry import record_telemetry, record_milestone, RecordType, MilestoneType
 from mcp.server.fastmcp import FastMCP
 import logging
 from logging.handlers import RotatingFileHandler
@@ -21,10 +22,12 @@ logger = logging.getLogger("mcp-for-unity-server")
 # Also write logs to a rotating file so logs are available when launched via stdio
 try:
     import os as _os
-    _log_dir = _os.path.join(_os.path.expanduser("~/Library/Application Support/UnityMCP"), "Logs")
+    _log_dir = _os.path.join(_os.path.expanduser(
+        "~/Library/Application Support/UnityMCP"), "Logs")
     _os.makedirs(_log_dir, exist_ok=True)
     _file_path = _os.path.join(_log_dir, "unity_mcp_server.log")
-    _fh = RotatingFileHandler(_file_path, maxBytes=512*1024, backupCount=2, encoding="utf-8")
+    _fh = RotatingFileHandler(
+        _file_path, maxBytes=512*1024, backupCount=2, encoding="utf-8")
     _fh.setFormatter(logging.Formatter(config.log_format))
     _fh.setLevel(getattr(logging, config.log_level))
     logger.addHandler(_fh)
@@ -42,7 +45,8 @@ except Exception:
 # Quieten noisy third-party loggers to avoid clutter during stdio handshake
 for noisy in ("httpx", "urllib3"):
     try:
-        logging.getLogger(noisy).setLevel(max(logging.WARNING, getattr(logging, config.log_level)))
+        logging.getLogger(noisy).setLevel(
+            max(logging.WARNING, getattr(logging, config.log_level)))
     except Exception:
         pass
 
@@ -50,13 +54,11 @@ for noisy in ("httpx", "urllib3"):
 # Ensure a slightly higher telemetry timeout unless explicitly overridden by env
 try:
 
-
     # Ensure generous timeout unless explicitly overridden by env
     if not os.environ.get("UNITY_MCP_TELEMETRY_TIMEOUT"):
         os.environ["UNITY_MCP_TELEMETRY_TIMEOUT"] = "5.0"
 except Exception:
     pass
-from telemetry import record_telemetry, record_milestone, RecordType, MilestoneType
 
 # Global connection state
 _unity_connection: UnityConnection = None
@@ -67,7 +69,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
     """Handle server startup and shutdown."""
     global _unity_connection
     logger.info("MCP for Unity Server starting up")
-    
+
     # Record server startup telemetry
     start_time = time.time()
     start_clk = time.perf_counter()
@@ -79,6 +81,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
         server_version = "unknown"
     # Defer initial telemetry by 1s to avoid stdio handshake interference
     import threading
+
     def _emit_startup():
         try:
             record_telemetry(RecordType.STARTUP, {
@@ -89,15 +92,17 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
         except Exception:
             logger.debug("Deferred startup telemetry failed", exc_info=True)
     threading.Timer(1.0, _emit_startup).start()
-    
+
     try:
-        skip_connect = os.environ.get("UNITY_MCP_SKIP_STARTUP_CONNECT", "").lower() in ("1", "true", "yes", "on")
+        skip_connect = os.environ.get(
+            "UNITY_MCP_SKIP_STARTUP_CONNECT", "").lower() in ("1", "true", "yes", "on")
         if skip_connect:
-            logger.info("Skipping Unity connection on startup (UNITY_MCP_SKIP_STARTUP_CONNECT=1)")
+            logger.info(
+                "Skipping Unity connection on startup (UNITY_MCP_SKIP_STARTUP_CONNECT=1)")
         else:
             _unity_connection = get_unity_connection()
             logger.info("Connected to Unity on startup")
-            
+
             # Record successful Unity connection (deferred)
             import threading as _t
             _t.Timer(1.0, lambda: record_telemetry(
@@ -107,11 +112,11 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
                     "connection_time_ms": (time.perf_counter() - start_clk) * 1000,
                 }
             )).start()
-            
+
     except ConnectionError as e:
         logger.warning("Could not connect to Unity on startup: %s", e)
         _unity_connection = None
-        
+
         # Record connection failure (deferred)
         import threading as _t
         _err_msg = str(e)[:200]
@@ -124,7 +129,8 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
             }
         )).start()
     except Exception as e:
-        logger.warning("Unexpected error connecting to Unity on startup: %s", e)
+        logger.warning(
+            "Unexpected error connecting to Unity on startup: %s", e)
         _unity_connection = None
         import threading as _t
         _err_msg = str(e)[:200]
@@ -136,7 +142,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
                 "connection_time_ms": (time.perf_counter() - start_clk) * 1000,
             }
         )).start()
-        
+
     try:
         # Yield the connection object so it can be attached to the context
         # The key 'bridge' matches how tools like read_console expect to access it (ctx.bridge)

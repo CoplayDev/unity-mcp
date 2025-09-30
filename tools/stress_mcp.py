@@ -21,7 +21,8 @@ def dlog(*args):
 
 def find_status_files() -> list[Path]:
     home = Path.home()
-    status_dir = Path(os.environ.get("UNITY_MCP_STATUS_DIR", home / ".unity-mcp"))
+    status_dir = Path(os.environ.get(
+        "UNITY_MCP_STATUS_DIR", home / ".unity-mcp"))
     if not status_dir.exists():
         return []
     return sorted(status_dir.glob("unity-mcp-status-*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
@@ -87,7 +88,8 @@ def make_ping_frame() -> bytes:
 
 def make_execute_menu_item(menu_path: str) -> bytes:
     # Retained for manual debugging; not used in normal stress runs
-    payload = {"type": "execute_menu_item", "params": {"action": "execute", "menu_path": menu_path}}
+    payload = {"type": "execute_menu_item", "params": {
+        "action": "execute", "menu_path": menu_path}}
     return json.dumps(payload).encode("utf-8")
 
 
@@ -102,7 +104,8 @@ async def client_loop(idx: int, host: str, port: int, stop_time: float, stats: d
             await asyncio.wait_for(do_handshake(reader), timeout=TIMEOUT)
             # Send a quick ping first
             await write_frame(writer, make_ping_frame())
-            _ = await asyncio.wait_for(read_frame(reader), timeout=TIMEOUT)  # ignore content
+            # ignore content
+            _ = await asyncio.wait_for(read_frame(reader), timeout=TIMEOUT)
 
             # Main activity loop (keep-alive + light load). Edit spam handled by reload_churn_task.
             while time.time() < stop_time:
@@ -182,7 +185,8 @@ async def reload_churn_task(project_path: str, stop_time: float, unity_file: str
                     if relative:
                         # Derive name and directory for ManageScript and compute precondition SHA + EOF position
                         name_base = Path(relative).stem
-                        dir_path = str(Path(relative).parent).replace('\\', '/')
+                        dir_path = str(
+                            Path(relative).parent).replace('\\', '/')
 
                         # 1) Read current contents via manage_script.read to compute SHA and true EOF location
                         contents = None
@@ -203,8 +207,10 @@ async def reload_churn_task(project_path: str, stop_time: float, unity_file: str
                                 await write_frame(writer, json.dumps(read_payload).encode("utf-8"))
                                 resp = await asyncio.wait_for(read_frame(reader), timeout=TIMEOUT)
 
-                                read_obj = json.loads(resp.decode("utf-8", errors="ignore"))
-                                result = read_obj.get("result", read_obj) if isinstance(read_obj, dict) else {}
+                                read_obj = json.loads(
+                                    resp.decode("utf-8", errors="ignore"))
+                                result = read_obj.get("result", read_obj) if isinstance(
+                                    read_obj, dict) else {}
                                 if result.get("success"):
                                     data_obj = result.get("data", {})
                                     contents = data_obj.get("contents") or ""
@@ -222,13 +228,15 @@ async def reload_churn_task(project_path: str, stop_time: float, unity_file: str
                                         pass
 
                         if not read_success or contents is None:
-                            stats["apply_errors"] = stats.get("apply_errors", 0) + 1
+                            stats["apply_errors"] = stats.get(
+                                "apply_errors", 0) + 1
                             await asyncio.sleep(0.5)
                             continue
 
                         # Compute SHA and EOF insertion point
                         import hashlib
-                        sha = hashlib.sha256(contents.encode("utf-8")).hexdigest()
+                        sha = hashlib.sha256(
+                            contents.encode("utf-8")).hexdigest()
                         lines = contents.splitlines(keepends=True)
                         # Insert at true EOF (safe against header guards)
                         end_line = len(lines) + 1  # 1-based exclusive end
@@ -237,7 +245,8 @@ async def reload_churn_task(project_path: str, stop_time: float, unity_file: str
                         # Build a unique marker append; ensure it begins with a newline if needed
                         marker = f"// MCP_STRESS seq={seq} time={int(time.time())}"
                         seq += 1
-                        insert_text = ("\n" if not contents.endswith("\n") else "") + marker + "\n"
+                        insert_text = ("\n" if not contents.endswith(
+                            "\n") else "") + marker + "\n"
 
                         # 2) Apply text edits with immediate refresh and precondition
                         apply_payload = {
@@ -269,11 +278,14 @@ async def reload_churn_task(project_path: str, stop_time: float, unity_file: str
                                 await write_frame(writer, json.dumps(apply_payload).encode("utf-8"))
                                 resp = await asyncio.wait_for(read_frame(reader), timeout=TIMEOUT)
                                 try:
-                                    data = json.loads(resp.decode("utf-8", errors="ignore"))
-                                    result = data.get("result", data) if isinstance(data, dict) else {}
+                                    data = json.loads(resp.decode(
+                                        "utf-8", errors="ignore"))
+                                    result = data.get("result", data) if isinstance(
+                                        data, dict) else {}
                                     ok = bool(result.get("success", False))
                                     if ok:
-                                        stats["applies"] = stats.get("applies", 0) + 1
+                                        stats["applies"] = stats.get(
+                                            "applies", 0) + 1
                                         apply_success = True
                                         break
                                 except Exception:
@@ -290,7 +302,8 @@ async def reload_churn_task(project_path: str, stop_time: float, unity_file: str
                                     except Exception:
                                         pass
                         if not apply_success:
-                            stats["apply_errors"] = stats.get("apply_errors", 0) + 1
+                            stats["apply_errors"] = stats.get(
+                                "apply_errors", 0) + 1
 
         except Exception:
             pass
@@ -298,13 +311,17 @@ async def reload_churn_task(project_path: str, stop_time: float, unity_file: str
 
 
 async def main():
-    ap = argparse.ArgumentParser(description="Stress test the Unity MCP bridge with concurrent clients and reload churn")
+    ap = argparse.ArgumentParser(
+        description="Stress test the Unity MCP bridge with concurrent clients and reload churn")
     ap.add_argument("--host", default="127.0.0.1")
-    ap.add_argument("--project", default=str(Path(__file__).resolve().parents[1] / "TestProjects" / "UnityMCPTests"))
-    ap.add_argument("--unity-file", default=str(Path(__file__).resolve().parents[1] / "TestProjects" / "UnityMCPTests" / "Assets" / "Scripts" / "LongUnityScriptClaudeTest.cs"))
+    ap.add_argument("--project", default=str(
+        Path(__file__).resolve().parents[1] / "TestProjects" / "UnityMCPTests"))
+    ap.add_argument("--unity-file", default=str(Path(__file__).resolve(
+    ).parents[1] / "TestProjects" / "UnityMCPTests" / "Assets" / "Scripts" / "LongUnityScriptClaudeTest.cs"))
     ap.add_argument("--clients", type=int, default=10)
     ap.add_argument("--duration", type=int, default=60)
-    ap.add_argument("--storm-count", type=int, default=1, help="Number of scripts to touch each cycle")
+    ap.add_argument("--storm-count", type=int, default=1,
+                    help="Number of scripts to touch each cycle")
     args = ap.parse_args()
 
     port = discover_port(args.project)
@@ -315,10 +332,12 @@ async def main():
 
     # Spawn clients
     for i in range(max(1, args.clients)):
-        tasks.append(asyncio.create_task(client_loop(i, args.host, port, stop_time, stats)))
+        tasks.append(asyncio.create_task(
+            client_loop(i, args.host, port, stop_time, stats)))
 
     # Spawn reload churn task
-    tasks.append(asyncio.create_task(reload_churn_task(args.project, stop_time, args.unity_file, args.host, port, stats, storm_count=args.storm_count)))
+    tasks.append(asyncio.create_task(reload_churn_task(args.project, stop_time,
+                 args.unity_file, args.host, port, stats, storm_count=args.storm_count)))
 
     await asyncio.gather(*tasks, return_exceptions=True)
     print(json.dumps({"port": port, "stats": stats}, indent=2))
@@ -329,5 +348,3 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         pass
-
-

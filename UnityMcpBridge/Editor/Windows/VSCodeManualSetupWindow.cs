@@ -13,14 +13,14 @@ namespace MCPForUnity.Editor.Windows
             window.configPath = configPath;
             window.configJson = configJson;
             window.minSize = new Vector2(550, 500);
-            
+
             // Create a McpClient for VSCode
             window.mcpClient = new McpClient
             {
                 name = "VSCode GitHub Copilot",
                 mcpType = McpTypes.VSCode
             };
-            
+
             window.Show();
         }
 
@@ -84,7 +84,7 @@ namespace MCPForUnity.Editor.Windows
                 instructionStyle
             );
             EditorGUILayout.Space(5);
-            
+
             EditorGUILayout.LabelField(
                 "2. Steps to Configure",
                 EditorStyles.boldLabel
@@ -102,7 +102,7 @@ namespace MCPForUnity.Editor.Windows
                 instructionStyle
             );
             EditorGUILayout.Space(5);
-            
+
             EditorGUILayout.LabelField(
                 "3. VSCode mcp.json location:",
                 EditorStyles.boldLabel
@@ -120,7 +120,7 @@ namespace MCPForUnity.Editor.Windows
                     "mcp.json"
                 );
             }
-            else 
+            else
             {
                 displayPath = System.IO.Path.Combine(
                     System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile),

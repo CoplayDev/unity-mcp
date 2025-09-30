@@ -110,7 +110,7 @@ namespace MCPForUnity.Runtime.Serialization
             );
         }
     }
-    
+
     public class RectConverter : JsonConverter<Rect>
     {
         public override void WriteJson(JsonWriter writer, Rect value, JsonSerializer serializer)
@@ -138,7 +138,7 @@ namespace MCPForUnity.Runtime.Serialization
             );
         }
     }
-    
+
     public class BoundsConverter : JsonConverter<Bounds>
     {
         public override void WriteJson(JsonWriter writer, Bounds value, JsonSerializer serializer)
@@ -263,4 +263,4 @@ namespace MCPForUnity.Runtime.Serialization
             throw new JsonSerializationException($"Unexpected token type '{reader.TokenType}' when deserializing UnityEngine.Object");
         }
     }
-} 
+}

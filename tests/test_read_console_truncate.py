@@ -12,8 +12,10 @@ mcp_pkg = types.ModuleType("mcp")
 server_pkg = types.ModuleType("mcp.server")
 fastmcp_pkg = types.ModuleType("mcp.server.fastmcp")
 
+
 class _Dummy:
     pass
+
 
 fastmcp_pkg.FastMCP = _Dummy
 fastmcp_pkg.Context = _Dummy
@@ -23,13 +25,17 @@ sys.modules.setdefault("mcp", mcp_pkg)
 sys.modules.setdefault("mcp.server", server_pkg)
 sys.modules.setdefault("mcp.server.fastmcp", fastmcp_pkg)
 
+
 def _load_module(path: pathlib.Path, name: str):
     spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
 
-read_console_mod = _load_module(SRC / "tools" / "read_console.py", "read_console_mod")
+
+read_console_mod = _load_module(
+    SRC / "tools" / "read_console.py", "read_console_mod")
+
 
 class DummyMCP:
     def __init__(self):
@@ -41,10 +47,12 @@ class DummyMCP:
             return fn
         return deco
 
+
 def setup_tools():
     mcp = DummyMCP()
     read_console_mod.register_read_console_tools(mcp)
     return mcp.tools
+
 
 def test_read_console_full_default(monkeypatch):
     tools = setup_tools()
@@ -60,7 +68,8 @@ def test_read_console_full_default(monkeypatch):
         }
 
     monkeypatch.setattr(read_console_mod, "send_command_with_retry", fake_send)
-    monkeypatch.setattr(read_console_mod, "get_unity_connection", lambda: object())
+    monkeypatch.setattr(
+        read_console_mod, "get_unity_connection", lambda: object())
 
     resp = read_console(ctx=None, count=10)
     assert resp == {
@@ -85,8 +94,10 @@ def test_read_console_truncated(monkeypatch):
         }
 
     monkeypatch.setattr(read_console_mod, "send_command_with_retry", fake_send)
-    monkeypatch.setattr(read_console_mod, "get_unity_connection", lambda: object())
+    monkeypatch.setattr(
+        read_console_mod, "get_unity_connection", lambda: object())
 
     resp = read_console(ctx=None, count=10, include_stacktrace=False)
-    assert resp == {"success": True, "data": {"lines": [{"level": "error", "message": "oops"}]}}
+    assert resp == {"success": True, "data": {
+        "lines": [{"level": "error", "message": "oops"}]}}
     assert captured["params"]["includeStacktrace"] is False

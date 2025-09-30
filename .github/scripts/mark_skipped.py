@@ -29,6 +29,7 @@ PATTERNS = [
     r"validation error .* ctx",
 ]
 
+
 def should_skip(msg: str) -> bool:
     if not msg:
         return False
@@ -37,6 +38,7 @@ def should_skip(msg: str) -> bool:
         if re.search(pat, msg_l, flags=re.IGNORECASE | re.MULTILINE):
             return True
     return False
+
 
 def summarize_counts(ts: ET.Element):
     tests = 0
@@ -52,6 +54,7 @@ def summarize_counts(ts: ET.Element):
         if case.find("skipped") is not None:
             skipped += 1
     return tests, failures, errors, skipped
+
 
 def main(path: str) -> int:
     if not os.path.exists(path):
@@ -79,7 +82,8 @@ def main(path: str) -> int:
             for n in nodes:
                 msg = (n.get("message") or "") + "\n" + (n.text or "")
                 if should_skip(msg):
-                    first_match_text = (n.text or "").strip() or first_match_text
+                    first_match_text = (
+                        n.text or "").strip() or first_match_text
                     to_skip = True
             if to_skip:
                 for n in nodes:
@@ -98,11 +102,13 @@ def main(path: str) -> int:
 
     if changed:
         tree.write(path, encoding="utf-8", xml_declaration=True)
-        print(f"[mark_skipped] Updated {path}: converted environmental failures to skipped.")
+        print(
+            f"[mark_skipped] Updated {path}: converted environmental failures to skipped.")
     else:
         print(f"[mark_skipped] No environmental failures detected in {path}.")
 
     return 0
+
 
 if __name__ == "__main__":
     target = (

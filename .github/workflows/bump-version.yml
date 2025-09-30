@@ -12,7 +12,7 @@ on:
           - major
         default: patch
         required: true
-    
+
 jobs:
   bump:
     name: "Bump version and tag"

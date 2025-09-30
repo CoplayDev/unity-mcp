@@ -1,17 +1,20 @@
 import os
 import importlib
 
+
 def test_endpoint_rejects_non_http(tmp_path, monkeypatch):
     # Point data dir to temp to avoid touching real files
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     monkeypatch.setenv("UNITY_MCP_TELEMETRY_ENDPOINT", "file:///etc/passwd")
 
-    telemetry = importlib.import_module("UnityMcpBridge.UnityMcpServer~.src.telemetry")
+    telemetry = importlib.import_module(
+        "UnityMcpBridge.UnityMcpServer~.src.telemetry")
     importlib.reload(telemetry)
 
     tc = telemetry.TelemetryCollector()
     # Should have fallen back to default endpoint
     assert tc.config.endpoint == tc.config.default_endpoint
+
 
 def test_config_preferred_then_env_override(tmp_path, monkeypatch):
     # Simulate config telemetry endpoint
@@ -20,27 +23,32 @@ def test_config_preferred_then_env_override(tmp_path, monkeypatch):
 
     # Patch config.telemetry_endpoint via import mocking
     import importlib
-    cfg_mod = importlib.import_module("UnityMcpBridge.UnityMcpServer~.src.config")
+    cfg_mod = importlib.import_module(
+        "UnityMcpBridge.UnityMcpServer~.src.config")
     old_endpoint = cfg_mod.config.telemetry_endpoint
     cfg_mod.config.telemetry_endpoint = "https://example.com/telemetry"
     try:
-        telemetry = importlib.import_module("UnityMcpBridge.UnityMcpServer~.src.telemetry")
+        telemetry = importlib.import_module(
+            "UnityMcpBridge.UnityMcpServer~.src.telemetry")
         importlib.reload(telemetry)
         tc = telemetry.TelemetryCollector()
         assert tc.config.endpoint == "https://example.com/telemetry"
 
         # Env should override config
-        monkeypatch.setenv("UNITY_MCP_TELEMETRY_ENDPOINT", "https://override.example/ep")
+        monkeypatch.setenv("UNITY_MCP_TELEMETRY_ENDPOINT",
+                           "https://override.example/ep")
         importlib.reload(telemetry)
         tc2 = telemetry.TelemetryCollector()
         assert tc2.config.endpoint == "https://override.example/ep"
     finally:
         cfg_mod.config.telemetry_endpoint = old_endpoint
 
+
 def test_uuid_preserved_on_malformed_milestones(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
 
-    telemetry = importlib.import_module("UnityMcpBridge.UnityMcpServer~.src.telemetry")
+    telemetry = importlib.import_module(
+        "UnityMcpBridge.UnityMcpServer~.src.telemetry")
     importlib.reload(telemetry)
 
     tc1 = telemetry.TelemetryCollector()
@@ -53,4 +61,3 @@ def test_uuid_preserved_on_malformed_milestones(tmp_path, monkeypatch):
     importlib.reload(telemetry)
     tc2 = telemetry.TelemetryCollector()
     assert tc2._customer_uuid == first_uuid
-

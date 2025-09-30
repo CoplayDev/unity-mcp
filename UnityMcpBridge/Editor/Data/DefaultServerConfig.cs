@@ -15,4 +15,3 @@ namespace MCPForUnity.Editor.Data
         public new float retryDelay = 1.0f;
     }
 }
-

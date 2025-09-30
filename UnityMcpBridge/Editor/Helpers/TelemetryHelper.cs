@@ -14,7 +14,7 @@ namespace MCPForUnity.Editor.Helpers
         private const string TELEMETRY_DISABLED_KEY = "MCPForUnity.TelemetryDisabled";
         private const string CUSTOMER_UUID_KEY = "MCPForUnity.CustomerUUID";
         private static Action<Dictionary<string, object>> s_sender;
-        
+
         /// <summary>
         /// Check if telemetry is enabled (can be disabled via Environment Variable or EditorPrefs)
         /// </summary>
@@ -24,14 +24,14 @@ namespace MCPForUnity.Editor.Helpers
             {
                 // Check environment variables first
                 var envDisable = Environment.GetEnvironmentVariable("DISABLE_TELEMETRY");
-                if (!string.IsNullOrEmpty(envDisable) && 
+                if (!string.IsNullOrEmpty(envDisable) &&
                     (envDisable.ToLower() == "true" || envDisable == "1"))
                 {
                     return false;
                 }
-                
+
                 var unityMcpDisable = Environment.GetEnvironmentVariable("UNITY_MCP_DISABLE_TELEMETRY");
-                if (!string.IsNullOrEmpty(unityMcpDisable) && 
+                if (!string.IsNullOrEmpty(unityMcpDisable) &&
                     (unityMcpDisable.ToLower() == "true" || unityMcpDisable == "1"))
                 {
                     return false;
@@ -49,7 +49,7 @@ namespace MCPForUnity.Editor.Helpers
                 return !UnityEditor.EditorPrefs.GetBool(TELEMETRY_DISABLED_KEY, false);
             }
         }
-        
+
         /// <summary>
         /// Get or generate customer UUID for anonymous tracking
         /// </summary>
@@ -63,7 +63,7 @@ namespace MCPForUnity.Editor.Helpers
             }
             return uuid;
         }
-        
+
         /// <summary>
         /// Disable telemetry (stored in EditorPrefs)
         /// </summary>
@@ -71,7 +71,7 @@ namespace MCPForUnity.Editor.Helpers
         {
             UnityEditor.EditorPrefs.SetBool(TELEMETRY_DISABLED_KEY, true);
         }
-        
+
         /// <summary>
         /// Enable telemetry (stored in EditorPrefs)
         /// </summary>
@@ -79,7 +79,7 @@ namespace MCPForUnity.Editor.Helpers
         {
             UnityEditor.EditorPrefs.SetBool(TELEMETRY_DISABLED_KEY, false);
         }
-        
+
         /// <summary>
         /// Send telemetry data to Python server for processing
         /// This is a lightweight bridge - the actual telemetry logic is in Python
@@ -88,7 +88,7 @@ namespace MCPForUnity.Editor.Helpers
         {
             if (!IsEnabled)
                 return;
-                
+
             try
             {
                 var telemetryData = new Dictionary<string, object>
@@ -100,12 +100,12 @@ namespace MCPForUnity.Editor.Helpers
                     ["platform"] = Application.platform.ToString(),
                     ["source"] = "unity_bridge"
                 };
-                
+
                 if (data != null)
                 {
                     telemetryData["data"] = data;
                 }
-                
+
                 // Send to Python server via existing bridge communication
                 // The Python server will handle actual telemetry transmission
                 SendTelemetryToPythonServer(telemetryData);
@@ -119,7 +119,7 @@ namespace MCPForUnity.Editor.Helpers
                 }
             }
         }
-        
+
         /// <summary>
         /// Allows the bridge to register a concrete sender for telemetry payloads.
         /// </summary>
@@ -144,7 +144,7 @@ namespace MCPForUnity.Editor.Helpers
                 ["auto_connect"] = MCPForUnityBridge.IsAutoConnectMode()
             });
         }
-        
+
         /// <summary>
         /// Record bridge connection event
         /// </summary>
@@ -154,15 +154,15 @@ namespace MCPForUnity.Editor.Helpers
             {
                 ["success"] = success
             };
-            
+
             if (!string.IsNullOrEmpty(error))
             {
                 data["error"] = error.Substring(0, Math.Min(200, error.Length));
             }
-            
+
             RecordEvent("bridge_connection", data);
         }
-        
+
         /// <summary>
         /// Record tool execution from Unity side
         /// </summary>
@@ -174,15 +174,15 @@ namespace MCPForUnity.Editor.Helpers
                 ["success"] = success,
                 ["duration_ms"] = Math.Round(durationMs, 2)
             };
-            
+
             if (!string.IsNullOrEmpty(error))
             {
                 data["error"] = error.Substring(0, Math.Min(200, error.Length));
             }
-            
+
             RecordEvent("tool_execution_unity", data);
         }
-        
+
         private static void SendTelemetryToPythonServer(Dictionary<string, object> telemetryData)
         {
             var sender = Volatile.Read(ref s_sender);
@@ -208,16 +208,16 @@ namespace MCPForUnity.Editor.Helpers
                 Debug.Log($"<b><color=#2EA3FF>MCP-TELEMETRY</color></b>: {telemetryData["event_type"]}");
             }
         }
-        
+
         private static bool IsDebugEnabled()
         {
-            try 
-            { 
-                return UnityEditor.EditorPrefs.GetBool("MCPForUnity.DebugLogs", false); 
-            } 
-            catch 
-            { 
-                return false; 
+            try
+            {
+                return UnityEditor.EditorPrefs.GetBool("MCPForUnity.DebugLogs", false);
+            }
+            catch
+            {
+                return false;
             }
         }
     }

@@ -10,7 +10,7 @@ namespace MCPForUnity.Editor.Helpers
     public static class PackageInstaller
     {
         private const string InstallationFlagKey = "MCPForUnity.ServerInstalled";
-        
+
         static PackageInstaller()
         {
             // Check if this is the first time the package is loaded
@@ -20,17 +20,17 @@ namespace MCPForUnity.Editor.Helpers
                 EditorApplication.delayCall += InstallServerOnFirstLoad;
             }
         }
-        
+
         private static void InstallServerOnFirstLoad()
         {
             try
             {
                 Debug.Log("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Installing Python server...");
                 ServerInstaller.EnsureServerInstalled();
-                
+
                 // Mark as installed
                 EditorPrefs.SetBool(InstallationFlagKey, true);
-                
+
                 Debug.Log("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Python server installation completed successfully.");
             }
             catch (System.Exception ex)

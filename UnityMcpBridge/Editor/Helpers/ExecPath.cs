@@ -205,7 +205,7 @@ namespace MCPForUnity.Editor.Helpers
                 var so = new StringBuilder();
                 var se = new StringBuilder();
                 process.OutputDataReceived += (_, e) => { if (e.Data != null) so.AppendLine(e.Data); };
-                process.ErrorDataReceived  += (_, e) => { if (e.Data != null) se.AppendLine(e.Data); };
+                process.ErrorDataReceived += (_, e) => { if (e.Data != null) se.AppendLine(e.Data); };
 
                 if (!process.Start()) return false;
 
@@ -276,5 +276,3 @@ namespace MCPForUnity.Editor.Helpers
 #endif
     }
 }
-
-

@@ -6,7 +6,7 @@ namespace TestNamespace
     {
         [SerializeField]
         private string customText = "Hello from custom asmdef!";
-        
+
         [SerializeField]
         private float customFloat = 42.0f;
 

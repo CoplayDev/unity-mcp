@@ -1,3 +1,4 @@
+from tools.resource_tools import register_resource_tools  # type: ignore
 import pytest
 
 
@@ -21,16 +22,17 @@ if SRC is None:
     )
 sys.path.insert(0, str(SRC))
 
-from tools.resource_tools import register_resource_tools  # type: ignore
 
 class DummyMCP:
     def __init__(self):
         self._tools = {}
+
     def tool(self, *args, **kwargs):  # accept kwargs like description
         def deco(fn):
             self._tools[fn.__name__] = fn
             return fn
         return deco
+
 
 @pytest.fixture()
 def resource_tools():
@@ -60,7 +62,8 @@ def test_resource_list_filters_and_rejects_traversal(resource_tools, tmp_path, m
     # Only .cs under Assets should be listed
     import asyncio
     resp = asyncio.get_event_loop().run_until_complete(
-        list_resources(ctx=None, pattern="*.cs", under="Assets", limit=50, project_root=str(proj))
+        list_resources(ctx=None, pattern="*.cs", under="Assets",
+                       limit=50, project_root=str(proj))
     )
     assert resp["success"] is True
     uris = resp["data"]["uris"]
@@ -75,7 +78,9 @@ def test_resource_list_rejects_outside_paths(resource_tools, tmp_path):
     list_resources = resource_tools["list_resources"]
     import asyncio
     resp = asyncio.get_event_loop().run_until_complete(
-        list_resources(ctx=None, pattern="*.cs", under="..", limit=10, project_root=str(proj))
+        list_resources(ctx=None, pattern="*.cs", under="..",
+                       limit=10, project_root=str(proj))
     )
     assert resp["success"] is False
-    assert "Assets" in resp.get("error", "") or "under project root" in resp.get("error", "")
+    assert "Assets" in resp.get(
+        "error", "") or "under project root" in resp.get("error", "")

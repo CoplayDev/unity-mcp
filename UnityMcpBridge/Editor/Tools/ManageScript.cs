@@ -2658,4 +2658,3 @@ static class ManageScriptRefreshHelpers
 #endif
     }
 }
-

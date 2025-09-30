@@ -43,8 +43,8 @@ namespace MCPForUnity.Editor.Helpers
         {
             // Try to load stored port first, but only if it's from the current project
             var storedConfig = GetStoredPortConfig();
-            if (storedConfig != null && 
-                storedConfig.unity_port > 0 && 
+            if (storedConfig != null &&
+                storedConfig.unity_port > 0 &&
                 string.Equals(storedConfig.project_path ?? string.Empty, Application.dataPath ?? string.Empty, StringComparison.OrdinalIgnoreCase) &&
                 IsPortAvailable(storedConfig.unity_port))
             {
@@ -228,7 +228,7 @@ namespace MCPForUnity.Editor.Helpers
             try
             {
                 string registryFile = GetRegistryFilePath();
-                
+
                 if (!File.Exists(registryFile))
                 {
                     // Backwards compatibility: try the legacy file name
@@ -261,7 +261,7 @@ namespace MCPForUnity.Editor.Helpers
             try
             {
                 string registryFile = GetRegistryFilePath();
-                
+
                 if (!File.Exists(registryFile))
                 {
                     // Backwards compatibility: try the legacy file
