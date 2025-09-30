@@ -1,35 +1,27 @@
-from mcp.server.fastmcp import FastMCP, Context
-from typing import Dict, Any
-from unity_connection import get_unity_connection, send_command_with_retry
-from config import config
-import time
+from typing import Annotated, Literal, Any
 
+from mcp.server.fastmcp import FastMCP, Context
 from telemetry_decorator import telemetry_tool
+
+from unity_connection import send_command_with_retry
+
 
 def register_manage_scene_tools(mcp: FastMCP):
     """Register all scene management tools with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(name="manage_scene", description="Manage Unity scenes")
     @telemetry_tool("manage_scene")
     def manage_scene(
         ctx: Context,
-        action: str,
-        name: str = "",
-        path: str = "",
-        build_index: Any = None,
-    ) -> Dict[str, Any]:
-        """Manages Unity scenes (load, save, create, get hierarchy, etc.).
-
-        Args:
-            action: Operation (e.g., 'load', 'save', 'create', 'get_hierarchy').
-            name: Scene name (no extension) for create/load/save.
-            path: Asset path for scene operations (default: "Assets/").
-            build_index: Build index for load/build settings actions.
-            # Add other action-specific args as needed (e.g., for hierarchy depth)
-
-        Returns:
-            Dictionary with results ('success', 'message', 'data').
-        """
+        action: Annotated[Literal["create", "load", "save", "get_hierarchy", "get_active", "get_build_settings"], "Perform CRUD operations on Unity scenes."],
+        name: Annotated[str,
+                        "Scene name. Not required get_active/get_build_settings"] | None = None,
+        path: Annotated[str,
+                        "Asset path for scene operations (default: 'Assets/')"] | None = None,
+        build_index: Annotated[int,
+                               "Build index for load/build settings actions"] | None = None,
+    ) -> dict[str, Any]:
+        ctx.info(f"Processing manage_scene: {action}")
         try:
             # Coerce numeric inputs defensively
             def _coerce_int(value, default=None):
@@ -56,7 +48,7 @@ def register_manage_scene_tools(mcp: FastMCP):
                 params["path"] = path
             if coerced_build_index is not None:
                 params["buildIndex"] = coerced_build_index
-            
+
             # Use centralized retry helper
             response = send_command_with_retry("manage_scene", params)
 

@@ -3,14 +3,16 @@ Telemetry decorator for Unity MCP tools
 """
 
 import functools
-import time
 import inspect
 import logging
+import time
 from typing import Callable, Any
+
 from telemetry import record_tool_usage, record_milestone, MilestoneType
 
 _log = logging.getLogger("unity-mcp-telemetry")
 _decorator_log_count = 0
+
 
 def telemetry_tool(tool_name: str):
     """Decorator to add telemetry tracking to MCP tools"""
@@ -41,7 +43,8 @@ def telemetry_tool(tool_name: str):
                     if tool_name == "manage_script" and action_val == "create":
                         record_milestone(MilestoneType.FIRST_SCRIPT_CREATION)
                     elif tool_name.startswith("manage_scene"):
-                        record_milestone(MilestoneType.FIRST_SCENE_MODIFICATION)
+                        record_milestone(
+                            MilestoneType.FIRST_SCENE_MODIFICATION)
                     record_milestone(MilestoneType.FIRST_TOOL_USAGE)
                 except Exception:
                     _log.debug("milestone emit failed", exc_info=True)
@@ -52,7 +55,8 @@ def telemetry_tool(tool_name: str):
             finally:
                 duration_ms = (time.time() - start_time) * 1000
                 try:
-                    record_tool_usage(tool_name, success, duration_ms, error, sub_action=sub_action)
+                    record_tool_usage(tool_name, success,
+                                      duration_ms, error, sub_action=sub_action)
                 except Exception:
                     _log.debug("record_tool_usage failed", exc_info=True)
 
@@ -82,7 +86,8 @@ def telemetry_tool(tool_name: str):
                     if tool_name == "manage_script" and action_val == "create":
                         record_milestone(MilestoneType.FIRST_SCRIPT_CREATION)
                     elif tool_name.startswith("manage_scene"):
-                        record_milestone(MilestoneType.FIRST_SCENE_MODIFICATION)
+                        record_milestone(
+                            MilestoneType.FIRST_SCENE_MODIFICATION)
                     record_milestone(MilestoneType.FIRST_TOOL_USAGE)
                 except Exception:
                     _log.debug("milestone emit failed", exc_info=True)
@@ -93,7 +98,8 @@ def telemetry_tool(tool_name: str):
             finally:
                 duration_ms = (time.time() - start_time) * 1000
                 try:
-                    record_tool_usage(tool_name, success, duration_ms, error, sub_action=sub_action)
+                    record_tool_usage(tool_name, success,
+                                      duration_ms, error, sub_action=sub_action)
                 except Exception:
                     _log.debug("record_tool_usage failed", exc_info=True)
 

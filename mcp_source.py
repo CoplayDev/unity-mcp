@@ -32,7 +32,8 @@ def run_git(repo: pathlib.Path, *args: str) -> str:
         "git", "-C", str(repo), *args
     ], capture_output=True, text=True)
     if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or f"git {' '.join(args)} failed")
+        raise RuntimeError(result.stderr.strip()
+                           or f"git {' '.join(args)} failed")
     return result.stdout.strip()
 
 
@@ -77,7 +78,8 @@ def find_manifest(explicit: Optional[str]) -> pathlib.Path:
         candidate = parent / "Packages" / "manifest.json"
         if candidate.exists():
             return candidate
-    raise FileNotFoundError("Could not find Packages/manifest.json from current directory. Use --manifest to specify a path.")
+    raise FileNotFoundError(
+        "Could not find Packages/manifest.json from current directory. Use --manifest to specify a path.")
 
 
 def read_json(path: pathlib.Path) -> dict:
@@ -103,16 +105,21 @@ def build_options(repo_root: pathlib.Path, branch: str, origin_https: str):
         origin_remote = origin
     return [
         ("[1] Upstream main", upstream),
-        ("[2] Remote current branch", f"{origin_remote}?path=/{BRIDGE_SUBPATH}#{branch}"),
-        ("[3] Local workspace", f"file:{(repo_root / BRIDGE_SUBPATH).as_posix()}"),
+        ("[2] Remote current branch",
+         f"{origin_remote}?path=/{BRIDGE_SUBPATH}#{branch}"),
+        ("[3] Local workspace",
+         f"file:{(repo_root / BRIDGE_SUBPATH).as_posix()}"),
     ]
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Switch MCP for Unity package source")
+    p = argparse.ArgumentParser(
+        description="Switch MCP for Unity package source")
     p.add_argument("--manifest", help="Path to Packages/manifest.json")
-    p.add_argument("--repo", help="Path to unity-mcp repo root (for local file option)")
-    p.add_argument("--choice", choices=["1", "2", "3"], help="Pick option non-interactively")
+    p.add_argument(
+        "--repo", help="Path to unity-mcp repo root (for local file option)")
+    p.add_argument(
+        "--choice", choices=["1", "2", "3"], help="Pick option non-interactively")
     return p.parse_args()
 
 
@@ -153,7 +160,8 @@ def main() -> None:
     data = read_json(manifest_path)
     deps = data.get("dependencies", {})
     if PKG_NAME not in deps:
-        print(f"Error: '{PKG_NAME}' not found in manifest dependencies.", file=sys.stderr)
+        print(
+            f"Error: '{PKG_NAME}' not found in manifest dependencies.", file=sys.stderr)
         sys.exit(1)
 
     print(f"\nUpdating {PKG_NAME} → {chosen}")

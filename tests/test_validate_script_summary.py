@@ -12,8 +12,10 @@ mcp_pkg = types.ModuleType("mcp")
 server_pkg = types.ModuleType("mcp.server")
 fastmcp_pkg = types.ModuleType("mcp.server.fastmcp")
 
+
 class _Dummy:
     pass
+
 
 fastmcp_pkg.FastMCP = _Dummy
 fastmcp_pkg.Context = _Dummy
@@ -23,13 +25,17 @@ sys.modules.setdefault("mcp", mcp_pkg)
 sys.modules.setdefault("mcp.server", server_pkg)
 sys.modules.setdefault("mcp.server.fastmcp", fastmcp_pkg)
 
+
 def _load_module(path: pathlib.Path, name: str):
     spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
 
-manage_script = _load_module(SRC / "tools" / "manage_script.py", "manage_script_mod")
+
+manage_script = _load_module(
+    SRC / "tools" / "manage_script.py", "manage_script_mod")
+
 
 class DummyMCP:
     def __init__(self):
@@ -41,10 +47,12 @@ class DummyMCP:
             return fn
         return deco
 
+
 def setup_tools():
     mcp = DummyMCP()
     manage_script.register_manage_script_tools(mcp)
     return mcp.tools
+
 
 def test_validate_script_returns_counts(monkeypatch):
     tools = setup_tools()

@@ -43,8 +43,8 @@ namespace MCPForUnity.Editor.Tools
                 );
                 if (logEntriesType == null)
                     throw new Exception("Could not find internal type UnityEditor.LogEntries");
-                
-                
+
+
 
                 // Include NonPublic binding flags as internal APIs might change accessibility
                 BindingFlags staticFlags =
@@ -104,9 +104,9 @@ namespace MCPForUnity.Editor.Tools
                 _instanceIdField = logEntryType.GetField("instanceID", instanceFlags);
                 if (_instanceIdField == null)
                     throw new Exception("Failed to reflect LogEntry.instanceID");
-                
+
                 // (Calibration removed)
-                
+
             }
             catch (Exception e)
             {
@@ -505,7 +505,7 @@ namespace MCPForUnity.Editor.Tools
                     || trimmedLine.StartsWith("UnityEditor.")
                     || trimmedLine.Contains("(at ")
                     || // Covers "(at Assets/..." pattern
-                    // Heuristic: Check if line starts with likely namespace/class pattern (Uppercase.Something)
+                       // Heuristic: Check if line starts with likely namespace/class pattern (Uppercase.Something)
                     (
                         trimmedLine.Length > 0
                         && char.IsUpper(trimmedLine[0])
@@ -568,4 +568,3 @@ namespace MCPForUnity.Editor.Tools
         */
     }
 }
-

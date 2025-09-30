@@ -159,6 +159,28 @@ namespace MCPForUnity.Editor.Data
                 mcpType = McpTypes.Kiro,
                 configStatus = "Not Configured",
             },
+            // 4) Codex CLI
+            new()
+            {
+                name = "Codex CLI",
+                windowsConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".codex",
+                    "config.toml"
+                ),
+                macConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".codex",
+                    "config.toml"
+                ),
+                linuxConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".codex",
+                    "config.toml"
+                ),
+                mcpType = McpTypes.Codex,
+                configStatus = "Not Configured",
+            },
         };
 
         // Initialize status enums after construction
@@ -174,4 +196,3 @@ namespace MCPForUnity.Editor.Data
         }
     }
 }
-

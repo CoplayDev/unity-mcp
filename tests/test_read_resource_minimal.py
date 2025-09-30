@@ -1,3 +1,4 @@
+from tools.resource_tools import register_resource_tools  # type: ignore
 import sys
 import pathlib
 import asyncio
@@ -13,8 +14,10 @@ mcp_pkg = types.ModuleType("mcp")
 server_pkg = types.ModuleType("mcp.server")
 fastmcp_pkg = types.ModuleType("mcp.server.fastmcp")
 
+
 class _Dummy:
     pass
+
 
 fastmcp_pkg.FastMCP = _Dummy
 fastmcp_pkg.Context = _Dummy
@@ -23,8 +26,6 @@ mcp_pkg.server = server_pkg
 sys.modules.setdefault("mcp", mcp_pkg)
 sys.modules.setdefault("mcp.server", server_pkg)
 sys.modules.setdefault("mcp.server.fastmcp", fastmcp_pkg)
-
-from tools.resource_tools import register_resource_tools  # type: ignore
 
 
 class DummyMCP:
@@ -57,7 +58,8 @@ def test_read_resource_minimal_metadata_only(resource_tools, tmp_path):
     loop = asyncio.new_event_loop()
     try:
         resp = loop.run_until_complete(
-            read_resource(uri="unity://path/Assets/A.txt", ctx=None, project_root=str(proj))
+            read_resource(uri="unity://path/Assets/A.txt",
+                          ctx=None, project_root=str(proj))
         )
     finally:
         loop.close()

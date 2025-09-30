@@ -1,47 +1,34 @@
 """
 Defines the read_console tool for accessing Unity Editor console messages.
 """
-from typing import List, Dict, Any
-import time
+from typing import Annotated, Any, Literal
+
 from mcp.server.fastmcp import FastMCP, Context
-from unity_connection import get_unity_connection, send_command_with_retry
-from config import config
 from telemetry_decorator import telemetry_tool
+
+from unity_connection import send_command_with_retry
+
 
 def register_read_console_tools(mcp: FastMCP):
     """Registers the read_console tool with the MCP server."""
 
-    @mcp.tool()
+    @mcp.tool(name="read_console", description="Gets messages from or clears the Unity Editor console.")
     @telemetry_tool("read_console")
     def read_console(
         ctx: Context,
-        action: str = None,
-        types: List[str] = None,
-        count: Any = None,
-        filter_text: str = None,
-        since_timestamp: str = None,
-        format: str = None,
-        include_stacktrace: bool = None
-    ) -> Dict[str, Any]:
-        """Gets messages from or clears the Unity Editor console.
-
-        Args:
-            ctx: The MCP context.
-            action: Operation ('get' or 'clear').
-            types: Message types to get ('error', 'warning', 'log', 'all').
-            count: Max messages to return.
-            filter_text: Text filter for messages.
-            since_timestamp: Get messages after this timestamp (ISO 8601).
-            format: Output format ('plain', 'detailed', 'json').
-            include_stacktrace: Include stack traces in output.
-
-        Returns:
-            Dictionary with results. For 'get', includes 'data' (messages).
-        """
-        
-        # Get the connection instance
-        bridge = get_unity_connection()
-
+        action: Annotated[Literal['get', 'clear'], "Get or clear the Unity Editor console."],
+        types: Annotated[list[Literal['error', 'warning',
+                                      'log', 'all']], "Message types to get"] | None = None,
+        count: Annotated[int, "Max messages to return"] | None = None,
+        filter_text: Annotated[str, "Text filter for messages"] | None = None,
+        since_timestamp: Annotated[str,
+                                   "Get messages after this timestamp (ISO 8601)"] | None = None,
+        format: Annotated[Literal['plain', 'detailed',
+                                  'json'], "Output format"] | None = None,
+        include_stacktrace: Annotated[bool,
+                                      "Include stack traces in output"] | None = None
+    ) -> dict[str, Any]:
+        ctx.info(f"Processing read_console: {action}")
         # Set defaults if values are None
         action = action if action is not None else 'get'
         types = types if types is not None else ['error', 'warning', 'log']
@@ -51,7 +38,7 @@ def register_read_console_tools(mcp: FastMCP):
         # Normalize action if it's a string
         if isinstance(action, str):
             action = action.lower()
-        
+
         # Coerce count defensively (string/float -> int)
         def _coerce_int(value, default=None):
             if value is None:
@@ -82,11 +69,12 @@ def register_read_console_tools(mcp: FastMCP):
         }
 
         # Remove None values unless it's 'count' (as None might mean 'all')
-        params_dict = {k: v for k, v in params_dict.items() if v is not None or k == 'count'} 
-        
+        params_dict = {k: v for k, v in params_dict.items()
+                       if v is not None or k == 'count'}
+
         # Add count back if it was None, explicitly sending null might be important for C# logic
         if 'count' not in params_dict:
-             params_dict['count'] = None 
+            params_dict['count'] = None
 
         # Use centralized retry helper
         resp = send_command_with_retry("read_console", params_dict)

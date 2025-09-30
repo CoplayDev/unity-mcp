@@ -1,9 +1,9 @@
+import tools.manage_script as manage_script  # type: ignore
 import sys
 import types
 from pathlib import Path
 
 import pytest
-
 
 
 # Locate server src dynamically to avoid hardcoded layout assumptions (same as other tests)
@@ -25,7 +25,12 @@ sys.path.insert(0, str(SRC))
 mcp_pkg = types.ModuleType("mcp")
 server_pkg = types.ModuleType("mcp.server")
 fastmcp_pkg = types.ModuleType("mcp.server.fastmcp")
-class _Dummy: pass
+
+
+class _Dummy:
+    pass
+
+
 fastmcp_pkg.FastMCP = _Dummy
 fastmcp_pkg.Context = _Dummy
 server_pkg.fastmcp = fastmcp_pkg
@@ -36,7 +41,6 @@ sys.modules.setdefault("mcp.server.fastmcp", fastmcp_pkg)
 
 
 # Import target module after path injection
-import tools.manage_script as manage_script  # type: ignore
 
 
 class DummyMCP:
@@ -83,10 +87,13 @@ def test_split_uri_unity_path(monkeypatch):
 @pytest.mark.parametrize(
     "uri, expected_name, expected_path",
     [
-        ("file:///Users/alex/Project/Assets/Scripts/Foo%20Bar.cs", "Foo Bar", "Assets/Scripts"),
+        ("file:///Users/alex/Project/Assets/Scripts/Foo%20Bar.cs",
+         "Foo Bar", "Assets/Scripts"),
         ("file://localhost/Users/alex/Project/Assets/Hello.cs", "Hello", "Assets"),
-        ("file:///C:/Users/Alex/Proj/Assets/Scripts/Hello.cs", "Hello", "Assets/Scripts"),
-        ("file:///tmp/Other.cs", "Other", "tmp"),  # outside Assets → fall back to normalized dir
+        ("file:///C:/Users/Alex/Proj/Assets/Scripts/Hello.cs",
+         "Hello", "Assets/Scripts"),
+        # outside Assets → fall back to normalized dir
+        ("file:///tmp/Other.cs", "Other", "tmp"),
     ],
 )
 def test_split_uri_file_urls(monkeypatch, uri, expected_name, expected_path):
@@ -118,9 +125,8 @@ def test_split_uri_plain_path(monkeypatch):
     monkeypatch.setattr(manage_script, "send_command_with_retry", fake_send)
 
     fn = tools['apply_text_edits']
-    fn(DummyCtx(), uri="Assets/Scripts/Thing.cs", edits=[], precondition_sha256=None)
+    fn(DummyCtx(), uri="Assets/Scripts/Thing.cs",
+       edits=[], precondition_sha256=None)
 
     assert captured['params']['name'] == 'Thing'
     assert captured['params']['path'] == 'Assets/Scripts'
-
-

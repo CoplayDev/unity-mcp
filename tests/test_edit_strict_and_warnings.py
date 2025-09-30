@@ -12,7 +12,12 @@ sys.path.insert(0, str(SRC))
 mcp_pkg = types.ModuleType("mcp")
 server_pkg = types.ModuleType("mcp.server")
 fastmcp_pkg = types.ModuleType("mcp.server.fastmcp")
-class _Dummy: pass
+
+
+class _Dummy:
+    pass
+
+
 fastmcp_pkg.FastMCP = _Dummy
 fastmcp_pkg.Context = _Dummy
 server_pkg.fastmcp = fastmcp_pkg
@@ -34,6 +39,7 @@ manage_script = _load(SRC / "tools" / "manage_script.py", "manage_script_mod3")
 
 class DummyMCP:
     def __init__(self): self.tools = {}
+
     def tool(self, *args, **kwargs):
         def deco(fn): self.tools[fn.__name__] = fn; return fn
         return deco
@@ -56,13 +62,16 @@ def test_explicit_zero_based_normalized_warning(monkeypatch):
     monkeypatch.setattr(manage_script, "send_command_with_retry", fake_send)
 
     # Explicit fields given as 0-based (invalid); SDK should normalize and warn
-    edits = [{"startLine": 0, "startCol": 0, "endLine": 0, "endCol": 0, "newText": "//x"}]
-    resp = apply_edits(None, uri="unity://path/Assets/Scripts/F.cs", edits=edits, precondition_sha256="sha")
+    edits = [{"startLine": 0, "startCol": 0,
+              "endLine": 0, "endCol": 0, "newText": "//x"}]
+    resp = apply_edits(None, uri="unity://path/Assets/Scripts/F.cs",
+                       edits=edits, precondition_sha256="sha")
 
     assert resp["success"] is True
     data = resp.get("data", {})
     assert "normalizedEdits" in data
-    assert any(w == "zero_based_explicit_fields_normalized" for w in data.get("warnings", []))
+    assert any(
+        w == "zero_based_explicit_fields_normalized" for w in data.get("warnings", []))
     ne = data["normalizedEdits"][0]
     assert ne["startLine"] == 1 and ne["startCol"] == 1 and ne["endLine"] == 1 and ne["endCol"] == 1
 
@@ -76,9 +85,9 @@ def test_strict_zero_based_error(monkeypatch):
 
     monkeypatch.setattr(manage_script, "send_command_with_retry", fake_send)
 
-    edits = [{"startLine": 0, "startCol": 0, "endLine": 0, "endCol": 0, "newText": "//x"}]
-    resp = apply_edits(None, uri="unity://path/Assets/Scripts/F.cs", edits=edits, precondition_sha256="sha", strict=True)
+    edits = [{"startLine": 0, "startCol": 0,
+              "endLine": 0, "endCol": 0, "newText": "//x"}]
+    resp = apply_edits(None, uri="unity://path/Assets/Scripts/F.cs",
+                       edits=edits, precondition_sha256="sha", strict=True)
     assert resp["success"] is False
     assert resp.get("code") == "zero_based_explicit_fields"
-
-

@@ -5,8 +5,9 @@ using System.IO;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditorInternal; // Required for tag management
+using UnityEditor.SceneManagement;
 using UnityEngine;
-using MCPForUnity.Editor.Helpers; // For Response class
+using MCPForUnity.Editor.Helpers;
 
 namespace MCPForUnity.Editor.Tools
 {
@@ -98,6 +99,8 @@ namespace MCPForUnity.Editor.Tools
                     return GetActiveTool();
                 case "get_selection":
                     return GetSelection();
+                case "get_prefab_stage":
+                    return GetPrefabStageInfo();
                 case "set_active_tool":
                     string toolName = @params["toolName"]?.ToString();
                     if (string.IsNullOrEmpty(toolName))
@@ -140,7 +143,7 @@ namespace MCPForUnity.Editor.Tools
 
                 default:
                     return Response.Error(
-                        $"Unknown action: '{action}'. Supported actions include play, pause, stop, get_state, get_project_root, get_windows, get_active_tool, get_selection, set_active_tool, add_tag, remove_tag, get_tags, add_layer, remove_layer, get_layers."
+                        $"Unknown action: '{action}'. Supported actions include play, pause, stop, get_state, get_project_root, get_windows, get_active_tool, get_selection, get_prefab_stage, set_active_tool, add_tag, remove_tag, get_tags, add_layer, remove_layer, get_layers."
                     );
             }
         }
@@ -241,6 +244,35 @@ namespace MCPForUnity.Editor.Tools
             catch (Exception e)
             {
                 return Response.Error($"Error getting editor windows: {e.Message}");
+            }
+        }
+
+        private static object GetPrefabStageInfo()
+        {
+            try
+            {
+                PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
+                if (stage == null)
+                {
+                    return Response.Success
+                    ("No prefab stage is currently open.", new { isOpen = false });
+                }
+
+                return Response.Success(
+                    "Prefab stage info retrieved.",
+                    new
+                    {
+                        isOpen = true,
+                        assetPath = stage.assetPath,
+                        prefabRootName = stage.prefabContentsRoot != null ? stage.prefabContentsRoot.name : null,
+                        mode = stage.mode.ToString(),
+                        isDirty = stage.scene.isDirty
+                    }
+                );
+            }
+            catch (Exception e)
+            {
+                return Response.Error($"Error getting prefab stage info: {e.Message}");
             }
         }
 
@@ -610,4 +642,3 @@ namespace MCPForUnity.Editor.Tools
         }
     }
 }
-

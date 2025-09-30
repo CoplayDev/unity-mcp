@@ -3,7 +3,8 @@ import importlib
 
 def _get_decorator_module():
     # Import the telemetry_decorator module from the Unity MCP server src
-    mod = importlib.import_module("UnityMcpBridge.UnityMcpServer~.src.telemetry_decorator")
+    mod = importlib.import_module(
+        "UnityMcpBridge.UnityMcpServer~.src.telemetry_decorator")
     return mod
 
 
@@ -79,5 +80,3 @@ def test_subaction_none_when_not_present(monkeypatch):
     _ = wrapped(None, name="X")
     assert captured["tool_name"] == "apply_text_edits"
     assert captured["sub_action"] is None
-
-

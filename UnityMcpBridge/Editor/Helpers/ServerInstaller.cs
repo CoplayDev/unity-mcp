@@ -419,7 +419,7 @@ namespace MCPForUnity.Editor.Helpers
                 try { if ((File.GetAttributes(dirPath) & FileAttributes.ReparsePoint) != 0) continue; } catch { }
                 string destSubDir = Path.Combine(destinationDir, dirName);
                 CopyDirectoryRecursive(dirPath, destSubDir);
-            NextDir: ;
+            NextDir:;
             }
         }
 
@@ -467,7 +467,7 @@ namespace MCPForUnity.Editor.Helpers
                 string uvPath = FindUvPath();
                 if (uvPath == null)
                 {
-                    Debug.LogError("UV not found. Please install uv (https://docs.astral.sh/uv/)." );
+                    Debug.LogError("UV not found. Please install uv (https://docs.astral.sh/uv/).");
                     return false;
                 }
 
@@ -486,7 +486,7 @@ namespace MCPForUnity.Editor.Helpers
                 var sbOut = new StringBuilder();
                 var sbErr = new StringBuilder();
                 proc.OutputDataReceived += (_, e) => { if (e.Data != null) sbOut.AppendLine(e.Data); };
-                proc.ErrorDataReceived  += (_, e) => { if (e.Data != null) sbErr.AppendLine(e.Data); };
+                proc.ErrorDataReceived += (_, e) => { if (e.Data != null) sbErr.AppendLine(e.Data); };
 
                 if (!proc.Start())
                 {

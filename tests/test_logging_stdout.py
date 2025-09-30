@@ -64,5 +64,7 @@ def test_no_print_statements_in_codebase():
         v.visit(tree)
         if v.hit:
             offenders.append(py_file.relative_to(SRC))
-    assert not syntax_errors, "syntax errors in: " + ", ".join(str(e) for e in syntax_errors)
-    assert not offenders, "stdout writes found in: " + ", ".join(str(o) for o in offenders)
+    assert not syntax_errors, "syntax errors in: " + \
+        ", ".join(str(e) for e in syntax_errors)
+    assert not offenders, "stdout writes found in: " + \
+        ", ".join(str(o) for o in offenders)

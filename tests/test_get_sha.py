@@ -13,8 +13,10 @@ mcp_pkg = types.ModuleType("mcp")
 server_pkg = types.ModuleType("mcp.server")
 fastmcp_pkg = types.ModuleType("mcp.server.fastmcp")
 
+
 class _Dummy:
     pass
+
 
 fastmcp_pkg.FastMCP = _Dummy
 fastmcp_pkg.Context = _Dummy
@@ -32,7 +34,8 @@ def _load_module(path: pathlib.Path, name: str):
     return mod
 
 
-manage_script = _load_module(SRC / "tools" / "manage_script.py", "manage_script_mod")
+manage_script = _load_module(
+    SRC / "tools" / "manage_script.py", "manage_script_mod")
 
 
 class DummyMCP:
@@ -72,4 +75,3 @@ def test_get_sha_param_shape_and_routing(monkeypatch):
     assert captured["params"]["path"].endswith("Assets/Scripts")
     assert resp["success"] is True
     assert resp["data"] == {"sha256": "abc", "lengthBytes": 1}
-

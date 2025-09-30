@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-import socket, struct, json, sys
+import socket
+import struct
+import json
+import sys
 
 HOST = "127.0.0.1"
 PORT = 6400
@@ -9,6 +12,7 @@ except (IndexError, ValueError):
     SIZE_MB = 5  # e.g., 5 or 10
 FILL = "R"
 MAX_FRAME = 64 * 1024 * 1024
+
 
 def recv_exact(sock, n):
     buf = bytearray(n)
@@ -21,12 +25,14 @@ def recv_exact(sock, n):
         off += r
     return bytes(buf)
 
+
 def is_valid_json(b):
     try:
         json.loads(b.decode("utf-8"))
         return True
     except Exception:
         return False
+
 
 def recv_legacy_json(sock, timeout=60):
     sock.settimeout(timeout)
@@ -44,6 +50,7 @@ def recv_legacy_json(sock, timeout=60):
             return data
         if is_valid_json(data):
             return data
+
 
 def main():
     # Cap filler to stay within framing limit (reserve small overhead for JSON)
@@ -83,16 +90,16 @@ def main():
             print(f"Response framed length: {resp_len}")
             MAX_RESP = MAX_FRAME
             if resp_len <= 0 or resp_len > MAX_RESP:
-                raise RuntimeError(f"invalid framed length: {resp_len} (max {MAX_RESP})")
+                raise RuntimeError(
+                    f"invalid framed length: {resp_len} (max {MAX_RESP})")
             resp = recv_exact(s, resp_len)
         else:
             s.sendall(body_bytes)
             resp = recv_legacy_json(s)
 
         print(f"Response bytes: {len(resp)}")
-        print(f"Response head: {resp[:120].decode('utf-8','ignore')}")
+        print(f"Response head: {resp[:120].decode('utf-8', 'ignore')}")
+
 
 if __name__ == "__main__":
     main()
-
-

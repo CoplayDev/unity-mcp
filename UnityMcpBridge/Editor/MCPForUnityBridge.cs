@@ -15,6 +15,7 @@ using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
 using MCPForUnity.Editor.Tools;
 using MCPForUnity.Editor.Tools.MenuItems;
+using MCPForUnity.Editor.Tools.Prefabs;
 
 namespace MCPForUnity.Editor
 {
@@ -53,7 +54,7 @@ namespace MCPForUnity.Editor
         private static bool isAutoConnectMode = false;
         private const ulong MaxFrameBytes = 64UL * 1024 * 1024; // 64 MiB hard cap for framed payloads
         private const int FrameIOTimeoutMs = 30000; // Per-read timeout to avoid stalled clients
-        
+
         // IO diagnostics
         private static long _ioSeq = 0;
         private static void IoInfo(string s) { McpLog.Info(s, always: false); }
@@ -63,7 +64,7 @@ namespace MCPForUnity.Editor
         {
             try { return EditorPrefs.GetBool("MCPForUnity.DebugLogs", false); } catch { return false; }
         }
-        
+
         private static void LogBreadcrumb(string stage)
         {
             if (IsDebugEnabled())
@@ -82,21 +83,21 @@ namespace MCPForUnity.Editor
         public static void StartAutoConnect()
         {
             Stop(); // Stop current connection
-            
+
             try
             {
                 // Prefer stored project port and start using the robust Start() path (with retries/options)
                 currentUnityPort = PortManager.GetPortWithFallback();
                 Start();
                 isAutoConnectMode = true;
-                
+
                 // Record telemetry for bridge startup
                 TelemetryHelper.RecordBridgeStartup();
             }
             catch (Exception ex)
             {
                 Debug.LogError($"Auto-connect failed: {ex.Message}");
-                
+
                 // Record telemetry for connection failure
                 TelemetryHelper.RecordBridgeConnection(false, ex.Message);
                 throw;
@@ -150,7 +151,8 @@ namespace MCPForUnity.Editor
                             IoInfo($"[IO] ✗ write FAIL  tag={item.Tag} reqId={(item.ReqId?.ToString() ?? "?")} {ex.GetType().Name}: {ex.Message}");
                         }
                     }
-                }) { IsBackground = true, Name = "MCP-Writer" };
+                })
+                { IsBackground = true, Name = "MCP-Writer" };
                 writerThread.Start();
             }
             catch { }
@@ -314,7 +316,7 @@ namespace MCPForUnity.Editor
                     const int maxImmediateRetries = 3;
                     const int retrySleepMs = 75;
                     int attempt = 0;
-                    for (;;)
+                    for (; ; )
                     {
                         try
                         {
@@ -515,159 +517,159 @@ namespace MCPForUnity.Editor
                 lock (clientsLock) { activeClients.Add(client); }
                 try
                 {
-                // Framed I/O only; legacy mode removed
-                try
-                {
-                    if (IsDebugEnabled())
+                    // Framed I/O only; legacy mode removed
+                    try
                     {
-                        var ep = client.Client?.RemoteEndPoint?.ToString() ?? "unknown";
-                        Debug.Log($"<b><color=#2EA3FF>UNITY-MCP</color></b>: Client connected {ep}");
+                        if (IsDebugEnabled())
+                        {
+                            var ep = client.Client?.RemoteEndPoint?.ToString() ?? "unknown";
+                            Debug.Log($"<b><color=#2EA3FF>UNITY-MCP</color></b>: Client connected {ep}");
+                        }
                     }
-                }
-                catch { }
-                // Strict framing: always require FRAMING=1 and frame all I/O
-                try
-                {
-                    client.NoDelay = true;
-                }
-                catch { }
-                try
-                {
-                    string handshake = "WELCOME UNITY-MCP 1 FRAMING=1\n";
-                    byte[] handshakeBytes = System.Text.Encoding.ASCII.GetBytes(handshake);
-                    using var cts = new CancellationTokenSource(FrameIOTimeoutMs);
+                    catch { }
+                    // Strict framing: always require FRAMING=1 and frame all I/O
+                    try
+                    {
+                        client.NoDelay = true;
+                    }
+                    catch { }
+                    try
+                    {
+                        string handshake = "WELCOME UNITY-MCP 1 FRAMING=1\n";
+                        byte[] handshakeBytes = System.Text.Encoding.ASCII.GetBytes(handshake);
+                        using var cts = new CancellationTokenSource(FrameIOTimeoutMs);
 #if NETSTANDARD2_1 || NET6_0_OR_GREATER
-                    await stream.WriteAsync(handshakeBytes.AsMemory(0, handshakeBytes.Length), cts.Token).ConfigureAwait(false);
+                        await stream.WriteAsync(handshakeBytes.AsMemory(0, handshakeBytes.Length), cts.Token).ConfigureAwait(false);
 #else
                     await stream.WriteAsync(handshakeBytes, 0, handshakeBytes.Length, cts.Token).ConfigureAwait(false);
 #endif
-                    if (IsDebugEnabled()) MCPForUnity.Editor.Helpers.McpLog.Info("Sent handshake FRAMING=1 (strict)", always: false);
-                }
-                catch (Exception ex)
-                {
-                    if (IsDebugEnabled()) MCPForUnity.Editor.Helpers.McpLog.Warn($"Handshake failed: {ex.Message}");
-                    return; // abort this client
-                }
-
-                while (isRunning && !token.IsCancellationRequested)
-                {
-                    try
-                    {
-                        // Strict framed mode only: enforced framed I/O for this connection
-                        string commandText = await ReadFrameAsUtf8Async(stream, FrameIOTimeoutMs, token).ConfigureAwait(false);
-
-                        try
-                        {
-                            if (IsDebugEnabled())
-                            {
-                                var preview = commandText.Length > 120 ? commandText.Substring(0, 120) + "…" : commandText;
-                                MCPForUnity.Editor.Helpers.McpLog.Info($"recv framed: {preview}", always: false);
-                            }
-                        }
-                        catch { }
-                        string commandId = Guid.NewGuid().ToString();
-                        var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-                        // Special handling for ping command to avoid JSON parsing
-                        if (commandText.Trim() == "ping")
-                        {
-                            // Direct response to ping without going through JSON parsing
-                            byte[] pingResponseBytes = System.Text.Encoding.UTF8.GetBytes(
-                                /*lang=json,strict*/
-                                "{\"status\":\"success\",\"result\":{\"message\":\"pong\"}}"
-                            );
-                            await WriteFrameAsync(stream, pingResponseBytes);
-                            continue;
-                        }
-
-                        lock (lockObj)
-                        {
-                            commandQueue[commandId] = (commandText, tcs);
-                        }
-
-                        // Wait for the handler to produce a response, but do not block indefinitely
-                        string response;
-                        try
-                        {
-                            using var respCts = new CancellationTokenSource(FrameIOTimeoutMs);
-                            var completed = await Task.WhenAny(tcs.Task, Task.Delay(FrameIOTimeoutMs, respCts.Token)).ConfigureAwait(false);
-                            if (completed == tcs.Task)
-                            {
-                                // Got a result from the handler
-                                respCts.Cancel();
-                                response = tcs.Task.Result;
-                            }
-                            else
-                            {
-                                // Timeout: return a structured error so the client can recover
-                                var timeoutResponse = new
-                                {
-                                    status = "error",
-                                    error = $"Command processing timed out after {FrameIOTimeoutMs} ms",
-                                };
-                                response = JsonConvert.SerializeObject(timeoutResponse);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            var errorResponse = new
-                            {
-                                status = "error",
-                                error = ex.Message,
-                            };
-                            response = JsonConvert.SerializeObject(errorResponse);
-                        }
-
-                        if (IsDebugEnabled())
-                        {
-                            try { MCPForUnity.Editor.Helpers.McpLog.Info("[MCP] sending framed response", always: false); } catch { }
-                        }
-                        // Crash-proof and self-reporting writer logs (direct write to this client's stream)
-                        long seq = System.Threading.Interlocked.Increment(ref _ioSeq);
-                        byte[] responseBytes;
-                        try
-                        {
-                            responseBytes = System.Text.Encoding.UTF8.GetBytes(response);
-                            IoInfo($"[IO] ➜ write start seq={seq} tag=response len={responseBytes.Length} reqId=?");
-                        }
-                        catch (Exception ex)
-                        {
-                            IoInfo($"[IO] ✗ serialize FAIL tag=response reqId=? {ex.GetType().Name}: {ex.Message}");
-                            throw;
-                        }
-
-                        var swDirect = System.Diagnostics.Stopwatch.StartNew();
-                        try
-                        {
-                            await WriteFrameAsync(stream, responseBytes);
-                            swDirect.Stop();
-                            IoInfo($"[IO] ✓ write end   tag=response len={responseBytes.Length} reqId=? durMs={swDirect.Elapsed.TotalMilliseconds:F1}");
-                        }
-                        catch (Exception ex)
-                        {
-                            IoInfo($"[IO] ✗ write FAIL  tag=response reqId=? {ex.GetType().Name}: {ex.Message}");
-                            throw;
-                        }
+                        if (IsDebugEnabled()) MCPForUnity.Editor.Helpers.McpLog.Info("Sent handshake FRAMING=1 (strict)", always: false);
                     }
                     catch (Exception ex)
                     {
-                        // Treat common disconnects/timeouts as benign; only surface hard errors
-                        string msg = ex.Message ?? string.Empty;
-                        bool isBenign =
-                            msg.IndexOf("Connection closed before reading expected bytes", StringComparison.OrdinalIgnoreCase) >= 0
-                            || msg.IndexOf("Read timed out", StringComparison.OrdinalIgnoreCase) >= 0
-                            || ex is System.IO.IOException;
-                        if (isBenign)
-                        {
-                            if (IsDebugEnabled()) MCPForUnity.Editor.Helpers.McpLog.Info($"Client handler: {msg}", always: false);
-                        }
-                        else
-                        {
-                            MCPForUnity.Editor.Helpers.McpLog.Error($"Client handler error: {msg}");
-                        }
-                        break;
+                        if (IsDebugEnabled()) MCPForUnity.Editor.Helpers.McpLog.Warn($"Handshake failed: {ex.Message}");
+                        return; // abort this client
                     }
-                }
+
+                    while (isRunning && !token.IsCancellationRequested)
+                    {
+                        try
+                        {
+                            // Strict framed mode only: enforced framed I/O for this connection
+                            string commandText = await ReadFrameAsUtf8Async(stream, FrameIOTimeoutMs, token).ConfigureAwait(false);
+
+                            try
+                            {
+                                if (IsDebugEnabled())
+                                {
+                                    var preview = commandText.Length > 120 ? commandText.Substring(0, 120) + "…" : commandText;
+                                    MCPForUnity.Editor.Helpers.McpLog.Info($"recv framed: {preview}", always: false);
+                                }
+                            }
+                            catch { }
+                            string commandId = Guid.NewGuid().ToString();
+                            var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                            // Special handling for ping command to avoid JSON parsing
+                            if (commandText.Trim() == "ping")
+                            {
+                                // Direct response to ping without going through JSON parsing
+                                byte[] pingResponseBytes = System.Text.Encoding.UTF8.GetBytes(
+                                    /*lang=json,strict*/
+                                    "{\"status\":\"success\",\"result\":{\"message\":\"pong\"}}"
+                                );
+                                await WriteFrameAsync(stream, pingResponseBytes);
+                                continue;
+                            }
+
+                            lock (lockObj)
+                            {
+                                commandQueue[commandId] = (commandText, tcs);
+                            }
+
+                            // Wait for the handler to produce a response, but do not block indefinitely
+                            string response;
+                            try
+                            {
+                                using var respCts = new CancellationTokenSource(FrameIOTimeoutMs);
+                                var completed = await Task.WhenAny(tcs.Task, Task.Delay(FrameIOTimeoutMs, respCts.Token)).ConfigureAwait(false);
+                                if (completed == tcs.Task)
+                                {
+                                    // Got a result from the handler
+                                    respCts.Cancel();
+                                    response = tcs.Task.Result;
+                                }
+                                else
+                                {
+                                    // Timeout: return a structured error so the client can recover
+                                    var timeoutResponse = new
+                                    {
+                                        status = "error",
+                                        error = $"Command processing timed out after {FrameIOTimeoutMs} ms",
+                                    };
+                                    response = JsonConvert.SerializeObject(timeoutResponse);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                var errorResponse = new
+                                {
+                                    status = "error",
+                                    error = ex.Message,
+                                };
+                                response = JsonConvert.SerializeObject(errorResponse);
+                            }
+
+                            if (IsDebugEnabled())
+                            {
+                                try { MCPForUnity.Editor.Helpers.McpLog.Info("[MCP] sending framed response", always: false); } catch { }
+                            }
+                            // Crash-proof and self-reporting writer logs (direct write to this client's stream)
+                            long seq = System.Threading.Interlocked.Increment(ref _ioSeq);
+                            byte[] responseBytes;
+                            try
+                            {
+                                responseBytes = System.Text.Encoding.UTF8.GetBytes(response);
+                                IoInfo($"[IO] ➜ write start seq={seq} tag=response len={responseBytes.Length} reqId=?");
+                            }
+                            catch (Exception ex)
+                            {
+                                IoInfo($"[IO] ✗ serialize FAIL tag=response reqId=? {ex.GetType().Name}: {ex.Message}");
+                                throw;
+                            }
+
+                            var swDirect = System.Diagnostics.Stopwatch.StartNew();
+                            try
+                            {
+                                await WriteFrameAsync(stream, responseBytes);
+                                swDirect.Stop();
+                                IoInfo($"[IO] ✓ write end   tag=response len={responseBytes.Length} reqId=? durMs={swDirect.Elapsed.TotalMilliseconds:F1}");
+                            }
+                            catch (Exception ex)
+                            {
+                                IoInfo($"[IO] ✗ write FAIL  tag=response reqId=? {ex.GetType().Name}: {ex.Message}");
+                                throw;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            // Treat common disconnects/timeouts as benign; only surface hard errors
+                            string msg = ex.Message ?? string.Empty;
+                            bool isBenign =
+                                msg.IndexOf("Connection closed before reading expected bytes", StringComparison.OrdinalIgnoreCase) >= 0
+                                || msg.IndexOf("Read timed out", StringComparison.OrdinalIgnoreCase) >= 0
+                                || ex is System.IO.IOException;
+                            if (isBenign)
+                            {
+                                if (IsDebugEnabled()) MCPForUnity.Editor.Helpers.McpLog.Info($"Client handler: {msg}", always: false);
+                            }
+                            else
+                            {
+                                MCPForUnity.Editor.Helpers.McpLog.Error($"Client handler error: {msg}");
+                            }
+                            break;
+                        }
+                    }
                 }
                 finally
                 {
@@ -755,7 +757,7 @@ namespace MCPForUnity.Editor
         {
             byte[] header = await ReadExactAsync(stream, 8, timeoutMs, cancel).ConfigureAwait(false);
             ulong payloadLen = ReadUInt64BigEndian(header);
-             if (payloadLen > MaxFrameBytes)
+            if (payloadLen > MaxFrameBytes)
             {
                 throw new System.IO.IOException($"Invalid framed length: {payloadLen}");
             }
@@ -805,116 +807,116 @@ namespace MCPForUnity.Editor
             if (Interlocked.Exchange(ref processingCommands, 1) == 1) return; // reentrancy guard
             try
             {
-            // Heartbeat without holding the queue lock
-            double now = EditorApplication.timeSinceStartup;
-            if (now >= nextHeartbeatAt)
-            {
-                WriteHeartbeat(false);
-                nextHeartbeatAt = now + 0.5f;
-            }
-
-            // Snapshot under lock, then process outside to reduce contention
-            List<(string id, string text, TaskCompletionSource<string> tcs)> work;
-            lock (lockObj)
-            {
-                work = commandQueue
-                    .Select(kvp => (kvp.Key, kvp.Value.commandJson, kvp.Value.tcs))
-                    .ToList();
-            }
-
-            foreach (var item in work)
-            {
-                string id = item.id;
-                string commandText = item.text;
-                TaskCompletionSource<string> tcs = item.tcs;
-
-                try
+                // Heartbeat without holding the queue lock
+                double now = EditorApplication.timeSinceStartup;
+                if (now >= nextHeartbeatAt)
                 {
-                    // Special case handling
-                    if (string.IsNullOrEmpty(commandText))
+                    WriteHeartbeat(false);
+                    nextHeartbeatAt = now + 0.5f;
+                }
+
+                // Snapshot under lock, then process outside to reduce contention
+                List<(string id, string text, TaskCompletionSource<string> tcs)> work;
+                lock (lockObj)
+                {
+                    work = commandQueue
+                        .Select(kvp => (kvp.Key, kvp.Value.commandJson, kvp.Value.tcs))
+                        .ToList();
+                }
+
+                foreach (var item in work)
+                {
+                    string id = item.id;
+                    string commandText = item.text;
+                    TaskCompletionSource<string> tcs = item.tcs;
+
+                    try
                     {
-                        var emptyResponse = new
+                        // Special case handling
+                        if (string.IsNullOrEmpty(commandText))
+                        {
+                            var emptyResponse = new
+                            {
+                                status = "error",
+                                error = "Empty command received",
+                            };
+                            tcs.SetResult(JsonConvert.SerializeObject(emptyResponse));
+                            // Remove quickly under lock
+                            lock (lockObj) { commandQueue.Remove(id); }
+                            continue;
+                        }
+
+                        // Trim the command text to remove any whitespace
+                        commandText = commandText.Trim();
+
+                        // Non-JSON direct commands handling (like ping)
+                        if (commandText == "ping")
+                        {
+                            var pingResponse = new
+                            {
+                                status = "success",
+                                result = new { message = "pong" },
+                            };
+                            tcs.SetResult(JsonConvert.SerializeObject(pingResponse));
+                            lock (lockObj) { commandQueue.Remove(id); }
+                            continue;
+                        }
+
+                        // Check if the command is valid JSON before attempting to deserialize
+                        if (!IsValidJson(commandText))
+                        {
+                            var invalidJsonResponse = new
+                            {
+                                status = "error",
+                                error = "Invalid JSON format",
+                                receivedText = commandText.Length > 50
+                                    ? commandText[..50] + "..."
+                                    : commandText,
+                            };
+                            tcs.SetResult(JsonConvert.SerializeObject(invalidJsonResponse));
+                            lock (lockObj) { commandQueue.Remove(id); }
+                            continue;
+                        }
+
+                        // Normal JSON command processing
+                        Command command = JsonConvert.DeserializeObject<Command>(commandText);
+
+                        if (command == null)
+                        {
+                            var nullCommandResponse = new
+                            {
+                                status = "error",
+                                error = "Command deserialized to null",
+                                details = "The command was valid JSON but could not be deserialized to a Command object",
+                            };
+                            tcs.SetResult(JsonConvert.SerializeObject(nullCommandResponse));
+                        }
+                        else
+                        {
+                            string responseJson = ExecuteCommand(command);
+                            tcs.SetResult(responseJson);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogError($"Error processing command: {ex.Message}\n{ex.StackTrace}");
+
+                        var response = new
                         {
                             status = "error",
-                            error = "Empty command received",
-                        };
-                        tcs.SetResult(JsonConvert.SerializeObject(emptyResponse));
-                        // Remove quickly under lock
-                        lock (lockObj) { commandQueue.Remove(id); }
-                        continue;
-                    }
-
-                    // Trim the command text to remove any whitespace
-                    commandText = commandText.Trim();
-
-                    // Non-JSON direct commands handling (like ping)
-                    if (commandText == "ping")
-                    {
-                        var pingResponse = new
-                        {
-                            status = "success",
-                            result = new { message = "pong" },
-                        };
-                        tcs.SetResult(JsonConvert.SerializeObject(pingResponse));
-                        lock (lockObj) { commandQueue.Remove(id); }
-                        continue;
-                    }
-
-                    // Check if the command is valid JSON before attempting to deserialize
-                    if (!IsValidJson(commandText))
-                    {
-                        var invalidJsonResponse = new
-                        {
-                            status = "error",
-                            error = "Invalid JSON format",
-                            receivedText = commandText.Length > 50
+                            error = ex.Message,
+                            commandType = "Unknown (error during processing)",
+                            receivedText = commandText?.Length > 50
                                 ? commandText[..50] + "..."
                                 : commandText,
                         };
-                        tcs.SetResult(JsonConvert.SerializeObject(invalidJsonResponse));
-                        lock (lockObj) { commandQueue.Remove(id); }
-                        continue;
-                    }
-
-                    // Normal JSON command processing
-                    Command command = JsonConvert.DeserializeObject<Command>(commandText);
-
-                    if (command == null)
-                    {
-                        var nullCommandResponse = new
-                        {
-                            status = "error",
-                            error = "Command deserialized to null",
-                            details = "The command was valid JSON but could not be deserialized to a Command object",
-                        };
-                        tcs.SetResult(JsonConvert.SerializeObject(nullCommandResponse));
-                    }
-                    else
-                    {
-                        string responseJson = ExecuteCommand(command);
+                        string responseJson = JsonConvert.SerializeObject(response);
                         tcs.SetResult(responseJson);
                     }
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"Error processing command: {ex.Message}\n{ex.StackTrace}");
 
-                    var response = new
-                    {
-                        status = "error",
-                        error = ex.Message,
-                        commandType = "Unknown (error during processing)",
-                        receivedText = commandText?.Length > 50
-                            ? commandText[..50] + "..."
-                            : commandText,
-                    };
-                    string responseJson = JsonConvert.SerializeObject(response);
-                    tcs.SetResult(responseJson);
+                    // Remove quickly under lock
+                    lock (lockObj) { commandQueue.Remove(id); }
                 }
-
-                // Remove quickly under lock
-                lock (lockObj) { commandQueue.Remove(id); }
-            }
             }
             finally
             {
@@ -1039,26 +1041,7 @@ namespace MCPForUnity.Editor
 
                 // Use JObject for parameters as the new handlers likely expect this
                 JObject paramsObject = command.@params ?? new JObject();
-
-                // Route command based on the new tool structure from the refactor plan
-                object result = command.type switch
-                {
-                    // Maps the command type (tool name) to the corresponding handler's static HandleCommand method
-                    // Assumes each handler class has a static method named 'HandleCommand' that takes JObject parameters
-                    "manage_script" => ManageScript.HandleCommand(paramsObject),
-                    // Run scene operations on the main thread to avoid deadlocks/hangs (with diagnostics under debug flag)
-                    "manage_scene" => HandleManageScene(paramsObject)
-                        ?? throw new TimeoutException($"manage_scene timed out after {FrameIOTimeoutMs} ms on main thread"),
-                    "manage_editor" => ManageEditor.HandleCommand(paramsObject),
-                    "manage_gameobject" => ManageGameObject.HandleCommand(paramsObject),
-                    "manage_asset" => ManageAsset.HandleCommand(paramsObject),
-                    "manage_shader" => ManageShader.HandleCommand(paramsObject),
-                    "read_console" => ReadConsole.HandleCommand(paramsObject),
-                    "manage_menu_item" => ManageMenuItem.HandleCommand(paramsObject),
-                    _ => throw new ArgumentException(
-                        $"Unknown or unsupported command type: {command.type}"
-                    ),
-                };
+                object result = CommandRegistry.GetHandler(command.type)(paramsObject);
 
                 // Standard success response format
                 var response = new { status = "success", result };

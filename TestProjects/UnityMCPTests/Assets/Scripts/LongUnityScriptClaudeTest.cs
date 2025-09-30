@@ -2035,5 +2035,3 @@ public class LongUnityScriptClaudeTest : MonoBehaviour
     #endregion
 
 }
-
-

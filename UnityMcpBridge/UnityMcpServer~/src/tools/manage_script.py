@@ -1,20 +1,23 @@
-from mcp.server.fastmcp import FastMCP, Context
-from typing import Dict, Any, List
-from unity_connection import send_command_with_retry
 import base64
 import os
+from typing import Annotated, Any, Literal
 from urllib.parse import urlparse, unquote
+
+from mcp.server.fastmcp import FastMCP, Context
+
+from unity_connection import send_command_with_retry
 
 try:
     from telemetry_decorator import telemetry_tool
-    from telemetry import record_milestone, MilestoneType
     HAS_TELEMETRY = True
 except ImportError:
     HAS_TELEMETRY = False
+
     def telemetry_tool(tool_name: str):
         def decorator(func):
             return func
         return decorator
+
 
 def register_manage_script_tools(mcp: FastMCP):
     """Register all script management tools with the MCP server."""
@@ -32,7 +35,7 @@ def register_manage_script_tools(mcp: FastMCP):
         """
         raw_path: str
         if uri.startswith("unity://path/"):
-            raw_path = uri[len("unity://path/") :]
+            raw_path = uri[len("unity://path/"):]
         elif uri.startswith("file://"):
             parsed = urlparse(uri)
             host = (parsed.netloc or "").strip()
@@ -56,7 +59,8 @@ def register_manage_script_tools(mcp: FastMCP):
 
         # If an 'Assets' segment exists, compute path relative to it (case-insensitive)
         parts = [p for p in norm.split("/") if p not in ("", ".")]
-        idx = next((i for i, seg in enumerate(parts) if seg.lower() == "assets"), None)
+        idx = next((i for i, seg in enumerate(parts)
+                   if seg.lower() == "assets"), None)
         assets_rel = "/".join(parts[idx:]) if idx is not None else None
 
         effective_path = assets_rel if assets_rel else norm
@@ -69,51 +73,47 @@ def register_manage_script_tools(mcp: FastMCP):
         directory = os.path.dirname(effective_path)
         return name, directory
 
-    @mcp.tool(description=(
-        "Apply small text edits to a C# script identified by URI.\n\n"
-        "⚠️ IMPORTANT: This tool replaces EXACT character positions. Always verify content at target lines/columns BEFORE editing!\n"
-        "Common mistakes:\n"
-        "- Assuming what's on a line without checking\n"
-        "- Using wrong line numbers (they're 1-indexed)\n"
-        "- Miscounting column positions (also 1-indexed, tabs count as 1)\n\n"
-        "RECOMMENDED WORKFLOW:\n"
-        "1) First call resources/read with start_line/line_count to verify exact content\n"
-        "2) Count columns carefully (or use find_in_file to locate patterns)\n"
-        "3) Apply your edit with precise coordinates\n"
-        "4) Consider script_apply_edits with anchors for safer pattern-based replacements\n\n"
-        "Args:\n"
-        "- uri: unity://path/Assets/... or file://... or Assets/...\n"
-        "- edits: list of {startLine,startCol,endLine,endCol,newText} (1-indexed!)\n"
-        "- precondition_sha256: optional SHA of current file (prevents concurrent edit conflicts)\n\n"
-        "Notes:\n"
-        "- Path must resolve under Assets/\n"
-        "- For method/class operations, use script_apply_edits (safer, structured edits)\n"
-        "- For pattern-based replacements, consider anchor operations in script_apply_edits\n"
+    @mcp.tool(name="apply_text_edits", description=(
+        """Apply small text edits to a C# script identified by URI.
+        IMPORTANT: This tool replaces EXACT character positions. Always verify content at target lines/columns BEFORE editing!
+        RECOMMENDED WORKFLOW:
+            1. First call resources/read with start_line/line_count to verify exact content
+            2. Count columns carefully (or use find_in_file to locate patterns)
+            3. Apply your edit with precise coordinates
+            4. Consider script_apply_edits with anchors for safer pattern-based replacements
+        Notes:
+            - For method/class operations, use script_apply_edits (safer, structured edits)
+            - For pattern-based replacements, consider anchor operations in script_apply_edits
+            - Lines, columns are 1-indexed
+            - Tabs count as 1 column"""
     ))
     @telemetry_tool("apply_text_edits")
     def apply_text_edits(
         ctx: Context,
-        uri: str,
-        edits: List[Dict[str, Any]],
-        precondition_sha256: str | None = None,
-        strict: bool | None = None,
-        options: Dict[str, Any] | None = None,
-    ) -> Dict[str, Any]:
-        """Apply small text edits to a C# script identified by URI."""
+        uri: Annotated[str, "URI of the script to edit under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
+        edits: Annotated[list[dict[str, Any]], "List of edits to apply to the script, i.e. a list of {startLine,startCol,endLine,endCol,newText} (1-indexed!)"],
+        precondition_sha256: Annotated[str,
+                                       "Optional SHA256 of the script to edit, used to prevent concurrent edits"] | None = None,
+        strict: Annotated[bool,
+                          "Optional strict flag, used to enforce strict mode"] | None = None,
+        options: Annotated[dict[str, Any],
+                           "Optional options, used to pass additional options to the script editor"] | None = None,
+    ) -> dict[str, Any]:
+        ctx.info(f"Processing apply_text_edits: {uri}")
         name, directory = _split_uri(uri)
 
         # Normalize common aliases/misuses for resilience:
         # - Accept LSP-style range objects: {range:{start:{line,character}, end:{...}}, newText|text}
         # - Accept index ranges as a 2-int array: {range:[startIndex,endIndex], text}
         # If normalization is required, read current contents to map indices -> 1-based line/col.
-        def _needs_normalization(arr: List[Dict[str, Any]]) -> bool:
+        def _needs_normalization(arr: list[dict[str, Any]]) -> bool:
             for e in arr or []:
                 if ("startLine" not in e) or ("startCol" not in e) or ("endLine" not in e) or ("endCol" not in e) or ("newText" not in e and "text" in e):
                     return True
             return False
 
-        normalized_edits: List[Dict[str, Any]] = []
-        warnings: List[str] = []
+        normalized_edits: list[dict[str, Any]] = []
+        warnings: list[str] = []
         if _needs_normalization(edits):
             # Read file to support index->line/col conversion when needed
             read_resp = send_command_with_retry("manage_script", {
@@ -127,7 +127,8 @@ def register_manage_script_tools(mcp: FastMCP):
             contents = data.get("contents")
             if not contents and data.get("contentsEncoded"):
                 try:
-                    contents = base64.b64decode(data.get("encodedContents", "").encode("utf-8")).decode("utf-8", "replace")
+                    contents = base64.b64decode(data.get("encodedContents", "").encode(
+                        "utf-8")).decode("utf-8", "replace")
                 except Exception:
                     contents = contents or ""
 
@@ -151,7 +152,7 @@ def register_manage_script_tools(mcp: FastMCP):
                 if "startLine" in e2 and "startCol" in e2 and "endLine" in e2 and "endCol" in e2:
                     # Guard: explicit fields must be 1-based.
                     zero_based = False
-                    for k in ("startLine","startCol","endLine","endCol"):
+                    for k in ("startLine", "startCol", "endLine", "endCol"):
                         try:
                             if int(e2.get(k, 1)) < 1:
                                 zero_based = True
@@ -161,13 +162,14 @@ def register_manage_script_tools(mcp: FastMCP):
                         if strict:
                             return {"success": False, "code": "zero_based_explicit_fields", "message": "Explicit line/col fields are 1-based; received zero-based.", "data": {"normalizedEdits": normalized_edits}}
                         # Normalize by clamping to 1 and warn
-                        for k in ("startLine","startCol","endLine","endCol"):
+                        for k in ("startLine", "startCol", "endLine", "endCol"):
                             try:
                                 if int(e2.get(k, 1)) < 1:
                                     e2[k] = 1
                             except Exception:
                                 pass
-                        warnings.append("zero_based_explicit_fields_normalized")
+                        warnings.append(
+                            "zero_based_explicit_fields_normalized")
                     normalized_edits.append(e2)
                     continue
 
@@ -205,17 +207,18 @@ def register_manage_script_tools(mcp: FastMCP):
                     "success": False,
                     "code": "missing_field",
                     "message": "apply_text_edits requires startLine/startCol/endLine/endCol/newText or a normalizable 'range'",
-                    "data": {"expected": ["startLine","startCol","endLine","endCol","newText"], "got": e}
+                    "data": {"expected": ["startLine", "startCol", "endLine", "endCol", "newText"], "got": e}
                 }
         else:
             # Even when edits appear already in explicit form, validate 1-based coordinates.
             normalized_edits = []
             for e in edits or []:
                 e2 = dict(e)
-                has_all = all(k in e2 for k in ("startLine","startCol","endLine","endCol"))
+                has_all = all(k in e2 for k in (
+                    "startLine", "startCol", "endLine", "endCol"))
                 if has_all:
                     zero_based = False
-                    for k in ("startLine","startCol","endLine","endCol"):
+                    for k in ("startLine", "startCol", "endLine", "endCol"):
                         try:
                             if int(e2.get(k, 1)) < 1:
                                 zero_based = True
@@ -224,21 +227,24 @@ def register_manage_script_tools(mcp: FastMCP):
                     if zero_based:
                         if strict:
                             return {"success": False, "code": "zero_based_explicit_fields", "message": "Explicit line/col fields are 1-based; received zero-based.", "data": {"normalizedEdits": [e2]}}
-                        for k in ("startLine","startCol","endLine","endCol"):
+                        for k in ("startLine", "startCol", "endLine", "endCol"):
                             try:
                                 if int(e2.get(k, 1)) < 1:
                                     e2[k] = 1
                             except Exception:
                                 pass
                         if "zero_based_explicit_fields_normalized" not in warnings:
-                            warnings.append("zero_based_explicit_fields_normalized")
+                            warnings.append(
+                                "zero_based_explicit_fields_normalized")
                 normalized_edits.append(e2)
 
         # Preflight: detect overlapping ranges among normalized line/col spans
-        def _pos_tuple(e: Dict[str, Any], key_start: bool) -> tuple[int, int]:
+        def _pos_tuple(e: dict[str, Any], key_start: bool) -> tuple[int, int]:
             return (
-                int(e.get("startLine", 1)) if key_start else int(e.get("endLine", 1)),
-                int(e.get("startCol", 1)) if key_start else int(e.get("endCol", 1)),
+                int(e.get("startLine", 1)) if key_start else int(
+                    e.get("endLine", 1)),
+                int(e.get("startCol", 1)) if key_start else int(
+                    e.get("endCol", 1)),
             )
 
         def _le(a: tuple[int, int], b: tuple[int, int]) -> bool:
@@ -276,7 +282,7 @@ def register_manage_script_tools(mcp: FastMCP):
         # preserves existing call-count expectations in clients/tests.
 
         # Default options: for multi-span batches, prefer atomic to avoid mid-apply imbalance
-        opts: Dict[str, Any] = dict(options or {})
+        opts: dict[str, Any] = dict(options or {})
         try:
             if len(normalized_edits) > 1 and "applyMode" not in opts:
                 opts["applyMode"] = "atomic"
@@ -320,10 +326,16 @@ def register_manage_script_tools(mcp: FastMCP):
             if resp.get("success") and (options or {}).get("force_sentinel_reload"):
                 # Optional: flip sentinel via menu if explicitly requested
                 try:
-                    import threading, time, json, glob, os
+                    import threading
+                    import time
+                    import json
+                    import glob
+                    import os
+
                     def _latest_status() -> dict | None:
                         try:
-                            files = sorted(glob.glob(os.path.expanduser("~/.unity-mcp/unity-mcp-status-*.json")), key=os.path.getmtime, reverse=True)
+                            files = sorted(glob.glob(os.path.expanduser(
+                                "~/.unity-mcp/unity-mcp-status-*.json")), key=os.path.getmtime, reverse=True)
                             if not files:
                                 return None
                             with open(files[0], "r") as f:
@@ -352,24 +364,21 @@ def register_manage_script_tools(mcp: FastMCP):
             return resp
         return {"success": False, "message": str(resp)}
 
-    @mcp.tool(description=(
-        "Create a new C# script at the given project path.\n\n"
-        "Args: path (e.g., 'Assets/Scripts/My.cs'), contents (string), script_type, namespace.\n"
-        "Rules: path must be under Assets/. Contents will be Base64-encoded over transport.\n"
-    ))
+    @mcp.tool(name="create_script", description=("Create a new C# script at the given project path."))
     @telemetry_tool("create_script")
     def create_script(
         ctx: Context,
-        path: str,
-        contents: str = "",
-        script_type: str | None = None,
-        namespace: str | None = None,
-    ) -> Dict[str, Any]:
-        """Create a new C# script at the given path."""
+        path: Annotated[str, "Path under Assets/ to create the script at, e.g., 'Assets/Scripts/My.cs'"],
+        contents: Annotated[str, "Contents of the script to create. Note, this is Base64 encoded over transport."],
+        script_type: Annotated[str, "Script type (e.g., 'C#')"] | None = None,
+        namespace: Annotated[str, "Namespace for the script"] | None = None,
+    ) -> dict[str, Any]:
+        ctx.info(f"Processing create_script: {path}")
         name = os.path.splitext(os.path.basename(path))[0]
         directory = os.path.dirname(path)
         # Local validation to avoid round-trips on obviously bad input
-        norm_path = os.path.normpath((path or "").replace("\\", "/")).replace("\\", "/")
+        norm_path = os.path.normpath(
+            (path or "").replace("\\", "/")).replace("\\", "/")
         if not directory or directory.split("/")[0].lower() != "assets":
             return {"success": False, "code": "path_outside_assets", "message": f"path must be under 'Assets/'; got '{path}'."}
         if ".." in norm_path.split("/") or norm_path.startswith("/"):
@@ -378,7 +387,7 @@ def register_manage_script_tools(mcp: FastMCP):
             return {"success": False, "code": "bad_path", "message": "path must include a script file name."}
         if not norm_path.lower().endswith(".cs"):
             return {"success": False, "code": "bad_extension", "message": "script file must end with .cs."}
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "action": "create",
             "name": name,
             "path": directory,
@@ -386,20 +395,21 @@ def register_manage_script_tools(mcp: FastMCP):
             "scriptType": script_type,
         }
         if contents:
-            params["encodedContents"] = base64.b64encode(contents.encode("utf-8")).decode("utf-8")
+            params["encodedContents"] = base64.b64encode(
+                contents.encode("utf-8")).decode("utf-8")
             params["contentsEncoded"] = True
         params = {k: v for k, v in params.items() if v is not None}
         resp = send_command_with_retry("manage_script", params)
         return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}
 
-    @mcp.tool(description=(
-        "Delete a C# script by URI or Assets-relative path.\n\n"
-        "Args: uri (unity://path/... or file://... or Assets/...).\n"
-        "Rules: Target must resolve under Assets/.\n"
-    ))
+    @mcp.tool(name="delete_script", description=("Delete a C# script by URI or Assets-relative path."))
     @telemetry_tool("delete_script")
-    def delete_script(ctx: Context, uri: str) -> Dict[str, Any]:
+    def delete_script(
+        ctx: Context,
+        uri: Annotated[str, "URI of the script to delete under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."]
+    ) -> dict[str, Any]:
         """Delete a C# script by URI."""
+        ctx.info(f"Processing delete_script: {uri}")
         name, directory = _split_uri(uri)
         if not directory or directory.split("/")[0].lower() != "assets":
             return {"success": False, "code": "path_outside_assets", "message": "URI must resolve under 'Assets/'."}
@@ -407,18 +417,17 @@ def register_manage_script_tools(mcp: FastMCP):
         resp = send_command_with_retry("manage_script", params)
         return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}
 
-    @mcp.tool(description=(
-        "Validate a C# script and return diagnostics.\n\n"
-        "Args: uri, level=('basic'|'standard'), include_diagnostics (bool, optional).\n"
-        "- basic: quick syntax checks.\n"
-        "- standard: deeper checks (performance hints, common pitfalls).\n"
-        "- include_diagnostics: when true, returns full diagnostics and summary; default returns counts only.\n"
-    ))
+    @mcp.tool(name="validate_script", description=("Validate a C# script and return diagnostics."))
     @telemetry_tool("validate_script")
     def validate_script(
-        ctx: Context, uri: str, level: str = "basic", include_diagnostics: bool = False
-    ) -> Dict[str, Any]:
-        """Validate a C# script and return diagnostics."""
+        ctx: Context,
+        uri: Annotated[str, "URI of the script to validate under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
+        level: Annotated[Literal['basic', 'standard'],
+                         "Validation level"] = "basic",
+        include_diagnostics: Annotated[bool,
+                                       "Include full diagnostics and summary"] = False
+    ) -> dict[str, Any]:
+        ctx.info(f"Processing validate_script: {uri}")
         name, directory = _split_uri(uri)
         if not directory or directory.split("/")[0].lower() != "assets":
             return {"success": False, "code": "path_outside_assets", "message": "URI must resolve under 'Assets/'."}
@@ -433,103 +442,30 @@ def register_manage_script_tools(mcp: FastMCP):
         resp = send_command_with_retry("manage_script", params)
         if isinstance(resp, dict) and resp.get("success"):
             diags = resp.get("data", {}).get("diagnostics", []) or []
-            warnings = sum(1 for d in diags if str(d.get("severity", "")).lower() == "warning")
-            errors = sum(1 for d in diags if str(d.get("severity", "")).lower() in ("error", "fatal"))
+            warnings = sum(1 for d in diags if str(
+                d.get("severity", "")).lower() == "warning")
+            errors = sum(1 for d in diags if str(
+                d.get("severity", "")).lower() in ("error", "fatal"))
             if include_diagnostics:
                 return {"success": True, "data": {"diagnostics": diags, "summary": {"warnings": warnings, "errors": errors}}}
             return {"success": True, "data": {"warnings": warnings, "errors": errors}}
         return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}
 
-    @mcp.tool(description=(
-        "Compatibility router for legacy script operations.\n\n"
-        "Actions: create|read|delete (update is routed to apply_text_edits with precondition).\n"
-        "Args: name (no .cs), path (Assets/...), contents (for create), script_type, namespace.\n"
-        "Notes: prefer apply_text_edits (ranges) or script_apply_edits (structured) for edits.\n"
-    ))
+    @mcp.tool(name="manage_script", description=("Compatibility router for legacy script operations. Prefer apply_text_edits (ranges) or script_apply_edits (structured) for edits."))
     @telemetry_tool("manage_script")
     def manage_script(
         ctx: Context,
-        action: str,
-        name: str,
-        path: str,
-        contents: str = "",
-        script_type: str | None = None,
-        namespace: str | None = None,
-    ) -> Dict[str, Any]:
-        """Compatibility router for legacy script operations.
-
-        IMPORTANT:
-        - Direct file reads should use resources/read.
-        - Edits should use apply_text_edits.
-
-        Args:
-            action: Operation ('create', 'read', 'delete').
-            name: Script name (no .cs extension).
-            path: Asset path (default: "Assets/").
-            contents: C# code for 'create'/'update'.
-            script_type: Type hint (e.g., 'MonoBehaviour').
-            namespace: Script namespace.
-
-        Returns:
-            Dictionary with results ('success', 'message', 'data').
-        """
+        action: Annotated[Literal['create', 'read', 'delete'], "Perform CRUD operations on C# scripts."],
+        name: Annotated[str, "Script name (no .cs extension)", "Name of the script to create"],
+        path: Annotated[str, "Asset path (default: 'Assets/')", "Path under Assets/ to create the script at, e.g., 'Assets/Scripts/My.cs'"],
+        contents: Annotated[str, "Contents of the script to create",
+                            "C# code for 'create'/'update'"] | None = None,
+        script_type: Annotated[str, "Script type (e.g., 'C#')",
+                               "Type hint (e.g., 'MonoBehaviour')"] | None = None,
+        namespace: Annotated[str, "Namespace for the script"] | None = None,
+    ) -> dict[str, Any]:
+        ctx.info(f"Processing manage_script: {action}")
         try:
-            # Graceful migration for legacy 'update': route to apply_text_edits (whole-file replace)
-            if action == 'update':
-                try:
-                    # 1) Read current contents to compute end range and precondition
-                    read_resp = send_command_with_retry("manage_script", {
-                        "action": "read",
-                        "name": name,
-                        "path": path,
-                    })
-                    if not (isinstance(read_resp, dict) and read_resp.get("success")):
-                        return {"success": False, "code": "deprecated_update", "message": "Use apply_text_edits; automatic migration failed to read current file."}
-                    data = read_resp.get("data", {})
-                    current = data.get("contents")
-                    if not current and data.get("contentsEncoded"):
-                        current = base64.b64decode(data.get("encodedContents", "").encode("utf-8")).decode("utf-8", "replace")
-                    if current is None:
-                        return {"success": False, "code": "deprecated_update", "message": "Use apply_text_edits; current file read returned no contents."}
-
-                    # 2) Compute whole-file range (1-based, end exclusive) and SHA
-                    import hashlib as _hashlib
-                    old_lines = current.splitlines(keepends=True)
-                    end_line = len(old_lines) + 1
-                    sha = _hashlib.sha256(current.encode("utf-8")).hexdigest()
-
-                    # 3) Apply single whole-file text edit with provided 'contents'
-                    edits = [{
-                        "startLine": 1,
-                        "startCol": 1,
-                        "endLine": end_line,
-                        "endCol": 1,
-                        "newText": contents or "",
-                    }]
-                    route_params = {
-                        "action": "apply_text_edits",
-                        "name": name,
-                        "path": path,
-                        "edits": edits,
-                        "precondition_sha256": sha,
-                        "options": {"refresh": "debounced", "validate": "standard"},
-                    }
-                    # Preflight size vs. default cap (256 KiB) to avoid opaque server errors
-                    try:
-                        import json as _json
-                        payload_bytes = len(_json.dumps({"edits": edits}, ensure_ascii=False).encode("utf-8"))
-                        if payload_bytes > 256 * 1024:
-                            return {"success": False, "code": "payload_too_large", "message": f"Edit payload {payload_bytes} bytes exceeds 256 KiB cap; try structured ops or chunking."}
-                    except Exception:
-                        pass
-                    routed = send_command_with_retry("manage_script", route_params)
-                    if isinstance(routed, dict):
-                        routed.setdefault("message", "Routed legacy update to apply_text_edits")
-                        return routed
-                    return {"success": False, "message": str(routed)}
-                except Exception as e:
-                    return {"success": False, "code": "deprecated_update", "message": f"Use apply_text_edits; migration error: {e}"}
-
             # Prepare parameters for Unity
             params = {
                 "action": action,
@@ -542,7 +478,8 @@ def register_manage_script_tools(mcp: FastMCP):
             # Base64 encode the contents if they exist to avoid JSON escaping issues
             if contents:
                 if action == 'create':
-                    params["encodedContents"] = base64.b64encode(contents.encode('utf-8')).decode('utf-8')
+                    params["encodedContents"] = base64.b64encode(
+                        contents.encode('utf-8')).decode('utf-8')
                     params["contentsEncoded"] = True
                 else:
                     params["contents"] = contents
@@ -554,7 +491,8 @@ def register_manage_script_tools(mcp: FastMCP):
             if isinstance(response, dict):
                 if response.get("success"):
                     if response.get("data", {}).get("contentsEncoded"):
-                        decoded_contents = base64.b64decode(response["data"]["encodedContents"]).decode('utf-8')
+                        decoded_contents = base64.b64decode(
+                            response["data"]["encodedContents"]).decode('utf-8')
                         response["data"]["contents"] = decoded_contents
                         del response["data"]["encodedContents"]
                         del response["data"]["contentsEncoded"]
@@ -574,19 +512,24 @@ def register_manage_script_tools(mcp: FastMCP):
                 "message": f"Python error managing script: {str(e)}",
             }
 
-    @mcp.tool(description=(
-        "Get manage_script capabilities (supported ops, limits, and guards).\n\n"
-        "Returns:\n- ops: list of supported structured ops\n- text_ops: list of supported text ops\n- max_edit_payload_bytes: server edit payload cap\n- guards: header/using guard enabled flag\n"
+    @mcp.tool(name="manage_script_capabilities", description=(
+        """Get manage_script capabilities (supported ops, limits, and guards).
+        Returns:
+            - ops: list of supported structured ops
+            - text_ops: list of supported text ops
+            - max_edit_payload_bytes: server edit payload cap
+            - guards: header/using guard enabled flag"""
     ))
     @telemetry_tool("manage_script_capabilities")
-    def manage_script_capabilities(ctx: Context) -> Dict[str, Any]:
+    def manage_script_capabilities(ctx: Context) -> dict[str, Any]:
+        ctx.info("Processing manage_script_capabilities")
         try:
             # Keep in sync with server/Editor ManageScript implementation
             ops = [
-                "replace_class","delete_class","replace_method","delete_method",
-                "insert_method","anchor_insert","anchor_delete","anchor_replace"
+                "replace_class", "delete_class", "replace_method", "delete_method",
+                "insert_method", "anchor_insert", "anchor_delete", "anchor_replace"
             ]
-            text_ops = ["replace_range","regex_replace","prepend","append"]
+            text_ops = ["replace_range", "regex_replace", "prepend", "append"]
             # Match ManageScript.MaxEditPayloadBytes if exposed; hardcode a sensible default fallback
             max_edit_payload_bytes = 256 * 1024
             guards = {"using_guard": True}
@@ -601,21 +544,21 @@ def register_manage_script_tools(mcp: FastMCP):
         except Exception as e:
             return {"success": False, "error": f"capabilities error: {e}"}
 
-    @mcp.tool(description=(
-        "Get SHA256 and basic metadata for a Unity C# script without returning file contents.\n\n"
-        "Args: uri (unity://path/Assets/... or file://... or Assets/...).\n"
-        "Returns: {sha256, lengthBytes}."
-    ))
+    @mcp.tool(name="get_sha", description="Get SHA256 and basic metadata for a Unity C# script without returning file contents")
     @telemetry_tool("get_sha")
-    def get_sha(ctx: Context, uri: str) -> Dict[str, Any]:
-        """Return SHA256 and basic metadata for a script."""
+    def get_sha(
+        ctx: Context,
+        uri: Annotated[str, "URI of the script to edit under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."]
+    ) -> dict[str, Any]:
+        ctx.info(f"Processing get_sha: {uri}")
         try:
             name, directory = _split_uri(uri)
             params = {"action": "get_sha", "name": name, "path": directory}
             resp = send_command_with_retry("manage_script", params)
             if isinstance(resp, dict) and resp.get("success"):
                 data = resp.get("data", {})
-                minimal = {"sha256": data.get("sha256"), "lengthBytes": data.get("lengthBytes")}
+                minimal = {"sha256": data.get(
+                    "sha256"), "lengthBytes": data.get("lengthBytes")}
                 return {"success": True, "data": minimal}
             return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}
         except Exception as e:

@@ -124,7 +124,7 @@ namespace MCPForUnity.Editor.Helpers
             // --- Add Early Logging --- 
             // Debug.Log($"[GetComponentData] Starting for component: {c?.GetType()?.FullName ?? "null"} (ID: {c?.GetInstanceID() ?? 0})");
             // --- End Early Logging ---
-            
+
             if (c == null) return null;
             Type componentType = c.GetType();
 
@@ -150,8 +150,8 @@ namespace MCPForUnity.Editor.Helpers
                     { "rootInstanceID", tr.root?.gameObject.GetInstanceID() ?? 0 },
                     { "childCount", tr.childCount },
                     // Include standard Object/Component properties
-                    { "name", tr.name }, 
-                    { "tag", tr.tag }, 
+                    { "name", tr.name },
+                    { "tag", tr.tag },
                     { "gameObjectInstanceID", tr.gameObject?.GetInstanceID() ?? 0 }
                 };
             }
@@ -244,8 +244,9 @@ namespace MCPForUnity.Editor.Helpers
                         // Basic filtering (readable, not indexer, not transform which is handled elsewhere)
                         if (!propInfo.CanRead || propInfo.GetIndexParameters().Length > 0 || propInfo.Name == "transform") continue;
                         // Add if not already added (handles overrides - keep the most derived version)
-                        if (!propertiesToCache.Any(p => p.Name == propInfo.Name)) {
-                             propertiesToCache.Add(propInfo);
+                        if (!propertiesToCache.Any(p => p.Name == propInfo.Name))
+                        {
+                            propertiesToCache.Add(propInfo);
                         }
                     }
 
@@ -258,8 +259,8 @@ namespace MCPForUnity.Editor.Helpers
                     {
                         if (fieldInfo.Name.EndsWith("k__BackingField")) continue; // Skip backing fields
 
-                         // Add if not already added (handles hiding - keep the most derived version)
-                         if (fieldsToCache.Any(f => f.Name == fieldInfo.Name)) continue;
+                        // Add if not already added (handles hiding - keep the most derived version)
+                        if (fieldsToCache.Any(f => f.Name == fieldInfo.Name)) continue;
 
                         bool shouldInclude = false;
                         if (includeNonPublicSerializedFields)
@@ -291,7 +292,7 @@ namespace MCPForUnity.Editor.Helpers
 
             // --- Use cached metadata ---
             var serializablePropertiesOutput = new Dictionary<string, object>();
-            
+
             // --- Add Logging Before Property Loop ---
             // Debug.Log($"[GetComponentData] Starting property loop for {componentType.Name}...");
             // --- End Logging Before Property Loop ---
@@ -310,16 +311,16 @@ namespace MCPForUnity.Editor.Helpers
                     propName == "particleSystem" ||
                     // Also skip potentially problematic Matrix properties prone to cycles/errors
                     propName == "worldToLocalMatrix" || propName == "localToWorldMatrix")
-                 {
-                     // Debug.Log($"[GetComponentData] Explicitly skipping generic property: {propName}"); // Optional log
-                     skipProperty = true;
-                 }
+                {
+                    // Debug.Log($"[GetComponentData] Explicitly skipping generic property: {propName}"); // Optional log
+                    skipProperty = true;
+                }
                 // --- End Skip Generic Properties ---
 
                 // --- Skip specific potentially problematic Camera properties ---
-                if (componentType == typeof(Camera) && 
-                    (propName == "pixelRect" || 
-                     propName == "rect" || 
+                if (componentType == typeof(Camera) &&
+                    (propName == "pixelRect" ||
+                     propName == "rect" ||
                      propName == "cullingMatrix" ||
                      propName == "useOcclusionCulling" ||
                      propName == "worldToCameraMatrix" ||
@@ -334,8 +335,8 @@ namespace MCPForUnity.Editor.Helpers
                 // --- End Skip Camera Properties ---
 
                 // --- Skip specific potentially problematic Transform properties ---
-                if (componentType == typeof(Transform) && 
-                    (propName == "lossyScale" || 
+                if (componentType == typeof(Transform) &&
+                    (propName == "lossyScale" ||
                      propName == "rotation" ||
                      propName == "worldToLocalMatrix" ||
                      propName == "localToWorldMatrix"))
@@ -345,11 +346,11 @@ namespace MCPForUnity.Editor.Helpers
                 }
                 // --- End Skip Transform Properties ---
 
-                 // Skip if flagged
-                 if (skipProperty)
-                 {
+                // Skip if flagged
+                if (skipProperty)
+                {
                     continue;
-                 }
+                }
 
                 try
                 {
@@ -362,7 +363,7 @@ namespace MCPForUnity.Editor.Helpers
                 }
                 catch (Exception)
                 {
-                     // Debug.LogWarning($"Could not read property {propName} on {componentType.Name}");
+                    // Debug.LogWarning($"Could not read property {propName} on {componentType.Name}");
                 }
             }
 
@@ -373,7 +374,7 @@ namespace MCPForUnity.Editor.Helpers
             // Use cached fields
             foreach (var fieldInfo in cachedData.SerializableFields)
             {
-                 try
+                try
                 {
                     // --- Add detailed logging for fields --- 
                     // Debug.Log($"[GetComponentData] Accessing Field: {componentType.Name}.{fieldInfo.Name}");
@@ -385,7 +386,7 @@ namespace MCPForUnity.Editor.Helpers
                 }
                 catch (Exception)
                 {
-                     // Debug.LogWarning($"Could not read field {fieldInfo.Name} on {componentType.Name}");
+                    // Debug.LogWarning($"Could not read field {fieldInfo.Name} on {componentType.Name}");
                 }
             }
             // --- End Use cached metadata ---
@@ -458,19 +459,19 @@ namespace MCPForUnity.Editor.Helpers
                 case JTokenType.Boolean:
                     return token.ToObject<bool>();
                 case JTokenType.Date:
-                     return token.ToObject<DateTime>();
-                 case JTokenType.Guid:
-                     return token.ToObject<Guid>();
-                 case JTokenType.Uri:
-                     return token.ToObject<Uri>();
-                 case JTokenType.TimeSpan:
-                     return token.ToObject<TimeSpan>();
+                    return token.ToObject<DateTime>();
+                case JTokenType.Guid:
+                    return token.ToObject<Guid>();
+                case JTokenType.Uri:
+                    return token.ToObject<Uri>();
+                case JTokenType.TimeSpan:
+                    return token.ToObject<TimeSpan>();
                 case JTokenType.Bytes:
-                     return token.ToObject<byte[]>();
+                    return token.ToObject<byte[]>();
                 case JTokenType.Null:
                     return null;
-                 case JTokenType.Undefined:
-                     return null; // Treat undefined as null
+                case JTokenType.Undefined:
+                    return null; // Treat undefined as null
 
                 default:
                     // Fallback for simple value types not explicitly listed
@@ -524,4 +525,4 @@ namespace MCPForUnity.Editor.Helpers
             }
         }
     }
-} 
+}
