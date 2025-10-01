@@ -2,7 +2,6 @@
 Tool registry for auto-discovery of MCP tools.
 """
 from typing import Callable, Any
-from telemetry_decorator import telemetry_tool
 
 # Global registry to collect decorated tools
 _tool_registry: list[dict[str, Any]] = []
@@ -33,15 +32,14 @@ def mcp_for_unity_tool(
     """
     def decorator(func: Callable) -> Callable:
         tool_name = name if name is not None else func.__name__
-        wrapped_func = telemetry_tool(tool_name)(func)
         _tool_registry.append({
-            'func': wrapped_func,
+            'func': func,
             'name': tool_name,
             'description': description,
             'kwargs': kwargs
         })
 
-        return wrapped_func
+        return func
 
     return decorator
 
