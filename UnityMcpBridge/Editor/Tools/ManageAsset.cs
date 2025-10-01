@@ -22,6 +22,7 @@ namespace MCPForUnity.Editor.Tools
     /// <summary>
     /// Handles asset management operations within the Unity project.
     /// </summary>
+    [McpForUnityTool("manage_asset")]
     public static class ManageAsset
     {
         // --- Main Handler ---

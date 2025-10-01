@@ -15,6 +15,7 @@ namespace MCPForUnity.Editor.Tools
     /// Handles operations related to controlling and querying the Unity Editor state,
     /// including managing Tags and Layers.
     /// </summary>
+    [McpForUnityTool("manage_editor")]
     public static class ManageEditor
     {
         // Constant for starting user layer index

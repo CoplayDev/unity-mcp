@@ -19,6 +19,7 @@ namespace MCPForUnity.Editor.Tools
     /// <summary>
     /// Handles GameObject manipulation within the current scene (CRUD, find, components).
     /// </summary>
+    [McpForUnityTool("manage_gameobject")]
     public static class ManageGameObject
     {
         // Shared JsonSerializer to avoid per-call allocation overhead

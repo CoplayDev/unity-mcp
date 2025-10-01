@@ -4,6 +4,7 @@ using MCPForUnity.Editor.Helpers;
 
 namespace MCPForUnity.Editor.Tools.MenuItems
 {
+    [McpForUnityTool("manage_menu_item")]
     public static class ManageMenuItem
     {
         /// <summary>
