@@ -273,7 +273,11 @@ On Windows, set `command` to the absolute shim, e.g. `C:\\Users\\YOU\\AppData\\L
 
 ## Development & Contributing 🛠️
 
-### For Developers
+### Adding Custom Tools
+
+MCP for Unity uses a Python MCP Server tied with Unity's C# scripts for tools. If you'd like to extend the functionality with your own tools, learn how to do so in **[CUSTOM_TOOLS.md](docs/CUSTOM_TOOLS.md)**.
+
+### Contributing to the Project
 
 If you're contributing to MCP for Unity or want to test core changes, we have development tools to streamline your workflow:
 

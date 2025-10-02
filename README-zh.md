@@ -270,7 +270,11 @@ claude mcp add UnityMCP -- "C:/Users/USERNAME/AppData/Local/Microsoft/WinGet/Lin
 
 ## 开发和贡献 🛠️
 
-### 开发者
+### 添加自定义工具
+
+MCP for Unity 使用与 Unity 的 C# 脚本绑定的 Python MCP 服务器来实现工具功能。如果您想使用自己的工具扩展功能，请参阅 **[CUSTOM_TOOLS.md](docs/CUSTOM_TOOLS.md)** 了解如何操作。
+
+### 贡献项目
 
 如果您正在为 MCP for Unity 做贡献或想要测试核心更改，我们有开发工具来简化您的工作流程：
 
