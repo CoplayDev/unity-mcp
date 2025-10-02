@@ -387,6 +387,7 @@ namespace MCPForUnity.Editor
                     // Start background listener with cooperative cancellation
                     cts = new CancellationTokenSource();
                     listenerTask = Task.Run(() => ListenerLoopAsync(cts.Token));
+                    CommandRegistry.Initialize();
                     EditorApplication.update += ProcessCommands;
                     // Ensure lifecycle events are (re)subscribed in case Stop() removed them earlier in-domain
                     try { AssemblyReloadEvents.beforeAssemblyReload -= OnBeforeAssemblyReload; } catch { }
