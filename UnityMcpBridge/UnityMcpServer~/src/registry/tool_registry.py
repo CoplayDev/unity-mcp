@@ -13,16 +13,13 @@ def mcp_for_unity_tool(
     **kwargs
 ) -> Callable:
     """
-    Decorator for registering MCP tools with auto-discovery.
+    Decorator for registering MCP tools in the server's tools directory.
 
-    Automatically applies:
-    - Telemetry tracking (if available and enabled)
-    - Registration in the global tool registry
+    Tools are registered in the global tool registry.
 
     Args:
         name: Tool name (defaults to function name)
         description: Tool description
-        enable_telemetry: Whether to enable telemetry for this tool (default: True)
         **kwargs: Additional arguments passed to @mcp.tool()
 
     Example:
