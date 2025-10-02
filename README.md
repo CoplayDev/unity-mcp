@@ -302,7 +302,7 @@ Unity MCP includes **privacy-focused, anonymous telemetry** to help us improve t
 
 - **🔒 Anonymous**: Random UUIDs only, no personal data
 - **🚫 Easy opt-out**: Set `DISABLE_TELEMETRY=true` environment variable
-- **📖 Transparent**: See [TELEMETRY.md](TELEMETRY.md) for full details
+- **📖 Transparent**: See [TELEMETRY.md](docs/TELEMETRY.md) for full details
 
 Your privacy matters to us. All telemetry is optional and designed to respect your workflow.
 

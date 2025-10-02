@@ -299,7 +299,7 @@ Unity MCP 包含**注重隐私的匿名遥测**来帮助我们改进产品。我
 
 - **🔒 匿名**：仅随机 UUID，无个人数据
 - **🚫 轻松退出**：设置 `DISABLE_TELEMETRY=true` 环境变量
-- **📖 透明**：查看 [TELEMETRY.md](TELEMETRY.md) 获取完整详情
+- **📖 透明**：查看 [TELEMETRY.md](docs/TELEMETRY.md) 获取完整详情
 
 您的隐私对我们很重要。所有遥测都是可选的，旨在尊重您的工作流程。
 
