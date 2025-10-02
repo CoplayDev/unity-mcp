@@ -281,7 +281,7 @@ If you're contributing to MCP for Unity or want to test core changes, we have de
 - **Automatic Backup System**: Safe testing with easy rollback capabilities  
 - **Hot Reload Workflow**: Fast iteration cycle for core development
 
-📖 **See [README-DEV.md](README-DEV.md)** for complete development setup and workflow documentation.
+📖 **See [README-DEV.md](docs/README-DEV.md)** for complete development setup and workflow documentation.
 
 ### Contributing 🤝
 

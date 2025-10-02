@@ -1,6 +1,6 @@
 # MCP for Unity 开发工具
 
-| [English](README-DEV.md) | [简体中文](README-DEV-zh.md) |
+| [English](docs/README-DEV.md) | [简体中文](docs/README-DEV-zh.md) |
 |---------------------------|------------------------------|
 
 欢迎来到 MCP for Unity 开发环境！此目录包含简化 MCP for Unity 核心开发的工具和实用程序。

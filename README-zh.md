@@ -278,7 +278,7 @@ claude mcp add UnityMCP -- "C:/Users/USERNAME/AppData/Local/Microsoft/WinGet/Lin
 - **自动备份系统**：具有简单回滚功能的安全测试
 - **热重载工作流程**：核心开发的快速迭代周期
 
-📖 **查看 [README-DEV.md](README-DEV.md)** 获取完整的开发设置和工作流程文档。
+📖 **查看 [README-DEV.md](docs/README-DEV.md)** 获取完整的开发设置和工作流程文档。
 
 ### 贡献 🤝
 
