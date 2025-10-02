@@ -41,7 +41,6 @@ def my_custom_tool(
 
 3. **The tool is automatically registered!** The decorator:
    - Auto-generates the tool name from the function name (e.g., `my_custom_tool`)
-   - Applies telemetry tracking automatically
    - Registers the tool with FastMCP during module import
 
 ### Decorator Options
@@ -50,7 +49,6 @@ def my_custom_tool(
 @mcp_for_unity_tool(
     name="custom_name",          # Optional: override auto-generated name
     description="Tool description",  # Required: describe what the tool does
-    enable_telemetry=True        # Optional: enable/disable telemetry (default: True)
 )
 ```
 
@@ -131,26 +129,25 @@ Tools are automatically discovered when:
 
 ```python
 from typing import Annotated, Any
+
 from mcp.server.fastmcp import Context
+
 from registry import mcp_for_unity_tool
 from unity_connection import send_command_with_retry
 
+
 @mcp_for_unity_tool(
-    description="Capture screenshots in Unity"
+    description="Capture screenshots in Unity, saving them as PNGs"
 )
 def capture_screenshot(
     ctx: Context,
-    filename: Annotated[str, "Screenshot filename"],
-    width: Annotated[int, "Screenshot width"] | None = None,
-    height: Annotated[int, "Screenshot height"] | None = None,
+    filename: Annotated[str, "Screenshot filename without extension, e.g., screenshot_01"],
 ) -> dict[str, Any]:
     ctx.info(f"Capturing screenshot: {filename}")
 
     params = {
         "action": "capture",
         "filename": filename,
-        "width": width,
-        "height": height,
     }
     params = {k: v for k, v in params.items() if v is not None}
 
@@ -163,9 +160,8 @@ def capture_screenshot(
 ```csharp
 using System.IO;
 using Newtonsoft.Json.Linq;
-using UnityEditor;
 using UnityEngine;
-using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Tools;
 
 namespace MyProject.Editor.Tools
 {
@@ -174,33 +170,61 @@ namespace MyProject.Editor.Tools
     {
         public static object HandleCommand(JObject @params)
         {
-            string action = @params["action"]?.ToString();
             string filename = @params["filename"]?.ToString();
-            int width = @params["width"]?.ToObject<int?>() ?? 1920;
-            int height = @params["height"]?.ToObject<int?>() ?? 1080;
 
             if (string.IsNullOrEmpty(filename))
             {
-                return Response.Error("filename is required");
+                return MCPForUnity.Editor.Helpers.Response.Error("filename is required");
             }
 
             try
             {
-                string path = Path.Combine(Application.dataPath, "..", "Screenshots", filename);
-                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                string absolutePath = Path.Combine(Application.dataPath, "Screenshots", filename);
+                Directory.CreateDirectory(Path.GetDirectoryName(absolutePath));
 
-                ScreenCapture.CaptureScreenshot(path, width, height);
-
-                return Response.Success($"Screenshot saved to {path}", new
+                // Find the main camera
+                Camera camera = Camera.main;
+                if (camera == null)
                 {
-                    path = path,
-                    width = width,
-                    height = height
+                    camera = Object.FindFirstObjectByType<Camera>();
+                }
+
+                if (camera == null)
+                {
+                    return MCPForUnity.Editor.Helpers.Response.Error("No camera found in the scene");
+                }
+
+                // Create a RenderTexture
+                RenderTexture rt = new RenderTexture(Screen.width, Screen.height, 24);
+                camera.targetTexture = rt;
+
+                // Render the camera's view
+                camera.Render();
+
+                // Read pixels from the RenderTexture
+                RenderTexture.active = rt;
+                Texture2D screenshot = new Texture2D(Screen.width, Screen.height, TextureFormat.RGB24, false);
+                screenshot.ReadPixels(new Rect(0, 0, Screen.width, Screen.height), 0, 0);
+                screenshot.Apply();
+
+                // Clean up
+                camera.targetTexture = null;
+                RenderTexture.active = null;
+                Object.DestroyImmediate(rt);
+
+                // Save to file
+                byte[] bytes = screenshot.EncodeToPNG();
+                File.WriteAllBytes(absolutePath, bytes);
+                Object.DestroyImmediate(screenshot);
+
+                return MCPForUnity.Editor.Helpers.Response.Success($"Screenshot saved to {absolutePath}", new
+                {
+                    path = absolutePath,
                 });
             }
             catch (System.Exception ex)
             {
-                return Response.Error($"Failed to capture screenshot: {ex.Message}");
+                return MCPForUnity.Editor.Helpers.Response.Error($"Failed to capture screenshot: {ex.Message}");
             }
         }
     }
