@@ -47,10 +47,12 @@ def my_custom_tool(
 
 ```python
 @mcp_for_unity_tool(
-    name="custom_name",          # Optional: override auto-generated name
+    name="custom_name",          # Optional: the function name is used by default
     description="Tool description",  # Required: describe what the tool does
 )
 ```
+
+You can use all options available in FastMCP's `mcp.tool` function decorator: <https://gofastmcp.com/servers/tools#tools>. The `description` is the only required field.
 
 ### Auto-Discovery
 
@@ -73,6 +75,7 @@ using MCPForUnity.Editor.Helpers;
 
 namespace MyProject.Editor.CustomTools
 {
+    // The name argument is optional, it uses a snake_case version of the class name by default
     [McpForUnityTool("my_custom_tool")]
     public static class MyCustomTool
     {
@@ -125,7 +128,7 @@ Tools are automatically discovered when:
 
 ## Complete Example: Custom Screenshot Tool
 
-### Python (`tools/screenshot_tool.py`)
+### Python (`UnityMcpServer~/src/tools/screenshot_tool.py`)
 
 ```python
 from typing import Annotated, Any
