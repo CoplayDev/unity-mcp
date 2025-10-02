@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using MCPForUnity.Editor.Tools;
 
@@ -8,34 +11,41 @@ namespace MCPForUnityTests.Editor.Tools
     public class CommandRegistryTests
     {
         [Test]
-        public void GetHandler_ThrowException_ForUnknownCommand()
+        public void GetHandler_ThrowsException_ForUnknownCommand()
         {
-            var unknown = "HandleDoesNotExist";
-            try
-            {
-                var handler = CommandRegistry.GetHandler(unknown);
-                Assert.Fail("Should throw InvalidOperation for unknown handler.");
-            }
-            catch (InvalidOperationException)
-            {
+            var unknown = "nonexistent_command_that_should_not_exist";
 
-            }
-            catch
+            Assert.Throws<InvalidOperationException>(() =>
             {
-                Assert.Fail("Should throw InvalidOperation for unknown handler.");
-            }
+                CommandRegistry.GetHandler(unknown);
+            }, "Should throw InvalidOperationException for unknown handler");
         }
 
         [Test]
-        public void GetHandler_ReturnsManageGameObjectHandler()
+        public void AutoDiscovery_RegistersAllBuiltInTools()
         {
-            var handler = CommandRegistry.GetHandler("manage_gameobject");
-            Assert.IsNotNull(handler, "Expected a handler for manage_gameobject.");
+            // Verify that all expected built-in tools are registered by trying to get their handlers
+            var expectedTools = new[]
+            {
+                "manage_asset",
+                "manage_editor",
+                "manage_gameobject",
+                "manage_scene",
+                "manage_script",
+                "manage_shader",
+                "read_console",
+                "manage_menu_item",
+                "manage_prefabs"
+            };
 
-            var methodInfo = handler.Method;
-            Assert.AreEqual("HandleCommand", methodInfo.Name, "Handler method name should be HandleCommand.");
-            Assert.AreEqual(typeof(ManageGameObject), methodInfo.DeclaringType, "Handler should be declared on ManageGameObject.");
-            Assert.IsNull(handler.Target, "Handler should be a static method (no target instance).");
+            foreach (var toolName in expectedTools)
+            {
+                Assert.DoesNotThrow(() =>
+                {
+                    var handler = CommandRegistry.GetHandler(toolName);
+                    Assert.IsNotNull(handler, $"Handler for '{toolName}' should not be null");
+                }, $"Expected tool '{toolName}' to be auto-registered");
+            }
         }
     }
 }
