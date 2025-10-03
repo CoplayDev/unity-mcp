@@ -1099,51 +1099,6 @@ namespace MCPForUnity.Editor.Windows
             Repaint();
         }
 
-        private static bool ValidateUvBinarySafe(string path)
-        {
-            try
-            {
-                if (!File.Exists(path)) return false;
-                var psi = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = path,
-                    Arguments = "--version",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
-                using var p = System.Diagnostics.Process.Start(psi);
-                if (p == null) return false;
-                if (!p.WaitForExit(3000)) { try { p.Kill(); } catch { } return false; }
-                if (p.ExitCode != 0) return false;
-                string output = p.StandardOutput.ReadToEnd().Trim();
-                return output.StartsWith("uv ");
-            }
-            catch { return false; }
-        }
-
-        private static bool ArgsEqual(string[] a, string[] b)
-        {
-            if (a == null || b == null) return a == b;
-            if (a.Length != b.Length) return false;
-            for (int i = 0; i < a.Length; i++)
-            {
-                if (!string.Equals(a[i], b[i], StringComparison.Ordinal)) return false;
-            }
-            return true;
-        }
-
-        private void ShowManualConfigurationInstructions(
-            string configPath,
-            McpClient mcpClient
-        )
-        {
-            mcpClient.SetStatus(McpStatus.Error, "Manual configuration required");
-
-            ShowManualInstructionsWindow(configPath, mcpClient);
-        }
-
         // New method to show manual instructions without changing status
         private void ShowManualInstructionsWindow(string configPath, McpClient mcpClient)
         {
@@ -1231,42 +1186,6 @@ namespace MCPForUnity.Editor.Windows
             }
         }
 
-        private void ShowCursorManualConfigurationInstructions(
-            string configPath,
-            McpClient mcpClient
-        )
-        {
-            mcpClient.SetStatus(McpStatus.Error, "Manual configuration required");
-
-            // Get the Python directory path using Package Manager API
-            string pythonDir = FindPackagePythonDirectory();
-
-            // Create the manual configuration message
-            string uvPath = FindUvPath();
-            if (uvPath == null)
-            {
-                UnityEngine.Debug.LogError("UV package manager not found. Cannot configure manual setup.");
-                return;
-            }
-
-            McpConfig jsonConfig = new()
-            {
-                mcpServers = new McpConfigServers
-                {
-                    unityMCP = new McpConfigServer
-                    {
-                        command = uvPath,
-                        args = new[] { "run", "--directory", pythonDir, "server.py" },
-                    },
-                },
-            };
-
-            JsonSerializerSettings jsonSettings = new() { Formatting = Formatting.Indented };
-            string manualConfigJson = JsonConvert.SerializeObject(jsonConfig, jsonSettings);
-
-            ManualConfigEditorWindow.ShowWindow(configPath, manualConfigJson, mcpClient);
-        }
-
         private void LoadValidationLevelSetting()
         {
             string savedLevel = EditorPrefs.GetString("MCPForUnity_ScriptValidationLevel", "standard");
@@ -1303,12 +1222,6 @@ namespace MCPForUnity.Editor.Windows
                 3 => "Full semantic validation with namespace/type resolution (requires Roslyn)",
                 _ => "Standard validation"
             };
-        }
-
-        public static string GetCurrentValidationLevel()
-        {
-            string savedLevel = EditorPrefs.GetString("MCPForUnity_ScriptValidationLevel", "standard");
-            return savedLevel;
         }
 
         private void CheckMcpConfiguration(McpClient mcpClient)
