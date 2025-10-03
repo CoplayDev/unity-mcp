@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import sys, json, re
+import sys, json
 
 def summarize(txt):
     try:

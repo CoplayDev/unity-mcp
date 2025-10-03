@@ -9,22 +9,20 @@ Usage:
 Choices:
   1) Upstream main (CoplayDev/unity-mcp)
   2) Your remote current branch (derived from `origin` and current branch)
-  3) Local repo workspace (file: URL to UnityMcpBridge in your checkout)
+  3) Local repo workspace (file: URL to MCPForUnity in your checkout)
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import pathlib
-import re
 import subprocess
 import sys
 from typing import Optional
 
 PKG_NAME = "com.coplaydev.unity-mcp"
-BRIDGE_SUBPATH = "UnityMcpBridge"
+BRIDGE_SUBPATH = "MCPForUnity"
 
 
 def run_git(repo: pathlib.Path, *args: str) -> str:
@@ -94,7 +92,7 @@ def write_json(path: pathlib.Path, data: dict) -> None:
 
 
 def build_options(repo_root: pathlib.Path, branch: str, origin_https: str):
-    upstream = "git+https://github.com/CoplayDev/unity-mcp.git?path=/UnityMcpBridge"
+    upstream = "git+https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity"
     # Ensure origin is https
     origin = origin_https
     # If origin is a local file path or non-https, try to coerce to https github if possible
