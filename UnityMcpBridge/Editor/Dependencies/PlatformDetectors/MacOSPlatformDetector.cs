@@ -226,10 +226,10 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
                     version = output.Substring(7); // Remove "Python " prefix
                     fullPath = pythonPath;
 
-                    // Validate minimum version (3.10+)
+                    // Validate minimum version (Python 4+ or Python 3.10+)
                     if (TryParseVersion(version, out var major, out var minor))
                     {
-                        return major >= 3 && minor >= 10;
+                        return major > 3 || (major >= 3 && minor >= 10);
                     }
                 }
             }
