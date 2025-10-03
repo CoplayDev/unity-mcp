@@ -80,6 +80,15 @@ namespace MCPForUnity.Editor.Tools
                 commandName = ToSnakeCase(type.Name);
             }
 
+            // Check for duplicate command names
+            if (_handlers.ContainsKey(commandName))
+            {
+                McpLog.Warn(
+                    $"Duplicate command name '{commandName}' detected. " +
+                    $"Tool {type.Name} will override previously registered handler."
+                );
+            }
+
             // Find HandleCommand method
             var method = type.GetMethod(
                 "HandleCommand",
