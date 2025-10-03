@@ -22,9 +22,9 @@ namespace MCPForUnity.Editor.Tools
         public static void Initialize()
         {
             if (_initialized) return;
-            _initialized = true;
 
             AutoDiscoverTools();
+            _initialized = true;
         }
 
         /// <summary>
