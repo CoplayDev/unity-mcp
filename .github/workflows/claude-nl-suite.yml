@@ -55,14 +55,14 @@ jobs:
           uv venv
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> "$GITHUB_ENV"
           echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
-          if [ -f UnityMcpBridge/UnityMcpServer~/src/pyproject.toml ]; then
-            uv pip install -e UnityMcpBridge/UnityMcpServer~/src
-          elif [ -f UnityMcpBridge/UnityMcpServer~/src/requirements.txt ]; then
-            uv pip install -r UnityMcpBridge/UnityMcpServer~/src/requirements.txt
-          elif [ -f UnityMcpBridge/UnityMcpServer~/pyproject.toml ]; then
-            uv pip install -e UnityMcpBridge/UnityMcpServer~/
-          elif [ -f UnityMcpBridge/UnityMcpServer~/requirements.txt ]; then
-            uv pip install -r UnityMcpBridge/UnityMcpServer~/requirements.txt
+          if [ -f MCPForUnity/UnityMcpServer~/src/pyproject.toml ]; then
+            uv pip install -e MCPForUnity/UnityMcpServer~/src
+          elif [ -f MCPForUnity/UnityMcpServer~/src/requirements.txt ]; then
+            uv pip install -r MCPForUnity/UnityMcpServer~/src/requirements.txt
+          elif [ -f MCPForUnity/UnityMcpServer~/pyproject.toml ]; then
+            uv pip install -e MCPForUnity/UnityMcpServer~/
+          elif [ -f MCPForUnity/UnityMcpServer~/requirements.txt ]; then
+            uv pip install -r MCPForUnity/UnityMcpServer~/requirements.txt
           else
             echo "No MCP Python deps found (skipping)"
           fi
@@ -285,7 +285,7 @@ jobs:
             "mcpServers": {
               "unity": {
                 "command": "uv",
-                "args": ["run","--active","--directory","UnityMcpBridge/UnityMcpServer~/src","python","server.py"],
+                "args": ["run","--active","--directory","MCPForUnity/UnityMcpServer~/src","python","server.py"],
                 "transport": { "type": "stdio" },
                 "env": {
                   "PYTHONUNBUFFERED": "1",

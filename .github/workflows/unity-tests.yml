@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - TestProjects/UnityMCPTests/**
-      - UnityMcpBridge/Editor/**
+      - MCPForUnity/Editor/**
       - .github/workflows/unity-tests.yml
 
 jobs:
