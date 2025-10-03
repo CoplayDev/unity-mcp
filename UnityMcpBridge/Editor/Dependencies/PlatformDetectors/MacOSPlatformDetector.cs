@@ -10,11 +10,11 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
     /// <summary>
     /// macOS-specific dependency detection
     /// </summary>
-    public class MacOSPlatformDetector : IPlatformDetector
+    public class MacOSPlatformDetector : PlatformDetectorBase
     {
-        public string PlatformName => "macOS";
+        public override string PlatformName => "macOS";
 
-        public bool CanDetect => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+        public override bool CanDetect => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
 
         public DependencyStatus DetectPython()
         {
@@ -76,89 +76,17 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             return status;
         }
 
-        public DependencyStatus DetectUV()
+        public override string GetPythonInstallUrl()
         {
-            var status = new DependencyStatus("UV Package Manager", isRequired: true)
-            {
-                InstallationHint = GetUVInstallUrl()
-            };
-
-            try
-            {
-                // Use existing UV detection from ServerInstaller
-                string uvPath = ServerInstaller.FindUvPath();
-                if (!string.IsNullOrEmpty(uvPath))
-                {
-                    if (TryValidateUV(uvPath, out string version))
-                    {
-                        status.IsAvailable = true;
-                        status.Version = version;
-                        status.Path = uvPath;
-                        status.Details = $"Found UV {version} at {uvPath}";
-                        return status;
-                    }
-                }
-
-                status.ErrorMessage = "UV package manager not found. Please install UV.";
-                status.Details = "UV is required for managing Python dependencies.";
-            }
-            catch (Exception ex)
-            {
-                status.ErrorMessage = $"Error detecting UV: {ex.Message}";
-            }
-
-            return status;
+            return "https://www.python.org/downloads/macos/";
         }
 
-        public DependencyStatus DetectMCPServer()
+        public override string GetUVInstallUrl()
         {
-            var status = new DependencyStatus("MCP Server", isRequired: false);
-
-            try
-            {
-                // Check if server is installed
-                string serverPath = ServerInstaller.GetServerPath();
-                string serverPy = Path.Combine(serverPath, "server.py");
-
-                if (File.Exists(serverPy))
-                {
-                    status.IsAvailable = true;
-                    status.Path = serverPath;
-
-                    // Try to get version
-                    string versionFile = Path.Combine(serverPath, "server_version.txt");
-                    if (File.Exists(versionFile))
-                    {
-                        status.Version = File.ReadAllText(versionFile).Trim();
-                    }
-
-                    status.Details = $"MCP Server found at {serverPath}";
-                }
-                else
-                {
-                    // Check for embedded server
-                    if (ServerPathResolver.TryFindEmbeddedServerSource(out string embeddedPath))
-                    {
-                        status.IsAvailable = true;
-                        status.Path = embeddedPath;
-                        status.Details = "MCP Server available (embedded in package)";
-                    }
-                    else
-                    {
-                        status.ErrorMessage = "MCP Server not found";
-                        status.Details = "Server will be installed automatically when needed";
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                status.ErrorMessage = $"Error detecting MCP Server: {ex.Message}";
-            }
-
-            return status;
+            return "https://docs.astral.sh/uv/getting-started/installation/#macos";
         }
 
-        public string GetInstallationRecommendations()
+        public override string GetInstallationRecommendations()
         {
             return @"macOS Installation Recommendations:
 
@@ -173,16 +101,6 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 3. MCP Server: Will be installed automatically by Unity MCP Bridge
 
 Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
-        }
-
-        public string GetPythonInstallUrl()
-        {
-            return "https://www.python.org/downloads/macos/";
-        }
-
-        public string GetUVInstallUrl()
-        {
-            return "https://docs.astral.sh/uv/getting-started/installation/#macos";
         }
 
         private bool TryValidatePython(string pythonPath, out string version, out string fullPath)
@@ -329,23 +247,7 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
 
         private bool TryParseVersion(string version, out int major, out int minor)
         {
-            major = 0;
-            minor = 0;
-
-            try
-            {
-                var parts = version.Split('.');
-                if (parts.Length >= 2)
-                {
-                    return int.TryParse(parts[0], out major) && int.TryParse(parts[1], out minor);
-                }
-            }
-            catch
-            {
-                // Ignore parsing errors
-            }
-
-            return false;
+            return base.TryParseVersion(version, out major, out minor);
         }
     }
 }
