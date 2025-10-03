@@ -244,10 +244,5 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
 
             return false;
         }
-
-        private bool TryParseVersion(string version, out int major, out int minor)
-        {
-            return base.TryParseVersion(version, out major, out minor);
-        }
     }
 }

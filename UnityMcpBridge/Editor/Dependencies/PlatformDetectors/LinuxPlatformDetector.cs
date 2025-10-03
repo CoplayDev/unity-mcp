@@ -244,10 +244,5 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
 
             return false;
         }
-
-        private bool TryParseVersion(string version, out int major, out int minor)
-        {
-            return base.TryParseVersion(version, out major, out minor);
-        }
     }
 }
