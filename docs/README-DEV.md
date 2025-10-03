@@ -21,7 +21,7 @@ Quick deployment and testing tools for MCP for Unity core changes.
 
 ## Switching MCP package sources quickly
 
-Run this from the unity-mcp repo, not your game's roote directory. Use `mcp_source.py` to quickly switch between different MCP for Unity package sources:
+Run this from the unity-mcp repo, not your game's root directory. Use `mcp_source.py` to quickly switch between different MCP for Unity package sources:
 
 **Usage:**
 ```bash
