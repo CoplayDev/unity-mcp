@@ -100,7 +100,7 @@ namespace MCPForUnity.Editor.Setup
         /// <summary>
         /// Force show setup wizard (for manual invocation)
         /// </summary>
-        [MenuItem("Window/MCP for Unity/Setup Wizard", priority = 1)]
+        [MenuItem("Window/MCP For Unity/Setup Wizard", priority = 1)]
         public static void ShowSetupWizardManual()
         {
             ShowSetupWizard();
@@ -109,7 +109,7 @@ namespace MCPForUnity.Editor.Setup
         /// <summary>
         /// Check dependencies and show status
         /// </summary>
-        [MenuItem("Window/MCP for Unity/Check Dependencies", priority = 3)]
+        [MenuItem("Window/MCP For Unity/Check Dependencies", priority = 3)]
         public static void CheckDependencies()
         {
             var result = DependencyManager.CheckAllDependencies();
@@ -141,7 +141,7 @@ namespace MCPForUnity.Editor.Setup
         /// <summary>
         /// Open MCP Client Configuration window
         /// </summary>
-        [MenuItem("Window/MCP for Unity/MCP Client Configuration", priority = 4)]
+        [MenuItem("Window/MCP For Unity/Open MCP Window", priority = 4)]
         public static void OpenClientConfiguration()
         {
             Windows.MCPForUnityEditorWindow.ShowWindow();

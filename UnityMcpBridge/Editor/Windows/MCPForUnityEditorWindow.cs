@@ -45,7 +45,7 @@ namespace MCPForUnity.Editor.Windows
         // UI state
         private int selectedClientIndex = 0;
 
-        [MenuItem("Window/MCP for Unity")]
+        [MenuItem("Window/MCP For Unity")]
         public static void ShowWindow()
         {
             GetWindow<MCPForUnityEditorWindow>("MCP for Unity");
