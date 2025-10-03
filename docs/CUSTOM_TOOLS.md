@@ -59,7 +59,9 @@ def my_custom_tool(
 )
 ```
 
-You can use all options available in FastMCP's `mcp.tool` function decorator: <https://gofastmcp.com/servers/tools#tools>. The `description` is the only required field.
+You can use all options available in FastMCP's `mcp.tool` function decorator: <https://gofastmcp.com/servers/tools#tools>.
+
+**Note:** All tools should have the `description` field. It's not strictly required, however, that parameter is the best place to define a description so that most MCP clients can read it. See [issue #289](https://github.com/CoplayDev/unity-mcp/issues/289).
 
 ### Auto-Discovery
 
