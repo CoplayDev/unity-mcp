@@ -40,15 +40,26 @@ namespace MCPForUnity.Editor.Setup
 
             try
             {
-                // Always show setup wizard on package import
-                McpLog.Info("Package imported - showing setup wizard", always: false);
+                // Check if setup was already completed or dismissed in previous sessions
+                bool setupCompleted = EditorPrefs.GetBool(SETUP_COMPLETED_KEY, false);
+                bool setupDismissed = EditorPrefs.GetBool(SETUP_DISMISSED_KEY, false);
 
-                var dependencyResult = DependencyManager.CheckAllDependencies();
-                EditorApplication.delayCall += () => ShowSetupWizard(dependencyResult);
+                // Only show setup wizard if it hasn't been completed or dismissed before
+                if (!(setupCompleted || setupDismissed))
+                {
+                    McpLog.Info("Package imported - showing setup wizard", always: false);
+
+                    var dependencyResult = DependencyManager.CheckAllDependencies();
+                    EditorApplication.delayCall += () => ShowSetupWizard(dependencyResult);
+                }
+                else
+                {
+                    McpLog.Info("Setup wizard skipped - previously completed or dismissed", always: false);
+                }
             }
             catch (Exception ex)
             {
-                McpLog.Error($"Error showing setup wizard: {ex.Message}");
+                McpLog.Error($"Error checking setup status: {ex.Message}");
             }
         }
 
