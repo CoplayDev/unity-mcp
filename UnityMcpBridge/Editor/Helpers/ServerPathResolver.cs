@@ -99,22 +99,14 @@ namespace MCPForUnity.Editor.Helpers
             return false;
         }
 
-        private static bool TryResolveWithinPackage(UnityEditor.PackageManager.PackageInfo p, out string srcPath, bool warnOnLegacyPackageId)
+        private static bool TryResolveWithinPackage(UnityEditor.PackageManager.PackageInfo p, out string srcPath)
         {
             const string CurrentId = "com.coplaydev.unity-mcp";
-            const string LegacyId = "com.justinpbarnett.unity-mcp";
 
             srcPath = null;
-            if (p == null || (p.name != CurrentId && p.name != LegacyId))
+            if (p == null || p.name != CurrentId)
             {
                 return false;
-            }
-
-            if (warnOnLegacyPackageId && p.name == LegacyId)
-            {
-                Debug.LogWarning(
-                    "MCP for Unity: Detected legacy package id 'com.justinpbarnett.unity-mcp'. " +
-                    "Please update Packages/manifest.json to 'com.coplaydev.unity-mcp' to avoid future breakage.");
             }
 
             string packagePath = p.resolvedPath;

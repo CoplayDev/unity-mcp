@@ -1169,35 +1169,6 @@ namespace MCPForUnity.Editor.Windows
             return McpPathResolver.FindPackagePythonDirectory(debugLogsEnabled);
         }
 
-        private bool IsDevelopmentMode()
-        {
-            try
-            {
-                // Only treat as development if manifest explicitly references a local file path for the package
-                string manifestPath = Path.Combine(Application.dataPath, "..", "Packages", "manifest.json");
-                if (!File.Exists(manifestPath)) return false;
-
-                string manifestContent = File.ReadAllText(manifestPath);
-                // Look specifically for our package dependency set to a file: URL
-                // This avoids auto-enabling dev mode just because a repo exists elsewhere on disk
-                if (manifestContent.IndexOf("\"com.justinpbarnett.unity-mcp\"", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    int idx = manifestContent.IndexOf("com.justinpbarnett.unity-mcp", StringComparison.OrdinalIgnoreCase);
-                    // Crude but effective: check for "file:" in the same line/value
-                    if (manifestContent.IndexOf("file:", idx, StringComparison.OrdinalIgnoreCase) >= 0
-                        && manifestContent.IndexOf("\n", idx, StringComparison.OrdinalIgnoreCase) > manifestContent.IndexOf("file:", idx, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
-                }
-                return false;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
         private string ConfigureMcpClient(McpClient mcpClient)
         {
             try

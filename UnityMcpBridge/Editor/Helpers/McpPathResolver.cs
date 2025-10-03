@@ -90,9 +90,9 @@ namespace MCPForUnity.Editor.Helpers
                 string manifestContent = File.ReadAllText(manifestPath);
                 // Look specifically for our package dependency set to a file: URL
                 // This avoids auto-enabling dev mode just because a repo exists elsewhere on disk
-                if (manifestContent.IndexOf("\"com.justinpbarnett.unity-mcp\"", StringComparison.OrdinalIgnoreCase) >= 0)
+                if (manifestContent.IndexOf("\"com.coplaydev.unity-mcp\"", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
-                    int idx = manifestContent.IndexOf("com.justinpbarnett.unity-mcp", StringComparison.OrdinalIgnoreCase);
+                    int idx = manifestContent.IndexOf("com.coplaydev.unity-mcp", StringComparison.OrdinalIgnoreCase);
                     // Crude but effective: check for "file:" in the same line/value
                     if (manifestContent.IndexOf("file:", idx, StringComparison.OrdinalIgnoreCase) >= 0
                         && manifestContent.IndexOf("\n", idx, StringComparison.OrdinalIgnoreCase) > manifestContent.IndexOf("file:", idx, StringComparison.OrdinalIgnoreCase))
