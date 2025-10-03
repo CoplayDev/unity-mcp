@@ -1,9 +1,9 @@
 using System;
 using System.Linq;
+using MCPForUnity.Editor.Data;
 using MCPForUnity.Editor.Dependencies;
 using MCPForUnity.Editor.Dependencies.Models;
 using MCPForUnity.Editor.Helpers;
-using MCPForUnity.Editor.Data;
 using MCPForUnity.Editor.Models;
 using UnityEditor;
 using UnityEngine;
@@ -563,13 +563,13 @@ namespace MCPForUnity.Editor.Setup
         {
             try
             {
-                string pythonDir = FindPackagePythonDirectory();
+                string pythonDir = McpPathResolver.FindPackagePythonDirectory();
                 string claudePath = ExecPath.ResolveClaude();
                 string uvPath = ExecPath.ResolveUv() ?? "uv";
 
                 string args = $"mcp add UnityMCP -- \"{uvPath}\" run --directory \"{pythonDir}\" server.py";
 
-                if (!ExecPath.TryRun(claudePath, args, null, out var stdout, out var stderr, 15000, GetPathPrepend()))
+                if (!ExecPath.TryRun(claudePath, args, null, out var stdout, out var stderr, 15000, McpPathResolver.GetPathPrepend()))
                 {
                     if ((stdout + stderr).Contains("already exists", System.StringComparison.OrdinalIgnoreCase))
                     {
@@ -598,7 +598,7 @@ namespace MCPForUnity.Editor.Setup
             try
             {
                 string claudePath = ExecPath.ResolveClaude();
-                if (ExecPath.TryRun(claudePath, "mcp remove UnityMCP", null, out var stdout, out var stderr, 10000, GetPathPrepend()))
+                if (ExecPath.TryRun(claudePath, "mcp remove UnityMCP", null, out var stdout, out var stderr, 10000, McpPathResolver.GetPathPrepend()))
                 {
                     CheckClientConfiguration(client);
                     EditorUtility.DisplayDialog("Claude Code", "Successfully unregistered MCP for Unity from Claude Code.", "OK");
@@ -617,21 +617,22 @@ namespace MCPForUnity.Editor.Setup
         private string PerformClientConfiguration(McpClient client)
         {
             // This mirrors the logic from MCPForUnityEditorWindow.ConfigureMcpClient
-            string configPath = GetConfigPath(client);
-            string pythonDir = FindPackagePythonDirectory();
+            string configPath = McpConfigurationHelper.GetClientConfigPath(client);
+            string pythonDir = McpPathResolver.FindPackagePythonDirectory();
 
             if (string.IsNullOrEmpty(pythonDir))
             {
                 return "Manual configuration required - Python server directory not found.";
             }
 
-            return WriteToConfig(pythonDir, configPath, client);
+            McpConfigurationHelper.EnsureConfigDirectoryExists(configPath);
+            return McpConfigurationHelper.WriteMcpConfiguration(pythonDir, configPath, client);
         }
 
         private void ShowManualSetupInWizard(McpClient client)
         {
-            string configPath = GetConfigPath(client);
-            string pythonDir = FindPackagePythonDirectory();
+            string configPath = McpConfigurationHelper.GetClientConfigPath(client);
+            string pythonDir = McpPathResolver.FindPackagePythonDirectory();
             string uvPath = ServerInstaller.FindUvPath();
 
             if (string.IsNullOrEmpty(uvPath))
@@ -640,48 +641,33 @@ namespace MCPForUnity.Editor.Setup
                 return;
             }
 
-            string manualConfig = BuildManualConfig(client, uvPath, pythonDir);
+            // Build manual configuration using the sophisticated helper logic
+            string result = McpConfigurationHelper.WriteMcpConfiguration(pythonDir, configPath, client);
+            string manualConfig;
+
+            if (result == "Configured successfully")
+            {
+                // Read back the configuration that was written
+                try
+                {
+                    manualConfig = System.IO.File.ReadAllText(configPath);
+                }
+                catch
+                {
+                    manualConfig = "Configuration written successfully, but could not read back for display.";
+                }
+            }
+            else
+            {
+                manualConfig = $"Configuration failed: {result}";
+            }
 
             EditorUtility.DisplayDialog(
                 $"Manual Setup - {client.name}",
                 $"Configuration file location:\n{configPath}\n\n" +
-                $"Add this configuration:\n\n{manualConfig}\n\n" +
-                "After adding the configuration, restart your AI client.",
+                $"Configuration result:\n{manualConfig}",
                 "OK"
             );
-        }
-
-        private string GetConfigPath(McpClient client)
-        {
-            if (Application.platform == RuntimePlatform.WindowsEditor)
-                return client.windowsConfigPath;
-            else if (Application.platform == RuntimePlatform.OSXEditor)
-                return string.IsNullOrEmpty(client.macConfigPath) ? client.linuxConfigPath : client.macConfigPath;
-            else
-                return client.linuxConfigPath;
-        }
-
-        private string FindPackagePythonDirectory()
-        {
-            // This should use the same logic as the main MCP window
-            try
-            {
-                ServerInstaller.EnsureServerInstalled();
-                return ServerInstaller.GetServerPath();
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private string GetPathPrepend()
-        {
-            if (Application.platform == RuntimePlatform.OSXEditor)
-                return "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin";
-            else if (Application.platform == RuntimePlatform.LinuxEditor)
-                return "/usr/local/bin:/usr/bin:/bin";
-            return null;
         }
 
         private void CheckClientConfiguration(McpClient client)
@@ -689,7 +675,7 @@ namespace MCPForUnity.Editor.Setup
             // Basic status check - could be enhanced to mirror MCPForUnityEditorWindow logic
             try
             {
-                string configPath = GetConfigPath(client);
+                string configPath = McpConfigurationHelper.GetClientConfigPath(client);
                 if (System.IO.File.Exists(configPath))
                 {
                     client.configStatus = "Configured";
@@ -706,75 +692,6 @@ namespace MCPForUnity.Editor.Setup
                 client.configStatus = "Error";
                 client.status = McpStatus.Error;
             }
-        }
-
-        private string WriteToConfig(string pythonDir, string configPath, McpClient client)
-        {
-            // Simplified version of the config writing logic
-            try
-            {
-                string uvPath = ServerInstaller.FindUvPath();
-                if (string.IsNullOrEmpty(uvPath))
-                {
-                    return "UV package manager not found. Please install UV first.";
-                }
-
-                // Create directory if it doesn't exist
-                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(configPath));
-
-                // Build configuration JSON
-                string configJson = BuildClientConfig(client, uvPath, pythonDir);
-
-                // Write configuration
-                System.IO.File.WriteAllText(configPath, configJson);
-
-                return "Configuration successful!";
-            }
-            catch (System.Exception ex)
-            {
-                return $"Configuration failed: {ex.Message}";
-            }
-        }
-
-        private string BuildClientConfig(McpClient client, string uvPath, string pythonDir)
-        {
-            // Build appropriate JSON configuration based on client type
-            if (client.mcpType == McpTypes.VSCode)
-            {
-                var config = new
-                {
-                    servers = new
-                    {
-                        unityMCP = new
-                        {
-                            command = uvPath,
-                            args = new[] { "run", "--directory", pythonDir, "server.py" }
-                        }
-                    }
-                };
-                return Newtonsoft.Json.JsonConvert.SerializeObject(config, Newtonsoft.Json.Formatting.Indented);
-            }
-            else
-            {
-                // Default configuration for other clients
-                var config = new
-                {
-                    mcpServers = new
-                    {
-                        unityMCP = new
-                        {
-                            command = uvPath,
-                            args = new[] { "run", "--directory", pythonDir, "server.py" }
-                        }
-                    }
-                };
-                return Newtonsoft.Json.JsonConvert.SerializeObject(config, Newtonsoft.Json.Formatting.Indented);
-            }
-        }
-
-        private string BuildManualConfig(McpClient client, string uvPath, string pythonDir)
-        {
-            return BuildClientConfig(client, uvPath, pythonDir);
         }
 
         private void OpenInstallationUrls()

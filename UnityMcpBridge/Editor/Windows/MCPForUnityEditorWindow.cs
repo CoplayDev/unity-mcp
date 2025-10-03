@@ -1099,18 +1099,11 @@ namespace MCPForUnity.Editor.Windows
             Repaint();
         }
 
-        private static bool IsValidUv(string path)
-        {
-            return !string.IsNullOrEmpty(path)
-                && System.IO.Path.IsPathRooted(path)
-                && System.IO.File.Exists(path);
-        }
-
         private static bool ValidateUvBinarySafe(string path)
         {
             try
             {
-                if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) return false;
+                if (!File.Exists(path)) return false;
                 var psi = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = path,
@@ -1139,118 +1132,6 @@ namespace MCPForUnity.Editor.Windows
                 if (!string.Equals(a[i], b[i], StringComparison.Ordinal)) return false;
             }
             return true;
-        }
-
-        private string WriteToConfig(string pythonDir, string configPath, McpClient mcpClient = null)
-        {
-            // 0) Respect explicit lock (hidden pref or UI toggle)
-            try { if (UnityEditor.EditorPrefs.GetBool("MCPForUnity.LockCursorConfig", false)) return "Skipped (locked)"; } catch { }
-
-            JsonSerializerSettings jsonSettings = new() { Formatting = Formatting.Indented };
-
-            // Read existing config if it exists
-            string existingJson = "{}";
-            if (File.Exists(configPath))
-            {
-                try
-                {
-                    existingJson = File.ReadAllText(configPath);
-                }
-                catch (Exception e)
-                {
-                    UnityEngine.Debug.LogWarning($"Error reading existing config: {e.Message}.");
-                }
-            }
-
-            // Parse the existing JSON while preserving all properties
-            dynamic existingConfig;
-            try
-            {
-                if (string.IsNullOrWhiteSpace(existingJson))
-                {
-                    existingConfig = new Newtonsoft.Json.Linq.JObject();
-                }
-                else
-                {
-                    existingConfig = JsonConvert.DeserializeObject(existingJson) ?? new Newtonsoft.Json.Linq.JObject();
-                }
-            }
-            catch
-            {
-                // If user has partial/invalid JSON (e.g., mid-edit), start from a fresh object
-                if (!string.IsNullOrWhiteSpace(existingJson))
-                {
-                    UnityEngine.Debug.LogWarning("UnityMCP: VSCode mcp.json could not be parsed; rewriting servers block.");
-                }
-                existingConfig = new Newtonsoft.Json.Linq.JObject();
-            }
-
-            // Determine existing entry references (command/args)
-            string existingCommand = null;
-            string[] existingArgs = null;
-            bool isVSCode = (mcpClient?.mcpType == McpTypes.VSCode);
-            try
-            {
-                if (isVSCode)
-                {
-                    existingCommand = existingConfig?.servers?.unityMCP?.command?.ToString();
-                    existingArgs = existingConfig?.servers?.unityMCP?.args?.ToObject<string[]>();
-                }
-                else
-                {
-                    existingCommand = existingConfig?.mcpServers?.unityMCP?.command?.ToString();
-                    existingArgs = existingConfig?.mcpServers?.unityMCP?.args?.ToObject<string[]>();
-                }
-            }
-            catch { }
-
-            // 1) Start from existing, only fill gaps (prefer trusted resolver)
-            string uvPath = ServerInstaller.FindUvPath();
-            // Optionally trust existingCommand if it looks like uv/uv.exe
-            try
-            {
-                var name = System.IO.Path.GetFileName((existingCommand ?? string.Empty).Trim()).ToLowerInvariant();
-                if ((name == "uv" || name == "uv.exe") && ValidateUvBinarySafe(existingCommand))
-                {
-                    uvPath = existingCommand;
-                }
-            }
-            catch { }
-            if (uvPath == null) return "UV package manager not found. Please install UV first.";
-            string serverSrc = McpConfigFileHelper.ResolveServerDirectory(pythonDir, existingArgs);
-
-            // 2) Canonical args order
-            var newArgs = new[] { "run", "--directory", serverSrc, "server.py" };
-
-            // 3) Only write if changed
-            bool changed = !string.Equals(existingCommand, uvPath, StringComparison.Ordinal)
-                || !ArgsEqual(existingArgs, newArgs);
-            if (!changed)
-            {
-                return "Configured successfully"; // nothing to do
-            }
-
-            // 4) Ensure containers exist and write back minimal changes
-            JObject existingRoot;
-            if (existingConfig is JObject eo)
-                existingRoot = eo;
-            else
-                existingRoot = JObject.FromObject(existingConfig);
-
-            existingRoot = ConfigJsonBuilder.ApplyUnityServerToExistingConfig(existingRoot, uvPath, serverSrc, mcpClient);
-
-            string mergedJson = JsonConvert.SerializeObject(existingRoot, jsonSettings);
-
-            McpConfigFileHelper.WriteAtomicFile(configPath, mergedJson);
-
-            try
-            {
-                if (IsValidUv(uvPath)) UnityEditor.EditorPrefs.SetString("MCPForUnity.UvPath", uvPath);
-                UnityEditor.EditorPrefs.SetString("MCPForUnity.ServerSrc", serverSrc);
-            }
-            catch { }
-
-            return "Configured successfully";
         }
 
         private void ShowManualConfigurationInstructions(
@@ -1284,59 +1165,8 @@ namespace MCPForUnity.Editor.Windows
 
         private string FindPackagePythonDirectory()
         {
-            string pythonDir = McpConfigFileHelper.ResolveServerSource();
-
-            try
-            {
-                // Only check dev paths if we're using a file-based package (development mode)
-                bool isDevelopmentMode = IsDevelopmentMode();
-                if (isDevelopmentMode)
-                {
-                    string currentPackagePath = Path.GetDirectoryName(Application.dataPath);
-                    string[] devPaths = {
-                        Path.Combine(currentPackagePath, "unity-mcp", "UnityMcpServer", "src"),
-                        Path.Combine(Path.GetDirectoryName(currentPackagePath), "unity-mcp", "UnityMcpServer", "src"),
-                    };
-
-                    foreach (string devPath in devPaths)
-                    {
-                        if (Directory.Exists(devPath) && File.Exists(Path.Combine(devPath, "server.py")))
-                        {
-                            if (debugLogsEnabled)
-                            {
-                                UnityEngine.Debug.Log($"Currently in development mode. Package: {devPath}");
-                            }
-                            return devPath;
-                        }
-                    }
-                }
-
-                // Resolve via shared helper (handles local registry and older fallback) only if dev override on
-                if (UnityEditor.EditorPrefs.GetBool("MCPForUnity.UseEmbeddedServer", false))
-                {
-                    if (ServerPathResolver.TryFindEmbeddedServerSource(out string embedded))
-                    {
-                        return embedded;
-                    }
-                }
-
-                // Log only if the resolved path does not actually contain server.py
-                if (debugLogsEnabled)
-                {
-                    bool hasServer = false;
-                    try { hasServer = File.Exists(Path.Combine(pythonDir, "server.py")); } catch { }
-                    if (!hasServer)
-                    {
-                        UnityEngine.Debug.LogWarning("Could not find Python directory with server.py; falling back to installed path");
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                UnityEngine.Debug.LogError($"Error finding package path: {e.Message}");
-            }
-
-            return pythonDir;
+            // Use shared helper for consistent path resolution across both windows
+            return McpPathResolver.FindPackagePythonDirectory(debugLogsEnabled);
         }
 
         private bool IsDevelopmentMode()
@@ -1372,36 +1202,13 @@ namespace MCPForUnity.Editor.Windows
         {
             try
             {
-                // Determine the config file path based on OS
-                string configPath;
-
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                {
-                    configPath = mcpClient.windowsConfigPath;
-                }
-                else if (
-                    RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
-                )
-                {
-                    configPath = string.IsNullOrEmpty(mcpClient.macConfigPath)
-                        ? mcpClient.linuxConfigPath
-                        : mcpClient.macConfigPath;
-                }
-                else if (
-                    RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
-                )
-                {
-                    configPath = mcpClient.linuxConfigPath;
-                }
-                else
-                {
-                    return "Unsupported OS";
-                }
+                // Use shared helper for consistent config path resolution
+                string configPath = McpConfigurationHelper.GetClientConfigPath(mcpClient);
 
                 // Create directory if it doesn't exist
-                Directory.CreateDirectory(Path.GetDirectoryName(configPath));
+                McpConfigurationHelper.EnsureConfigDirectoryExists(configPath);
 
-                // Find the server.py file location using the same logic as FindPackagePythonDirectory
+                // Find the server.py file location using shared helper
                 string pythonDir = FindPackagePythonDirectory();
 
                 if (pythonDir == null || !File.Exists(Path.Combine(pythonDir, "server.py")))
@@ -1411,8 +1218,8 @@ namespace MCPForUnity.Editor.Windows
                 }
 
                 string result = mcpClient.mcpType == McpTypes.Codex
-                    ? ConfigureCodexClient(pythonDir, configPath, mcpClient)
-                    : WriteToConfig(pythonDir, configPath, mcpClient);
+                    ? McpConfigurationHelper.ConfigureCodexClient(pythonDir, configPath, mcpClient)
+                    : McpConfigurationHelper.WriteMcpConfiguration(pythonDir, configPath, mcpClient);
 
                 // Update the client status after successful configuration
                 if (result == "Configured successfully")
@@ -1451,80 +1258,6 @@ namespace MCPForUnity.Editor.Windows
                 );
                 return $"Failed to configure {mcpClient.name}";
             }
-        }
-
-        private string ConfigureCodexClient(string pythonDir, string configPath, McpClient mcpClient)
-        {
-            try { if (EditorPrefs.GetBool("MCPForUnity.LockCursorConfig", false)) return "Skipped (locked)"; } catch { }
-
-            string existingToml = string.Empty;
-            if (File.Exists(configPath))
-            {
-                try
-                {
-                    existingToml = File.ReadAllText(configPath);
-                }
-                catch (Exception e)
-                {
-                    if (debugLogsEnabled)
-                    {
-                        UnityEngine.Debug.LogWarning($"UnityMCP: Failed to read Codex config '{configPath}': {e.Message}");
-                    }
-                    existingToml = string.Empty;
-                }
-            }
-
-            string existingCommand = null;
-            string[] existingArgs = null;
-            if (!string.IsNullOrWhiteSpace(existingToml))
-            {
-                CodexConfigHelper.TryParseCodexServer(existingToml, out existingCommand, out existingArgs);
-            }
-
-            string uvPath = ServerInstaller.FindUvPath();
-            try
-            {
-                var name = Path.GetFileName((existingCommand ?? string.Empty).Trim()).ToLowerInvariant();
-                if ((name == "uv" || name == "uv.exe") && ValidateUvBinarySafe(existingCommand))
-                {
-                    uvPath = existingCommand;
-                }
-            }
-            catch { }
-
-            if (uvPath == null)
-            {
-                return "UV package manager not found. Please install UV first.";
-            }
-
-            string serverSrc = McpConfigFileHelper.ResolveServerDirectory(pythonDir, existingArgs);
-            var newArgs = new[] { "run", "--directory", serverSrc, "server.py" };
-
-            bool changed = true;
-            if (!string.IsNullOrEmpty(existingCommand) && existingArgs != null)
-            {
-                changed = !string.Equals(existingCommand, uvPath, StringComparison.Ordinal)
-                    || !ArgsEqual(existingArgs, newArgs);
-            }
-
-            if (!changed)
-            {
-                return "Configured successfully";
-            }
-
-            string codexBlock = CodexConfigHelper.BuildCodexServerBlock(uvPath, serverSrc);
-            string updatedToml = CodexConfigHelper.UpsertCodexServerBlock(existingToml, codexBlock);
-
-            McpConfigFileHelper.WriteAtomicFile(configPath, updatedToml);
-
-            try
-            {
-                if (IsValidUv(uvPath)) EditorPrefs.SetString("MCPForUnity.UvPath", uvPath);
-                EditorPrefs.SetString("MCPForUnity.ServerSrc", serverSrc);
-            }
-            catch { }
-
-            return "Configured successfully";
         }
 
         private void ShowCursorManualConfigurationInstructions(
@@ -1618,30 +1351,8 @@ namespace MCPForUnity.Editor.Windows
                     return;
                 }
 
-                string configPath;
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                {
-                    configPath = mcpClient.windowsConfigPath;
-                }
-                else if (
-                    RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
-                )
-                {
-                    configPath = string.IsNullOrEmpty(mcpClient.macConfigPath)
-                        ? mcpClient.linuxConfigPath
-                        : mcpClient.macConfigPath;
-                }
-                else if (
-                    RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
-                )
-                {
-                    configPath = mcpClient.linuxConfigPath;
-                }
-                else
-                {
-                    mcpClient.SetStatus(McpStatus.UnsupportedOS);
-                    return;
-                }
+                // Use shared helper for consistent config path resolution
+                string configPath = McpConfigurationHelper.GetClientConfigPath(mcpClient);
 
                 if (!File.Exists(configPath))
                 {
@@ -1711,8 +1422,8 @@ namespace MCPForUnity.Editor.Windows
                         try
                         {
                             string rewriteResult = mcpClient.mcpType == McpTypes.Codex
-                                ? ConfigureCodexClient(pythonDir, configPath, mcpClient)
-                                : WriteToConfig(pythonDir, configPath, mcpClient);
+                                ? McpConfigurationHelper.ConfigureCodexClient(pythonDir, configPath, mcpClient)
+                                : McpConfigurationHelper.WriteMcpConfiguration(pythonDir, configPath, mcpClient);
                             if (rewriteResult == "Configured successfully")
                             {
                                 if (debugLogsEnabled)
