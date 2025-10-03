@@ -159,42 +159,6 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
             return false;
         }
 
-        private bool TryValidateUV(string uvPath, out string version)
-        {
-            version = null;
-
-            try
-            {
-                var psi = new ProcessStartInfo
-                {
-                    FileName = uvPath,
-                    Arguments = "--version",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
-
-                using var process = Process.Start(psi);
-                if (process == null) return false;
-
-                string output = process.StandardOutput.ReadToEnd().Trim();
-                process.WaitForExit(5000);
-
-                if (process.ExitCode == 0 && output.StartsWith("uv "))
-                {
-                    version = output.Substring(3); // Remove "uv " prefix
-                    return true;
-                }
-            }
-            catch
-            {
-                // Ignore validation errors
-            }
-
-            return false;
-        }
-
         private bool TryFindInPath(string executable, out string fullPath)
         {
             fullPath = null;
