@@ -12,7 +12,7 @@ namespace MCPForUnity.Editor.Helpers
         /// or common development locations. Returns true if found and sets srcPath to the folder
         /// containing server.py.
         /// </summary>
-        public static bool TryFindEmbeddedServerSource(out string srcPath, bool warnOnLegacyPackageId = true)
+        public static bool TryFindEmbeddedServerSource(out string srcPath)
         {
             // 1) Repo development layouts commonly used alongside this package
             try
@@ -43,7 +43,7 @@ namespace MCPForUnity.Editor.Helpers
                 var owner = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(ServerPathResolver).Assembly);
                 if (owner != null)
                 {
-                    if (TryResolveWithinPackage(owner, out srcPath, warnOnLegacyPackageId))
+                    if (TryResolveWithinPackage(owner, out srcPath))
                     {
                         return true;
                     }
@@ -52,7 +52,7 @@ namespace MCPForUnity.Editor.Helpers
                 // Secondary: scan all registered packages locally
                 foreach (var p in UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages())
                 {
-                    if (TryResolveWithinPackage(p, out srcPath, warnOnLegacyPackageId))
+                    if (TryResolveWithinPackage(p, out srcPath))
                     {
                         return true;
                     }
@@ -65,7 +65,7 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     foreach (var pkg in list.Result)
                     {
-                        if (TryResolveWithinPackage(pkg, out srcPath, warnOnLegacyPackageId))
+                        if (TryResolveWithinPackage(pkg, out srcPath))
                         {
                             return true;
                         }
