@@ -8,7 +8,7 @@ import queue as q
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SRC = ROOT / "UnityMcpBridge" / "UnityMcpServer~" / "src"
+SRC = ROOT / "MCPForUnity" / "UnityMcpServer~" / "src"
 sys.path.insert(0, str(SRC))
 
 # Stub mcp.server.fastmcp to satisfy imports without the full dependency

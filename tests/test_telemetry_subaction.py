@@ -4,7 +4,7 @@ import importlib
 def _get_decorator_module():
     # Import the telemetry_decorator module from the Unity MCP server src
     mod = importlib.import_module(
-        "UnityMcpBridge.UnityMcpServer~.src.telemetry_decorator")
+        "MCPForUnity.UnityMcpServer~.src.telemetry_decorator")
     return mod
 
 

@@ -7,7 +7,7 @@ import asyncio
 
 # add server src to path and load modules without triggering package imports
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SRC = ROOT / "UnityMcpBridge" / "UnityMcpServer~" / "src"
+SRC = ROOT / "MCPForUnity" / "UnityMcpServer~" / "src"
 sys.path.insert(0, str(SRC))
 
 # stub mcp.server.fastmcp to satisfy imports without full dependency

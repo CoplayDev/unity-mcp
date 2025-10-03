@@ -7,7 +7,7 @@ import asyncio
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SRC = ROOT / "UnityMcpBridge" / "UnityMcpServer~" / "src"
+SRC = ROOT / "MCPForUnity" / "UnityMcpServer~" / "src"
 sys.path.insert(0, str(SRC))
 
 
