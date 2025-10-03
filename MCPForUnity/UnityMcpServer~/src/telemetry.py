@@ -75,8 +75,8 @@ class TelemetryConfig:
         # Prefer config file, then allow env overrides
         server_config = None
         for modname in (
-            "UnityMcpBridge.UnityMcpServer~.src.config",
-            "UnityMcpBridge.UnityMcpServer.src.config",
+            "MCPForUnity.UnityMcpServer~.src.config",
+            "MCPForUnity.UnityMcpServer.src.config",
             "src.config",
             "config",
         ):
