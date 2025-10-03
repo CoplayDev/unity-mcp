@@ -36,7 +36,7 @@ namespace MCPForUnity.Editor.Helpers
             catch (System.Exception ex)
             {
                 Debug.LogError($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Failed to install Python server: {ex.Message}");
-                Debug.LogWarning("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: You may need to manually install the Python server. Check the MCP for Unity Editor Window for instructions.");
+                Debug.LogWarning("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: You may need to manually install the Python server. Check the MCP For Unity Window for instructions.");
             }
         }
     }

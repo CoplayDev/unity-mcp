@@ -12,7 +12,7 @@ namespace MCPForUnity.Editor.Helpers
         /// or common development locations. Returns true if found and sets srcPath to the folder
         /// containing server.py.
         /// </summary>
-        public static bool TryFindEmbeddedServerSource(out string srcPath, bool warnOnLegacyPackageId = true)
+        public static bool TryFindEmbeddedServerSource(out string srcPath)
         {
             // 1) Repo development layouts commonly used alongside this package
             try
@@ -43,7 +43,7 @@ namespace MCPForUnity.Editor.Helpers
                 var owner = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(ServerPathResolver).Assembly);
                 if (owner != null)
                 {
-                    if (TryResolveWithinPackage(owner, out srcPath, warnOnLegacyPackageId))
+                    if (TryResolveWithinPackage(owner, out srcPath))
                     {
                         return true;
                     }
@@ -52,7 +52,7 @@ namespace MCPForUnity.Editor.Helpers
                 // Secondary: scan all registered packages locally
                 foreach (var p in UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages())
                 {
-                    if (TryResolveWithinPackage(p, out srcPath, warnOnLegacyPackageId))
+                    if (TryResolveWithinPackage(p, out srcPath))
                     {
                         return true;
                     }
@@ -65,7 +65,7 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     foreach (var pkg in list.Result)
                     {
-                        if (TryResolveWithinPackage(pkg, out srcPath, warnOnLegacyPackageId))
+                        if (TryResolveWithinPackage(pkg, out srcPath))
                         {
                             return true;
                         }
@@ -99,22 +99,14 @@ namespace MCPForUnity.Editor.Helpers
             return false;
         }
 
-        private static bool TryResolveWithinPackage(UnityEditor.PackageManager.PackageInfo p, out string srcPath, bool warnOnLegacyPackageId)
+        private static bool TryResolveWithinPackage(UnityEditor.PackageManager.PackageInfo p, out string srcPath)
         {
             const string CurrentId = "com.coplaydev.unity-mcp";
-            const string LegacyId = "com.justinpbarnett.unity-mcp";
 
             srcPath = null;
-            if (p == null || (p.name != CurrentId && p.name != LegacyId))
+            if (p == null || p.name != CurrentId)
             {
                 return false;
-            }
-
-            if (warnOnLegacyPackageId && p.name == LegacyId)
-            {
-                Debug.LogWarning(
-                    "MCP for Unity: Detected legacy package id 'com.justinpbarnett.unity-mcp'. " +
-                    "Please update Packages/manifest.json to 'com.coplaydev.unity-mcp' to avoid future breakage.");
             }
 
             string packagePath = p.resolvedPath;
