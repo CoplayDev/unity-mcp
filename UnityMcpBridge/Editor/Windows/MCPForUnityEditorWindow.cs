@@ -368,25 +368,25 @@ namespace MCPForUnity.Editor.Windows
             }
             EditorGUILayout.Space(4);
 
-            // Repair Python Env button with tooltip tag
+            // Rebuild MCP Server button with tooltip tag
             using (new EditorGUILayout.HorizontalScope())
             {
                 GUILayout.FlexibleSpace();
                 GUIContent repairLabel = new GUIContent(
-                    "Repair Python Env",
-                    "Deletes the server's .venv and runs 'uv sync' to rebuild a clean environment. Use this if modules are missing or Python upgraded."
+                    "Rebuild MCP Server",
+                    "Deletes the installed server and re-copies it from the package. Use this to update the server after making source code changes or if the installation is corrupted."
                 );
                 if (GUILayout.Button(repairLabel, GUILayout.Width(160), GUILayout.Height(22)))
                 {
-                    bool ok = global::MCPForUnity.Editor.Helpers.ServerInstaller.RepairPythonEnvironment();
+                    bool ok = global::MCPForUnity.Editor.Helpers.ServerInstaller.RebuildMcpServer();
                     if (ok)
                     {
-                        EditorUtility.DisplayDialog("MCP For Unity", "Python environment repaired.", "OK");
+                        EditorUtility.DisplayDialog("MCP For Unity", "Server rebuilt successfully.", "OK");
                         UpdatePythonServerInstallationStatus();
                     }
                     else
                     {
-                        EditorUtility.DisplayDialog("MCP For Unity", "Repair failed. Please check Console for details.", "OK");
+                        EditorUtility.DisplayDialog("MCP For Unity", "Rebuild failed. Please check Console for details.", "OK");
                     }
                 }
             }

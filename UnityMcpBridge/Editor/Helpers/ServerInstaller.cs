@@ -423,105 +423,61 @@ namespace MCPForUnity.Editor.Helpers
             }
         }
 
-        public static bool RepairPythonEnvironment()
+        public static bool RebuildMcpServer()
         {
             try
             {
-                string serverSrc = GetServerPath();
-                bool hasServer = File.Exists(Path.Combine(serverSrc, "server.py"));
-                if (!hasServer)
+                // Find embedded source
+                if (!TryGetEmbeddedServerSource(out string embeddedSrc))
                 {
-                    // In dev mode or if not installed yet, try the embedded/dev source
-                    if (TryGetEmbeddedServerSource(out string embeddedSrc) && File.Exists(Path.Combine(embeddedSrc, "server.py")))
+                    Debug.LogError("RebuildMcpServer: Could not find embedded server source.");
+                    return false;
+                }
+
+                string saveLocation = GetSaveLocation();
+                string destRoot = Path.Combine(saveLocation, ServerFolder);
+                string destSrc = Path.Combine(destRoot, "src");
+
+                // Kill any running uv processes for this server
+                TryKillUvForPath(destSrc);
+
+                // Delete the entire installed server directory
+                if (Directory.Exists(destRoot))
+                {
+                    try
                     {
-                        serverSrc = embeddedSrc;
-                        hasServer = true;
+                        Directory.Delete(destRoot, recursive: true);
+                        Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Deleted existing server at {destRoot}");
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        // Attempt to install then retry
-                        EnsureServerInstalled();
-                        serverSrc = GetServerPath();
-                        hasServer = File.Exists(Path.Combine(serverSrc, "server.py"));
+                        Debug.LogError($"Failed to delete existing server: {ex.Message}");
+                        return false;
                     }
                 }
 
-                if (!hasServer)
+                // Re-copy from embedded source
+                string embeddedRoot = Path.GetDirectoryName(embeddedSrc) ?? embeddedSrc;
+                Directory.CreateDirectory(destRoot);
+                CopyDirectoryRecursive(embeddedRoot, destRoot);
+
+                // Write version file
+                string embeddedVer = ReadVersionFile(Path.Combine(embeddedSrc, VersionFileName)) ?? "unknown";
+                try
                 {
-                    Debug.LogWarning("RepairPythonEnvironment: server.py not found; ensure server is installed first.");
-                    return false;
+                    File.WriteAllText(Path.Combine(destSrc, VersionFileName), embeddedVer);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"Failed to write version file: {ex.Message}");
                 }
 
-                // Remove stale venv and pinned version file if present
-                string venvPath = Path.Combine(serverSrc, ".venv");
-                if (Directory.Exists(venvPath))
-                {
-                    try { Directory.Delete(venvPath, recursive: true); } catch (Exception ex) { Debug.LogWarning($"Failed to delete .venv: {ex.Message}"); }
-                }
-                string pyPin = Path.Combine(serverSrc, ".python-version");
-                if (File.Exists(pyPin))
-                {
-                    try { File.Delete(pyPin); } catch (Exception ex) { Debug.LogWarning($"Failed to delete .python-version: {ex.Message}"); }
-                }
-
-                string uvPath = FindUvPath();
-                if (uvPath == null)
-                {
-                    Debug.LogError("UV not found. Please install uv (https://docs.astral.sh/uv/).");
-                    return false;
-                }
-
-                var psi = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = uvPath,
-                    Arguments = "sync",
-                    WorkingDirectory = serverSrc,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
-
-                using var proc = new System.Diagnostics.Process { StartInfo = psi };
-                var sbOut = new StringBuilder();
-                var sbErr = new StringBuilder();
-                proc.OutputDataReceived += (_, e) => { if (e.Data != null) sbOut.AppendLine(e.Data); };
-                proc.ErrorDataReceived += (_, e) => { if (e.Data != null) sbErr.AppendLine(e.Data); };
-
-                if (!proc.Start())
-                {
-                    Debug.LogError("Failed to start uv process.");
-                    return false;
-                }
-
-                proc.BeginOutputReadLine();
-                proc.BeginErrorReadLine();
-
-                if (!proc.WaitForExit(60000))
-                {
-                    try { proc.Kill(); } catch { }
-                    Debug.LogError("uv sync timed out.");
-                    return false;
-                }
-
-                // Ensure async buffers flushed
-                proc.WaitForExit();
-
-                string stdout = sbOut.ToString();
-                string stderr = sbErr.ToString();
-
-                if (proc.ExitCode != 0)
-                {
-                    Debug.LogError($"uv sync failed: {stderr}\n{stdout}");
-                    return false;
-                }
-
-                Debug.Log("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Python environment repaired successfully.");
+                Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Server rebuilt successfully at {destRoot} (version {embeddedVer})");
                 return true;
             }
             catch (Exception ex)
             {
-                Debug.LogError($"RepairPythonEnvironment failed: {ex.Message}");
+                Debug.LogError($"RebuildMcpServer failed: {ex.Message}");
                 return false;
             }
         }

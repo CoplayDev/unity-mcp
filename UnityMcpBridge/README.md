@@ -29,7 +29,7 @@ The window has four areas: Server Status, Unity Bridge, MCP Client Configuration
   - Ports: Unity (varies; shown in UI), MCP 6500.
 - Actions:
   - Auto-Setup: Registers/updates your selected MCP client(s), ensures bridge connectivity. Shows “Connected ✓” after success.
-  - Repair Python Env: Rebuilds a clean Python environment (deletes `.venv`, runs `uv sync`).
+  - Rebuild MCP Server: Rebuilds the Python based MCP server
   - Select server folder…: Choose the folder containing `server.py`.
   - Verify again: Re-checks server presence.
   - If Python isn’t detected, use “Open Install Instructions”.
