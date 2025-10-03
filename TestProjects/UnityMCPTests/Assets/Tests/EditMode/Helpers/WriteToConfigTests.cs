@@ -1,17 +1,14 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEditor;
-using UnityEngine;
-using MCPForUnity.Editor.Data;
+using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
-using MCPForUnity.Editor.Windows;
 
-namespace MCPForUnityTests.Editor.Windows
+namespace MCPForUnityTests.Editor.Helpers
 {
     public class WriteToConfigTests
     {
@@ -68,7 +65,7 @@ namespace MCPForUnityTests.Editor.Windows
         public void AddsEnvAndDisabledFalse_ForWindsurf()
         {
             var configPath = Path.Combine(_tempRoot, "windsurf.json");
-            WriteInitialConfig(configPath, isVSCode:false, command:_fakeUvPath, directory:"/old/path");
+            WriteInitialConfig(configPath, isVSCode: false, command: _fakeUvPath, directory: "/old/path");
 
             var client = new McpClient { name = "Windsurf", mcpType = McpTypes.Windsurf };
             InvokeWriteToConfig(configPath, client);
@@ -85,7 +82,7 @@ namespace MCPForUnityTests.Editor.Windows
         public void AddsEnvAndDisabledFalse_ForKiro()
         {
             var configPath = Path.Combine(_tempRoot, "kiro.json");
-            WriteInitialConfig(configPath, isVSCode:false, command:_fakeUvPath, directory:"/old/path");
+            WriteInitialConfig(configPath, isVSCode: false, command: _fakeUvPath, directory: "/old/path");
 
             var client = new McpClient { name = "Kiro", mcpType = McpTypes.Kiro };
             InvokeWriteToConfig(configPath, client);
@@ -102,7 +99,7 @@ namespace MCPForUnityTests.Editor.Windows
         public void DoesNotAddEnvOrDisabled_ForCursor()
         {
             var configPath = Path.Combine(_tempRoot, "cursor.json");
-            WriteInitialConfig(configPath, isVSCode:false, command:_fakeUvPath, directory:"/old/path");
+            WriteInitialConfig(configPath, isVSCode: false, command: _fakeUvPath, directory: "/old/path");
 
             var client = new McpClient { name = "Cursor", mcpType = McpTypes.Cursor };
             InvokeWriteToConfig(configPath, client);
@@ -118,7 +115,7 @@ namespace MCPForUnityTests.Editor.Windows
         public void DoesNotAddEnvOrDisabled_ForVSCode()
         {
             var configPath = Path.Combine(_tempRoot, "vscode.json");
-            WriteInitialConfig(configPath, isVSCode:true, command:_fakeUvPath, directory:"/old/path");
+            WriteInitialConfig(configPath, isVSCode: true, command: _fakeUvPath, directory: "/old/path");
 
             var client = new McpClient { name = "VSCode", mcpType = McpTypes.VSCode };
             InvokeWriteToConfig(configPath, client);
@@ -219,25 +216,15 @@ namespace MCPForUnityTests.Editor.Windows
             File.WriteAllText(configPath, root.ToString());
         }
 
-        private static MCPForUnityEditorWindow CreateWindow()
-        {
-            return ScriptableObject.CreateInstance<MCPForUnityEditorWindow>();
-        }
-
         private static void InvokeWriteToConfig(string configPath, McpClient client)
         {
-            var window = CreateWindow();
-            var mi = typeof(MCPForUnityEditorWindow).GetMethod("WriteToConfig", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.NotNull(mi, "Could not find WriteToConfig via reflection");
+            var result = McpConfigurationHelper.WriteMcpConfiguration(
+                pythonDir: string.Empty,
+                configPath: configPath,
+                mcpClient: client
+            );
 
-            // pythonDir is unused by WriteToConfig, but pass server src to keep it consistent
-            var result = (string)mi!.Invoke(window, new object[] { 
-                /* pythonDir */ string.Empty, 
-                /* configPath */ configPath, 
-                /* mcpClient */ client 
-            });
-
-            Assert.AreEqual("Configured successfully", result, "WriteToConfig should return success");
+            Assert.AreEqual("Configured successfully", result, "WriteMcpConfiguration should return success");
         }
     }
 }
