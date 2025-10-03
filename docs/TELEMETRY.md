@@ -107,7 +107,7 @@ Files created:
 
 ### Testing Telemetry
 ```bash
-cd UnityMcpBridge/UnityMcpServer~/src
+cd MCPForUnity/UnityMcpServer~/src
 python test_telemetry.py
 ```
 

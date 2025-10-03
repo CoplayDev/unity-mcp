@@ -31,7 +31,7 @@ python mcp_source.py [--manifest /path/to/manifest.json] [--repo /path/to/unity-
 **Options:**
 - **1** Upstream main (CoplayDev/unity-mcp)
 - **2** Remote current branch (origin + branch)
-- **3** Local workspace (file: UnityMcpBridge)
+- **3** Local workspace (file: MCPForUnity)
 
 After switching, open Package Manager and Refresh to re-resolve packages.
 

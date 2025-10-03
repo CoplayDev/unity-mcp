@@ -11,7 +11,7 @@ Be sure to review the developer README first:
 
 ### Creating a Custom Tool
 
-1. **Create a new Python file** in `UnityMcpBridge/UnityMcpServer~/src/tools/` (or any location that gets imported)
+1. **Create a new Python file** in `MCPForUnity/UnityMcpServer~/src/tools/` (or any location that gets imported)
 
 2. **Use the `@mcp_for_unity_tool` decorator**:
 

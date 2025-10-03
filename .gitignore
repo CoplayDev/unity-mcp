@@ -25,7 +25,6 @@ UnityMcpServer.meta
 # Unity Editor
 *.unitypackage
 *.asset
-UnityMcpBridge.meta
 LICENSE.meta
 CONTRIBUTING.md.meta
 

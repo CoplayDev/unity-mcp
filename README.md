@@ -115,7 +115,7 @@ MCP for Unity connects your tools using two components:
 3.  Click `+` -> `Add package from git URL...`.
 4.  Enter:
     ```
-    https://github.com/CoplayDev/unity-mcp.git?path=/UnityMcpBridge
+    https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity
     ```
 5.  Click `Add`.
 6. The MCP server is installed automatically by the package on first run or via Auto-Setup. If that fails, use Manual Configuration (below).

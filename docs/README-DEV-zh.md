@@ -31,7 +31,7 @@ python mcp_source.py [--manifest /path/to/manifest.json] [--repo /path/to/unity-
 **选项:**
 - **1** 上游主分支 (CoplayDev/unity-mcp)
 - **2** 远程当前分支 (origin + branch)
-- **3** 本地工作区 (file: UnityMcpBridge)
+- **3** 本地工作区 (file: MCPForUnity)
 
 切换后，打开包管理器并刷新以重新解析包。
 
