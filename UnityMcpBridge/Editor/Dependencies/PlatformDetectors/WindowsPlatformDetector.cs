@@ -16,7 +16,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
         public override bool CanDetect => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
-        public DependencyStatus DetectPython()
+        public override DependencyStatus DetectPython()
         {
             var status = new DependencyStatus("Python", isRequired: true)
             {
