@@ -48,6 +48,8 @@ def my_custom_tool(
    - Auto-generates the tool name from the function name (e.g., `my_custom_tool`)
    - Registers the tool with FastMCP during module import
 
+4. **Rebuild the server** in the MCP for Unity window (in the Unity Editor) to apply the changes.
+
 ### Decorator Options
 
 ```python
