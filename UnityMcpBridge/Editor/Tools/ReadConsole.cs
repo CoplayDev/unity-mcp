@@ -303,14 +303,18 @@ namespace MCPForUnity.Editor.Tools
 
                     // --- Formatting ---
                     string stackTrace = includeStacktrace ? ExtractStackTrace(message) : null;
-                    // Get first line if stack is present and requested, otherwise use full message
-                    string messageOnly =
-                        (includeStacktrace && !string.IsNullOrEmpty(stackTrace))
-                            ? message.Split(
-                                new[] { '\n', '\r' },
-                                StringSplitOptions.RemoveEmptyEntries
-                            )[0]
-                            : message;
+                    // Always get first line for the message, use full message only if no stack trace exists
+                    string[] messageLines = message.Split(
+                        new[] { '\n', '\r' },
+                        StringSplitOptions.RemoveEmptyEntries
+                    );
+                    string messageOnly = messageLines.Length > 0 ? messageLines[0] : message;
+
+                    // If not including stacktrace, ensure we only show the first line
+                    if (!includeStacktrace)
+                    {
+                        stackTrace = null;
+                    }
 
                     object formattedEntry = null;
                     switch (format)
