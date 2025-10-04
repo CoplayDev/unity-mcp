@@ -10,6 +10,13 @@ namespace MCPForUnityTests.Editor.Tools
 {
     public class CommandRegistryTests
     {
+        [OneTimeSetUp]
+        public void OneTimeSetUp()
+        {
+            // Ensure CommandRegistry is initialized before tests run
+            CommandRegistry.Initialize();
+        }
+
         [Test]
         public void GetHandler_ThrowsException_ForUnknownCommand()
         {
