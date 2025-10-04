@@ -2,7 +2,7 @@ name: Unity Tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/*]
     paths:
       - TestProjects/UnityMCPTests/**
       - MCPForUnity/Editor/**
