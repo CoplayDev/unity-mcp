@@ -1310,11 +1310,18 @@ namespace MCPForUnity.Editor.Tools
             if (string.IsNullOrEmpty(searchMethod))
             {
                 if (targetToken?.Type == JTokenType.Integer)
-                    searchMethod = "by_id";
+                    searchMethod = "id"; // Use shorter format as default
                 else if (!string.IsNullOrEmpty(searchTerm) && searchTerm.Contains('/'))
-                    searchMethod = "by_path";
+                    searchMethod = "path"; // Use shorter format as default
                 else
-                    searchMethod = "by_name"; // Default fallback
+                    searchMethod = "name"; // Default fallback, use shorter format
+            }
+
+            // Normalize search method - add by_ prefix if not present for internal processing
+            string normalizedSearchMethod = searchMethod;
+            if (!string.IsNullOrEmpty(searchMethod) && !searchMethod.StartsWith("by_") && !searchMethod.Equals("by_id_or_name_or_path"))
+            {
+                normalizedSearchMethod = "by_" + searchMethod;
             }
 
             GameObject rootSearchObject = null;
@@ -1331,7 +1338,7 @@ namespace MCPForUnity.Editor.Tools
                 }
             }
 
-            switch (searchMethod)
+            switch (normalizedSearchMethod)
             {
                 case "by_id":
                     if (int.TryParse(searchTerm, out int instanceId))
@@ -1352,13 +1359,39 @@ namespace MCPForUnity.Editor.Tools
                             .GetComponentsInChildren<Transform>(searchInactive)
                             .Select(t => t.gameObject)
                         : GetAllSceneObjects(searchInactive);
-                    results.AddRange(searchPoolName.Where(go => go.name == searchTerm));
+
+                    // Debug logging for name search
+                    var searchPool = searchPoolName.ToList();
+
+                    var matchingObjects = searchPool.Where(go => go.name == searchTerm).ToList();
+
+                    results.AddRange(matchingObjects);
                     break;
                 case "by_path":
                     // Path is relative to scene root or rootSearchObject
-                    Transform foundTransform = rootSearchObject
-                        ? rootSearchObject.transform.Find(searchTerm)
-                        : GameObject.Find(searchTerm)?.transform;
+                    Transform foundTransform = null;
+                    if (rootSearchObject)
+                    {
+                        foundTransform = rootSearchObject.transform.Find(searchTerm);
+                    }
+                    else
+                    {
+                        // Search in all loaded scenes, not just active scene
+                        for (int i = 0; i < SceneManager.sceneCount && foundTransform == null; i++)
+                        {
+                            var scene = SceneManager.GetSceneAt(i);
+                            if (scene.isLoaded)
+                            {
+                                var rootObjects = scene.GetRootGameObjects();
+                                foreach (var root in rootObjects)
+                                {
+                                    foundTransform = root.transform.Find(searchTerm);
+                                    if (foundTransform != null)
+                                        break;
+                                }
+                            }
+                        }
+                    }
                     if (foundTransform != null)
                         results.Add(foundTransform.gameObject);
                     break;
@@ -1429,7 +1462,27 @@ namespace MCPForUnity.Editor.Tools
                             break;
                         }
                     }
-                    GameObject objByPath = GameObject.Find(searchTerm);
+
+                    // Try to find by path in all loaded scenes
+                    GameObject objByPath = null;
+                    for (int i = 0; i < SceneManager.sceneCount && objByPath == null; i++)
+                    {
+                        var scene = SceneManager.GetSceneAt(i);
+                        if (scene.isLoaded)
+                        {
+                            var rootObjects = scene.GetRootGameObjects();
+                            foreach (var root in rootObjects)
+                            {
+                                var transform = root.transform.Find(searchTerm);
+                                if (transform != null)
+                                {
+                                    objByPath = transform.gameObject;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
                     if (objByPath != null)
                     {
                         results.Add(objByPath);
@@ -1451,23 +1504,35 @@ namespace MCPForUnity.Editor.Tools
             {
                 return new List<GameObject> { results[0] };
             }
-
             return results.Distinct().ToList(); // Ensure uniqueness
         }
 
         // Helper to get all scene objects efficiently
         private static IEnumerable<GameObject> GetAllSceneObjects(bool includeInactive)
         {
-            // SceneManager.GetActiveScene().GetRootGameObjects() is faster than FindObjectsOfType<GameObject>()
-            var rootObjects = SceneManager.GetActiveScene().GetRootGameObjects();
             var allObjects = new List<GameObject>();
-            foreach (var root in rootObjects)
+
+            // Search in all loaded scenes, not just the active one
+            for (int i = 0; i < SceneManager.sceneCount; i++)
             {
-                allObjects.AddRange(
-                    root.GetComponentsInChildren<Transform>(includeInactive)
-                        .Select(t => t.gameObject)
-                );
+                var scene = SceneManager.GetSceneAt(i);
+                if (scene.isLoaded)
+                {
+                    var rootObjects = scene.GetRootGameObjects();
+                    Debug.Log($"[ManageGameObject] Scanning scene '{scene.name}' - {rootObjects.Length} root objects");
+
+                    foreach (var root in rootObjects)
+                    {
+                        var sceneObjects = root.GetComponentsInChildren<Transform>(includeInactive)
+                            .Select(t => t.gameObject)
+                            .ToList();
+                        allObjects.AddRange(sceneObjects);
+                        Debug.Log($"[ManageGameObject] Scene '{scene.name}' root '{root.name}' contains {sceneObjects.Count} objects (includeInactive: {includeInactive})");
+                    }
+                }
             }
+
+            Debug.Log($"[ManageGameObject] Total objects found: {allObjects.Count}");
             return allObjects;
         }
 
