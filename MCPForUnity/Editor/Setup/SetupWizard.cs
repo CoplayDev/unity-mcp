@@ -144,7 +144,7 @@ namespace MCPForUnity.Editor.Setup
         [MenuItem("Window/MCP For Unity/Open MCP Window", priority = 4)]
         public static void OpenClientConfiguration()
         {
-            Windows.MCPForUnityEditorWindow.ShowWindow();
+            Windows.MCPForUnityEditorWindowNew.ShowWindow();
         }
     }
 }
