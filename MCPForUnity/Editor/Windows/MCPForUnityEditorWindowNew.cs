@@ -118,31 +118,41 @@ namespace MCPForUnity.Editor.Windows
 
         private void OnEnable()
         {
-            // Refresh on enable (after domain reload)
-            EditorApplication.delayCall += () =>
-            {
-                if (rootVisualElement != null && rootVisualElement.childCount > 0)
-                {
-                    UpdateConnectionStatus();
-                    UpdatePathOverrides();
-                    if (selectedClientIndex >= 0 && selectedClientIndex < mcpClients.clients.Count)
-                    {
-                        var client = mcpClients.clients[selectedClientIndex];
-                        MCPServiceLocator.Client.CheckClientStatus(client);
-                        UpdateClientStatus();
-                        UpdateManualConfiguration();
-                        UpdateClaudeCliPathVisibility();
-                    }
-                }
-            };
+            EditorApplication.update += OnEditorUpdate;
+        }
+
+        private void OnDisable()
+        {
+            EditorApplication.update -= OnEditorUpdate;
         }
 
         private void OnFocus()
         {
-            // Refresh bridge status (may have changed after domain reload)
+            // Only refresh data if UI is built
+            if (rootVisualElement == null || rootVisualElement.childCount == 0)
+                return;
+
+            RefreshAllData();
+        }
+
+        private void OnEditorUpdate()
+        {
+            // Only update UI if it's built
+            if (rootVisualElement == null || rootVisualElement.childCount == 0)
+                return;
+
             UpdateConnectionStatus();
-            
-            // Refresh selected client status (config may have been edited externally)
+        }
+
+        private void RefreshAllData()
+        {
+            // Update connection status
+            UpdateConnectionStatus();
+
+            // Update path overrides
+            UpdatePathOverrides();
+
+            // Refresh selected client (may have been configured externally)
             if (selectedClientIndex >= 0 && selectedClientIndex < mcpClients.clients.Count)
             {
                 var client = mcpClients.clients[selectedClientIndex];
@@ -151,9 +161,6 @@ namespace MCPForUnity.Editor.Windows
                 UpdateManualConfiguration();
                 UpdateClaudeCliPathVisibility();
             }
-            
-            // Refresh path overrides in case they changed
-            UpdatePathOverrides();
         }
 
         private void CacheUIElements()
@@ -279,14 +286,6 @@ namespace MCPForUnity.Editor.Windows
             copyPathButton.clicked += OnCopyPathClicked;
             openFileButton.clicked += OnOpenFileClicked;
             copyJsonButton.clicked += OnCopyJsonClicked;
-
-            // Update connection status periodically
-            EditorApplication.update += UpdateConnectionStatus;
-        }
-
-        private void OnDisable()
-        {
-            EditorApplication.update -= UpdateConnectionStatus;
         }
 
         private void UpdateValidationDescription()
@@ -324,7 +323,7 @@ namespace MCPForUnity.Editor.Windows
                 statusIndicator.RemoveFromClassList("connected");
                 statusIndicator.AddToClassList("disconnected");
                 connectionToggleButton.text = "Start";
-                
+
                 // Reset health status when disconnected
                 healthStatusLabel.text = "Unknown";
                 healthIndicator.RemoveFromClassList("healthy");
