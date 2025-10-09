@@ -385,7 +385,7 @@ namespace MCPForUnity.Editor.Services
                        "# Unregister the MCP server:\n" +
                        "claude mcp remove unityMCP\n\n" +
                        "# List registered servers:\n" +
-                       "claude mcp list";
+                       "claude mcp list # Only works when claude is run in the project's directory";
             }
 
             if (string.IsNullOrEmpty(pythonDir) || string.IsNullOrEmpty(uvPath))
