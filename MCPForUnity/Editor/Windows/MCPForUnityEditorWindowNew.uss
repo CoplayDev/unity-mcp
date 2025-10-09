@@ -127,8 +127,32 @@
     background-color: rgba(255, 200, 0, 1);
 }
 
+.status-dot.unknown {
+    background-color: rgba(150, 150, 150, 1);
+}
+
+.status-dot.healthy {
+    background-color: rgba(0, 200, 100, 1);
+}
+
 .status-text {
     -unity-text-align: middle-left;
+}
+
+.status-indicator-small {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    margin-left: 8px;
+    background-color: rgba(150, 150, 150, 1);
+}
+
+.status-indicator-small.valid {
+    background-color: rgba(0, 200, 100, 1);
+}
+
+.status-indicator-small.invalid {
+    background-color: rgba(200, 50, 50, 1);
 }
 
 /* Buttons */
@@ -244,6 +268,75 @@
     margin-top: 4px;
 }
 
+/* Advanced Settings */
+.advanced-settings-foldout {
+    margin-top: 16px;
+}
+
+.advanced-settings-foldout > .unity-foldout__toggle {
+    -unity-font-style: bold;
+    font-size: 12px;
+}
+
+.advanced-settings-content {
+    padding: 8px;
+    margin-top: 8px;
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+}
+
+.advanced-label {
+    font-size: 11px;
+    -unity-font-style: bold;
+    margin-bottom: 8px;
+    color: rgba(150, 150, 150, 1);
+}
+
+.override-row {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 8px;
+    margin-bottom: 4px;
+}
+
+.override-label {
+    font-size: 11px;
+    -unity-font-style: bold;
+    min-width: 120px;
+}
+
+.path-override-controls {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.override-field {
+    flex-grow: 1;
+    margin-right: 4px;
+}
+
+.override-field > .unity-text-field__input {
+    background-color: rgba(0, 0, 0, 0.1);
+    font-size: 11px;
+}
+
+.setting-label-small {
+    font-size: 11px;
+    min-width: 120px;
+    -unity-text-align: middle-left;
+}
+
+.path-display-field {
+    flex-grow: 1;
+    margin-right: 4px;
+}
+
+.path-display-field > .unity-text-field__input {
+    background-color: rgba(0, 0, 0, 0.1);
+    font-size: 11px;
+}
+
 /* Light Theme Overrides */
 .unity-theme-light .title {
     background-color: rgba(0, 0, 0, 0.05);
@@ -276,4 +369,16 @@
 
 .unity-theme-light .installation-steps {
     background-color: rgba(0, 0, 0, 0.03);
+}
+
+.unity-theme-light .advanced-settings-content {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+.unity-theme-light .override-field > .unity-text-field__input {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.unity-theme-light .path-display-field > .unity-text-field__input {
+    background-color: rgba(0, 0, 0, 0.05);
 }

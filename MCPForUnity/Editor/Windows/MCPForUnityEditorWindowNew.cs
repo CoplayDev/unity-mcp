@@ -2,14 +2,13 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using UnityEditor;
+using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 using MCPForUnity.Editor.Data;
-using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
+using MCPForUnity.Editor.Services;
 
 namespace MCPForUnity.Editor.Windows
 {
@@ -22,21 +21,41 @@ namespace MCPForUnity.Editor.Windows
             // HTTPStreaming // Future
         }
 
-        // UI Elements
+        // Settings UI Elements
         private Toggle debugLogsToggle;
         private EnumField validationLevelField;
         private Label validationDescription;
+        private Foldout advancedSettingsFoldout;
+        private TextField pythonPathOverride;
+        private TextField uvPathOverride;
+        private Button browsePythonButton;
+        private Button clearPythonButton;
+        private Button browseUvButton;
+        private Button clearUvButton;
+        private VisualElement pythonPathStatus;
+        private VisualElement uvPathStatus;
+
+        // Connection UI Elements
         private EnumField protocolDropdown;
         private TextField unityPortField;
         private TextField serverPortField;
         private VisualElement statusIndicator;
         private Label connectionStatusLabel;
         private Button connectionToggleButton;
+        private VisualElement healthIndicator;
+        private Label healthStatusLabel;
+        private Button testConnectionButton;
         private Button rebuildServerButton;
+
+        // Client UI Elements
         private DropdownField clientDropdown;
+        private Button configureAllButton;
         private VisualElement clientStatusIndicator;
         private Label clientStatusLabel;
         private Button configureButton;
+        private VisualElement claudeCliPathRow;
+        private TextField claudeCliPath;
+        private Button browseClaudeButton;
         private Foldout manualConfigFoldout;
         private TextField configPathField;
         private Button copyPathButton;
@@ -91,24 +110,82 @@ namespace MCPForUnity.Editor.Windows
             // Initial update
             UpdateConnectionStatus();
             UpdateClientStatus();
+            UpdatePathOverrides();
+        }
+
+        private void OnEnable()
+        {
+            // Refresh on enable (after domain reload)
+            EditorApplication.delayCall += () =>
+            {
+                if (rootVisualElement != null && rootVisualElement.childCount > 0)
+                {
+                    UpdateConnectionStatus();
+                    UpdatePathOverrides();
+                    if (selectedClientIndex >= 0 && selectedClientIndex < mcpClients.clients.Count)
+                    {
+                        var client = mcpClients.clients[selectedClientIndex];
+                        MCPServiceLocator.Client.CheckClientStatus(client);
+                        UpdateClientStatus();
+                    }
+                }
+            };
+        }
+
+        private void OnFocus()
+        {
+            // Refresh bridge status (may have changed after domain reload)
+            UpdateConnectionStatus();
+            
+            // Refresh selected client status (config may have been edited externally)
+            if (selectedClientIndex >= 0 && selectedClientIndex < mcpClients.clients.Count)
+            {
+                var client = mcpClients.clients[selectedClientIndex];
+                MCPServiceLocator.Client.CheckClientStatus(client);
+                UpdateClientStatus();
+            }
+            
+            // Refresh path overrides in case they changed
+            UpdatePathOverrides();
         }
 
         private void CacheUIElements()
         {
+            // Settings
             debugLogsToggle = rootVisualElement.Q<Toggle>("debug-logs-toggle");
             validationLevelField = rootVisualElement.Q<EnumField>("validation-level");
             validationDescription = rootVisualElement.Q<Label>("validation-description");
+            advancedSettingsFoldout = rootVisualElement.Q<Foldout>("advanced-settings-foldout");
+            pythonPathOverride = rootVisualElement.Q<TextField>("python-path-override");
+            uvPathOverride = rootVisualElement.Q<TextField>("uv-path-override");
+            browsePythonButton = rootVisualElement.Q<Button>("browse-python-button");
+            clearPythonButton = rootVisualElement.Q<Button>("clear-python-button");
+            browseUvButton = rootVisualElement.Q<Button>("browse-uv-button");
+            clearUvButton = rootVisualElement.Q<Button>("clear-uv-button");
+            pythonPathStatus = rootVisualElement.Q<VisualElement>("python-path-status");
+            uvPathStatus = rootVisualElement.Q<VisualElement>("uv-path-status");
+
+            // Connection
             protocolDropdown = rootVisualElement.Q<EnumField>("protocol-dropdown");
             unityPortField = rootVisualElement.Q<TextField>("unity-port");
             serverPortField = rootVisualElement.Q<TextField>("server-port");
             statusIndicator = rootVisualElement.Q<VisualElement>("status-indicator");
             connectionStatusLabel = rootVisualElement.Q<Label>("connection-status");
             connectionToggleButton = rootVisualElement.Q<Button>("connection-toggle");
+            healthIndicator = rootVisualElement.Q<VisualElement>("health-indicator");
+            healthStatusLabel = rootVisualElement.Q<Label>("health-status");
+            testConnectionButton = rootVisualElement.Q<Button>("test-connection-button");
             rebuildServerButton = rootVisualElement.Q<Button>("rebuild-server-button");
+
+            // Client
             clientDropdown = rootVisualElement.Q<DropdownField>("client-dropdown");
+            configureAllButton = rootVisualElement.Q<Button>("configure-all-button");
             clientStatusIndicator = rootVisualElement.Q<VisualElement>("client-status-indicator");
             clientStatusLabel = rootVisualElement.Q<Label>("client-status");
             configureButton = rootVisualElement.Q<Button>("configure-button");
+            claudeCliPathRow = rootVisualElement.Q<VisualElement>("claude-cli-path-row");
+            claudeCliPath = rootVisualElement.Q<TextField>("claude-cli-path");
+            browseClaudeButton = rootVisualElement.Q<Button>("browse-claude-button");
             manualConfigFoldout = rootVisualElement.Q<Foldout>("manual-config-foldout");
             configPathField = rootVisualElement.Q<TextField>("config-path");
             copyPathButton = rootVisualElement.Q<Button>("copy-path-button");
@@ -129,11 +206,14 @@ namespace MCPForUnity.Editor.Windows
             validationLevelField.value = currentValidationLevel;
             UpdateValidationDescription();
 
+            // Advanced settings starts collapsed
+            advancedSettingsFoldout.value = false;
+
             // Connection Section
             protocolDropdown.Init(ConnectionProtocol.Stdio);
             protocolDropdown.SetEnabled(false); // Disabled for now, only stdio supported
 
-            unityPortField.value = MCPForUnityBridge.GetCurrentPort().ToString();
+            unityPortField.value = MCPServiceLocator.Bridge.CurrentPort.ToString();
             serverPortField.value = "6500";
 
             // Client Configuration
@@ -146,6 +226,9 @@ namespace MCPForUnity.Editor.Windows
 
             // Manual config starts collapsed
             manualConfigFoldout.value = false;
+
+            // Claude CLI path row hidden by default
+            claudeCliPathRow.style.display = DisplayStyle.None;
         }
 
         private void RegisterCallbacks()
@@ -163,8 +246,15 @@ namespace MCPForUnity.Editor.Windows
                 UpdateValidationDescription();
             });
 
+            // Advanced settings callbacks
+            browsePythonButton.clicked += OnBrowsePythonClicked;
+            clearPythonButton.clicked += OnClearPythonClicked;
+            browseUvButton.clicked += OnBrowseUvClicked;
+            clearUvButton.clicked += OnClearUvClicked;
+
             // Connection callbacks
             connectionToggleButton.clicked += OnConnectionToggleClicked;
+            testConnectionButton.clicked += OnTestConnectionClicked;
             rebuildServerButton.clicked += OnRebuildServerClicked;
 
             // Client callbacks
@@ -173,9 +263,12 @@ namespace MCPForUnity.Editor.Windows
                 selectedClientIndex = clientDropdown.index;
                 UpdateClientStatus();
                 UpdateManualConfiguration();
+                UpdateClaudeCliPathVisibility();
             });
 
+            configureAllButton.clicked += OnConfigureAllClientsClicked;
             configureButton.clicked += OnConfigureClicked;
+            browseClaudeButton.clicked += OnBrowseClaudeClicked;
             copyPathButton.clicked += OnCopyPathClicked;
             openFileButton.clicked += OnOpenFileClicked;
             copyJsonButton.clicked += OnCopyJsonClicked;
@@ -208,7 +301,8 @@ namespace MCPForUnity.Editor.Windows
 
         private void UpdateConnectionStatus()
         {
-            bool isRunning = MCPForUnityBridge.IsRunning;
+            var bridgeService = MCPServiceLocator.Bridge;
+            bool isRunning = bridgeService.IsRunning;
 
             if (isRunning)
             {
@@ -223,10 +317,16 @@ namespace MCPForUnity.Editor.Windows
                 statusIndicator.RemoveFromClassList("connected");
                 statusIndicator.AddToClassList("disconnected");
                 connectionToggleButton.text = "Start";
+                
+                // Reset health status when disconnected
+                healthStatusLabel.text = "Unknown";
+                healthIndicator.RemoveFromClassList("healthy");
+                healthIndicator.RemoveFromClassList("warning");
+                healthIndicator.AddToClassList("unknown");
             }
 
             // Update ports
-            unityPortField.value = MCPForUnityBridge.GetCurrentPort().ToString();
+            unityPortField.value = bridgeService.CurrentPort.ToString();
         }
 
         private void UpdateClientStatus()
@@ -235,7 +335,7 @@ namespace MCPForUnity.Editor.Windows
                 return;
 
             var client = mcpClients.clients[selectedClientIndex];
-            CheckMcpConfiguration(client);
+            MCPServiceLocator.Client.CheckClientStatus(client);
 
             clientStatusLabel.text = client.GetStatusDisplayString();
 
@@ -260,6 +360,17 @@ namespace MCPForUnity.Editor.Windows
                     clientStatusIndicator.AddToClassList("not-configured");
                     break;
             }
+
+            // Update configure button text for Claude Code
+            if (client.mcpType == McpTypes.ClaudeCode)
+            {
+                bool isConfigured = client.status == McpStatus.Configured;
+                configureButton.text = isConfigured ? "Unregister" : "Register";
+            }
+            else
+            {
+                configureButton.text = "Configure";
+            }
         }
 
         private void UpdateManualConfiguration()
@@ -270,137 +381,217 @@ namespace MCPForUnity.Editor.Windows
             var client = mcpClients.clients[selectedClientIndex];
 
             // Get config path
-            string configPath = GetConfigPathForClient(client);
+            string configPath = MCPServiceLocator.Client.GetConfigPath(client);
             configPathField.value = configPath;
 
             // Get config JSON
-            string configJson = GenerateConfigJson(client);
+            string configJson = MCPServiceLocator.Client.GenerateConfigJson(client);
             configJsonField.value = configJson;
 
             // Get installation steps
-            string steps = GetInstallationSteps(client);
+            string steps = MCPServiceLocator.Client.GetInstallationSteps(client);
             installationStepsLabel.text = steps;
         }
 
-        private string GetConfigPathForClient(McpClient client)
+        private void UpdateClaudeCliPathVisibility()
         {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                return client.windowsConfigPath;
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-                return client.macConfigPath;
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                return client.linuxConfigPath;
+            if (selectedClientIndex < 0 || selectedClientIndex >= mcpClients.clients.Count)
+                return;
 
-            return "Unknown";
-        }
-
-        private string GenerateConfigJson(McpClient client)
-        {
-            string pythonDir = FindPackagePythonDirectory();
-            string uvPath = FindUvPath();
-
-            if (string.IsNullOrEmpty(pythonDir) || string.IsNullOrEmpty(uvPath))
-                return "{ \"error\": \"Configuration not available\" }";
-
-            try
+            var client = mcpClients.clients[selectedClientIndex];
+            
+            // Show Claude CLI path only for Claude Code client
+            if (client.mcpType == McpTypes.ClaudeCode)
             {
-                // Use the existing config builder
-                if (client.mcpType == McpTypes.Codex)
+                string claudePath = MCPServiceLocator.Paths.GetClaudeCliPath();
+                if (string.IsNullOrEmpty(claudePath))
                 {
-                    return Helpers.CodexConfigHelper.BuildCodexServerBlock(uvPath,
-                        Helpers.McpConfigFileHelper.ResolveServerDirectory(pythonDir, null));
+                    // Show path selector if not found
+                    claudeCliPathRow.style.display = DisplayStyle.Flex;
+                    claudeCliPath.value = "Not found - click Browse to select";
                 }
                 else
                 {
-                    return Helpers.ConfigJsonBuilder.BuildManualConfigJson(uvPath, pythonDir, client);
+                    // Show detected path
+                    claudeCliPathRow.style.display = DisplayStyle.Flex;
+                    claudeCliPath.value = claudePath;
                 }
             }
-            catch (Exception ex)
+            else
             {
-                return $"{{ \"error\": \"{ex.Message}\" }}";
+                claudeCliPathRow.style.display = DisplayStyle.None;
             }
         }
 
-        private string GetInstallationSteps(McpClient client)
+        private void UpdatePathOverrides()
         {
-            string baseSteps = client.mcpType switch
+            var pathService = MCPServiceLocator.Paths;
+
+            // Python Server Path
+            string pythonPath = pathService.GetPythonServerPath();
+            if (pathService.HasPythonServerOverride)
             {
-                McpTypes.ClaudeDesktop =>
-                    "1. Open Claude Desktop\n" +
-                    "2. Go to Settings > Developer > Edit Config\n" +
-                    "   OR open the config file at the path above\n" +
-                    "3. Paste the configuration JSON\n" +
-                    "4. Save and restart Claude Desktop",
+                pythonPathOverride.value = pythonPath ?? "(override set but invalid)";
+            }
+            else
+            {
+                pythonPathOverride.value = pythonPath ?? "(auto-detected)";
+            }
 
-                McpTypes.Cursor =>
-                    "1. Open Cursor\n" +
-                    "2. Go to File > Preferences > Cursor Settings > MCP > Add new global MCP server\n" +
-                    "   OR open the config file at the path above\n" +
-                    "3. Paste the configuration JSON\n" +
-                    "4. Save and restart Cursor",
+            // Update status indicator
+            pythonPathStatus.RemoveFromClassList("valid");
+            pythonPathStatus.RemoveFromClassList("invalid");
+            if (!string.IsNullOrEmpty(pythonPath) && File.Exists(Path.Combine(pythonPath, "server.py")))
+            {
+                pythonPathStatus.AddToClassList("valid");
+            }
+            else
+            {
+                pythonPathStatus.AddToClassList("invalid");
+            }
 
-                McpTypes.Windsurf =>
-                    "1. Open Windsurf\n" +
-                    "2. Go to File > Preferences > Windsurf Settings > MCP > Manage MCPs > View raw config\n" +
-                    "   OR open the config file at the path above\n" +
-                    "3. Paste the configuration JSON\n" +
-                    "4. Save and restart Windsurf",
+            // UV Path
+            string uvPath = pathService.GetUvPath();
+            if (pathService.HasUvPathOverride)
+            {
+                uvPathOverride.value = uvPath ?? "(override set but invalid)";
+            }
+            else
+            {
+                uvPathOverride.value = uvPath ?? "(auto-detected)";
+            }
 
-                McpTypes.VSCode =>
-                    "1. Ensure VSCode and GitHub Copilot extension are installed\n" +
-                    "2. Open or create mcp.json at the path above\n" +
-                    "3. Paste the configuration JSON\n" +
-                    "4. Save and restart VSCode",
-
-                McpTypes.Kiro =>
-                    "1. Open Kiro\n" +
-                    "2. Go to File > Settings > Settings > Search for \"MCP\" > Open Workspace MCP Config\n" +
-                    "   OR open the config file at the path above\n" +
-                    "3. Paste the configuration JSON\n" +
-                    "4. Save and restart Kiro",
-
-                McpTypes.Codex =>
-                    "1. Run 'codex config edit' in a terminal\n" +
-                    "   OR open the config file at the path above\n" +
-                    "2. Paste the configuration TOML\n" +
-                    "3. Save and restart Codex",
-
-                McpTypes.ClaudeCode =>
-                    "1. Ensure Claude CLI is installed\n" +
-                    "2. Use the Configure button to register automatically\n" +
-                    "   OR manually edit ~/.claude.json\n" +
-                    "3. Restart Claude Code",
-
-                _ => "Configuration steps not available for this client."
-            };
-
-            return baseSteps;
+            // Update status indicator
+            uvPathStatus.RemoveFromClassList("valid");
+            uvPathStatus.RemoveFromClassList("invalid");
+            if (!string.IsNullOrEmpty(uvPath) && File.Exists(uvPath))
+            {
+                uvPathStatus.AddToClassList("valid");
+            }
+            else
+            {
+                uvPathStatus.AddToClassList("invalid");
+            }
         }
 
         // Button callbacks
         private void OnConnectionToggleClicked()
         {
-            if (MCPForUnityBridge.IsRunning)
+            var bridgeService = MCPServiceLocator.Bridge;
+            
+            if (bridgeService.IsRunning)
             {
-                MCPForUnityBridge.Stop();
+                bridgeService.Stop();
             }
             else
             {
-                MCPForUnityBridge.StartAutoConnect();
+                bridgeService.Start();
+                
+                // Verify connection after starting (Option C: verify on connect)
+                EditorApplication.delayCall += () =>
+                {
+                    if (bridgeService.IsRunning)
+                    {
+                        VerifyBridgeConnection();
+                    }
+                };
             }
+            
             UpdateConnectionStatus();
+        }
+
+        private void OnTestConnectionClicked()
+        {
+            VerifyBridgeConnection();
+        }
+
+        private void VerifyBridgeConnection()
+        {
+            var bridgeService = MCPServiceLocator.Bridge;
+            
+            if (!bridgeService.IsRunning)
+            {
+                healthStatusLabel.text = "Disconnected";
+                healthIndicator.RemoveFromClassList("healthy");
+                healthIndicator.RemoveFromClassList("warning");
+                healthIndicator.AddToClassList("unknown");
+                Debug.LogWarning("Cannot verify connection: Bridge is not running");
+                return;
+            }
+
+            var result = bridgeService.Verify(bridgeService.CurrentPort);
+
+            healthIndicator.RemoveFromClassList("healthy");
+            healthIndicator.RemoveFromClassList("warning");
+            healthIndicator.RemoveFromClassList("unknown");
+
+            if (result.Success && result.PingSucceeded)
+            {
+                healthStatusLabel.text = "Healthy";
+                healthIndicator.AddToClassList("healthy");
+                Debug.Log("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Bridge verification successful");
+            }
+            else if (result.HandshakeValid)
+            {
+                healthStatusLabel.text = "Ping Failed";
+                healthIndicator.AddToClassList("warning");
+                Debug.LogWarning($"Bridge verification warning: {result.Message}");
+            }
+            else
+            {
+                healthStatusLabel.text = "Unhealthy";
+                healthIndicator.AddToClassList("warning");
+                Debug.LogError($"Bridge verification failed: {result.Message}");
+            }
         }
 
         private void OnRebuildServerClicked()
         {
             try
             {
-                ServerInstaller.RebuildMcpServer();
-                Debug.Log("MCP Server rebuild initiated");
+                bool success = Helpers.ServerInstaller.RebuildMcpServer();
+                if (success)
+                {
+                    EditorUtility.DisplayDialog("MCP For Unity", "Server rebuilt successfully.", "OK");
+                    UpdatePathOverrides();
+                }
+                else
+                {
+                    EditorUtility.DisplayDialog("MCP For Unity", "Rebuild failed. Please check Console for details.", "OK");
+                }
             }
             catch (Exception ex)
             {
                 Debug.LogError($"Failed to rebuild server: {ex.Message}");
+                EditorUtility.DisplayDialog("MCP For Unity", $"Rebuild failed: {ex.Message}", "OK");
+            }
+        }
+
+        private void OnConfigureAllClientsClicked()
+        {
+            try
+            {
+                var summary = MCPServiceLocator.Client.ConfigureAllDetectedClients();
+                
+                // Build detailed message
+                string message = summary.GetSummaryMessage() + "\n\n";
+                foreach (var msg in summary.Messages)
+                {
+                    message += msg + "\n";
+                }
+
+                EditorUtility.DisplayDialog("Configure All Clients", message, "OK");
+
+                // Refresh current client status
+                if (selectedClientIndex >= 0 && selectedClientIndex < mcpClients.clients.Count)
+                {
+                    UpdateClientStatus();
+                    UpdateManualConfiguration();
+                }
+            }
+            catch (Exception ex)
+            {
+                EditorUtility.DisplayDialog("Configuration Failed", ex.Message, "OK");
             }
         }
 
@@ -415,18 +606,105 @@ namespace MCPForUnity.Editor.Windows
             {
                 if (client.mcpType == McpTypes.ClaudeCode)
                 {
-                    RegisterWithClaudeCode();
+                    bool isConfigured = client.status == McpStatus.Configured;
+                    if (isConfigured)
+                    {
+                        MCPServiceLocator.Client.UnregisterClaudeCode();
+                    }
+                    else
+                    {
+                        MCPServiceLocator.Client.RegisterClaudeCode();
+                    }
                 }
                 else
                 {
-                    ConfigureMcpClient(client);
+                    MCPServiceLocator.Client.ConfigureClient(client);
                 }
 
                 UpdateClientStatus();
+                UpdateManualConfiguration();
             }
             catch (Exception ex)
             {
+                clientStatusLabel.text = "Error";
+                clientStatusLabel.style.color = Color.red;
                 Debug.LogError($"Configuration failed: {ex.Message}");
+                EditorUtility.DisplayDialog("Configuration Failed", ex.Message, "OK");
+            }
+        }
+
+        private void OnBrowsePythonClicked()
+        {
+            string picked = EditorUtility.OpenFolderPanel("Select Python Server Directory", Application.dataPath, "");
+            if (!string.IsNullOrEmpty(picked))
+            {
+                try
+                {
+                    MCPServiceLocator.Paths.SetPythonServerOverride(picked);
+                    UpdatePathOverrides();
+                    Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Python server path override set to: {picked}");
+                }
+                catch (Exception ex)
+                {
+                    EditorUtility.DisplayDialog("Invalid Path", ex.Message, "OK");
+                }
+            }
+        }
+
+        private void OnClearPythonClicked()
+        {
+            MCPServiceLocator.Paths.ClearPythonServerOverride();
+            UpdatePathOverrides();
+            Debug.Log("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Python server path override cleared");
+        }
+
+        private void OnBrowseUvClicked()
+        {
+            string suggested = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) 
+                ? "/opt/homebrew/bin" 
+                : Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            string picked = EditorUtility.OpenFilePanel("Select UV Executable", suggested, "");
+            if (!string.IsNullOrEmpty(picked))
+            {
+                try
+                {
+                    MCPServiceLocator.Paths.SetUvPathOverride(picked);
+                    UpdatePathOverrides();
+                    Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: UV path override set to: {picked}");
+                }
+                catch (Exception ex)
+                {
+                    EditorUtility.DisplayDialog("Invalid Path", ex.Message, "OK");
+                }
+            }
+        }
+
+        private void OnClearUvClicked()
+        {
+            MCPServiceLocator.Paths.ClearUvPathOverride();
+            UpdatePathOverrides();
+            Debug.Log("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: UV path override cleared");
+        }
+
+        private void OnBrowseClaudeClicked()
+        {
+            string suggested = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) 
+                ? "/opt/homebrew/bin" 
+                : Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            string picked = EditorUtility.OpenFilePanel("Select Claude CLI", suggested, "");
+            if (!string.IsNullOrEmpty(picked))
+            {
+                try
+                {
+                    MCPServiceLocator.Paths.SetClaudeCliPathOverride(picked);
+                    UpdateClaudeCliPathVisibility();
+                    UpdateClientStatus();
+                    Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Claude CLI path override set to: {picked}");
+                }
+                catch (Exception ex)
+                {
+                    EditorUtility.DisplayDialog("Invalid Path", ex.Message, "OK");
+                }
             }
         }
 
@@ -461,229 +739,5 @@ namespace MCPForUnity.Editor.Windows
             EditorGUIUtility.systemCopyBuffer = configJsonField.value;
             Debug.Log("Configuration copied to clipboard");
         }
-
-        // Helper methods using existing infrastructure
-        private void CheckMcpConfiguration(McpClient client)
-        {
-            try
-            {
-                // Special handling for Claude Code
-                if (client.mcpType == McpTypes.ClaudeCode)
-                {
-                    CheckClaudeCodeConfiguration(client);
-                    return;
-                }
-
-                string configPath = Helpers.McpConfigurationHelper.GetClientConfigPath(client);
-
-                if (!File.Exists(configPath))
-                {
-                    client.SetStatus(McpStatus.NotConfigured);
-                    return;
-                }
-
-                string configJson = File.ReadAllText(configPath);
-                string pythonDir = FindPackagePythonDirectory();
-
-                // Check configuration based on client type
-                string[] args = null;
-                bool configExists = false;
-
-                switch (client.mcpType)
-                {
-                    case McpTypes.VSCode:
-                        dynamic vsConfig = JsonConvert.DeserializeObject(configJson);
-                        if (vsConfig?.servers?.unityMCP != null)
-                        {
-                            args = vsConfig.servers.unityMCP.args.ToObject<string[]>();
-                            configExists = true;
-                        }
-                        else if (vsConfig?.mcp?.servers?.unityMCP != null)
-                        {
-                            args = vsConfig.mcp.servers.unityMCP.args.ToObject<string[]>();
-                            configExists = true;
-                        }
-                        break;
-
-                    case McpTypes.Codex:
-                        if (Helpers.CodexConfigHelper.TryParseCodexServer(configJson, out _, out var codexArgs))
-                        {
-                            args = codexArgs;
-                            configExists = true;
-                        }
-                        break;
-
-                    default:
-                        McpConfig standardConfig = JsonConvert.DeserializeObject<McpConfig>(configJson);
-                        if (standardConfig?.mcpServers?.unityMCP != null)
-                        {
-                            args = standardConfig.mcpServers.unityMCP.args;
-                            configExists = true;
-                        }
-                        break;
-                }
-
-                if (configExists)
-                {
-                    string configuredDir = Helpers.McpConfigFileHelper.ExtractDirectoryArg(args);
-                    bool matches = !string.IsNullOrEmpty(configuredDir) &&
-                                   Helpers.McpConfigFileHelper.PathsEqual(configuredDir, pythonDir);
-
-                    client.SetStatus(matches ? McpStatus.Configured : McpStatus.IncorrectPath);
-                }
-                else
-                {
-                    client.SetStatus(McpStatus.NotConfigured);
-                }
-            }
-            catch (Exception ex)
-            {
-                client.SetStatus(McpStatus.Error, ex.Message);
-            }
-        }
-
-        private void CheckClaudeCodeConfiguration(McpClient client)
-        {
-            try
-            {
-                string configPath = Helpers.McpConfigurationHelper.GetClientConfigPath(client);
-
-                if (!File.Exists(configPath))
-                {
-                    client.SetStatus(McpStatus.NotConfigured);
-                    return;
-                }
-
-                string configJson = File.ReadAllText(configPath);
-                dynamic claudeConfig = JsonConvert.DeserializeObject(configJson);
-
-                if (claudeConfig?.mcpServers != null)
-                {
-                    var servers = claudeConfig.mcpServers;
-                    if (servers.UnityMCP != null || servers.unityMCP != null)
-                    {
-                        client.SetStatus(McpStatus.Configured);
-                        return;
-                    }
-                }
-
-                client.SetStatus(McpStatus.NotConfigured);
-            }
-            catch (Exception ex)
-            {
-                client.SetStatus(McpStatus.Error, ex.Message);
-            }
-        }
-
-        private void ConfigureMcpClient(McpClient client)
-        {
-            try
-            {
-                string configPath = Helpers.McpConfigurationHelper.GetClientConfigPath(client);
-                Helpers.McpConfigurationHelper.EnsureConfigDirectoryExists(configPath);
-
-                string pythonDir = FindPackagePythonDirectory();
-
-                if (pythonDir == null || !File.Exists(Path.Combine(pythonDir, "server.py")))
-                {
-                    Debug.LogError("Server not found. Please use manual configuration.");
-                    return;
-                }
-
-                string uvPath = FindUvPath();
-                string result = client.mcpType == McpTypes.Codex
-                    ? Helpers.McpConfigurationHelper.ConfigureCodexClient(pythonDir, configPath, client)
-                    : Helpers.McpConfigurationHelper.WriteMcpConfiguration(pythonDir, configPath, client);
-
-                if (result == "Configured successfully")
-                {
-                    client.SetStatus(McpStatus.Configured);
-                    Debug.Log($"{client.name} configured successfully");
-                }
-                else
-                {
-                    Debug.LogWarning($"Configuration completed with message: {result}");
-                }
-
-                CheckMcpConfiguration(client);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Configuration failed: {ex.Message}");
-            }
-        }
-
-        private void RegisterWithClaudeCode()
-        {
-            string pythonDir = FindPackagePythonDirectory();
-            if (string.IsNullOrEmpty(pythonDir))
-            {
-                Debug.LogError("Cannot register: Python directory not found");
-                return;
-            }
-
-            string claudePath = ExecPath.ResolveClaude();
-            if (string.IsNullOrEmpty(claudePath))
-            {
-                Debug.LogError("Claude CLI not found. Please install Claude Code first.");
-                return;
-            }
-
-            string uvPath = ExecPath.ResolveUv() ?? "uv";
-            string args = $"mcp add UnityMCP -- \"{uvPath}\" run --directory \"{pythonDir}\" server.py";
-            string projectDir = Path.GetDirectoryName(Application.dataPath);
-
-            string pathPrepend = null;
-            if (Application.platform == RuntimePlatform.OSXEditor)
-            {
-                pathPrepend = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin";
-            }
-            else if (Application.platform == RuntimePlatform.LinuxEditor)
-            {
-                pathPrepend = "/usr/local/bin:/usr/bin:/bin";
-            }
-
-            if (!ExecPath.TryRun(claudePath, args, projectDir, out var stdout, out var stderr, 15000, pathPrepend))
-            {
-                string combined = ($"{stdout}\n{stderr}") ?? string.Empty;
-                if (combined.IndexOf("already exists", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    Debug.Log("MCP for Unity already registered with Claude Code.");
-                }
-                else
-                {
-                    Debug.LogError($"Failed to register with Claude Code:\n{stderr}\n{stdout}");
-                }
-                return;
-            }
-
-            Debug.Log("Successfully registered with Claude Code.");
-
-            // Update status
-            var claudeClient = mcpClients.clients.FirstOrDefault(c => c.mcpType == McpTypes.ClaudeCode);
-            if (claudeClient != null)
-            {
-                CheckClaudeCodeConfiguration(claudeClient);
-                UpdateClientStatus();
-            }
-        }
-
-        private string FindPackagePythonDirectory()
-        {
-            return Helpers.McpPathResolver.FindPackagePythonDirectory(false);
-        }
-
-        private string FindUvPath()
-        {
-            try
-            {
-                return Helpers.ServerInstaller.FindUvPath();
-            }
-            catch
-            {
-                return "uv";
-            }
-        }
     }
-
 }

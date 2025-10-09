@@ -20,6 +20,35 @@
                     <uie:EnumField name="validation-level" class="setting-dropdown" />
                     <ui:Label name="validation-description" class="validation-description" />
                 </ui:VisualElement>
+                
+                <!-- Advanced Settings (Collapsible) -->
+                <ui:Foldout name="advanced-settings-foldout" text="Advanced Settings" class="advanced-settings-foldout">
+                    <ui:VisualElement class="advanced-settings-content">
+                        <ui:Label text="Path Overrides (leave empty for auto-detection):" class="advanced-label" />
+                        
+                        <!-- Python Server Path Override -->
+                        <ui:VisualElement class="override-row">
+                            <ui:Label text="Python Server Path:" class="override-label" />
+                            <ui:VisualElement class="status-indicator-small" name="python-path-status" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="path-override-controls">
+                            <ui:TextField name="python-path-override" readonly="true" class="override-field" />
+                            <ui:Button name="browse-python-button" text="Browse" class="icon-button" />
+                            <ui:Button name="clear-python-button" text="Clear" class="icon-button" />
+                        </ui:VisualElement>
+                        
+                        <!-- UV Path Override -->
+                        <ui:VisualElement class="override-row">
+                            <ui:Label text="UV Path:" class="override-label" />
+                            <ui:VisualElement class="status-indicator-small" name="uv-path-status" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="path-override-controls">
+                            <ui:TextField name="uv-path-override" readonly="true" class="override-field" />
+                            <ui:Button name="browse-uv-button" text="Browse" class="icon-button" />
+                            <ui:Button name="clear-uv-button" text="Clear" class="icon-button" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:Foldout>
             </ui:VisualElement>
         </ui:VisualElement>
 
@@ -46,6 +75,14 @@
                     </ui:VisualElement>
                     <ui:Button name="connection-toggle" text="Start" class="action-button" />
                 </ui:VisualElement>
+                <ui:VisualElement class="setting-row">
+                    <ui:Label text="Health:" class="setting-label" />
+                    <ui:VisualElement class="status-container">
+                        <ui:VisualElement name="health-indicator" class="status-dot" />
+                        <ui:Label name="health-status" text="Unknown" class="status-text" />
+                    </ui:VisualElement>
+                    <ui:Button name="test-connection-button" text="Test" class="action-button" />
+                </ui:VisualElement>
                 <ui:Button name="rebuild-server-button" text="Rebuild Server" class="secondary-button" />
             </ui:VisualElement>
         </ui:VisualElement>
@@ -58,12 +95,18 @@
                     <ui:Label text="Client:" class="setting-label" />
                     <ui:DropdownField name="client-dropdown" class="setting-dropdown-inline" />
                 </ui:VisualElement>
+                <ui:Button name="configure-all-button" text="Configure All Detected Clients" class="secondary-button" />
                 <ui:VisualElement class="setting-row">
                     <ui:VisualElement class="status-container">
                         <ui:VisualElement name="client-status-indicator" class="status-dot" />
                         <ui:Label name="client-status" text="Not Configured" class="status-text" />
                     </ui:VisualElement>
                     <ui:Button name="configure-button" text="Configure" class="action-button" />
+                </ui:VisualElement>
+                <ui:VisualElement class="setting-row" name="claude-cli-path-row" style="display: none;">
+                    <ui:Label text="Claude CLI Path:" class="setting-label-small" />
+                    <ui:TextField name="claude-cli-path" readonly="true" class="path-display-field" />
+                    <ui:Button name="browse-claude-button" text="Browse" class="icon-button" />
                 </ui:VisualElement>
 
                 <!-- Manual Configuration (Collapsible) -->
