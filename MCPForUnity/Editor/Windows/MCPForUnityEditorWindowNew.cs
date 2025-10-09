@@ -111,6 +111,9 @@ namespace MCPForUnity.Editor.Windows
             UpdateConnectionStatus();
             UpdateClientStatus();
             UpdatePathOverrides();
+            // Technically not required to connect, but if we don't do this, the UI will be blank
+            UpdateManualConfiguration();
+            UpdateClaudeCliPathVisibility();
         }
 
         private void OnEnable()
@@ -127,6 +130,8 @@ namespace MCPForUnity.Editor.Windows
                         var client = mcpClients.clients[selectedClientIndex];
                         MCPServiceLocator.Client.CheckClientStatus(client);
                         UpdateClientStatus();
+                        UpdateManualConfiguration();
+                        UpdateClaudeCliPathVisibility();
                     }
                 }
             };
@@ -143,6 +148,8 @@ namespace MCPForUnity.Editor.Windows
                 var client = mcpClients.clients[selectedClientIndex];
                 MCPServiceLocator.Client.CheckClientStatus(client);
                 UpdateClientStatus();
+                UpdateManualConfiguration();
+                UpdateClaudeCliPathVisibility();
             }
             
             // Refresh path overrides in case they changed
