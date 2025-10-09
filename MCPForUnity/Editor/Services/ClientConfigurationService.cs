@@ -260,6 +260,19 @@ namespace MCPForUnity.Editor.Services
                 pathPrepend = "/usr/local/bin:/usr/bin:/bin";
             }
 
+            // Add the directory containing Claude CLI to PATH (for node/nvm scenarios)
+            try
+            {
+                string claudeDir = Path.GetDirectoryName(claudePath);
+                if (!string.IsNullOrEmpty(claudeDir))
+                {
+                    pathPrepend = string.IsNullOrEmpty(pathPrepend)
+                        ? claudeDir
+                        : $"{claudeDir}:{pathPrepend}";
+                }
+            }
+            catch { }
+
             if (!ExecPath.TryRun(claudePath, args, projectDir, out var stdout, out var stderr, 15000, pathPrepend))
             {
                 string combined = ($"{stdout}\n{stderr}") ?? string.Empty;
