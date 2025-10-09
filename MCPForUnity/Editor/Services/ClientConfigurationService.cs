@@ -247,7 +247,7 @@ namespace MCPForUnity.Editor.Services
             }
 
             string uvPath = pathService.GetUvPath() ?? "uv";
-            string args = $"mcp add UnityMCP -- \"{uvPath}\" run --directory \"{pythonDir}\" server.py";
+            string args = $"mcp add unityMCP -- \"{uvPath}\" run --directory \"{pythonDir}\" server.py";
             string projectDir = Path.GetDirectoryName(Application.dataPath);
 
             string pathPrepend = null;
@@ -315,7 +315,7 @@ namespace MCPForUnity.Editor.Services
             }
 
             // Remove the server
-            if (ExecPath.TryRun(claudePath, "mcp remove UnityMCP", projectDir, out var stdout, out var stderr, 10000, pathPrepend))
+            if (ExecPath.TryRun(claudePath, "mcp remove unityMCP", projectDir, out var stdout, out var stderr, 10000, pathPrepend))
             {
                 Debug.Log("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: MCP server successfully unregistered from Claude Code.");
             }
@@ -335,6 +335,12 @@ namespace MCPForUnity.Editor.Services
 
         public string GetConfigPath(McpClient client)
         {
+            // Claude Code is managed via CLI, not config files
+            if (client.mcpType == McpTypes.ClaudeCode)
+            {
+                return "Not applicable (managed via Claude CLI)";
+            }
+
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 return client.windowsConfigPath;
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
@@ -349,6 +355,25 @@ namespace MCPForUnity.Editor.Services
         {
             string pythonDir = MCPServiceLocator.Paths.GetPythonServerPath();
             string uvPath = MCPServiceLocator.Paths.GetUvPath();
+
+            // Claude Code uses CLI commands, not JSON config
+            if (client.mcpType == McpTypes.ClaudeCode)
+            {
+                if (string.IsNullOrEmpty(pythonDir) || string.IsNullOrEmpty(uvPath))
+                {
+                    return "# Error: Configuration not available - check paths in Advanced Settings";
+                }
+
+                // Show the actual command that RegisterClaudeCode() uses
+                string registerCommand = $"claude mcp add unityMCP -- \"{uvPath}\" run --directory \"{pythonDir}\" server.py";
+
+                return "# Register the MCP server with Claude Code:\n" +
+                       $"{registerCommand}\n\n" +
+                       "# Unregister the MCP server:\n" +
+                       "claude mcp remove unityMCP\n\n" +
+                       "# List registered servers:\n" +
+                       "claude mcp list";
+            }
 
             if (string.IsNullOrEmpty(pythonDir) || string.IsNullOrEmpty(uvPath))
                 return "{ \"error\": \"Configuration not available - check paths in Advanced Settings\" }";
