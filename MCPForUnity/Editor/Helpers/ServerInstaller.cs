@@ -52,10 +52,15 @@ namespace MCPForUnity.Editor.Helpers
                     // Copy the entire UnityMcpServer folder (parent of src)
                     string embeddedRoot = Path.GetDirectoryName(embeddedSrc) ?? embeddedSrc; // go up from src to UnityMcpServer
                     CopyDirectoryRecursive(embeddedRoot, destRoot);
+
                     // Write/refresh version file
                     try { File.WriteAllText(Path.Combine(destSrc, VersionFileName), embeddedVer ?? "unknown"); } catch { }
                     McpLog.Info($"Installed/updated server to {destRoot} (version {embeddedVer}).");
                 }
+
+                // Copy Unity project tools (runs independently of server version updates)
+                string destToolsDir = Path.Combine(destSrc, "tools");
+                CopyUnityProjectTools(destToolsDir);
 
                 // Cleanup legacy installs that are missing version or older than embedded
                 foreach (var legacyRoot in GetLegacyRootsForDetection())
@@ -397,6 +402,134 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         private static readonly string[] _skipDirs = { ".venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".git" };
+
+        /// <summary>
+        /// Searches Unity project for MCPForUnityTools folders and copies .py files to server tools directory.
+        /// Only copies if the tool's version.txt has changed (or doesn't exist).
+        /// </summary>
+        private static void CopyUnityProjectTools(string destToolsDir)
+        {
+            try
+            {
+                // Get Unity project root
+                string projectRoot = Directory.GetParent(Application.dataPath)?.FullName;
+                if (string.IsNullOrEmpty(projectRoot))
+                {
+                    return;
+                }
+
+                // Find all MCPForUnityTools folders
+                var toolsFolders = Directory.GetDirectories(projectRoot, "MCPForUnityTools", SearchOption.AllDirectories);
+
+                int copiedCount = 0;
+                int skippedCount = 0;
+
+                foreach (var folder in toolsFolders)
+                {
+                    // Generate unique identifier for this tools folder based on its parent directory structure
+                    // e.g., "MooseRunner_MCPForUnityTools" or "MyPackage_MCPForUnityTools"
+                    string folderIdentifier = GetToolsFolderIdentifier(folder);
+                    string versionTrackingFile = Path.Combine(destToolsDir, $"{folderIdentifier}_version.txt");
+
+                    // Read source version
+                    string sourceVersionFile = Path.Combine(folder, "version.txt");
+                    string sourceVersion = ReadVersionFile(sourceVersionFile) ?? "0.0.0";
+
+                    // Read installed version (tracked separately per tools folder)
+                    string installedVersion = ReadVersionFile(versionTrackingFile);
+
+                    // Check if update is needed (version different or no tracking file)
+                    bool needsUpdate = string.IsNullOrEmpty(installedVersion) || sourceVersion != installedVersion;
+
+                    if (needsUpdate)
+                    {
+                        // Get all .py files (excluding __init__.py)
+                        var pyFiles = Directory.GetFiles(folder, "*.py")
+                            .Where(f => !Path.GetFileName(f).Equals("__init__.py", StringComparison.OrdinalIgnoreCase));
+
+                        foreach (var pyFile in pyFiles)
+                        {
+                            string fileName = Path.GetFileName(pyFile);
+                            string destFile = Path.Combine(destToolsDir, fileName);
+
+                            try
+                            {
+                                File.Copy(pyFile, destFile, overwrite: true);
+                                copiedCount++;
+                                McpLog.Info($"Copied Unity project tool: {fileName} from {folderIdentifier} (v{sourceVersion})");
+                            }
+                            catch (Exception ex)
+                            {
+                                McpLog.Warn($"Failed to copy {fileName}: {ex.Message}");
+                            }
+                        }
+
+                        // Update version tracking file
+                        try
+                        {
+                            File.WriteAllText(versionTrackingFile, sourceVersion);
+                        }
+                        catch (Exception ex)
+                        {
+                            McpLog.Warn($"Failed to write version tracking file for {folderIdentifier}: {ex.Message}");
+                        }
+                    }
+                    else
+                    {
+                        skippedCount++;
+                    }
+                }
+
+                if (copiedCount > 0)
+                {
+                    McpLog.Info($"Copied {copiedCount} Unity project tool(s) to server");
+                }
+            }
+            catch (Exception ex)
+            {
+                McpLog.Warn($"Failed to scan Unity project for tools: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Generates a unique identifier for a MCPForUnityTools folder based on its parent directory.
+        /// Example: "Assets/MooseRunner/Editor/MCPForUnityTools" → "MooseRunner_MCPForUnityTools"
+        /// </summary>
+        private static string GetToolsFolderIdentifier(string toolsFolderPath)
+        {
+            try
+            {
+                // Get parent directory name (e.g., "Editor" or package name)
+                DirectoryInfo parent = Directory.GetParent(toolsFolderPath);
+                if (parent == null) return "MCPForUnityTools";
+
+                // Walk up to find a distinctive parent (Assets/PackageName or Packages/PackageName)
+                DirectoryInfo current = parent;
+                while (current != null)
+                {
+                    string name = current.Name;
+                    DirectoryInfo grandparent = current.Parent;
+
+                    // Stop at Assets, Packages, or if we find a package-like structure
+                    if (grandparent != null &&
+                        (grandparent.Name.Equals("Assets", StringComparison.OrdinalIgnoreCase) ||
+                         grandparent.Name.Equals("Packages", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        return $"{name}_MCPForUnityTools";
+                    }
+
+                    current = grandparent;
+                }
+
+                // Fallback: use immediate parent
+                return $"{parent.Name}_MCPForUnityTools";
+            }
+            catch
+            {
+                return "MCPForUnityTools";
+            }
+        }
+
         private static void CopyDirectoryRecursive(string sourceDir, string destinationDir)
         {
             Directory.CreateDirectory(destinationDir);
@@ -460,6 +593,10 @@ namespace MCPForUnity.Editor.Helpers
                 string embeddedRoot = Path.GetDirectoryName(embeddedSrc) ?? embeddedSrc;
                 Directory.CreateDirectory(destRoot);
                 CopyDirectoryRecursive(embeddedRoot, destRoot);
+
+                // Copy Unity project tools
+                string destToolsDir = Path.Combine(destSrc, "tools");
+                CopyUnityProjectTools(destToolsDir);
 
                 // Write version file
                 string embeddedVer = ReadVersionFile(Path.Combine(embeddedSrc, VersionFileName)) ?? "unknown";

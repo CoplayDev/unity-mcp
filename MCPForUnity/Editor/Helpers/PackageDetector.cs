@@ -23,7 +23,10 @@ namespace MCPForUnity.Editor.Helpers
                 bool legacyPresent = LegacyRootsExist();
                 bool canonicalMissing = !System.IO.File.Exists(System.IO.Path.Combine(ServerInstaller.GetServerPath(), "server.py"));
 
-                if (!EditorPrefs.GetBool(key, false) || legacyPresent || canonicalMissing)
+                // Check if any MCPForUnityTools have updated versions
+                bool toolsNeedUpdate = ToolsVersionsChanged();
+
+                if (!EditorPrefs.GetBool(key, false) || legacyPresent || canonicalMissing || toolsNeedUpdate)
                 {
                     // Marshal the entire flow to the main thread. EnsureServerInstalled may touch Unity APIs.
                     EditorApplication.delayCall += () =>
@@ -102,6 +105,111 @@ namespace MCPForUnity.Editor.Helpers
             }
             catch { }
             return false;
+        }
+
+        /// <summary>
+        /// Checks if any MCPForUnityTools folders have version.txt files that differ from installed versions.
+        /// Returns true if any tool needs updating.
+        /// </summary>
+        private static bool ToolsVersionsChanged()
+        {
+            try
+            {
+                // Get Unity project root
+                string projectRoot = System.IO.Directory.GetParent(UnityEngine.Application.dataPath)?.FullName;
+                if (string.IsNullOrEmpty(projectRoot))
+                {
+                    return false;
+                }
+
+                // Get server tools directory
+                string serverPath = ServerInstaller.GetServerPath();
+                string toolsDir = System.IO.Path.Combine(serverPath, "tools");
+
+                if (!System.IO.Directory.Exists(toolsDir))
+                {
+                    // Tools directory doesn't exist yet, needs initial setup
+                    return true;
+                }
+
+                // Find all MCPForUnityTools folders in project
+                var toolsFolders = System.IO.Directory.GetDirectories(projectRoot, "MCPForUnityTools", System.IO.SearchOption.AllDirectories);
+
+                foreach (var folder in toolsFolders)
+                {
+                    // Check if version.txt exists in this folder
+                    string versionFile = System.IO.Path.Combine(folder, "version.txt");
+                    if (!System.IO.File.Exists(versionFile))
+                    {
+                        continue; // No version tracking for this folder
+                    }
+
+                    // Read source version
+                    string sourceVersion = System.IO.File.ReadAllText(versionFile)?.Trim();
+                    if (string.IsNullOrEmpty(sourceVersion))
+                    {
+                        continue;
+                    }
+
+                    // Get folder identifier (same logic as ServerInstaller.GetToolsFolderIdentifier)
+                    string folderIdentifier = GetToolsFolderIdentifier(folder);
+                    string trackingFile = System.IO.Path.Combine(toolsDir, $"{folderIdentifier}_version.txt");
+
+                    // Read installed version
+                    string installedVersion = null;
+                    if (System.IO.File.Exists(trackingFile))
+                    {
+                        installedVersion = System.IO.File.ReadAllText(trackingFile)?.Trim();
+                    }
+
+                    // Check if versions differ
+                    if (string.IsNullOrEmpty(installedVersion) || sourceVersion != installedVersion)
+                    {
+                        return true; // Version changed, needs update
+                    }
+                }
+
+                return false; // All versions match
+            }
+            catch
+            {
+                // On error, assume update needed to be safe
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Generates a unique identifier for a MCPForUnityTools folder (duplicates ServerInstaller logic).
+        /// </summary>
+        private static string GetToolsFolderIdentifier(string toolsFolderPath)
+        {
+            try
+            {
+                System.IO.DirectoryInfo parent = System.IO.Directory.GetParent(toolsFolderPath);
+                if (parent == null) return "MCPForUnityTools";
+
+                System.IO.DirectoryInfo current = parent;
+                while (current != null)
+                {
+                    string name = current.Name;
+                    System.IO.DirectoryInfo grandparent = current.Parent;
+
+                    if (grandparent != null &&
+                        (grandparent.Name.Equals("Assets", System.StringComparison.OrdinalIgnoreCase) ||
+                         grandparent.Name.Equals("Packages", System.StringComparison.OrdinalIgnoreCase)))
+                    {
+                        return $"{name}_MCPForUnityTools";
+                    }
+
+                    current = grandparent;
+                }
+
+                return $"{parent.Name}_MCPForUnityTools";
+            }
+            catch
+            {
+                return "MCPForUnityTools";
+            }
         }
     }
 }
