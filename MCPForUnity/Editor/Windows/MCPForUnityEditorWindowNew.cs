@@ -149,6 +149,12 @@ namespace MCPForUnity.Editor.Windows
             // Update connection status
             UpdateConnectionStatus();
 
+            // Auto-verify bridge health if connected
+            if (MCPServiceLocator.Bridge.IsRunning)
+            {
+                VerifyBridgeConnection();
+            }
+
             // Update path overrides
             UpdatePathOverrides();
 
