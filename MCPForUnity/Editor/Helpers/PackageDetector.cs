@@ -152,7 +152,7 @@ namespace MCPForUnity.Editor.Helpers
                     }
 
                     // Get folder identifier (same logic as ServerInstaller.GetToolsFolderIdentifier)
-                    string folderIdentifier = GetToolsFolderIdentifier(folder);
+                    string folderIdentifier = ServerInstaller.GetToolsFolderIdentifier(folder);
                     string trackingFile = System.IO.Path.Combine(toolsDir, $"{folderIdentifier}_version.txt");
 
                     // Read installed version
@@ -175,40 +175,6 @@ namespace MCPForUnity.Editor.Helpers
             {
                 // On error, assume update needed to be safe
                 return true;
-            }
-        }
-
-        /// <summary>
-        /// Generates a unique identifier for a MCPForUnityTools folder (duplicates ServerInstaller logic).
-        /// </summary>
-        private static string GetToolsFolderIdentifier(string toolsFolderPath)
-        {
-            try
-            {
-                System.IO.DirectoryInfo parent = System.IO.Directory.GetParent(toolsFolderPath);
-                if (parent == null) return "MCPForUnityTools";
-
-                System.IO.DirectoryInfo current = parent;
-                while (current != null)
-                {
-                    string name = current.Name;
-                    System.IO.DirectoryInfo grandparent = current.Parent;
-
-                    if (grandparent != null &&
-                        (grandparent.Name.Equals("Assets", System.StringComparison.OrdinalIgnoreCase) ||
-                         grandparent.Name.Equals("Packages", System.StringComparison.OrdinalIgnoreCase)))
-                    {
-                        return $"{name}_MCPForUnityTools";
-                    }
-
-                    current = grandparent;
-                }
-
-                return $"{parent.Name}_MCPForUnityTools";
-            }
-            catch
-            {
-                return "MCPForUnityTools";
             }
         }
     }

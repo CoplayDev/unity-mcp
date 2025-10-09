@@ -495,7 +495,7 @@ namespace MCPForUnity.Editor.Helpers
         /// Generates a unique identifier for a MCPForUnityTools folder based on its parent directory.
         /// Example: "Assets/MooseRunner/Editor/MCPForUnityTools" → "MooseRunner_MCPForUnityTools"
         /// </summary>
-        private static string GetToolsFolderIdentifier(string toolsFolderPath)
+        internal static string GetToolsFolderIdentifier(string toolsFolderPath)
         {
             try
             {
