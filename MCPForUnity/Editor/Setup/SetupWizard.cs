@@ -146,5 +146,14 @@ namespace MCPForUnity.Editor.Setup
         {
             Windows.MCPForUnityEditorWindowNew.ShowWindow();
         }
+
+        /// <summary>
+        /// Open legacy MCP Client Configuration window
+        /// </summary>
+        [MenuItem("Window/MCP For Unity/Open Legacy MCP Window", priority = 5)]
+        public static void OpenLegacyClientConfiguration()
+        {
+            Windows.MCPForUnityEditorWindow.ShowWindow();
+        }
     }
 }
