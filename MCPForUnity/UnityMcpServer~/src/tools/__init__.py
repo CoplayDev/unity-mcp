@@ -21,13 +21,14 @@ def register_all_tools(mcp: FastMCP):
     """
     Auto-discover and register all tools in the tools/ directory.
 
-    Any .py file in this directory with @mcp_for_unity_tool decorated
+    Any .py file in this directory or subdirectories with @mcp_for_unity_tool decorated
     functions will be automatically registered.
     """
     logger.info("Auto-discovering MCP for Unity Server tools...")
     # Dynamic import of all modules in this directory
     tools_dir = Path(__file__).parent
 
+    # Discover modules in the top level
     for _, module_name, _ in pkgutil.iter_modules([str(tools_dir)]):
         # Skip private modules and __init__
         if module_name.startswith('_'):
@@ -37,6 +38,24 @@ def register_all_tools(mcp: FastMCP):
             importlib.import_module(f'.{module_name}', __package__)
         except Exception as e:
             logger.warning(f"Failed to import tool module {module_name}: {e}")
+
+    # Discover modules in subdirectories (one level deep)
+    for subdir in tools_dir.iterdir():
+        if not subdir.is_dir() or subdir.name.startswith('_') or subdir.name.startswith('.'):
+            continue
+
+        # Check if subdirectory contains Python modules
+        for _, module_name, _ in pkgutil.iter_modules([str(subdir)]):
+            # Skip private modules and __init__
+            if module_name.startswith('_'):
+                continue
+
+            try:
+                # Import as tools.subdirname.modulename
+                full_module_name = f'.{subdir.name}.{module_name}'
+                importlib.import_module(full_module_name, __package__)
+            except Exception as e:
+                logger.warning(f"Failed to import tool module {subdir.name}.{module_name}: {e}")
 
     tools = get_registered_tools()
 

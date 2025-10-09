@@ -406,6 +406,7 @@ namespace MCPForUnity.Editor.Helpers
         /// <summary>
         /// Searches Unity project for MCPForUnityTools folders and copies .py files to server tools directory.
         /// Only copies if the tool's version.txt has changed (or doesn't exist).
+        /// Files are copied into per-folder subdirectories to avoid conflicts.
         /// </summary>
         private static void CopyUnityProjectTools(string destToolsDir)
         {
@@ -418,18 +419,51 @@ namespace MCPForUnity.Editor.Helpers
                     return;
                 }
 
-                // Find all MCPForUnityTools folders
-                var toolsFolders = Directory.GetDirectories(projectRoot, "MCPForUnityTools", SearchOption.AllDirectories);
+                // Ensure destToolsDir exists
+                Directory.CreateDirectory(destToolsDir);
+
+                // Limit scan to specific directories to avoid deep recursion
+                var searchRoots = new List<string>();
+                var assetsPath = Path.Combine(projectRoot, "Assets");
+                var packagesPath = Path.Combine(projectRoot, "Packages");
+                var packageCachePath = Path.Combine(projectRoot, "Library", "PackageCache");
+
+                if (Directory.Exists(assetsPath)) searchRoots.Add(assetsPath);
+                if (Directory.Exists(packagesPath)) searchRoots.Add(packagesPath);
+                if (Directory.Exists(packageCachePath)) searchRoots.Add(packageCachePath);
+
+                // Find all MCPForUnityTools folders in limited search roots
+                var toolsFolders = new List<string>();
+                foreach (var searchRoot in searchRoots)
+                {
+                    try
+                    {
+                        toolsFolders.AddRange(Directory.GetDirectories(searchRoot, "MCPForUnityTools", SearchOption.AllDirectories));
+                    }
+                    catch (Exception ex)
+                    {
+                        McpLog.Warn($"Failed to search {searchRoot}: {ex.Message}");
+                    }
+                }
 
                 int copiedCount = 0;
                 int skippedCount = 0;
+
+                // Track all active folder identifiers (for cleanup)
+                var activeFolderIdentifiers = new HashSet<string>();
 
                 foreach (var folder in toolsFolders)
                 {
                     // Generate unique identifier for this tools folder based on its parent directory structure
                     // e.g., "MooseRunner_MCPForUnityTools" or "MyPackage_MCPForUnityTools"
                     string folderIdentifier = GetToolsFolderIdentifier(folder);
-                    string versionTrackingFile = Path.Combine(destToolsDir, $"{folderIdentifier}_version.txt");
+                    activeFolderIdentifiers.Add(folderIdentifier);
+
+                    // Create per-folder subdirectory in destToolsDir
+                    string destFolderSubdir = Path.Combine(destToolsDir, folderIdentifier);
+                    Directory.CreateDirectory(destFolderSubdir);
+
+                    string versionTrackingFile = Path.Combine(destFolderSubdir, "version.txt");
 
                     // Read source version
                     string sourceVersionFile = Path.Combine(folder, "version.txt");
@@ -450,7 +484,7 @@ namespace MCPForUnity.Editor.Helpers
                         foreach (var pyFile in pyFiles)
                         {
                             string fileName = Path.GetFileName(pyFile);
-                            string destFile = Path.Combine(destToolsDir, fileName);
+                            string destFile = Path.Combine(destFolderSubdir, fileName);
 
                             try
                             {
@@ -480,6 +514,9 @@ namespace MCPForUnity.Editor.Helpers
                     }
                 }
 
+                // Clean up stale subdirectories (folders removed from upstream)
+                CleanupStaleToolFolders(destToolsDir, activeFolderIdentifiers);
+
                 if (copiedCount > 0)
                 {
                     McpLog.Info($"Copied {copiedCount} Unity project tool(s) to server");
@@ -488,6 +525,43 @@ namespace MCPForUnity.Editor.Helpers
             catch (Exception ex)
             {
                 McpLog.Warn($"Failed to scan Unity project for tools: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Removes stale tool subdirectories that are no longer present in the Unity project.
+        /// </summary>
+        private static void CleanupStaleToolFolders(string destToolsDir, HashSet<string> activeFolderIdentifiers)
+        {
+            try
+            {
+                if (!Directory.Exists(destToolsDir)) return;
+
+                // Get all subdirectories in destToolsDir
+                var existingSubdirs = Directory.GetDirectories(destToolsDir);
+
+                foreach (var subdir in existingSubdirs)
+                {
+                    string subdirName = Path.GetFileName(subdir);
+
+                    // Check if this subdirectory corresponds to an active tools folder
+                    if (!activeFolderIdentifiers.Contains(subdirName))
+                    {
+                        try
+                        {
+                            Directory.Delete(subdir, recursive: true);
+                            McpLog.Info($"Cleaned up stale tools folder: {subdirName}");
+                        }
+                        catch (Exception ex)
+                        {
+                            McpLog.Warn($"Failed to delete stale folder {subdirName}: {ex.Message}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                McpLog.Warn($"Failed to cleanup stale tool folders: {ex.Message}");
             }
         }
 
