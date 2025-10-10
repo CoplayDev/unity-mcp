@@ -604,7 +604,7 @@ namespace MCPForUnity.Editor.Helpers
                         (grandparent.Name.Equals("Assets", StringComparison.OrdinalIgnoreCase) ||
                          grandparent.Name.Equals("Packages", StringComparison.OrdinalIgnoreCase)))
                     {
-                        return $"{name}_MCPForUnityTools";
+                        return $"{grandparent.Name}_{name}_MCPForUnityTools";
                     }
 
                     current = grandparent;
