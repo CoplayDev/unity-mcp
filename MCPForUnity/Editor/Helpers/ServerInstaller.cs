@@ -1,9 +1,10 @@
 using System;
-using System.IO;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Net;
+using System.Runtime.InteropServices;
 using UnityEditor;
 using UnityEngine;
 
@@ -162,7 +163,7 @@ namespace MCPForUnity.Editor.Helpers
                 TryCreateMacSymlinkForAppSupport();
                 return Path.Combine(localAppSupport, RootFolder);
             }
-            throw new Exception("Unsupported operating system.");
+            throw new Exception("Unsupported operating system");
         }
 
         /// <summary>
@@ -314,7 +315,7 @@ namespace MCPForUnity.Editor.Helpers
 
         private static IEnumerable<string> GetLegacyRootsForDetection()
         {
-            var roots = new System.Collections.Generic.List<string>();
+            var roots = new List<string>();
             string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) ?? string.Empty;
             // macOS/Linux legacy
             roots.Add(Path.Combine(home, ".config", "UnityMCP", "UnityMcpServer"));
@@ -639,7 +640,7 @@ namespace MCPForUnity.Editor.Helpers
                         string homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) ?? string.Empty;
                         string prepend = string.Join(":", new[]
                         {
-                            System.IO.Path.Combine(homeDir, ".local", "bin"),
+                            Path.Combine(homeDir, ".local", "bin"),
                             "/opt/homebrew/bin",
                             "/usr/local/bin",
                             "/usr/bin",
@@ -729,7 +730,7 @@ namespace MCPForUnity.Editor.Helpers
                 EditorUtility.DisplayProgressBar("MCP for Unity", "Downloading server...", 0.3f);
 
                 // Download
-                using (var client = new System.Net.WebClient())
+                using (var client = new WebClient())
                 {
                     client.DownloadFile(downloadUrl, tempZip);
                 }
@@ -757,7 +758,7 @@ namespace MCPForUnity.Editor.Helpers
                 Directory.CreateDirectory(destRoot);
 
                 // Extract
-                System.IO.Compression.ZipFile.ExtractToDirectory(tempZip, destRoot);
+                ZipFile.ExtractToDirectory(tempZip, destRoot);
 
                 // Write version file
                 File.WriteAllText(
