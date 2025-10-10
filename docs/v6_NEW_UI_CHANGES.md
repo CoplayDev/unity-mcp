@@ -1,270 +1,301 @@
-# New MCP Editor Window Summary
+# MCP for Unity v6 - New Editor Window
+
+> **UI Toolkit-based window with service-oriented architecture**
 
 ![New MCP Editor Window Dark](./screenshots/v6_new_ui_dark.png)
+*Dark theme*
+
 ![New MCP Editor Window Light](./screenshots/v6_new_ui_light.png)
-
-## **Major Changes**
-
-**Architecture:**
-- ✅ Introduced service layer with `IBridgeControlService`, `IClientConfigurationService`, `IPathResolverService`
-- ✅ Created `MCPServiceLocator` for dependency-free service access
-- ✅ Separated business logic from UI - window is now pure UI orchestration
-- ✅ All configuration logic moved to services for reusability and testability
-
-**New Features:**
-- ✅ **Advanced Settings section** with path overrides (Python server, UV) with visual validation
-- ✅ **Bridge health verification** with separate status indicator and manual test button
-- ✅ **"Configure All Detected Clients"** button with summary dialog (shows success/failure/skipped counts)
-- ✅ **Dynamic Claude Code Register/Unregister** button with CLI path override support
-- ✅ **Auto-rewrite on path mismatch** - silently fixes outdated config paths
-- ✅ **OnFocus refresh logic** - updates status after domain reloads and external config edits
-- ✅ **Path override persistence** - overrides saved to EditorPrefs and survive restarts
-- ✅ **Opt-in auto-start** - Bridge only auto-starts after user opens a window for the first time
-- ✅ **Auto-Start Bridge toggle** - User can enable/disable auto-start behavior in settings
-
-**Bug Fixes:**
-- ✅ Fixed Claude Code detection (now only checks for "unityMCP", removed candidate name hacks)
-- ✅ Fixed Unity 2021 compatibility (added `UnityEditor.UIElements` using statement)
-- ✅ Debug toggle now functional (used in service logging)
+*Light theme*
 
 ---
 
-## **Features Left Behind (By Design)**
+## Overview
 
-### **Removed: Auto-Setup Behavior**
-**Old Window:**
-- `AutoFirstRunSetup()` - Automatically configured clients on first run
-- `autoRegisterEnabled` flag - Controlled automatic registration
-- Project-scoped SHA1 key to track first-run
-- `lastClientRegisteredOk` / `lastBridgeVerifiedOk` state flags
-- Button text changed to "Connected ✓" after successful setup
+The new MCP Editor Window is a complete rebuild using **UI Toolkit (UXML/USS)** with a **service-oriented architecture**. The design philosophy emphasizes **explicit over implicit** behavior, making the system more predictable, testable, and maintainable.
 
-**Rationale:** Users now have explicit control. Setup is manual via "Configure All Clients" button.
+**Quick Access:** `Cmd/Ctrl+Shift+M` or `Window > MCP For Unity > Open MCP Window`
 
----
-
-### **Removed: Python Detection Warning**
-**Old Window:**
-- Checked for Python installation on system
-- Showed warning banner with link to python.org if not found
-
-**Status:** Setup Wizard handles this
+**Key Improvements:**
+- 🎨 Modern UI that doesn't hide info as the window size changes
+- 🏗️ Service layer separates business logic from UI
+- 🔧 Explicit path overrides for troubleshooting
+- 📦 Asset Store support with server download capability
+- ⚡ Keyboard shortcut for quick access
 
 ---
 
-### **Removed: Separate Manual Setup Windows**
-**Old Window:**
-- `VSCodeManualSetupWindow` - Dedicated popup for VSCode config
-- `ManualConfigEditorWindow` - Dedicated popup for other clients
+## Key Differences at a Glance
 
-**New Window:**
-- Inline "Manual Configuration" foldout with copy/paste functionality
-- Simpler UX, less window clutter
+| Feature | Old Window | New Window | Notes |
+|---------|-----------|------------|-------|
+| **Architecture** | Monolithic | Service-based | Better testability & reusability |
+| **UI Framework** | IMGUI | UI Toolkit (UXML/USS) | Modern, responsive, themeable |
+| **Auto-Setup** | ✅ Automatic | ❌ Manual | Users have explicit control |
+| **Path Overrides** | ⚠️ Python only | ✅ Python + UV + Claude CLI | Advanced troubleshooting |
+| **Bridge Health** | ⚠️ Hidden | ✅ Visible with test button | Separate from connection status |
+| **Configure All** | ❌ None | ✅ Batch with summary | Configure all clients at once |
+| **Manual Config** | ✅ Popup windows | ✅ Inline foldout | Less window clutter |
+| **Server Download** | ❌ None | ✅ Asset Store support | Download server from GitHub |
+| **Keyboard Shortcut** | ❌ None | ✅ Cmd/Ctrl+Shift+M | Quick access |
 
-**Status:** Old popup windows still exist in codebase but aren't used by new window.
+## What's New
 
----
+### UI Enhancements
+- **Advanced Settings Foldout** - Collapsible section for path overrides (Python server, UV, Claude CLI)
+- **Visual Path Validation** - Green/red indicators show whether override paths are valid
+- **Bridge Health Indicator** - Separate from connection status, shows handshake and ping/pong results
+- **Manual Connection Test Button** - Verify bridge health on demand without reconnecting
+- **Inline Manual Configuration** - Copy config path and JSON without opening separate windows
 
-### **Removed: Server Installation Status Section**
-**Old Window:**
-- "Server Status" panel showing "Installed" / "Not Installed"
-- Server installation color indicator
-- "Auto-Setup" button
-- "Select server folder..." troubleshooting button
+### Functional Improvements
+- **Configure All Detected Clients** - One-click batch configuration with summary dialog
+- **Keyboard Shortcut** - `Cmd/Ctrl+Shift+M` opens the window quickly
 
-**New Window:**
-- Server path is in "Advanced Settings" as override
-- No separate installation status display
-- "Rebuild Server" button in Connection section
+### Asset Store Support
+- **Server Download Button** - Asset Store users can download the server from GitHub releases
+- **Dynamic UI** - Shows appropriate button based on installation type
 
----
-
-### **Removed: Auto-Connect Toggle**
-**Old Window:**
-- Toggle to enable/disable auto-registration
-
-**Status:** Not needed since auto-setup was removed.
-
----
-
-### **Simplified: Error Handling**
-**Old Window:**
-- Complex error states and fallback logic
-- Multiple status colors and states
-- Detailed troubleshooting UI per client
-
-**New Window:**
-- Errors shown in Unity Console with red status labels
-- Cleaner UI focused on happy path
-- Advanced troubleshooting via path overrides
+![Asset Store Version](./screenshots/v6_new_ui_asset_store_version.png)
+*Asset Store version showing the "Download & Install Server" button*
 
 ---
 
-## **Key Differences Summary**
+## Features Not Supported (By Design)
 
-| Feature | Old Window | New Window | Status |
-|---------|-----------|------------|--------|
-| **Auto First-Run Setup** | ✅ Automatic | ❌ Manual only | Removed by design |
-| **Bridge Verification** | ⚠️ Hidden (only in setup) | ✅ Visible with health indicator | Enhanced |
-| **Path Overrides** | ⚠️ Python only, buried | ✅ Python + UV, in Advanced Settings | Enhanced |
-| **Configure All Clients** | ❌ None | ✅ With summary dialog | New |
-| **Claude Code** | ✅ Register/Unregister | ✅ Register/Unregister + path picker | Enhanced |
-| **Manual Config** | ✅ Separate windows | ✅ Inline foldout | Simplified |
-| **Auto-Rewrite** | ✅ In CheckMcpConfiguration | ✅ In ClientConfigurationService | Refactored |
-| **OnFocus Refresh** | ✅ Bridge + client status | ✅ Bridge + client + paths | Enhanced |
-| **Python Detection** | ✅ Warning banner | ❌ None | Removed |
-| **Server Status Panel** | ✅ Separate section | ❌ Integrated | Simplified |
-| **Debug Logs** | ✅ Toggle + logging | ✅ Toggle + service logging | Maintained |
-| **Validation Levels** | ✅ 4 levels | ✅ 4 levels | Maintained |
+The new window intentionally removes implicit behaviors and complex edge-case handling to provide a cleaner, more predictable UX.
+
+### ❌ Auto-Setup on First Run
+- **Old:** Automatically configured clients on first window open
+- **Why Removed:** Users should explicitly choose which clients to configure
+- **Alternative:** Use "Configure All Detected Clients" button
+
+### ❌ Python Detection Warning
+- **Old:** Warning banner if Python not detected on system
+- **Why Removed:** Setup Wizard handles dependency checks, we also can't flood a bunch of error and warning logs when submitting to the Asset Store
+- **Alternative:** Run Setup Wizard via `Window > MCP For Unity > Setup Wizard`
+
+### ❌ Separate Manual Setup Windows
+- **Old:** `VSCodeManualSetupWindow`, `ManualConfigEditorWindow` popup dialogs
+- **Why Removed:** Looks neater, less visual clutter
+- **Alternative:** Inline "Manual Configuration" foldout with copy buttons
+
+### ❌ Server Installation Status Panel
+- **Old:** Dedicated panel showing server install status with color indicators
+- **Why Removed:** Simplified to focus on active configuration and the connection status, we now have a setup wizard for this
+- **Alternative:** Server path override in Advanced Settings + Rebuild button
 
 ---
 
-## **Service Architecture**
+## Service Locator Architecture
 
-### **IBridgeControlService**
-Manages MCP for Unity Bridge lifecycle and health verification.
+The new window uses a **service locator pattern** to access business logic without tight coupling. This provides flexibility for testing and future dependency injection migration.
 
-**Responsibilities:**
-- Start/Stop bridge with intelligent auto-connect
-- Bridge health verification (Option C: verify on connect + manual test)
-- Framed protocol handshake validation
-- Detailed verification results (handshake, ping/pong)
+### MCPServiceLocator
+
+**Purpose:** Central access point for MCP services
+
+**Usage:**
+```csharp
+// Access bridge service
+MCPServiceLocator.Bridge.Start();
+
+// Access client configuration service
+MCPServiceLocator.Client.ConfigureAllDetectedClients();
+
+// Access path resolver service
+string pythonPath = MCPServiceLocator.Paths.GetPythonServerPath();
+```
+
+**Benefits:**
+- No constructor dependencies (easy to use anywhere)
+- Lazy initialization (services created only when needed)
+- Testable (supports custom implementations via `SetCustomImplementation()`)
+
+---
+
+### IBridgeControlService
+
+**Purpose:** Manages MCP for Unity Bridge lifecycle and health verification
+
+**Key Methods:**
+- `Start()` / `Stop()` - Bridge lifecycle management
+- `Verify(port)` - Health check with handshake + ping/pong validation
+- `IsRunning` - Current bridge status
+- `CurrentPort` - Active port number
 
 **Implementation:** `BridgeControlService`
 
+**Usage Example:**
+```csharp
+var bridge = MCPServiceLocator.Bridge;
+bridge.Start();
+
+var result = bridge.Verify(bridge.CurrentPort);
+if (result.Success && result.PingSucceeded)
+{
+    Debug.Log("Bridge is healthy");
+}
+```
+
 ---
 
-### **IClientConfigurationService**
-Handles MCP client configuration and registration.
+### IClientConfigurationService
 
-**Responsibilities:**
-- Configure individual clients
-- Configure all detected clients with summary
-- Auto-rewrite on path mismatch during status checks
-- Register/Unregister Claude Code (fixed to only check "unityMCP")
-- Generate config JSON and installation steps
+**Purpose:** Handles MCP client configuration and registration
+
+**Key Methods:**
+- `ConfigureClient(client)` - Configure a single client
+- `ConfigureAllDetectedClients()` - Batch configure with summary
+- `CheckClientStatus(client)` - Verify client status + auto-rewrite paths
+- `RegisterClaudeCode()` / `UnregisterClaudeCode()` - Claude Code management
+- `GenerateConfigJson(client)` - Get JSON for manual configuration
 
 **Implementation:** `ClientConfigurationService`
 
+**Usage Example:**
+```csharp
+var clientService = MCPServiceLocator.Client;
+var summary = clientService.ConfigureAllDetectedClients();
+Debug.Log($"Configured: {summary.SuccessCount}, Failed: {summary.FailureCount}");
+```
+
 ---
 
-### **IPathResolverService**
-Resolves paths to required tools with override support.
+### IPathResolverService
 
-**Responsibilities:**
-- Python server path with override support
-- UV path with override support
-- Claude CLI path with override support
-- Override persistence via EditorPrefs
-- Path validation and detection
+**Purpose:** Resolves paths to required tools with override support
+
+**Key Methods:**
+- `GetPythonServerPath()` - Python server directory
+- `GetUvPath()` - UV executable path
+- `GetClaudeCliPath()` - Claude CLI path
+- `SetPythonServerOverride(path)` / `ClearPythonServerOverride()` - Manage overrides
+- `IsPythonDetected()` / `IsUvDetected()` - Detection checks
 
 **Implementation:** `PathResolverService`
 
----
+**Usage Example:**
+```csharp
+var paths = MCPServiceLocator.Paths;
 
-### **MCPServiceLocator**
-Static service locator for accessing MCP services without dependency injection.
+// Check if UV is detected
+if (!paths.IsUvDetected())
+{
+    Debug.LogWarning("UV not found");
+}
 
-**Features:**
-- Lazy initialization of services
-- Support for custom implementations (useful for testing)
-- Simple access pattern: `MCPServiceLocator.Bridge.Start()`
+// Set an override
+paths.SetUvPathOverride("/custom/path/to/uv");
+```
 
----
+## Technical Details
 
-## **Files Changed**
+### Files Created
 
-### **Created**
+**Services:**
 ```
 MCPForUnity/Editor/Services/
-├── IBridgeControlService.cs
-├── BridgeControlService.cs
-├── IClientConfigurationService.cs
-├── ClientConfigurationService.cs
-├── IPathResolverService.cs
-├── PathResolverService.cs
-└── MCPServiceLocator.cs
+├── IBridgeControlService.cs          # Bridge lifecycle interface
+├── BridgeControlService.cs           # Bridge lifecycle implementation
+├── IClientConfigurationService.cs    # Client config interface
+├── ClientConfigurationService.cs     # Client config implementation
+├── IPathResolverService.cs          # Path resolution interface
+├── PathResolverService.cs           # Path resolution implementation
+└── MCPServiceLocator.cs             # Service locator pattern
 ```
 
-### **Modified**
-- `MCPForUnity/Editor/Windows/MCPForUnityEditorWindowNew.cs` (complete rewrite - ~750 lines)
-- `MCPForUnity/Editor/Windows/MCPForUnityEditorWindowNew.uxml` (added UI elements)
-- `MCPForUnity/Editor/Windows/MCPForUnityEditorWindowNew.uss` (added styles)
+**Helpers:**
+```
+MCPForUnity/Editor/Helpers/
+└── AssetPathUtility.cs              # Package path detection & package.json parsing
+```
 
-### **Preserved**
-- `MCPForUnity/Editor/Windows/MCPForUnityEditorWindowNew_Old.cs.bak` (backup of original)
+**UI:**
+```
+MCPForUnity/Editor/Windows/
+├── MCPForUnityEditorWindowNew.cs    # Main window (~850 lines)
+├── MCPForUnityEditorWindowNew.uxml  # UI Toolkit layout
+└── MCPForUnityEditorWindowNew.uss   # UI Toolkit styles
+```
 
----
+**CI/CD:**
+```
+.github/workflows/
+└── bump-version.yml                 # Server upload to releases
+```
 
-## **UI Changes**
+### Key Files Modified
 
-### **Settings Section - New Elements**
-- **Advanced Settings foldout** (collapsible)
-  - Python Server Path override with Browse/Clear buttons
-  - UV Path override with Browse/Clear buttons
-  - Visual status indicators (green = valid, red = invalid)
-
-### **Connection Section - New Elements**
-- **Health status indicator** (separate from connection status)
-- **Test Connection button** for manual verification
-- Health states: Healthy 🟢 | Ping Failed 🟡 | Unhealthy 🟡 | Unknown ⚪
-
-### **Client Configuration Section - New Elements**
-- **Configure All Detected Clients button** (above dropdown)
-- **Claude CLI Path row** (shown only for Claude Code, with Browse button)
-- **Dynamic button text**: "Register" / "Unregister" for Claude Code
+- `ServerInstaller.cs` - Added download/install logic for Asset Store
+- `SetupWizard.cs` - Integration with new service locator
+- `PackageDetector.cs` - Uses `AssetPathUtility` for version detection
 
 ---
 
-## **Migration Notes**
+## Migration Notes
 
-- Old window (`MCPForUnityEditorWindow.cs`) remains unchanged and functional
-- New window is accessed via same menu but uses different implementation
-- Services can be reused by other parts of the codebase
-- Path overrides are backward compatible (same EditorPrefs keys)
-- Consider deprecating old window after user testing confirms stability
+### For Users
 
----
+**Immediate Changes (v6.x):**
+- Both old and new windows are available
+- New window accessible via `Cmd/Ctrl+Shift+M` or menu
+- Settings and overrides are shared between windows (same EditorPrefs keys)
+- Services can be used by both windows
 
-## **Auto-Start Behavior**
+**Upcoming Changes (v8.x):**
+- ⚠️ **Old window will be removed in v8.0**
+- All users will automatically use the new window
+- EditorPrefs keys remain the same (no migration needed)
+- Custom scripts using old window APIs will need updates
 
-### **First Install (Clean Experience)**
-- Project loads → **No bridge auto-start**, **No logs**
-- Setup wizard appears (minimal, expected logs)
-- User works normally without MCP running
+### For Developers
 
-### **First Window Open**
-- User opens either old or new window
-- Bridge starts automatically
-- `AutoStartBridge` EditorPref set to `true`
-- Connection logs appear (expected at this point)
-
-### **Subsequent Sessions**
-- Project loads → Bridge auto-starts (convenient for active users)
-- All MCP functionality ready immediately
-- User can disable via "Auto-Start Bridge" toggle in Settings
-
-### **Toggle Control**
-- **Both windows** have "Auto-Start Bridge" toggle
-- **New window**: In Settings section
-- **Old window**: In header (next to Debug Logs)
-- Changes take effect next session
-- Default: `false` (off) for new installations
-
-### **API Methods**
+**Using the Services:**
 ```csharp
-// Enable auto-start (called by windows on first open)
-MCPForUnityBridge.EnableAutoStart();
+// Accessing services from any editor script
+var bridge = MCPServiceLocator.Bridge;
+var client = MCPServiceLocator.Client;
+var paths = MCPServiceLocator.Paths;
 
-// Disable auto-start (called when user unchecks toggle)
-MCPForUnityBridge.DisableAutoStart();
-
-// Check current state
-bool enabled = MCPForUnityBridge.IsAutoStartEnabled();
+// Services are lazily initialized on first access
+// No need to check for null
 ```
+
+**Testing with Custom Implementations:**
+```csharp
+// In test setup
+var mockBridge = new MockBridgeService();
+MCPServiceLocator.SetCustomBridgeService(mockBridge);
+
+// Services are now testable without Unity dependencies
+```
+
+**Reusing Service Logic:**
+The service layer is designed to be reused by other parts of the codebase. For example:
+- Build scripts can use `IClientConfigurationService` to auto-configure clients
+- CI/CD can use `IBridgeControlService` to verify bridge health
+- Tools can use `IPathResolverService` for consistent path resolution
+
+**Notes:**
+- A lot of Helpers will gradually be moved to the service layer
+- Why not Dependency Injection? This change had a lot of changes, so we didn't want to add too much complexity to the codebase in one go
 
 ---
 
-**Date:** 2025-10-10
-**Unity Versions Supported:** Unity 2021.x - Unity 6.x
-**Architecture:** Service-based with UXML/USS UI
+## Pull Request Reference
+
+**PR #313:** [feat: New UI with service architecture](https://github.com/CoplayDev/unity-mcp/pull/313)
+
+**Key Commits:**
+- Service layer implementation
+- UI Toolkit window rebuild
+- Asset Store server download support
+- CI/CD server upload automation
+
+---
+
+**Last Updated:** 2025-10-10  
+**Unity Versions:** Unity 2021.3+ through Unity 6.x  
+**Architecture:** Service Locator + UI Toolkit  
+**Status:** Active (Old window deprecated in v8.0)
