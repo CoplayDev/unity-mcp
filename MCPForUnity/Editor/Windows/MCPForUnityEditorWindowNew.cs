@@ -87,19 +87,63 @@ namespace MCPForUnity.Editor.Windows
             window.minSize = new Vector2(500, 600);
         }
 
+        /// <summary>
+        /// Detects the base path for the package, supporting both Package Manager 
+        /// (Packages/com.coplaydev.unity-mcp) and Asset Store (Assets/MCPForUnity) installations.
+        /// </summary>
+        private static string GetAssetBasePath()
+        {
+            // Find this script file in the AssetDatabase
+            string[] guids = AssetDatabase.FindAssets($"t:Script {nameof(MCPForUnityEditorWindowNew)}");
+            
+            if (guids.Length == 0)
+            {
+                Debug.LogError("Could not find MCPForUnityEditorWindowNew script in AssetDatabase");
+                return "Packages/com.coplaydev.unity-mcp"; // fallback to package path
+            }
+
+            string scriptPath = AssetDatabase.GUIDToAssetPath(guids[0]);
+            
+            // Script is at: {basePath}/Editor/Windows/MCPForUnityEditorWindowNew.cs
+            // We need to extract {basePath}
+            int editorIndex = scriptPath.IndexOf("/Editor/", StringComparison.Ordinal);
+            
+            if (editorIndex >= 0)
+            {
+                return scriptPath.Substring(0, editorIndex);
+            }
+
+            Debug.LogError($"Could not determine base path from script path: {scriptPath}");
+            return "Packages/com.coplaydev.unity-mcp"; // fallback
+        }
+
         public void CreateGUI()
         {
+            // Determine base path (Package Manager vs Asset Store install)
+            string basePath = GetAssetBasePath();
+
             // Load UXML
             var visualTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
-                "Packages/com.coplaydev.unity-mcp/Editor/Windows/MCPForUnityEditorWindowNew.uxml"
+                $"{basePath}/Editor/Windows/MCPForUnityEditorWindowNew.uxml"
             );
+
+            if (visualTree == null)
+            {
+                Debug.LogError($"Failed to load UXML at: {basePath}/Editor/Windows/MCPForUnityEditorWindowNew.uxml");
+                return;
+            }
+
             visualTree.CloneTree(rootVisualElement);
 
             // Load USS
             var styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(
-                "Packages/com.coplaydev.unity-mcp/Editor/Windows/MCPForUnityEditorWindowNew.uss"
+                $"{basePath}/Editor/Windows/MCPForUnityEditorWindowNew.uss"
             );
-            rootVisualElement.styleSheets.Add(styleSheet);
+
+            if (styleSheet != null)
+            {
+                rootVisualElement.styleSheets.Add(styleSheet);
+            }
 
             // Cache UI elements
             CacheUIElements();
