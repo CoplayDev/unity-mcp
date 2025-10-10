@@ -134,6 +134,34 @@ namespace MCPForUnity.Editor.Data
                 mcpType = McpTypes.VSCode,
                 configStatus = "Not Configured",
             },
+            // 6) JetBrains GitHub Copilot
+            new()
+            {
+                name = "JetBrains GitHub Copilot",
+                windowsConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "github-copilot",
+                    "intellij",
+                    "mcp.json"
+                ),
+                macConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    "Library",
+                    "Application Support",
+                    "", //TODO(PR): I need some help here
+                    "", //TODO(PR): I need some help here
+                    "mcp.json"
+                ),
+                linuxConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".config",
+                    "", //TODO(PR): I need some help here
+                    "", //TODO(PR): I need some help here
+                    "mcp.json"
+                ),
+                mcpType = McpTypes.JetBrainsCopilot,
+                configStatus = "Not Configured",
+            },
             // 3) Kiro
             new()
             {
