@@ -3,10 +3,10 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using UnityEditor;
-using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 using MCPForUnity.Editor.Data;
+using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
 using MCPForUnity.Editor.Services;
 
@@ -93,28 +93,13 @@ namespace MCPForUnity.Editor.Windows
         /// </summary>
         private static string GetAssetBasePath()
         {
-            // Find this script file in the AssetDatabase
-            string[] guids = AssetDatabase.FindAssets($"t:Script {nameof(MCPForUnityEditorWindowNew)}");
-            
-            if (guids.Length == 0)
+            string path = Helpers.AssetPathUtility.GetMcpPackageRootPath();
+            if (string.IsNullOrEmpty(path))
             {
-                Debug.LogError("Could not find MCPForUnityEditorWindowNew script in AssetDatabase");
-                return "Packages/com.coplaydev.unity-mcp"; // fallback to package path
+                Debug.LogError("Could not determine package base path");
+                return "Packages/com.coplaydev.unity-mcp"; // fallback
             }
-
-            string scriptPath = AssetDatabase.GUIDToAssetPath(guids[0]);
-            
-            // Script is at: {basePath}/Editor/Windows/MCPForUnityEditorWindowNew.cs
-            // We need to extract {basePath}
-            int editorIndex = scriptPath.IndexOf("/Editor/", StringComparison.Ordinal);
-            
-            if (editorIndex >= 0)
-            {
-                return scriptPath.Substring(0, editorIndex);
-            }
-
-            Debug.LogError($"Could not determine base path from script path: {scriptPath}");
-            return "Packages/com.coplaydev.unity-mcp"; // fallback
+            return path;
         }
 
         public void CreateGUI()
@@ -648,9 +633,9 @@ namespace MCPForUnity.Editor.Windows
 
         private void UpdateServerStatusBanner()
         {
-            bool hasEmbedded = Helpers.ServerInstaller.HasEmbeddedServer();
-            string installedVer = Helpers.ServerInstaller.GetInstalledServerVersion();
-            string packageVer = Helpers.ServerInstaller.GetPackageVersion();
+            bool hasEmbedded = ServerInstaller.HasEmbeddedServer();
+            string installedVer = ServerInstaller.GetInstalledServerVersion();
+            string packageVer = AssetPathUtility.GetPackageVersion();
 
             // Show/hide download vs rebuild buttons
             if (hasEmbedded)

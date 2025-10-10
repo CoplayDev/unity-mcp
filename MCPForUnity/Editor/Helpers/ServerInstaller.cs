@@ -713,7 +713,7 @@ namespace MCPForUnity.Editor.Helpers
         /// </summary>
         public static bool DownloadAndInstallServer()
         {
-            string packageVersion = GetPackageVersion();
+            string packageVersion = AssetPathUtility.GetPackageVersion();
             if (packageVersion == "unknown")
             {
                 Debug.LogError("Cannot determine package version for download.");
@@ -783,22 +783,6 @@ namespace MCPForUnity.Editor.Helpers
             finally
             {
                 try { if (File.Exists(tempZip)) File.Delete(tempZip); } catch { }
-            }
-        }
-
-        /// <summary>
-        /// Get the package version from Unity Package Manager
-        /// </summary>
-        public static string GetPackageVersion()
-        {
-            try
-            {
-                var info = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(ServerInstaller).Assembly);
-                return info?.version ?? "unknown";
-            }
-            catch
-            {
-                return "unknown";
             }
         }
 
