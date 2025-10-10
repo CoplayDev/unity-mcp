@@ -116,10 +116,10 @@ jobs:
         run: |
           set -euo pipefail
           cd MCPForUnity/UnityMcpServer~
-          zip -r ../../mcp-for-unity-server-${NEW_VERSION}.zip .
+          zip -r ../../mcp-for-unity-server-v${NEW_VERSION}.zip .
           cd ../..
-          ls -lh mcp-for-unity-server-${NEW_VERSION}.zip
-          echo "Server package created: mcp-for-unity-server-${NEW_VERSION}.zip"
+          ls -lh mcp-for-unity-server-v${NEW_VERSION}.zip
+          echo "Server package created: mcp-for-unity-server-v${NEW_VERSION}.zip"
 
       - name: Create GitHub release with server artifact
         env:
@@ -134,4 +134,4 @@ jobs:
           gh release create "$TAG" \
             --title "v${NEW_VERSION}" \
             --notes "Release v${NEW_VERSION}" \
-            "mcp-for-unity-server-${NEW_VERSION}.zip#MCP Server v${NEW_VERSION}"
+            "mcp-for-unity-server-v${NEW_VERSION}.zip#MCP Server v${NEW_VERSION}"
