@@ -667,12 +667,12 @@ namespace MCPForUnity.Editor.Windows
             // Update banner
             if (!hasEmbedded && string.IsNullOrEmpty(installedVer))
             {
-                serverStatusMessage.text = "⚠️ Server not installed. Click 'Download & Install Server' to get started.";
+                serverStatusMessage.text = "\u26A0 Server not installed. Click 'Download & Install Server' to get started.";
                 serverStatusBanner.style.display = DisplayStyle.Flex;
             }
             else if (!hasEmbedded && !string.IsNullOrEmpty(installedVer) && installedVer != packageVer)
             {
-                serverStatusMessage.text = $"⚠️ Server update available (v{installedVer} → v{packageVer}). Update recommended.";
+                serverStatusMessage.text = $"\u26A0 Server update available (v{installedVer} \u2192 v{packageVer}). Update recommended.";
                 serverStatusBanner.style.display = DisplayStyle.Flex;
             }
             else
