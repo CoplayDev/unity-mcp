@@ -488,6 +488,7 @@ namespace MCPForUnity.Editor.Helpers
                             continue; 
                         }
 
+                        bool copyFailed = false;
                         foreach (var pyFile in pyFiles)
                         {
                             string fileName = Path.GetFileName(pyFile);
@@ -502,17 +503,21 @@ namespace MCPForUnity.Editor.Helpers
                             catch (Exception ex)
                             {
                                 McpLog.Warn($"Failed to copy {fileName}: {ex.Message}");
+                                copyFailed = true;
                             }
                         }
 
-                        // Update version tracking file
-                        try
+                        // Update version tracking file only on full success
+                        if (!copyFailed)
                         {
-                            File.WriteAllText(versionTrackingFile, sourceVersion);
-                        }
-                        catch (Exception ex)
-                        {
-                            McpLog.Warn($"Failed to write version tracking file for {folderIdentifier}: {ex.Message}");
+                            try
+                            {
+                                File.WriteAllText(versionTrackingFile, sourceVersion);
+                            }
+                            catch (Exception ex)
+                            {
+                                McpLog.Warn($"Failed to write version tracking file for {folderIdentifier}: {ex.Message}");
+                            }
                         }
                     }
                     else
