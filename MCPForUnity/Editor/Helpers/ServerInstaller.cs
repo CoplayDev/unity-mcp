@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -189,7 +190,7 @@ namespace MCPForUnity.Editor.Helpers
                 if (!Directory.Exists(canonical)) return;
 
                 // Use 'ln -s' to create a directory symlink (macOS)
-                var psi = new System.Diagnostics.ProcessStartInfo
+                var psi = new ProcessStartInfo
                 {
                     FileName = "/bin/ln",
                     Arguments = $"-s \"{canonical}\" \"{symlink}\"",
@@ -198,7 +199,7 @@ namespace MCPForUnity.Editor.Helpers
                     RedirectStandardError = true,
                     CreateNoWindow = true
                 };
-                using var p = System.Diagnostics.Process.Start(psi);
+                using var p = Process.Start(psi);
                 p?.WaitForExit(2000);
             }
             catch { /* best-effort */ }
@@ -343,7 +344,7 @@ namespace MCPForUnity.Editor.Helpers
                 if (string.IsNullOrEmpty(serverSrcPath)) return;
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
 
-                var psi = new System.Diagnostics.ProcessStartInfo
+                var psi = new ProcessStartInfo
                 {
                     FileName = "/usr/bin/pgrep",
                     Arguments = $"-f \"uv .*--directory {serverSrcPath}\"",
@@ -352,7 +353,7 @@ namespace MCPForUnity.Editor.Helpers
                     RedirectStandardError = true,
                     CreateNoWindow = true
                 };
-                using var p = System.Diagnostics.Process.Start(psi);
+                using var p = Process.Start(psi);
                 if (p == null) return;
                 string outp = p.StandardOutput.ReadToEnd();
                 p.WaitForExit(1500);
@@ -362,7 +363,7 @@ namespace MCPForUnity.Editor.Helpers
                     {
                         if (int.TryParse(line.Trim(), out int pid))
                         {
-                            try { System.Diagnostics.Process.GetProcessById(pid).Kill(); } catch { }
+                            try { Process.GetProcessById(pid).Kill(); } catch { }
                         }
                     }
                 }
@@ -442,7 +443,7 @@ namespace MCPForUnity.Editor.Helpers
                 // Find embedded source
                 if (!TryGetEmbeddedServerSource(out string embeddedSrc))
                 {
-                    Debug.LogError("RebuildMcpServer: Could not find embedded server source.");
+                    McpLog.Error("RebuildMcpServer: Could not find embedded server source.");
                     return false;
                 }
 
@@ -459,11 +460,11 @@ namespace MCPForUnity.Editor.Helpers
                     try
                     {
                         Directory.Delete(destRoot, recursive: true);
-                        Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Deleted existing server at {destRoot}");
+                        McpLog.Info($"Deleted existing server at {destRoot}");
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogError($"Failed to delete existing server: {ex.Message}");
+                        McpLog.Error($"Failed to delete existing server: {ex.Message}");
                         return false;
                     }
                 }
@@ -481,15 +482,15 @@ namespace MCPForUnity.Editor.Helpers
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"Failed to write version file: {ex.Message}");
+                    McpLog.Warn($"Failed to write version file: {ex.Message}");
                 }
 
-                Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Server rebuilt successfully at {destRoot} (version {embeddedVer})");
+                McpLog.Info($"Server rebuilt successfully at {destRoot} (version {embeddedVer})");
                 return true;
             }
             catch (Exception ex)
             {
-                Debug.LogError($"RebuildMcpServer failed: {ex.Message}");
+                McpLog.Error($"RebuildMcpServer failed: {ex.Message}");
                 return false;
             }
         }
@@ -520,7 +521,7 @@ namespace MCPForUnity.Editor.Helpers
                 // Fast path: resolve from PATH first
                 try
                 {
-                    var wherePsi = new System.Diagnostics.ProcessStartInfo
+                    var wherePsi = new ProcessStartInfo
                     {
                         FileName = "where",
                         Arguments = "uv.exe",
@@ -529,7 +530,7 @@ namespace MCPForUnity.Editor.Helpers
                         RedirectStandardError = true,
                         CreateNoWindow = true
                     };
-                    using var wp = System.Diagnostics.Process.Start(wherePsi);
+                    using var wp = Process.Start(wherePsi);
                     string output = wp.StandardOutput.ReadToEnd().Trim();
                     wp.WaitForExit(1500);
                     if (wp.ExitCode == 0 && !string.IsNullOrEmpty(output))
@@ -625,7 +626,7 @@ namespace MCPForUnity.Editor.Helpers
             {
                 if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
-                    var whichPsi = new System.Diagnostics.ProcessStartInfo
+                    var whichPsi = new ProcessStartInfo
                     {
                         FileName = "/usr/bin/which",
                         Arguments = "uv",
@@ -650,7 +651,7 @@ namespace MCPForUnity.Editor.Helpers
                         whichPsi.EnvironmentVariables["PATH"] = string.IsNullOrEmpty(currentPath) ? prepend : (prepend + ":" + currentPath);
                     }
                     catch { }
-                    using var wp = System.Diagnostics.Process.Start(whichPsi);
+                    using var wp = Process.Start(whichPsi);
                     string output = wp.StandardOutput.ReadToEnd().Trim();
                     wp.WaitForExit(3000);
                     if (wp.ExitCode == 0 && !string.IsNullOrEmpty(output) && File.Exists(output))
@@ -688,7 +689,7 @@ namespace MCPForUnity.Editor.Helpers
         {
             try
             {
-                var psi = new System.Diagnostics.ProcessStartInfo
+                var psi = new ProcessStartInfo
                 {
                     FileName = uvPath,
                     Arguments = "--version",
@@ -697,7 +698,7 @@ namespace MCPForUnity.Editor.Helpers
                     RedirectStandardError = true,
                     CreateNoWindow = true
                 };
-                using var p = System.Diagnostics.Process.Start(psi);
+                using var p = Process.Start(psi);
                 if (!p.WaitForExit(5000)) { try { p.Kill(); } catch { } return false; }
                 if (p.ExitCode == 0)
                 {
@@ -717,7 +718,7 @@ namespace MCPForUnity.Editor.Helpers
             string packageVersion = AssetPathUtility.GetPackageVersion();
             if (packageVersion == "unknown")
             {
-                Debug.LogError("Cannot determine package version for download.");
+                McpLog.Error("Cannot determine package version for download.");
                 return false;
             }
 
@@ -750,7 +751,7 @@ namespace MCPForUnity.Editor.Helpers
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogWarning($"Could not fully delete old server: {ex.Message}");
+                        McpLog.Warn($"Could not fully delete old server: {ex.Message}");
                     }
                 }
 
@@ -767,13 +768,13 @@ namespace MCPForUnity.Editor.Helpers
                 );
 
                 EditorUtility.ClearProgressBar();
-                Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Server v{packageVersion} downloaded and installed successfully!");
+                McpLog.Info($"Server v{packageVersion} downloaded and installed successfully!");
                 return true;
             }
             catch (Exception ex)
             {
                 EditorUtility.ClearProgressBar();
-                Debug.LogError($"Failed to download server: {ex.Message}");
+                McpLog.Error($"Failed to download server: {ex.Message}");
                 EditorUtility.DisplayDialog(
                     "Download Failed",
                     $"Could not download server from GitHub.\n\n{ex.Message}\n\nPlease check your internet connection or try again later.",
