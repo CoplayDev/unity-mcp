@@ -42,11 +42,15 @@
     align-items: center;
     margin-bottom: 8px;
     min-height: 24px;
+    flex-shrink: 1;
+    min-width: 0;
 }
 
 .setting-column {
     flex-direction: column;
     margin-bottom: 8px;
+    flex-shrink: 1;
+    min-width: 0;
 }
 
 .setting-label {
@@ -65,12 +69,16 @@
 
 .setting-dropdown {
     flex-grow: 1;
+    flex-shrink: 1;
     margin-top: 4px;
+    max-width: 100%;
 }
 
 .setting-dropdown-inline {
     flex-grow: 1;
+    flex-shrink: 1;
     min-width: 150px;
+    max-width: 100%;
 }
 
 /* Validation Description */
