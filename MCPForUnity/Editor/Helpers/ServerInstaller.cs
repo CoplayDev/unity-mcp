@@ -720,8 +720,8 @@ namespace MCPForUnity.Editor.Helpers
                 return false;
             }
 
-            string downloadUrl = $"https://github.com/CoplayDev/unity-mcp/releases/download/v{packageVersion}/mcp-for-unity-server-{packageVersion}.zip";
-            string tempZip = Path.Combine(Path.GetTempPath(), $"mcp-server-{packageVersion}.zip");
+            string downloadUrl = $"https://github.com/CoplayDev/unity-mcp/releases/download/v{packageVersion}/mcp-for-unity-server-v{packageVersion}.zip";
+            string tempZip = Path.Combine(Path.GetTempPath(), $"mcp-server-v{packageVersion}.zip");
             string destRoot = Path.Combine(GetSaveLocation(), ServerFolder);
 
             try
