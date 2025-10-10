@@ -755,17 +755,34 @@ namespace MCPForUnity.Editor.Helpers
                     }
                 }
 
-                // Ensure parent directory exists
-                Directory.CreateDirectory(destRoot);
+                // Extract to temp location first
+                string tempExtractDir = Path.Combine(Path.GetTempPath(), $"mcp-server-extract-{Guid.NewGuid()}");
+                Directory.CreateDirectory(tempExtractDir);
 
-                // Extract
-                ZipFile.ExtractToDirectory(tempZip, destRoot);
+                try
+                {
+                    ZipFile.ExtractToDirectory(tempZip, tempExtractDir);
 
-                // Write version file
-                File.WriteAllText(
-                    Path.Combine(destRoot, "src", VersionFileName),
-                    packageVersion
-                );
+                    // The ZIP contains UnityMcpServer~ folder, find it and move its contents
+                    string extractedServerFolder = Path.Combine(tempExtractDir, "UnityMcpServer~");
+                    Directory.CreateDirectory(destRoot);
+                    CopyDirectoryRecursive(extractedServerFolder, destRoot);
+                }
+                finally
+                {
+                    // Cleanup temp extraction directory
+                    try
+                    {
+                        if (Directory.Exists(tempExtractDir))
+                        {
+                            Directory.Delete(tempExtractDir, recursive: true);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        McpLog.Warn($"Could not fully delete temp extraction directory: {ex.Message}");
+                    }
+                }
 
                 EditorUtility.ClearProgressBar();
                 McpLog.Info($"Server v{packageVersion} downloaded and installed successfully!");
@@ -784,7 +801,11 @@ namespace MCPForUnity.Editor.Helpers
             }
             finally
             {
-                try { if (File.Exists(tempZip)) File.Delete(tempZip); } catch { }
+                try {
+                    if (File.Exists(tempZip)) File.Delete(tempZip); 
+                } catch (Exception ex) {
+                    McpLog.Warn($"Could not delete temp zip file: {ex.Message}");
+                }
             }
         }
 
@@ -810,7 +831,10 @@ namespace MCPForUnity.Editor.Helpers
                     return File.ReadAllText(versionPath)?.Trim() ?? string.Empty;
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                McpLog.Warn($"Could not read version file: {ex.Message}");
+            }
             return string.Empty;
         }
     }
