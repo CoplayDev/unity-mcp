@@ -544,6 +544,13 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     string subdirName = Path.GetFileName(subdir);
 
+                    // Skip Python cache and virtual environment directories
+                    foreach (var skip in _skipDirs)
+                    {
+                        if (subdirName.Equals(skip, StringComparison.OrdinalIgnoreCase))
+                            goto NextSubdir;
+                    }
+
                     // Check if this subdirectory corresponds to an active tools folder
                     if (!activeFolderIdentifiers.Contains(subdirName))
                     {
@@ -557,6 +564,7 @@ namespace MCPForUnity.Editor.Helpers
                             McpLog.Warn($"Failed to delete stale folder {subdirName}: {ex.Message}");
                         }
                     }
+                NextSubdir:;
                 }
             }
             catch (Exception ex)
