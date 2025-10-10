@@ -25,18 +25,21 @@ namespace MCPForUnity.Editor.Helpers
         {
             try
             {
-                Debug.Log("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Installing Python server...");
                 ServerInstaller.EnsureServerInstalled();
 
-                // Mark as installed
+                // Mark as installed/checked
                 EditorPrefs.SetBool(InstallationFlagKey, true);
 
-                Debug.Log("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Python server installation completed successfully.");
+                // Only log success if server was actually embedded and copied
+                if (ServerInstaller.HasEmbeddedServer())
+                {
+                    McpLog.Info("Python server installation completed successfully.");
+                }
             }
-            catch (System.Exception ex)
+            catch (System.Exception)
             {
-                Debug.LogError($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Failed to install Python server: {ex.Message}");
-                Debug.LogWarning("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: You may need to manually install the Python server. Check the MCP For Unity Window for instructions.");
+                EditorPrefs.SetBool(InstallationFlagKey, true); // Mark as handled
+                McpLog.Info("Server installation pending. Open Window > MCP For Unity to download the server.");
             }
         }
     }

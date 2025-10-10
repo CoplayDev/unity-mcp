@@ -34,8 +34,19 @@ namespace MCPForUnity.Editor.Helpers
                 // Resolve embedded source and versions
                 if (!TryGetEmbeddedServerSource(out string embeddedSrc))
                 {
-                    throw new Exception("Could not find embedded UnityMcpServer/src in the package.");
+                    // Asset Store install - no embedded server
+                    // Check if server was already downloaded
+                    if (File.Exists(Path.Combine(destSrc, "server.py")))
+                    {
+                        McpLog.Info("Using previously downloaded MCP server.", always: false);
+                    }
+                    else
+                    {
+                        McpLog.Info("MCP server not found. Download via Window > MCP For Unity > Open MCP Window.", always: false);
+                    }
+                    return; // Graceful exit - no exception
                 }
+
                 string embeddedVer = ReadVersionFile(Path.Combine(embeddedSrc, VersionFileName)) ?? "unknown";
                 string installedVer = ReadVersionFile(Path.Combine(destSrc, VersionFileName));
 
@@ -695,6 +706,126 @@ namespace MCPForUnity.Editor.Helpers
             }
             catch { }
             return false;
+        }
+
+        /// <summary>
+        /// Download and install server from GitHub release (Asset Store workflow)
+        /// </summary>
+        public static bool DownloadAndInstallServer()
+        {
+            string packageVersion = GetPackageVersion();
+            if (packageVersion == "unknown")
+            {
+                Debug.LogError("Cannot determine package version for download.");
+                return false;
+            }
+
+            string downloadUrl = $"https://github.com/CoplayDev/unity-mcp/releases/download/v{packageVersion}/mcp-for-unity-server-{packageVersion}.zip";
+            string tempZip = Path.Combine(Path.GetTempPath(), $"mcp-server-{packageVersion}.zip");
+            string destRoot = Path.Combine(GetSaveLocation(), ServerFolder);
+
+            try
+            {
+                EditorUtility.DisplayProgressBar("MCP for Unity", "Downloading server...", 0.3f);
+
+                // Download
+                using (var client = new System.Net.WebClient())
+                {
+                    client.DownloadFile(downloadUrl, tempZip);
+                }
+
+                EditorUtility.DisplayProgressBar("MCP for Unity", "Extracting server...", 0.7f);
+
+                // Kill any running UV processes
+                string destSrc = Path.Combine(destRoot, "src");
+                TryKillUvForPath(destSrc);
+
+                // Delete old installation
+                if (Directory.Exists(destRoot))
+                {
+                    try
+                    {
+                        Directory.Delete(destRoot, recursive: true);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"Could not fully delete old server: {ex.Message}");
+                    }
+                }
+
+                // Ensure parent directory exists
+                Directory.CreateDirectory(destRoot);
+
+                // Extract
+                System.IO.Compression.ZipFile.ExtractToDirectory(tempZip, destRoot);
+
+                // Write version file
+                File.WriteAllText(
+                    Path.Combine(destRoot, "src", VersionFileName),
+                    packageVersion
+                );
+
+                EditorUtility.ClearProgressBar();
+                Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Server v{packageVersion} downloaded and installed successfully!");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                EditorUtility.ClearProgressBar();
+                Debug.LogError($"Failed to download server: {ex.Message}");
+                EditorUtility.DisplayDialog(
+                    "Download Failed",
+                    $"Could not download server from GitHub.\n\n{ex.Message}\n\nPlease check your internet connection or try again later.",
+                    "OK"
+                );
+                return false;
+            }
+            finally
+            {
+                try { if (File.Exists(tempZip)) File.Delete(tempZip); } catch { }
+            }
+        }
+
+        /// <summary>
+        /// Get the package version from Unity Package Manager
+        /// </summary>
+        public static string GetPackageVersion()
+        {
+            try
+            {
+                var info = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(ServerInstaller).Assembly);
+                return info?.version ?? "unknown";
+            }
+            catch
+            {
+                return "unknown";
+            }
+        }
+
+        /// <summary>
+        /// Check if the package has an embedded server (Git install vs Asset Store)
+        /// </summary>
+        public static bool HasEmbeddedServer()
+        {
+            return TryGetEmbeddedServerSource(out _);
+        }
+
+        /// <summary>
+        /// Get the installed server version from the local installation
+        /// </summary>
+        public static string GetInstalledServerVersion()
+        {
+            try
+            {
+                string destRoot = Path.Combine(GetSaveLocation(), ServerFolder);
+                string versionPath = Path.Combine(destRoot, "src", VersionFileName);
+                if (File.Exists(versionPath))
+                {
+                    return File.ReadAllText(versionPath)?.Trim() ?? string.Empty;
+                }
+            }
+            catch { }
+            return string.Empty;
         }
     }
 }

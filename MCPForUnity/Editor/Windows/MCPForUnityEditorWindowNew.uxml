@@ -83,7 +83,17 @@
                     </ui:VisualElement>
                     <ui:Button name="test-connection-button" text="Test" class="action-button" />
                 </ui:VisualElement>
-                <ui:Button name="rebuild-server-button" text="Rebuild Server" class="secondary-button" />
+
+                <!-- Server Status Banner -->
+                <ui:VisualElement name="server-status-banner" class="banner" style="display: none; background-color: rgba(255, 193, 7, 0.2); padding: 8px; margin: 8px 0; border-radius: 4px; border-left-width: 3px; border-left-color: rgb(255, 193, 7);">
+                    <ui:Label name="server-status-message" text="" style="-unity-text-align: middle-left; white-space: normal;" />
+                </ui:VisualElement>
+
+                <!-- Server Management Buttons -->
+                <ui:VisualElement class="button-row" style="flex-direction: row; margin-top: 8px;">
+                    <ui:Button name="download-server-button" text="Download &amp; Install Server" class="secondary-button" style="display: none; flex: 1;" />
+                    <ui:Button name="rebuild-server-button" text="Rebuild Server" class="secondary-button" style="flex: 1;" />
+                </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
 

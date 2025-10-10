@@ -49,8 +49,7 @@ namespace MCPForUnity.Editor.Helpers
 
                         if (!string.IsNullOrEmpty(error))
                         {
-                            Debug.LogWarning($"MCP for Unity: Auto-detect on load failed: {capturedEx}");
-                            // Alternatively: Debug.LogException(capturedEx);
+                            McpLog.Info($"Server check: {error}. Download via Window > MCP For Unity if needed.", always: false);
                         }
                     };
                 }
