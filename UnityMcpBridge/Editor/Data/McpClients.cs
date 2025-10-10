@@ -139,7 +139,7 @@ namespace MCPForUnity.Editor.Data
             {
                 name = "JetBrains GitHub Copilot",
                 windowsConfigPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                     "github-copilot",
                     "intellij",
                     "mcp.json"
