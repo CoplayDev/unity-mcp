@@ -480,6 +480,13 @@ namespace MCPForUnity.Editor.Helpers
                         // Get all .py files (excluding __init__.py)
                         var pyFiles = Directory.GetFiles(folder, "*.py")
                             .Where(f => !Path.GetFileName(f).Equals("__init__.py", StringComparison.OrdinalIgnoreCase));
+                            
+                        // Skip folders with no .py files
+                        if (!pyFiles.Any())
+                        { 
+                            skippedCount++; 
+                            continue; 
+                        }
 
                         foreach (var pyFile in pyFiles)
                         {
