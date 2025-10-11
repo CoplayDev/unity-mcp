@@ -110,7 +110,7 @@ string mcpServerPath = MCPServiceLocator.Paths.GetMcpServerPath();
 **Benefits:**
 - No constructor dependencies (easy to use anywhere)
 - Lazy initialization (services created only when needed)
-- Testable (supports custom implementations via `SetCustomImplementation()`)
+- Testable (supports custom implementations via `Register()`)
 
 ---
 
@@ -268,7 +268,7 @@ var paths = MCPServiceLocator.Paths;
 ```csharp
 // In test setup
 var mockBridge = new MockBridgeService();
-MCPServiceLocator.SetCustomBridgeService(mockBridge);
+MCPServiceLocator.Register(mockBridge);
 
 // Services are now testable without Unity dependencies
 ```
