@@ -11,6 +11,7 @@ import contextlib
 from dataclasses import dataclass
 from enum import Enum
 import importlib
+import importlib.resources
 import json
 import logging
 import os
@@ -24,6 +25,8 @@ from typing import Optional, Dict, Any
 from urllib.parse import urlparse
 import uuid
 
+import tomllib
+
 try:
     import httpx
     HAS_HTTPX = True
@@ -32,6 +35,16 @@ except ImportError:
     HAS_HTTPX = False
 
 logger = logging.getLogger("unity-mcp-telemetry")
+
+
+def get_package_version() -> str:
+    pyproject_path = importlib.resources.files("pyproject.toml")
+    with pyproject_path.open("rb") as f:
+        data = tomllib.load(f)
+    return data["project"]["version"]
+
+
+MCP_VERSION = get_package_version()
 
 
 class RecordType(str, Enum):
@@ -328,7 +341,7 @@ class TelemetryCollector:
                 "customer_uuid": record.customer_uuid,
                 "session_id": record.session_id,
                 "data": enriched_data,
-                "version": "3.0.2",  # MCP for Unity version
+                "version": MCP_VERSION,
                 "platform": _platform,
                 "source": _source,
             }
