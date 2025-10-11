@@ -602,7 +602,7 @@ namespace MCPForUnity.Editor.Windows
                 UpdatePathOverrides();
                 EditorUtility.DisplayDialog(
                     "Download Complete",
-                    "Server installed successfully! The bridge will start automatically.",
+                    "Server installed successfully! Click 'Start' in the Connection section to start the MCP bridge.",
                     "OK"
                 );
             }
