@@ -817,20 +817,23 @@ namespace MCPForUnity.Editor.Windows
         private void OnOpenFileClicked()
         {
             string path = configPathField.value;
-            if (!string.IsNullOrEmpty(path))
+            try
             {
-                try
+                if (!File.Exists(path))
                 {
-                    Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = path,
-                        UseShellExecute = true
-                    });
+                    EditorUtility.DisplayDialog("Open File", "The configuration file path does not exist.", "OK");
+                    return;
                 }
-                catch (Exception ex)
+
+                Process.Start(new ProcessStartInfo
                 {
-                    McpLog.Error($"Failed to open file: {ex.Message}");
-                }
+                    FileName = path,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                McpLog.Error($"Failed to open file: {ex.Message}");
             }
         }
 
