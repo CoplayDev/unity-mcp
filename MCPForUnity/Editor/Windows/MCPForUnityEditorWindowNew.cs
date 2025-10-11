@@ -373,6 +373,9 @@ namespace MCPForUnity.Editor.Windows
             MCPServiceLocator.Client.CheckClientStatus(client);
 
             clientStatusLabel.text = client.GetStatusDisplayString();
+            
+            // Reset inline color style (clear error state from OnConfigureClicked)
+            clientStatusLabel.style.color = StyleKeyword.Null;
 
             // Update status indicator color
             clientStatusIndicator.RemoveFromClassList("configured");
