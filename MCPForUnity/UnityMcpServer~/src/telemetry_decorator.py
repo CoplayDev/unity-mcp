@@ -1,5 +1,5 @@
 """
-Telemetry decorator for Unity MCP tools
+Telemetry decorator for MCP for Unity tools
 """
 
 import functools

@@ -84,19 +84,19 @@ class UnityConnection:
                     if 'FRAMING=1' in text:
                         self.use_framing = True
                         logger.debug(
-                            'Unity MCP handshake received: FRAMING=1 (strict)')
+                            'MCP for Unity handshake received: FRAMING=1 (strict)')
                     else:
                         if require_framing:
                             # Best-effort plain-text advisory for legacy peers
                             with contextlib.suppress(Exception):
                                 self.sock.sendall(
-                                    b'Unity MCP requires FRAMING=1\n')
+                                    b'MCP for Unity requires FRAMING=1\n')
                             raise ConnectionError(
-                                f'Unity MCP requires FRAMING=1, got: {text!r}')
+                                f'MCP for Unity requires FRAMING=1, got: {text!r}')
                         else:
                             self.use_framing = False
                             logger.warning(
-                                'Unity MCP handshake missing FRAMING=1; proceeding in legacy mode by configuration')
+                                'MCP for Unity handshake missing FRAMING=1; proceeding in legacy mode by configuration')
                 finally:
                     self.sock.settimeout(config.connection_timeout)
                 return True

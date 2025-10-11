@@ -28,12 +28,12 @@ namespace MCPForUnity.Editor.Services
         bool CheckClientStatus(McpClient client, bool attemptAutoRewrite = true);
         
         /// <summary>
-        /// Registers Unity MCP with Claude Code CLI
+        /// Registers MCP for Unity with Claude Code CLI
         /// </summary>
         void RegisterClaudeCode();
         
         /// <summary>
-        /// Unregisters Unity MCP from Claude Code CLI
+        /// Unregisters MCP for Unity from Claude Code CLI
         /// </summary>
         void UnregisterClaudeCode();
         

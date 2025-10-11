@@ -105,7 +105,7 @@ An on-demand stress utility exercises the MCP bridge with multiple concurrent cl
 - `tools/stress_mcp.py`
 
 ### What it does
-- Starts N TCP clients against the Unity MCP bridge (default port auto-discovered from `~/.unity-mcp/unity-mcp-status-*.json`).
+- Starts N TCP clients against the MCP for Unity bridge (default port auto-discovered from `~/.unity-mcp/unity-mcp-status-*.json`).
 - Sends lightweight framed `ping` keepalives to maintain concurrency.
 - In parallel, appends a unique marker comment to a target C# file using `manage_script.apply_text_edits` with:
   - `options.refresh = "immediate"` to force an import/compile immediately (triggers domain reload), and
@@ -181,7 +181,7 @@ We provide a CI job to run a Natural Language Editing suite against the Unity te
 - Artifacts: `claude-nl-suite-artifacts` includes XML and MD.
 
 ### MCP Connection Debugging
-- *Enable debug logs* in the Unity MCP window (inside the Editor) to view connection status, auto-setup results, and MCP client paths. It shows:
+- *Enable debug logs* in the MCP for Unity window (inside the Editor) to view connection status, auto-setup results, and MCP client paths. It shows:
   - bridge startup/port, client connections, strict framing negotiation, and parsed frames
   - auto-config path detection (Windows/macOS/Linux), uv/claude resolution, and surfaced errors
 - In CI, the job tails Unity logs (redacted for serial/license/password/token) and prints socket/status JSON diagnostics if startup fails.

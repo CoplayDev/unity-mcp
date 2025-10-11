@@ -1,7 +1,7 @@
 namespace MCPForUnity.Editor.Services
 {
     /// <summary>
-    /// Service for controlling the Unity MCP Bridge connection
+    /// Service for controlling the MCP for Unity Bridge connection
     /// </summary>
     public interface IBridgeControlService
     {
@@ -21,12 +21,12 @@ namespace MCPForUnity.Editor.Services
         bool IsAutoConnectMode { get; }
         
         /// <summary>
-        /// Starts the Unity MCP Bridge
+        /// Starts the MCP for Unity Bridge
         /// </summary>
         void Start();
         
         /// <summary>
-        /// Stops the Unity MCP Bridge
+        /// Stops the MCP for Unity Bridge
         /// </summary>
         void Stop();
         

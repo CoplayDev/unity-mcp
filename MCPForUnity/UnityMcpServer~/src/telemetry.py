@@ -1,5 +1,5 @@
 """
-Privacy-focused, anonymous telemetry system for Unity MCP
+Privacy-focused, anonymous telemetry system for MCP for Unity
 Inspired by Onyx's telemetry implementation with Unity-specific adaptations
 
 Fire-and-forget telemetry sender with a single background worker.
@@ -328,7 +328,7 @@ class TelemetryCollector:
                 "customer_uuid": record.customer_uuid,
                 "session_id": record.session_id,
                 "data": enriched_data,
-                "version": "3.0.2",  # Unity MCP version
+                "version": "3.0.2",  # MCP for Unity version
                 "platform": _platform,
                 "source": _source,
             }

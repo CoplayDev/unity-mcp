@@ -101,7 +101,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
    - Run: powershell -ExecutionPolicy ByPass -c ""irm https://astral.sh/uv/install.ps1 | iex""
    - Or download from: https://github.com/astral-sh/uv/releases
 
-3. MCP Server: Will be installed automatically by Unity MCP Bridge";
+3. MCP Server: Will be installed automatically by MCP for Unity Bridge";
         }
 
         private bool TryValidatePython(string pythonPath, out string version, out string fullPath)

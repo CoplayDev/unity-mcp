@@ -1,6 +1,6 @@
-# Adding Custom Tools to Unity MCP
+# Adding Custom Tools to MCP for Unity
 
-Unity MCP now supports auto-discovery of custom tools using decorators (Python) and attributes (C#). This allows you to easily extend the MCP server with your own tools without modifying core files.
+MCP for Unity now supports auto-discovery of custom tools using decorators (Python) and attributes (C#). This allows you to easily extend the MCP server with your own tools without modifying core files.
 
 Be sure to review the developer README first:
 

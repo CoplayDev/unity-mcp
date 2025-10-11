@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script for Unity MCP Telemetry System
+Test script for MCP for Unity Telemetry System
 Run this to verify telemetry is working correctly
 """
 

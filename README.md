@@ -302,7 +302,7 @@ Help make MCP for Unity better!
 
 ## 📊 Telemetry & Privacy
 
-Unity MCP includes **privacy-focused, anonymous telemetry** to help us improve the product. We collect usage analytics and performance data, but **never** your code, project names, or personal information.
+MCP for Unity includes **privacy-focused, anonymous telemetry** to help us improve the product. We collect usage analytics and performance data, but **never** your code, project names, or personal information.
 
 - **🔒 Anonymous**: Random UUIDs only, no personal data
 - **🚫 Easy opt-out**: Set `DISABLE_TELEMETRY=true` environment variable
@@ -354,10 +354,10 @@ MIT License. See [LICENSE](LICENSE) file.
 ## Unity AI Tools by Coplay
 
 Coplay has built 2 AI tools for Unity
-- **Unity MCP** is available freely under the MIT license.
-- **Coplay** is a premium Unity AI assistant that sits within Unity and is more than the Unity MCP.
+- **MCP for Unity** is available freely under the MIT license.
+- **Coplay** is a premium Unity AI assistant that sits within Unity and is more than the MCP for Unity.
 
-(These tools have different tech stacks. See this blog post [comparing Coplay to Unity MCP](https://www.coplay.dev/blog/comparing-coplay-and-unity-mcp).)
+(These tools have different tech stacks. See this blog post [comparing Coplay to MCP for Unity](https://www.coplay.dev/blog/comparing-coplay-and-unity-mcp).)
 
 ## Disclaimer
 

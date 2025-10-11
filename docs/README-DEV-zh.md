@@ -105,7 +105,7 @@ X:\UnityProject\Library\PackageCache\com.coplaydev.unity-mcp@272123cfd97e
 - `tools/stress_mcp.py`
 
 ### 作用
-- 对 Unity MCP bridge 启动 N 个 TCP 客户端（默认端口从 `~/.unity-mcp/unity-mcp-status-*.json` 自动发现）。
+- 对 MCP for Unity bridge 启动 N 个 TCP 客户端（默认端口从 `~/.unity-mcp/unity-mcp-status-*.json` 自动发现）。
 - 发送轻量级帧 `ping` 保活以维持并发。
 - 并行地，使用 `manage_script.apply_text_edits` 向目标 C# 文件追加唯一标记注释：
   - `options.refresh = "immediate"` 立即强制导入/编译（触发域重载），以及
@@ -181,7 +181,7 @@ python3 tools/stress_mcp.py \
 - 工件：`claude-nl-suite-artifacts` 包含 XML 和 MD。
 
 ### MCP 连接调试
-- *在 Unity MCP 窗口（编辑器内）启用调试日志* 以查看连接状态、自动设置结果和 MCP 客户端路径。它显示：
+- *在 MCP for Unity 窗口（编辑器内）启用调试日志* 以查看连接状态、自动设置结果和 MCP 客户端路径。它显示：
   - bridge 启动/端口、客户端连接、严格帧协商和解析的帧
   - 自动配置路径检测（Windows/macOS/Linux）、uv/claude 解析和显示的错误
 - 在 CI 中，如果启动失败，作业会尾随 Unity 日志（序列号/许可证/密码/令牌已编辑）并打印套接字/状态 JSON 诊断。
