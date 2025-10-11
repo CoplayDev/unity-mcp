@@ -3,6 +3,7 @@ using System.IO;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
+using PackageInfo = UnityEditor.PackageManager.PackageInfo;
 
 namespace MCPForUnity.Editor.Helpers
 {
@@ -31,46 +32,33 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
-        /// Gets the MCP for Unity package root path by finding a known script in the AssetDatabase.
-        /// Works for both Package Manager (Packages/com.coplaydev.unity-mcp) and Asset Store (Assets/MCPForUnity) installations.
+        /// Gets the MCP for Unity package root path.
+        /// Works for registry Package Manager, local Package Manager, and Asset Store installations.
         /// </summary>
-        /// <returns>The package root path, or null if not found</returns>
+        /// <returns>The package root path (virtual for PM, absolute for Asset Store), or null if not found</returns>
         public static string GetMcpPackageRootPath()
         {
             try
             {
-                // Use a known type from the package to locate it
-                string[] guids = AssetDatabase.FindAssets($"t:Script {nameof(AssetPathUtility)}");
-                
-                if (guids.Length == 0)
+                var packageInfo = PackageInfo.FindForAssembly(typeof(AssetPathUtility).Assembly);
+                if (packageInfo != null && !string.IsNullOrEmpty(packageInfo.assetPath))
                 {
-                    Debug.LogWarning("Could not find AssetPathUtility script in AssetDatabase");
-                    return null;
+                    McpLog.Info($"Found MCP for Unity package root path: {packageInfo.assetPath}");
+                    return packageInfo.assetPath;
                 }
-
-                string scriptPath = AssetDatabase.GUIDToAssetPath(guids[0]);
-                
-                // Script is at: {packageRoot}/Editor/Helpers/AssetPathUtility.cs
-                // We need to extract {packageRoot}
-                int editorIndex = scriptPath.IndexOf("/Editor/", StringComparison.Ordinal);
-                
-                if (editorIndex >= 0)
-                {
-                    return scriptPath.Substring(0, editorIndex);
-                }
-
-                Debug.LogWarning($"Could not determine package root from script path: {scriptPath}");
+                McpLog.Info($"Failed to get MCP for Unity package root path");
                 return null;
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"Failed to get package root path: {ex.Message}");
+                McpLog.Error($"Failed to get package root path: {ex.Message}");
                 return null;
             }
         }
 
         /// <summary>
         /// Reads and parses the package.json file for MCP for Unity.
+        /// Handles both Package Manager (registry/local) and Asset Store installations.
         /// </summary>
         /// <returns>JObject containing package.json data, or null if not found or parse failed</returns>
         public static JObject GetPackageJson()
@@ -84,10 +72,35 @@ namespace MCPForUnity.Editor.Helpers
                 }
 
                 string packageJsonPath = Path.Combine(packageRoot, "package.json");
-                
+
+                // Convert virtual asset path to file system path
+                if (packageRoot.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Package Manager install - must use PackageInfo.resolvedPath
+                    // Virtual paths like "Packages/..." don't work with File.Exists()
+                    // Registry packages live in Library/PackageCache/package@version/
+                    var packageInfo = PackageInfo.FindForAssembly(typeof(AssetPathUtility).Assembly);
+                    if (packageInfo != null && !string.IsNullOrEmpty(packageInfo.resolvedPath))
+                    {
+                        packageJsonPath = Path.Combine(packageInfo.resolvedPath, "package.json");
+                    }
+                    else
+                    {
+                        McpLog.Warn("Could not resolve Package Manager path for package.json");
+                        return null;
+                    }
+                }
+                else if (packageRoot.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Asset Store install - convert to absolute file system path
+                    // Application.dataPath is the absolute path to the Assets folder
+                    string relativePath = packageRoot.Substring("Assets/".Length);
+                    packageJsonPath = Path.Combine(Application.dataPath, relativePath, "package.json");
+                }
+
                 if (!File.Exists(packageJsonPath))
                 {
-                    Debug.LogWarning($"package.json not found at: {packageJsonPath}");
+                    McpLog.Warn($"package.json not found at: {packageJsonPath}");
                     return null;
                 }
 
@@ -96,7 +109,7 @@ namespace MCPForUnity.Editor.Helpers
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"Failed to read or parse package.json: {ex.Message}");
+                McpLog.Warn($"Failed to read or parse package.json: {ex.Message}");
                 return null;
             }
         }
@@ -120,7 +133,7 @@ namespace MCPForUnity.Editor.Helpers
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"Failed to get package version: {ex.Message}");
+                McpLog.Warn($"Failed to get package version: {ex.Message}");
                 return "unknown";
             }
         }
