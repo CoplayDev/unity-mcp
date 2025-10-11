@@ -87,26 +87,10 @@ namespace MCPForUnity.Editor.Windows
             var window = GetWindow<MCPForUnityEditorWindowNew>("MCP For Unity");
             window.minSize = new Vector2(500, 600);
         }
-
-        /// <summary>
-        /// Detects the base path for the package, supporting both Package Manager 
-        /// (Packages/com.coplaydev.unity-mcp) and Asset Store (Assets/MCPForUnity) installations.
-        /// </summary>
-        private static string GetAssetBasePath()
-        {
-            string path = Helpers.AssetPathUtility.GetMcpPackageRootPath();
-            if (string.IsNullOrEmpty(path))
-            {
-                McpLog.Error("Could not determine package base path");
-                return "Packages/com.coplaydev.unity-mcp"; // fallback
-            }
-            return path;
-        }
-
         public void CreateGUI()
         {
             // Determine base path (Package Manager vs Asset Store install)
-            string basePath = GetAssetBasePath();
+            string basePath = AssetPathUtility.GetMcpPackageRootPath();
 
             // Load UXML
             var visualTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
@@ -597,7 +581,7 @@ namespace MCPForUnity.Editor.Windows
 
         private void OnDownloadServerClicked()
         {
-            if (Helpers.ServerInstaller.DownloadAndInstallServer())
+            if (ServerInstaller.DownloadAndInstallServer())
             {
                 UpdateServerStatusBanner();
                 UpdatePathOverrides();
@@ -613,7 +597,7 @@ namespace MCPForUnity.Editor.Windows
         {
             try
             {
-                bool success = Helpers.ServerInstaller.RebuildMcpServer();
+                bool success = ServerInstaller.RebuildMcpServer();
                 if (success)
                 {
                     EditorUtility.DisplayDialog("MCP For Unity", "Server rebuilt successfully.", "OK");
