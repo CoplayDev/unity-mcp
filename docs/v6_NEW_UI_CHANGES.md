@@ -206,13 +206,13 @@ MCPForUnity/Editor/Services/
 ```
 
 **Helpers:**
-```
+```text
 MCPForUnity/Editor/Helpers/
 └── AssetPathUtility.cs              # Package path detection & package.json parsing
 ```
 
 **UI:**
-```
+```text
 MCPForUnity/Editor/Windows/
 ├── MCPForUnityEditorWindowNew.cs    # Main window (~850 lines)
 ├── MCPForUnityEditorWindowNew.uxml  # UI Toolkit layout
@@ -220,7 +220,7 @@ MCPForUnity/Editor/Windows/
 ```
 
 **CI/CD:**
-```
+```text
 .github/workflows/
 └── bump-version.yml                 # Server upload to releases
 ```
