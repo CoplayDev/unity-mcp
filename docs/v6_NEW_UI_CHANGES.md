@@ -194,7 +194,7 @@ paths.SetUvPathOverride("/custom/path/to/uv");
 ### Files Created
 
 **Services:**
-```
+```text
 MCPForUnity/Editor/Services/
 ├── IBridgeControlService.cs          # Bridge lifecycle interface
 ├── BridgeControlService.cs           # Bridge lifecycle implementation
