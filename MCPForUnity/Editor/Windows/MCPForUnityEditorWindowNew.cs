@@ -448,7 +448,7 @@ namespace MCPForUnity.Editor.Windows
                 return;
 
             var client = mcpClients.clients[selectedClientIndex];
-            
+
             // Show Claude CLI path only for Claude Code client
             if (client.mcpType == McpTypes.ClaudeCode)
             {
@@ -527,7 +527,7 @@ namespace MCPForUnity.Editor.Windows
         private void OnConnectionToggleClicked()
         {
             var bridgeService = MCPServiceLocator.Bridge;
-            
+
             if (bridgeService.IsRunning)
             {
                 bridgeService.Stop();
@@ -535,7 +535,7 @@ namespace MCPForUnity.Editor.Windows
             else
             {
                 bridgeService.Start();
-                
+
                 // Verify connection after starting (Option C: verify on connect)
                 EditorApplication.delayCall += () =>
                 {
@@ -545,7 +545,7 @@ namespace MCPForUnity.Editor.Windows
                     }
                 };
             }
-            
+
             UpdateConnectionStatus();
         }
 
@@ -557,7 +557,7 @@ namespace MCPForUnity.Editor.Windows
         private void VerifyBridgeConnection()
         {
             var bridgeService = MCPServiceLocator.Bridge;
-            
+
             if (!bridgeService.IsRunning)
             {
                 healthStatusLabel.text = "Disconnected";
@@ -602,7 +602,7 @@ namespace MCPForUnity.Editor.Windows
                 UpdatePathOverrides();
                 EditorUtility.DisplayDialog(
                     "Download Complete",
-                    "Server installed successfully! Click 'Start' in the Connection section to start the MCP bridge.",
+                    "Server installed successfully! Start your connection and configure your MCP clients to begin.",
                     "OK"
                 );
             }
@@ -671,7 +671,7 @@ namespace MCPForUnity.Editor.Windows
             try
             {
                 var summary = MCPServiceLocator.Client.ConfigureAllDetectedClients();
-                
+
                 // Build detailed message
                 string message = summary.GetSummaryMessage() + "\n\n";
                 foreach (var msg in summary.Messages)
@@ -759,8 +759,8 @@ namespace MCPForUnity.Editor.Windows
 
         private void OnBrowseUvClicked()
         {
-            string suggested = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) 
-                ? "/opt/homebrew/bin" 
+            string suggested = RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+                ? "/opt/homebrew/bin"
                 : Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
             string picked = EditorUtility.OpenFilePanel("Select UV Executable", suggested, "");
             if (!string.IsNullOrEmpty(picked))
@@ -787,8 +787,8 @@ namespace MCPForUnity.Editor.Windows
 
         private void OnBrowseClaudeClicked()
         {
-            string suggested = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) 
-                ? "/opt/homebrew/bin" 
+            string suggested = RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+                ? "/opt/homebrew/bin"
                 : Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
             string picked = EditorUtility.OpenFilePanel("Select Claude CLI", suggested, "");
             if (!string.IsNullOrEmpty(picked))
