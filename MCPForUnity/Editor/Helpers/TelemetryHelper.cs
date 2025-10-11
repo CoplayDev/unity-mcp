@@ -82,7 +82,7 @@ namespace MCPForUnity.Editor.Helpers
 
         /// <summary>
         /// Send telemetry data to MCP server for processing
-        /// This is a lightweight bridge - the actual telemetry logic is in Python
+        /// This is a lightweight bridge - the actual telemetry logic is in the MCP server
         /// </summary>
         public static void RecordEvent(string eventType, Dictionary<string, object> data = null)
         {
