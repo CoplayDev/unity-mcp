@@ -40,13 +40,34 @@ namespace MCPForUnity.Editor.Helpers
         {
             try
             {
+                // Try Package Manager first (registry and local installs)
                 var packageInfo = PackageInfo.FindForAssembly(typeof(AssetPathUtility).Assembly);
                 if (packageInfo != null && !string.IsNullOrEmpty(packageInfo.assetPath))
                 {
-                    McpLog.Info($"Found MCP for Unity package root path: {packageInfo.assetPath}");
                     return packageInfo.assetPath;
                 }
-                McpLog.Info($"Failed to get MCP for Unity package root path");
+
+                // Fallback to AssetDatabase for Asset Store installs (Assets/MCPForUnity)
+                string[] guids = AssetDatabase.FindAssets($"t:Script {nameof(AssetPathUtility)}");
+                
+                if (guids.Length == 0)
+                {
+                    McpLog.Warn("Could not find AssetPathUtility script in AssetDatabase");
+                    return null;
+                }
+
+                string scriptPath = AssetDatabase.GUIDToAssetPath(guids[0]);
+                
+                // Script is at: {packageRoot}/Editor/Helpers/AssetPathUtility.cs
+                // Extract {packageRoot}
+                int editorIndex = scriptPath.IndexOf("/Editor/", StringComparison.Ordinal);
+                
+                if (editorIndex >= 0)
+                {
+                    return scriptPath.Substring(0, editorIndex);
+                }
+
+                McpLog.Warn($"Could not determine package root from script path: {scriptPath}");
                 return null;
             }
             catch (Exception ex)
