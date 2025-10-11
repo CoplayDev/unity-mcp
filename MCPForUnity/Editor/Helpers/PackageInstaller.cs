@@ -4,7 +4,7 @@ using UnityEngine;
 namespace MCPForUnity.Editor.Helpers
 {
     /// <summary>
-    /// Handles automatic installation of the Python server when the package is first installed.
+    /// Handles automatic installation of the MCP server when the package is first installed.
     /// </summary>
     [InitializeOnLoad]
     public static class PackageInstaller
@@ -33,7 +33,7 @@ namespace MCPForUnity.Editor.Helpers
                 // Only log success if server was actually embedded and copied
                 if (ServerInstaller.HasEmbeddedServer())
                 {
-                    McpLog.Info("Python server installation completed successfully.");
+                    McpLog.Info("MCP server installation completed successfully.");
                 }
             }
             catch (System.Exception)

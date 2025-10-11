@@ -26,9 +26,9 @@
                     <ui:VisualElement class="advanced-settings-content">
                         <ui:Label text="Path Overrides (leave empty for auto-detection):" class="advanced-label" />
                         
-                        <!-- Python Server Path Override -->
+                        <!-- MCP Server Path Override -->
                         <ui:VisualElement class="override-row">
-                            <ui:Label text="Python Server Path:" class="override-label" />
+                            <ui:Label text="MCP Server Path:" class="override-label" />
                             <ui:VisualElement class="status-indicator-small" name="mcp-server-path-status" />
                         </ui:VisualElement>
                         <ui:VisualElement class="path-override-controls">

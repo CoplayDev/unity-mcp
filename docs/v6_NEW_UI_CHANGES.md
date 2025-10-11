@@ -42,7 +42,7 @@ The new MCP Editor Window is a complete rebuild using **UI Toolkit (UXML/USS)** 
 ## What's New
 
 ### UI Enhancements
-- **Advanced Settings Foldout** - Collapsible section for path overrides (Python server, UV, Claude CLI)
+- **Advanced Settings Foldout** - Collapsible section for path overrides (MCP server, UV, Claude CLI)
 - **Visual Path Validation** - Green/red indicators show whether override paths are valid
 - **Bridge Health Indicator** - Separate from connection status, shows handshake and ping/pong results
 - **Manual Connection Test Button** - Verify bridge health on demand without reconnecting
@@ -167,7 +167,7 @@ Debug.Log($"Configured: {summary.SuccessCount}, Failed: {summary.FailureCount}")
 **Purpose:** Resolves paths to required tools with override support
 
 **Key Methods:**
-- `GetMcpServerPath()` - Python server directory
+- `GetMcpServerPath()` - MCP server directory
 - `GetUvPath()` - UV executable path
 - `GetClaudeCliPath()` - Claude CLI path
 - `SetMcpServerOverride(path)` / `ClearMcpServerOverride()` - Manage overrides

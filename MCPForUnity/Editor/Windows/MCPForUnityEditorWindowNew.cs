@@ -743,7 +743,7 @@ namespace MCPForUnity.Editor.Windows
         {
             MCPServiceLocator.Paths.ClearMcpServerOverride();
             UpdatePathOverrides();
-            McpLog.Info("Python server path override cleared");
+            McpLog.Info("MCP server path override cleared");
         }
 
         private void OnBrowseUvClicked()
