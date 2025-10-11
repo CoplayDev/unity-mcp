@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -96,7 +97,7 @@ namespace MCPForUnity.Editor.Windows
             string path = Helpers.AssetPathUtility.GetMcpPackageRootPath();
             if (string.IsNullOrEmpty(path))
             {
-                Debug.LogError("Could not determine package base path");
+                McpLog.Error("Could not determine package base path");
                 return "Packages/com.coplaydev.unity-mcp"; // fallback
             }
             return path;
@@ -114,7 +115,7 @@ namespace MCPForUnity.Editor.Windows
 
             if (visualTree == null)
             {
-                Debug.LogError($"Failed to load UXML at: {basePath}/Editor/Windows/MCPForUnityEditorWindowNew.uxml");
+                McpLog.Error($"Failed to load UXML at: {basePath}/Editor/Windows/MCPForUnityEditorWindowNew.uxml");
                 return;
             }
 
@@ -564,7 +565,7 @@ namespace MCPForUnity.Editor.Windows
                 healthIndicator.RemoveFromClassList("healthy");
                 healthIndicator.RemoveFromClassList("warning");
                 healthIndicator.AddToClassList("unknown");
-                Debug.LogWarning("Cannot verify connection: Bridge is not running");
+                McpLog.Warn("Cannot verify connection: Bridge is not running");
                 return;
             }
 
@@ -578,19 +579,19 @@ namespace MCPForUnity.Editor.Windows
             {
                 healthStatusLabel.text = "Healthy";
                 healthIndicator.AddToClassList("healthy");
-                Debug.Log("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Bridge verification successful");
+                McpLog.Info("Bridge verification successful");
             }
             else if (result.HandshakeValid)
             {
                 healthStatusLabel.text = "Ping Failed";
                 healthIndicator.AddToClassList("warning");
-                Debug.LogWarning($"Bridge verification warning: {result.Message}");
+                McpLog.Warn($"Bridge verification warning: {result.Message}");
             }
             else
             {
                 healthStatusLabel.text = "Unhealthy";
                 healthIndicator.AddToClassList("warning");
-                Debug.LogError($"Bridge verification failed: {result.Message}");
+                McpLog.Error($"Bridge verification failed: {result.Message}");
             }
         }
 
@@ -626,7 +627,7 @@ namespace MCPForUnity.Editor.Windows
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Failed to rebuild server: {ex.Message}");
+                McpLog.Error($"Failed to rebuild server: {ex.Message}");
                 EditorUtility.DisplayDialog("MCP For Unity", $"Rebuild failed: {ex.Message}", "OK");
             }
         }
@@ -727,7 +728,7 @@ namespace MCPForUnity.Editor.Windows
             {
                 clientStatusLabel.text = "Error";
                 clientStatusLabel.style.color = Color.red;
-                Debug.LogError($"Configuration failed: {ex.Message}");
+                McpLog.Error($"Configuration failed: {ex.Message}");
                 EditorUtility.DisplayDialog("Configuration Failed", ex.Message, "OK");
             }
         }
@@ -741,7 +742,7 @@ namespace MCPForUnity.Editor.Windows
                 {
                     MCPServiceLocator.Paths.SetPythonServerOverride(picked);
                     UpdatePathOverrides();
-                    Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Python server path override set to: {picked}");
+                    McpLog.Info($"Python server path override set to: {picked}");
                 }
                 catch (Exception ex)
                 {
@@ -754,7 +755,7 @@ namespace MCPForUnity.Editor.Windows
         {
             MCPServiceLocator.Paths.ClearPythonServerOverride();
             UpdatePathOverrides();
-            Debug.Log("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Python server path override cleared");
+            McpLog.Info("Python server path override cleared");
         }
 
         private void OnBrowseUvClicked()
@@ -769,7 +770,7 @@ namespace MCPForUnity.Editor.Windows
                 {
                     MCPServiceLocator.Paths.SetUvPathOverride(picked);
                     UpdatePathOverrides();
-                    Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: UV path override set to: {picked}");
+                    McpLog.Info($"UV path override set to: {picked}");
                 }
                 catch (Exception ex)
                 {
@@ -782,7 +783,7 @@ namespace MCPForUnity.Editor.Windows
         {
             MCPServiceLocator.Paths.ClearUvPathOverride();
             UpdatePathOverrides();
-            Debug.Log("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: UV path override cleared");
+            McpLog.Info("UV path override cleared");
         }
 
         private void OnBrowseClaudeClicked()
@@ -798,7 +799,7 @@ namespace MCPForUnity.Editor.Windows
                     MCPServiceLocator.Paths.SetClaudeCliPathOverride(picked);
                     UpdateClaudeCliPathVisibility();
                     UpdateClientStatus();
-                    Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Claude CLI path override set to: {picked}");
+                    McpLog.Info($"Claude CLI path override set to: {picked}");
                 }
                 catch (Exception ex)
                 {
@@ -810,7 +811,7 @@ namespace MCPForUnity.Editor.Windows
         private void OnCopyPathClicked()
         {
             EditorGUIUtility.systemCopyBuffer = configPathField.value;
-            Debug.Log("Config path copied to clipboard");
+            McpLog.Info("Config path copied to clipboard");
         }
 
         private void OnOpenFileClicked()
@@ -820,7 +821,7 @@ namespace MCPForUnity.Editor.Windows
             {
                 try
                 {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    Process.Start(new System.Diagnostics.ProcessStartInfo
                     {
                         FileName = path,
                         UseShellExecute = true
@@ -828,7 +829,7 @@ namespace MCPForUnity.Editor.Windows
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"Failed to open file: {ex.Message}");
+                    McpLog.Error($"Failed to open file: {ex.Message}");
                 }
             }
         }
@@ -836,7 +837,7 @@ namespace MCPForUnity.Editor.Windows
         private void OnCopyJsonClicked()
         {
             EditorGUIUtility.systemCopyBuffer = configJsonField.value;
-            Debug.Log("Configuration copied to clipboard");
+            McpLog.Info("Configuration copied to clipboard");
         }
     }
 }
