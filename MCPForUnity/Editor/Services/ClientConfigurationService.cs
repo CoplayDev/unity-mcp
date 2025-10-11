@@ -25,7 +25,7 @@ namespace MCPForUnity.Editor.Services
                 string configPath = McpConfigurationHelper.GetClientConfigPath(client);
                 McpConfigurationHelper.EnsureConfigDirectoryExists(configPath);
 
-                string pythonDir = MCPServiceLocator.Paths.GetPythonServerPath();
+                string pythonDir = MCPServiceLocator.Paths.GetMcpServerPath();
 
                 if (pythonDir == null || !File.Exists(Path.Combine(pythonDir, "server.py")))
                 {
@@ -134,7 +134,7 @@ namespace MCPForUnity.Editor.Services
                 }
 
                 string configJson = File.ReadAllText(configPath);
-                string pythonDir = MCPServiceLocator.Paths.GetPythonServerPath();
+                string pythonDir = MCPServiceLocator.Paths.GetMcpServerPath();
 
                 // Check configuration based on client type
                 string[] args = null;
@@ -233,7 +233,7 @@ namespace MCPForUnity.Editor.Services
         public void RegisterClaudeCode()
         {
             var pathService = MCPServiceLocator.Paths;
-            string pythonDir = pathService.GetPythonServerPath();
+            string pythonDir = pathService.GetMcpServerPath();
             
             if (string.IsNullOrEmpty(pythonDir))
             {
@@ -366,7 +366,7 @@ namespace MCPForUnity.Editor.Services
 
         public string GenerateConfigJson(McpClient client)
         {
-            string pythonDir = MCPServiceLocator.Paths.GetPythonServerPath();
+            string pythonDir = MCPServiceLocator.Paths.GetMcpServerPath();
             string uvPath = MCPServiceLocator.Paths.GetUvPath();
 
             // Claude Code uses CLI commands, not JSON config

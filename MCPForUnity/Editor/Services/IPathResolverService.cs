@@ -6,10 +6,10 @@ namespace MCPForUnity.Editor.Services
     public interface IPathResolverService
     {
         /// <summary>
-        /// Gets the Python MCP server path (respects override if set)
+        /// Gets the MCP server path (respects override if set)
         /// </summary>
-        /// <returns>Path to the Python server directory containing server.py, or null if not found</returns>
-        string GetPythonServerPath();
+        /// <returns>Path to the MCP server directory containing server.py, or null if not found</returns>
+        string GetMcpServerPath();
         
         /// <summary>
         /// Gets the UV package manager path (respects override if set)
@@ -42,10 +42,10 @@ namespace MCPForUnity.Editor.Services
         bool IsClaudeCliDetected();
         
         /// <summary>
-        /// Sets an override for the Python server path
+        /// Sets an override for the MCP server path
         /// </summary>
         /// <param name="path">Path to override with</param>
-        void SetPythonServerOverride(string path);
+        void SetMcpServerOverride(string path);
         
         /// <summary>
         /// Sets an override for the UV path
@@ -60,9 +60,9 @@ namespace MCPForUnity.Editor.Services
         void SetClaudeCliPathOverride(string path);
         
         /// <summary>
-        /// Clears the Python server path override
+        /// Clears the MCP server path override
         /// </summary>
-        void ClearPythonServerOverride();
+        void ClearMcpServerOverride();
         
         /// <summary>
         /// Clears the UV path override
@@ -75,9 +75,9 @@ namespace MCPForUnity.Editor.Services
         void ClearClaudeCliPathOverride();
         
         /// <summary>
-        /// Gets whether a Python server path override is active
+        /// Gets whether a MCP server path override is active
         /// </summary>
-        bool HasPythonServerOverride { get; }
+        bool HasMcpServerOverride { get; }
         
         /// <summary>
         /// Gets whether a UV path override is active

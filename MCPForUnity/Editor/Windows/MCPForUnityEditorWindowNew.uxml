@@ -29,7 +29,7 @@
                         <!-- Python Server Path Override -->
                         <ui:VisualElement class="override-row">
                             <ui:Label text="Python Server Path:" class="override-label" />
-                            <ui:VisualElement class="status-indicator-small" name="python-path-status" />
+                            <ui:VisualElement class="status-indicator-small" name="mcp-server-path-status" />
                         </ui:VisualElement>
                         <ui:VisualElement class="path-override-controls">
                             <ui:TextField name="python-path-override" readonly="true" class="override-field" />

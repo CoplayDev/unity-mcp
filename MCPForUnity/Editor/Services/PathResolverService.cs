@@ -16,11 +16,11 @@ namespace MCPForUnity.Editor.Services
         private const string UvPathOverrideKey = "MCPForUnity.UvPath";
         private const string ClaudeCliPathOverrideKey = "MCPForUnity.ClaudeCliPath";
 
-        public bool HasPythonServerOverride => !string.IsNullOrEmpty(EditorPrefs.GetString(PythonDirOverrideKey, null));
+        public bool HasMcpServerOverride => !string.IsNullOrEmpty(EditorPrefs.GetString(PythonDirOverrideKey, null));
         public bool HasUvPathOverride => !string.IsNullOrEmpty(EditorPrefs.GetString(UvPathOverrideKey, null));
         public bool HasClaudeCliPathOverride => !string.IsNullOrEmpty(EditorPrefs.GetString(ClaudeCliPathOverrideKey, null));
 
-        public string GetPythonServerPath()
+        public string GetMcpServerPath()
         {
             // Check for override first
             string overridePath = EditorPrefs.GetString(PythonDirOverrideKey, null);
@@ -174,11 +174,11 @@ namespace MCPForUnity.Editor.Services
             return !string.IsNullOrEmpty(GetClaudeCliPath());
         }
 
-        public void SetPythonServerOverride(string path)
+        public void SetMcpServerOverride(string path)
         {
             if (string.IsNullOrEmpty(path))
             {
-                ClearPythonServerOverride();
+                ClearMcpServerOverride();
                 return;
             }
 
@@ -224,7 +224,7 @@ namespace MCPForUnity.Editor.Services
             ExecPath.SetClaudeCliPath(path);
         }
 
-        public void ClearPythonServerOverride()
+        public void ClearMcpServerOverride()
         {
             EditorPrefs.DeleteKey(PythonDirOverrideKey);
         }

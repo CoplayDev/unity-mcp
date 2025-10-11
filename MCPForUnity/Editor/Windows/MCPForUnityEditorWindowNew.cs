@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using UnityEditor;
-using UnityEditor.UIElements;
+using UnityEditor.UIElements; // For Unity 2021 compatibility
 using UnityEngine;
 using UnityEngine.UIElements;
 using MCPForUnity.Editor.Data;
@@ -28,13 +28,13 @@ namespace MCPForUnity.Editor.Windows
         private EnumField validationLevelField;
         private Label validationDescription;
         private Foldout advancedSettingsFoldout;
-        private TextField pythonPathOverride;
+        private TextField mcpServerPathOverride;
         private TextField uvPathOverride;
         private Button browsePythonButton;
         private Button clearPythonButton;
         private Button browseUvButton;
         private Button clearUvButton;
-        private VisualElement pythonPathStatus;
+        private VisualElement mcpServerPathStatus;
         private VisualElement uvPathStatus;
 
         // Connection UI Elements
@@ -195,13 +195,13 @@ namespace MCPForUnity.Editor.Windows
             validationLevelField = rootVisualElement.Q<EnumField>("validation-level");
             validationDescription = rootVisualElement.Q<Label>("validation-description");
             advancedSettingsFoldout = rootVisualElement.Q<Foldout>("advanced-settings-foldout");
-            pythonPathOverride = rootVisualElement.Q<TextField>("python-path-override");
+            mcpServerPathOverride = rootVisualElement.Q<TextField>("python-path-override");
             uvPathOverride = rootVisualElement.Q<TextField>("uv-path-override");
             browsePythonButton = rootVisualElement.Q<Button>("browse-python-button");
             clearPythonButton = rootVisualElement.Q<Button>("clear-python-button");
             browseUvButton = rootVisualElement.Q<Button>("browse-uv-button");
             clearUvButton = rootVisualElement.Q<Button>("clear-uv-button");
-            pythonPathStatus = rootVisualElement.Q<VisualElement>("python-path-status");
+            mcpServerPathStatus = rootVisualElement.Q<VisualElement>("mcp-server-path-status");
             uvPathStatus = rootVisualElement.Q<VisualElement>("uv-path-status");
 
             // Connection
@@ -462,27 +462,27 @@ namespace MCPForUnity.Editor.Windows
         {
             var pathService = MCPServiceLocator.Paths;
 
-            // Python Server Path
-            string pythonPath = pathService.GetPythonServerPath();
-            if (pathService.HasPythonServerOverride)
+            // MCP Server Path
+            string mcpServerPath = pathService.GetMcpServerPath();
+            if (pathService.HasMcpServerOverride)
             {
-                pythonPathOverride.value = pythonPath ?? "(override set but invalid)";
+                mcpServerPathOverride.value = mcpServerPath ?? "(override set but invalid)";
             }
             else
             {
-                pythonPathOverride.value = pythonPath ?? "(auto-detected)";
+                mcpServerPathOverride.value = mcpServerPath ?? "(auto-detected)";
             }
 
             // Update status indicator
-            pythonPathStatus.RemoveFromClassList("valid");
-            pythonPathStatus.RemoveFromClassList("invalid");
-            if (!string.IsNullOrEmpty(pythonPath) && File.Exists(Path.Combine(pythonPath, "server.py")))
+            mcpServerPathStatus.RemoveFromClassList("valid");
+            mcpServerPathStatus.RemoveFromClassList("invalid");
+            if (!string.IsNullOrEmpty(mcpServerPath) && File.Exists(Path.Combine(mcpServerPath, "server.py")))
             {
-                pythonPathStatus.AddToClassList("valid");
+                mcpServerPathStatus.AddToClassList("valid");
             }
             else
             {
-                pythonPathStatus.AddToClassList("invalid");
+                mcpServerPathStatus.AddToClassList("invalid");
             }
 
             // UV Path
@@ -720,14 +720,14 @@ namespace MCPForUnity.Editor.Windows
 
         private void OnBrowsePythonClicked()
         {
-            string picked = EditorUtility.OpenFolderPanel("Select Python Server Directory", Application.dataPath, "");
+            string picked = EditorUtility.OpenFolderPanel("Select MCP Server Directory", Application.dataPath, "");
             if (!string.IsNullOrEmpty(picked))
             {
                 try
                 {
-                    MCPServiceLocator.Paths.SetPythonServerOverride(picked);
+                    MCPServiceLocator.Paths.SetMcpServerOverride(picked);
                     UpdatePathOverrides();
-                    McpLog.Info($"Python server path override set to: {picked}");
+                    McpLog.Info($"MCP server path override set to: {picked}");
                 }
                 catch (Exception ex)
                 {
@@ -738,7 +738,7 @@ namespace MCPForUnity.Editor.Windows
 
         private void OnClearPythonClicked()
         {
-            MCPServiceLocator.Paths.ClearPythonServerOverride();
+            MCPServiceLocator.Paths.ClearMcpServerOverride();
             UpdatePathOverrides();
             McpLog.Info("Python server path override cleared");
         }

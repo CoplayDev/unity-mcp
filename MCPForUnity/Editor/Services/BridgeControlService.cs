@@ -19,7 +19,7 @@ namespace MCPForUnity.Editor.Services
         {
             // If server is installed, use auto-connect mode
             // Otherwise use standard mode
-            string serverPath = MCPServiceLocator.Paths.GetPythonServerPath();
+            string serverPath = MCPServiceLocator.Paths.GetMcpServerPath();
             if (!string.IsNullOrEmpty(serverPath) && File.Exists(Path.Combine(serverPath, "server.py")))
             {
                 MCPForUnityBridge.StartAutoConnect();

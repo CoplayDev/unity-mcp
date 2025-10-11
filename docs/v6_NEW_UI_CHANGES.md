@@ -104,7 +104,7 @@ MCPServiceLocator.Bridge.Start();
 MCPServiceLocator.Client.ConfigureAllDetectedClients();
 
 // Access path resolver service
-string pythonPath = MCPServiceLocator.Paths.GetPythonServerPath();
+string mcpServerPath = MCPServiceLocator.Paths.GetMcpServerPath();
 ```
 
 **Benefits:**
@@ -167,10 +167,10 @@ Debug.Log($"Configured: {summary.SuccessCount}, Failed: {summary.FailureCount}")
 **Purpose:** Resolves paths to required tools with override support
 
 **Key Methods:**
-- `GetPythonServerPath()` - Python server directory
+- `GetMcpServerPath()` - Python server directory
 - `GetUvPath()` - UV executable path
 - `GetClaudeCliPath()` - Claude CLI path
-- `SetPythonServerOverride(path)` / `ClearPythonServerOverride()` - Manage overrides
+- `SetMcpServerOverride(path)` / `ClearMcpServerOverride()` - Manage overrides
 - `IsPythonDetected()` / `IsUvDetected()` - Detection checks
 
 **Implementation:** `PathResolverService`
