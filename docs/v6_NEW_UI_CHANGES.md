@@ -170,7 +170,9 @@ Debug.Log($"Configured: {summary.SuccessCount}, Failed: {summary.FailureCount}")
 - `GetMcpServerPath()` - MCP server directory
 - `GetUvPath()` - UV executable path
 - `GetClaudeCliPath()` - Claude CLI path
-- `SetMcpServerOverride(path)` / `ClearMcpServerOverride()` - Manage overrides
+- `SetMcpServerOverride(path)` / `ClearMcpServerOverride()` - Manage MCP server overrides
+- `SetUvPathOverride(path)` / `ClearUvPathOverride()` - Manage UV overrides
+- `SetClaudeCliPathOverride(path)` / `ClearClaudeCliPathOverride()` - Manage Claude CLI overrides
 - `IsPythonDetected()` / `IsUvDetected()` - Detection checks
 
 **Implementation:** `PathResolverService`
