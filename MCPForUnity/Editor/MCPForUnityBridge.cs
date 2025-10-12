@@ -96,7 +96,7 @@ namespace MCPForUnity.Editor
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Auto-connect failed: {ex.Message}");
+                McpLog.Error($"Auto-connect failed: {ex.Message}");
 
                 // Record telemetry for connection failure
                 TelemetryHelper.RecordBridgeConnection(false, ex.Message);
@@ -297,7 +297,7 @@ namespace MCPForUnity.Editor
                 {
                     if (IsDebugEnabled())
                     {
-                        Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: MCPForUnityBridge already running on port {currentUnityPort}");
+                        McpLog.Info($"MCPForUnityBridge already running on port {currentUnityPort}");
                     }
                     return;
                 }
@@ -383,7 +383,7 @@ namespace MCPForUnity.Editor
                     isAutoConnectMode = false;
                     string platform = Application.platform.ToString();
                     string serverVer = ReadInstalledServerVersionSafe();
-                    Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: MCPForUnityBridge started on port {currentUnityPort}. (OS={platform}, server={serverVer})");
+                    McpLog.Info($"MCPForUnityBridge started on port {currentUnityPort}. (OS={platform}, server={serverVer})");
                     // Start background listener with cooperative cancellation
                     cts = new CancellationTokenSource();
                     listenerTask = Task.Run(() => ListenerLoopAsync(cts.Token));
@@ -403,7 +403,7 @@ namespace MCPForUnity.Editor
                 }
                 catch (SocketException ex)
                 {
-                    Debug.LogError($"Failed to start TCP listener: {ex.Message}");
+                    McpLog.Error($"Failed to start TCP listener: {ex.Message}");
                 }
             }
         }
@@ -437,7 +437,7 @@ namespace MCPForUnity.Editor
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"Error stopping MCPForUnityBridge: {ex.Message}");
+                    McpLog.Error($"Error stopping MCPForUnityBridge: {ex.Message}");
                 }
             }
 
@@ -465,7 +465,7 @@ namespace MCPForUnity.Editor
             try { AssemblyReloadEvents.afterAssemblyReload -= OnAfterAssemblyReload; } catch { }
             try { EditorApplication.quitting -= Stop; } catch { }
 
-            if (IsDebugEnabled()) Debug.Log("<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: MCPForUnityBridge stopped.");
+            if (IsDebugEnabled()) McpLog.Info("MCPForUnityBridge stopped.");
         }
 
         private static async Task ListenerLoopAsync(CancellationToken token)
@@ -504,7 +504,7 @@ namespace MCPForUnity.Editor
                 {
                     if (isRunning && !token.IsCancellationRequested)
                     {
-                        if (IsDebugEnabled()) Debug.LogError($"Listener error: {ex.Message}");
+                        if (IsDebugEnabled()) McpLog.Error($"Listener error: {ex.Message}");
                     }
                 }
             }
@@ -524,7 +524,7 @@ namespace MCPForUnity.Editor
                         if (IsDebugEnabled())
                         {
                             var ep = client.Client?.RemoteEndPoint?.ToString() ?? "unknown";
-                            Debug.Log($"<b><color=#2EA3FF>UNITY-MCP</color></b>: Client connected {ep}");
+                            McpLog.Info($"Client connected {ep}");
                         }
                     }
                     catch { }
@@ -544,11 +544,11 @@ namespace MCPForUnity.Editor
 #else
                     await stream.WriteAsync(handshakeBytes, 0, handshakeBytes.Length, cts.Token).ConfigureAwait(false);
 #endif
-                        if (IsDebugEnabled()) MCPForUnity.Editor.Helpers.McpLog.Info("Sent handshake FRAMING=1 (strict)", always: false);
+                        if (IsDebugEnabled()) McpLog.Info("Sent handshake FRAMING=1 (strict)", always: false);
                     }
                     catch (Exception ex)
                     {
-                        if (IsDebugEnabled()) MCPForUnity.Editor.Helpers.McpLog.Warn($"Handshake failed: {ex.Message}");
+                        if (IsDebugEnabled()) McpLog.Warn($"Handshake failed: {ex.Message}");
                         return; // abort this client
                     }
 
@@ -564,7 +564,7 @@ namespace MCPForUnity.Editor
                                 if (IsDebugEnabled())
                                 {
                                     var preview = commandText.Length > 120 ? commandText.Substring(0, 120) + "…" : commandText;
-                                    MCPForUnity.Editor.Helpers.McpLog.Info($"recv framed: {preview}", always: false);
+                                    McpLog.Info($"recv framed: {preview}", always: false);
                                 }
                             }
                             catch { }
@@ -623,7 +623,7 @@ namespace MCPForUnity.Editor
 
                             if (IsDebugEnabled())
                             {
-                                try { MCPForUnity.Editor.Helpers.McpLog.Info("[MCP] sending framed response", always: false); } catch { }
+                                try { McpLog.Info("[MCP] sending framed response", always: false); } catch { }
                             }
                             // Crash-proof and self-reporting writer logs (direct write to this client's stream)
                             long seq = System.Threading.Interlocked.Increment(ref _ioSeq);
@@ -662,11 +662,11 @@ namespace MCPForUnity.Editor
                                 || ex is System.IO.IOException;
                             if (isBenign)
                             {
-                                if (IsDebugEnabled()) MCPForUnity.Editor.Helpers.McpLog.Info($"Client handler: {msg}", always: false);
+                                if (IsDebugEnabled()) McpLog.Info($"Client handler: {msg}", always: false);
                             }
                             else
                             {
-                                MCPForUnity.Editor.Helpers.McpLog.Error($"Client handler error: {msg}");
+                                McpLog.Error($"Client handler error: {msg}");
                             }
                             break;
                         }
@@ -900,7 +900,7 @@ namespace MCPForUnity.Editor
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogError($"Error processing command: {ex.Message}\n{ex.StackTrace}");
+                        McpLog.Error($"Error processing command: {ex.Message}\n{ex.StackTrace}");
 
                         var response = new
                         {
@@ -1051,9 +1051,7 @@ namespace MCPForUnity.Editor
             catch (Exception ex)
             {
                 // Log the detailed error in Unity for debugging
-                Debug.LogError(
-                    $"Error executing command '{command?.type ?? "Unknown"}': {ex.Message}\n{ex.StackTrace}"
-                );
+                McpLog.Error($"Error executing command '{command?.type ?? "Unknown"}': {ex.Message}\n{ex.StackTrace}");
 
                 // Standard error response format
                 var response = new
@@ -1074,11 +1072,11 @@ namespace MCPForUnity.Editor
         {
             try
             {
-                if (IsDebugEnabled()) Debug.Log("[MCP] manage_scene: dispatching to main thread");
+                if (IsDebugEnabled()) McpLog.Info("[MCP] manage_scene: dispatching to main thread");
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 var r = InvokeOnMainThreadWithTimeout(() => ManageScene.HandleCommand(paramsObject), FrameIOTimeoutMs);
                 sw.Stop();
-                if (IsDebugEnabled()) Debug.Log($"[MCP] manage_scene: completed in {sw.ElapsedMilliseconds} ms");
+                if (IsDebugEnabled()) McpLog.Info($"[MCP] manage_scene: completed in {sw.ElapsedMilliseconds} ms");
                 return r ?? Response.Error("manage_scene returned null (timeout or error)");
             }
             catch (Exception ex)
