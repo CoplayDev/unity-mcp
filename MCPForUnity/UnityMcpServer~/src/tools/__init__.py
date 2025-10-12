@@ -9,12 +9,12 @@ import pkgutil
 from mcp.server.fastmcp import FastMCP
 from telemetry_decorator import telemetry_tool
 
-from registry import get_registered_tools, mcp_for_unity_tool
+from registry import get_registered_tools
 
 logger = logging.getLogger("mcp-for-unity-server")
 
 # Export decorator for easy imports within tools
-__all__ = ['register_all_tools', 'mcp_for_unity_tool']
+__all__ = ['register_all_tools']
 
 
 def register_all_tools(mcp: FastMCP):
