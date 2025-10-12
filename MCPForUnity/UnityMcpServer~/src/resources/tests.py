@@ -2,7 +2,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field
 from mcp.server.fastmcp import Context
 
-from ..models import MCPResponse
+from models import MCPResponse
 from registry import mcp_for_unity_resource
 from unity_connection import async_send_command_with_retry
 

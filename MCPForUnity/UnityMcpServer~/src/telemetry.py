@@ -11,7 +11,6 @@ import contextlib
 from dataclasses import dataclass
 from enum import Enum
 import importlib
-import importlib.resources
 import json
 import logging
 import os
@@ -38,8 +37,10 @@ logger = logging.getLogger("unity-mcp-telemetry")
 
 
 def get_package_version() -> str:
-    pyproject_path = importlib.resources.files("pyproject.toml")
-    with pyproject_path.open("rb") as f:
+    """
+    Open pyproject.toml and parse version
+    """
+    with open("pyproject.toml", "rb") as f:
         data = tomllib.load(f)
     return data["project"]["version"]
 
@@ -85,7 +86,9 @@ class TelemetryConfig:
     """Telemetry configuration"""
 
     def __init__(self):
-        # Prefer config file, then allow env overrides
+        """
+        Prefer config file, then allow env overrides
+        """
         server_config = None
         for modname in (
             "MCPForUnity.UnityMcpServer~.src.config",
