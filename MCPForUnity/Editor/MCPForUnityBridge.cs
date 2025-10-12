@@ -465,6 +465,9 @@ namespace MCPForUnity.Editor
             try { AssemblyReloadEvents.afterAssemblyReload -= OnAfterAssemblyReload; } catch { }
             try { EditorApplication.quitting -= Stop; } catch { }
 
+            // Stop all running coroutines
+            Helpers.EditorCoroutineExecutor.StopAllCoroutines();
+
             if (IsDebugEnabled()) McpLog.Info("MCPForUnityBridge stopped.");
         }
 
@@ -894,8 +897,33 @@ namespace MCPForUnity.Editor
                         }
                         else
                         {
-                            string responseJson = ExecuteCommand(command);
-                            tcs.SetResult(responseJson);
+                            // Use JObject for parameters as handlers expect this
+                            JObject paramsObject = command.@params ?? new JObject();
+
+                            // Execute command (may be sync or async)
+                            object result = CommandRegistry.ExecuteCommand(command.type, paramsObject, tcs);
+
+                            // If result is null, it means async execution - TCS will be completed by coroutine
+                            // In this case, DON'T remove from queue yet, DON'T complete TCS
+                            if (result == null)
+                            {
+                                // Async command - coroutine will complete TCS
+                                // Setup cleanup when TCS completes - schedule on next frame to avoid race conditions
+                                string asyncCommandId = id;
+                                _ = tcs.Task.ContinueWith(_ =>
+                                {
+                                    // Use EditorApplication.delayCall to schedule cleanup on main thread, next frame
+                                    EditorApplication.delayCall += () =>
+                                    {
+                                        lock (lockObj) { commandQueue.Remove(asyncCommandId); }
+                                    };
+                                });
+                                continue; // Skip the queue removal below
+                            }
+
+                            // Synchronous result - complete TCS now
+                            var response = new { status = "success", result };
+                            tcs.SetResult(JsonConvert.SerializeObject(response));
                         }
                     }
                     catch (Exception ex)
@@ -915,7 +943,7 @@ namespace MCPForUnity.Editor
                         tcs.SetResult(responseJson);
                     }
 
-                    // Remove quickly under lock
+                    // Remove from queue (only for sync commands - async ones skip with 'continue' above)
                     lock (lockObj) { commandQueue.Remove(id); }
                 }
             }

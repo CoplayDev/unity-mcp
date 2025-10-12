@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
@@ -15,40 +16,46 @@ namespace MCPForUnity.Editor.Resources.Tests
     [McpForUnityResource("get_tests")]
     public static class GetTests
     {
-        public static object HandleCommand(JObject @params)
+        public static IEnumerator HandleCommand(JObject @params)
         {
-            try
-            {
-                string modeStr = @params?["mode"]?.ToString();
-                TestMode? parsedMode = null;
+            string modeStr = @params?["mode"]?.ToString();
+            TestMode? parsedMode = null;
 
-                if (!string.IsNullOrWhiteSpace(modeStr))
+            if (!string.IsNullOrWhiteSpace(modeStr))
+            {
+                if (!ModeParser.TryParse(modeStr, out parsedMode, out var error))
                 {
-                    if (!ModeParser.TryParse(modeStr, out parsedMode, out var error))
-                    {
-                        return Response.Error(error);
-                    }
+                    yield return Response.Error(error);
+                    yield break;
                 }
-
-                McpLog.Info(
-                    parsedMode.HasValue
-                        ? $"[GetTests] Retrieving tests for mode: {parsedMode.Value}"
-                        : "[GetTests] Retrieving tests for all modes",
-                    always: false
-                );
-
-                var tests = TestCollector.GetTests(parsedMode);
-                string message = parsedMode.HasValue
-                    ? $"Retrieved {tests.Count} {parsedMode.Value} tests"
-                    : $"Retrieved {tests.Count} tests";
-
-                return Response.Success(message, tests);
             }
-            catch (Exception e)
+
+            McpLog.Info(
+                parsedMode.HasValue
+                    ? $"[GetTests] Retrieving tests for mode: {parsedMode.Value}"
+                    : "[GetTests] Retrieving tests for all modes",
+                always: false
+            );
+
+            // Use coroutine version of GetTests
+            var testsCoroutine = TestCollector.GetTestsAsync(parsedMode);
+            while (testsCoroutine.MoveNext())
             {
-                McpLog.Error($"[GetTests] Error retrieving tests: {e.Message}");
-                return Response.Error($"Error retrieving tests: {e.Message}");
+                yield return null; // Wait a frame
             }
+
+            var tests = testsCoroutine.Current as List<Dictionary<string, string>>;
+            if (tests == null)
+            {
+                yield return Response.Error("Failed to retrieve tests");
+                yield break;
+            }
+
+            string message = parsedMode.HasValue
+                ? $"Retrieved {tests.Count} {parsedMode.Value} tests"
+                : $"Retrieved {tests.Count} tests";
+
+            yield return Response.Success(message, tests);
         }
     }
 
@@ -59,32 +66,39 @@ namespace MCPForUnity.Editor.Resources.Tests
     [McpForUnityResource("get_tests_for_mode")]
     public static class GetTestsForMode
     {
-        public static object HandleCommand(JObject @params)
+        public static IEnumerator HandleCommand(JObject @params)
         {
-            try
+            string modeStr = @params["mode"]?.ToString();
+            if (string.IsNullOrEmpty(modeStr))
             {
-                string modeStr = @params["mode"]?.ToString();
-                if (string.IsNullOrEmpty(modeStr))
-                {
-                    return Response.Error("'mode' parameter is required");
-                }
-
-                if (!ModeParser.TryParse(modeStr, out var parsedMode, out var parseError))
-                {
-                    return Response.Error(parseError);
-                }
-
-                McpLog.Info($"[GetTestsForMode] Retrieving tests for mode: {parsedMode.Value}", always: false);
-
-                var tests = TestCollector.GetTests(parsedMode);
-                string message = $"Retrieved {tests.Count} {parsedMode.Value} tests";
-                return Response.Success(message, tests);
+                yield return Response.Error("'mode' parameter is required");
+                yield break;
             }
-            catch (Exception e)
+
+            if (!ModeParser.TryParse(modeStr, out var parsedMode, out var parseError))
             {
-                McpLog.Error($"[GetTestsForMode] Error retrieving tests: {e.Message}");
-                return Response.Error($"Error retrieving tests: {e.Message}");
+                yield return Response.Error(parseError);
+                yield break;
             }
+
+            McpLog.Info($"[GetTestsForMode] Retrieving tests for mode: {parsedMode.Value}", always: false);
+
+            // Use coroutine version of GetTests
+            var testsCoroutine = TestCollector.GetTestsAsync(parsedMode);
+            while (testsCoroutine.MoveNext())
+            {
+                yield return null; // Wait a frame
+            }
+
+            var tests = testsCoroutine.Current as List<Dictionary<string, string>>;
+            if (tests == null)
+            {
+                yield return Response.Error("Failed to retrieve tests");
+                yield break;
+            }
+
+            string message = $"Retrieved {tests.Count} {parsedMode.Value} tests";
+            yield return Response.Success(message, tests);
         }
     }
 
@@ -92,7 +106,10 @@ namespace MCPForUnity.Editor.Resources.Tests
     {
         private static readonly TestMode[] AllModes = { TestMode.EditMode, TestMode.PlayMode };
 
-        internal static List<Dictionary<string, string>> GetTests(TestMode? filterMode)
+        /// <summary>
+        /// Async coroutine version that waits for Unity's TestRunnerApi callbacks to complete.
+        /// </summary>
+        internal static IEnumerator GetTestsAsync(TestMode? filterMode)
         {
             var modesToQuery = filterMode.HasValue ? new[] { filterMode.Value } : AllModes;
             var tests = new List<Dictionary<string, string>>();
@@ -104,16 +121,33 @@ namespace MCPForUnity.Editor.Resources.Tests
             {
                 foreach (var mode in modesToQuery)
                 {
+                    bool callbackInvoked = false;
+                    ITestAdaptor capturedRoot = null;
+
                     var filter = new Filter();
                     api.RetrieveTestList(mode, root =>
                     {
-                        if (root == null)
-                        {
-                            return;
-                        }
-
-                        CollectFromNode(root, mode, tests, seen, new List<string>());
+                        capturedRoot = root;
+                        callbackInvoked = true;
                     });
+
+                    // Wait for the callback to be invoked (max 100 frames)
+                    int maxFrames = 100;
+                    while (!callbackInvoked && maxFrames-- > 0)
+                    {
+                        yield return null; // Wait one frame
+                    }
+
+                    if (!callbackInvoked)
+                    {
+                        McpLog.Warn($"[TestCollector] Timeout waiting for test retrieval callback for {mode}");
+                        continue;
+                    }
+
+                    if (capturedRoot != null)
+                    {
+                        CollectFromNode(capturedRoot, mode, tests, seen, new List<string>());
+                    }
                 }
             }
             finally
@@ -124,7 +158,7 @@ namespace MCPForUnity.Editor.Resources.Tests
                 }
             }
 
-            return tests;
+            yield return tests; // Return the final result
         }
 
         private static void CollectFromNode(

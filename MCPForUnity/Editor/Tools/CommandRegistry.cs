@@ -1,10 +1,13 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Resources;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace MCPForUnity.Editor.Tools
@@ -167,6 +170,89 @@ namespace MCPForUnity.Editor.Tools
                 );
             }
             return handler;
+        }
+
+        /// <summary>
+        /// Execute a command handler, supporting both synchronous and asynchronous (coroutine) handlers.
+        /// If the handler returns an IEnumerator, it will be executed as a coroutine.
+        /// </summary>
+        /// <param name="commandName">The command name to execute</param>
+        /// <param name="params">Command parameters</param>
+        /// <param name="tcs">TaskCompletionSource to complete when async operation finishes</param>
+        /// <returns>The result for synchronous commands, or null for async commands (TCS will be completed later)</returns>
+        public static object ExecuteCommand(string commandName, JObject @params, TaskCompletionSource<string> tcs)
+        {
+            var handler = GetHandler(commandName);
+            var result = handler(@params);
+
+            // Check if the result is a coroutine (async command)
+            if (result is IEnumerator coroutine)
+            {
+                // Start the coroutine - it will complete the TCS when done
+                Helpers.EditorCoroutineExecutor.StartCoroutine(
+                    coroutine,
+                    onComplete: (finalResult) =>
+                    {
+                        try
+                        {
+                            var response = new { status = "success", result = finalResult };
+                            string json = JsonConvert.SerializeObject(response);
+
+                            // Use TrySetResult to avoid exception if TCS already completed
+                            if (!tcs.TrySetResult(json))
+                            {
+                                McpLog.Warn($"TCS for async command '{commandName}' was already completed");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            McpLog.Error($"Error completing async command '{commandName}': {ex.Message}\n{ex.StackTrace}");
+
+                            // Try to set error response
+                            var errorResponse = new
+                            {
+                                status = "error",
+                                error = $"Error completing command: {ex.Message}",
+                                command = commandName
+                            };
+                            tcs.TrySetResult(JsonConvert.SerializeObject(errorResponse));
+                        }
+                    },
+                    onError: (ex) =>
+                    {
+                        try
+                        {
+                            McpLog.Error($"Error in async command '{commandName}': {ex.Message}\n{ex.StackTrace}");
+                            var errorResponse = new
+                            {
+                                status = "error",
+                                error = ex.Message,
+                                command = commandName,
+                                stackTrace = ex.StackTrace
+                            };
+                            string json = JsonConvert.SerializeObject(errorResponse);
+
+                            // Use TrySetResult to avoid exception if TCS already completed
+                            if (!tcs.TrySetResult(json))
+                            {
+                                McpLog.Warn($"TCS for async command '{commandName}' was already completed when trying to report error");
+                            }
+                        }
+                        catch (Exception serializationEx)
+                        {
+                            // Last resort - just try to set a simple error
+                            McpLog.Error($"Failed to serialize error response: {serializationEx.Message}");
+                            tcs.TrySetResult("{\"status\":\"error\",\"error\":\"Failed to complete command\"}");
+                        }
+                    }
+                );
+
+                // Return null to signal async execution (TCS will be completed by coroutine)
+                return null;
+            }
+
+            // Synchronous result - caller will complete TCS
+            return result;
         }
     }
 }
