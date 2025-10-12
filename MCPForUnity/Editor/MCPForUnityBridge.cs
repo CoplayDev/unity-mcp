@@ -19,6 +19,26 @@ using MCPForUnity.Editor.Tools.Prefabs;
 
 namespace MCPForUnity.Editor
 {
+
+    /// <summary>
+    /// Outbound message structure for the writer thread
+    /// </summary>
+    class Outbound
+    {
+        public byte[] Payload;
+        public string Tag;
+        public int? ReqId;
+    }
+
+    /// <summary>
+    /// Queued command structure for main thread processing
+    /// </summary>
+    class QueuedCommand
+    {
+        public string CommandJson;
+        public TaskCompletionSource<string> Tcs;
+        public bool IsExecuting;
+    }
     [InitializeOnLoad]
     public static partial class MCPForUnityBridge
     {
@@ -28,13 +48,6 @@ namespace MCPForUnity.Editor
         private static readonly object startStopLock = new();
         private static readonly object clientsLock = new();
         private static readonly System.Collections.Generic.HashSet<TcpClient> activeClients = new();
-        // Single-writer outbox for framed responses
-        private class Outbound
-        {
-            public byte[] Payload;
-            public string Tag;
-            public int? ReqId;
-        }
         private static readonly BlockingCollection<Outbound> _outbox = new(new ConcurrentQueue<Outbound>());
         private static CancellationTokenSource cts;
         private static Task listenerTask;
@@ -45,10 +58,7 @@ namespace MCPForUnity.Editor
         private static double nextStartAt = 0.0f;
         private static double nextHeartbeatAt = 0.0f;
         private static int heartbeatSeq = 0;
-        private static Dictionary<
-            string,
-            (string commandJson, TaskCompletionSource<string> tcs)
-        > commandQueue = new();
+        private static Dictionary<string, QueuedCommand> commandQueue = new();
         private static int mainThreadId;
         private static int currentUnityPort = 6400; // Dynamic port, starts with default
         private static bool isAutoConnectMode = false;
@@ -465,9 +475,6 @@ namespace MCPForUnity.Editor
             try { AssemblyReloadEvents.afterAssemblyReload -= OnAfterAssemblyReload; } catch { }
             try { EditorApplication.quitting -= Stop; } catch { }
 
-            // Stop all running coroutines
-            Helpers.EditorCoroutineExecutor.StopAllCoroutines();
-
             if (IsDebugEnabled()) McpLog.Info("MCPForUnityBridge stopped.");
         }
 
@@ -588,7 +595,12 @@ namespace MCPForUnity.Editor
 
                             lock (lockObj)
                             {
-                                commandQueue[commandId] = (commandText, tcs);
+                                commandQueue[commandId] = new QueuedCommand
+                                {
+                                    CommandJson = commandText,
+                                    Tcs = tcs,
+                                    IsExecuting = false
+                                };
                             }
 
                             // Wait for the handler to produce a response, but do not block indefinitely
@@ -820,19 +832,25 @@ namespace MCPForUnity.Editor
                 }
 
                 // Snapshot under lock, then process outside to reduce contention
-                List<(string id, string text, TaskCompletionSource<string> tcs)> work;
+                List<(string id, QueuedCommand command)> work;
                 lock (lockObj)
                 {
-                    work = commandQueue
-                        .Select(kvp => (kvp.Key, kvp.Value.commandJson, kvp.Value.tcs))
-                        .ToList();
+                    work = new List<(string, QueuedCommand)>(commandQueue.Count);
+                    foreach (var kvp in commandQueue)
+                    {
+                        var queued = kvp.Value;
+                        if (queued.IsExecuting) continue;
+                        queued.IsExecuting = true;
+                        work.Add((kvp.Key, queued));
+                    }
                 }
 
                 foreach (var item in work)
                 {
                     string id = item.id;
-                    string commandText = item.text;
-                    TaskCompletionSource<string> tcs = item.tcs;
+                    QueuedCommand queuedCommand = item.command;
+                    string commandText = queuedCommand.CommandJson;
+                    TaskCompletionSource<string> tcs = queuedCommand.Tcs;
 
                     try
                     {
@@ -903,11 +921,11 @@ namespace MCPForUnity.Editor
                             // Execute command (may be sync or async)
                             object result = CommandRegistry.ExecuteCommand(command.type, paramsObject, tcs);
 
-                            // If result is null, it means async execution - TCS will be completed by coroutine
+                            // If result is null, it means async execution - TCS will be completed by the awaited task
                             // In this case, DON'T remove from queue yet, DON'T complete TCS
                             if (result == null)
                             {
-                                // Async command - coroutine will complete TCS
+                                // Async command - the task continuation will complete the TCS
                                 // Setup cleanup when TCS completes - schedule on next frame to avoid race conditions
                                 string asyncCommandId = id;
                                 _ = tcs.Task.ContinueWith(_ =>
@@ -915,7 +933,10 @@ namespace MCPForUnity.Editor
                                     // Use EditorApplication.delayCall to schedule cleanup on main thread, next frame
                                     EditorApplication.delayCall += () =>
                                     {
-                                        lock (lockObj) { commandQueue.Remove(asyncCommandId); }
+                                        lock (lockObj)
+                                        {
+                                            commandQueue.Remove(asyncCommandId);
+                                        }
                                     };
                                 });
                                 continue; // Skip the queue removal below

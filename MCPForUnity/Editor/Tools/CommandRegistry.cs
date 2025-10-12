@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -13,12 +12,31 @@ using Newtonsoft.Json.Linq;
 namespace MCPForUnity.Editor.Tools
 {
     /// <summary>
+    /// Holds information about a registered command handler.
+    /// </summary>
+    class HandlerInfo
+    {
+        public string CommandName { get; }
+        public Func<JObject, object> SyncHandler { get; }
+        public Func<JObject, Task<object>> AsyncHandler { get; }
+
+        public bool IsAsync => AsyncHandler != null;
+
+        public HandlerInfo(string commandName, Func<JObject, object> syncHandler, Func<JObject, Task<object>> asyncHandler)
+        {
+            CommandName = commandName;
+            SyncHandler = syncHandler;
+            AsyncHandler = asyncHandler;
+        }
+    }
+
+    /// <summary>
     /// Registry for all MCP command handlers via reflection.
     /// Handles both MCP tools and resources.
     /// </summary>
     public static class CommandRegistry
     {
-        private static readonly Dictionary<string, Func<JObject, object>> _handlers = new();
+        private static readonly Dictionary<string, HandlerInfo> _handlers = new();
         private static bool _initialized = false;
 
         /// <summary>
@@ -144,11 +162,23 @@ namespace MCPForUnity.Editor.Tools
 
             try
             {
-                var handler = (Func<JObject, object>)Delegate.CreateDelegate(
-                    typeof(Func<JObject, object>),
-                    method
-                );
-                _handlers[commandName] = handler;
+                HandlerInfo handlerInfo;
+
+                if (typeof(Task).IsAssignableFrom(method.ReturnType))
+                {
+                    var asyncHandler = CreateAsyncHandlerDelegate(method, commandName);
+                    handlerInfo = new HandlerInfo(commandName, null, asyncHandler);
+                }
+                else
+                {
+                    var handler = (Func<JObject, object>)Delegate.CreateDelegate(
+                        typeof(Func<JObject, object>),
+                        method
+                    );
+                    handlerInfo = new HandlerInfo(commandName, handler, null);
+                }
+
+                _handlers[commandName] = handlerInfo;
                 return true;
             }
             catch (Exception ex)
@@ -161,7 +191,7 @@ namespace MCPForUnity.Editor.Tools
         /// <summary>
         /// Get a command handler by name
         /// </summary>
-        public static Func<JObject, object> GetHandler(string commandName)
+        private static HandlerInfo GetHandlerInfo(string commandName)
         {
             if (!_handlers.TryGetValue(commandName, out var handler))
             {
@@ -170,6 +200,26 @@ namespace MCPForUnity.Editor.Tools
                 );
             }
             return handler;
+        }
+
+        /// <summary>
+        /// Get a synchronous command handler by name.
+        /// Throws if the command is asynchronous.
+        /// </summary>
+        /// <param name="commandName"></param>
+        /// <returns></returns>
+        /// <exception cref="InvalidOperationException"></exception>
+        public static Func<JObject, object> GetHandler(string commandName)
+        {
+            var handlerInfo = GetHandlerInfo(commandName);
+            if (handlerInfo.IsAsync)
+            {
+                throw new InvalidOperationException(
+                    $"Command '{commandName}' is asynchronous and must be executed via ExecuteCommand"
+                );
+            }
+
+            return handlerInfo.SyncHandler;
         }
 
         /// <summary>
@@ -182,77 +232,177 @@ namespace MCPForUnity.Editor.Tools
         /// <returns>The result for synchronous commands, or null for async commands (TCS will be completed later)</returns>
         public static object ExecuteCommand(string commandName, JObject @params, TaskCompletionSource<string> tcs)
         {
-            var handler = GetHandler(commandName);
-            var result = handler(@params);
+            var handlerInfo = GetHandlerInfo(commandName);
 
-            // Check if the result is a coroutine (async command)
-            if (result is IEnumerator coroutine)
+            if (handlerInfo.IsAsync)
             {
-                // Start the coroutine - it will complete the TCS when done
-                Helpers.EditorCoroutineExecutor.StartCoroutine(
-                    coroutine,
-                    onComplete: (finalResult) =>
-                    {
-                        try
-                        {
-                            var response = new { status = "success", result = finalResult };
-                            string json = JsonConvert.SerializeObject(response);
-
-                            // Use TrySetResult to avoid exception if TCS already completed
-                            if (!tcs.TrySetResult(json))
-                            {
-                                McpLog.Warn($"TCS for async command '{commandName}' was already completed");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            McpLog.Error($"Error completing async command '{commandName}': {ex.Message}\n{ex.StackTrace}");
-
-                            // Try to set error response
-                            var errorResponse = new
-                            {
-                                status = "error",
-                                error = $"Error completing command: {ex.Message}",
-                                command = commandName
-                            };
-                            tcs.TrySetResult(JsonConvert.SerializeObject(errorResponse));
-                        }
-                    },
-                    onError: (ex) =>
-                    {
-                        try
-                        {
-                            McpLog.Error($"Error in async command '{commandName}': {ex.Message}\n{ex.StackTrace}");
-                            var errorResponse = new
-                            {
-                                status = "error",
-                                error = ex.Message,
-                                command = commandName,
-                                stackTrace = ex.StackTrace
-                            };
-                            string json = JsonConvert.SerializeObject(errorResponse);
-
-                            // Use TrySetResult to avoid exception if TCS already completed
-                            if (!tcs.TrySetResult(json))
-                            {
-                                McpLog.Warn($"TCS for async command '{commandName}' was already completed when trying to report error");
-                            }
-                        }
-                        catch (Exception serializationEx)
-                        {
-                            // Last resort - just try to set a simple error
-                            McpLog.Error($"Failed to serialize error response: {serializationEx.Message}");
-                            tcs.TrySetResult("{\"status\":\"error\",\"error\":\"Failed to complete command\"}");
-                        }
-                    }
-                );
-
-                // Return null to signal async execution (TCS will be completed by coroutine)
+                ExecuteAsyncHandler(handlerInfo, @params, commandName, tcs);
                 return null;
             }
 
-            // Synchronous result - caller will complete TCS
-            return result;
+            if (handlerInfo.SyncHandler == null)
+            {
+                throw new InvalidOperationException($"Handler for '{commandName}' does not provide a synchronous implementation");
+            }
+
+            return handlerInfo.SyncHandler(@params);
+        }
+
+        /// <summary>
+        /// Create a delegate for an async handler method that returns Task or Task<T>.
+        /// The delegate will invoke the method and await its completion, returning the result.
+        /// </summary>
+        /// <param name="method"></param>
+        /// <param name="commandName"></param>
+        /// <returns></returns>
+        /// <exception cref="InvalidOperationException"></exception>
+        private static Func<JObject, Task<object>> CreateAsyncHandlerDelegate(MethodInfo method, string commandName)
+        {
+            return async (JObject parameters) =>
+            {
+                object rawResult;
+
+                try
+                {
+                    rawResult = method.Invoke(null, new object[] { parameters });
+                }
+                catch (TargetInvocationException ex)
+                {
+                    throw ex.InnerException ?? ex;
+                }
+
+                if (rawResult == null)
+                {
+                    return null;
+                }
+
+                if (rawResult is not Task task)
+                {
+                    throw new InvalidOperationException(
+                        $"Async handler '{commandName}' returned an object that is not a Task"
+                    );
+                }
+
+                await task.ConfigureAwait(true);
+
+                var taskType = task.GetType();
+                if (taskType.IsGenericType)
+                {
+                    var resultProperty = taskType.GetProperty("Result");
+                    if (resultProperty != null)
+                    {
+                        return resultProperty.GetValue(task);
+                    }
+                }
+
+                return null;
+            };
+        }
+
+        private static void ExecuteAsyncHandler(
+            HandlerInfo handlerInfo,
+            JObject parameters,
+            string commandName,
+            TaskCompletionSource<string> tcs)
+        {
+            if (handlerInfo.AsyncHandler == null)
+            {
+                throw new InvalidOperationException($"Async handler for '{commandName}' is not configured correctly");
+            }
+
+            Task<object> handlerTask;
+
+            try
+            {
+                handlerTask = handlerInfo.AsyncHandler(parameters);
+            }
+            catch (Exception ex)
+            {
+                ReportAsyncFailure(commandName, tcs, ex);
+                return;
+            }
+
+            if (handlerTask == null)
+            {
+                CompleteAsyncCommand(commandName, tcs, null);
+                return;
+            }
+
+            async void AwaitHandler()
+            {
+                try
+                {
+                    var finalResult = await handlerTask.ConfigureAwait(true);
+                    CompleteAsyncCommand(commandName, tcs, finalResult);
+                }
+                catch (Exception ex)
+                {
+                    ReportAsyncFailure(commandName, tcs, ex);
+                }
+            }
+
+            AwaitHandler();
+        }
+
+        /// <summary>
+        /// Complete the TaskCompletionSource for an async command with a success result.
+        /// </summary>
+        /// <param name="commandName"></param>
+        /// <param name="tcs"></param>
+        /// <param name="result"></param>
+        private static void CompleteAsyncCommand(string commandName, TaskCompletionSource<string> tcs, object result)
+        {
+            try
+            {
+                var response = new { status = "success", result };
+                string json = JsonConvert.SerializeObject(response);
+
+                if (!tcs.TrySetResult(json))
+                {
+                    McpLog.Warn($"TCS for async command '{commandName}' was already completed");
+                }
+            }
+            catch (Exception ex)
+            {
+                McpLog.Error($"Error completing async command '{commandName}': {ex.Message}\n{ex.StackTrace}");
+                ReportAsyncFailure(commandName, tcs, ex);
+            }
+        }
+
+        /// <summary>
+        /// Report an error that occurred during async command execution.
+        /// Completes the TaskCompletionSource with an error response.
+        /// </summary>
+        /// <param name="commandName"></param>
+        /// <param name="tcs"></param>
+        /// <param name="ex"></param>
+        private static void ReportAsyncFailure(string commandName, TaskCompletionSource<string> tcs, Exception ex)
+        {
+            McpLog.Error($"Error in async command '{commandName}': {ex.Message}\n{ex.StackTrace}");
+
+            var errorResponse = new
+            {
+                status = "error",
+                error = ex.Message,
+                command = commandName,
+                stackTrace = ex.StackTrace
+            };
+
+            string json;
+            try
+            {
+                json = JsonConvert.SerializeObject(errorResponse);
+            }
+            catch (Exception serializationEx)
+            {
+                McpLog.Error($"Failed to serialize error response for '{commandName}': {serializationEx.Message}");
+                json = "{\"status\":\"error\",\"error\":\"Failed to complete command\"}";
+            }
+
+            if (!tcs.TrySetResult(json))
+            {
+                McpLog.Warn($"TCS for async command '{commandName}' was already completed when trying to report error");
+            }
         }
     }
 }
