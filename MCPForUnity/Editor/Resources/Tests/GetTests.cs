@@ -104,8 +104,8 @@ namespace MCPForUnity.Editor.Resources.Tests
             {
                 foreach (var mode in modesToQuery)
                 {
-                    var filter = new Filter { testMode = mode };
-                    api.RetrieveTestList(filter, root =>
+                    var filter = new Filter();
+                    api.RetrieveTestList(mode, root =>
                     {
                         if (root == null)
                         {
