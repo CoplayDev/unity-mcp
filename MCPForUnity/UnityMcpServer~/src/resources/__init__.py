@@ -53,9 +53,9 @@ def register_all_resources(mcp: FastMCP):
         kwargs = resource_info['kwargs']
 
         # Apply the @mcp.resource decorator and telemetry
+        wrapped = telemetry_resource(resource_name)(func)
         wrapped = mcp.resource(uri=uri, name=resource_name,
-                               description=description, **kwargs)(func)
-        wrapped = telemetry_resource(resource_name)(wrapped)
+                               description=description, **kwargs)(wrapped)
         resource_info['func'] = wrapped
         logger.debug(f"Registered resource: {resource_name} - {description}")
 
