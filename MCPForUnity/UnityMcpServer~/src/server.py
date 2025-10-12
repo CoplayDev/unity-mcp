@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator, Dict, Any
 from config import config
 from tools import register_all_tools
+from resources import register_all_resources
 from unity_connection import get_unity_connection, UnityConnection
 import time
 
@@ -162,7 +163,8 @@ mcp = FastMCP(
 # Register all tools
 register_all_tools(mcp)
 
-# Asset Creation Strategy
+# Register all resources
+register_all_resources(mcp)
 
 
 @mcp.prompt()
