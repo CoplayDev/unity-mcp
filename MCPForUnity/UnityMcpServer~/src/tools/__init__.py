@@ -55,6 +55,6 @@ def register_all_tools(mcp: FastMCP):
             name=tool_name, description=description, **kwargs)(func)
         wrapped = telemetry_tool(tool_name)(wrapped)
         tool_info['func'] = wrapped
-        logger.info(f"Registered tool: {tool_name} - {description}")
+        logger.debug(f"Registered tool: {tool_name} - {description}")
 
     logger.info(f"Registered {len(tools)} MCP tools")
