@@ -17,7 +17,7 @@ async def get_menu_items() -> GetMenuItemsResponse:
     # Later versions of FastMCP support these as query parameters
     # See: https://gofastmcp.com/servers/resources#query-parameters
     params = {
-        "refresh": False,
+        "refresh": True,
         "search": "",
     }
 
