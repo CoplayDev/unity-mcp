@@ -32,7 +32,7 @@ async def manage_asset(
     page_size: Annotated[int, "Page size for pagination"] | None = None,
     page_number: Annotated[int, "Page number for pagination"] | None = None
 ) -> dict[str, Any]:
-    await ctx.info(f"Processing manage_asset: {action}")
+    ctx.info(f"Processing manage_asset: {action}")
     # Ensure properties is a dict if None
     if properties is None:
         properties = {}

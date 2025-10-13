@@ -75,7 +75,7 @@ def _split_uri(uri: str) -> tuple[str, str]:
         - Lines, columns are 1-indexed
         - Tabs count as 1 column"""
 ))
-async def apply_text_edits(
+def apply_text_edits(
     ctx: Context,
     uri: Annotated[str, "URI of the script to edit under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
     edits: Annotated[list[dict[str, Any]], "List of edits to apply to the script, i.e. a list of {startLine,startCol,endLine,endCol,newText} (1-indexed!)"],
@@ -86,7 +86,7 @@ async def apply_text_edits(
     options: Annotated[dict[str, Any],
                        "Optional options, used to pass additional options to the script editor"] | None = None,
 ) -> dict[str, Any]:
-    await ctx.info(f"Processing apply_text_edits: {uri}")
+    ctx.info(f"Processing apply_text_edits: {uri}")
     name, directory = _split_uri(uri)
 
     # Normalize common aliases/misuses for resilience:
@@ -360,7 +360,7 @@ def create_script(
     script_type: Annotated[str, "Script type (e.g., 'C#')"] | None = None,
     namespace: Annotated[str, "Namespace for the script"] | None = None,
 ) -> dict[str, Any]:
-    await ctx.info(f"Processing create_script: {path}")
+    ctx.info(f"Processing create_script: {path}")
     name = os.path.splitext(os.path.basename(path))[0]
     directory = os.path.dirname(path)
     # Local validation to avoid round-trips on obviously bad input
@@ -396,7 +396,7 @@ def delete_script(
     uri: Annotated[str, "URI of the script to delete under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."]
 ) -> dict[str, Any]:
     """Delete a C# script by URI."""
-    await ctx.info(f"Processing delete_script: {uri}")
+    ctx.info(f"Processing delete_script: {uri}")
     name, directory = _split_uri(uri)
     if not directory or directory.split("/")[0].lower() != "assets":
         return {"success": False, "code": "path_outside_assets", "message": "URI must resolve under 'Assets/'."}
@@ -414,7 +414,7 @@ def validate_script(
     include_diagnostics: Annotated[bool,
                                    "Include full diagnostics and summary"] = False
 ) -> dict[str, Any]:
-    await ctx.info(f"Processing validate_script: {uri}")
+    ctx.info(f"Processing validate_script: {uri}")
     name, directory = _split_uri(uri)
     if not directory or directory.split("/")[0].lower() != "assets":
         return {"success": False, "code": "path_outside_assets", "message": "URI must resolve under 'Assets/'."}
@@ -451,7 +451,7 @@ def manage_script(
                            "Type hint (e.g., 'MonoBehaviour')"] | None = None,
     namespace: Annotated[str, "Namespace for the script"] | None = None,
 ) -> dict[str, Any]:
-    await ctx.info(f"Processing manage_script: {action}")
+    ctx.info(f"Processing manage_script: {action}")
     try:
         # Prepare parameters for Unity
         params = {
@@ -509,7 +509,7 @@ def manage_script(
         - guards: header/using guard enabled flag"""
 ))
 def manage_script_capabilities(ctx: Context) -> dict[str, Any]:
-    await ctx.info("Processing manage_script_capabilities")
+    ctx.info("Processing manage_script_capabilities")
     try:
         # Keep in sync with server/Editor ManageScript implementation
         ops = [
@@ -537,7 +537,7 @@ def get_sha(
     ctx: Context,
     uri: Annotated[str, "URI of the script to edit under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."]
 ) -> dict[str, Any]:
-    await ctx.info(f"Processing get_sha: {uri}")
+    ctx.info(f"Processing get_sha: {uri}")
     try:
         name, directory = _split_uri(uri)
         params = {"action": "get_sha", "name": name, "path": directory}

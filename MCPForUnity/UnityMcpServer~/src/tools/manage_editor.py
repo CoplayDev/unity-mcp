@@ -9,7 +9,7 @@ from unity_connection import send_command_with_retry
 @mcp_for_unity_tool(
     description="Controls and queries the Unity editor's state and settings"
 )
-async def manage_editor(
+def manage_editor(
     ctx: Context,
     action: Annotated[Literal["telemetry_status", "telemetry_ping", "play", "pause", "stop", "get_state", "get_project_root", "get_windows",
                               "get_active_tool", "get_selection", "get_prefab_stage", "set_active_tool", "add_tag", "remove_tag", "get_tags", "add_layer", "remove_layer", "get_layers"], "Get and update the Unity Editor state."],
@@ -22,7 +22,7 @@ async def manage_editor(
     layer_name: Annotated[str,
                           "Layer name when adding and removing layers"] | None = None,
 ) -> dict[str, Any]:
-    await ctx.info(f"Processing manage_editor: {action}")
+    ctx.info(f"Processing manage_editor: {action}")
     try:
         # Diagnostics: quick telemetry checks
         if action == "telemetry_status":

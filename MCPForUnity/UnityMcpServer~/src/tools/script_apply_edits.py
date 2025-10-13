@@ -354,7 +354,7 @@ def _err(code: str, message: str, *, expected: dict[str, Any] | None = None, rew
     }
     ]"""
 ))
-async def script_apply_edits(
+def script_apply_edits(
     ctx: Context,
     name: Annotated[str, "Name of the script to edit"],
     path: Annotated[str, "Path to the script to edit under Assets/ directory"],
@@ -366,7 +366,7 @@ async def script_apply_edits(
     namespace: Annotated[str,
                          "Namespace of the script to edit"] | None = None,
 ) -> dict[str, Any]:
-    await ctx.info(f"Processing script_apply_edits: {name}")
+    ctx.info(f"Processing script_apply_edits: {name}")
     # Normalize locator first so downstream calls target the correct script file.
     name, path = _normalize_script_locator(name, path)
     # Normalize unsupported or aliased ops to known structured/text paths

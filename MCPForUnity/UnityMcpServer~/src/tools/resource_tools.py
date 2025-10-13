@@ -142,7 +142,7 @@ async def list_resources(
     limit: Annotated[int, "Page limit"] = 200,
     project_root: Annotated[str, "Project path"] | None = None,
 ) -> dict[str, Any]:
-    await ctx.info(f"Processing list_resources: {pattern}")
+    ctx.info(f"Processing list_resources: {pattern}")
     try:
         project = _resolve_project_root(project_root)
         base = (project / under).resolve()
@@ -202,7 +202,7 @@ async def read_resource(
                             "The project root directory"] | None = None,
     request: Annotated[str, "The request ID"] | None = None,
 ) -> dict[str, Any]:
-    await ctx.info(f"Processing read_resource: {uri}")
+    ctx.info(f"Processing read_resource: {uri}")
     try:
         # Serve the canonical spec directly when requested (allow bare or with scheme)
         if uri in ("unity://spec/script-edits", "spec/script-edits", "script-edits"):
@@ -357,7 +357,7 @@ async def find_in_file(
     max_results: Annotated[int,
                            "Cap results to avoid huge payloads"] = 200,
 ) -> dict[str, Any]:
-    await ctx.info(f"Processing find_in_file: {uri}")
+    ctx.info(f"Processing find_in_file: {uri}")
     try:
         project = _resolve_project_root(project_root)
         p = _resolve_safe_path_from_uri(uri, project)
