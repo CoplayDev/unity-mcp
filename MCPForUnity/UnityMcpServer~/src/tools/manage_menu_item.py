@@ -22,7 +22,7 @@ async def manage_menu_item(
     refresh: Annotated[bool,
                        "Optional flag to force refresh of the menu cache when listing"] | None = None,
 ) -> dict[str, Any]:
-    ctx.info(f"Processing manage_menu_item: {action}")
+    await ctx.info(f"Processing manage_menu_item: {action}")
     # Prepare parameters for the C# handler
     params_dict: dict[str, Any] = {
         "action": action,

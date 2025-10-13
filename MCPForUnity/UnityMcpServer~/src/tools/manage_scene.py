@@ -6,7 +6,7 @@ from unity_connection import send_command_with_retry
 
 
 @mcp_for_unity_tool(description="Manage Unity scenes")
-def manage_scene(
+async def manage_scene(
     ctx: Context,
     action: Annotated[Literal["create", "load", "save", "get_hierarchy", "get_active", "get_build_settings"], "Perform CRUD operations on Unity scenes."],
     name: Annotated[str,
@@ -16,7 +16,7 @@ def manage_scene(
     build_index: Annotated[int,
                            "Build index for load/build settings actions"] | None = None,
 ) -> dict[str, Any]:
-    ctx.info(f"Processing manage_scene: {action}")
+    await ctx.info(f"Processing manage_scene: {action}")
     try:
         # Coerce numeric inputs defensively
         def _coerce_int(value, default=None):

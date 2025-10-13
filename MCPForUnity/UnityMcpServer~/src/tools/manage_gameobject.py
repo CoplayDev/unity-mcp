@@ -8,7 +8,7 @@ from unity_connection import send_command_with_retry
 @mcp_for_unity_tool(
     description="Manage GameObjects. Note: for 'get_components', the `data` field contains a dictionary of component names and their serialized properties. For 'get_component', specify 'component_name' to retrieve only that component's serialized data."
 )
-def manage_gameobject(
+async def manage_gameobject(
     ctx: Context,
     action: Annotated[Literal["create", "modify", "delete", "find", "add_component", "remove_component", "set_component_property", "get_components", "get_component"], "Perform CRUD operations on GameObjects and components."],
     target: Annotated[str,
@@ -64,7 +64,7 @@ def manage_gameobject(
     includeNonPublicSerialized: Annotated[bool,
                                           "Controls whether serialization of private [SerializeField] fields is included"] | None = None,
 ) -> dict[str, Any]:
-    ctx.info(f"Processing manage_gameobject: {action}")
+    await ctx.info(f"Processing manage_gameobject: {action}")
     try:
         # Validate parameter usage to prevent silent failures
         if action == "find":

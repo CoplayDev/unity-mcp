@@ -8,7 +8,7 @@ from unity_connection import send_command_with_retry
 @mcp_for_unity_tool(
     description="Bridge for prefab management commands (stage control and creation)."
 )
-def manage_prefabs(
+async def manage_prefabs(
     ctx: Context,
     action: Annotated[Literal[
         "open_stage",
@@ -29,7 +29,7 @@ def manage_prefabs(
     search_inactive: Annotated[bool,
                                "Include inactive objects when resolving the target name"] | None = None,
 ) -> dict[str, Any]:
-    ctx.info(f"Processing manage_prefabs: {action}")
+    await ctx.info(f"Processing manage_prefabs: {action}")
     try:
         params: dict[str, Any] = {"action": action}
 

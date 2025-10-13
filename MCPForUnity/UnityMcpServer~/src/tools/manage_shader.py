@@ -9,7 +9,7 @@ from unity_connection import send_command_with_retry
 @mcp_for_unity_tool(
     description="Manages shader scripts in Unity (create, read, update, delete)."
 )
-def manage_shader(
+async def manage_shader(
     ctx: Context,
     action: Annotated[Literal['create', 'read', 'update', 'delete'], "Perform CRUD operations on shader scripts."],
     name: Annotated[str, "Shader name (no .cs extension)"],
@@ -17,7 +17,7 @@ def manage_shader(
     contents: Annotated[str,
                         "Shader code for 'create'/'update'"] | None = None,
 ) -> dict[str, Any]:
-    ctx.info(f"Processing manage_shader: {action}")
+    await ctx.info(f"Processing manage_shader: {action}")
     try:
         # Prepare parameters for Unity
         params = {
