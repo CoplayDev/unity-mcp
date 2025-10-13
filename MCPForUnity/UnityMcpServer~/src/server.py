@@ -173,7 +173,7 @@ def asset_creation_strategy() -> str:
     return (
         "Available MCP for Unity Server Tools:\n\n"
         "- `manage_editor`: Controls editor state and queries info.\n"
-        "- `manage_menu_item`: Executes, lists and checks for the existence of Unity Editor menu items.\n"
+        "- `execute_menu_item`: Executes, lists and checks for the existence of Unity Editor menu items.\n"
         "- `read_console`: Reads or clears Unity console messages, with filtering options.\n"
         "- `manage_scene`: Manages scenes.\n"
         "- `manage_gameobject`: Manages GameObjects in the scene.\n"
@@ -185,9 +185,7 @@ def asset_creation_strategy() -> str:
         "- Always include a camera and main light in your scenes.\n"
         "- Unless specified otherwise, paths are relative to the project's `Assets/` folder.\n"
         "- After creating or modifying scripts with `manage_script`, allow Unity to recompile; use `read_console` to check for compile errors.\n"
-        "- Use `manage_menu_item` for interacting with Unity systems and third party tools like a user would.\n"
-        "- List menu items before using them if you are unsure of the menu path.\n"
-        "- If a menu item seems missing, refresh the cache: use manage_menu_item with action='list' and refresh=true, or action='refresh'. Avoid refreshing every time; prefer refresh only when the menu set likely changed.\n"
+        "- Use `execute_menu_item` for interacting with Unity systems and third party tools like a user would.\n"
     )
 
 

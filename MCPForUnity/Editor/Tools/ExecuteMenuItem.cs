@@ -1,15 +1,13 @@
 using System;
 using System.Collections.Generic;
+using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
-using MCPForUnity.Editor.Helpers;
 
-namespace MCPForUnity.Editor.Tools.MenuItems
+namespace MCPForUnity.Editor.Tools
 {
-    /// <summary>
-    /// Executes Unity Editor menu items by path with safety checks.
-    /// </summary>
-    public static class MenuItemExecutor
+    [McpForUnityTool("execute_menu_item")]
+    public static class ExecuteMenuItem
     {
         // Basic blacklist to prevent execution of disruptive menu items.
         private static readonly HashSet<string> _menuPathBlacklist = new HashSet<string>(
@@ -19,10 +17,11 @@ namespace MCPForUnity.Editor.Tools.MenuItems
         };
 
         /// <summary>
-        /// Execute a specific menu item. Expects 'menu_path' or 'menuPath' in params.
+        /// Routes actions: execute, list, exists, refresh
         /// </summary>
-        public static object Execute(JObject @params)
+        public static object HandleCommand(JObject @params)
         {
+            McpLog.Info("[ExecuteMenuItem] Handling menu item command");
             string menuPath = @params["menu_path"]?.ToString() ?? @params["menuPath"]?.ToString();
             if (string.IsNullOrWhiteSpace(menuPath))
             {

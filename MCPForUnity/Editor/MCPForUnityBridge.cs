@@ -14,7 +14,6 @@ using UnityEngine;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
 using MCPForUnity.Editor.Tools;
-using MCPForUnity.Editor.Tools.MenuItems;
 using MCPForUnity.Editor.Tools.Prefabs;
 
 namespace MCPForUnity.Editor
