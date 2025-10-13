@@ -24,7 +24,7 @@ from typing import Any
 from urllib.parse import urlparse
 import uuid
 
-import tomllib
+import tomli
 
 try:
     import httpx
@@ -39,9 +39,10 @@ logger = logging.getLogger("unity-mcp-telemetry")
 def get_package_version() -> str:
     """
     Open pyproject.toml and parse version
+    We use the tomli library instead of tomllib to support Python 3.10
     """
     with open("pyproject.toml", "rb") as f:
-        data = tomllib.load(f)
+        data = tomli.load(f)
     return data["project"]["version"]
 
 
