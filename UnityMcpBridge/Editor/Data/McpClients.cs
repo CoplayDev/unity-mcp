@@ -146,10 +146,9 @@ namespace MCPForUnity.Editor.Data
                 ),
                 macConfigPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    "Library",
-                    "Application Support",
-                    "", //TODO(PR): I need some help here
-                    "", //TODO(PR): I need some help here
+                    ".config",
+                    "github-copilot",
+                    "intellij",
                     "mcp.json"
                 ),
                 linuxConfigPath = Path.Combine(
