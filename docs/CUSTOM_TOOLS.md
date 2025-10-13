@@ -24,12 +24,12 @@ from unity_connection import send_command_with_retry
 @mcp_for_unity_tool(
     description="My custom tool that does something amazing"
 )
-def my_custom_tool(
+async def my_custom_tool(
     ctx: Context,
     param1: Annotated[str, "Description of param1"],
     param2: Annotated[int, "Description of param2"] | None = None
 ) -> dict[str, Any]:
-    ctx.info(f"Processing my_custom_tool: {param1}")
+    await ctx.info(f"Processing my_custom_tool: {param1}")
 
     # Prepare parameters for Unity
     params = {
@@ -151,11 +151,11 @@ from unity_connection import send_command_with_retry
 @mcp_for_unity_tool(
     description="Capture screenshots in Unity, saving them as PNGs"
 )
-def capture_screenshot(
+async def capture_screenshot(
     ctx: Context,
     filename: Annotated[str, "Screenshot filename without extension, e.g., screenshot_01"],
 ) -> dict[str, Any]:
-    ctx.info(f"Capturing screenshot: {filename}")
+    await ctx.info(f"Capturing screenshot: {filename}")
 
     params = {
         "action": "capture",
