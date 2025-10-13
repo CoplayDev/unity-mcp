@@ -1,3 +1,5 @@
+using System;
+
 namespace MCPForUnity.Editor.Services
 {
     /// <summary>
@@ -8,6 +10,7 @@ namespace MCPForUnity.Editor.Services
         private static IBridgeControlService _bridgeService;
         private static IClientConfigurationService _clientService;
         private static IPathResolverService _pathService;
+        private static ITestRunnerService _testRunnerService;
 
         /// <summary>
         /// Gets the bridge control service
@@ -25,6 +28,11 @@ namespace MCPForUnity.Editor.Services
         public static IPathResolverService Paths => _pathService ??= new PathResolverService();
 
         /// <summary>
+        /// Gets the Unity test runner service
+        /// </summary>
+        public static ITestRunnerService Tests => _testRunnerService ??= new TestRunnerService();
+
+        /// <summary>
         /// Registers a custom implementation for a service (useful for testing)
         /// </summary>
         /// <typeparam name="T">The service interface type</typeparam>
@@ -37,6 +45,8 @@ namespace MCPForUnity.Editor.Services
                 _clientService = c;
             else if (implementation is IPathResolverService p)
                 _pathService = p;
+            else if (implementation is ITestRunnerService t)
+                _testRunnerService = t;
         }
 
         /// <summary>
@@ -44,9 +54,15 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         public static void Reset()
         {
+            (_bridgeService as IDisposable)?.Dispose();
+            (_clientService as IDisposable)?.Dispose();
+            (_pathService as IDisposable)?.Dispose();
+            (_testRunnerService as IDisposable)?.Dispose();
+
             _bridgeService = null;
             _clientService = null;
             _pathService = null;
+            _testRunnerService = null;
         }
     }
 }

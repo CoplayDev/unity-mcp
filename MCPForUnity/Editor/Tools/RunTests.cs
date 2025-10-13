@@ -2,8 +2,8 @@ using System;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Resources.Tests;
+using MCPForUnity.Editor.Services;
 using Newtonsoft.Json.Linq;
-using UnityEditor.TestTools.TestRunner.Api;
 
 namespace MCPForUnity.Editor.Tools
 {
@@ -42,12 +42,11 @@ namespace MCPForUnity.Editor.Tools
                 // Preserve default timeout if parsing fails
             }
 
-            using var executor = new TestRunExecutor();
-            Task<TestRunExecutor.TestRunResult> runTask;
-
+            var testService = MCPServiceLocator.Tests;
+            Task<TestRunResult> runTask;
             try
             {
-                runTask = executor.RunTestsAsync(parsedMode.Value);
+                runTask = testService.RunTestsAsync(parsedMode.Value);
             }
             catch (Exception ex)
             {
