@@ -9,9 +9,8 @@ from unity_connection import async_send_command_with_retry
 class TestItem(BaseModel):
     name: Annotated[str, Field(description="The name of the test.")]
     full_name: Annotated[str, Field(description="The full name of the test.")]
-    path: Annotated[str, Field(description="The path of the test.")]
-    mode: Annotated[str, Field(
-        description="The mode the test is for (EditMode or PlayMode).")]
+    mode: Annotated[Literal["EditMode", "PlayMode"],
+                    Field(description="The mode the test is for.")]
 
 
 class GetTestsResponse(MCPResponse):
@@ -26,7 +25,7 @@ async def get_tests() -> GetTestsResponse:
 
 
 @mcp_for_unity_resource(uri="mcpforunity://tests/{mode}", name="get_tests_for_mode", description="Provides a list of tests for a specific mode.")
-async def get_tests_for_mode(mode: Annotated[Literal["edit", "play"], Field(description="The mode to filter tests by.")]) -> GetTestsResponse:
+async def get_tests_for_mode(mode: Annotated[Literal["EditMode", "PlayMode"], Field(description="The mode to filter tests by.")]) -> GetTestsResponse:
     """Provides a list of tests for a specific mode."""
     response = await async_send_command_with_retry("get_tests_for_mode", {"mode": mode})
     return GetTestsResponse(**response) if isinstance(response, dict) else response

@@ -191,12 +191,10 @@ namespace MCPForUnity.Editor.Resources.Tests
 
                 if (!string.IsNullOrEmpty(fullName) && seen.Add(key))
                 {
-                    string computedPath = path.Count > 0 ? string.Join("/", path) : fullName;
                     output.Add(new Dictionary<string, string>
                     {
                         ["name"] = node.Name ?? fullName,
                         ["full_name"] = fullName,
-                        ["path"] = computedPath,
                         ["mode"] = mode.ToString(),
                     });
                 }
@@ -229,23 +227,19 @@ namespace MCPForUnity.Editor.Resources.Tests
                 return false;
             }
 
-            if (modeStr.Equals("edit", StringComparison.OrdinalIgnoreCase) ||
-                modeStr.Equals("editmode", StringComparison.OrdinalIgnoreCase) ||
-                modeStr.Equals("EditMode", StringComparison.Ordinal))
+            if (modeStr.Equals("edit", StringComparison.OrdinalIgnoreCase))
             {
                 mode = TestMode.EditMode;
                 return true;
             }
 
-            if (modeStr.Equals("play", StringComparison.OrdinalIgnoreCase) ||
-                modeStr.Equals("playmode", StringComparison.OrdinalIgnoreCase) ||
-                modeStr.Equals("PlayMode", StringComparison.Ordinal))
+            if (modeStr.Equals("play", StringComparison.OrdinalIgnoreCase))
             {
                 mode = TestMode.PlayMode;
                 return true;
             }
 
-            error = $"Unknown test mode: '{modeStr}'. Use 'EditMode' or 'PlayMode'";
+            error = $"Unknown test mode: '{modeStr}'. Use 'edit' or 'play'";
             return false;
         }
     }
