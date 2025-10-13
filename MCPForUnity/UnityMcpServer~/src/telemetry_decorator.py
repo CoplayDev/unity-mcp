@@ -8,7 +8,7 @@ import logging
 import time
 from typing import Callable, Any
 
-from telemetry import record_tool_usage, record_milestone, MilestoneType
+from telemetry import record_resource_usage, record_tool_usage, record_milestone, MilestoneType
 
 _log = logging.getLogger("unity-mcp-telemetry")
 _decorator_log_count = 0
