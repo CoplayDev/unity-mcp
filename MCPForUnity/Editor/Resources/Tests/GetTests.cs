@@ -18,34 +18,16 @@ namespace MCPForUnity.Editor.Resources.Tests
     {
         public static async Task<object> HandleCommand(JObject @params)
         {
-            string modeStr = @params?["mode"]?.ToString();
-            TestMode? parsedMode = null;
+            McpLog.Info("[GetTests] Retrieving tests for all modes");
 
-            if (!string.IsNullOrWhiteSpace(modeStr))
-            {
-                if (!ModeParser.TryParse(modeStr, out parsedMode, out var error))
-                {
-                    return Response.Error(error);
-                }
-            }
-
-            McpLog.Info(
-                parsedMode.HasValue
-                    ? $"[GetTests] Retrieving tests for mode: {parsedMode.Value}"
-                    : "[GetTests] Retrieving tests for all modes",
-                always: false
-            );
-
-            var tests = await TestCollector.GetTestsAsync(parsedMode).ConfigureAwait(true);
+            var tests = await TestCollector.GetTestsAsync(filterMode: null).ConfigureAwait(true);
 
             if (tests == null)
             {
                 return Response.Error("Failed to retrieve tests");
             }
 
-            string message = parsedMode.HasValue
-                ? $"Retrieved {tests.Count} {parsedMode.Value} tests"
-                : $"Retrieved {tests.Count} tests";
+            string message = $"Retrieved {tests.Count} tests";
 
             return Response.Success(message, tests);
         }
