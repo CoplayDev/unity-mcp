@@ -18,21 +18,21 @@ namespace MCPForUnity.Editor.Resources.Tests
         public static async Task<object> HandleCommand(JObject @params)
         {
             McpLog.Info("[GetTests] Retrieving tests for all modes");
+            IReadOnlyList<Dictionary<string, string>> result;
 
-            var service = MCPServiceLocator.Tests;
-            var result = await service.GetTestsAsync(mode: null).ConfigureAwait(true);
-            var tests = result is List<Dictionary<string, string>> list
-                ? list
-                : new List<Dictionary<string, string>>(result);
-
-            if (tests == null)
+            try
             {
+                result = await MCPServiceLocator.Tests.GetTestsAsync(mode: null).ConfigureAwait(true);
+            }
+            catch (Exception ex)
+            {
+                McpLog.Error($"[GetTests] Error retrieving tests: {ex.Message}\n{ex.StackTrace}");
                 return Response.Error("Failed to retrieve tests");
             }
 
-            string message = $"Retrieved {tests.Count} tests";
+            string message = $"Retrieved {result.Count} tests";
 
-            return Response.Success(message, tests);
+            return Response.Success(message, result);
         }
     }
 
@@ -45,6 +45,7 @@ namespace MCPForUnity.Editor.Resources.Tests
     {
         public static async Task<object> HandleCommand(JObject @params)
         {
+            IReadOnlyList<Dictionary<string, string>> result;
             string modeStr = @params["mode"]?.ToString();
             if (string.IsNullOrEmpty(modeStr))
             {
@@ -58,19 +59,18 @@ namespace MCPForUnity.Editor.Resources.Tests
 
             McpLog.Info($"[GetTestsForMode] Retrieving tests for mode: {parsedMode.Value}");
 
-            var service = MCPServiceLocator.Tests;
-            var result = await service.GetTestsAsync(parsedMode).ConfigureAwait(true);
-            var tests = result is List<Dictionary<string, string>> list
-                ? list
-                : new List<Dictionary<string, string>>(result);
-
-            if (tests == null)
+            try
             {
+                result = await MCPServiceLocator.Tests.GetTestsAsync(parsedMode).ConfigureAwait(true);
+            }
+            catch (Exception ex)
+            {
+                McpLog.Error($"[GetTestsForMode] Error retrieving tests: {ex.Message}\n{ex.StackTrace}");
                 return Response.Error("Failed to retrieve tests");
             }
 
-            string message = $"Retrieved {tests.Count} {parsedMode.Value} tests";
-            return Response.Success(message, tests);
+            string message = $"Retrieved {result.Count} {parsedMode.Value} tests";
+            return Response.Success(message, result);
         }
     }
 
