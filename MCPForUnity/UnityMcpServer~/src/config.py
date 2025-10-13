@@ -16,7 +16,6 @@ class ServerConfig:
     mcp_port: int = 6500
 
     # Connection settings
-    # short initial timeout; retries use shorter timeouts
     connection_timeout: float = 30.0
     buffer_size: int = 16 * 1024 * 1024  # 16MB buffer
     # Framed receive behavior
