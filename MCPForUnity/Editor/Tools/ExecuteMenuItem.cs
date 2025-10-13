@@ -16,9 +16,6 @@ namespace MCPForUnity.Editor.Tools
             "File/Quit",
         };
 
-        /// <summary>
-        /// Routes actions: execute, list, exists, refresh
-        /// </summary>
         public static object HandleCommand(JObject @params)
         {
             McpLog.Info("[ExecuteMenuItem] Handling menu item command");
