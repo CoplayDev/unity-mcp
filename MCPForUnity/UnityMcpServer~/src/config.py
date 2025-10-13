@@ -17,7 +17,7 @@ class ServerConfig:
 
     # Connection settings
     # short initial timeout; retries use shorter timeouts
-    connection_timeout: float = 1.0
+    connection_timeout: float = 30.0
     buffer_size: int = 16 * 1024 * 1024  # 16MB buffer
     # Framed receive behavior
     # max seconds to wait while consuming heartbeats only
