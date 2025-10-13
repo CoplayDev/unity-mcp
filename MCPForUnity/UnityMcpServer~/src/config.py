@@ -30,7 +30,7 @@ class ServerConfig:
     log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
     # Server settings
-    max_retries: int = 10
+    max_retries: int = 5
     retry_delay: float = 0.25
     # Backoff hint returned to clients when Unity is reloading (milliseconds)
     reload_retry_ms: int = 250
