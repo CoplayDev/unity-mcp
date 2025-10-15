@@ -24,6 +24,7 @@ namespace MCPForUnity.Editor.Windows
         }
 
         // Settings UI Elements
+        private Label versionLabel;
         private Toggle debugLogsToggle;
         private EnumField validationLevelField;
         private Label validationDescription;
@@ -191,6 +192,7 @@ namespace MCPForUnity.Editor.Windows
         private void CacheUIElements()
         {
             // Settings
+            versionLabel = rootVisualElement.Q<Label>("version-label");
             debugLogsToggle = rootVisualElement.Q<Toggle>("debug-logs-toggle");
             validationLevelField = rootVisualElement.Q<EnumField>("validation-level");
             validationDescription = rootVisualElement.Q<Label>("validation-description");
@@ -240,6 +242,7 @@ namespace MCPForUnity.Editor.Windows
         private void InitializeUI()
         {
             // Settings Section
+            versionLabel.text = AssetPathUtility.GetPackageVersion();
             debugLogsToggle.value = EditorPrefs.GetBool("MCPForUnity.DebugLogs", false);
 
             validationLevelField.Init(ValidationLevel.Standard);

@@ -9,7 +9,7 @@
             <ui:VisualElement class="section-content">
                 <ui:VisualElement class="setting-row">
                     <ui:Label text="Version:" class="setting-label" />
-                    <ui:Label text="5.0.0" name="version-label" class="setting-value" />
+                    <ui:Label text="..." name="version-label" class="setting-value" />
                 </ui:VisualElement>
                 <ui:VisualElement class="setting-row">
                     <ui:Label text="Show Debug Logs:" class="setting-label" />
