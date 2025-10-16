@@ -564,8 +564,8 @@ namespace MCPForUnity.Editor.Helpers
                     }
 					
 					// Only manage per-folder tool installs created by this feature
-+                    if (!subdirName.EndsWith("_MCPForUnityTools", StringComparison.OrdinalIgnoreCase))
-+                        goto NextSubdir;
+                    if (!subdirName.EndsWith("_MCPForUnityTools", StringComparison.OrdinalIgnoreCase)) 
+                        goto NextSubdir;
 
                     // Check if this subdirectory corresponds to an active tools folder
                     if (!activeFolderIdentifiers.Contains(subdirName))
