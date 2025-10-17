@@ -83,8 +83,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/unity-status"
           rm -f "$RUNNER_TEMP/unity-status"/unity-mcp-status-*.json || true
 
-      # ---------- Start headless Unity with MCP bridge ----------
-      - name: Start Unity MCP bridge in background
+      # ---------- Activate Unity using game-ci's activation scripts ----------
+      - name: Activate Unity license in temporary container
         if: steps.detect.outputs.unity_ok == 'true'
         shell: bash
         env:
@@ -95,39 +95,63 @@ jobs:
         run: |
           set -euxo pipefail
 
-          # Use the unityci/editor image's built-in activation via entrypoint
-          # Create activation wrapper script that runs activation then starts Unity with MCP
-          docker rm -f unity-mcp >/dev/null 2>&1 || true
+          # Create directories for license persistence
+          mkdir -p "$RUNNER_TEMP/unity-license"
 
-          # The unityci image uses /usr/bin/activate.sh for license setup
-          # We'll call it first, then start Unity with our MCP bridge
-          docker run -d --name unity-mcp --network host \
+          # Run game-ci's activation in a temporary container
+          # This uses their built-in /steps/activate.sh script
+          docker run --rm \
             -e UNITY_EMAIL \
             -e UNITY_PASSWORD \
             -e UNITY_LICENSE \
             -e UNITY_SERIAL \
+            -v "$RUNNER_TEMP/unity-license:/root/.local/share/unity3d" \
+            ${{ env.UNITY_IMAGE }} \
+            bash -c '
+              # game-ci images have activation scripts at /steps/
+              if [ -f /steps/activate.sh ]; then
+                bash /steps/activate.sh
+              else
+                # Fallback: manual activation
+                if [[ -n "${UNITY_LICENSE:-}" ]]; then
+                  mkdir -p /root/.local/share/unity3d/Unity
+                  echo "$UNITY_LICENSE" | base64 -d > /root/.local/share/unity3d/Unity/Unity_lic.ulf 2>/dev/null || \
+                  echo "$UNITY_LICENSE" > /root/.local/share/unity3d/Unity/Unity_lic.ulf
+                elif [[ -n "${UNITY_EMAIL:-}" && -n "${UNITY_PASSWORD:-}" ]]; then
+                  /opt/unity/Editor/Unity -quit -batchmode -nographics -logFile - \
+                    -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD" ${UNITY_SERIAL:+-serial "$UNITY_SERIAL"}
+                fi
+              fi
+              echo "License files:"
+              find /root/.local/share/unity3d -type f -ls || true
+            '
+
+          # Verify license was created
+          echo "Checking for license files on host:"
+          find "$RUNNER_TEMP/unity-license" -type f || echo "No license files found!"
+
+      # ---------- Start Unity with MCP bridge ----------
+      - name: Start Unity MCP bridge in background
+        if: steps.detect.outputs.unity_ok == 'true'
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          docker rm -f unity-mcp >/dev/null 2>&1 || true
+
+          # Start Unity with the pre-activated license mounted
+          docker run -d --name unity-mcp --network host \
             -e UNITY_MCP_ALLOW_BATCH=1 \
             -e UNITY_MCP_STATUS_DIR=/root/.unity-mcp \
             -e UNITY_MCP_BIND_HOST=127.0.0.1 \
             -v "${{ github.workspace }}:/workspace" -w /workspace \
             -v "$RUNNER_TEMP/unity-status:/root/.unity-mcp" \
+            -v "$RUNNER_TEMP/unity-license:/root/.local/share/unity3d" \
             ${{ env.UNITY_IMAGE }} \
-            bash -c '
-              # Activate Unity license (unityci pattern)
-              if [[ -n "${UNITY_LICENSE:-}" ]]; then
-                mkdir -p /root/.local/share/unity3d/Unity
-                # Try base64 decode, fallback to plain text
-                echo "$UNITY_LICENSE" | base64 -d > /root/.local/share/unity3d/Unity/Unity_lic.ulf 2>/dev/null || \
-                echo "$UNITY_LICENSE" > /root/.local/share/unity3d/Unity/Unity_lic.ulf
-                chmod 600 /root/.local/share/unity3d/Unity/Unity_lic.ulf
-              fi
-
-              # Start Unity with MCP bridge
-              /opt/unity/Editor/Unity -batchmode -nographics -logFile - \
-                -stackTraceLogType Full \
-                -projectPath /workspace/TestProjects/UnityMCPTests \
-                -executeMethod MCPForUnity.Editor.MCPForUnityBridge.StartAutoConnect
-            '
+            /opt/unity/Editor/Unity -batchmode -nographics -logFile - \
+              -stackTraceLogType Full \
+              -projectPath /workspace/TestProjects/UnityMCPTests \
+              -executeMethod MCPForUnity.Editor.MCPForUnityBridge.StartAutoConnect
 
       # ---------- Wait for Unity bridge ----------
       - name: Wait for Unity bridge (robust)
