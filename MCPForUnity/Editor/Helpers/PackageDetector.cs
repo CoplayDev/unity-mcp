@@ -23,10 +23,7 @@ namespace MCPForUnity.Editor.Helpers
                 bool legacyPresent = LegacyRootsExist();
                 bool canonicalMissing = !System.IO.File.Exists(System.IO.Path.Combine(ServerInstaller.GetServerPath(), "server.py"));
 
-                // Check if any MCPForUnityTools have updated versions
-                bool toolsNeedUpdate = ToolsVersionsChanged();
-
-                if (!EditorPrefs.GetBool(key, false) || legacyPresent || canonicalMissing || toolsNeedUpdate)
+                if (!EditorPrefs.GetBool(key, false) || legacyPresent || canonicalMissing)
                 {
                     // Marshal the entire flow to the main thread. EnsureServerInstalled may touch Unity APIs.
                     EditorApplication.delayCall += () =>
@@ -104,77 +101,6 @@ namespace MCPForUnity.Editor.Helpers
             }
             catch { }
             return false;
-        }
-
-        /// <summary>
-        /// Checks if any MCPForUnityTools folders have version.txt files that differ from installed versions.
-        /// Returns true if any tool needs updating.
-        /// </summary>
-        private static bool ToolsVersionsChanged()
-        {
-            try
-            {
-                // Get Unity project root
-                string projectRoot = System.IO.Directory.GetParent(UnityEngine.Application.dataPath)?.FullName;
-                if (string.IsNullOrEmpty(projectRoot))
-                {
-                    return false;
-                }
-
-                // Get server tools directory
-                string serverPath = ServerInstaller.GetServerPath();
-                string toolsDir = System.IO.Path.Combine(serverPath, "tools");
-
-                if (!System.IO.Directory.Exists(toolsDir))
-                {
-                    // Tools directory doesn't exist yet, needs initial setup
-                    return true;
-                }
-
-                // Find all MCPForUnityTools folders in project
-                var toolsFolders = System.IO.Directory.GetDirectories(projectRoot, "MCPForUnityTools", System.IO.SearchOption.AllDirectories);
-
-                foreach (var folder in toolsFolders)
-                {
-                    // Check if version.txt exists in this folder
-                    string versionFile = System.IO.Path.Combine(folder, "version.txt");
-                    if (!System.IO.File.Exists(versionFile))
-                    {
-                        continue; // No version tracking for this folder
-                    }
-
-                    // Read source version
-                    string sourceVersion = System.IO.File.ReadAllText(versionFile)?.Trim();
-                    if (string.IsNullOrEmpty(sourceVersion))
-                    {
-                        continue;
-                    }
-
-                    // Get folder identifier (same logic as ServerInstaller.GetToolsFolderIdentifier)
-                    string folderIdentifier = ServerInstaller.GetToolsFolderIdentifier(folder);
-                    string trackingFile = System.IO.Path.Combine(toolsDir, $"{folderIdentifier}_version.txt");
-
-                    // Read installed version
-                    string installedVersion = null;
-                    if (System.IO.File.Exists(trackingFile))
-                    {
-                        installedVersion = System.IO.File.ReadAllText(trackingFile)?.Trim();
-                    }
-
-                    // Check if versions differ
-                    if (string.IsNullOrEmpty(installedVersion) || sourceVersion != installedVersion)
-                    {
-                        return true; // Version changed, needs update
-                    }
-                }
-
-                return false; // All versions match
-            }
-            catch
-            {
-                // On error, assume update needed to be safe
-                return true;
-            }
         }
     }
 }
