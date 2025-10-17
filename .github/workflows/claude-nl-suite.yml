@@ -95,9 +95,12 @@ jobs:
         run: |
           set -euxo pipefail
 
-          # The unityci/editor image supports licensing via env vars
-          # Pass credentials and let Unity activate itself on first run
+          # Use the unityci/editor image's built-in activation via entrypoint
+          # Create activation wrapper script that runs activation then starts Unity with MCP
           docker rm -f unity-mcp >/dev/null 2>&1 || true
+
+          # The unityci image uses /usr/bin/activate.sh for license setup
+          # We'll call it first, then start Unity with our MCP bridge
           docker run -d --name unity-mcp --network host \
             -e UNITY_EMAIL \
             -e UNITY_PASSWORD \
@@ -109,10 +112,22 @@ jobs:
             -v "${{ github.workspace }}:/workspace" -w /workspace \
             -v "$RUNNER_TEMP/unity-status:/root/.unity-mcp" \
             ${{ env.UNITY_IMAGE }} \
-            /opt/unity/Editor/Unity -batchmode -nographics -logFile - \
-              -stackTraceLogType Full \
-              -projectPath /workspace/TestProjects/UnityMCPTests \
-              -executeMethod MCPForUnity.Editor.MCPForUnityBridge.StartAutoConnect
+            bash -c '
+              # Activate Unity license (unityci pattern)
+              if [[ -n "${UNITY_LICENSE:-}" ]]; then
+                mkdir -p /root/.local/share/unity3d/Unity
+                # Try base64 decode, fallback to plain text
+                echo "$UNITY_LICENSE" | base64 -d > /root/.local/share/unity3d/Unity/Unity_lic.ulf 2>/dev/null || \
+                echo "$UNITY_LICENSE" > /root/.local/share/unity3d/Unity/Unity_lic.ulf
+                chmod 600 /root/.local/share/unity3d/Unity/Unity_lic.ulf
+              fi
+
+              # Start Unity with MCP bridge
+              /opt/unity/Editor/Unity -batchmode -nographics -logFile - \
+                -stackTraceLogType Full \
+                -projectPath /workspace/TestProjects/UnityMCPTests \
+                -executeMethod MCPForUnity.Editor.MCPForUnityBridge.StartAutoConnect
+            '
 
       # ---------- Wait for Unity bridge ----------
       - name: Wait for Unity bridge (robust)
