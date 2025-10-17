@@ -67,49 +67,82 @@ jobs:
             echo "No MCP Python deps found (skipping)"
           fi
 
-      # Cache Unity Library to speed up runs
-      - uses: actions/cache@v4
-        with:
-          path: TestProjects/UnityMCPTests/Library
-          key: Library-UnityMCPTests-2021.3.45f2-${{ hashFiles('TestProjects/UnityMCPTests/Assets/**', 'TestProjects/UnityMCPTests/Packages/**', 'TestProjects/UnityMCPTests/ProjectSettings/**') }}
-          restore-keys: |
-            Library-UnityMCPTests-2021.3.45f2-
-            Library-UnityMCPTests-
-
-      # ---------- Clean old MCP status ----------
-      - name: Clean old MCP status
-        run: |
-          set -eux
-          mkdir -p "$RUNNER_TEMP/unity-status"
-          rm -f "$RUNNER_TEMP/unity-status"/unity-mcp-status-*.json || true
-
-      # ---------- Start headless Unity with MCP bridge ----------
-      - name: Start Unity MCP bridge in background
-        if: steps.detect.outputs.unity_ok == 'true'
-        shell: bash
+      # --- Use game-ci for Unity activation (handles all license types) ---
+      - name: Activate Unity using game-ci
+        uses: game-ci/unity-activator@v2
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        with:
+          unity-version: 2021.3.45f2
+
+      # Copy activation artifacts to Docker mount locations
+      - name: Prepare Unity license for Docker containers
+        shell: bash
         run: |
           set -euxo pipefail
+          mkdir -p "$RUNNER_TEMP/unity-config" "$RUNNER_TEMP/unity-local"
 
-          # The unityci/editor image supports licensing via env vars
-          # Pass credentials and let Unity activate itself on first run
+          # game-ci stores license files in standard Unity locations
+          # Copy them to our Docker mount points
+          if [ -d "$HOME/.local/share/unity3d" ]; then
+            cp -r "$HOME/.local/share/unity3d"/* "$RUNNER_TEMP/unity-local/" || true
+          fi
+          if [ -d "$HOME/.config/unity3d" ]; then
+            cp -r "$HOME/.config/unity3d"/* "$RUNNER_TEMP/unity-config/" || true
+          fi
+
+          # Verify license files exist
+          echo "Unity license files prepared:"
+          find "$RUNNER_TEMP/unity-local" -type f || true
+          find "$RUNNER_TEMP/unity-config" -type f || true
+
+      # ---------- Warm up project (import Library once) ----------
+      - name: Warm up project (import Library once)
+        if: steps.detect.outputs.unity_ok == 'true'
+        shell: bash
+        env:
+          UNITY_IMAGE: ${{ env.UNITY_IMAGE }}
+        run: |
+          set -euxo pipefail
+          docker run --rm --network host \
+            -e HOME=/root \
+            -v "${{ github.workspace }}:/workspace" -w /workspace \
+            -v "$RUNNER_TEMP/unity-config:/root/.config/unity3d" \
+            -v "$RUNNER_TEMP/unity-local:/root/.local/share/unity3d" \
+            "$UNITY_IMAGE" /opt/unity/Editor/Unity -batchmode -nographics -logFile - \
+              -projectPath /workspace/TestProjects/UnityMCPTests \
+              -quit
+
+      # ---------- Clean old MCP status ----------
+      - name: Clean old MCP status
+        run: |
+          set -eux
+          mkdir -p "$HOME/.unity-mcp"
+          rm -f "$HOME/.unity-mcp"/unity-mcp-status-*.json || true
+
+      # ---------- Start headless Unity (persistent bridge) ----------
+      - name: Start Unity (persistent bridge)
+        if: steps.detect.outputs.unity_ok == 'true'
+        shell: bash
+        env:
+          UNITY_IMAGE: ${{ env.UNITY_IMAGE }}
+        run: |
+          set -euxo pipefail
+          mkdir -p "$RUNNER_TEMP/unity-status"
           docker rm -f unity-mcp >/dev/null 2>&1 || true
           docker run -d --name unity-mcp --network host \
-            -e UNITY_EMAIL \
-            -e UNITY_PASSWORD \
-            -e UNITY_LICENSE \
-            -e UNITY_SERIAL \
+            -e HOME=/root \
             -e UNITY_MCP_ALLOW_BATCH=1 \
             -e UNITY_MCP_STATUS_DIR=/root/.unity-mcp \
             -e UNITY_MCP_BIND_HOST=127.0.0.1 \
             -v "${{ github.workspace }}:/workspace" -w /workspace \
             -v "$RUNNER_TEMP/unity-status:/root/.unity-mcp" \
-            ${{ env.UNITY_IMAGE }} \
-            /opt/unity/Editor/Unity -batchmode -nographics -logFile - \
+            -v "$RUNNER_TEMP/unity-config:/root/.config/unity3d" \
+            -v "$RUNNER_TEMP/unity-local:/root/.local/share/unity3d" \
+            "$UNITY_IMAGE" /opt/unity/Editor/Unity -batchmode -nographics -logFile - \
               -stackTraceLogType Full \
               -projectPath /workspace/TestProjects/UnityMCPTests \
               -executeMethod MCPForUnity.Editor.MCPForUnityBridge.StartAutoConnect
