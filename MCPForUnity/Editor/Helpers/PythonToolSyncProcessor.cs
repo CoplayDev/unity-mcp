@@ -148,6 +148,28 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
+        /// Menu item to reimport all Python files in the project
+        /// </summary>
+        [MenuItem("MCP For Unity/Reimport Python Files", priority = 99)]
+        public static void ReimportPythonFiles()
+        {
+            string[] allAssets = AssetDatabase.GetAllAssetPaths();
+            int count = 0;
+            
+            foreach (string path in allAssets)
+            {
+                if (path.EndsWith(".py") && path.StartsWith("Assets/"))
+                {
+                    AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+                    count++;
+                }
+            }
+            
+            McpLog.Info($"Reimported {count} Python files");
+            AssetDatabase.Refresh();
+        }
+
+        /// <summary>
         /// Menu item to manually trigger sync
         /// </summary>
         [MenuItem("MCP For Unity/Sync Python Tools", priority = 100)]
