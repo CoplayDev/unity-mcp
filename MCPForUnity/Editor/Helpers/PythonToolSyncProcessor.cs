@@ -46,19 +46,10 @@ namespace MCPForUnity.Editor.Helpers
 
             bool needsSync = false;
 
-            // Check if any PythonToolsAsset was modified
+            // Only check for .py file changes, not PythonToolsAsset changes
+            // (PythonToolsAsset changes are internal state updates from syncing)
             foreach (string path in importedAssets.Concat(movedAssets))
             {
-                if (path.EndsWith(".asset"))
-                {
-                    var asset = AssetDatabase.LoadAssetAtPath<PythonToolsAsset>(path);
-                    if (asset != null)
-                    {
-                        needsSync = true;
-                        break;
-                    }
-                }
-
                 // Check if any .py files were modified
                 if (path.EndsWith(".py"))
                 {

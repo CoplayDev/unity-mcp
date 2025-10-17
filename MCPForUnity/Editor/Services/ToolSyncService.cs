@@ -35,48 +35,58 @@ namespace MCPForUnity.Editor.Services
 
                 var syncedFiles = new HashSet<string>();
 
-                foreach (var registry in registries)
+                // Batch all asset modifications together to minimize reimports
+                AssetDatabase.StartAssetEditing();
+                try
                 {
-                    foreach (var file in registry.GetValidFiles())
+                    foreach (var registry in registries)
                     {
-                        try
+                        foreach (var file in registry.GetValidFiles())
                         {
-                            // Check if needs syncing (hash-based or always)
-                            if (_registryService.NeedsSync(registry, file))
+                            try
                             {
-                                string destPath = Path.Combine(destToolsDir, file.name + ".py");
+                                // Check if needs syncing (hash-based or always)
+                                if (_registryService.NeedsSync(registry, file))
+                                {
+                                    string destPath = Path.Combine(destToolsDir, file.name + ".py");
 
-                                // Write the Python file content
-                                File.WriteAllText(destPath, file.text);
+                                    // Write the Python file content
+                                    File.WriteAllText(destPath, file.text);
 
-                                // Record sync
-                                _registryService.RecordSync(registry, file);
+                                    // Record sync
+                                    _registryService.RecordSync(registry, file);
 
-                                result.CopiedCount++;
-                                syncedFiles.Add(destPath);
-                                McpLog.Info($"Synced Python tool: {file.name}.py");
+                                    result.CopiedCount++;
+                                    syncedFiles.Add(destPath);
+                                    McpLog.Info($"Synced Python tool: {file.name}.py");
+                                }
+                                else
+                                {
+                                    string destPath = Path.Combine(destToolsDir, file.name + ".py");
+                                    syncedFiles.Add(destPath);
+                                    result.SkippedCount++;
+                                }
                             }
-                            else
+                            catch (Exception ex)
                             {
-                                string destPath = Path.Combine(destToolsDir, file.name + ".py");
-                                syncedFiles.Add(destPath);
-                                result.SkippedCount++;
+                                result.ErrorCount++;
+                                result.Messages.Add($"Failed to sync {file.name}: {ex.Message}");
                             }
                         }
-                        catch (Exception ex)
-                        {
-                            result.ErrorCount++;
-                            result.Messages.Add($"Failed to sync {file.name}: {ex.Message}");
-                        }
+
+                        // Cleanup stale states in registry
+                        registry.CleanupStaleStates();
+                        EditorUtility.SetDirty(registry);
                     }
 
-                    // Cleanup stale states in registry
-                    registry.CleanupStaleStates();
-                    EditorUtility.SetDirty(registry);
+                    // Cleanup stale Python files in destination
+                    CleanupStaleFiles(destToolsDir, syncedFiles);
                 }
-
-                // Cleanup stale Python files in destination
-                CleanupStaleFiles(destToolsDir, syncedFiles);
+                finally
+                {
+                    // End batch editing - this triggers a single asset refresh
+                    AssetDatabase.StopAssetEditing();
+                }
 
                 // Save all modified registries
                 AssetDatabase.SaveAssets();
