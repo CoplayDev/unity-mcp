@@ -1,15 +1,14 @@
 """
 MCP Tools package - Auto-discovers and registers all tools in this directory.
 """
-import importlib
 import logging
 from pathlib import Path
-import pkgutil
 
 from mcp.server.fastmcp import FastMCP
 from telemetry_decorator import telemetry_tool
 
 from registry import get_registered_tools
+from module_discovery import discover_modules
 
 logger = logging.getLogger("mcp-for-unity-server")
 
@@ -28,34 +27,8 @@ def register_all_tools(mcp: FastMCP):
     # Dynamic import of all modules in this directory
     tools_dir = Path(__file__).parent
 
-    # Discover modules in the top level
-    for _, module_name, _ in pkgutil.iter_modules([str(tools_dir)]):
-        # Skip private modules and __init__
-        if module_name.startswith('_'):
-            continue
-
-        try:
-            importlib.import_module(f'.{module_name}', __package__)
-        except Exception as e:
-            logger.warning(f"Failed to import tool module {module_name}: {e}")
-
-    # Discover modules in subdirectories (one level deep)
-    for subdir in tools_dir.iterdir():
-        if not subdir.is_dir() or subdir.name.startswith('_') or subdir.name.startswith('.'):
-            continue
-
-        # Check if subdirectory contains Python modules
-        for _, module_name, _ in pkgutil.iter_modules([str(subdir)]):
-            # Skip private modules and __init__
-            if module_name.startswith('_'):
-                continue
-
-            try:
-                # Import as tools.subdirname.modulename
-                full_module_name = f'.{subdir.name}.{module_name}'
-                importlib.import_module(full_module_name, __package__)
-            except Exception as e:
-                logger.warning(f"Failed to import tool module {subdir.name}.{module_name}: {e}")
+    # Discover and import all modules
+    list(discover_modules(tools_dir, __package__))
 
     tools = get_registered_tools()
 

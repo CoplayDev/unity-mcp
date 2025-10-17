@@ -1,15 +1,14 @@
 """
 MCP Resources package - Auto-discovers and registers all resources in this directory.
 """
-import importlib
 import logging
 from pathlib import Path
-import pkgutil
 
 from mcp.server.fastmcp import FastMCP
 from telemetry_decorator import telemetry_resource
 
 from registry import get_registered_resources
+from module_discovery import discover_modules
 
 logger = logging.getLogger("mcp-for-unity-server")
 
@@ -21,23 +20,15 @@ def register_all_resources(mcp: FastMCP):
     """
     Auto-discover and register all resources in the resources/ directory.
 
-    Any .py file in this directory with @mcp_for_unity_resource decorated
+    Any .py file in this directory or subdirectories with @mcp_for_unity_resource decorated
     functions will be automatically registered.
     """
     logger.info("Auto-discovering MCP for Unity Server resources...")
     # Dynamic import of all modules in this directory
     resources_dir = Path(__file__).parent
 
-    for _, module_name, _ in pkgutil.iter_modules([str(resources_dir)]):
-        # Skip private modules and __init__
-        if module_name.startswith('_'):
-            continue
-
-        try:
-            importlib.import_module(f'.{module_name}', __package__)
-        except Exception as e:
-            logger.warning(
-                f"Failed to import resource module {module_name}: {e}")
+    # Discover and import all modules
+    list(discover_modules(resources_dir, __package__))
 
     resources = get_registered_resources()
 
