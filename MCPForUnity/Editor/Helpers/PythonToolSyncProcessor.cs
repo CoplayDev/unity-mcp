@@ -141,7 +141,7 @@ namespace MCPForUnity.Editor.Helpers
         /// <summary>
         /// Menu item to reimport all Python files in the project
         /// </summary>
-        [MenuItem("MCP For Unity/Reimport Python Files", priority = 99)]
+        [MenuItem("Window/MCP For Unity/Tool Sync/Reimport Python Files", priority = 99)]
         public static void ReimportPythonFiles()
         {
             string[] allAssets = AssetDatabase.GetAllAssetPaths();
@@ -163,7 +163,7 @@ namespace MCPForUnity.Editor.Helpers
         /// <summary>
         /// Menu item to manually trigger sync
         /// </summary>
-        [MenuItem("MCP For Unity/Sync Python Tools", priority = 100)]
+        [MenuItem("Window/MCP For Unity/Tool Sync/Sync Python Tools", priority = 100)]
         public static void ManualSync()
         {
             McpLog.Info("Manually syncing Python tools...");
@@ -173,7 +173,7 @@ namespace MCPForUnity.Editor.Helpers
         /// <summary>
         /// Menu item to toggle auto-sync
         /// </summary>
-        [MenuItem("MCP For Unity/Auto-Sync Python Tools", priority = 101)]
+        [MenuItem("Window/MCP For Unity/Tool Sync/Auto-Sync Python Tools", priority = 101)]
         public static void ToggleAutoSync()
         {
             SetAutoSyncEnabled(!IsAutoSyncEnabled());
@@ -182,7 +182,7 @@ namespace MCPForUnity.Editor.Helpers
         /// <summary>
         /// Validate menu item (shows checkmark when enabled)
         /// </summary>
-        [MenuItem("MCP For Unity/Auto-Sync Python Tools", true, priority = 101)]
+        [MenuItem("Window/MCP For Unity/Tool Sync/Auto-Sync Python Tools", true, priority = 101)]
         public static bool ToggleAutoSyncValidate()
         {
             Menu.SetChecked("MCP For Unity/Auto-Sync Python Tools", IsAutoSyncEnabled());
