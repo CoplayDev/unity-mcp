@@ -165,6 +165,9 @@ jobs:
         env:
           UNITY_IMAGE: ${{ env.UNITY_IMAGE }}
           ULF_OK: ${{ steps.ulf.outputs.ok }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
         run: |
           set -euxo pipefail
           manual_args=()
@@ -173,6 +176,8 @@ jobs:
           fi
           docker run --rm --network host \
             -e HOME=/root \
+            -e UNITY_EMAIL="${UNITY_EMAIL:-}" \
+            -e UNITY_PASSWORD="${UNITY_PASSWORD:-}" \
             -v "${{ github.workspace }}:/workspace" -w /workspace \
             -v "$RUNNER_TEMP/unity-config:/root/.config/unity3d" \
             -v "$RUNNER_TEMP/unity-local:/root/.local/share/unity3d" \
@@ -195,6 +200,9 @@ jobs:
         env:
           UNITY_IMAGE: ${{ env.UNITY_IMAGE }}
           ULF_OK: ${{ steps.ulf.outputs.ok }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
         run: |
           set -euxo pipefail
           manual_args=()
@@ -206,13 +214,15 @@ jobs:
           docker rm -f unity-mcp >/dev/null 2>&1 || true
           docker run -d --name unity-mcp --network host \
             -e HOME=/root \
+            -e UNITY_EMAIL="${UNITY_EMAIL:-}" \
+            -e UNITY_PASSWORD="${UNITY_PASSWORD:-}" \
             -e UNITY_MCP_ALLOW_BATCH=1 \
             -e UNITY_MCP_STATUS_DIR=/root/.unity-mcp \
             -e UNITY_MCP_BIND_HOST=127.0.0.1 \
             -v "${{ github.workspace }}:/workspace" -w /workspace \
             -v "$RUNNER_TEMP/unity-status:/root/.unity-mcp" \
-            -v "$RUNNER_TEMP/unity-config:/root/.config/unity3d:ro" \
-            -v "$RUNNER_TEMP/unity-local:/root/.local/share/unity3d:ro" \
+            -v "$RUNNER_TEMP/unity-config:/root/.config/unity3d" \
+            -v "$RUNNER_TEMP/unity-local:/root/.local/share/unity3d" \
             "$UNITY_IMAGE" /opt/unity/Editor/Unity -batchmode -nographics -logFile - \
               -stackTraceLogType Full \
               -projectPath /workspace/TestProjects/UnityMCPTests \
