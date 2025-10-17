@@ -7,7 +7,7 @@ using MCPForUnity.Editor.Helpers;
 namespace MCPForUnity.Editor.Helpers
 {
     /// <summary>
-    /// Shared helper for resolving Python server directory paths with support for
+    /// Shared helper for resolving MCP server directory paths with support for
     /// development mode, embedded servers, and installed packages
     /// </summary>
     public static class McpPathResolver
@@ -15,7 +15,7 @@ namespace MCPForUnity.Editor.Helpers
         private const string USE_EMBEDDED_SERVER_KEY = "MCPForUnity.UseEmbeddedServer";
 
         /// <summary>
-        /// Resolves the Python server directory path with comprehensive logic
+        /// Resolves the MCP server directory path with comprehensive logic
         /// including development mode support and fallback mechanisms
         /// </summary>
         public static string FindPackagePythonDirectory(bool debugLogsEnabled = false)

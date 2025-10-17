@@ -1,19 +1,19 @@
 using NUnit.Framework;
 using Newtonsoft.Json.Linq;
-using MCPForUnity.Editor.Tools.MenuItems;
+using MCPForUnity.Editor.Resources.MenuItems;
 using System;
 using System.Linq;
 
-namespace MCPForUnityTests.Editor.Tools.MenuItems
+namespace MCPForUnityTests.Editor.Resources.MenuItems
 {
-    public class MenuItemsReaderTests
+    public class GetMenuItemsTests
     {
         private static JObject ToJO(object o) => JObject.FromObject(o);
 
         [Test]
-        public void List_NoSearch_ReturnsSuccessAndArray()
+        public void NoSearch_ReturnsSuccessAndArray()
         {
-            var res = MenuItemsReader.List(new JObject());
+            var res = GetMenuItems.HandleCommand(new JObject { ["search"] = "", ["refresh"] = false });
             var jo = ToJO(res);
             Assert.IsTrue((bool)jo["success"], "Expected success true");
             Assert.IsNotNull(jo["data"], "Expected data field present");
@@ -30,9 +30,9 @@ namespace MCPForUnityTests.Editor.Tools.MenuItems
         }
 
         [Test]
-        public void List_SearchNoMatch_ReturnsEmpty()
+        public void SearchNoMatch_ReturnsEmpty()
         {
-            var res = MenuItemsReader.List(new JObject { ["search"] = "___unlikely___term___" });
+            var res = GetMenuItems.HandleCommand(new JObject { ["search"] = "___unlikely___term___" });
             var jo = ToJO(res);
             Assert.IsTrue((bool)jo["success"], "Expected success true");
             Assert.AreEqual(JTokenType.Array, jo["data"].Type, "Expected data to be an array");
@@ -40,10 +40,10 @@ namespace MCPForUnityTests.Editor.Tools.MenuItems
         }
 
         [Test]
-        public void List_SearchMatchesExistingItem_ReturnsContainingItem()
+        public void SearchMatchesExistingItem_ReturnsContainingItem()
         {
             // Get the full list first
-            var listRes = MenuItemsReader.List(new JObject());
+            var listRes = GetMenuItems.HandleCommand(new JObject { ["search"] = "", ["refresh"] = false });
             var listJo = ToJO(listRes);
             if (listJo["data"] is JArray arr && arr.Count > 0)
             {
@@ -52,7 +52,7 @@ namespace MCPForUnityTests.Editor.Tools.MenuItems
                 var term = first.Length > 4 ? first.Substring(1, Math.Min(3, first.Length - 2)) : first;
                 term = term.ToLowerInvariant();
 
-                var res = MenuItemsReader.List(new JObject { ["search"] = term });
+                var res = GetMenuItems.HandleCommand(new JObject { ["search"] = term, ["refresh"] = false });
                 var jo = ToJO(res);
                 Assert.IsTrue((bool)jo["success"], "Expected success true");
                 Assert.AreEqual(JTokenType.Array, jo["data"].Type, "Expected data to be an array");
@@ -64,25 +64,6 @@ namespace MCPForUnityTests.Editor.Tools.MenuItems
             {
                 Assert.Pass("No menu items available to perform a content-based search assertion.");
             }
-        }
-
-        [Test]
-        public void Exists_MissingParam_ReturnsError()
-        {
-            var res = MenuItemsReader.Exists(new JObject());
-            var jo = ToJO(res);
-            Assert.IsFalse((bool)jo["success"], "Expected success false");
-            StringAssert.Contains("Required parameter", (string)jo["error"]);
-        }
-
-        [Test]
-        public void Exists_Bogus_ReturnsFalse()
-        {
-            var res = MenuItemsReader.Exists(new JObject { ["menuPath"] = "Nonexistent/Menu/___unlikely___" });
-            var jo = ToJO(res);
-            Assert.IsTrue((bool)jo["success"], "Expected success true");
-            Assert.IsNotNull(jo["data"], "Expected data field present");
-            Assert.IsFalse((bool)jo["data"]["exists"], "Expected exists false for bogus menu path");
         }
     }
 }

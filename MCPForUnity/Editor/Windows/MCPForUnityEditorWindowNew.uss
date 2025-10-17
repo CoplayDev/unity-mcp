@@ -1,0 +1,423 @@
+/* Root Container */
+#root-container {
+    padding: 16px;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
+/* Title */
+.title {
+    font-size: 20px;
+    -unity-font-style: bold;
+    margin-bottom: 20px;
+    padding: 12px;
+    background-color: rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+}
+
+/* Section Styling */
+.section {
+    margin-bottom: 16px;
+    padding: 12px;
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0.2);
+}
+
+.section-title {
+    font-size: 14px;
+    -unity-font-style: bold;
+    margin-bottom: 12px;
+}
+
+.section-content {
+    padding: 8px;
+}
+
+/* Setting Rows */
+.setting-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    min-height: 24px;
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+.setting-column {
+    flex-direction: column;
+    margin-bottom: 8px;
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+.setting-label {
+    min-width: 140px;
+    -unity-text-align: middle-left;
+}
+
+.setting-value {
+    -unity-text-align: middle-right;
+    color: rgba(150, 150, 150, 1);
+}
+
+.setting-toggle {
+    margin-left: auto;
+}
+
+.setting-dropdown {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin-top: 4px;
+    max-width: 100%;
+}
+
+.setting-dropdown-inline {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 150px;
+    max-width: 100%;
+}
+
+/* Validation Description */
+.validation-description {
+    margin-top: 4px;
+    padding: 8px;
+    background-color: rgba(100, 150, 200, 0.15);
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: normal;
+}
+
+/* Port Fields */
+.port-field {
+    width: 100px;
+    margin-left: auto;
+}
+
+.port-field > .unity-text-field__input {
+    background-color: rgba(0, 0, 0, 0.1);
+    -unity-text-align: middle-center;
+}
+
+/* Status Container */
+.status-container {
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+}
+
+.status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 6px;
+    margin-right: 8px;
+    background-color: rgba(150, 150, 150, 1);
+}
+
+.status-dot.connected {
+    background-color: rgba(0, 200, 100, 1);
+}
+
+.status-dot.disconnected {
+    background-color: rgba(200, 50, 50, 1);
+}
+
+.status-dot.configured {
+    background-color: rgba(0, 200, 100, 1);
+}
+
+.status-dot.not-configured {
+    background-color: rgba(200, 50, 50, 1);
+}
+
+.status-dot.warning {
+    background-color: rgba(255, 200, 0, 1);
+}
+
+.status-dot.unknown {
+    background-color: rgba(150, 150, 150, 1);
+}
+
+.status-dot.healthy {
+    background-color: rgba(0, 200, 100, 1);
+}
+
+.status-text {
+    -unity-text-align: middle-left;
+}
+
+.status-indicator-small {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    margin-left: 8px;
+    background-color: rgba(150, 150, 150, 1);
+}
+
+.status-indicator-small.valid {
+    background-color: rgba(0, 200, 100, 1);
+}
+
+.status-indicator-small.invalid {
+    background-color: rgba(200, 50, 50, 1);
+}
+
+/* Buttons */
+.action-button {
+    min-width: 80px;
+    height: 28px;
+    margin-left: 8px;
+    background-color: rgba(50, 150, 250, 0.8);
+    border-radius: 4px;
+    -unity-font-style: bold;
+}
+
+.action-button:hover {
+    background-color: rgba(50, 150, 250, 1);
+}
+
+.action-button:active {
+    background-color: rgba(30, 120, 200, 1);
+}
+
+.secondary-button {
+    width: 100%;
+    height: 28px;
+    margin-top: 8px;
+    background-color: rgba(100, 100, 100, 0.3);
+    border-radius: 4px;
+}
+
+.secondary-button:hover {
+    background-color: rgba(100, 100, 100, 0.5);
+}
+
+.secondary-button:active {
+    background-color: rgba(80, 80, 80, 0.5);
+}
+
+/* Manual Configuration */
+.manual-config-foldout {
+    margin-top: 16px;
+}
+
+.manual-config-foldout > .unity-foldout__toggle {
+    -unity-font-style: bold;
+    font-size: 12px;
+}
+
+.manual-config-content {
+    padding: 8px;
+    margin-top: 8px;
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+.config-label {
+    font-size: 11px;
+    -unity-font-style: bold;
+    margin-top: 8px;
+    margin-bottom: 4px;
+}
+
+.path-row {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 8px;
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+.config-path-field {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin-right: 4px;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.config-path-field > .unity-text-field__input {
+    background-color: rgba(0, 0, 0, 0.1);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: clip;
+}
+
+.icon-button {
+    min-width: 50px;
+    height: 24px;
+    margin-left: 4px;
+}
+
+.config-json-row {
+    flex-direction: row;
+    margin-bottom: 8px;
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+.config-json-field {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-height: 150px;
+    margin-right: 4px;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.config-json-field > .unity-text-field__input {
+    background-color: rgba(0, 0, 0, 0.1);
+    font-size: 10px;
+    -unity-font-style: normal;
+    white-space: normal;
+    overflow: hidden;
+}
+
+.icon-button-vertical {
+    min-width: 50px;
+    height: 30px;
+    align-self: flex-start;
+}
+
+.installation-steps {
+    padding: 8px;
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: normal;
+    margin-top: 4px;
+}
+
+/* Advanced Settings */
+.advanced-settings-foldout {
+    margin-top: 16px;
+}
+
+.advanced-settings-foldout > .unity-foldout__toggle {
+    -unity-font-style: bold;
+    font-size: 12px;
+}
+
+.advanced-settings-content {
+    padding: 8px;
+    margin-top: 8px;
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+.advanced-label {
+    font-size: 11px;
+    -unity-font-style: bold;
+    margin-bottom: 8px;
+    color: rgba(150, 150, 150, 1);
+}
+
+.override-row {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 8px;
+    margin-bottom: 4px;
+}
+
+.override-label {
+    font-size: 11px;
+    -unity-font-style: bold;
+    min-width: 120px;
+}
+
+.path-override-controls {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+.override-field {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin-right: 4px;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.override-field > .unity-text-field__input {
+    background-color: rgba(0, 0, 0, 0.1);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: clip;
+}
+
+.setting-label-small {
+    font-size: 11px;
+    min-width: 120px;
+    -unity-text-align: middle-left;
+}
+
+.path-display-field {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin-right: 4px;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.path-display-field > .unity-text-field__input {
+    background-color: rgba(0, 0, 0, 0.1);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: clip;
+}
+
+/* Light Theme Overrides */
+.unity-theme-light .title {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.unity-theme-light .section {
+    background-color: rgba(0, 0, 0, 0.03);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+.unity-theme-light .validation-description {
+    background-color: rgba(100, 150, 200, 0.1);
+}
+
+.unity-theme-light .port-field > .unity-text-field__input {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.unity-theme-light .config-path-field > .unity-text-field__input {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.unity-theme-light .config-json-field > .unity-text-field__input {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.unity-theme-light .manual-config-content {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+.unity-theme-light .installation-steps {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+.unity-theme-light .advanced-settings-content {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+.unity-theme-light .override-field > .unity-text-field__input {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.unity-theme-light .path-display-field > .unity-text-field__input {
+    background-color: rgba(0, 0, 0, 0.05);
+}

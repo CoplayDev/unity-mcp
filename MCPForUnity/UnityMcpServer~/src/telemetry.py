@@ -1,5 +1,5 @@
 """
-Privacy-focused, anonymous telemetry system for Unity MCP
+Privacy-focused, anonymous telemetry system for MCP for Unity
 Inspired by Onyx's telemetry implementation with Unity-specific adaptations
 
 Fire-and-forget telemetry sender with a single background worker.
@@ -20,9 +20,11 @@ import queue
 import sys
 import threading
 import time
-from typing import Optional, Dict, Any
+from typing import Any
 from urllib.parse import urlparse
 import uuid
+
+import tomli
 
 try:
     import httpx
@@ -34,6 +36,19 @@ except ImportError:
 logger = logging.getLogger("unity-mcp-telemetry")
 
 
+def get_package_version() -> str:
+    """
+    Open pyproject.toml and parse version
+    We use the tomli library instead of tomllib to support Python 3.10
+    """
+    with open("pyproject.toml", "rb") as f:
+        data = tomli.load(f)
+    return data["project"]["version"]
+
+
+MCP_VERSION = get_package_version()
+
+
 class RecordType(str, Enum):
     """Types of telemetry records we collect"""
     VERSION = "version"
@@ -41,6 +56,7 @@ class RecordType(str, Enum):
     USAGE = "usage"
     LATENCY = "latency"
     FAILURE = "failure"
+    RESOURCE_RETRIEVAL = "resource_retrieval"
     TOOL_EXECUTION = "tool_execution"
     UNITY_CONNECTION = "unity_connection"
     CLIENT_CONNECTION = "client_connection"
@@ -64,15 +80,17 @@ class TelemetryRecord:
     timestamp: float
     customer_uuid: str
     session_id: str
-    data: Dict[str, Any]
-    milestone: Optional[MilestoneType] = None
+    data: dict[str, Any]
+    milestone: MilestoneType | None = None
 
 
 class TelemetryConfig:
     """Telemetry configuration"""
 
     def __init__(self):
-        # Prefer config file, then allow env overrides
+        """
+        Prefer config file, then allow env overrides
+        """
         server_config = None
         for modname in (
             "MCPForUnity.UnityMcpServer~.src.config",
@@ -192,8 +210,8 @@ class TelemetryCollector:
 
     def __init__(self):
         self.config = TelemetryConfig()
-        self._customer_uuid: Optional[str] = None
-        self._milestones: Dict[str, Dict[str, Any]] = {}
+        self._customer_uuid: str | None = None
+        self._milestones: dict[str, dict[str, Any]] = {}
         self._lock: threading.Lock = threading.Lock()
         # Bounded queue with single background worker (records only; no context propagation)
         self._queue: "queue.Queue[TelemetryRecord]" = queue.Queue(maxsize=1000)
@@ -246,7 +264,7 @@ class TelemetryCollector:
         except OSError as e:
             logger.warning(f"Failed to save milestones: {e}", exc_info=True)
 
-    def record_milestone(self, milestone: MilestoneType, data: Optional[Dict[str, Any]] = None) -> bool:
+    def record_milestone(self, milestone: MilestoneType, data: dict[str, Any] | None = None) -> bool:
         """Record a milestone event, returns True if this is the first occurrence"""
         if not self.config.enabled:
             return False
@@ -272,8 +290,8 @@ class TelemetryCollector:
 
     def record(self,
                record_type: RecordType,
-               data: Dict[str, Any],
-               milestone: Optional[MilestoneType] = None):
+               data: dict[str, Any],
+               milestone: MilestoneType | None = None):
         """Record a telemetry event (async, non-blocking)"""
         if not self.config.enabled:
             return
@@ -328,7 +346,7 @@ class TelemetryCollector:
                 "customer_uuid": record.customer_uuid,
                 "session_id": record.session_id,
                 "data": enriched_data,
-                "version": "3.0.2",  # Unity MCP version
+                "version": MCP_VERSION,
                 "platform": _platform,
                 "source": _source,
             }
@@ -377,7 +395,7 @@ class TelemetryCollector:
 
 
 # Global telemetry instance
-_telemetry_collector: Optional[TelemetryCollector] = None
+_telemetry_collector: TelemetryCollector | None = None
 
 
 def get_telemetry() -> TelemetryCollector:
@@ -389,18 +407,18 @@ def get_telemetry() -> TelemetryCollector:
 
 
 def record_telemetry(record_type: RecordType,
-                     data: Dict[str, Any],
-                     milestone: Optional[MilestoneType] = None):
+                     data: dict[str, Any],
+                     milestone: MilestoneType | None = None):
     """Convenience function to record telemetry"""
     get_telemetry().record(record_type, data, milestone)
 
 
-def record_milestone(milestone: MilestoneType, data: Optional[Dict[str, Any]] = None) -> bool:
+def record_milestone(milestone: MilestoneType, data: dict[str, Any] | None = None) -> bool:
     """Convenience function to record a milestone"""
     return get_telemetry().record_milestone(milestone, data)
 
 
-def record_tool_usage(tool_name: str, success: bool, duration_ms: float, error: Optional[str] = None, sub_action: Optional[str] = None):
+def record_tool_usage(tool_name: str, success: bool, duration_ms: float, error: str | None = None, sub_action: str | None = None):
     """Record tool usage telemetry
 
     Args:
@@ -429,7 +447,28 @@ def record_tool_usage(tool_name: str, success: bool, duration_ms: float, error: 
     record_telemetry(RecordType.TOOL_EXECUTION, data)
 
 
-def record_latency(operation: str, duration_ms: float, metadata: Optional[Dict[str, Any]] = None):
+def record_resource_usage(resource_name: str, success: bool, duration_ms: float, error: str | None = None):
+    """Record resource usage telemetry
+
+    Args:
+        resource_name: Name of the resource invoked (e.g., 'get_tests').
+        success: Whether the resource completed successfully.
+        duration_ms: Execution duration in milliseconds.
+        error: Optional error message (truncated if present).
+    """
+    data = {
+        "resource_name": resource_name,
+        "success": success,
+        "duration_ms": round(duration_ms, 2)
+    }
+
+    if error:
+        data["error"] = str(error)[:200]  # Limit error message length
+
+    record_telemetry(RecordType.RESOURCE_RETRIEVAL, data)
+
+
+def record_latency(operation: str, duration_ms: float, metadata: dict[str, Any] | None = None):
     """Record latency telemetry"""
     data = {
         "operation": operation,
@@ -442,7 +481,7 @@ def record_latency(operation: str, duration_ms: float, metadata: Optional[Dict[s
     record_telemetry(RecordType.LATENCY, data)
 
 
-def record_failure(component: str, error: str, metadata: Optional[Dict[str, Any]] = None):
+def record_failure(component: str, error: str, metadata: dict[str, Any] | None = None):
     """Record failure telemetry"""
     data = {
         "component": component,

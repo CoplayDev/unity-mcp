@@ -16,8 +16,7 @@ class ServerConfig:
     mcp_port: int = 6500
 
     # Connection settings
-    # short initial timeout; retries use shorter timeouts
-    connection_timeout: float = 1.0
+    connection_timeout: float = 30.0
     buffer_size: int = 16 * 1024 * 1024  # 16MB buffer
     # Framed receive behavior
     # max seconds to wait while consuming heartbeats only
@@ -30,7 +29,7 @@ class ServerConfig:
     log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
     # Server settings
-    max_retries: int = 10
+    max_retries: int = 5
     retry_delay: float = 0.25
     # Backoff hint returned to clients when Unity is reloading (milliseconds)
     reload_retry_ms: int = 250

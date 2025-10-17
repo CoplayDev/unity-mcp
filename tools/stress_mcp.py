@@ -312,7 +312,7 @@ async def reload_churn_task(project_path: str, stop_time: float, unity_file: str
 
 async def main():
     ap = argparse.ArgumentParser(
-        description="Stress test the Unity MCP bridge with concurrent clients and reload churn")
+        description="Stress test MCP for Unity with concurrent clients and reload churn")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--project", default=str(
         Path(__file__).resolve().parents[1] / "TestProjects" / "UnityMCPTests"))

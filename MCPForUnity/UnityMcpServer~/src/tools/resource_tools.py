@@ -208,7 +208,7 @@ async def read_resource(
         if uri in ("unity://spec/script-edits", "spec/script-edits", "script-edits"):
             spec_json = (
                 '{\n'
-                '  "name": "Unity MCP - Script Edits v1",\n'
+                '  "name": "MCP for Unity - Script Edits v1",\n'
                 '  "target_tool": "script_apply_edits",\n'
                 '  "canonical_rules": {\n'
                 '    "always_use": ["op","className","methodName","replacement","afterMethodName","beforeMethodName"],\n'

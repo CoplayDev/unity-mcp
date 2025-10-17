@@ -41,7 +41,7 @@ namespace MCPForUnityTests.Editor.Tools
                 "manage_script",
                 "manage_shader",
                 "read_console",
-                "manage_menu_item",
+                "execute_menu_item",
                 "manage_prefabs"
             };
 

@@ -1,6 +1,6 @@
-# Unity MCP Telemetry
+# MCP for Unity Telemetry
 
-Unity MCP includes privacy-focused, anonymous telemetry to help us improve the product. This document explains what data is collected, how to opt out, and our privacy practices.
+MCP for Unity includes privacy-focused, anonymous telemetry to help us improve the product. This document explains what data is collected, how to opt out, and our privacy practices.
 
 ## 🔒 Privacy First
 
@@ -38,7 +38,7 @@ Set any of these environment variables to `true`:
 # Disable all telemetry
 export DISABLE_TELEMETRY=true
 
-# Unity MCP specific
+# MCP for Unity specific
 export UNITY_MCP_DISABLE_TELEMETRY=true
 
 # MCP protocol wide  
@@ -175,4 +175,4 @@ Notice:
 
 ---
 
-*Unity MCP Telemetry is designed to respect your privacy while helping us build a better tool. Thank you for helping improve Unity MCP!*
+*MCP for Unity Telemetry is designed to respect your privacy while helping us build a better tool. Thank you for helping improve MCP for Unity!*

@@ -46,6 +46,6 @@ def get_registered_tools() -> list[dict[str, Any]]:
     return _tool_registry.copy()
 
 
-def clear_registry():
+def clear_tool_registry():
     """Clear the tool registry (useful for testing)"""
     _tool_registry.clear()

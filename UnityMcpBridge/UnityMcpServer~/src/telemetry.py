@@ -24,12 +24,27 @@ from typing import Optional, Dict, Any
 from urllib.parse import urlparse
 import uuid
 
+import tomli
+
 try:
     import httpx
     HAS_HTTPX = True
 except ImportError:
     httpx = None  # type: ignore
     HAS_HTTPX = False
+
+
+def get_package_version() -> str:
+    """
+    Open pyproject.toml and parse version
+    We use the tomli library instead of tomllib to support Python 3.10
+    """
+    with open("pyproject.toml", "rb") as f:
+        data = tomli.load(f)
+    return data["project"]["version"]
+
+
+MCP_VERSION = get_package_version()
 
 logger = logging.getLogger("unity-mcp-telemetry")
 
@@ -328,7 +343,7 @@ class TelemetryCollector:
                 "customer_uuid": record.customer_uuid,
                 "session_id": record.session_id,
                 "data": enriched_data,
-                "version": "3.0.2",  # Unity MCP version
+                "version": MCP_VERSION,
                 "platform": _platform,
                 "source": _source,
             }

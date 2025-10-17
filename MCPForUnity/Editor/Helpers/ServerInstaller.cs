@@ -1,9 +1,11 @@
 using System;
-using System.IO;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Net;
+using System.Runtime.InteropServices;
 using UnityEditor;
 using UnityEngine;
 
@@ -34,8 +36,19 @@ namespace MCPForUnity.Editor.Helpers
                 // Resolve embedded source and versions
                 if (!TryGetEmbeddedServerSource(out string embeddedSrc))
                 {
-                    throw new Exception("Could not find embedded UnityMcpServer/src in the package.");
+                    // Asset Store install - no embedded server
+                    // Check if server was already downloaded
+                    if (File.Exists(Path.Combine(destSrc, "server.py")))
+                    {
+                        McpLog.Info("Using previously downloaded MCP server.", always: false);
+                    }
+                    else
+                    {
+                        McpLog.Info("MCP server not found. Download via Window > MCP For Unity > Open MCP Window.", always: false);
+                    }
+                    return; // Graceful exit - no exception
                 }
+
                 string embeddedVer = ReadVersionFile(Path.Combine(embeddedSrc, VersionFileName)) ?? "unknown";
                 string installedVer = ReadVersionFile(Path.Combine(destSrc, VersionFileName));
 
@@ -156,7 +169,7 @@ namespace MCPForUnity.Editor.Helpers
                 TryCreateMacSymlinkForAppSupport();
                 return Path.Combine(localAppSupport, RootFolder);
             }
-            throw new Exception("Unsupported operating system.");
+            throw new Exception("Unsupported operating system");
         }
 
         /// <summary>
@@ -182,7 +195,7 @@ namespace MCPForUnity.Editor.Helpers
                 if (!Directory.Exists(canonical)) return;
 
                 // Use 'ln -s' to create a directory symlink (macOS)
-                var psi = new System.Diagnostics.ProcessStartInfo
+                var psi = new ProcessStartInfo
                 {
                     FileName = "/bin/ln",
                     Arguments = $"-s \"{canonical}\" \"{symlink}\"",
@@ -191,7 +204,7 @@ namespace MCPForUnity.Editor.Helpers
                     RedirectStandardError = true,
                     CreateNoWindow = true
                 };
-                using var p = System.Diagnostics.Process.Start(psi);
+                using var p = Process.Start(psi);
                 p?.WaitForExit(2000);
             }
             catch { /* best-effort */ }
@@ -308,7 +321,7 @@ namespace MCPForUnity.Editor.Helpers
 
         private static IEnumerable<string> GetLegacyRootsForDetection()
         {
-            var roots = new System.Collections.Generic.List<string>();
+            var roots = new List<string>();
             string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) ?? string.Empty;
             // macOS/Linux legacy
             roots.Add(Path.Combine(home, ".config", "UnityMCP", "UnityMcpServer"));
@@ -336,7 +349,7 @@ namespace MCPForUnity.Editor.Helpers
                 if (string.IsNullOrEmpty(serverSrcPath)) return;
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
 
-                var psi = new System.Diagnostics.ProcessStartInfo
+                var psi = new ProcessStartInfo
                 {
                     FileName = "/usr/bin/pgrep",
                     Arguments = $"-f \"uv .*--directory {serverSrcPath}\"",
@@ -345,7 +358,7 @@ namespace MCPForUnity.Editor.Helpers
                     RedirectStandardError = true,
                     CreateNoWindow = true
                 };
-                using var p = System.Diagnostics.Process.Start(psi);
+                using var p = Process.Start(psi);
                 if (p == null) return;
                 string outp = p.StandardOutput.ReadToEnd();
                 p.WaitForExit(1500);
@@ -355,7 +368,7 @@ namespace MCPForUnity.Editor.Helpers
                     {
                         if (int.TryParse(line.Trim(), out int pid))
                         {
-                            try { System.Diagnostics.Process.GetProcessById(pid).Kill(); } catch { }
+                            try { Process.GetProcessById(pid).Kill(); } catch { }
                         }
                     }
                 }
@@ -661,7 +674,7 @@ namespace MCPForUnity.Editor.Helpers
                 // Find embedded source
                 if (!TryGetEmbeddedServerSource(out string embeddedSrc))
                 {
-                    Debug.LogError("RebuildMcpServer: Could not find embedded server source.");
+                    McpLog.Error("RebuildMcpServer: Could not find embedded server source.");
                     return false;
                 }
 
@@ -678,11 +691,11 @@ namespace MCPForUnity.Editor.Helpers
                     try
                     {
                         Directory.Delete(destRoot, recursive: true);
-                        Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Deleted existing server at {destRoot}");
+                        McpLog.Info($"Deleted existing server at {destRoot}");
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogError($"Failed to delete existing server: {ex.Message}");
+                        McpLog.Error($"Failed to delete existing server: {ex.Message}");
                         return false;
                     }
                 }
@@ -704,15 +717,15 @@ namespace MCPForUnity.Editor.Helpers
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"Failed to write version file: {ex.Message}");
+                    McpLog.Warn($"Failed to write version file: {ex.Message}");
                 }
 
-                Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Server rebuilt successfully at {destRoot} (version {embeddedVer})");
+                McpLog.Info($"Server rebuilt successfully at {destRoot} (version {embeddedVer})");
                 return true;
             }
             catch (Exception ex)
             {
-                Debug.LogError($"RebuildMcpServer failed: {ex.Message}");
+                McpLog.Error($"RebuildMcpServer failed: {ex.Message}");
                 return false;
             }
         }
@@ -743,7 +756,7 @@ namespace MCPForUnity.Editor.Helpers
                 // Fast path: resolve from PATH first
                 try
                 {
-                    var wherePsi = new System.Diagnostics.ProcessStartInfo
+                    var wherePsi = new ProcessStartInfo
                     {
                         FileName = "where",
                         Arguments = "uv.exe",
@@ -752,7 +765,7 @@ namespace MCPForUnity.Editor.Helpers
                         RedirectStandardError = true,
                         CreateNoWindow = true
                     };
-                    using var wp = System.Diagnostics.Process.Start(wherePsi);
+                    using var wp = Process.Start(wherePsi);
                     string output = wp.StandardOutput.ReadToEnd().Trim();
                     wp.WaitForExit(1500);
                     if (wp.ExitCode == 0 && !string.IsNullOrEmpty(output))
@@ -848,7 +861,7 @@ namespace MCPForUnity.Editor.Helpers
             {
                 if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
-                    var whichPsi = new System.Diagnostics.ProcessStartInfo
+                    var whichPsi = new ProcessStartInfo
                     {
                         FileName = "/usr/bin/which",
                         Arguments = "uv",
@@ -863,7 +876,7 @@ namespace MCPForUnity.Editor.Helpers
                         string homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) ?? string.Empty;
                         string prepend = string.Join(":", new[]
                         {
-                            System.IO.Path.Combine(homeDir, ".local", "bin"),
+                            Path.Combine(homeDir, ".local", "bin"),
                             "/opt/homebrew/bin",
                             "/usr/local/bin",
                             "/usr/bin",
@@ -873,7 +886,7 @@ namespace MCPForUnity.Editor.Helpers
                         whichPsi.EnvironmentVariables["PATH"] = string.IsNullOrEmpty(currentPath) ? prepend : (prepend + ":" + currentPath);
                     }
                     catch { }
-                    using var wp = System.Diagnostics.Process.Start(whichPsi);
+                    using var wp = Process.Start(whichPsi);
                     string output = wp.StandardOutput.ReadToEnd().Trim();
                     wp.WaitForExit(3000);
                     if (wp.ExitCode == 0 && !string.IsNullOrEmpty(output) && File.Exists(output))
@@ -911,7 +924,7 @@ namespace MCPForUnity.Editor.Helpers
         {
             try
             {
-                var psi = new System.Diagnostics.ProcessStartInfo
+                var psi = new ProcessStartInfo
                 {
                     FileName = uvPath,
                     Arguments = "--version",
@@ -920,7 +933,7 @@ namespace MCPForUnity.Editor.Helpers
                     RedirectStandardError = true,
                     CreateNoWindow = true
                 };
-                using var p = System.Diagnostics.Process.Start(psi);
+                using var p = Process.Start(psi);
                 if (!p.WaitForExit(5000)) { try { p.Kill(); } catch { } return false; }
                 if (p.ExitCode == 0)
                 {
@@ -930,6 +943,134 @@ namespace MCPForUnity.Editor.Helpers
             }
             catch { }
             return false;
+        }
+
+        /// <summary>
+        /// Download and install server from GitHub release (Asset Store workflow)
+        /// </summary>
+        public static bool DownloadAndInstallServer()
+        {
+            string packageVersion = AssetPathUtility.GetPackageVersion();
+            if (packageVersion == "unknown")
+            {
+                McpLog.Error("Cannot determine package version for download.");
+                return false;
+            }
+
+            string downloadUrl = $"https://github.com/CoplayDev/unity-mcp/releases/download/v{packageVersion}/mcp-for-unity-server-v{packageVersion}.zip";
+            string tempZip = Path.Combine(Path.GetTempPath(), $"mcp-server-v{packageVersion}.zip");
+            string destRoot = Path.Combine(GetSaveLocation(), ServerFolder);
+
+            try
+            {
+                EditorUtility.DisplayProgressBar("MCP for Unity", "Downloading server...", 0.3f);
+
+                // Download
+                using (var client = new WebClient())
+                {
+                    client.DownloadFile(downloadUrl, tempZip);
+                }
+
+                EditorUtility.DisplayProgressBar("MCP for Unity", "Extracting server...", 0.7f);
+
+                // Kill any running UV processes
+                string destSrc = Path.Combine(destRoot, "src");
+                TryKillUvForPath(destSrc);
+
+                // Delete old installation
+                if (Directory.Exists(destRoot))
+                {
+                    try
+                    {
+                        Directory.Delete(destRoot, recursive: true);
+                    }
+                    catch (Exception ex)
+                    {
+                        McpLog.Warn($"Could not fully delete old server: {ex.Message}");
+                    }
+                }
+
+                // Extract to temp location first
+                string tempExtractDir = Path.Combine(Path.GetTempPath(), $"mcp-server-extract-{Guid.NewGuid()}");
+                Directory.CreateDirectory(tempExtractDir);
+
+                try
+                {
+                    ZipFile.ExtractToDirectory(tempZip, tempExtractDir);
+
+                    // The ZIP contains UnityMcpServer~ folder, find it and move its contents
+                    string extractedServerFolder = Path.Combine(tempExtractDir, "UnityMcpServer~");
+                    Directory.CreateDirectory(destRoot);
+                    CopyDirectoryRecursive(extractedServerFolder, destRoot);
+                }
+                finally
+                {
+                    // Cleanup temp extraction directory
+                    try
+                    {
+                        if (Directory.Exists(tempExtractDir))
+                        {
+                            Directory.Delete(tempExtractDir, recursive: true);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        McpLog.Warn($"Could not fully delete temp extraction directory: {ex.Message}");
+                    }
+                }
+
+                EditorUtility.ClearProgressBar();
+                McpLog.Info($"Server v{packageVersion} downloaded and installed successfully!");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                EditorUtility.ClearProgressBar();
+                McpLog.Error($"Failed to download server: {ex.Message}");
+                EditorUtility.DisplayDialog(
+                    "Download Failed",
+                    $"Could not download server from GitHub.\n\n{ex.Message}\n\nPlease check your internet connection or try again later.",
+                    "OK"
+                );
+                return false;
+            }
+            finally
+            {
+                try {
+                    if (File.Exists(tempZip)) File.Delete(tempZip); 
+                } catch (Exception ex) {
+                    McpLog.Warn($"Could not delete temp zip file: {ex.Message}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Check if the package has an embedded server (Git install vs Asset Store)
+        /// </summary>
+        public static bool HasEmbeddedServer()
+        {
+            return TryGetEmbeddedServerSource(out _);
+        }
+
+        /// <summary>
+        /// Get the installed server version from the local installation
+        /// </summary>
+        public static string GetInstalledServerVersion()
+        {
+            try
+            {
+                string destRoot = Path.Combine(GetSaveLocation(), ServerFolder);
+                string versionPath = Path.Combine(destRoot, "src", VersionFileName);
+                if (File.Exists(versionPath))
+                {
+                    return File.ReadAllText(versionPath)?.Trim() ?? string.Empty;
+                }
+            }
+            catch (Exception ex)
+            {
+                McpLog.Warn($"Could not read version file: {ex.Message}");
+            }
+            return string.Empty;
         }
     }
 }

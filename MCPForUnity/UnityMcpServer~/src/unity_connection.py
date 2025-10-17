@@ -13,6 +13,8 @@ import threading
 import time
 from typing import Any, Dict
 
+from models import MCPResponse
+
 
 # Configure logging using settings from config
 logging.basicConfig(
@@ -84,19 +86,19 @@ class UnityConnection:
                     if 'FRAMING=1' in text:
                         self.use_framing = True
                         logger.debug(
-                            'Unity MCP handshake received: FRAMING=1 (strict)')
+                            'MCP for Unity handshake received: FRAMING=1 (strict)')
                     else:
                         if require_framing:
                             # Best-effort plain-text advisory for legacy peers
                             with contextlib.suppress(Exception):
                                 self.sock.sendall(
-                                    b'Unity MCP requires FRAMING=1\n')
+                                    b'MCP for Unity requires FRAMING=1\n')
                             raise ConnectionError(
-                                f'Unity MCP requires FRAMING=1, got: {text!r}')
+                                f'MCP for Unity requires FRAMING=1, got: {text!r}')
                         else:
                             self.use_framing = False
                             logger.warning(
-                                'Unity MCP handshake missing FRAMING=1; proceeding in legacy mode by configuration')
+                                'MCP for Unity handshake missing FRAMING=1; proceeding in legacy mode by configuration')
                 finally:
                     self.sock.settimeout(config.connection_timeout)
                 return True
@@ -227,8 +229,7 @@ class UnityConnection:
         if not command_type:
             raise ValueError("MCP call missing command_type")
         if params is None:
-            # Return a fast, structured error that clients can display without hanging
-            return {"success": False, "error": "MCP call received with no parameters (client placeholder?)"}
+            return MCPResponse(success=False, error="MCP call received with no parameters (client placeholder?)")
         attempts = max(config.max_retries, 5)
         base_backoff = max(0.5, config.retry_delay)
 
@@ -250,13 +251,12 @@ class UnityConnection:
         try:
             status = read_status_file()
             if status and (status.get('reloading') or status.get('reason') == 'reloading'):
-                return {
-                    "success": False,
-                    "state": "reloading",
-                    "retry_after_ms": int(config.reload_retry_ms),
-                    "error": "Unity domain reload in progress",
-                    "message": "Unity is reloading scripts; please retry shortly"
-                }
+                return MCPResponse(
+                    success=False,
+                    error="Unity domain reload in progress, please try again shortly",
+                    data={"state": "reloading", "retry_after_ms": int(
+                        config.reload_retry_ms)}
+                )
         except Exception:
             pass
 
@@ -436,7 +436,7 @@ def send_command_with_retry(command_type: str, params: Dict[str, Any], *, max_re
     return response
 
 
-async def async_send_command_with_retry(command_type: str, params: Dict[str, Any], *, loop=None, max_retries: int | None = None, retry_ms: int | None = None) -> Dict[str, Any]:
+async def async_send_command_with_retry(command_type: str, params: dict[str, Any], *, loop=None, max_retries: int | None = None, retry_ms: int | None = None) -> dict[str, Any] | MCPResponse:
     """Async wrapper that runs the blocking retry helper in a thread pool."""
     try:
         import asyncio  # local import to avoid mandatory asyncio dependency for sync callers
@@ -448,5 +448,4 @@ async def async_send_command_with_retry(command_type: str, params: Dict[str, Any
                 command_type, params, max_retries=max_retries, retry_ms=retry_ms),
         )
     except Exception as e:
-        # Return a structured error dict for consistency with other responses
-        return {"success": False, "error": f"Python async retry helper failed: {str(e)}"}
+        return MCPResponse(success=False, error=str(e))

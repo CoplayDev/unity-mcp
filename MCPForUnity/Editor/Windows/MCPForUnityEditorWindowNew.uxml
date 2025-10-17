@@ -1,0 +1,145 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+    <ui:ScrollView name="root-container" style="padding: 16px;">
+        <!-- Title -->
+        <ui:Label text="MCP For Unity" name="title" class="title" />
+
+        <!-- Settings Section -->
+        <ui:VisualElement name="settings-section" class="section">
+            <ui:Label text="Settings" class="section-title" />
+            <ui:VisualElement class="section-content">
+                <ui:VisualElement class="setting-row">
+                    <ui:Label text="Version:" class="setting-label" />
+                    <ui:Label text="..." name="version-label" class="setting-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="setting-row">
+                    <ui:Label text="Show Debug Logs:" class="setting-label" />
+                    <ui:Toggle name="debug-logs-toggle" class="setting-toggle" />
+                </ui:VisualElement>
+                <ui:VisualElement class="setting-column">
+                    <ui:Label text="Script Validation Level:" class="setting-label" />
+                    <uie:EnumField name="validation-level" class="setting-dropdown" />
+                    <ui:Label name="validation-description" class="validation-description" />
+                </ui:VisualElement>
+                
+                <!-- Advanced Settings (Collapsible) -->
+                <ui:Foldout name="advanced-settings-foldout" text="Advanced Settings" class="advanced-settings-foldout">
+                    <ui:VisualElement class="advanced-settings-content">
+                        <ui:Label text="Path Overrides (leave empty for auto-detection):" class="advanced-label" />
+                        
+                        <!-- MCP Server Path Override -->
+                        <ui:VisualElement class="override-row">
+                            <ui:Label text="MCP Server Path:" class="override-label" />
+                            <ui:VisualElement class="status-indicator-small" name="mcp-server-path-status" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="path-override-controls">
+                            <ui:TextField name="python-path-override" readonly="true" class="override-field" />
+                            <ui:Button name="browse-python-button" text="Browse" class="icon-button" />
+                            <ui:Button name="clear-python-button" text="Clear" class="icon-button" />
+                        </ui:VisualElement>
+                        
+                        <!-- UV Path Override -->
+                        <ui:VisualElement class="override-row">
+                            <ui:Label text="UV Path:" class="override-label" />
+                            <ui:VisualElement class="status-indicator-small" name="uv-path-status" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="path-override-controls">
+                            <ui:TextField name="uv-path-override" readonly="true" class="override-field" />
+                            <ui:Button name="browse-uv-button" text="Browse" class="icon-button" />
+                            <ui:Button name="clear-uv-button" text="Clear" class="icon-button" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:Foldout>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Connection Section -->
+        <ui:VisualElement name="connection-section" class="section">
+            <ui:Label text="Connection" class="section-title" />
+            <ui:VisualElement class="section-content">
+                <ui:VisualElement class="setting-row">
+                    <ui:Label text="Protocol:" class="setting-label" />
+                    <uie:EnumField name="protocol-dropdown" class="setting-dropdown-inline" />
+                </ui:VisualElement>
+                <ui:VisualElement class="setting-row">
+                    <ui:Label text="Unity Port:" class="setting-label" />
+                    <ui:TextField name="unity-port" readonly="true" class="port-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="setting-row">
+                    <ui:Label text="Server Port:" class="setting-label" />
+                    <ui:TextField name="server-port" readonly="true" class="port-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="setting-row">
+                    <ui:VisualElement class="status-container">
+                        <ui:VisualElement name="status-indicator" class="status-dot" />
+                        <ui:Label name="connection-status" text="Disconnected" class="status-text" />
+                    </ui:VisualElement>
+                    <ui:Button name="connection-toggle" text="Start" class="action-button" />
+                </ui:VisualElement>
+                <ui:VisualElement class="setting-row">
+                    <ui:Label text="Health:" class="setting-label" />
+                    <ui:VisualElement class="status-container">
+                        <ui:VisualElement name="health-indicator" class="status-dot" />
+                        <ui:Label name="health-status" text="Unknown" class="status-text" />
+                    </ui:VisualElement>
+                    <ui:Button name="test-connection-button" text="Test" class="action-button" />
+                </ui:VisualElement>
+
+                <!-- Server Status Banner -->
+                <ui:VisualElement name="server-status-banner" class="banner" style="display: none; background-color: rgba(255, 193, 7, 0.2); padding: 8px; margin: 8px 0; border-radius: 4px; border-left-width: 3px; border-left-color: rgb(255, 193, 7);">
+                    <ui:Label name="server-status-message" text="" style="-unity-text-align: middle-left; white-space: normal;" />
+                </ui:VisualElement>
+
+                <!-- Server Management Buttons -->
+                <ui:VisualElement class="button-row" style="flex-direction: row; margin-top: 8px;">
+                    <ui:Button name="download-server-button" text="Download &amp; Install Server" class="secondary-button" style="display: none; flex: 1;" />
+                    <ui:Button name="rebuild-server-button" text="Rebuild Server" class="secondary-button" style="flex: 1;" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Client Configuration Section -->
+        <ui:VisualElement name="client-section" class="section">
+            <ui:Label text="Client Configuration" class="section-title" />
+            <ui:VisualElement class="section-content">
+                <ui:VisualElement class="setting-row">
+                    <ui:Label text="Client:" class="setting-label" />
+                    <ui:DropdownField name="client-dropdown" class="setting-dropdown-inline" />
+                </ui:VisualElement>
+                <ui:Button name="configure-all-button" text="Configure All Detected Clients" class="secondary-button" />
+                <ui:VisualElement class="setting-row">
+                    <ui:VisualElement class="status-container">
+                        <ui:VisualElement name="client-status-indicator" class="status-dot" />
+                        <ui:Label name="client-status" text="Not Configured" class="status-text" />
+                    </ui:VisualElement>
+                    <ui:Button name="configure-button" text="Configure" class="action-button" />
+                </ui:VisualElement>
+                <ui:VisualElement class="setting-row" name="claude-cli-path-row" style="display: none;">
+                    <ui:Label text="Claude CLI Path:" class="setting-label-small" />
+                    <ui:TextField name="claude-cli-path" readonly="true" class="path-display-field" />
+                    <ui:Button name="browse-claude-button" text="Browse" class="icon-button" />
+                </ui:VisualElement>
+
+                <!-- Manual Configuration (Collapsible) -->
+                <ui:Foldout name="manual-config-foldout" text="Manual Configuration" class="manual-config-foldout">
+                    <ui:VisualElement class="manual-config-content">
+                        <ui:Label text="Config Path:" class="config-label" />
+                        <ui:VisualElement class="path-row">
+                            <ui:TextField name="config-path" readonly="true" class="config-path-field" />
+                            <ui:Button name="copy-path-button" text="Copy" class="icon-button" />
+                            <ui:Button name="open-file-button" text="Open" class="icon-button" />
+                        </ui:VisualElement>
+
+                        <ui:Label text="Configuration:" class="config-label" />
+                        <ui:VisualElement class="config-json-row">
+                            <ui:TextField name="config-json" readonly="true" multiline="true" class="config-json-field" />
+                            <ui:Button name="copy-json-button" text="Copy" class="icon-button-vertical" />
+                        </ui:VisualElement>
+
+                        <ui:Label text="Installation Steps:" class="config-label" />
+                        <ui:Label name="installation-steps" class="installation-steps" />
+                    </ui:VisualElement>
+                </ui:Foldout>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:ScrollView>
+</ui:UXML>

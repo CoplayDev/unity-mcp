@@ -97,7 +97,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
    - Run: curl -LsSf https://astral.sh/uv/install.sh | sh
    - Or download from: https://github.com/astral-sh/uv/releases
 
-3. MCP Server: Will be installed automatically by Unity MCP Bridge
+3. MCP Server: Will be installed automatically by MCP for Unity
 
 Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
         }

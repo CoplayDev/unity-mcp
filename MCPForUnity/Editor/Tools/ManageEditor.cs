@@ -206,7 +206,7 @@ namespace MCPForUnity.Editor.Tools
 
                 // Find currently open instances
                 // Resources.FindObjectsOfTypeAll seems more reliable than GetWindow for finding *all* open windows
-                EditorWindow[] allWindows = Resources.FindObjectsOfTypeAll<EditorWindow>();
+                EditorWindow[] allWindows = UnityEngine.Resources.FindObjectsOfTypeAll<EditorWindow>();
 
                 foreach (EditorWindow window in allWindows)
                 {

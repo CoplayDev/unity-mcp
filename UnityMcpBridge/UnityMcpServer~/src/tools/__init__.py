@@ -51,9 +51,9 @@ def register_all_tools(mcp: FastMCP):
         kwargs = tool_info['kwargs']
 
         # Apply the @mcp.tool decorator and telemetry
+        wrapped = telemetry_tool(tool_name)(func)
         wrapped = mcp.tool(
-            name=tool_name, description=description, **kwargs)(func)
-        wrapped = telemetry_tool(tool_name)(wrapped)
+            name=tool_name, description=description, **kwargs)(wrapped)
         tool_info['func'] = wrapped
         logger.info(f"Registered tool: {tool_name} - {description}")
 
