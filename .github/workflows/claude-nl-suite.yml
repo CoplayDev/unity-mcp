@@ -164,8 +164,13 @@ jobs:
         shell: bash
         env:
           UNITY_IMAGE: ${{ env.UNITY_IMAGE }}
+          ULF_OK: ${{ steps.ulf.outputs.ok }}
         run: |
           set -euxo pipefail
+          manual_args=()
+          if [[ "${ULF_OK:-false}" == "true" ]]; then
+            manual_args=(-manualLicenseFile "/root/.local/share/unity3d/Unity/Unity_lic.ulf")
+          fi
           docker run --rm --network host \
             -e HOME=/root \
             -v "${{ github.workspace }}:/workspace" -w /workspace \
@@ -173,6 +178,7 @@ jobs:
             -v "$RUNNER_TEMP/unity-local:/root/.local/share/unity3d" \
             "$UNITY_IMAGE" /opt/unity/Editor/Unity -batchmode -nographics -logFile - \
               -projectPath /workspace/TestProjects/UnityMCPTests \
+              "${manual_args[@]}" \
               -quit
 
       # ---------- Clean old MCP status ----------
@@ -188,8 +194,14 @@ jobs:
         shell: bash
         env:
           UNITY_IMAGE: ${{ env.UNITY_IMAGE }}
+          ULF_OK: ${{ steps.ulf.outputs.ok }}
         run: |
           set -euxo pipefail
+          manual_args=()
+          if [[ "${ULF_OK:-false}" == "true" ]]; then
+            manual_args=(-manualLicenseFile "/root/.local/share/unity3d/Unity/Unity_lic.ulf")
+          fi
+
           mkdir -p "$RUNNER_TEMP/unity-status"
           docker rm -f unity-mcp >/dev/null 2>&1 || true
           docker run -d --name unity-mcp --network host \
@@ -204,6 +216,7 @@ jobs:
             "$UNITY_IMAGE" /opt/unity/Editor/Unity -batchmode -nographics -logFile - \
               -stackTraceLogType Full \
               -projectPath /workspace/TestProjects/UnityMCPTests \
+              "${manual_args[@]}" \
               -executeMethod MCPForUnity.Editor.MCPForUnityBridge.StartAutoConnect
 
       # ---------- Wait for Unity bridge ----------
