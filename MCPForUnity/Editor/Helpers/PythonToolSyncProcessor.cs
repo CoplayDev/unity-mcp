@@ -185,7 +185,7 @@ namespace MCPForUnity.Editor.Helpers
         [MenuItem("Window/MCP For Unity/Tool Sync/Auto-Sync Python Tools", true, priority = 101)]
         public static bool ToggleAutoSyncValidate()
         {
-            Menu.SetChecked("MCP For Unity/Auto-Sync Python Tools", IsAutoSyncEnabled());
+            Menu.SetChecked("Window/MCP For Unity/Tool Sync/Auto-Sync Python Tools", IsAutoSyncEnabled());
             return true;
         }
     }
