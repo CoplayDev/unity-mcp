@@ -144,18 +144,18 @@ namespace MCPForUnity.Editor.Helpers
         [MenuItem("Window/MCP For Unity/Tool Sync/Reimport Python Files", priority = 99)]
         public static void ReimportPythonFiles()
         {
-            string[] allAssets = AssetDatabase.GetAllAssetPaths();
-            int count = 0;
+            // Find all Python files (imported as TextAssets by PythonFileImporter)
+            var pythonGuids = AssetDatabase.FindAssets("t:TextAsset", new[] { "Assets" })
+                .Select(AssetDatabase.GUIDToAssetPath)
+                .Where(path => path.EndsWith(".py", System.StringComparison.OrdinalIgnoreCase))
+                .ToArray();
 
-            foreach (string path in allAssets)
+            foreach (string path in pythonGuids)
             {
-                if (path.EndsWith(".py") && path.StartsWith("Assets/"))
-                {
-                    AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
-                    count++;
-                }
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
             }
 
+            int count = pythonGuids.Length;
             McpLog.Info($"Reimported {count} Python files");
             AssetDatabase.Refresh();
         }
