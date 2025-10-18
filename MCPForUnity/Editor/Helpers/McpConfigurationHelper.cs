@@ -205,8 +205,7 @@ namespace MCPForUnity.Editor.Helpers
                 return "Configured successfully";
             }
 
-            string codexBlock = CodexConfigHelper.BuildCodexServerBlock(uvPath, serverSrc);
-            string updatedToml = CodexConfigHelper.UpsertCodexServerBlock(existingToml, codexBlock);
+            string updatedToml = CodexConfigHelper.UpsertCodexServerBlock(existingToml, uvPath, serverSrc);
 
             McpConfigFileHelper.WriteAtomicFile(configPath, updatedToml);
 

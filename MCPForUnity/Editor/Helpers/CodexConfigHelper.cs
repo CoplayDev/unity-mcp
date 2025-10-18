@@ -2,10 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
 using MCPForUnity.External.Tommy;
-using Newtonsoft.Json;
 
 namespace MCPForUnity.Editor.Helpers
 {
@@ -42,106 +39,105 @@ namespace MCPForUnity.Editor.Helpers
 
         public static string BuildCodexServerBlock(string uvPath, string serverSrc)
         {
-            string argsArray = FormatTomlStringArray(new[] { "run", "--directory", serverSrc, "server.py" });
-            return $"[mcp_servers.unityMCP]{Environment.NewLine}" +
-                   $"command = \"{EscapeTomlString(uvPath)}\"{Environment.NewLine}" +
-                   $"args = {argsArray}";
+            var table = new TomlTable();
+            var mcpServers = new TomlTable();
+
+            mcpServers["unityMCP"] = CreateUnityMcpTable(uvPath, serverSrc);
+            table["mcp_servers"] = mcpServers;
+
+            using var writer = new StringWriter();
+            table.WriteTo(writer);
+            return writer.ToString();
         }
 
-        public static string UpsertCodexServerBlock(string existingToml, string newBlock)
+        public static string UpsertCodexServerBlock(string existingToml, string uvPath, string serverSrc)
         {
-            if (string.IsNullOrWhiteSpace(existingToml))
+            // Parse existing TOML or create new root table
+            var root = TryParseToml(existingToml) ?? new TomlTable();
+
+            // Ensure mcp_servers table exists
+            if (!root.TryGetNode("mcp_servers", out var mcpServersNode) || !(mcpServersNode is TomlTable))
             {
-                return newBlock.TrimEnd() + Environment.NewLine;
+                root["mcp_servers"] = new TomlTable();
             }
+            var mcpServers = root["mcp_servers"] as TomlTable;
 
-            StringBuilder sb = new StringBuilder();
-            using StringReader reader = new StringReader(existingToml);
-            string line;
-            bool inTarget = false;
-            bool replaced = false;
-            while ((line = reader.ReadLine()) != null)
-            {
-                string trimmed = line.Trim();
-                bool isSection = trimmed.StartsWith("[") && trimmed.EndsWith("]") && !trimmed.StartsWith("[[");
-                if (isSection)
-                {
-                    bool isTarget = string.Equals(trimmed, "[mcp_servers.unityMCP]", StringComparison.OrdinalIgnoreCase);
-                    if (isTarget)
-                    {
-                        if (!replaced)
-                        {
-                            if (sb.Length > 0 && sb[^1] != '\n') sb.AppendLine();
-                            sb.AppendLine(newBlock.TrimEnd());
-                            replaced = true;
-                        }
-                        inTarget = true;
-                        continue;
-                    }
+            // Create or update unityMCP table
+            mcpServers["unityMCP"] = CreateUnityMcpTable(uvPath, serverSrc);
 
-                    if (inTarget)
-                    {
-                        inTarget = false;
-                    }
-                }
-
-                if (inTarget)
-                {
-                    continue;
-                }
-
-                sb.AppendLine(line);
-            }
-
-            if (!replaced)
-            {
-                if (sb.Length > 0 && sb[^1] != '\n') sb.AppendLine();
-                sb.AppendLine(newBlock.TrimEnd());
-            }
-
-            return sb.ToString().TrimEnd() + Environment.NewLine;
+            // Serialize back to TOML
+            using var writer = new StringWriter();
+            root.WriteTo(writer);
+            return writer.ToString();
         }
 
         public static bool TryParseCodexServer(string toml, out string command, out string[] args)
         {
             command = null;
             args = null;
-            if (string.IsNullOrWhiteSpace(toml)) return false;
+
+            var root = TryParseToml(toml);
+            if (root == null) return false;
+
+            if (!TryGetTable(root, "mcp_servers", out var servers)
+                && !TryGetTable(root, "mcpServers", out servers))
+            {
+                return false;
+            }
+
+            if (!TryGetTable(servers, "unityMCP", out var unity))
+            {
+                return false;
+            }
+
+            command = GetTomlString(unity, "command");
+            args = GetTomlStringArray(unity, "args");
+
+            return !string.IsNullOrEmpty(command) && args != null;
+        }
+
+        /// <summary>
+        /// Safely parses TOML string, returning null on failure
+        /// </summary>
+        private static TomlTable TryParseToml(string toml)
+        {
+            if (string.IsNullOrWhiteSpace(toml)) return null;
 
             try
             {
                 using var reader = new StringReader(toml);
-                TomlTable root = TOML.Parse(reader);
-                if (root == null) return false;
-
-                if (!TryGetTable(root, "mcp_servers", out var servers)
-                    && !TryGetTable(root, "mcpServers", out servers))
-                {
-                    return false;
-                }
-
-                if (!TryGetTable(servers, "unityMCP", out var unity))
-                {
-                    return false;
-                }
-
-                command = GetTomlString(unity, "command");
-                args = GetTomlStringArray(unity, "args");
-
-                return !string.IsNullOrEmpty(command) && args != null;
+                return TOML.Parse(reader);
             }
             catch (TomlParseException)
             {
-                return false;
+                return null;
             }
             catch (TomlSyntaxException)
             {
-                return false;
+                return null;
             }
             catch (FormatException)
             {
-                return false;
+                return null;
             }
+        }
+
+        /// <summary>
+        /// Creates a TomlTable for the unityMCP server configuration
+        /// </summary>
+        private static TomlTable CreateUnityMcpTable(string uvPath, string serverSrc)
+        {
+            var unityMCP = new TomlTable();
+            unityMCP["command"] = new TomlString { Value = uvPath };
+
+            var argsArray = new TomlArray();
+            argsArray.Add(new TomlString { Value = "run" });
+            argsArray.Add(new TomlString { Value = "--directory" });
+            argsArray.Add(new TomlString { Value = serverSrc });
+            argsArray.Add(new TomlString { Value = "server.py" });
+            unityMCP["args"] = argsArray;
+
+            return unityMCP;
         }
 
         private static bool TryGetTable(TomlTable parent, string key, out TomlTable table)
@@ -211,33 +207,5 @@ namespace MCPForUnity.Editor.Helpers
 
             return null;
         }
-
-        private static string FormatTomlStringArray(IEnumerable<string> values)
-        {
-            if (values == null) return "[]";
-            StringBuilder sb = new StringBuilder();
-            sb.Append('[');
-            bool first = true;
-            foreach (string value in values)
-            {
-                if (!first)
-                {
-                    sb.Append(", ");
-                }
-                sb.Append('"').Append(EscapeTomlString(value ?? string.Empty)).Append('"');
-                first = false;
-            }
-            sb.Append(']');
-            return sb.ToString();
-        }
-
-        private static string EscapeTomlString(string value)
-        {
-            if (string.IsNullOrEmpty(value)) return string.Empty;
-            return value
-                .Replace("\\", "\\\\")
-                .Replace("\"", "\\\"");
-        }
-
     }
 }
