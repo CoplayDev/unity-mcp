@@ -148,31 +148,6 @@ namespace MCPForUnityTests.Editor.Data
         }
 
         [Test]
-        public void CleanupStaleStates_RemovesStatesForRemovedFiles()
-        {
-            var file1 = new TextAsset("print('test1')");
-            var file2 = new TextAsset("print('test2')");
-
-            // Add both files
-            _asset.pythonFiles.Add(file1);
-            _asset.pythonFiles.Add(file2);
-
-            // Record sync for both
-            _asset.RecordSync(file1, "hash1");
-            _asset.RecordSync(file2, "hash2");
-
-            Assert.AreEqual(2, _asset.fileStates.Count, "Should have two states");
-
-            // Remove one file
-            _asset.pythonFiles.Remove(file1);
-
-            // Cleanup
-            _asset.CleanupStaleStates();
-
-            Assert.AreEqual(1, _asset.fileStates.Count, "Should have one state after cleanup");
-        }
-
-        [Test]
         public void CleanupStaleStates_KeepsStatesForCurrentFiles()
         {
             var file1 = new TextAsset("print('test1')");

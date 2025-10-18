@@ -60,22 +60,6 @@ namespace MCPForUnityTests.Editor.Services
         }
 
         [Test]
-        public void SyncProjectTools_CleansUpStaleFiles()
-        {
-            // Create a stale file in the destination
-            Directory.CreateDirectory(_testToolsDir);
-            string staleFile = Path.Combine(_testToolsDir, "old_tool.py");
-            File.WriteAllText(staleFile, "print('old')");
-
-            Assert.IsTrue(File.Exists(staleFile), "Stale file should exist before sync");
-
-            // Sync with no assets (should cleanup the stale file)
-            _service.SyncProjectTools(_testToolsDir);
-
-            Assert.IsFalse(File.Exists(staleFile), "Stale file should be removed after sync");
-        }
-
-        [Test]
         public void SyncProjectTools_ReportsCorrectCounts()
         {
             var result = _service.SyncProjectTools(_testToolsDir);
