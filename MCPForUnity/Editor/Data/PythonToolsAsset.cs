@@ -12,7 +12,6 @@ namespace MCPForUnity.Editor.Data
     [CreateAssetMenu(fileName = "PythonTools", menuName = "MCP For Unity/Python Tools")]
     public class PythonToolsAsset : ScriptableObject
     {
-        [Header("Python Tool Files")]
         [Tooltip("Add Python files (.py) to sync to the MCP server. Files can be located anywhere in your project.")]
         public List<TextAsset> pythonFiles = new List<TextAsset>();
 
