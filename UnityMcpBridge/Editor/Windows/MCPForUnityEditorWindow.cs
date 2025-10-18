@@ -71,6 +71,9 @@ namespace MCPForUnity.Editor.Windows
             // Load validation level setting
             LoadValidationLevelSetting();
 
+            // Show one-time migration dialog
+            ShowMigrationDialogIfNeeded();
+
             // First-run auto-setup only if Claude CLI is available
             if (autoRegisterEnabled && !string.IsNullOrEmpty(ExecPath.ResolveClaude()))
             {
@@ -169,6 +172,9 @@ namespace MCPForUnity.Editor.Windows
         private void OnGUI()
         {
             scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
+
+            // Migration warning banner (non-dismissible)
+            DrawMigrationWarningBanner();
 
             // Header
             DrawHeader();
@@ -1571,6 +1577,65 @@ namespace MCPForUnity.Editor.Windows
                 UnityEngine.Debug.LogWarning($"Error checking Claude Code config: {e.Message}");
                 mcpClient.SetStatus(McpStatus.Error, e.Message);
             }
+        }
+
+        private void ShowMigrationDialogIfNeeded()
+        {
+            const string dialogShownKey = "MCPForUnity.LegacyMigrationDialogShown";
+            if (EditorPrefs.GetBool(dialogShownKey, false))
+            {
+                return; // Already shown
+            }
+
+            int result = EditorUtility.DisplayDialogComplex(
+                "Migration Required",
+                "This is the legacy UnityMcpBridge package.\n\n" +
+                "Please migrate to the new MCPForUnity package to receive updates and support.\n\n" +
+                "Migration takes just a few minutes.",
+                "View Migration Guide",
+                "Remind Me Later",
+                "I'll Migrate Later"
+            );
+
+            if (result == 0) // View Migration Guide
+            {
+                Application.OpenURL("https://github.com/CoplayDev/unity-mcp/blob/main/docs/v5_MIGRATION.md");
+                EditorPrefs.SetBool(dialogShownKey, true);
+            }
+            else if (result == 2) // I'll Migrate Later
+            {
+                EditorPrefs.SetBool(dialogShownKey, true);
+            }
+            // result == 1 (Remind Me Later) - don't set the flag, show again next time
+        }
+
+        private void DrawMigrationWarningBanner()
+        {
+            // Warning banner - not dismissible, always visible
+            EditorGUILayout.Space(5);
+            Rect bannerRect = EditorGUILayout.GetControlRect(false, 50);
+            EditorGUI.DrawRect(bannerRect, new Color(1f, 0.6f, 0f, 0.3f)); // Orange background
+
+            GUIStyle warningStyle = new GUIStyle(EditorStyles.boldLabel)
+            {
+                fontSize = 13,
+                alignment = TextAnchor.MiddleLeft,
+                richText = true
+            };
+
+            // Use Unicode warning triangle (same as used elsewhere in codebase at line 647, 652)
+            string warningText = "\u26A0 <color=#FF8C00>LEGACY PACKAGE:</color> Please migrate to MCPForUnity for updates and support.";
+
+            Rect textRect = new Rect(bannerRect.x + 15, bannerRect.y + 8, bannerRect.width - 180, bannerRect.height - 16);
+            GUI.Label(textRect, warningText, warningStyle);
+
+            // Button on the right
+            Rect buttonRect = new Rect(bannerRect.xMax - 160, bannerRect.y + 10, 145, 30);
+            if (GUI.Button(buttonRect, "View Migration Guide"))
+            {
+                Application.OpenURL("https://github.com/CoplayDev/unity-mcp/blob/main/docs/v5_MIGRATION.md");
+            }
+            EditorGUILayout.Space(5);
         }
 
         private bool IsPythonDetected()
