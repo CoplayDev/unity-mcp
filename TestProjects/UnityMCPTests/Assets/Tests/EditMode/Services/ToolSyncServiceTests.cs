@@ -60,20 +60,6 @@ namespace MCPForUnityTests.Editor.Services
         }
 
         [Test]
-        public void SyncProjectTools_CopiesPythonFile_WhenAssetHasFile()
-        {
-            // Create a test asset with a Python file
-            var asset = ScriptableObject.CreateInstance<PythonToolsAsset>();
-            var textAsset = new TextAsset("print('test tool')");
-            asset.pythonFiles.Add(textAsset);
-
-            // Note: This test is limited because we can't easily create real TextAssets
-            // with proper file paths in unit tests. This would be better as an integration test.
-
-            Object.DestroyImmediate(asset);
-        }
-
-        [Test]
         public void SyncProjectTools_CleansUpStaleFiles()
         {
             // Create a stale file in the destination
@@ -87,16 +73,6 @@ namespace MCPForUnityTests.Editor.Services
             _service.SyncProjectTools(_testToolsDir);
 
             Assert.IsFalse(File.Exists(staleFile), "Stale file should be removed after sync");
-        }
-
-        [Test]
-        public void SyncProjectTools_HandlesMultipleAssets()
-        {
-            // This would require creating multiple PythonToolsAssets
-            // Better suited for integration testing
-            var result = _service.SyncProjectTools(_testToolsDir);
-
-            Assert.IsNotNull(result, "Should handle multiple assets gracefully");
         }
 
         [Test]
