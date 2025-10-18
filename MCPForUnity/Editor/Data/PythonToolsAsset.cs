@@ -74,6 +74,26 @@ namespace MCPForUnity.Editor.Data
         {
             return UnityEditor.AssetDatabase.AssetPathToGUID(UnityEditor.AssetDatabase.GetAssetPath(asset));
         }
+
+        /// <summary>
+        /// Called when the asset is modified in the Inspector
+        /// Triggers sync to handle file additions/removals
+        /// </summary>
+        private void OnValidate()
+        {
+            // Cleanup stale states immediately
+            CleanupStaleStates();
+            
+            // Trigger sync after a delay to handle file removals
+            // Delay ensures the asset is saved before sync runs
+            UnityEditor.EditorApplication.delayCall += () =>
+            {
+                if (this != null) // Check if asset still exists
+                {
+                    MCPForUnity.Editor.Helpers.PythonToolSyncProcessor.SyncAllTools();
+                }
+            };
+        }
     }
 
     [Serializable]
