@@ -101,6 +101,13 @@ namespace MCPForUnity.Editor.Windows
                     instructionStyle
                 );
             }
+            else if (mcpClient?.mcpType == McpTypes.JetBrainsCopilot)
+            {
+                EditorGUILayout.LabelField(
+                    "    a) Going to File > Settings > Tools > GitHub Copilot > Model Context Protocol (MCP) > Configure",
+                    instructionStyle
+                );
+            }
             else if (mcpClient?.mcpType == McpTypes.Codex)
             {
                 EditorGUILayout.LabelField(
