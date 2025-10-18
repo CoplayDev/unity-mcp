@@ -242,7 +242,7 @@ namespace MCPForUnity.Editor.Windows
         private void InitializeUI()
         {
             // Settings Section
-            versionLabel.text = AssetPathUtility.GetPackageVersion();
+            UpdateVersionLabel();
             debugLogsToggle.value = EditorPrefs.GetBool("MCPForUnity.DebugLogs", false);
 
             validationLevelField.Init(ValidationLevel.Standard);
@@ -833,5 +833,28 @@ namespace MCPForUnity.Editor.Windows
             EditorGUIUtility.systemCopyBuffer = configJsonField.value;
             McpLog.Info("Configuration copied to clipboard");
         }
+
+        private void UpdateVersionLabel()
+        {
+            string currentVersion = AssetPathUtility.GetPackageVersion();
+            versionLabel.text = $"v{currentVersion}";
+
+            // Check for updates using the service
+            var updateCheck = MCPServiceLocator.Updates.CheckForUpdate(currentVersion);
+
+            if (updateCheck.UpdateAvailable && !string.IsNullOrEmpty(updateCheck.LatestVersion))
+            {
+                // Update available - enhance the label
+                versionLabel.text = $"\u2191 v{currentVersion} (Update available: v{updateCheck.LatestVersion})";
+                versionLabel.style.color = new Color(1f, 0.7f, 0f); // Orange
+                versionLabel.tooltip = $"Version {updateCheck.LatestVersion} is available. Update via Package Manager.\n\nGit URL: https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity";
+            }
+            else
+            {
+                versionLabel.style.color = StyleKeyword.Null; // Default color
+                versionLabel.tooltip = $"Current version: {currentVersion}";
+            }
+        }
+
     }
 }

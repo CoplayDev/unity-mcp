@@ -13,6 +13,7 @@ namespace MCPForUnity.Editor.Services
         private static IPythonToolRegistryService _pythonToolRegistryService;
         private static ITestRunnerService _testRunnerService;
         private static IToolSyncService _toolSyncService;
+        private static IPackageUpdateService _packageUpdateService;
 
         public static IBridgeControlService Bridge => _bridgeService ??= new BridgeControlService();
         public static IClientConfigurationService Client => _clientService ??= new ClientConfigurationService();
@@ -20,6 +21,7 @@ namespace MCPForUnity.Editor.Services
         public static IPythonToolRegistryService PythonToolRegistry => _pythonToolRegistryService ??= new PythonToolRegistryService();
         public static ITestRunnerService Tests => _testRunnerService ??= new TestRunnerService();
         public static IToolSyncService ToolSync => _toolSyncService ??= new ToolSyncService();
+        public static IPackageUpdateService Updates => _packageUpdateService ??= new PackageUpdateService();
 
         /// <summary>
         /// Registers a custom implementation for a service (useful for testing)
@@ -40,6 +42,8 @@ namespace MCPForUnity.Editor.Services
                 _testRunnerService = t;
             else if (implementation is IToolSyncService ts)
                 _toolSyncService = ts;
+            else if (implementation is IPackageUpdateService pu)
+                _packageUpdateService = pu;
         }
 
         /// <summary>
@@ -53,6 +57,7 @@ namespace MCPForUnity.Editor.Services
             (_pythonToolRegistryService as IDisposable)?.Dispose();
             (_testRunnerService as IDisposable)?.Dispose();
             (_toolSyncService as IDisposable)?.Dispose();
+            (_packageUpdateService as IDisposable)?.Dispose();
 
             _bridgeService = null;
             _clientService = null;
@@ -60,6 +65,7 @@ namespace MCPForUnity.Editor.Services
             _pythonToolRegistryService = null;
             _testRunnerService = null;
             _toolSyncService = null;
+            _packageUpdateService = null;
         }
     }
 }
