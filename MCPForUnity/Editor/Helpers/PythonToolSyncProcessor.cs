@@ -18,7 +18,7 @@ namespace MCPForUnity.Editor.Helpers
     {
         private const string SyncEnabledKey = "MCPForUnity.AutoSyncEnabled";
         private static bool _isSyncing = false;
-        
+
         static PythonToolSyncProcessor()
         {
             // Sync on Unity startup
@@ -92,9 +92,9 @@ namespace MCPForUnity.Editor.Helpers
                 }
 
                 string toolsDir = Path.Combine(srcPath, "tools", "custom");
-                
+
                 var result = MCPServiceLocator.ToolSync.SyncProjectTools(toolsDir);
-                
+
                 if (result.Success)
                 {
                     if (result.CopiedCount > 0 || result.SkippedCount > 0)
@@ -146,7 +146,7 @@ namespace MCPForUnity.Editor.Helpers
         {
             string[] allAssets = AssetDatabase.GetAllAssetPaths();
             int count = 0;
-            
+
             foreach (string path in allAssets)
             {
                 if (path.EndsWith(".py") && path.StartsWith("Assets/"))
@@ -155,7 +155,7 @@ namespace MCPForUnity.Editor.Helpers
                     count++;
                 }
             }
-            
+
             McpLog.Info($"Reimported {count} Python files");
             AssetDatabase.Refresh();
         }
