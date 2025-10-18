@@ -1,19 +1,31 @@
 # Adding Custom Tools to MCP for Unity
 
-MCP for Unity now supports auto-discovery of custom tools using decorators (Python) and attributes (C#). This allows you to easily extend the MCP server with your own tools without modifying core files.
+MCP for Unity supports auto-discovery of custom tools using decorators (Python) and attributes (C#). This allows you to easily extend the MCP server with your own tools.
 
 Be sure to review the developer README first:
 
 | [English](README-DEV.md) | [简体中文](README-DEV-zh.md) |
 |---------------------------|------------------------------|
 
-## Python Side (MCP Server)
+---
 
-### Creating a Custom Tool
+# Part 1: How to Use (Quick Start Guide)
 
-1. **Create a new Python file** in `MCPForUnity/UnityMcpServer~/src/tools/` (or any location that gets imported)
+This section shows you how to add custom tools to your Unity project.
 
-2. **Use the `@mcp_for_unity_tool` decorator**:
+## Step 1: Create a PythonToolsAsset
+
+First, create a ScriptableObject to manage your Python tools:
+
+1. In Unity, right-click in the Project window
+2. Select **Assets > Create > MCP For Unity > Python Tools**
+3. Name it (e.g., `MyPythonTools`)
+
+![Create Python Tools Asset](screenshots/v6_2_create_python_tools_asset.png)
+
+## Step 2: Create Your Python Tool File
+
+Create a Python file **anywhere in your Unity project**. For example, `Assets/Editor/MyTools/my_custom_tool.py`:
 
 ```python
 from typing import Annotated, Any
@@ -44,39 +56,20 @@ async def my_custom_tool(
     return response if isinstance(response, dict) else {"success": False, "message": str(response)}
 ```
 
-3. **The tool is automatically registered!** The decorator:
-   - Auto-generates the tool name from the function name (e.g., `my_custom_tool`)
-   - Registers the tool with FastMCP during module import
+## Step 3: Add Python File to Asset
 
-4. **Rebuild the server** in the MCP for Unity window (in the Unity Editor) to apply the changes.
+1. Select your `PythonToolsAsset` in the Project window
+2. In the Inspector, expand **Python Files**
+3. Drag your `.py` file into the list (or click **+** and select it)
 
-### Decorator Options
+![Python Tools Asset Inspector](screenshots/v6_2_python_tools_asset.png)
 
-```python
-@mcp_for_unity_tool(
-    name="custom_name",          # Optional: the function name is used by default
-    description="Tool description",  # Required: describe what the tool does
-)
-```
+**Note:** If you can't see `.py` files in the object picker, go to **Window > MCP For Unity > Tool Sync > Reimport Python Files** to force Unity to recognize them as text assets.
 
-You can use all options available in FastMCP's `mcp.tool` function decorator: <https://gofastmcp.com/servers/tools#tools>.
+## Step 4: Create C# Handler
 
-**Note:** All tools should have the `description` field. It's not strictly required, however, that parameter is the best place to define a description so that most MCP clients can read it. See [issue #289](https://github.com/CoplayDev/unity-mcp/issues/289).
+Create a C# file anywhere in your Unity project (typically in `Editor/`):
 
-### Auto-Discovery
-
-Tools are automatically discovered when:
-- The Python file is in the `tools/` directory
-- The file is imported during server startup
-- The decorator `@mcp_for_unity_tool` is used
-
-## C# Side (Unity Editor)
-
-### Creating a Custom Tool Handler
-
-1. **Create a new C# file** anywhere in your Unity project (typically in `Editor/`)
-
-2. **Add the `[McpForUnityTool]` attribute** and implement `HandleCommand`:
 
 ```csharp
 using Newtonsoft.Json.Linq;
@@ -84,7 +77,6 @@ using MCPForUnity.Editor.Helpers;
 
 namespace MyProject.Editor.CustomTools
 {
-    // The name argument is optional, it uses a snake_case version of the class name by default
     [McpForUnityTool("my_custom_tool")]
     public static class MyCustomTool
     {
@@ -114,30 +106,23 @@ namespace MyProject.Editor.CustomTools
 }
 ```
 
-3. **The tool is automatically registered!** Unity will discover it via reflection on startup.
+## Step 5: Rebuild the MCP Server
 
-### Attribute Options
+1. Open the MCP for Unity window in the Unity Editor
+2. Click **Rebuild Server** to apply your changes
+3. Your tool is now available to MCP clients!
 
-```csharp
-// Explicit command name
-[McpForUnityTool("my_custom_tool")]
-public static class MyCustomTool { }
+**What happens automatically:**
+- ✅ Python files are synced to the MCP server on Unity startup
+- ✅ Python files are synced when modified (you would need to rebuild the server)
+- ✅ C# handlers are discovered via reflection
+- ✅ Tools are registered with the MCP server
 
-// Auto-generated from class name (MyCustomTool → my_custom_tool)
-[McpForUnityTool]
-public static class MyCustomTool { }
-```
+## Complete Example: Screenshot Tool
 
-### Auto-Discovery
+Here's a complete example showing how to create a screenshot capture tool.
 
-Tools are automatically discovered when:
-- The class has the `[McpForUnityTool]` attribute
-- The class has a `public static HandleCommand(JObject)` method
-- Unity loads the assembly containing the class
-
-## Complete Example: Custom Screenshot Tool
-
-### Python (`UnityMcpServer~/src/tools/screenshot_tool.py`)
+### Python File (`Assets/Editor/ScreenShots/Python/screenshot_tool.py`)
 
 ```python
 from typing import Annotated, Any
@@ -167,7 +152,13 @@ async def capture_screenshot(
     return response if isinstance(response, dict) else {"success": False, "message": str(response)}
 ```
 
-### C# (`Editor/CaptureScreenshotTool.cs`)
+### Add to PythonToolsAsset
+
+1. Select your `PythonToolsAsset`
+2. Add `screenshot_tool.py` to the **Python Files** list
+3. The file will automatically sync to the MCP server
+
+### C# Handler (`Assets/Editor/ScreenShots/CaptureScreenshotTool.cs`)
 
 ```csharp
 using System.IO;
@@ -243,6 +234,94 @@ namespace MyProject.Editor.Tools
 }
 ```
 
+### Rebuild and Test
+
+1. Open the MCP for Unity window
+2. Click **Rebuild Server**
+3. Test your tool from your MCP client!
+
+---
+
+# Part 2: How It Works (Technical Details)
+
+This section explains the technical implementation of the custom tools system.
+
+## Python Side: Decorator System
+
+### The `@mcp_for_unity_tool` Decorator
+
+The decorator automatically registers your function as an MCP tool:
+
+```python
+@mcp_for_unity_tool(
+    name="custom_name",          # Optional: function name used by default
+    description="Tool description",  # Required: describe what the tool does
+)
+```
+
+**How it works:**
+- Auto-generates the tool name from the function name (e.g., `my_custom_tool`)
+- Registers the tool with FastMCP during module import
+- Supports all FastMCP `mcp.tool` decorator options: <https://gofastmcp.com/servers/tools#tools>
+
+**Note:** All tools should have the `description` field. It's not strictly required, however, that parameter is the best place to define a description so that most MCP clients can read it. See [issue #289](https://github.com/CoplayDev/unity-mcp/issues/289).
+
+### Auto-Discovery
+
+Python tools are automatically discovered when:
+- The Python file is added to a `PythonToolsAsset`
+- The file is synced to `MCPForUnity/UnityMcpServer~/src/tools/custom/`
+- The file is imported during server startup
+- The decorator `@mcp_for_unity_tool` is used
+
+### Sync System
+
+The `PythonToolsAsset` system automatically syncs your Python files:
+
+**When sync happens:**
+- ✅ Unity starts up
+- ✅ Python files are modified
+- ✅ Python files are added/removed from the asset
+
+**Manual controls:**
+- **Sync Now:** Window > MCP For Unity > Tool Sync > Sync Python Tools
+- **Toggle Auto-Sync:** Window > MCP For Unity > Tool Sync > Auto-Sync Python Tools
+- **Reimport Python Files:** Window > MCP For Unity > Tool Sync > Reimport Python Files
+
+**How it works:**
+- Uses content hashing to detect changes (only syncs modified files)
+- Files are copied to `MCPForUnity/UnityMcpServer~/src/tools/custom/`
+- Stale files are automatically cleaned up
+
+## C# Side: Attribute System
+
+### The `[McpForUnityTool]` Attribute
+
+The attribute marks your class as a tool handler:
+
+```csharp
+// Explicit command name
+[McpForUnityTool("my_custom_tool")]
+public static class MyCustomTool { }
+
+// Auto-generated from class name (MyCustomTool → my_custom_tool)
+[McpForUnityTool]
+public static class MyCustomTool { }
+```
+
+### Auto-Discovery
+
+C# handlers are automatically discovered when:
+- The class has the `[McpForUnityTool]` attribute
+- The class has a `public static HandleCommand(JObject)` method
+- Unity loads the assembly containing the class
+
+**How it works:**
+- Unity scans all assemblies on startup
+- Finds classes with `[McpForUnityTool]` attribute
+- Registers them in the command registry
+- Routes MCP commands to the appropriate handler
+
 ## Best Practices
 
 ### Python
@@ -274,8 +353,26 @@ namespace MyProject.Editor.Tools
 ## Troubleshooting
 
 **Tool not appearing:**
-- Python: Ensure the file is in `tools/` directory and imports the decorator
-- C#: Ensure the class has `[McpForUnityTool]` attribute and `HandleCommand` method
+- **Python:** 
+  - Ensure the `.py` file is added to a `PythonToolsAsset`
+  - Check Unity Console for sync messages: "Python tools synced: X copied"
+  - Verify file was synced to `UnityMcpServer~/src/tools/custom/`
+  - Try manual sync: Window > MCP For Unity > Tool Sync > Sync Python Tools
+  - Rebuild the server in the MCP for Unity window
+- **C#:** 
+  - Ensure the class has `[McpForUnityTool]` attribute
+  - Ensure the class has a `public static HandleCommand(JObject)` method
+  - Check Unity Console for: "MCP-FOR-UNITY: Auto-discovered X tools"
+
+**Python files not showing in Inspector:**
+- Go to **Window > MCP For Unity > Tool Sync > Reimport Python Files**
+- This forces Unity to recognize `.py` files as TextAssets
+- Check that `.py.meta` files show `ScriptedImporter` (not `DefaultImporter`)
+
+**Sync not working:**
+- Check if auto-sync is enabled: Window > MCP For Unity > Tool Sync > Auto-Sync Python Tools
+- Look for errors in Unity Console
+- Verify `PythonToolsAsset` has the correct files added
 
 **Name conflicts:**
 - Use explicit names in decorators/attributes to avoid conflicts
