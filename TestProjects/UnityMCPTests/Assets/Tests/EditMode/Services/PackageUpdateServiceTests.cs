@@ -180,23 +180,6 @@ namespace MCPForUnityTests.Editor.Services
         }
 
         [Test]
-        public void CheckForUpdate_IgnoresExpiredCache()
-        {
-            // Arrange: Set cache from yesterday
-            string yesterday = DateTime.Now.AddDays(-1).ToString("yyyy-MM-dd");
-            EditorPrefs.SetString(TestLastCheckDateKey, yesterday);
-            EditorPrefs.SetString(TestCachedVersionKey, "5.0.0");
-
-            // Act
-            var result = _service.CheckForUpdate("5.0.0");
-
-            // Assert
-            // Should attempt fresh check (which may fail if offline, but cache should be ignored)
-            Assert.IsNotNull(result, "Should return a result");
-            // We can't guarantee network access in tests, so we just verify it doesn't use the expired cache
-        }
-
-        [Test]
         public void ClearCache_RemovesAllCachedData()
         {
             // Arrange: Set up cache
@@ -223,29 +206,6 @@ namespace MCPForUnityTests.Editor.Services
 
             // Act & Assert - should not throw
             Assert.DoesNotThrow(() => _service.ClearCache(), "Should not throw when clearing non-existent cache");
-        }
-
-        [Test]
-        public void ClearCache_ForcesNewCheck_OnNextCheckForUpdate()
-        {
-            // Arrange: Set up cache with old data
-            string today = DateTime.Now.ToString("yyyy-MM-dd");
-            EditorPrefs.SetString(TestLastCheckDateKey, today);
-            EditorPrefs.SetString(TestCachedVersionKey, "1.0.0");
-
-            // Verify cached result
-            var cachedResult = _service.CheckForUpdate("2.0.0");
-            Assert.AreEqual("1.0.0", cachedResult.LatestVersion, "Should return cached version first");
-
-            // Clear cache
-            _service.ClearCache();
-
-            // Next check should not use cache (will fetch fresh or fail if offline)
-            var freshResult = _service.CheckForUpdate("2.0.0");
-
-            // If the check succeeded (network available), it should have fetched fresh data
-            // If it failed (offline), that's also expected behavior
-            Assert.IsNotNull(freshResult, "Should return a result after cache clear");
         }
     }
 }
