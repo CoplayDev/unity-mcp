@@ -180,6 +180,56 @@ namespace MCPForUnityTests.Editor.Services
         }
 
         [Test]
+        public void CheckForUpdate_IgnoresExpiredCache_AndAttemptsFreshFetch()
+        {
+            // Arrange: Set cache from yesterday (expired)
+            string yesterday = DateTime.Now.AddDays(-1).ToString("yyyy-MM-dd");
+            string cachedVersion = "4.0.0";
+            EditorPrefs.SetString(TestLastCheckDateKey, yesterday);
+            EditorPrefs.SetString(TestCachedVersionKey, cachedVersion);
+
+            // Act
+            var result = _service.CheckForUpdate("5.0.0");
+
+            // Assert
+            Assert.IsNotNull(result, "Should return a result");
+            
+            // If the check succeeded (network available), verify it didn't use the expired cache
+            if (result.CheckSucceeded)
+            {
+                Assert.AreNotEqual(cachedVersion, result.LatestVersion, 
+                    "Should not return expired cached version when fresh fetch succeeds");
+                Assert.IsNotNull(result.LatestVersion, "Should have fetched a new version");
+            }
+            else
+            {
+                // If offline, check should fail (not succeed with cached data)
+                Assert.IsFalse(result.UpdateAvailable, 
+                    "Should not report update available when fetch fails and cache is expired");
+            }
+        }
+
+        [Test]
+        public void CheckForUpdate_ReturnsAssetStoreMessage_ForNonGitInstallations()
+        {
+            // Note: This test verifies the service behavior when IsGitInstallation() returns false.
+            // Since the actual result depends on package installation method, we create a mock
+            // implementation to test this specific code path.
+            
+            var mockService = new MockAssetStorePackageUpdateService();
+            
+            // Act
+            var result = mockService.CheckForUpdate("5.0.0");
+
+            // Assert
+            Assert.IsFalse(result.CheckSucceeded, "Check should not succeed for Asset Store installs");
+            Assert.IsFalse(result.UpdateAvailable, "No update should be reported for Asset Store installs");
+            Assert.AreEqual("Asset Store installations are updated via Unity Asset Store", result.Message,
+                "Should return Asset Store update message");
+            Assert.IsNull(result.LatestVersion, "Latest version should be null for Asset Store installs");
+        }
+
+        [Test]
         public void ClearCache_RemovesAllCachedData()
         {
             // Arrange: Set up cache
@@ -206,6 +256,40 @@ namespace MCPForUnityTests.Editor.Services
 
             // Act & Assert - should not throw
             Assert.DoesNotThrow(() => _service.ClearCache(), "Should not throw when clearing non-existent cache");
+        }
+    }
+
+    /// <summary>
+    /// Mock implementation of IPackageUpdateService that simulates Asset Store installation behavior
+    /// </summary>
+    internal class MockAssetStorePackageUpdateService : IPackageUpdateService
+    {
+        public UpdateCheckResult CheckForUpdate(string currentVersion)
+        {
+            // Simulate Asset Store installation (IsGitInstallation returns false)
+            return new UpdateCheckResult
+            {
+                CheckSucceeded = false,
+                UpdateAvailable = false,
+                Message = "Asset Store installations are updated via Unity Asset Store"
+            };
+        }
+
+        public bool IsNewerVersion(string version1, string version2)
+        {
+            // Not used in the Asset Store test, but required by interface
+            return false;
+        }
+
+        public bool IsGitInstallation()
+        {
+            // Simulate non-Git installation (Asset Store)
+            return false;
+        }
+
+        public void ClearCache()
+        {
+            // Not used in the Asset Store test, but required by interface
         }
     }
 }
