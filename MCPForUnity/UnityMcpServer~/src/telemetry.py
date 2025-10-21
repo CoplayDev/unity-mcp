@@ -10,7 +10,7 @@ Fire-and-forget telemetry sender with a single background worker.
 import contextlib
 from dataclasses import dataclass
 from enum import Enum
-import importlib
+from importlib import import_module, metadata
 import json
 import logging
 import os
@@ -38,12 +38,22 @@ logger = logging.getLogger("unity-mcp-telemetry")
 
 def get_package_version() -> str:
     """
-    Open pyproject.toml and parse version
-    We use the tomli library instead of tomllib to support Python 3.10
+    Get package version in different ways:
+    1. First we try the installed metadata - this is because uvx is used on the asset store
+    2. If that fails, we try to read from pyproject.toml - this is available for users who download via Git
+    Default is "unknown", but that should never happen
     """
-    with open("pyproject.toml", "rb") as f:
-        data = tomli.load(f)
-    return data["project"]["version"]
+    try:
+        return metadata.version("MCPForUnityServer")
+    except Exception:
+        # Fallback for development: read from pyproject.toml
+        try:
+            pyproject_path = Path(__file__).parent / "pyproject.toml"
+            with open(pyproject_path, "rb") as f:
+                data = tomli.load(f)
+            return data["project"]["version"]
+        except Exception:
+            return "unknown"
 
 
 MCP_VERSION = get_package_version()
@@ -99,7 +109,7 @@ class TelemetryConfig:
             "config",
         ):
             try:
-                mod = importlib.import_module(modname)
+                mod = import_module(modname)
                 server_config = getattr(mod, "config", None)
                 if server_config is not None:
                     break
