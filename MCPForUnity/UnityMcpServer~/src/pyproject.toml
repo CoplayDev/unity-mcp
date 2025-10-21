@@ -11,10 +11,23 @@ dependencies = [
  "tomli>=2.3.0",
 ]
 
+[project.scripts]
+mcp-for-unity = "server:main"
+
 [build-system]
 requires = ["setuptools>=64.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["config", "server", "unity_connection"]
-packages = ["tools"]
+py-modules = [
+    "config",
+    "models",
+    "module_discovery",
+    "port_discovery",
+    "reload_sentinel",
+    "server",
+    "telemetry",
+    "telemetry_decorator",
+    "unity_connection"
+]
+packages = ["tools", "resources", "registry"]
