@@ -103,10 +103,11 @@ class TelemetryConfig:
         """
         server_config = None
         for modname in (
+            # Prefer plain module to respect test-time overrides and sys.path injection
+            "config",
+            "src.config",
             "MCPForUnity.UnityMcpServer~.src.config",
             "MCPForUnity.UnityMcpServer.src.config",
-            "src.config",
-            "config",
         ):
             try:
                 mod = import_module(modname)
@@ -126,10 +127,13 @@ class TelemetryConfig:
             server_config, "telemetry_endpoint", None)
         default_ep = cfg_default or "https://api-prod.coplay.dev/telemetry/events"
         self.default_endpoint = default_ep
-        self.endpoint = self._validated_endpoint(
-            os.environ.get("UNITY_MCP_TELEMETRY_ENDPOINT", default_ep),
-            default_ep,
-        )
+        # Prefer config default; allow explicit env override only when set
+        env_ep = os.environ.get("UNITY_MCP_TELEMETRY_ENDPOINT")
+        if env_ep is not None and env_ep != "":
+            self.endpoint = self._validated_endpoint(env_ep, default_ep)
+        else:
+            # Validate config-provided default as well to enforce scheme/host rules
+            self.endpoint = self._validated_endpoint(default_ep, default_ep)
         try:
             logger.info(
                 "Telemetry configured: endpoint=%s (default=%s), timeout_env=%s",

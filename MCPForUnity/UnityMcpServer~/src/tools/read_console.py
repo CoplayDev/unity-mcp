@@ -13,7 +13,7 @@ from unity_connection import send_command_with_retry
 )
 def read_console(
     ctx: Context,
-    action: Annotated[Literal['get', 'clear'], "Get or clear the Unity Editor console."],
+    action: Annotated[Literal['get', 'clear'], "Get or clear the Unity Editor console."] | None = None,
     types: Annotated[list[Literal['error', 'warning',
                                   'log', 'all']], "Message types to get"] | None = None,
     count: Annotated[int, "Max messages to return"] | None = None,

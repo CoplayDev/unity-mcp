@@ -48,9 +48,21 @@ class DummyMCP:
         return deco
 
 
+from tests.test_helpers import DummyContext
+
+
 def setup_tools():
     mcp = DummyMCP()
-    read_console_mod.register_read_console_tools(mcp)
+    # Import the tools module to trigger decorator registration
+    import tools.read_console
+    # Get the registered tools from the registry
+    from registry import get_registered_tools
+    registered_tools = get_registered_tools()
+    # Add all console-related tools to our dummy MCP
+    for tool_info in registered_tools:
+        tool_name = tool_info['name']
+        if any(keyword in tool_name for keyword in ['read_console', 'console']):
+            mcp.tools[tool_name] = tool_info['func']
     return mcp.tools
 
 
@@ -67,11 +79,12 @@ def test_read_console_full_default(monkeypatch):
             "data": {"lines": [{"level": "error", "message": "oops", "stacktrace": "trace", "time": "t"}]},
         }
 
-    monkeypatch.setattr(read_console_mod, "send_command_with_retry", fake_send)
-    monkeypatch.setattr(
-        read_console_mod, "get_unity_connection", lambda: object())
+    # Patch the send_command_with_retry function in the tools module
+    import tools.read_console
+    monkeypatch.setattr(tools.read_console,
+                        "send_command_with_retry", fake_send)
 
-    resp = read_console(ctx=None, count=10)
+    resp = read_console(ctx=DummyContext(), action="get", count=10)
     assert resp == {
         "success": True,
         "data": {"lines": [{"level": "error", "message": "oops", "stacktrace": "trace", "time": "t"}]},
@@ -93,11 +106,12 @@ def test_read_console_truncated(monkeypatch):
             "data": {"lines": [{"level": "error", "message": "oops", "stacktrace": "trace"}]},
         }
 
-    monkeypatch.setattr(read_console_mod, "send_command_with_retry", fake_send)
-    monkeypatch.setattr(
-        read_console_mod, "get_unity_connection", lambda: object())
+    # Patch the send_command_with_retry function in the tools module
+    import tools.read_console
+    monkeypatch.setattr(tools.read_console,
+                        "send_command_with_retry", fake_send)
 
-    resp = read_console(ctx=None, count=10, include_stacktrace=False)
+    resp = read_console(ctx=DummyContext(), action="get", count=10, include_stacktrace=False)
     assert resp == {"success": True, "data": {
         "lines": [{"level": "error", "message": "oops"}]}}
     assert captured["params"]["includeStacktrace"] is False

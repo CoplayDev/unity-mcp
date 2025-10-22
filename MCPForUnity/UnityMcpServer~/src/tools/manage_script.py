@@ -6,7 +6,7 @@ from urllib.parse import urlparse, unquote
 from mcp.server.fastmcp import FastMCP, Context
 
 from registry import mcp_for_unity_tool
-from unity_connection import send_command_with_retry
+import unity_connection
 
 
 def _split_uri(uri: str) -> tuple[str, str]:
@@ -103,7 +103,7 @@ def apply_text_edits(
     warnings: list[str] = []
     if _needs_normalization(edits):
         # Read file to support index->line/col conversion when needed
-        read_resp = send_command_with_retry("manage_script", {
+        read_resp = unity_connection.send_command_with_retry("manage_script", {
             "action": "read",
             "name": name,
             "path": directory,
@@ -304,7 +304,7 @@ def apply_text_edits(
         "options": opts,
     }
     params = {k: v for k, v in params.items() if v is not None}
-    resp = send_command_with_retry("manage_script", params)
+    resp = unity_connection.send_command_with_retry("manage_script", params)
     if isinstance(resp, dict):
         data = resp.setdefault("data", {})
         data.setdefault("normalizedEdits", normalized_edits)
@@ -336,7 +336,7 @@ def apply_text_edits(
                         st = _latest_status()
                         if st and st.get("reloading"):
                             return
-                        send_command_with_retry(
+                        unity_connection.send_command_with_retry(
                             "execute_menu_item",
                             {"menuPath": "MCP/Flip Reload Sentinel"},
                             max_retries=0,
@@ -386,7 +386,7 @@ def create_script(
             contents.encode("utf-8")).decode("utf-8")
         params["contentsEncoded"] = True
     params = {k: v for k, v in params.items() if v is not None}
-    resp = send_command_with_retry("manage_script", params)
+    resp = unity_connection.send_command_with_retry("manage_script", params)
     return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}
 
 
@@ -401,7 +401,7 @@ def delete_script(
     if not directory or directory.split("/")[0].lower() != "assets":
         return {"success": False, "code": "path_outside_assets", "message": "URI must resolve under 'Assets/'."}
     params = {"action": "delete", "name": name, "path": directory}
-    resp = send_command_with_retry("manage_script", params)
+    resp = unity_connection.send_command_with_retry("manage_script", params)
     return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}
 
 
@@ -426,7 +426,7 @@ def validate_script(
         "path": directory,
         "level": level,
     }
-    resp = send_command_with_retry("manage_script", params)
+    resp = unity_connection.send_command_with_retry("manage_script", params)
     if isinstance(resp, dict) and resp.get("success"):
         diags = resp.get("data", {}).get("diagnostics", []) or []
         warnings = sum(1 for d in diags if str(
@@ -473,7 +473,7 @@ def manage_script(
 
         params = {k: v for k, v in params.items() if v is not None}
 
-        response = send_command_with_retry("manage_script", params)
+        response = unity_connection.send_command_with_retry("manage_script", params)
 
         if isinstance(response, dict):
             if response.get("success"):
@@ -541,7 +541,7 @@ def get_sha(
     try:
         name, directory = _split_uri(uri)
         params = {"action": "get_sha", "name": name, "path": directory}
-        resp = send_command_with_retry("manage_script", params)
+        resp = unity_connection.send_command_with_retry("manage_script", params)
         if isinstance(resp, dict) and resp.get("success"):
             data = resp.get("data", {})
             minimal = {"sha256": data.get(

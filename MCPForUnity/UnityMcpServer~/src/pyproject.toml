@@ -11,6 +11,12 @@ dependencies = [
  "tomli>=2.3.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23",
+]
+
 [project.scripts]
 mcp-for-unity = "server:main"
 

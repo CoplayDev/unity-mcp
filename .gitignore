@@ -39,3 +39,5 @@ TestProjects/UnityMCPTests/Packages/packages-lock.json
 # Backup artifacts
 *.backup
 *.backup.meta
+
+.wt-origin-main/

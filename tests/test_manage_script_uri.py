@@ -1,4 +1,4 @@
-import tools.manage_script as manage_script  # type: ignore
+# import triggers registration elsewhere; no direct use here
 import sys
 import types
 from pathlib import Path
@@ -54,18 +54,29 @@ class DummyMCP:
         return _decorator
 
 
-class DummyCtx:  # FastMCP Context placeholder
-    pass
+# (removed unused DummyCtx)
+
+
+from tests.test_helpers import DummyContext
 
 
 def _register_tools():
     mcp = DummyMCP()
-    manage_script.register_manage_script_tools(mcp)  # populates mcp.tools
+    # Import the tools module to trigger decorator registration
+    import tools.manage_script  # trigger decorator registration
+    # Get the registered tools from the registry
+    from registry import get_registered_tools
+    registered_tools = get_registered_tools()
+    # Add all script-related tools to our dummy MCP
+    for tool_info in registered_tools:
+        tool_name = tool_info['name']
+        if any(keyword in tool_name for keyword in ['script', 'apply_text', 'create_script', 'delete_script', 'validate_script', 'get_sha']):
+            mcp.tools[tool_name] = tool_info['func']
     return mcp.tools
 
 
 def test_split_uri_unity_path(monkeypatch):
-    tools = _register_tools()
+    test_tools = _register_tools()
     captured = {}
 
     def fake_send(cmd, params):  # capture params and return success
@@ -73,11 +84,15 @@ def test_split_uri_unity_path(monkeypatch):
         captured['params'] = params
         return {"success": True, "message": "ok"}
 
-    monkeypatch.setattr(manage_script, "send_command_with_retry", fake_send)
+    # Patch the send_command_with_retry function at the module level where it's imported
+    import unity_connection
+    monkeypatch.setattr(unity_connection,
+                        "send_command_with_retry", fake_send)
+    # No need to patch tools.manage_script; it now calls unity_connection.send_command_with_retry
 
-    fn = tools['apply_text_edits']
+    fn = test_tools['apply_text_edits']
     uri = "unity://path/Assets/Scripts/MyScript.cs"
-    fn(DummyCtx(), uri=uri, edits=[], precondition_sha256=None)
+    fn(DummyContext(), uri=uri, edits=[], precondition_sha256=None)
 
     assert captured['cmd'] == 'manage_script'
     assert captured['params']['name'] == 'MyScript'
@@ -97,35 +112,43 @@ def test_split_uri_unity_path(monkeypatch):
     ],
 )
 def test_split_uri_file_urls(monkeypatch, uri, expected_name, expected_path):
-    tools = _register_tools()
+    test_tools = _register_tools()
     captured = {}
 
-    def fake_send(cmd, params):
-        captured['cmd'] = cmd
+    def fake_send(_cmd, params):
+        captured['cmd'] = _cmd
         captured['params'] = params
         return {"success": True, "message": "ok"}
 
-    monkeypatch.setattr(manage_script, "send_command_with_retry", fake_send)
+    # Patch the send_command_with_retry function at the module level where it's imported
+    import unity_connection
+    monkeypatch.setattr(unity_connection,
+                        "send_command_with_retry", fake_send)
+    # No need to patch tools.manage_script; it now calls unity_connection.send_command_with_retry
 
-    fn = tools['apply_text_edits']
-    fn(DummyCtx(), uri=uri, edits=[], precondition_sha256=None)
+    fn = test_tools['apply_text_edits']
+    fn(DummyContext(), uri=uri, edits=[], precondition_sha256=None)
 
     assert captured['params']['name'] == expected_name
     assert captured['params']['path'] == expected_path
 
 
 def test_split_uri_plain_path(monkeypatch):
-    tools = _register_tools()
+    test_tools = _register_tools()
     captured = {}
 
-    def fake_send(cmd, params):
+    def fake_send(_cmd, params):
         captured['params'] = params
         return {"success": True, "message": "ok"}
 
-    monkeypatch.setattr(manage_script, "send_command_with_retry", fake_send)
+    # Patch the send_command_with_retry function at the module level where it's imported
+    import unity_connection
+    monkeypatch.setattr(unity_connection,
+                        "send_command_with_retry", fake_send)
+    # No need to patch tools.manage_script; it now calls unity_connection.send_command_with_retry
 
-    fn = tools['apply_text_edits']
-    fn(DummyCtx(), uri="Assets/Scripts/Thing.cs",
+    fn = test_tools['apply_text_edits']
+    fn(DummyContext(), uri="Assets/Scripts/Thing.cs",
        edits=[], precondition_sha256=None)
 
     assert captured['params']['name'] == 'Thing'

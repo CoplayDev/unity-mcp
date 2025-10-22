@@ -5,6 +5,36 @@
 
 Welcome to the MCP for Unity development environment! This directory contains tools and utilities to streamline MCP for Unity core development.
 
+## 🛠️ Development Setup
+
+### Installing Development Dependencies
+
+To contribute or run tests, you need to install the development dependencies:
+
+```bash
+# Navigate to the server source directory
+cd MCPForUnity/UnityMcpServer~/src
+
+# Install the package in editable mode with dev dependencies
+pip install -e .[dev]
+```
+
+This installs:
+- **Runtime dependencies**: `httpx`, `mcp[cli]`, `pydantic`, `tomli`
+- **Development dependencies**: `pytest`, `pytest-anyio`
+
+### Running Tests
+
+```bash
+# From the repo root
+pytest tests/ -v
+```
+
+Or if you prefer using Python module syntax:
+```bash
+python -m pytest tests/ -v
+```
+
 ## 🚀 Available Development Features
 
 ### ✅ Development Deployment Scripts

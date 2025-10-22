@@ -1,4 +1,3 @@
-from tools.resource_tools import register_resource_tools  # type: ignore
 import sys
 import pathlib
 import asyncio
@@ -39,10 +38,22 @@ class DummyMCP:
         return deco
 
 
+from tests.test_helpers import DummyContext
+
+
 @pytest.fixture()
 def resource_tools():
     mcp = DummyMCP()
-    register_resource_tools(mcp)
+    # Import the tools module to trigger decorator registration
+    import tools.resource_tools
+    # Get the registered tools from the registry
+    from registry import get_registered_tools
+    tools = get_registered_tools()
+    # Add all resource-related tools to our dummy MCP
+    for tool_info in tools:
+        tool_name = tool_info['name']
+        if any(keyword in tool_name for keyword in ['find_in_file', 'list_resources', 'read_resource']):
+            mcp.tools[tool_name] = tool_info['func']
     return mcp.tools
 
 
@@ -59,7 +70,7 @@ def test_read_resource_minimal_metadata_only(resource_tools, tmp_path):
     try:
         resp = loop.run_until_complete(
             read_resource(uri="unity://path/Assets/A.txt",
-                          ctx=None, project_root=str(proj))
+                          ctx=DummyContext(), project_root=str(proj))
         )
     finally:
         loop.close()

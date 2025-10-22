@@ -92,7 +92,7 @@ def write_json(path: pathlib.Path, data: dict) -> None:
 
 
 def build_options(repo_root: pathlib.Path, branch: str, origin_https: str):
-    upstream = "git+https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity"
+    upstream = "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity"
     # Ensure origin is https
     origin = origin_https
     # If origin is a local file path or non-https, try to coerce to https github if possible
@@ -103,9 +103,9 @@ def build_options(repo_root: pathlib.Path, branch: str, origin_https: str):
         origin_remote = origin
     return [
         ("[1] Upstream main", upstream),
-        ("[2] Remote current branch",
+        (f"[2] Remote {branch}",
          f"{origin_remote}?path=/{BRIDGE_SUBPATH}#{branch}"),
-        ("[3] Local workspace",
+        (f"[3] Local {branch}",
          f"file:{(repo_root / BRIDGE_SUBPATH).as_posix()}"),
     ]
 

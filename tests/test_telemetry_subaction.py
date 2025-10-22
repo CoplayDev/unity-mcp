@@ -3,8 +3,43 @@ import importlib
 
 def _get_decorator_module():
     # Import the telemetry_decorator module from the MCP for Unity server src
-    mod = importlib.import_module(
-        "MCPForUnity.UnityMcpServer~.src.telemetry_decorator")
+    import sys
+    import pathlib
+    import types
+    ROOT = pathlib.Path(__file__).resolve().parents[1]
+    SRC = ROOT / "MCPForUnity" / "UnityMcpServer~" / "src"
+    if str(SRC) not in sys.path:
+        sys.path.insert(0, str(SRC))
+    # Remove any previously stubbed module to force real import
+    sys.modules.pop("telemetry_decorator", None)
+    # Preload a minimal telemetry stub to satisfy telemetry_decorator imports
+    tel = types.ModuleType("telemetry")
+    class _MilestoneType:
+        FIRST_TOOL_USAGE = "first_tool_usage"
+        FIRST_SCRIPT_CREATION = "first_script_creation"
+        FIRST_SCENE_MODIFICATION = "first_scene_modification"
+    tel.MilestoneType = _MilestoneType
+    def _noop(*a, **k):
+        pass
+    tel.record_resource_usage = _noop
+    tel.record_tool_usage = _noop
+    tel.record_milestone = _noop
+    tel.get_package_version = lambda: "0.0.0"
+    sys.modules.setdefault("telemetry", tel)
+    mod = importlib.import_module("telemetry_decorator")
+    # Drop stub to avoid bleed-through into other tests
+    sys.modules.pop("telemetry", None)
+    # Ensure attributes exist for monkeypatch targets even if not exported
+    if not hasattr(mod, "record_tool_usage"):
+        def _noop_record_tool_usage(*a, **k):
+            pass
+        mod.record_tool_usage = _noop_record_tool_usage
+    if not hasattr(mod, "record_milestone"):
+        def _noop_record_milestone(*a, **k):
+            pass
+        mod.record_milestone = _noop_record_milestone
+    if not hasattr(mod, "_decorator_log_count"):
+        mod._decorator_log_count = 0
     return mod
 
 
