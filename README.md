@@ -1,4 +1,4 @@
-<img width="676" height="380" alt="MCP for Unity" src="https://github.com/user-attachments/assets/b712e41d-273c-48b2-9041-82bd17ace267" />
+<img width="676" height="380" alt="MCP for Unity" src="logo.png" />
 
 | [English](README.md) | [简体中文](README-zh.md) |
 |----------------------|---------------------------------|
