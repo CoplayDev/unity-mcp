@@ -129,6 +129,22 @@ namespace MCPForUnityTests.Editor.Helpers
         }
 
         [Test]
+        public void DoesNotAddEnvOrDisabled_ForTrae()
+        {
+            var configPath = Path.Combine(_tempRoot, "trae.json");
+            WriteInitialConfig(configPath, isVSCode: false, command: _fakeUvPath, directory: "/old/path");
+
+            var client = new McpClient { name = "Trae", mcpType = McpTypes.Trae };
+            InvokeWriteToConfig(configPath, client);
+
+            var root = JObject.Parse(File.ReadAllText(configPath));
+            var unity = (JObject)root.SelectToken("mcpServers.unityMCP");
+            Assert.NotNull(unity, "Expected mcpServers.unityMCP node");
+            Assert.IsNull(unity["env"], "env should not be added for Trae client");
+            Assert.IsNull(unity["disabled"], "disabled should not be added for Trae client");
+        }
+
+        [Test]
         public void PreservesExistingEnvAndDisabled()
         {
             var configPath = Path.Combine(_tempRoot, "preserve.json");

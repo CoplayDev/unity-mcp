@@ -459,6 +459,16 @@ namespace MCPForUnity.Editor.Services
                     "   OR manually run: claude mcp add UnityMCP\n" +
                     "3. Restart Claude Code",
 
+                McpTypes.Trae =>
+                    "1. Open Trae and go to Settings > MCP\n" +
+                    "2. Select Add Server > Add Manually\n" +
+                    "3. Paste the JSON or point to the mcp.json file\n" +
+                    "   Windows: %AppData%\\Trae\\mcp.json\n" +
+                    "   macOS: ~/Library/Application Support/Trae/mcp.json\n" +
+                    "   Linux: ~/.config/Trae/mcp.json\n" +
+                    "4. For local servers, Node.js (npx) or uvx must be installed\n" +
+                    "5. Save and restart Trae",
+
                 _ => "Configuration steps not available for this client."
             };
 

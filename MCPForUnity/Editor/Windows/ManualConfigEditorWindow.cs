@@ -108,6 +108,13 @@ namespace MCPForUnity.Editor.Windows
                     instructionStyle
                 );
             }
+            else if (mcpClient?.mcpType == McpTypes.Trae)
+            {
+                EditorGUILayout.LabelField(
+                    "    a) Going to Settings > MCP > Add Server > Add Manually",
+                    instructionStyle
+                );
+            }
             EditorGUILayout.LabelField("    OR", instructionStyle);
             EditorGUILayout.LabelField(
                 "    b) Opening the configuration file at:",

@@ -9,5 +9,6 @@ namespace MCPForUnity.Editor.Models
         Kiro,
         VSCode,
         Windsurf,
+        Trae,
     }
 }

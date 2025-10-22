@@ -134,6 +134,31 @@ namespace MCPForUnity.Editor.Data
                 mcpType = McpTypes.VSCode,
                 configStatus = "Not Configured",
             },
+            // Trae IDE
+            new()
+            {
+                name = "Trae",
+                windowsConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "Trae",
+                    "mcp.json"
+                ),
+                macConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    "Library",
+                    "Application Support",
+                    "Trae",
+                    "mcp.json"
+                ),
+                linuxConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".config",
+                    "Trae",
+                    "mcp.json"
+                ),
+                mcpType = McpTypes.Trae,
+                configStatus = "Not Configured",
+            },
             // 3) Kiro
             new()
             {
