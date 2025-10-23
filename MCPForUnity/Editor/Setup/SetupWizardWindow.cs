@@ -120,7 +120,7 @@ namespace MCPForUnity.Editor.Setup
             {
                 // Only show critical warnings when dependencies are actually missing
                 EditorGUILayout.HelpBox(
-                    "⚠️ Missing Dependencies: MCP for Unity requires Python 3.11+ and UV package manager to function properly.",
+                    "\u26A0 Missing Dependencies: MCP for Unity requires Python 3.11+ and UV package manager to function properly.",
                     MessageType.Warning
                 );
 
@@ -278,7 +278,7 @@ namespace MCPForUnity.Editor.Setup
             {
                 bool dismiss = EditorUtility.DisplayDialog(
                     "Skip Setup",
-                    "⚠️ Skipping setup will leave MCP for Unity non-functional!\n\n" +
+                    "\u26A0 Skipping setup will leave MCP for Unity non-functional!\n\n" +
                     "You can restart setup from: Window > MCP for Unity > Setup Wizard (Required)",
                     "Skip Anyway",
                     "Cancel"
