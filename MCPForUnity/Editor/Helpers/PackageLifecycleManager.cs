@@ -32,7 +32,7 @@ namespace MCPForUnity.Editor.Helpers
                 // Check for conditions that require installation/verification
                 bool isFirstTimeInstall = !EditorPrefs.HasKey(LegacyInstallFlagKey) && !hasRunForThisVersion;
                 bool legacyPresent = LegacyRootsExist();
-                bool canonicalMissing = File.Exists(
+                bool canonicalMissing = !File.Exists(
                     Path.Combine(ServerInstaller.GetServerPath(), "server.py")
                 );
 
