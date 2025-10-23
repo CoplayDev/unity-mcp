@@ -226,20 +226,6 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
-        /// Compares two string arrays for equality
-        /// </summary>
-        private static bool ArgsEqual(string[] a, string[] b)
-        {
-            if (a == null || b == null) return a == b;
-            if (a.Length != b.Length) return false;
-            for (int i = 0; i < a.Length; i++)
-            {
-                if (!string.Equals(a[i], b[i], StringComparison.Ordinal)) return false;
-            }
-            return true;
-        }
-
-        /// <summary>
         /// Gets the appropriate config file path for the given MCP client based on OS
         /// </summary>
         public static string GetClientConfigPath(McpClient mcpClient)
