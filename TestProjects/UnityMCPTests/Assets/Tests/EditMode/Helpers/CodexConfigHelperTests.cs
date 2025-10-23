@@ -335,10 +335,7 @@ namespace MCPForUnityTests.Editor.Helpers
                 "[mcp_servers.unityMCP]",
                 "command = \"uv\"",
                 "args = [\"run\", \"--directory\", \"C:\\\\old\\\\path\", \"server.py\"]",
-                "",
-                "[mcp_servers.unityMCP.env]",
-                "CUSTOM_VAR = \"custom_value\"",
-                "ANOTHER_VAR = \"another_value\""
+                "env = {CUSTOM_VAR=\"custom_value\", ANOTHER_VAR=\"another_value\"}"
             });
 
             string uvPath = "C:\\path\\to\\uv.exe";
