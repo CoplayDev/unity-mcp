@@ -18,12 +18,9 @@ namespace MCPForUnity.Editor.Setup
         private DependencyCheckResult _dependencyResult;
         private Vector2 _scrollPosition;
         private int _currentStep = 0;
-        private McpClients _mcpClients;
-        private int _selectedClientIndex = 0;
 
         private readonly string[] _stepTitles = {
             "Setup",
-            "Configure",
             "Complete"
         };
 
@@ -42,14 +39,6 @@ namespace MCPForUnity.Editor.Setup
             {
                 _dependencyResult = DependencyManager.CheckAllDependencies();
             }
-
-            _mcpClients = new McpClients();
-
-            // Check client configurations on startup
-            foreach (var client in _mcpClients.clients)
-            {
-                CheckClientConfiguration(client);
-            }
         }
 
         private void OnGUI()
@@ -62,8 +51,7 @@ namespace MCPForUnity.Editor.Setup
             switch (_currentStep)
             {
                 case 0: DrawSetupStep(); break;
-                case 1: DrawConfigureStep(); break;
-                case 2: DrawCompleteStep(); break;
+                case 1: DrawCompleteStep(); break;
             }
 
             EditorGUILayout.EndScrollView();
@@ -156,8 +144,6 @@ namespace MCPForUnity.Editor.Setup
                 EditorGUILayout.LabelField("All requirements are met. You can proceed to configure your AI clients.", EditorStyles.wordWrappedLabel);
             }
         }
-
-
 
         private void DrawCompleteStep()
         {
@@ -273,85 +259,6 @@ namespace MCPForUnity.Editor.Setup
             EditorGUILayout.EndHorizontal();
         }
 
-        private void DrawConfigureStep()
-        {
-            DrawSectionTitle("AI Client Configuration");
-
-            // Check dependencies first (with caching to avoid heavy operations on every repaint)
-            if (_dependencyResult == null || (DateTime.UtcNow - _dependencyResult.CheckedAt).TotalSeconds > 2)
-            {
-                _dependencyResult = DependencyManager.CheckAllDependencies();
-            }
-            if (!_dependencyResult.IsSystemReady)
-            {
-                DrawErrorStatus("Cannot Configure - System Requirements Not Met");
-
-                EditorGUILayout.HelpBox(
-                    "Client configuration requires system dependencies to be installed first. Please complete setup before proceeding.",
-                    MessageType.Warning
-                );
-
-                if (GUILayout.Button("Go Back to Setup", GUILayout.Height(30)))
-                {
-                    _currentStep = 0;
-                }
-                return;
-            }
-
-            EditorGUILayout.LabelField(
-                "Configure your AI assistants to work with Unity. Select a client below to set it up:",
-                EditorStyles.wordWrappedLabel
-            );
-            EditorGUILayout.Space();
-
-            // Client selection and configuration
-            if (_mcpClients.clients.Count > 0)
-            {
-                // Client selector dropdown
-                string[] clientNames = _mcpClients.clients.Select(c => c.name).ToArray();
-                EditorGUI.BeginChangeCheck();
-                _selectedClientIndex = EditorGUILayout.Popup("Select AI Client:", _selectedClientIndex, clientNames);
-                if (EditorGUI.EndChangeCheck())
-                {
-                    _selectedClientIndex = Mathf.Clamp(_selectedClientIndex, 0, _mcpClients.clients.Count - 1);
-                    // Refresh client status when selection changes
-                    CheckClientConfiguration(_mcpClients.clients[_selectedClientIndex]);
-                }
-
-                EditorGUILayout.Space();
-
-                var selectedClient = _mcpClients.clients[_selectedClientIndex];
-                DrawClientConfigurationInWizard(selectedClient);
-
-                EditorGUILayout.Space();
-
-                // Batch configuration option
-                EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-                EditorGUILayout.LabelField("Quick Setup", EditorStyles.boldLabel);
-                EditorGUILayout.LabelField(
-                    "Automatically configure all detected AI clients at once:",
-                    EditorStyles.wordWrappedLabel
-                );
-                EditorGUILayout.Space();
-
-                if (GUILayout.Button("Configure All Detected Clients", GUILayout.Height(30)))
-                {
-                    ConfigureAllClientsInWizard();
-                }
-                EditorGUILayout.EndVertical();
-            }
-            else
-            {
-                EditorGUILayout.HelpBox("No AI clients detected. Make sure you have Claude Code, Cursor, or VSCode installed.", MessageType.Info);
-            }
-
-            EditorGUILayout.Space();
-            EditorGUILayout.HelpBox(
-                "💡 You might need to restart your AI client after configuring.",
-                MessageType.Info
-            );
-        }
-
         private void DrawFooter()
         {
             EditorGUILayout.Space();
@@ -403,295 +310,6 @@ namespace MCPForUnity.Editor.Setup
 
             GUI.enabled = true;
             EditorGUILayout.EndHorizontal();
-        }
-
-        private void DrawClientConfigurationInWizard(McpClient client)
-        {
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-
-            EditorGUILayout.LabelField($"{client.name} Configuration", EditorStyles.boldLabel);
-            EditorGUILayout.Space();
-
-            // Show current status
-            var statusColor = GetClientStatusColor(client);
-            var originalColor = GUI.color;
-            GUI.color = statusColor;
-            EditorGUILayout.LabelField($"Status: {client.configStatus}", EditorStyles.label);
-            GUI.color = originalColor;
-
-            EditorGUILayout.Space();
-
-            // Configuration buttons
-            EditorGUILayout.BeginHorizontal();
-
-            if (client.mcpType == McpTypes.ClaudeCode)
-            {
-                // Special handling for Claude Code
-                bool claudeAvailable = !string.IsNullOrEmpty(ExecPath.ResolveClaude());
-                if (claudeAvailable)
-                {
-                    bool isConfigured = client.status == McpStatus.Configured;
-                    string buttonText = isConfigured ? "Unregister" : "Register";
-                    if (GUILayout.Button($"{buttonText} with Claude Code"))
-                    {
-                        if (isConfigured)
-                        {
-                            UnregisterFromClaudeCode(client);
-                        }
-                        else
-                        {
-                            RegisterWithClaudeCode(client);
-                        }
-                    }
-                }
-                else
-                {
-                    EditorGUILayout.HelpBox("Claude Code not found. Please install Claude Code first.", MessageType.Warning);
-                    if (GUILayout.Button("Open Claude Code Website"))
-                    {
-                        Application.OpenURL("https://claude.ai/download");
-                    }
-                }
-            }
-            else
-            {
-                // Standard client configuration
-                if (GUILayout.Button($"Configure {client.name}"))
-                {
-                    ConfigureClientInWizard(client);
-                }
-
-                if (GUILayout.Button("Manual Setup"))
-                {
-                    ShowManualSetupInWizard(client);
-                }
-            }
-
-            EditorGUILayout.EndHorizontal();
-            EditorGUILayout.EndVertical();
-        }
-
-        private Color GetClientStatusColor(McpClient client)
-        {
-            return client.status switch
-            {
-                McpStatus.Configured => Color.green,
-                McpStatus.Running => Color.green,
-                McpStatus.Connected => Color.green,
-                McpStatus.IncorrectPath => Color.yellow,
-                McpStatus.CommunicationError => Color.yellow,
-                McpStatus.NoResponse => Color.yellow,
-                _ => Color.red
-            };
-        }
-
-        private void ConfigureClientInWizard(McpClient client)
-        {
-            try
-            {
-                string result = PerformClientConfiguration(client);
-
-                EditorUtility.DisplayDialog(
-                    $"{client.name} Configuration",
-                    result,
-                    "OK"
-                );
-
-                // Refresh client status
-                CheckClientConfiguration(client);
-                Repaint();
-            }
-            catch (System.Exception ex)
-            {
-                EditorUtility.DisplayDialog(
-                    "Configuration Error",
-                    $"Failed to configure {client.name}: {ex.Message}",
-                    "OK"
-                );
-            }
-        }
-
-        private void ConfigureAllClientsInWizard()
-        {
-            int successCount = 0;
-            int totalCount = _mcpClients.clients.Count;
-
-            foreach (var client in _mcpClients.clients)
-            {
-                try
-                {
-                    if (client.mcpType == McpTypes.ClaudeCode)
-                    {
-                        if (!string.IsNullOrEmpty(ExecPath.ResolveClaude()) && client.status != McpStatus.Configured)
-                        {
-                            RegisterWithClaudeCode(client);
-                            successCount++;
-                        }
-                        else if (client.status == McpStatus.Configured)
-                        {
-                            successCount++; // Already configured
-                        }
-                    }
-                    else
-                    {
-                        string result = PerformClientConfiguration(client);
-                        if (result.Contains("success", System.StringComparison.OrdinalIgnoreCase))
-                        {
-                            successCount++;
-                        }
-                    }
-
-                    CheckClientConfiguration(client);
-                }
-                catch (System.Exception ex)
-                {
-                    McpLog.Error($"Failed to configure {client.name}: {ex.Message}");
-                }
-            }
-
-            EditorUtility.DisplayDialog(
-                "Batch Configuration Complete",
-                $"Successfully configured {successCount} out of {totalCount} clients.\n\n" +
-                "Restart your AI clients for changes to take effect.",
-                "OK"
-            );
-
-            Repaint();
-        }
-
-        private void RegisterWithClaudeCode(McpClient client)
-        {
-            try
-            {
-                string pythonDir = McpPathResolver.FindPackagePythonDirectory();
-                string claudePath = ExecPath.ResolveClaude();
-                string uvPath = ExecPath.ResolveUv() ?? "uv";
-
-                string args = $"mcp add UnityMCP -- \"{uvPath}\" run --directory \"{pythonDir}\" server.py";
-
-                if (!ExecPath.TryRun(claudePath, args, null, out var stdout, out var stderr, 15000, McpPathResolver.GetPathPrepend()))
-                {
-                    if ((stdout + stderr).Contains("already exists", System.StringComparison.OrdinalIgnoreCase))
-                    {
-                        CheckClientConfiguration(client);
-                        EditorUtility.DisplayDialog("Claude Code", "MCP for Unity is already registered with Claude Code.", "OK");
-                    }
-                    else
-                    {
-                        throw new System.Exception($"Registration failed: {stderr}");
-                    }
-                }
-                else
-                {
-                    CheckClientConfiguration(client);
-                    EditorUtility.DisplayDialog("Claude Code", "Successfully registered MCP for Unity with Claude Code!", "OK");
-                }
-            }
-            catch (System.Exception ex)
-            {
-                EditorUtility.DisplayDialog("Registration Error", $"Failed to register with Claude Code: {ex.Message}", "OK");
-            }
-        }
-
-        private void UnregisterFromClaudeCode(McpClient client)
-        {
-            try
-            {
-                string claudePath = ExecPath.ResolveClaude();
-                if (ExecPath.TryRun(claudePath, "mcp remove UnityMCP", null, out var stdout, out var stderr, 10000, McpPathResolver.GetPathPrepend()))
-                {
-                    CheckClientConfiguration(client);
-                    EditorUtility.DisplayDialog("Claude Code", "Successfully unregistered MCP for Unity from Claude Code.", "OK");
-                }
-                else
-                {
-                    throw new System.Exception($"Unregistration failed: {stderr}");
-                }
-            }
-            catch (System.Exception ex)
-            {
-                EditorUtility.DisplayDialog("Unregistration Error", $"Failed to unregister from Claude Code: {ex.Message}", "OK");
-            }
-        }
-
-        private string PerformClientConfiguration(McpClient client)
-        {
-            // This mirrors the logic from MCPForUnityEditorWindow.ConfigureMcpClient
-            string configPath = McpConfigurationHelper.GetClientConfigPath(client);
-            string pythonDir = McpPathResolver.FindPackagePythonDirectory();
-
-            if (string.IsNullOrEmpty(pythonDir))
-            {
-                return "Manual configuration required - Python server directory not found.";
-            }
-
-            McpConfigurationHelper.EnsureConfigDirectoryExists(configPath);
-            return McpConfigurationHelper.WriteMcpConfiguration(pythonDir, configPath, client);
-        }
-
-        private void ShowManualSetupInWizard(McpClient client)
-        {
-            string configPath = McpConfigurationHelper.GetClientConfigPath(client);
-            string pythonDir = McpPathResolver.FindPackagePythonDirectory();
-            string uvPath = ServerInstaller.FindUvPath();
-
-            if (string.IsNullOrEmpty(uvPath))
-            {
-                EditorUtility.DisplayDialog("Manual Setup", "UV package manager not found. Please install UV first.", "OK");
-                return;
-            }
-
-            // Build manual configuration using the sophisticated helper logic
-            string result = McpConfigurationHelper.WriteMcpConfiguration(pythonDir, configPath, client);
-            string manualConfig;
-
-            if (result == "Configured successfully")
-            {
-                // Read back the configuration that was written
-                try
-                {
-                    manualConfig = System.IO.File.ReadAllText(configPath);
-                }
-                catch
-                {
-                    manualConfig = "Configuration written successfully, but could not read back for display.";
-                }
-            }
-            else
-            {
-                manualConfig = $"Configuration failed: {result}";
-            }
-
-            EditorUtility.DisplayDialog(
-                $"Manual Setup - {client.name}",
-                $"Configuration file location:\n{configPath}\n\n" +
-                $"Configuration result:\n{manualConfig}",
-                "OK"
-            );
-        }
-
-        private void CheckClientConfiguration(McpClient client)
-        {
-            // Basic status check - could be enhanced to mirror MCPForUnityEditorWindow logic
-            try
-            {
-                string configPath = McpConfigurationHelper.GetClientConfigPath(client);
-                if (System.IO.File.Exists(configPath))
-                {
-                    client.configStatus = "Configured";
-                    client.status = McpStatus.Configured;
-                }
-                else
-                {
-                    client.configStatus = "Not Configured";
-                    client.status = McpStatus.NotConfigured;
-                }
-            }
-            catch
-            {
-                client.configStatus = "Error";
-                client.status = McpStatus.Error;
-            }
         }
 
         private void OpenInstallationUrls()

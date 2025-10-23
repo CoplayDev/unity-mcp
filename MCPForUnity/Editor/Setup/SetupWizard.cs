@@ -107,41 +107,9 @@ namespace MCPForUnity.Editor.Setup
         }
 
         /// <summary>
-        /// Check dependencies and show status
-        /// </summary>
-        [MenuItem("Window/MCP For Unity/Check Dependencies", priority = 2)]
-        public static void CheckDependencies()
-        {
-            var result = DependencyManager.CheckAllDependencies();
-
-            if (!result.IsSystemReady)
-            {
-                bool showWizard = EditorUtility.DisplayDialog(
-                    "MCP for Unity - Dependencies",
-                    $"System Status: {result.Summary}\n\nWould you like to open the Setup Wizard?",
-                    "Open Setup Wizard",
-                    "Close"
-                );
-
-                if (showWizard)
-                {
-                    ShowSetupWizard(result);
-                }
-            }
-            else
-            {
-                EditorUtility.DisplayDialog(
-                    "MCP for Unity - Dependencies",
-                    "✓ All dependencies are available and ready!\n\nMCP for Unity is ready to use.",
-                    "OK"
-                );
-            }
-        }
-
-        /// <summary>
         /// Open MCP Client Configuration window
         /// </summary>
-        [MenuItem("Window/MCP For Unity/Open MCP Window %#m", priority = 3)]
+        [MenuItem("Window/MCP For Unity/Open MCP Window %#m", priority = 2)]
         public static void OpenClientConfiguration()
         {
             Windows.MCPForUnityEditorWindow.ShowWindow();
