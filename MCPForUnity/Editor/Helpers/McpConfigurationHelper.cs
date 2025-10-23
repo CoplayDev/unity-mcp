@@ -107,18 +107,7 @@ namespace MCPForUnity.Editor.Helpers
             if (uvPath == null) return "UV package manager not found. Please install UV first.";
             string serverSrc = McpConfigFileHelper.ResolveServerDirectory(pythonDir, existingArgs);
 
-            // 2) Canonical args order
-            var newArgs = new[] { "run", "--directory", serverSrc, "server.py" };
-
-            // 3) Only write if changed
-            bool changed = !string.Equals(existingCommand, uvPath, StringComparison.Ordinal)
-                || !ArgsEqual(existingArgs, newArgs);
-            if (!changed)
-            {
-                return "Configured successfully"; // nothing to do
-            }
-
-            // 4) Ensure containers exist and write back minimal changes
+            // Ensure containers exist and write back configuration
             JObject existingRoot;
             if (existingConfig is JObject eo)
                 existingRoot = eo;
@@ -191,19 +180,6 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             string serverSrc = McpConfigFileHelper.ResolveServerDirectory(pythonDir, existingArgs);
-            var newArgs = new[] { "run", "--directory", serverSrc, "server.py" };
-
-            bool changed = true;
-            if (!string.IsNullOrEmpty(existingCommand) && existingArgs != null)
-            {
-                changed = !string.Equals(existingCommand, uvPath, StringComparison.Ordinal)
-                    || !ArgsEqual(existingArgs, newArgs);
-            }
-
-            if (!changed)
-            {
-                return "Configured successfully";
-            }
 
             string updatedToml = CodexConfigHelper.UpsertCodexServerBlock(existingToml, uvPath, serverSrc);
 
