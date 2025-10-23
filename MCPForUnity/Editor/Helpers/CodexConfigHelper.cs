@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using MCPForUnity.External.Tommy;
+using MCPForUnity.Editor.Services;
 
 namespace MCPForUnity.Editor.Helpers
 {
@@ -136,6 +137,16 @@ namespace MCPForUnity.Editor.Helpers
             argsArray.Add(new TomlString { Value = serverSrc });
             argsArray.Add(new TomlString { Value = "server.py" });
             unityMCP["args"] = argsArray;
+
+            // Add Windows-specific environment configuration, see: https://github.com/CoplayDev/unity-mcp/issues/315
+            var platformService = MCPServiceLocator.Platform;
+            if (platformService.IsWindows())
+            {
+                var envTable = new TomlTable();
+                string systemRoot = platformService.GetSystemRoot();
+                envTable["SystemRoot"] = new TomlString { Value = systemRoot };
+                unityMCP["env"] = envTable;
+            }
 
             return unityMCP;
         }
