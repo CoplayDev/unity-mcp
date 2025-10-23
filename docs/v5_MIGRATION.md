@@ -15,7 +15,7 @@ Version 5 introduces a new package structure. The package is now installed from 
 3. Find **MCP for Unity** in the list
 4. Click the **Remove** button to uninstall the legacy package
 
-![Uninstalling the legacy package](screenshots/v5_01_uninstall.png)
+![Uninstalling the legacy package](images/v5_01_uninstall.png)
 
 ### Step 2: Install from the New Path
 
@@ -24,18 +24,18 @@ Version 5 introduces a new package structure. The package is now installed from 
 3. Enter the following URL: `https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity`
 4. Click **Add** to install the package
 
-![Installing from the new MCPForUnity path](screenshots/v5_02_install.png)
+![Installing from the new MCPForUnity path](images/v5_02_install.png)
 
 ### Step 3: Rebuild MCP Server
 
 After installing the new package, you need to rebuild the MCP server:
 
 1. In Unity, go to **Window > MCP for Unity > Open MCP Window**
-![Opening the MCP window](screenshots/v5_03_open_mcp_window.png)
+![Opening the MCP window](images/v5_03_open_mcp_window.png)
 2. Click the **Rebuild MCP Server** button
-![Rebuilding the MCP server](screenshots/v5_04_rebuild_mcp_server.png)
+![Rebuilding the MCP server](images/v5_04_rebuild_mcp_server.png)
 3. You should see a success message confirming the rebuild
-![Rebuild success](screenshots/v5_05_rebuild_success.png)
+![Rebuild success](images/v5_05_rebuild_success.png)
 
 ## Verification
 

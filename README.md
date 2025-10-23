@@ -1,4 +1,4 @@
-<img width="676" height="380" alt="MCP for Unity" src="logo.png" />
+<img width="676" height="380" alt="MCP for Unity" src="docs/images/logo.png" />
 
 | [English](README.md) | [简体中文](README-zh.md) |
 |----------------------|---------------------------------|
@@ -68,7 +68,7 @@ MCP for Unity connects your tools using two components:
 
 ### Prerequisites
 
-  *   **Python:** Version 3.12 or newer. [Download Python](https://www.python.org/downloads/)
+  *   **Python:** Version 3.11 or newer. [Download Python](https://www.python.org/downloads/)
   *   **Unity Hub & Editor:** Version 2021.3 LTS or newer. [Download Unity](https://unity.com/download)
   *   **uv (Python toolchain manager):**
       ```bash
@@ -118,7 +118,6 @@ MCP for Unity connects your tools using two components:
     https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity
     ```
 5.  Click `Add`.
-6. The MCP server is installed automatically by the package on first run or via Auto-Setup. If that fails, use Manual Configuration (below).
 
 #### To install via OpenUPM
 
@@ -130,8 +129,6 @@ MCP for Unity connects your tools using two components:
 
 ### 🛠️ Step 2: Configure Your MCP Client
 Connect your MCP Client (Claude, Cursor, etc.) to the Python server set up in Step 1 (auto) or via Manual Configuration (below).
-
-<img width="648" height="599" alt="MCPForUnity-Readme-Image" src="https://github.com/user-attachments/assets/b4a725da-5c43-4bd6-80d6-ee2e3cca9596" />
 
 **Option A: Auto-Setup (Recommended for Claude/Cursor/VSC Copilot)**
 
@@ -273,30 +270,23 @@ On Windows, set `command` to the absolute shim, e.g. `C:\\Users\\YOU\\AppData\\L
 
 ## Development & Contributing 🛠️
 
+### Development Setup and Guidelines
+
+See [README-DEV.md](docs/README-DEV.md) for complete development setup and workflow documentation.
+
 ### Adding Custom Tools
 
 MCP for Unity uses a Python MCP Server tied with Unity's C# scripts for tools. If you'd like to extend the functionality with your own tools, learn how to do so in **[CUSTOM_TOOLS.md](docs/CUSTOM_TOOLS.md)**.
 
-### Contributing to the Project
-
-If you're contributing to MCP for Unity or want to test core changes, we have development tools to streamline your workflow:
-
-- **Development Deployment Scripts**: Quickly deploy and test your changes to MCP for Unity Bridge and Python Server
-- **Automatic Backup System**: Safe testing with easy rollback capabilities  
-- **Hot Reload Workflow**: Fast iteration cycle for core development
-
-📖 **See [README-DEV.md](docs/README-DEV.md)** for complete development setup and workflow documentation.
-
-### Contributing 🤝
-
-Help make MCP for Unity better!
+### How to Contribute
 
 1. **Fork** the main repository.
-2. **Create a branch** (`feature/your-idea` or `bugfix/your-fix`).
-3. **Make changes.**
-4. **Commit** (feat: Add cool new feature).
-5. **Push** your branch.
-6. **Open a Pull Request** against the main branch.
+2. **Create an issue** to discuss your idea or bug.
+3. **Create a branch** (`feature/your-idea` or `bugfix/your-fix`).
+4. **Make changes.**
+5. **Commit** (feat: Add cool new feature).
+6. **Push** your branch.
+7. **Open a Pull Request** against the main branch, referencing the issue you created earlier.
 
 ---
 
@@ -332,8 +322,8 @@ Your privacy matters to us. All telemetry is optional and designed to respect yo
       cd /path/to/your/UnityMCP/UnityMcpServer/src
       uv run server.py
       ```
-- **Auto-Configure Failed:**
-    - Use the Manual Configuration steps. Auto-configure might lack permissions to write to the MCP client's config file.
+- **Configuration Failed:**
+    - Use the Manual Configuration steps. The plugin may lack permissions to write to the MCP client's config file.
 
 </details>  
 
@@ -358,6 +348,8 @@ Coplay offers 2 AI tools for Unity
 - **Coplay** is a premium Unity AI assistant that sits within Unity and is more than the MCP for Unity.
 
 (These tools have different tech stacks. See this blog post [comparing Coplay to MCP for Unity](https://www.coplay.dev/blog/comparing-coplay-and-unity-mcp).)
+
+<img alt="Coplay" src="docs/images/coplay-logo.png" />
 
 ## Disclaimer
 

@@ -2,10 +2,10 @@
 
 > **UI Toolkit-based window with service-oriented architecture**
 
-![New MCP Editor Window Dark](./screenshots/v6_new_ui_dark.png)
+![New MCP Editor Window Dark](./images/v6_new_ui_dark.png)
 *Dark theme*
 
-![New MCP Editor Window Light](./screenshots/v6_new_ui_light.png)
+![New MCP Editor Window Light](./images/v6_new_ui_light.png)
 *Light theme*
 
 ---
@@ -56,7 +56,7 @@ The new MCP Editor Window is a complete rebuild using **UI Toolkit (UXML/USS)** 
 - **Server Download Button** - Asset Store users can download the server from GitHub releases
 - **Dynamic UI** - Shows appropriate button based on installation type
 
-![Asset Store Version](./screenshots/v6_new_ui_asset_store_version.png)
+![Asset Store Version](./images/v6_new_ui_asset_store_version.png)
 *Asset Store version showing the "Download & Install Server" button*
 
 ---
