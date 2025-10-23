@@ -83,22 +83,24 @@ def manage_gameobject(
     def _coerce_vec(value, default=None):
         if value is None:
             return default
-        if isinstance(value, list) and len(value) == 3:
+        import math
+        def _to_vec3(parts):
             try:
-                return [float(value[0]), float(value[1]), float(value[2])]
-            except Exception:
+                vec = [float(parts[0]), float(parts[1]), float(parts[2])]
+            except (ValueError, TypeError):
                 return default
+            return vec if all(math.isfinite(n) for n in vec) else default
+        if isinstance(value, list) and len(value) == 3:
+            return _to_vec3(value)
         if isinstance(value, str):
             s = value.strip()
             # minimal tolerant parse for "[x,y,z]" or "x,y,z"
             if s.startswith("[") and s.endswith("]"):
                 s = s[1:-1]
-            parts = [p.strip() for p in s.split(",")]
+            # support "x,y,z" and "x y z"
+            parts = [p.strip() for p in (s.split(",") if "," in s else s.split())]
             if len(parts) == 3:
-                try:
-                    return [float(parts[0]), float(parts[1]), float(parts[2])]
-                except Exception:
-                    return default
+                return _to_vec3(parts)
         return default
 
     position = _coerce_vec(position, default=position)
@@ -112,6 +114,10 @@ def manage_gameobject(
     includeNonPublicSerialized = _coerce_bool(includeNonPublicSerialized)
 
     try:
+        # Map tag to search_term when search_method is by_tag for backward compatibility
+        if action == "find" and search_method == "by_tag" and tag is not None and search_term is None:
+            search_term = tag
+
         # Validate parameter usage to prevent silent failures
         if action == "find":
             if name is not None:

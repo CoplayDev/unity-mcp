@@ -10,7 +10,7 @@ from unity_connection import send_command_with_retry
     description="Manages shader scripts in Unity (create, read, update, delete)."
 )
 def manage_shader(
-    ctx: Context,x
+    ctx: Context,
     action: Annotated[Literal['create', 'read', 'update', 'delete'], "Perform CRUD operations on shader scripts."],
     name: Annotated[str, "Shader name (no .cs extension)"],
     path: Annotated[str, "Asset path (default: \"Assets/\")"],

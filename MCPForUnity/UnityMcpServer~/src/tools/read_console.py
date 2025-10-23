@@ -16,7 +16,7 @@ def read_console(
     action: Annotated[Literal['get', 'clear'], "Get or clear the Unity Editor console."] | None = None,
     types: Annotated[list[Literal['error', 'warning',
                                   'log', 'all']], "Message types to get"] | None = None,
-    count: Annotated[str, "Max messages to return (pass as quoted string, e.g., '5')"] | None = None,
+    count: Annotated[int | str, "Max messages to return (accepts int or string, e.g., 5 or '5')"] | None = None,
     filter_text: Annotated[str, "Text filter for messages"] | None = None,
     since_timestamp: Annotated[str,
                                "Get messages after this timestamp (ISO 8601)"] | None = None,

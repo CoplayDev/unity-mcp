@@ -13,8 +13,8 @@ def manage_scene(
                     "Scene name. Not required get_active/get_build_settings"] | None = None,
     path: Annotated[str,
                     "Asset path for scene operations (default: 'Assets/')"] | None = None,
-    build_index: Annotated[str,
-                           "Build index for load/build settings actions (pass as quoted string, e.g., '0')"] | None = None,
+    build_index: Annotated[int | str,
+                           "Build index for load/build settings actions (accepts int or string, e.g., 0 or '0')"] | None = None,
 ) -> dict[str, Any]:
     ctx.info(f"Processing manage_scene: {action}")
     try:
