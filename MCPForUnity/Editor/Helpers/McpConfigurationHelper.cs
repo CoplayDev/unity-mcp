@@ -118,6 +118,7 @@ namespace MCPForUnity.Editor.Helpers
 
             string mergedJson = JsonConvert.SerializeObject(existingRoot, jsonSettings);
 
+            McpConfigFileHelper.EnsureConfigDirectoryExists(configPath);
             McpConfigFileHelper.WriteAtomicFile(configPath, mergedJson);
 
             try
@@ -183,6 +184,7 @@ namespace MCPForUnity.Editor.Helpers
 
             string updatedToml = CodexConfigHelper.UpsertCodexServerBlock(existingToml, uvPath, serverSrc);
 
+            McpConfigFileHelper.EnsureConfigDirectoryExists(configPath);
             McpConfigFileHelper.WriteAtomicFile(configPath, updatedToml);
 
             try
