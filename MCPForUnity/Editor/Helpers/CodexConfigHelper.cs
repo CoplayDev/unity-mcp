@@ -27,10 +27,10 @@ namespace MCPForUnity.Editor.Helpers
                 string toml = File.ReadAllText(configPath);
                 if (!TryParseCodexServer(toml, out _, out var args)) return false;
 
-                string dir = McpConfigFileHelper.ExtractDirectoryArg(args);
+                string dir = McpConfigurationHelper.ExtractDirectoryArg(args);
                 if (string.IsNullOrEmpty(dir)) return false;
 
-                return McpConfigFileHelper.PathsEqual(dir, pythonDir);
+                return McpConfigurationHelper.PathsEqual(dir, pythonDir);
             }
             catch
             {

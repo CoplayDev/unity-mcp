@@ -20,7 +20,7 @@ namespace MCPForUnity.Editor.Helpers
         /// </summary>
         public static string FindPackagePythonDirectory(bool debugLogsEnabled = false)
         {
-            string pythonDir = McpConfigFileHelper.ResolveServerSource();
+            string pythonDir = McpConfigurationHelper.ResolveServerSource();
 
             try
             {

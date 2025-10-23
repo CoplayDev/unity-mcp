@@ -176,9 +176,9 @@ namespace MCPForUnity.Editor.Services
 
                 if (configExists)
                 {
-                    string configuredDir = McpConfigFileHelper.ExtractDirectoryArg(args);
+                    string configuredDir = McpConfigurationHelper.ExtractDirectoryArg(args);
                     bool matches = !string.IsNullOrEmpty(configuredDir) &&
-                                   McpConfigFileHelper.PathsEqual(configuredDir, pythonDir);
+                                   McpConfigurationHelper.PathsEqual(configuredDir, pythonDir);
 
                     if (matches)
                     {
@@ -396,7 +396,7 @@ namespace MCPForUnity.Editor.Services
                 if (client.mcpType == McpTypes.Codex)
                 {
                     return CodexConfigHelper.BuildCodexServerBlock(uvPath,
-                        McpConfigFileHelper.ResolveServerDirectory(pythonDir, null));
+                        McpConfigurationHelper.ResolveServerDirectory(pythonDir, null));
                 }
                 else
                 {
