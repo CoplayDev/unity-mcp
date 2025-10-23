@@ -488,6 +488,10 @@ namespace MCPForUnity.Editor.Helpers
                 }
 
                 McpLog.Info($"Server rebuilt successfully at {destRoot} (version {embeddedVer})");
+                
+                // Clear any previous installation error
+                PackageLifecycleManager.ClearLastInstallError();
+                
                 return true;
             }
             catch (Exception ex)

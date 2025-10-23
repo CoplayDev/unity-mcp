@@ -14,6 +14,7 @@ namespace MCPForUnity.Editor.Helpers
     {
         private const string VersionKeyPrefix = "MCPForUnity.InstalledVersion:";
         private const string LegacyInstallFlagKey = "MCPForUnity.ServerInstalled"; // For migration
+        private const string InstallErrorKeyPrefix = "MCPForUnity.InstallError:"; // Stores last installation error
 
         static PackageLifecycleManager()
         {
@@ -83,17 +84,17 @@ namespace MCPForUnity.Editor.Helpers
                 error = ex.Message;
                 capturedEx = ex;
 
-                // Mark as handled to avoid repeated failures
-                EditorPrefs.SetBool(versionKey, true);
-                if (isFirstTimeInstall)
-                {
-                    EditorPrefs.SetBool(LegacyInstallFlagKey, true);
-                }
+                // Store the error for display in the UI, but don't mark as handled
+                // This allows the user to manually rebuild via the "Rebuild Server" button
+                string errorKey = InstallErrorKeyPrefix + version;
+                EditorPrefs.SetString(errorKey, ex.Message ?? "Unknown error");
+                
+                // Don't mark as installed - user needs to manually rebuild
             }
 
             if (!string.IsNullOrEmpty(error))
             {
-                McpLog.Info($"Server check: {error}. Download via Window > MCP For Unity if needed.", always: false);
+                McpLog.Info($"Server installation failed: {error}. Use Window > MCP For Unity > Rebuild Server to retry.", always: false);
             }
         }
 
@@ -197,6 +198,42 @@ namespace MCPForUnity.Editor.Helpers
                         }
                     }
                     catch { }
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Gets the last installation error for the current package version, if any.
+        /// Returns null if there was no error or the error has been cleared.
+        /// </summary>
+        public static string GetLastInstallError()
+        {
+            try
+            {
+                string currentVersion = GetPackageVersion();
+                string errorKey = InstallErrorKeyPrefix + currentVersion;
+                if (EditorPrefs.HasKey(errorKey))
+                {
+                    return EditorPrefs.GetString(errorKey, null);
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        /// <summary>
+        /// Clears the last installation error. Should be called after a successful manual rebuild.
+        /// </summary>
+        public static void ClearLastInstallError()
+        {
+            try
+            {
+                string currentVersion = GetPackageVersion();
+                string errorKey = InstallErrorKeyPrefix + currentVersion;
+                if (EditorPrefs.HasKey(errorKey))
+                {
+                    EditorPrefs.DeleteKey(errorKey);
                 }
             }
             catch { }

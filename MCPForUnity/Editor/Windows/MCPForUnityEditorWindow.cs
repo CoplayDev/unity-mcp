@@ -641,8 +641,15 @@ namespace MCPForUnity.Editor.Windows
                 rebuildServerButton.style.display = DisplayStyle.None;
             }
 
+            // Check for installation errors first
+            string installError = PackageLifecycleManager.GetLastInstallError();
+            if (!string.IsNullOrEmpty(installError))
+            {
+                serverStatusMessage.text = $"\u274C Server installation failed: {installError}. Click 'Rebuild Server' to retry.";
+                serverStatusBanner.style.display = DisplayStyle.Flex;
+            }
             // Update banner
-            if (!hasEmbedded && string.IsNullOrEmpty(installedVer))
+            else if (!hasEmbedded && string.IsNullOrEmpty(installedVer))
             {
                 serverStatusMessage.text = "\u26A0 Server not installed. Click 'Download & Install Server' to get started.";
                 serverStatusBanner.style.display = DisplayStyle.Flex;
