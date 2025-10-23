@@ -36,7 +36,7 @@ MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to 
 * **🧩 Extensible:** Designed to work with various MCP Clients.
 
 <details open>
-  <summary><strong> Available Tools </strong></summary>
+  <summary><strong>Tools</strong></summary>
 
   Your LLM can use functions like:
 
@@ -51,8 +51,18 @@ MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to 
   * `apply_text_edits`: Precise text edits with precondition hashes and atomic multi-edit batches.
   * `script_apply_edits`: Structured C# method/class edits (insert/replace/delete) with safer boundaries.
   * `validate_script`: Fast validation (basic/standard) to catch syntax/structure issues before/after writes.
+  * `run_test`: Runs a tests in the Unity Editor.
 </details>
 
+
+<details open>
+  <summary><strong>Resources</strong></summary>
+
+  Your LLM can retrieve the following resources:
+
+  * `menu_items`: Retrieves all available menu items in the Unity Editor.
+  * `tests`: Retrieves all available tests in the Unity Editor. Can select tests of a specific type (e.g., "EditMode", "PlayMode").
+</details>
 ---
 
 ## How It Works 
