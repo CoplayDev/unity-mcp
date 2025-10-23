@@ -63,8 +63,19 @@ namespace MCPForUnity.Editor.Helpers
             }
             var mcpServers = root["mcp_servers"] as TomlTable;
 
-            // Create or update unityMCP table
-            mcpServers["unityMCP"] = CreateUnityMcpTable(uvPath, serverSrc);
+            // Extract existing env table if unityMCP already exists
+            TomlTable existingEnvTable = null;
+            if (mcpServers.TryGetNode("unityMCP", out var existingUnityMcpNode) && existingUnityMcpNode is TomlTable)
+            {
+                var existingUnityMcp = existingUnityMcpNode as TomlTable;
+                if (existingUnityMcp.TryGetNode("env", out var envNode) && envNode is TomlTable)
+                {
+                    existingEnvTable = envNode as TomlTable;
+                }
+            }
+
+            // Create or update unityMCP table, preserving existing env table
+            mcpServers["unityMCP"] = CreateUnityMcpTable(uvPath, serverSrc, existingEnvTable);
 
             // Serialize back to TOML
             using var writer = new StringWriter();
@@ -126,7 +137,10 @@ namespace MCPForUnity.Editor.Helpers
         /// <summary>
         /// Creates a TomlTable for the unityMCP server configuration
         /// </summary>
-        private static TomlTable CreateUnityMcpTable(string uvPath, string serverSrc)
+        /// <param name="uvPath">Path to uv executable</param>
+        /// <param name="serverSrc">Path to server source directory</param>
+        /// <param name="existingEnvTable">Optional existing env table to preserve user-defined variables</param>
+        private static TomlTable CreateUnityMcpTable(string uvPath, string serverSrc, TomlTable existingEnvTable = null)
         {
             var unityMCP = new TomlTable();
             unityMCP["command"] = new TomlString { Value = uvPath };
@@ -142,10 +156,25 @@ namespace MCPForUnity.Editor.Helpers
             var platformService = MCPServiceLocator.Platform;
             if (platformService.IsWindows())
             {
-                var envTable = new TomlTable();
+                // Reuse existing env table (from parameter or unityMCP) to avoid dropping user keys
+                TomlTable envTable;
+                if (existingEnvTable != null)
+                    envTable = existingEnvTable;
+                else if (unityMCP.TryGetNode("env", out var envNode) && envNode is TomlTable existing)
+                    envTable = existing;
+                else
+                    envTable = new TomlTable();
+
                 string systemRoot = platformService.GetSystemRoot();
-                envTable["SystemRoot"] = new TomlString { Value = systemRoot };
+                if (!string.IsNullOrEmpty(systemRoot))
+                    envTable["SystemRoot"] = new TomlString { Value = systemRoot };
+
                 unityMCP["env"] = envTable;
+            }
+            else if (existingEnvTable != null)
+            {
+                // Preserve existing env table even on non-Windows platforms
+                unityMCP["env"] = existingEnvTable;
             }
 
             return unityMCP;
