@@ -126,7 +126,7 @@ namespace MCPForUnity.Editor.Dependencies
             {
                 if (dep.Name == "Python")
                 {
-                    result.RecommendedActions.Add($"Install Python 3.10+ from: {detector.GetPythonInstallUrl()}");
+                    result.RecommendedActions.Add($"Install Python 3.11+ from: {detector.GetPythonInstallUrl()}");
                 }
                 else if (dep.Name == "UV Package Manager")
                 {

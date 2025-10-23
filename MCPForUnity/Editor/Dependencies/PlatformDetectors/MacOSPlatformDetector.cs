@@ -35,8 +35,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                     "/opt/homebrew/bin/python3",
                     "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3",
                     "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3",
-                    "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3",
-                    "/Library/Frameworks/Python.framework/Versions/3.10/bin/python3"
+                    "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3"
                 };
 
                 foreach (var candidate in candidates)
@@ -65,7 +64,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                     }
                 }
 
-                status.ErrorMessage = "Python not found. Please install Python 3.10 or later.";
+                status.ErrorMessage = "Python not found. Please install Python 3.11 or later.";
                 status.Details = "Checked common installation paths including Homebrew, Framework, and system locations.";
             }
             catch (Exception ex)
@@ -144,10 +143,10 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
                     version = output.Substring(7); // Remove "Python " prefix
                     fullPath = pythonPath;
 
-                    // Validate minimum version (Python 4+ or Python 3.10+)
+                    // Validate minimum version (Python 4+ or Python 3.11+)
                     if (TryParseVersion(version, out var major, out var minor))
                     {
-                        return major > 3 || (major >= 3 && minor >= 10);
+                        return major > 3 || (major >= 3 && minor >= 11);
                     }
                 }
             }

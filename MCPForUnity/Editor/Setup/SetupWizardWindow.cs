@@ -120,7 +120,7 @@ namespace MCPForUnity.Editor.Setup
             {
                 // Only show critical warnings when dependencies are actually missing
                 EditorGUILayout.HelpBox(
-                    "⚠️ Missing Dependencies: MCP for Unity requires Python 3.10+ and UV package manager to function properly.",
+                    "⚠️ Missing Dependencies: MCP for Unity requires Python 3.11+ and UV package manager to function properly.",
                     MessageType.Warning
                 );
 
