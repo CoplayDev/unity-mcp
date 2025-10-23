@@ -4,7 +4,7 @@ MCP Tools package - Auto-discovers and registers all tools in this directory.
 import logging
 from pathlib import Path
 
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 from telemetry_decorator import telemetry_tool
 
 from registry import get_registered_tools

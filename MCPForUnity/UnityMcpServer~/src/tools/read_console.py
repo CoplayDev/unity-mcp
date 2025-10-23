@@ -3,34 +3,48 @@ Defines the read_console tool for accessing Unity Editor console messages.
 """
 from typing import Annotated, Any, Literal
 
-from mcp.server.fastmcp import Context
+from fastmcp import Context
 from registry import mcp_for_unity_tool
 from unity_connection import send_command_with_retry
 
 
 @mcp_for_unity_tool(
-    description="Gets messages from or clears the Unity Editor console."
+    description="Gets messages from or clears the Unity Editor console. Note: For maximum client compatibility, pass count as a quoted string (e.g., '5')."
 )
 def read_console(
     ctx: Context,
     action: Annotated[Literal['get', 'clear'], "Get or clear the Unity Editor console."] | None = None,
     types: Annotated[list[Literal['error', 'warning',
                                   'log', 'all']], "Message types to get"] | None = None,
-    count: Annotated[int, "Max messages to return"] | None = None,
+    count: Annotated[int | str, "Max messages to return (accepts int or string, e.g., 5 or '5')"] | None = None,
     filter_text: Annotated[str, "Text filter for messages"] | None = None,
     since_timestamp: Annotated[str,
                                "Get messages after this timestamp (ISO 8601)"] | None = None,
     format: Annotated[Literal['plain', 'detailed',
                               'json'], "Output format"] | None = None,
-    include_stacktrace: Annotated[bool,
-                                  "Include stack traces in output"] | None = None
+    include_stacktrace: Annotated[bool | str,
+                                  "Include stack traces in output (accepts true/false or 'true'/'false')"] | None = None
 ) -> dict[str, Any]:
     ctx.info(f"Processing read_console: {action}")
     # Set defaults if values are None
     action = action if action is not None else 'get'
     types = types if types is not None else ['error', 'warning', 'log']
     format = format if format is not None else 'detailed'
-    include_stacktrace = include_stacktrace if include_stacktrace is not None else True
+    # Coerce booleans defensively (strings like 'true'/'false')
+    def _coerce_bool(value, default=None):
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            v = value.strip().lower()
+            if v in ("true", "1", "yes", "on"):
+                return True
+            if v in ("false", "0", "no", "off"):
+                return False
+        return bool(value)
+
+    include_stacktrace = _coerce_bool(include_stacktrace, True)
 
     # Normalize action if it's a string
     if isinstance(action, str):

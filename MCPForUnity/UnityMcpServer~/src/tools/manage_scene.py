@@ -1,11 +1,11 @@
 from typing import Annotated, Literal, Any
 
-from mcp.server.fastmcp import Context
+from fastmcp import Context
 from registry import mcp_for_unity_tool
 from unity_connection import send_command_with_retry
 
 
-@mcp_for_unity_tool(description="Manage Unity scenes")
+@mcp_for_unity_tool(description="Manage Unity scenes. Tip: For broad client compatibility, pass build_index as a quoted string (e.g., '0').")
 def manage_scene(
     ctx: Context,
     action: Annotated[Literal["create", "load", "save", "get_hierarchy", "get_active", "get_build_settings"], "Perform CRUD operations on Unity scenes."],
@@ -13,8 +13,8 @@ def manage_scene(
                     "Scene name. Not required get_active/get_build_settings"] | None = None,
     path: Annotated[str,
                     "Asset path for scene operations (default: 'Assets/')"] | None = None,
-    build_index: Annotated[int,
-                           "Build index for load/build settings actions"] | None = None,
+    build_index: Annotated[int | str,
+                           "Build index for load/build settings actions (accepts int or string, e.g., 0 or '0')"] | None = None,
 ) -> dict[str, Any]:
     ctx.info(f"Processing manage_scene: {action}")
     try:

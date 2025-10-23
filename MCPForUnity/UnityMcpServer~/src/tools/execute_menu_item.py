@@ -3,7 +3,7 @@ Defines the execute_menu_item tool for executing and reading Unity Editor menu i
 """
 from typing import Annotated, Any
 
-from mcp.server.fastmcp import Context
+from fastmcp import Context
 
 from models import MCPResponse
 from registry import mcp_for_unity_tool

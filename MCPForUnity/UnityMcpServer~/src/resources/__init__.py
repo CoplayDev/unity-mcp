@@ -4,7 +4,7 @@ MCP Resources package - Auto-discovers and registers all resources in this direc
 import logging
 from pathlib import Path
 
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 from telemetry_decorator import telemetry_resource
 
 from registry import get_registered_resources

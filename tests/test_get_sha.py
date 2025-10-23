@@ -1,34 +1,17 @@
 import sys
 import pathlib
 import importlib.util
-import types
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SRC = ROOT / "MCPForUnity" / "UnityMcpServer~" / "src"
 sys.path.insert(0, str(SRC))
 
-# stub mcp.server.fastmcp to satisfy imports without full dependency
-mcp_pkg = types.ModuleType("mcp")
-server_pkg = types.ModuleType("mcp.server")
-fastmcp_pkg = types.ModuleType("mcp.server.fastmcp")
-
-
-class _Dummy:
-    pass
-
-
-fastmcp_pkg.FastMCP = _Dummy
-fastmcp_pkg.Context = _Dummy
-server_pkg.fastmcp = fastmcp_pkg
-mcp_pkg.server = server_pkg
-sys.modules.setdefault("mcp", mcp_pkg)
-sys.modules.setdefault("mcp.server", server_pkg)
-sys.modules.setdefault("mcp.server.fastmcp", fastmcp_pkg)
-
 
 def _load_module(path: pathlib.Path, name: str):
     spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load module {name} from {path}")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

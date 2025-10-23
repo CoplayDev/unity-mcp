@@ -11,7 +11,7 @@ import re
 from typing import Annotated, Any
 from urllib.parse import urlparse, unquote
 
-from mcp.server.fastmcp import Context
+from fastmcp import Context
 
 from registry import mcp_for_unity_tool
 from unity_connection import send_command_with_retry
@@ -190,13 +190,13 @@ async def list_resources(
 async def read_resource(
     ctx: Context,
     uri: Annotated[str, "The resource URI to read under Assets/"],
-    start_line: Annotated[int,
+    start_line: Annotated[int | float | str,
                           "The starting line number (0-based)"] | None = None,
-    line_count: Annotated[int,
+    line_count: Annotated[int | float | str,
                           "The number of lines to read"] | None = None,
-    head_bytes: Annotated[int,
+    head_bytes: Annotated[int | float | str,
                           "The number of bytes to read from the start of the file"] | None = None,
-    tail_lines: Annotated[int,
+    tail_lines: Annotated[int | float | str,
                           "The number of lines to read from the end of the file"] | None = None,
     project_root: Annotated[str,
                             "The project root directory"] | None = None,
@@ -351,7 +351,7 @@ async def find_in_file(
     ctx: Context,
     uri: Annotated[str, "The resource URI to search under Assets/ or file path form supported by read_resource"],
     pattern: Annotated[str, "The regex pattern to search for"],
-    ignore_case: Annotated[bool, "Case-insensitive search"] | None = True,
+    ignore_case: Annotated[bool | str, "Case-insensitive search (accepts true/false or 'true'/'false')"] | None = True,
     project_root: Annotated[str,
                             "The project root directory"] | None = None,
     max_results: Annotated[int,
@@ -365,6 +365,20 @@ async def find_in_file(
             return {"success": False, "error": f"Resource not found: {uri}"}
 
         text = p.read_text(encoding="utf-8")
+        # Tolerant boolean coercion for clients that stringify booleans
+        def _coerce_bool(val, default=None):
+            if val is None:
+                return default
+            if isinstance(val, bool):
+                return val
+            if isinstance(val, str):
+                v = val.strip().lower()
+                if v in ("true", "1", "yes", "on"):
+                    return True
+                if v in ("false", "0", "no", "off"):
+                    return False
+            return bool(val)
+        ignore_case = _coerce_bool(ignore_case, default=True)
         flags = re.MULTILINE
         if ignore_case:
             flags |= re.IGNORECASE

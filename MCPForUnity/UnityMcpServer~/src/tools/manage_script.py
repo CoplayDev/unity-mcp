@@ -3,7 +3,7 @@ import os
 from typing import Annotated, Any, Literal
 from urllib.parse import urlparse, unquote
 
-from mcp.server.fastmcp import FastMCP, Context
+from fastmcp import FastMCP, Context
 
 from registry import mcp_for_unity_tool
 import unity_connection

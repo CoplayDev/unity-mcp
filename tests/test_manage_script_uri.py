@@ -21,10 +21,8 @@ if SRC is None:
     )
 sys.path.insert(0, str(SRC))
 
-# Stub mcp.server.fastmcp to satisfy imports without full package
-mcp_pkg = types.ModuleType("mcp")
-server_pkg = types.ModuleType("mcp.server")
-fastmcp_pkg = types.ModuleType("mcp.server.fastmcp")
+# Stub fastmcp to avoid real MCP deps
+fastmcp_pkg = types.ModuleType("fastmcp")
 
 
 class _Dummy:
@@ -33,11 +31,7 @@ class _Dummy:
 
 fastmcp_pkg.FastMCP = _Dummy
 fastmcp_pkg.Context = _Dummy
-server_pkg.fastmcp = fastmcp_pkg
-mcp_pkg.server = server_pkg
-sys.modules.setdefault("mcp", mcp_pkg)
-sys.modules.setdefault("mcp.server", server_pkg)
-sys.modules.setdefault("mcp.server.fastmcp", fastmcp_pkg)
+sys.modules.setdefault("fastmcp", fastmcp_pkg)
 
 
 # Import target module after path injection

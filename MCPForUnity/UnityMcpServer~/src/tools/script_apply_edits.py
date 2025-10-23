@@ -3,7 +3,7 @@ import hashlib
 import re
 from typing import Annotated, Any
 
-from mcp.server.fastmcp import Context
+from fastmcp import Context
 
 from registry import mcp_for_unity_tool
 from unity_connection import send_command_with_retry
