@@ -97,22 +97,5 @@ namespace MCPForUnity.Editor.Setup
             McpLog.Info("Setup marked as dismissed");
         }
 
-        /// <summary>
-        /// Force show setup wizard (for manual invocation)
-        /// </summary>
-        [MenuItem("Window/MCP For Unity/Setup Wizard", priority = 1)]
-        public static void ShowSetupWizardManual()
-        {
-            ShowSetupWizard();
-        }
-
-        /// <summary>
-        /// Open MCP Client Configuration window
-        /// </summary>
-        [MenuItem("Window/MCP For Unity/Open MCP Window %#m", priority = 2)]
-        public static void OpenClientConfiguration()
-        {
-            Windows.MCPForUnityEditorWindow.ShowWindow();
-        }
     }
 }
