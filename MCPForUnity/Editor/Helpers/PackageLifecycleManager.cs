@@ -52,7 +52,6 @@ namespace MCPForUnity.Editor.Helpers
         private static void PerformInstallation(string version, string versionKey, bool isFirstTimeInstall)
         {
             string error = null;
-            System.Exception capturedEx = null;
 
             try
             {
@@ -82,7 +81,6 @@ namespace MCPForUnity.Editor.Helpers
             catch (System.Exception ex)
             {
                 error = ex.Message;
-                capturedEx = ex;
 
                 // Store the error for display in the UI, but don't mark as handled
                 // This allows the user to manually rebuild via the "Rebuild Server" button
