@@ -207,7 +207,7 @@ We provide a CI job to run a Natural Language Editing suite against the Unity te
 
 ***To run it***
 
- - Trigger: In GitHun "Actions" for the repo, trigger `workflow dispatch` (`Claude NL/T Full Suite (Unity live)`).
+ - Trigger: In GitHub "Actions" for the repo, trigger `workflow dispatch` (`Claude NL/T Full Suite (Unity live)`).
  - Image: `UNITY_IMAGE` (UnityCI) pulled by tag; the job resolves a digest at runtime. Logs are sanitized.
  - Execution: single pass with immediate per‑test fragment emissions (strict single `<testcase>` per file). A placeholder guard fails fast if any fragment is a bare ID. Staging (`reports/_staging`) is promoted to `reports/` to reduce partial writes.
  - Reports: JUnit at `reports/junit-nl-suite.xml`, Markdown at `reports/junit-nl-suite.md`.

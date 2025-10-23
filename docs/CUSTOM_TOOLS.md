@@ -122,7 +122,7 @@ namespace MyProject.Editor.CustomTools
 
 Here's a complete example showing how to create a screenshot capture tool.
 
-### Python File (`Assets/Editor/images/Python/screenshot_tool.py`)
+### Python File (`Assets/Editor/Screenshots/Python/screenshot_tool.py`)
 
 ```python
 from typing import Annotated, Any
@@ -158,7 +158,7 @@ async def capture_screenshot(
 2. Add `screenshot_tool.py` to the **Python Files** list
 3. The file will automatically sync to the MCP server
 
-### C# Handler (`Assets/Editor/images/CaptureScreenshotTool.cs`)
+### C# Handler (`Assets/Editor/Screenshots/CaptureScreenshotTool.cs`)
 
 ```csharp
 using System.IO;
