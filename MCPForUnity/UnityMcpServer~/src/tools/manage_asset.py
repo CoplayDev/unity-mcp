@@ -39,7 +39,7 @@ async def manage_asset(
         try:
             properties = json.loads(properties)
             ctx.info("manage_asset: coerced properties from JSON string to dict")
-        except Exception as e:
+        except json.JSONDecodeError as e:
             ctx.warn(f"manage_asset: failed to parse properties JSON string: {e}")
             # Leave properties as-is; Unity side may handle defaults
     # Ensure properties is a dict if None

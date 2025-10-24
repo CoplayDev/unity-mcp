@@ -45,6 +45,7 @@ def manage_gameobject(
                                     "List of component names to remove"] | None = None,
     component_properties: Annotated[dict[str, dict[str, Any]] | str,
                                     """Dictionary of component names to their properties to set. For example:
+                                    Can also be provided as a JSON string representation of the dict.
                                     `{"MyScript": {"otherObject": {"find": "Player", "method": "by_name"}}}` assigns GameObject
                                     `{"MyScript": {"playerHealth": {"find": "Player", "component": "HealthComponent"}}}` assigns Component
                                     Example set nested property:
@@ -119,8 +120,8 @@ def manage_gameobject(
         try:
             component_properties = json.loads(component_properties)
             ctx.info("manage_gameobject: coerced component_properties from JSON string to dict")
-        except Exception as e:
-            ctx.warn(f"manage_gameobject: failed to parse component_properties JSON string: {e}")
+        except json.JSONDecodeError as e:
+            return {"success": False, "message": f"Invalid JSON in component_properties: {e}"}
     try:
         # Map tag to search_term when search_method is by_tag for backward compatibility
         if action == "find" and search_method == "by_tag" and tag is not None and search_term is None:

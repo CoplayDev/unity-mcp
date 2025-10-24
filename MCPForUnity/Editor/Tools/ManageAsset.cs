@@ -64,19 +64,7 @@ namespace MCPForUnity.Editor.Tools
             string path = @params["path"]?.ToString();
 
             // Coerce string JSON to JObject for 'properties' if provided as a JSON string
-            var propertiesToken = @params["properties"];
-            if (propertiesToken != null && propertiesToken.Type == JTokenType.String)
-            {
-                try
-                {
-                    var parsed = JObject.Parse(propertiesToken.ToString());
-                    @params["properties"] = parsed;
-                }
-                catch (Exception e)
-                {
-                    Debug.LogWarning($"[ManageAsset] Could not parse 'properties' JSON string: {e.Message}");
-                }
-            }
+            JsonUtil.CoerceJsonStringParameter(@params, "properties");
 
             try
             {
