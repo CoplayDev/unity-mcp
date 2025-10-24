@@ -168,7 +168,10 @@ Available tools:\n
 - `manage_gameobject`: Manages GameObjects in the scene.\n
 - `manage_script`: Manages C# script files.\n
 - `manage_asset`: Manages prefabs and assets.\n
-- `manage_shader`: Manages shaders.\n\n
+- `manage_shader`: Manages shaders.\n
+- `apply_text_edits`: Precise text edits with precondition hashes and atomic multi-edit batches.\n
+- `script_apply_edits`: Structured C# method/class edits (insert/replace/delete) with safer boundaries.\n
+- `validate_script`: Fast validation (basic/standard) to catch syntax/structure issues before/after writes.\n\n
 - Tips:\n
 - Create prefabs for reusable GameObjects.\n
 - Always include a camera and main light in your scenes.\n
