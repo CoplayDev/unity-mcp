@@ -162,18 +162,17 @@ If Auto-Setup fails or you use a different client:
 **Claude Code**
 
 If you're using Claude Code, you can register the MCP server using the below commands:
-🚨**make sure to run these from your Unity project's home directory**🚨
 
 **macOS:**
 
 ```bash
-claude mcp add UnityMCP -- uv --directory /Users/USERNAME/Library/AppSupport/UnityMCP/UnityMcpServer/src run server.py
+claude mcp add --scope user UnityMCP -- uv --directory /Users/USERNAME/Library/AppSupport/UnityMCP/UnityMcpServer/src run server.py
 ```
 
 **Windows:**
 
 ```bash
-claude mcp add UnityMCP -- "C:/Users/USERNAME/AppData/Local/Microsoft/WinGet/Links/uv.exe" --directory "C:/Users/USERNAME/AppData/Local/UnityMCP/UnityMcpServer/src" run server.py
+claude mcp add --scope user UnityMCP -- "C:/Users/USERNAME/AppData/Local/Microsoft/WinGet/Links/uv.exe" --directory "C:/Users/USERNAME/AppData/Local/UnityMCP/UnityMcpServer/src" run server.py
 ```
 **VSCode (all OS)**
 
