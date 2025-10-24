@@ -88,7 +88,8 @@ namespace MCPForUnity.Editor.Tools
                     case "create":
                         return CreateAsset(@params);
                     case "modify":
-                        return ModifyAsset(path, @params["properties"] as JObject);
+                        var properties = @params["properties"] as JObject;
+                        return ModifyAsset(path, properties);
                     case "delete":
                         return DeleteAsset(path);
                     case "duplicate":
@@ -988,28 +989,43 @@ namespace MCPForUnity.Editor.Tools
                     }
                 }
             }
-            // Example: Set texture property
-            if (properties["texture"] is JObject texProps)
+            // Example: Set texture property (case-insensitive key and subkeys)
             {
-                string propName = texProps["name"]?.ToString() ?? "_MainTex"; // Default main texture
-                string texPath = texProps["path"]?.ToString();
-                if (!string.IsNullOrEmpty(texPath))
+                JObject texProps = null;
+                var direct = properties.Property("texture");
+                if (direct != null && direct.Value is JObject t0) texProps = t0;
+                if (texProps == null)
                 {
-                    Texture newTex = AssetDatabase.LoadAssetAtPath<Texture>(
-                        AssetPathUtility.SanitizeAssetPath(texPath)
-                    );
-                    if (
-                        newTex != null
-                        && mat.HasProperty(propName)
-                        && mat.GetTexture(propName) != newTex
-                    )
+                    var ci = properties.Properties().FirstOrDefault(
+                        p => string.Equals(p.Name, "texture", StringComparison.OrdinalIgnoreCase));
+                    if (ci != null && ci.Value is JObject t1) texProps = t1;
+                }
+                if (texProps != null)
+                {
+                    string rawName = (texProps["name"] ?? texProps["Name"])?.ToString();
+                    string texPath = (texProps["path"] ?? texProps["Path"])?.ToString();
+                    if (!string.IsNullOrEmpty(texPath))
                     {
-                        mat.SetTexture(propName, newTex);
-                        modified = true;
-                    }
-                    else if (newTex == null)
-                    {
-                        Debug.LogWarning($"Texture not found at path: {texPath}");
+                        var newTex = AssetDatabase.LoadAssetAtPath<Texture>(
+                            AssetPathUtility.SanitizeAssetPath(texPath));
+                        if (newTex == null)
+                        {
+                            Debug.LogWarning($"Texture not found at path: {texPath}");
+                        }
+                        else
+                        {
+                            // Reuse alias resolver so friendly names like 'albedo' work here too
+                            string candidateName = string.IsNullOrEmpty(rawName) ? "_BaseMap" : rawName;
+                            string targetProp = ResolvePropertyName(candidateName);
+                            if (!string.IsNullOrEmpty(targetProp) && mat.HasProperty(targetProp))
+                            {
+                                if (mat.GetTexture(targetProp) != newTex)
+                                {
+                                    mat.SetTexture(targetProp, newTex);
+                                    modified = true;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1026,15 +1042,20 @@ namespace MCPForUnity.Editor.Tools
 			{
 				if (string.IsNullOrEmpty(name)) return name;
 				string[] candidates;
-				switch (name)
+				var lower = name.ToLowerInvariant();
+				switch (lower)
 				{
-					case "_Color": candidates = new[] { "_Color", "_BaseColor" }; break;
-					case "_BaseColor": candidates = new[] { "_BaseColor", "_Color" }; break;
-					case "_MainTex": candidates = new[] { "_MainTex", "_BaseMap" }; break;
-					case "_BaseMap": candidates = new[] { "_BaseMap", "_MainTex" }; break;
-					case "_Glossiness": candidates = new[] { "_Glossiness", "_Smoothness" }; break;
-					case "_Smoothness": candidates = new[] { "_Smoothness", "_Glossiness" }; break;
-					default: candidates = new[] { name }; break;
+					case "_color": candidates = new[] { "_Color", "_BaseColor" }; break;
+					case "_basecolor": candidates = new[] { "_BaseColor", "_Color" }; break;
+					case "_maintex": candidates = new[] { "_MainTex", "_BaseMap" }; break;
+					case "_basemap": candidates = new[] { "_BaseMap", "_MainTex" }; break;
+					case "_glossiness": candidates = new[] { "_Glossiness", "_Smoothness" }; break;
+					case "_smoothness": candidates = new[] { "_Smoothness", "_Glossiness" }; break;
+					// Friendly names → shader property names
+					case "metallic": candidates = new[] { "_Metallic" }; break;
+					case "smoothness": candidates = new[] { "_Smoothness", "_Glossiness" }; break;
+					case "albedo": candidates = new[] { "_BaseMap", "_MainTex" }; break;
+					default: candidates = new[] { name }; break; // keep original as-is
 				}
 				foreach (var candidate in candidates)
 				{

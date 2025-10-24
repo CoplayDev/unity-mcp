@@ -178,9 +178,12 @@ def test_manage_asset_prefab_modify_request(monkeypatch):
         return {"success": True}
 
     # Patch the async function in the tools module
-    import tools.manage_asset
-    monkeypatch.setattr(tools.manage_asset,
+    import tools.manage_asset as tools_manage_asset
+    # Patch both at the module and at the function closure location
+    monkeypatch.setattr(tools_manage_asset,
                         "async_send_command_with_retry", fake_async)
+    # Also patch the globals of the function object (handles dynamically loaded module alias)
+    manage_asset.__globals__["async_send_command_with_retry"] = fake_async
 
     async def run():
         resp = await manage_asset(
