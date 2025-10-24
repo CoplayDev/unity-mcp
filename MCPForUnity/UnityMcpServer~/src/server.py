@@ -157,7 +157,26 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
 # Initialize MCP server
 mcp = FastMCP(
     name="mcp-for-unity-server",
-    lifespan=server_lifespan
+    lifespan=server_lifespan,
+    instructions="""
+This server provides tools to interact with the Unity Game Engine Editor.\n\n
+Available tools:\n
+- `manage_editor`: Controls editor state and queries info.\n
+- `execute_menu_item`: Executes, lists and checks for the existence of Unity Editor menu items.\n
+- `read_console`: Reads or clears Unity console messages, with filtering options.\n
+- `manage_scene`: Manages scenes.\n
+- `manage_gameobject`: Manages GameObjects in the scene.\n
+- `manage_script`: Manages C# script files.\n
+- `manage_asset`: Manages prefabs and assets.\n
+- `manage_shader`: Manages shaders.\n\n
+- Tips:\n
+- Create prefabs for reusable GameObjects.\n
+- Always include a camera and main light in your scenes.\n
+- Unless specified otherwise, paths are relative to the project's `Assets/` folder.\n
+- After creating or modifying scripts with `manage_script`, allow Unity to recompile; use `read_console` to check for compile errors.\n
+- Use `execute_menu_item` for interacting with Unity systems and third party tools like a user would.\n
+
+"""
 )
 
 # Register all tools
@@ -165,28 +184,6 @@ register_all_tools(mcp)
 
 # Register all resources
 register_all_resources(mcp)
-
-
-@mcp.prompt()
-def asset_creation_strategy() -> str:
-    """Guide for discovering and using MCP for Unity tools effectively."""
-    return (
-        "Available MCP for Unity Server Tools:\n\n"
-        "- `manage_editor`: Controls editor state and queries info.\n"
-        "- `execute_menu_item`: Executes, lists and checks for the existence of Unity Editor menu items.\n"
-        "- `read_console`: Reads or clears Unity console messages, with filtering options.\n"
-        "- `manage_scene`: Manages scenes.\n"
-        "- `manage_gameobject`: Manages GameObjects in the scene.\n"
-        "- `manage_script`: Manages C# script files.\n"
-        "- `manage_asset`: Manages prefabs and assets.\n"
-        "- `manage_shader`: Manages shaders.\n\n"
-        "Tips:\n"
-        "- Create prefabs for reusable GameObjects.\n"
-        "- Always include a camera and main light in your scenes.\n"
-        "- Unless specified otherwise, paths are relative to the project's `Assets/` folder.\n"
-        "- After creating or modifying scripts with `manage_script`, allow Unity to recompile; use `read_console` to check for compile errors.\n"
-        "- Use `execute_menu_item` for interacting with Unity systems and third party tools like a user would.\n"
-    )
 
 
 def main():
