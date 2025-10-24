@@ -450,7 +450,28 @@ namespace MCPForUnity.Editor
             }
             foreach (var c in toClose)
             {
-                try { c.Close(); } catch { }
+                try
+                {
+                    // Properly shutdown before closing to avoid CloseWait state
+                    if (c.Client != null && c.Connected)
+                    {
+                        c.Client.Shutdown(SocketShutdown.Both);
+                    }
+                    c.Close();
+                }
+                catch (SocketException se)
+                {
+                    // Expected: socket may already be closed
+                    if (IsDebugEnabled())
+                    {
+                        McpLog.Info($"Stop: socket shutdown {se.SocketErrorCode}", always: false);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log unexpected errors during shutdown
+                    McpLog.Warn($"Error closing client connection: {ex.Message}");
+                }
             }
 
             // Give the background loop a short window to exit without blocking the editor
@@ -512,12 +533,15 @@ namespace MCPForUnity.Editor
 
         private static async Task HandleClientAsync(TcpClient client, CancellationToken token)
         {
-            using (client)
-            using (NetworkStream stream = client.GetStream())
+            try
             {
                 lock (clientsLock) { activeClients.Add(client); }
-                try
+                
+                using (client)
+                using (NetworkStream stream = client.GetStream())
                 {
+                    try
+                    {
                     // Framed I/O only; legacy mode removed
                     try
                     {
@@ -671,11 +695,39 @@ namespace MCPForUnity.Editor
                             break;
                         }
                     }
+                    }
+                    finally
+                    {
+                        // Properly shutdown the socket before disposal to avoid CloseWait
+                        try
+                        {
+                            if (client.Client != null && client.Connected)
+                            {
+                                client.Client.Shutdown(SocketShutdown.Both);
+                            }
+                        }
+                        catch (SocketException se)
+                        {
+                            // Expected: socket may already be closed by remote
+                            if (IsDebugEnabled())
+                            {
+                                McpLog.Info($"Socket shutdown: {se.SocketErrorCode}", always: false);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            // Unexpected errors should be logged
+                            if (IsDebugEnabled())
+                            {
+                                McpLog.Warn($"Error during socket shutdown: {ex.Message}");
+                            }
+                        }
+                    }
                 }
-                finally
-                {
-                    lock (clientsLock) { activeClients.Remove(client); }
-                }
+            }
+            finally
+            {
+                lock (clientsLock) { activeClients.Remove(client); }
             }
         }
 
