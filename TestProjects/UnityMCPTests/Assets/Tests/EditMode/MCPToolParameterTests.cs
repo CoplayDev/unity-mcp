@@ -393,6 +393,22 @@ namespace Tests.EditMode
 			var matPath = $"{tempDir}/JsonTexTest_{Guid.NewGuid().ToString("N")}.mat";
 			var texPath = "Assets/Temp/LiveTests/TempBaseTex.asset"; // created by GenTempTex
 
+			// Ensure the texture exists BEFORE creating the material so assignment succeeds during create
+			var preTex = AssetDatabase.LoadAssetAtPath<Texture>(texPath);
+			if (preTex == null)
+			{
+				if (!AssetDatabase.IsValidFolder("Assets/Temp")) AssetDatabase.CreateFolder("Assets", "Temp");
+				if (!AssetDatabase.IsValidFolder("Assets/Temp/LiveTests")) AssetDatabase.CreateFolder("Assets/Temp", "LiveTests");
+				var tex2D = new Texture2D(4, 4, TextureFormat.RGBA32, false);
+				var pixels = new Color[16];
+				for (int i = 0; i < pixels.Length; i++) pixels[i] = Color.white;
+				tex2D.SetPixels(pixels);
+				tex2D.Apply();
+				AssetDatabase.CreateAsset(tex2D, texPath);
+				AssetDatabase.SaveAssets();
+				AssetDatabase.Refresh();
+			}
+
 			var createParams = new JObject
 			{
 				["action"] = "create",
