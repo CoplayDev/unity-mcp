@@ -3,6 +3,7 @@ using MCPForUnity.Editor.Helpers;
 using MCPForUnity.External.Tommy;
 using MCPForUnity.Editor.Services;
 using System.IO;
+using System.Linq;
 
 namespace MCPForUnityTests.Editor.Helpers
 {
@@ -314,6 +315,110 @@ namespace MCPForUnityTests.Editor.Helpers
             var unityMcp = unityMcpNode as TomlTable;
             Assert.IsTrue(unityMcp.TryGetNode("command", out _), "unityMCP should contain command");
             Assert.IsTrue(unityMcp.TryGetNode("args", out _), "unityMCP should contain args");
+
+            // Verify env is NOT present on non-Windows platforms
+            bool hasEnv = unityMcp.TryGetNode("env", out _);
+            Assert.IsFalse(hasEnv, "Non-Windows config should not contain env table");
+        }
+
+        [Test]
+        public void BuildCodexServerBlock_WithNullServerSrc_GeneratesRemoteUvxCommand()
+        {
+            // This test verifies that Asset Store installs (no embedded server) use remote uvx
+
+            // Mock Windows platform
+            MCPServiceLocator.Register<IPlatformService>(new MockPlatformService(isWindows: true, systemRoot: "C:\\Windows"));
+
+            string result = CodexConfigHelper.BuildCodexServerBlock(null, null);
+
+            Assert.IsNotNull(result, "BuildCodexServerBlock should return a valid TOML string for remote uvx");
+
+            // Parse the generated TOML to validate structure
+            TomlTable parsed;
+            using (var reader = new StringReader(result))
+            {
+                parsed = TOML.Parse(reader);
+            }
+
+            // Verify basic structure
+            Assert.IsTrue(parsed.TryGetNode("mcp_servers", out var mcpServersNode), "TOML should contain mcp_servers");
+            var mcpServers = mcpServersNode as TomlTable;
+            Assert.IsTrue(mcpServers.TryGetNode("unityMCP", out var unityMcpNode), "mcp_servers should contain unityMCP");
+            var unityMcp = unityMcpNode as TomlTable;
+
+            // Verify remote uvx command
+            Assert.IsTrue(unityMcp.TryGetNode("command", out var commandNode), "unityMCP should contain command");
+            var command = (commandNode as TomlString).Value;
+            Assert.AreEqual("uvx", command, "Command should be uvx for remote execution");
+
+            // Verify remote uvx args
+            Assert.IsTrue(unityMcp.TryGetNode("args", out var argsNode), "unityMCP should contain args");
+            var argsArray = argsNode as TomlArray;
+            Assert.IsNotNull(argsArray, "args should be an array");
+            Assert.AreEqual(3, argsArray.ChildrenCount, "Remote uvx should have 3 args: --from, url, package");
+
+            var args = argsArray.Children.OfType<TomlString>().Select(s => s.Value).ToArray();
+            Assert.AreEqual("--from", args[0], "First arg should be --from");
+            Assert.IsTrue(args[1].StartsWith("git+https://github.com/CoplayDev/unity-mcp@v"), "Second arg should be git URL");
+            Assert.IsTrue(args[1].Contains("#subdirectory=MCPForUnity/UnityMcpServer~/src"), "URL should include subdirectory");
+            Assert.AreEqual("mcp-for-unity", args[2], "Third arg should be package name");
+
+            // Verify env.SystemRoot is still present on Windows (even with remote uvx)
+            bool hasEnv = unityMcp.TryGetNode("env", out var envNode);
+            Assert.IsTrue(hasEnv, "Windows config should contain env table even with remote uvx");
+            var env = envNode as TomlTable;
+            Assert.IsTrue(env.TryGetNode("SystemRoot", out _), "env should contain SystemRoot");
+        }
+
+        [Test]
+        public void UpsertCodexServerBlock_WithNullServerSrc_GeneratesRemoteUvxCommand()
+        {
+            // This test verifies that upsert operations for Asset Store installs use remote uvx
+
+            // Mock non-Windows platform
+            MCPServiceLocator.Register<IPlatformService>(new MockPlatformService(isWindows: false));
+
+            string existingToml = string.Join("\n", new[]
+            {
+                "[other_section]",
+                "key = \"value\""
+            });
+
+            string result = CodexConfigHelper.UpsertCodexServerBlock(existingToml, null, null);
+
+            Assert.IsNotNull(result, "UpsertCodexServerBlock should return a valid TOML string for remote uvx");
+
+            // Parse the generated TOML to validate structure
+            TomlTable parsed;
+            using (var reader = new StringReader(result))
+            {
+                parsed = TOML.Parse(reader);
+            }
+
+            // Verify existing sections are preserved
+            Assert.IsTrue(parsed.TryGetNode("other_section", out _), "TOML should preserve existing sections");
+
+            // Verify mcp_servers structure
+            Assert.IsTrue(parsed.TryGetNode("mcp_servers", out var mcpServersNode), "TOML should contain mcp_servers");
+            var mcpServers = mcpServersNode as TomlTable;
+            Assert.IsTrue(mcpServers.TryGetNode("unityMCP", out var unityMcpNode), "mcp_servers should contain unityMCP");
+            var unityMcp = unityMcpNode as TomlTable;
+
+            // Verify remote uvx command
+            Assert.IsTrue(unityMcp.TryGetNode("command", out var commandNode), "unityMCP should contain command");
+            var command = (commandNode as TomlString).Value;
+            Assert.AreEqual("uvx", command, "Command should be uvx for remote execution");
+
+            // Verify remote uvx args
+            Assert.IsTrue(unityMcp.TryGetNode("args", out var argsNode), "unityMCP should contain args");
+            var argsArray = argsNode as TomlArray;
+            Assert.IsNotNull(argsArray, "args should be an array");
+            Assert.AreEqual(3, argsArray.ChildrenCount, "Remote uvx should have 3 args");
+
+            var args = argsArray.Children.OfType<TomlString>().Select(s => s.Value).ToArray();
+            Assert.AreEqual("--from", args[0], "First arg should be --from");
+            Assert.IsTrue(args[1].StartsWith("git+https://github.com/CoplayDev/unity-mcp@v"), "Second arg should be git URL");
+            Assert.AreEqual("mcp-for-unity", args[2], "Third arg should be package name");
 
             // Verify env is NOT present on non-Windows platforms
             bool hasEnv = unityMcp.TryGetNode("env", out _);

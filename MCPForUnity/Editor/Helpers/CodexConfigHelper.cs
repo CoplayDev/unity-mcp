@@ -124,23 +124,60 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
+        /// Checks if we should use remote uvx (Asset Store install without embedded server)
+        /// </summary>
+        private static bool ShouldUseRemoteUvx(string serverSrc)
+        {
+            // If no serverSrc provided, use remote
+            if (string.IsNullOrEmpty(serverSrc))
+                return true;
+
+            // If no embedded server exists, use remote
+            if (!ServerInstaller.HasEmbeddedServer())
+                return true;
+
+            return false;
+        }
+
+        /// <summary>
         /// Creates a TomlTable for the unityMCP server configuration
         /// </summary>
-        /// <param name="uvPath">Path to uv executable</param>
-        /// <param name="serverSrc">Path to server source directory</param>
+        /// <param name="uvPath">Path to uv executable (can be null for remote uvx)</param>
+        /// <param name="serverSrc">Path to server source directory (can be null for remote uvx)</param>
         private static TomlTable CreateUnityMcpTable(string uvPath, string serverSrc)
         {
             var unityMCP = new TomlTable();
-            unityMCP["command"] = new TomlString { Value = uvPath };
+            bool useRemote = ShouldUseRemoteUvx(serverSrc);
 
-            var argsArray = new TomlArray();
-            argsArray.Add(new TomlString { Value = "run" });
-            argsArray.Add(new TomlString { Value = "--directory" });
-            argsArray.Add(new TomlString { Value = serverSrc });
-            argsArray.Add(new TomlString { Value = "server.py" });
-            unityMCP["args"] = argsArray;
+            if (useRemote)
+            {
+                // Asset Store install - use remote uvx
+                string version = AssetPathUtility.GetPackageVersion();
+                string remoteUrl = $"git+https://github.com/CoplayDev/unity-mcp@v{version}#subdirectory=MCPForUnity/UnityMcpServer~/src";
+                
+                unityMCP["command"] = new TomlString { Value = "uvx" };
+                
+                var argsArray = new TomlArray();
+                argsArray.Add(new TomlString { Value = "--from" });
+                argsArray.Add(new TomlString { Value = remoteUrl });
+                argsArray.Add(new TomlString { Value = "mcp-for-unity" });
+                unityMCP["args"] = argsArray;
+            }
+            else
+            {
+                // Git/embedded install - use local path
+                unityMCP["command"] = new TomlString { Value = uvPath };
+
+                var argsArray = new TomlArray();
+                argsArray.Add(new TomlString { Value = "run" });
+                argsArray.Add(new TomlString { Value = "--directory" });
+                argsArray.Add(new TomlString { Value = serverSrc });
+                argsArray.Add(new TomlString { Value = "server.py" });
+                unityMCP["args"] = argsArray;
+            }
 
             // Add Windows-specific environment configuration, see: https://github.com/CoplayDev/unity-mcp/issues/315
+            // Always include for Windows, even with remote uvx
             var platformService = MCPServiceLocator.Platform;
             if (platformService.IsWindows())
             {
