@@ -1,6 +1,6 @@
 [project]
 name = "MCPForUnityServer"
-version = "6.2.4"
+version = "6.2.5"
 description = "MCP for Unity Server: A Unity package for Unity Editor integration via the Model Context Protocol (MCP)."
 readme = "README.md"
 requires-python = ">=3.11"

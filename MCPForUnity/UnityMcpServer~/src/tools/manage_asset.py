@@ -2,6 +2,7 @@
 Defines the manage_asset tool for interacting with Unity assets.
 """
 import asyncio
+import json
 from typing import Annotated, Any, Literal
 
 from fastmcp import Context
@@ -33,6 +34,14 @@ async def manage_asset(
     page_number: Annotated[int | float | str, "Page number for pagination"] | None = None
 ) -> dict[str, Any]:
     ctx.info(f"Processing manage_asset: {action}")
+    # Coerce 'properties' from JSON string to dict for client compatibility
+    if isinstance(properties, str):
+        try:
+            properties = json.loads(properties)
+            ctx.info("manage_asset: coerced properties from JSON string to dict")
+        except Exception as e:
+            ctx.warn(f"manage_asset: failed to parse properties JSON string: {e}")
+            # Leave properties as-is; Unity side may handle defaults
     # Ensure properties is a dict if None
     if properties is None:
         properties = {}

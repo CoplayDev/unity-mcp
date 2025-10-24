@@ -63,6 +63,21 @@ namespace MCPForUnity.Editor.Tools
             // Common parameters
             string path = @params["path"]?.ToString();
 
+            // Coerce string JSON to JObject for 'properties' if provided as a JSON string
+            var propertiesToken = @params["properties"];
+            if (propertiesToken != null && propertiesToken.Type == JTokenType.String)
+            {
+                try
+                {
+                    var parsed = JObject.Parse(propertiesToken.ToString());
+                    @params["properties"] = parsed;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"[ManageAsset] Could not parse 'properties' JSON string: {e.Message}");
+                }
+            }
+
             try
             {
                 switch (action)
@@ -999,7 +1014,108 @@ namespace MCPForUnity.Editor.Tools
                 }
             }
 
-            // TODO: Add handlers for other property types (Vectors, Ints, Keywords, RenderQueue, etc.)
+			// --- Flexible direct property assignment ---
+			// Allow payloads like: { "_Color": [r,g,b,a] }, { "_Glossiness": 0.5 }, { "_MainTex": "Assets/.." }
+			// while retaining backward compatibility with the structured keys above.
+			// This iterates all top-level keys except the reserved structured ones and applies them
+			// if they match known shader properties.
+			var reservedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "shader", "color", "float", "texture" };
+
+			// Helper resolves common URP/Standard aliasing (e.g., _Color <-> _BaseColor, _MainTex <-> _BaseMap, _Glossiness <-> _Smoothness)
+			string ResolvePropertyName(string name)
+			{
+				if (string.IsNullOrEmpty(name)) return name;
+				string[] candidates;
+				switch (name)
+				{
+					case "_Color": candidates = new[] { "_Color", "_BaseColor" }; break;
+					case "_BaseColor": candidates = new[] { "_BaseColor", "_Color" }; break;
+					case "_MainTex": candidates = new[] { "_MainTex", "_BaseMap" }; break;
+					case "_BaseMap": candidates = new[] { "_BaseMap", "_MainTex" }; break;
+					case "_Glossiness": candidates = new[] { "_Glossiness", "_Smoothness" }; break;
+					case "_Smoothness": candidates = new[] { "_Smoothness", "_Glossiness" }; break;
+					default: candidates = new[] { name }; break;
+				}
+				foreach (var candidate in candidates)
+				{
+					if (mat.HasProperty(candidate)) return candidate;
+				}
+				return name; // fall back to original
+			}
+
+			foreach (var prop in properties.Properties())
+			{
+				if (reservedKeys.Contains(prop.Name)) continue;
+				string shaderProp = ResolvePropertyName(prop.Name);
+				JToken v = prop.Value;
+
+				// Color: numeric array [r,g,b,(a)]
+				if (v is JArray arr && arr.Count >= 3 && arr.All(t => t.Type == JTokenType.Float || t.Type == JTokenType.Integer))
+				{
+					if (mat.HasProperty(shaderProp))
+					{
+						try
+						{
+							var c = new Color(
+								arr[0].ToObject<float>(),
+								arr[1].ToObject<float>(),
+								arr[2].ToObject<float>(),
+								arr.Count > 3 ? arr[3].ToObject<float>() : 1f
+							);
+							if (mat.GetColor(shaderProp) != c)
+							{
+								mat.SetColor(shaderProp, c);
+								modified = true;
+							}
+						}
+						catch (Exception ex)
+						{
+							Debug.LogWarning($"Error setting color '{shaderProp}': {ex.Message}");
+						}
+					}
+					continue;
+				}
+
+				// Float: single number
+				if (v.Type == JTokenType.Float || v.Type == JTokenType.Integer)
+				{
+					if (mat.HasProperty(shaderProp))
+					{
+						try
+						{
+							float f = v.ToObject<float>();
+							if (!Mathf.Approximately(mat.GetFloat(shaderProp), f))
+							{
+								mat.SetFloat(shaderProp, f);
+								modified = true;
+							}
+						}
+						catch (Exception ex)
+						{
+							Debug.LogWarning($"Error setting float '{shaderProp}': {ex.Message}");
+						}
+					}
+					continue;
+				}
+
+				// Texture: string path
+				if (v.Type == JTokenType.String)
+				{
+					string texPath = v.ToString();
+					if (!string.IsNullOrEmpty(texPath) && mat.HasProperty(shaderProp))
+					{
+						var tex = AssetDatabase.LoadAssetAtPath<Texture>(AssetPathUtility.SanitizeAssetPath(texPath));
+						if (tex != null && mat.GetTexture(shaderProp) != tex)
+						{
+							mat.SetTexture(shaderProp, tex);
+							modified = true;
+						}
+					}
+					continue;
+				}
+			}
+
+			// TODO: Add handlers for other property types (Vectors, Ints, Keywords, RenderQueue, etc.)
             return modified;
         }
 

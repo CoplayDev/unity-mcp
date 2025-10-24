@@ -66,6 +66,21 @@ namespace MCPForUnity.Editor.Tools
             bool includeNonPublicSerialized = @params["includeNonPublicSerialized"]?.ToObject<bool>() ?? true; // Default to true
             // --- End add parameter ---
 
+            // Coerce string JSON to JObject for 'componentProperties' if provided as a JSON string
+            var componentPropsToken = @params["componentProperties"];
+            if (componentPropsToken != null && componentPropsToken.Type == JTokenType.String)
+            {
+                try
+                {
+                    var parsed = JObject.Parse(componentPropsToken.ToString());
+                    @params["componentProperties"] = parsed;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"[ManageGameObject] Could not parse 'componentProperties' JSON string: {e.Message}");
+                }
+            }
+
             // --- Prefab Redirection Check ---
             string targetPath =
                 targetToken?.Type == JTokenType.String ? targetToken.ToString() : null;

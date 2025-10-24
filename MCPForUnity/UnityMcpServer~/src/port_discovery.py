@@ -56,7 +56,7 @@ class PortDiscovery:
     @staticmethod
     def _try_probe_unity_mcp(port: int) -> bool:
         """Quickly check if a MCP for Unity listener is on this port.
-        Tries a short TCP connect, sends 'ping', expects a JSON 'pong'.
+        Tries a short TCP connect, sends 'ping', expects Unity bridge welcome message.
         """
         try:
             with socket.create_connection(("127.0.0.1", port), PortDiscovery.CONNECT_TIMEOUT) as s:
@@ -64,8 +64,8 @@ class PortDiscovery:
                 try:
                     s.sendall(b"ping")
                     data = s.recv(512)
-                    # Minimal validation: look for a success pong response
-                    if data and b'"message":"pong"' in data:
+                    # Check for Unity bridge welcome message format
+                    if data and (b"WELCOME UNITY-MCP" in data or b'"message":"pong"' in data):
                         return True
                 except Exception:
                     return False

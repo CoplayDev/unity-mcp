@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.11"
 
 [[package]]
@@ -634,7 +634,7 @@ wheels = [
 
 [[package]]
 name = "mcpforunityserver"
-version = "6.2.4"
+version = "6.2.5"
 source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },

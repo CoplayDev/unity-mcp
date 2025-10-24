@@ -1,3 +1,4 @@
+import json
 from typing import Annotated, Any, Literal
 
 from fastmcp import Context
@@ -42,7 +43,7 @@ def manage_gameobject(
     layer: Annotated[str, "Layer name"] | None = None,
     components_to_remove: Annotated[list[str],
                                     "List of component names to remove"] | None = None,
-    component_properties: Annotated[dict[str, dict[str, Any]],
+    component_properties: Annotated[dict[str, dict[str, Any]] | str,
                                     """Dictionary of component names to their properties to set. For example:
                                     `{"MyScript": {"otherObject": {"find": "Player", "method": "by_name"}}}` assigns GameObject
                                     `{"MyScript": {"playerHealth": {"find": "Player", "component": "HealthComponent"}}}` assigns Component
@@ -65,7 +66,7 @@ def manage_gameobject(
                                           "Controls whether serialization of private [SerializeField] fields is included (accepts true/false or 'true'/'false')"] | None = None,
 ) -> dict[str, Any]:
     ctx.info(f"Processing manage_gameobject: {action}")
-    
+
     # Coercers to tolerate stringified booleans and vectors
     def _coerce_bool(value, default=None):
         if value is None:
@@ -113,6 +114,16 @@ def manage_gameobject(
     search_inactive = _coerce_bool(search_inactive)
     includeNonPublicSerialized = _coerce_bool(includeNonPublicSerialized)
 
+    # Coerce 'component_properties' from JSON string to dict for client compatibility
+    if isinstance(component_properties, str):
+        try:
+            component_properties = json.loads(component_properties)
+            ctx.info("manage_gameobject: coerced component_properties from JSON string to dict")
+        except json.JSONDecodeError as e:
+            return {"success": False, "message": f"Invalid JSON in component_properties: {e}"}
+    # Ensure final type is a dict (object) if provided
+    if component_properties is not None and not isinstance(component_properties, dict):
+        return {"success": False, "message": "component_properties must be a JSON object (dict)."}
     try:
         # Map tag to search_term when search_method is by_tag for backward compatibility
         if action == "find" and search_method == "by_tag" and tag is not None and search_term is None:

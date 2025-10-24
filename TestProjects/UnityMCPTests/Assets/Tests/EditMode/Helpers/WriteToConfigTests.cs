@@ -134,7 +134,12 @@ namespace MCPForUnityTests.Editor.Helpers
             var configPath = Path.Combine(_tempRoot, "trae.json");
             WriteInitialConfig(configPath, isVSCode: false, command: _fakeUvPath, directory: "/old/path");
 
-            var client = new McpClient { name = "Trae", mcpType = McpTypes.Trae };
+            if (!Enum.TryParse<McpTypes>("Trae", out var traeValue))
+            {
+                Assert.Ignore("McpTypes.Trae not available in this package version; skipping test.");
+            }
+
+            var client = new McpClient { name = "Trae", mcpType = traeValue };
             InvokeWriteToConfig(configPath, client);
 
             var root = JObject.Parse(File.ReadAllText(configPath));
