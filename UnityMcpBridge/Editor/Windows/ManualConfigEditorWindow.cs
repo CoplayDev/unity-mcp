@@ -26,6 +26,12 @@ namespace MCPForUnity.Editor.Windows
             window.Show();
         }
 
+        /// <summary>
+        /// Renders the Manual Configuration editor UI for an MCP client, including instructions, config path and content, and copy/open actions.
+        /// </summary>
+        /// <remarks>
+        /// The UI displays step-by-step guidance tailored to the client's MCP type, shows the configuration file path and configuration text (JSON or TOML), and provides buttons to copy the path or config to the system clipboard and to open the config file with the system default application. Invoking copy or open actions updates window state used for copy feedback and may launch the platform shell to open the file. This method is intended to be called by Unity's editor event loop and performs no return value.
+        /// </remarks>
         protected virtual void OnGUI()
         {
             scrollPos = EditorGUILayout.BeginScrollView(scrollPos);
@@ -115,6 +121,14 @@ namespace MCPForUnity.Editor.Windows
                     instructionStyle
                 );
             }
+            else if (mcpClient?.mcpType == McpTypes.Warp)
+            {
+                EditorGUILayout.LabelField(
+                 "a) Open 'Warp Drive' by click the Warp icon in the top-left corner or press (Ctrl + Shift + | on Windows / ⌘ + | on macOS) >  MCP Servers > Add",
+                    instructionStyle
+                );
+            }
+
             EditorGUILayout.LabelField("    OR", instructionStyle);
             EditorGUILayout.LabelField(
                 "    b) Opening the configuration file at:",
