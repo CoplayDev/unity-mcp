@@ -27,7 +27,9 @@ namespace MCPForUnity.Editor.Services
 
                 string pythonDir = MCPServiceLocator.Paths.GetMcpServerPath();
 
-                if (pythonDir == null || !File.Exists(Path.Combine(pythonDir, "server.py")))
+                // For Asset Store installs without embedded server, pythonDir can be null (will use remote uvx)
+                bool useRemote = !ServerInstaller.HasEmbeddedServer();
+                if (!useRemote && (pythonDir == null || !File.Exists(Path.Combine(pythonDir, "server.py"))))
                 {
                     throw new InvalidOperationException("Server not found. Please use manual configuration or set server path in Advanced Settings.");
                 }
@@ -235,19 +237,35 @@ namespace MCPForUnity.Editor.Services
             var pathService = MCPServiceLocator.Paths;
             string pythonDir = pathService.GetMcpServerPath();
             
-            if (string.IsNullOrEmpty(pythonDir))
-            {
-                throw new InvalidOperationException("Cannot register: Python directory not found");
-            }
-
             string claudePath = pathService.GetClaudeCliPath();
             if (string.IsNullOrEmpty(claudePath))
             {
                 throw new InvalidOperationException("Claude CLI not found. Please install Claude Code first.");
             }
 
-            string uvPath = pathService.GetUvPath() ?? "uv";
-            string args = $"mcp add UnityMCP -- \"{uvPath}\" run --directory \"{pythonDir}\" server.py";
+            // Check if we should use remote uvx (Asset Store without embedded server)
+            bool useRemote = !ServerInstaller.HasEmbeddedServer();
+            string args;
+            
+            if (useRemote)
+            {
+                // Asset Store install - use remote uvx
+                string version = AssetPathUtility.GetPackageVersion();
+                string remoteUrl = $"git+https://github.com/CoplayDev/unity-mcp@v{version}#subdirectory=MCPForUnity/UnityMcpServer~/src";
+                args = $"mcp add UnityMCP -- uvx --from {remoteUrl} mcp-for-unity";
+            }
+            else
+            {
+                // Git/embedded install - use local path
+                if (string.IsNullOrEmpty(pythonDir))
+                {
+                    throw new InvalidOperationException("Cannot register: Python directory not found");
+                }
+                
+                string uvPath = pathService.GetUvPath() ?? "uv";
+                args = $"mcp add UnityMCP -- \"{uvPath}\" run --directory \"{pythonDir}\" server.py";
+            }
+            
             string projectDir = Path.GetDirectoryName(Application.dataPath);
 
             string pathPrepend = null;
@@ -368,17 +386,28 @@ namespace MCPForUnity.Editor.Services
         {
             string pythonDir = MCPServiceLocator.Paths.GetMcpServerPath();
             string uvPath = MCPServiceLocator.Paths.GetUvPath();
+            bool useRemote = !ServerInstaller.HasEmbeddedServer();
 
             // Claude Code uses CLI commands, not JSON config
             if (client.mcpType == McpTypes.ClaudeCode)
             {
-                if (string.IsNullOrEmpty(pythonDir) || string.IsNullOrEmpty(uvPath))
+                string registerCommand;
+                if (useRemote)
                 {
-                    return "# Error: Configuration not available - check paths in Advanced Settings";
+                    // Asset Store install - use remote uvx
+                    string version = AssetPathUtility.GetPackageVersion();
+                    string remoteUrl = $"git+https://github.com/CoplayDev/unity-mcp@v{version}#subdirectory=MCPForUnity/UnityMcpServer~/src";
+                    registerCommand = $"claude mcp add UnityMCP -- uvx --from {remoteUrl} mcp-for-unity";
                 }
-
-                // Show the actual command that RegisterClaudeCode() uses
-                string registerCommand = $"claude mcp add UnityMCP -- \"{uvPath}\" run --directory \"{pythonDir}\" server.py";
+                else
+                {
+                    // Git/embedded install - use local path
+                    if (string.IsNullOrEmpty(pythonDir) || string.IsNullOrEmpty(uvPath))
+                    {
+                        return "# Error: Configuration not available - check paths in Advanced Settings";
+                    }
+                    registerCommand = $"claude mcp add UnityMCP -- \"{uvPath}\" run --directory \"{pythonDir}\" server.py";
+                }
 
                 return "# Register the MCP server with Claude Code:\n" +
                        $"{registerCommand}\n\n" +
@@ -388,7 +417,8 @@ namespace MCPForUnity.Editor.Services
                        "claude mcp list # Only works when claude is run in the project's directory";
             }
 
-            if (string.IsNullOrEmpty(pythonDir) || string.IsNullOrEmpty(uvPath))
+            // For other clients, check if we need paths
+            if (!useRemote && (string.IsNullOrEmpty(pythonDir) || string.IsNullOrEmpty(uvPath)))
                 return "{ \"error\": \"Configuration not available - check paths in Advanced Settings\" }";
 
             try

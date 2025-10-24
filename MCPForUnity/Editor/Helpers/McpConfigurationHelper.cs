@@ -93,19 +93,27 @@ namespace MCPForUnity.Editor.Helpers
             }
             catch { }
 
-            // 1) Start from existing, only fill gaps (prefer trusted resolver)
-            string uvPath = ServerInstaller.FindUvPath();
-            // Optionally trust existingCommand if it looks like uv/uv.exe
-            try
+            // 1) Check if we should use remote uvx (Asset Store without embedded server)
+            bool useRemote = !ServerInstaller.HasEmbeddedServer() || string.IsNullOrEmpty(pythonDir);
+            
+            string uvPath = null;
+            if (!useRemote)
             {
-                var name = Path.GetFileName((existingCommand ?? string.Empty).Trim()).ToLowerInvariant();
-                if ((name == "uv" || name == "uv.exe") && IsValidUvBinary(existingCommand))
+                // Git/embedded install - need UV path
+                uvPath = ServerInstaller.FindUvPath();
+                // Optionally trust existingCommand if it looks like uv/uv.exe
+                try
                 {
-                    uvPath = existingCommand;
+                    var name = Path.GetFileName((existingCommand ?? string.Empty).Trim()).ToLowerInvariant();
+                    if ((name == "uv" || name == "uv.exe") && IsValidUvBinary(existingCommand))
+                    {
+                        uvPath = existingCommand;
+                    }
                 }
+                catch { }
+                if (uvPath == null) return "UV package manager not found. Please install UV first.";
             }
-            catch { }
-            if (uvPath == null) return "UV package manager not found. Please install UV first.";
+            
             string serverSrc = ResolveServerDirectory(pythonDir, existingArgs);
 
             // Ensure containers exist and write back configuration
@@ -165,20 +173,28 @@ namespace MCPForUnity.Editor.Helpers
                 CodexConfigHelper.TryParseCodexServer(existingToml, out existingCommand, out existingArgs);
             }
 
-            string uvPath = ServerInstaller.FindUvPath();
-            try
+            // Check if we should use remote uvx (Asset Store without embedded server)
+            bool useRemote = !ServerInstaller.HasEmbeddedServer() || string.IsNullOrEmpty(pythonDir);
+            
+            string uvPath = null;
+            if (!useRemote)
             {
-                var name = Path.GetFileName((existingCommand ?? string.Empty).Trim()).ToLowerInvariant();
-                if ((name == "uv" || name == "uv.exe") && IsValidUvBinary(existingCommand))
+                // Git/embedded install - need UV path
+                uvPath = ServerInstaller.FindUvPath();
+                try
                 {
-                    uvPath = existingCommand;
+                    var name = Path.GetFileName((existingCommand ?? string.Empty).Trim()).ToLowerInvariant();
+                    if ((name == "uv" || name == "uv.exe") && IsValidUvBinary(existingCommand))
+                    {
+                        uvPath = existingCommand;
+                    }
                 }
-            }
-            catch { }
+                catch { }
 
-            if (uvPath == null)
-            {
-                return "UV package manager not found. Please install UV first.";
+                if (uvPath == null)
+                {
+                    return "UV package manager not found. Please install UV first.";
+                }
             }
 
             string serverSrc = ResolveServerDirectory(pythonDir, existingArgs);
