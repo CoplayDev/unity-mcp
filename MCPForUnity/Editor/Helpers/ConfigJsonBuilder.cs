@@ -41,18 +41,49 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
+        /// Checks if we should use remote uvx (Asset Store install without embedded server)
+        /// </summary>
+        private static bool ShouldUseRemoteUvx(string directory)
+        {
+            // If no directory provided, use remote
+            if (string.IsNullOrEmpty(directory))
+                return true;
+
+            // If no embedded server exists, use remote
+            if (!ServerInstaller.HasEmbeddedServer())
+                return true;
+
+            return false;
+        }
+
+        /// <summary>
         /// Centralized builder that applies all caveats consistently.
-        /// - Sets command/args with provided directory
+        /// - Sets command/args with provided directory OR remote uvx for Asset Store
         /// - Ensures env exists
         /// - Adds type:"stdio" for VSCode
         /// - Adds disabled:false for Windsurf/Kiro only when missing
         /// </summary>
         private static void PopulateUnityNode(JObject unity, string uvPath, string directory, McpClient client, bool isVSCode)
         {
-            unity["command"] = uvPath;
+            // Check if we should use remote uvx (Asset Store without embedded server)
+            bool useRemote = ShouldUseRemoteUvx(directory);
 
-            // For Cursor (non-VSCode) on macOS, prefer a no-spaces symlink path to avoid arg parsing issues in some runners
-            string effectiveDir = directory;
+            if (useRemote)
+            {
+                // Asset Store install - use remote uvx
+                string version = AssetPathUtility.GetPackageVersion();
+                string remoteUrl = $"git+https://github.com/CoplayDev/unity-mcp@v{version}#subdirectory=MCPForUnity/UnityMcpServer~/src";
+                
+                unity["command"] = "uvx";
+                unity["args"] = JArray.FromObject(new[] { "--from", remoteUrl, "mcp-for-unity" });
+            }
+            else
+            {
+                // Git/embedded install - use local path
+                unity["command"] = uvPath;
+
+                // For Cursor (non-VSCode) on macOS, prefer a no-spaces symlink path to avoid arg parsing issues in some runners
+                string effectiveDir = directory;
 #if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
             bool isCursor = !isVSCode && (client == null || client.mcpType != McpTypes.VSCode);
             if (isCursor && !string.IsNullOrEmpty(directory))
@@ -92,7 +123,8 @@ namespace MCPForUnity.Editor.Helpers
             }
 #endif
 
-            unity["args"] = JArray.FromObject(new[] { "run", "--directory", effectiveDir, "server.py" });
+                unity["args"] = JArray.FromObject(new[] { "run", "--directory", effectiveDir, "server.py" });
+            }
 
             if (isVSCode)
             {

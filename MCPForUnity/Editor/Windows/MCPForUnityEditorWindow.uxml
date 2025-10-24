@@ -91,7 +91,6 @@
 
                 <!-- Server Management Buttons -->
                 <ui:VisualElement class="button-row" style="flex-direction: row; margin-top: 8px;">
-                    <ui:Button name="download-server-button" text="Download &amp; Install Server" class="secondary-button" style="display: none; flex: 1;" />
                     <ui:Button name="rebuild-server-button" text="Rebuild Server" class="secondary-button" style="flex: 1;" />
                 </ui:VisualElement>
             </ui:VisualElement>

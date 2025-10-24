@@ -50,7 +50,6 @@ namespace MCPForUnity.Editor.Windows
         private Button testConnectionButton;
         private VisualElement serverStatusBanner;
         private Label serverStatusMessage;
-        private Button downloadServerButton;
         private Button rebuildServerButton;
 
         // Client UI Elements
@@ -218,7 +217,6 @@ namespace MCPForUnity.Editor.Windows
             testConnectionButton = rootVisualElement.Q<Button>("test-connection-button");
             serverStatusBanner = rootVisualElement.Q<VisualElement>("server-status-banner");
             serverStatusMessage = rootVisualElement.Q<Label>("server-status-message");
-            downloadServerButton = rootVisualElement.Q<Button>("download-server-button");
             rebuildServerButton = rootVisualElement.Q<Button>("rebuild-server-button");
 
             // Client
@@ -300,7 +298,6 @@ namespace MCPForUnity.Editor.Windows
             // Connection callbacks
             connectionToggleButton.clicked += OnConnectionToggleClicked;
             testConnectionButton.clicked += OnTestConnectionClicked;
-            downloadServerButton.clicked += OnDownloadServerClicked;
             rebuildServerButton.clicked += OnRebuildServerClicked;
 
             // Client callbacks
@@ -586,19 +583,6 @@ namespace MCPForUnity.Editor.Windows
             }
         }
 
-        private void OnDownloadServerClicked()
-        {
-            if (ServerInstaller.DownloadAndInstallServer())
-            {
-                UpdateServerStatusBanner();
-                UpdatePathOverrides();
-                EditorUtility.DisplayDialog(
-                    "Download Complete",
-                    "Server installed successfully! Start your connection and configure your MCP clients to begin.",
-                    "OK"
-                );
-            }
-        }
 
         private void OnRebuildServerClicked()
         {
@@ -629,38 +613,32 @@ namespace MCPForUnity.Editor.Windows
             string installedVer = ServerInstaller.GetInstalledServerVersion();
             string packageVer = AssetPathUtility.GetPackageVersion();
 
-            // Show/hide download vs rebuild buttons
+            // Only show rebuild button for Git/embedded installs
             if (hasEmbedded)
             {
-                downloadServerButton.style.display = DisplayStyle.None;
                 rebuildServerButton.style.display = DisplayStyle.Flex;
             }
             else
             {
-                downloadServerButton.style.display = DisplayStyle.Flex;
                 rebuildServerButton.style.display = DisplayStyle.None;
             }
 
-            // Check for installation errors first
+            // Check for installation errors first (only for embedded installs)
             string installError = PackageLifecycleManager.GetLastInstallError();
-            if (!string.IsNullOrEmpty(installError))
+            if (hasEmbedded && !string.IsNullOrEmpty(installError))
             {
                 serverStatusMessage.text = $"\u274C Server installation failed: {installError}. Click 'Rebuild Server' to retry.";
                 serverStatusBanner.style.display = DisplayStyle.Flex;
             }
-            // Update banner
-            else if (!hasEmbedded && string.IsNullOrEmpty(installedVer))
+            // Show version mismatch for embedded installs
+            else if (hasEmbedded && !string.IsNullOrEmpty(installedVer) && installedVer != packageVer)
             {
-                serverStatusMessage.text = "\u26A0 Server not installed. Click 'Download & Install Server' to get started.";
-                serverStatusBanner.style.display = DisplayStyle.Flex;
-            }
-            else if (!hasEmbedded && !string.IsNullOrEmpty(installedVer) && installedVer != packageVer)
-            {
-                serverStatusMessage.text = $"\u26A0 Server update available (v{installedVer} \u2192 v{packageVer}). Update recommended.";
+                serverStatusMessage.text = $"\u26A0 Server update available (v{installedVer} \u2192 v{packageVer}). Click 'Rebuild Server' to update.";
                 serverStatusBanner.style.display = DisplayStyle.Flex;
             }
             else
             {
+                // No banner needed for Asset Store installs or when everything is up to date
                 serverStatusBanner.style.display = DisplayStyle.None;
             }
         }
