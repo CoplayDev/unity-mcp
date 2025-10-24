@@ -84,14 +84,13 @@ namespace MCPForUnity.Editor.Helpers
                         if (legacyOlder)
                         {
                             TryKillUvForPath(legacySrc);
-                            try
+                            if (DeleteDirectoryWithRetry(legacyRoot))
                             {
-                                Directory.Delete(legacyRoot, recursive: true);
                                 McpLog.Info($"Removed legacy server at '{legacyRoot}'.");
                             }
-                            catch (Exception ex)
+                            else
                             {
-                                McpLog.Warn($"Failed to remove legacy server at '{legacyRoot}': {ex.Message}");
+                                McpLog.Warn($"Failed to remove legacy server at '{legacyRoot}' (files may be in use)");
                             }
                         }
                     }
@@ -338,13 +337,24 @@ namespace MCPForUnity.Editor.Helpers
             return roots;
         }
 
+        /// <summary>
+        /// Attempts to kill UV and Python processes associated with a specific server path.
+        /// This is necessary on Windows because the OS blocks file deletion when processes
+        /// have open file handles, unlike macOS/Linux which allow unlinking open files.
+        /// </summary>
         private static void TryKillUvForPath(string serverSrcPath)
         {
             try
             {
                 if (string.IsNullOrEmpty(serverSrcPath)) return;
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
 
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    KillWindowsUvProcesses(serverSrcPath);
+                    return;
+                }
+
+                // Unix: use pgrep to find processes by command line
                 var psi = new ProcessStartInfo
                 {
                     FileName = "/usr/bin/pgrep",
@@ -370,6 +380,148 @@ namespace MCPForUnity.Editor.Helpers
                 }
             }
             catch { }
+        }
+
+        /// <summary>
+        /// Kills Windows processes running from the virtual environment directory.
+        /// Uses WMIC (Windows Management Instrumentation) to safely query only processes
+        /// with executables in the .venv path, avoiding the need to iterate all system processes.
+        /// This prevents accidentally killing IDE processes or other critical system processes.
+        /// 
+        /// Why this is needed on Windows:
+        /// - Windows blocks file/directory deletion when ANY process has an open file handle
+        /// - UV creates a virtual environment with python.exe and other executables
+        /// - These processes may hold locks on DLLs, .pyd files, or the executables themselves
+        /// - macOS/Linux allow deletion of open files (unlink), but Windows does not
+        /// </summary>
+        private static void KillWindowsUvProcesses(string serverSrcPath)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(serverSrcPath)) return;
+
+                string venvPath = Path.Combine(serverSrcPath, ".venv");
+                if (!Directory.Exists(venvPath)) return;
+
+                string normalizedVenvPath = Path.GetFullPath(venvPath).ToLowerInvariant();
+
+                // Use WMIC to find processes with executables in the .venv directory
+                // This is much safer than iterating all processes
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "wmic",
+                    Arguments = $"process where \"ExecutablePath like '%{normalizedVenvPath.Replace("\\", "\\\\")}%'\" get ProcessId",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                using var proc = Process.Start(psi);
+                if (proc == null) return;
+
+                string output = proc.StandardOutput.ReadToEnd();
+                proc.WaitForExit(5000);
+
+                if (proc.ExitCode != 0) return;
+
+                // Parse PIDs from WMIC output
+                var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var line in lines)
+                {
+                    string trimmed = line.Trim();
+                    if (trimmed.Equals("ProcessId", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (string.IsNullOrWhiteSpace(trimmed)) continue;
+
+                    if (int.TryParse(trimmed, out int pid))
+                    {
+                        try
+                        {
+                            using var p = Process.GetProcessById(pid);
+                            // Double-check it's not a critical process
+                            string name = p.ProcessName.ToLowerInvariant();
+                            if (name == "unity" || name == "code" || name == "devenv" || name == "rider64")
+                            {
+                                continue; // Skip IDE processes
+                            }
+                            p.Kill();
+                            p.WaitForExit(2000);
+                        }
+                        catch { }
+                    }
+                }
+
+                // Give processes time to fully exit
+                System.Threading.Thread.Sleep(500);
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Attempts to delete a directory with retry logic to handle Windows file locking issues.
+        /// 
+        /// Why retries are necessary on Windows:
+        /// - Even after killing processes, Windows may take time to release file handles
+        /// - Antivirus, Windows Defender, or indexing services may temporarily lock files
+        /// - File Explorer previews can hold locks on certain file types
+        /// - Readonly attributes on files (common in .venv) block deletion
+        /// 
+        /// This method handles these cases by:
+        /// - Retrying deletion after a delay to allow handle release
+        /// - Clearing readonly attributes that block deletion
+        /// - Distinguishing between temporary locks (retry) and permanent failures
+        /// </summary>
+        private static bool DeleteDirectoryWithRetry(string path, int maxRetries = 3, int delayMs = 500)
+        {
+            for (int i = 0; i < maxRetries; i++)
+            {
+                try
+                {
+                    if (!Directory.Exists(path)) return true;
+                    
+                    Directory.Delete(path, recursive: true);
+                    return true;
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    if (i < maxRetries - 1)
+                    {
+                        // Wait for file handles to be released
+                        System.Threading.Thread.Sleep(delayMs);
+                        
+                        // Try to clear readonly attributes
+                        try
+                        {
+                            foreach (var file in Directory.GetFiles(path, "*", SearchOption.AllDirectories))
+                            {
+                                try
+                                {
+                                    var attrs = File.GetAttributes(file);
+                                    if ((attrs & FileAttributes.ReadOnly) == FileAttributes.ReadOnly)
+                                    {
+                                        File.SetAttributes(file, attrs & ~FileAttributes.ReadOnly);
+                                    }
+                                }
+                                catch { }
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                catch (IOException)
+                {
+                    if (i < maxRetries - 1)
+                    {
+                        // File in use, wait and retry
+                        System.Threading.Thread.Sleep(delayMs);
+                    }
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+            return false;
         }
 
         private static string ReadVersionFile(string path)
@@ -459,16 +611,12 @@ namespace MCPForUnity.Editor.Helpers
                 // Delete the entire installed server directory
                 if (Directory.Exists(destRoot))
                 {
-                    try
+                    if (!DeleteDirectoryWithRetry(destRoot, maxRetries: 5, delayMs: 1000))
                     {
-                        Directory.Delete(destRoot, recursive: true);
-                        McpLog.Info($"Deleted existing server at {destRoot}");
-                    }
-                    catch (Exception ex)
-                    {
-                        McpLog.Error($"Failed to delete existing server: {ex.Message}");
+                        McpLog.Error($"Failed to delete existing server at {destRoot}. Please close any applications using the Python virtual environment and try again.");
                         return false;
                     }
+                    McpLog.Info($"Deleted existing server at {destRoot}");
                 }
 
                 // Re-copy from embedded source
@@ -488,10 +636,12 @@ namespace MCPForUnity.Editor.Helpers
                 }
 
                 McpLog.Info($"Server rebuilt successfully at {destRoot} (version {embeddedVer})");
-                
+
                 // Clear any previous installation error
+
                 PackageLifecycleManager.ClearLastInstallError();
-                
+
+
                 return true;
             }
             catch (Exception ex)
@@ -751,13 +901,9 @@ namespace MCPForUnity.Editor.Helpers
                 // Delete old installation
                 if (Directory.Exists(destRoot))
                 {
-                    try
+                    if (!DeleteDirectoryWithRetry(destRoot, maxRetries: 5, delayMs: 1000))
                     {
-                        Directory.Delete(destRoot, recursive: true);
-                    }
-                    catch (Exception ex)
-                    {
-                        McpLog.Warn($"Could not fully delete old server: {ex.Message}");
+                        McpLog.Warn($"Could not fully delete old server (files may be in use)");
                     }
                 }
 
@@ -807,9 +953,12 @@ namespace MCPForUnity.Editor.Helpers
             }
             finally
             {
-                try {
-                    if (File.Exists(tempZip)) File.Delete(tempZip); 
-                } catch (Exception ex) {
+                try
+                {
+                    if (File.Exists(tempZip)) File.Delete(tempZip);
+                }
+                catch (Exception ex)
+                {
                     McpLog.Warn($"Could not delete temp zip file: {ex.Message}");
                 }
             }
