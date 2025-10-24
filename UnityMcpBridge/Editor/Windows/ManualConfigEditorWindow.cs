@@ -97,7 +97,7 @@ namespace MCPForUnity.Editor.Windows
             else if (mcpClient?.mcpType == McpTypes.Kiro)
             {
                 EditorGUILayout.LabelField(
-                    "    a) Going to File > Settings > Settings > Search for \"MCP\" > Open Workspace MCP Config",
+                      "a) Open 'Warp Drive' by click the Warp icon in the top-left corner or press (Ctrl + Shift + | on Windows / ⌘ + | on macOS) >  MCP Servers > Add",
                     instructionStyle
                 );
             }
@@ -112,6 +112,12 @@ namespace MCPForUnity.Editor.Windows
             {
                 EditorGUILayout.LabelField(
                     "    a) Going to Settings > MCP > Add Server > Add Manually",
+                    instructionStyle
+                );
+            }else if (mcpClient?.mcpType == McpTypes.Warp)
+            {
+                EditorGUILayout.LabelField(
+                    "    a) Going to Settings > MCP > Manage MCPs > Open Config File",
                     instructionStyle
                 );
             }
