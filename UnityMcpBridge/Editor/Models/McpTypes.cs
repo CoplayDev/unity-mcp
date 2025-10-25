@@ -10,6 +10,6 @@ namespace MCPForUnity.Editor.Models
         VSCode,
         Windsurf,
         Trae,
-        Warp
+        Warp,
     }
 }
