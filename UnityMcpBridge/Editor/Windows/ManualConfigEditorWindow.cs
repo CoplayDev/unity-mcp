@@ -118,7 +118,7 @@ namespace MCPForUnity.Editor.Windows
             else if (mcpClient?.mcpType == McpTypes.Warp)
             {
                 EditorGUILayout.LabelField(
-                 "a) Open 'Warp Drive' by click the Warp icon in the top-left corner or press (Ctrl + Shift + | on Windows / ⌘ + | on macOS) >  MCP Servers > Add",
+                 "a) Open 'Warp Drive' by clicking the Warp icon in the top-left corner or press (Ctrl + Shift + | on Windows / ⌘ + | on macOS) >  MCP Servers > Add",
                     instructionStyle
                 );
             }
