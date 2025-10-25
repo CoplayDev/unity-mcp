@@ -206,6 +206,31 @@ namespace MCPForUnity.Editor.Data
                 mcpType = McpTypes.Codex,
                 configStatus = "Not Configured",
             },
+            //  Warp
+            new()
+            {
+                name = "Warp",
+                windowsConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "Warp",
+                    "mcp.json"
+                ),
+                macConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    "Library",
+                    "Application Support",
+                    "Warp",
+                    "mcp.json"
+                ),
+                linuxConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".config",
+                    "Warp",
+                    "mcp.json"
+                ),
+                mcpType = McpTypes.Warp,
+                configStatus = "Not Configured",
+            },
         };
 
         // Initialize status enums after construction

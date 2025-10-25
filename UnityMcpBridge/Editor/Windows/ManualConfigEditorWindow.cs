@@ -115,6 +115,14 @@ namespace MCPForUnity.Editor.Windows
                     instructionStyle
                 );
             }
+            else if (mcpClient?.mcpType == McpTypes.Warp)
+            {
+                EditorGUILayout.LabelField(
+                 "a) Open 'Warp Drive' by clicking the Warp icon in the top-left corner or press (Ctrl + Shift + | on Windows / ⌘ + | on macOS) >  MCP Servers > Add",
+                    instructionStyle
+                );
+            }
+
             EditorGUILayout.LabelField("    OR", instructionStyle);
             EditorGUILayout.LabelField(
                 "    b) Opening the configuration file at:",

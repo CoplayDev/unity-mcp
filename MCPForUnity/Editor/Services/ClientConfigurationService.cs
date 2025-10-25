@@ -469,6 +469,13 @@ namespace MCPForUnity.Editor.Services
                     "4. For local servers, Node.js (npx) or uvx must be installed\n" +
                     "5. Save and restart Trae",
 
+                 McpTypes.Warp =>
+                    "1. Open Warp\n" +
+                    "2. Open 'Warp Drive' — click the Warp icon in the top-left corner, or press (Ctrl + Shift + | on Windows / ⌘ + | on macOS)\n" +
+                    "3. Go to MCP Servers > Add\n" +
+                    "4. Paste the configuration JSON\n" +
+                    "5. Save",
+
                 _ => "Configuration steps not available for this client."
             };
 
