@@ -38,7 +38,10 @@ namespace MCPForUnity.Editor.Helpers
         /// Get the port to use - either from storage or discover a new one
         /// Will try stored port first, then fallback to discovering new port
         /// </summary>
-        /// <returns>Port number to use</returns>
+        /// <summary>
+        /// Selects a TCP port for the current Unity project, preferring a previously saved project-specific port when it is valid and free; if the saved port is busy the method waits briefly for release and otherwise finds and persists an alternative.
+        /// </summary>
+        /// <returns>The port number to use. Returns the stored project port if it exists and is available (or becomes available after a short wait); otherwise returns a newly discovered available port which is saved for future use.</returns>
         public static int GetPortWithFallback()
         {
             // Try to load stored port first, but only if it's from the current project
@@ -60,14 +63,17 @@ namespace MCPForUnity.Editor.Helpers
                     if (IsDebugEnabled()) Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Stored port {storedConfig.unity_port} became available after short wait");
                     return storedConfig.unity_port;
                 }
-                // Prefer sticking to the same port; let the caller handle bind retries/fallbacks
-                return storedConfig.unity_port;
+                // Port is still busy after waiting - find a new available port instead
+                if (IsDebugEnabled()) Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Stored port {storedConfig.unity_port} is occupied by another instance, finding alternative...");
+                int newPort = FindAvailablePort();
+                SavePort(newPort);
+                return newPort;
             }
 
             // If no valid stored port, find a new one and save it
-            int newPort = FindAvailablePort();
-            SavePort(newPort);
-            return newPort;
+            int foundPort = FindAvailablePort();
+            SavePort(foundPort);
+            return foundPort;
         }
 
         /// <summary>

@@ -365,7 +365,32 @@ def script_apply_edits(
                            "Type of the script to edit"] = "MonoBehaviour",
     namespace: Annotated[str,
                          "Namespace of the script to edit"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
+    """
+    Apply a list of edits to a Unity C# script, performing local preview, validation, and/or sending appropriate structured or text edit requests to the Unity project.
+    
+    This function normalizes the script locator and edit shapes, decides whether edits should be handled as structured (class/method/anchor) operations or text-based edits (prepend/append/replace_range/regex_replace), and then either:
+    - forwards structured edits to Unity's structured editor, or
+    - computes line/column edit spans and sends them as atomic text edits with a SHA-256 precondition, or
+    - applies edits locally to produce a preview diff without writing when requested.
+    
+    It supports mixed batches by applying text edits first and then structured edits, honors preview/confirm options for regex replacements, and accepts an optional Unity instance selector to target a specific Unity editor/process.
+    
+    Parameters:
+        ctx: Execution context (logging/tracing) used by the caller.
+        name (str): Script name or locator (may include extensions or Unity URI forms); normalized before use.
+        path (str): Path hint for the script under the Assets/ tree; used to resolve the final script locator.
+        edits (list[dict]): List of edit descriptors. Supported high-level ops include structured ops (replace_method/insert_method/delete_method/replace_class/delete_class/anchor_*) and text ops (prepend/append/replace_range/regex_replace). Various aliases and LSP-like ranges are accepted and normalized.
+        options (dict|None): Operation options such as preview (bool), confirm (bool), validate, refresh, and applyMode. See call sites for supported keys.
+        script_type (str): Script classification (default "MonoBehaviour"); forwarded to Unity for validation and editor actions.
+        namespace (str|None): Optional C# namespace to use when applying structured edits.
+        unity_instance (str|None): Optional target Unity instance identifier (project name, hash, or "Name@hash"); when provided, all Unity RPCs are scoped to that instance.
+    
+    Returns:
+        dict: A structured response payload indicating success or failure. On success the payload may include data such as diffs (for preview), normalized edits echo, or Unity response data. On failure the payload contains machine-parsable error codes and hints describing required fields or regex/anchor problems.
+    """
     ctx.info(f"Processing script_apply_edits: {name}")
     # Normalize locator first so downstream calls target the correct script file.
     name, path = _normalize_script_locator(name, path)
@@ -586,7 +611,7 @@ def script_apply_edits(
             "options": opts2,
         }
         resp_struct = send_command_with_retry(
-            "manage_script", params_struct)
+            "manage_script", params_struct, instance_id=unity_instance)
         if isinstance(resp_struct, dict) and resp_struct.get("success"):
             pass  # Optional sentinel reload removed (deprecated)
         return _with_norm(resp_struct if isinstance(resp_struct, dict) else {"success": False, "message": str(resp_struct)}, normalized_for_echo, routing="structured")
@@ -598,7 +623,7 @@ def script_apply_edits(
         "path": path,
         "namespace": namespace,
         "scriptType": script_type,
-    })
+    }, instance_id=unity_instance)
     if not isinstance(read_resp, dict) or not read_resp.get("success"):
         return read_resp if isinstance(read_resp, dict) else {"success": False, "message": str(read_resp)}
 
@@ -722,7 +747,7 @@ def script_apply_edits(
                     "options": {"refresh": (options or {}).get("refresh", "debounced"), "validate": (options or {}).get("validate", "standard"), "applyMode": ("atomic" if len(at_edits) > 1 else (options or {}).get("applyMode", "sequential"))}
                 }
                 resp_text = send_command_with_retry(
-                    "manage_script", params_text)
+                    "manage_script", params_text, instance_id=unity_instance)
                 if not (isinstance(resp_text, dict) and resp_text.get("success")):
                     return _with_norm(resp_text if isinstance(resp_text, dict) else {"success": False, "message": str(resp_text)}, normalized_for_echo, routing="mixed/text-first")
                 # Optional sentinel reload removed (deprecated)
@@ -743,7 +768,7 @@ def script_apply_edits(
                 "options": opts2
             }
             resp_struct = send_command_with_retry(
-                "manage_script", params_struct)
+                "manage_script", params_struct, instance_id=unity_instance)
             if isinstance(resp_struct, dict) and resp_struct.get("success"):
                 pass  # Optional sentinel reload removed (deprecated)
             return _with_norm(resp_struct if isinstance(resp_struct, dict) else {"success": False, "message": str(resp_struct)}, normalized_for_echo, routing="mixed/text-first")
@@ -871,7 +896,7 @@ def script_apply_edits(
                     "applyMode": ("atomic" if len(at_edits) > 1 else (options or {}).get("applyMode", "sequential"))
                 }
             }
-            resp = send_command_with_retry("manage_script", params)
+            resp = send_command_with_retry("manage_script", params, instance_id=unity_instance)
             if isinstance(resp, dict) and resp.get("success"):
                 pass  # Optional sentinel reload removed (deprecated)
             return _with_norm(
@@ -955,7 +980,7 @@ def script_apply_edits(
         "options": options or {"validate": "standard", "refresh": "debounced"},
     }
 
-    write_resp = send_command_with_retry("manage_script", params)
+    write_resp = send_command_with_retry("manage_script", params, instance_id=unity_instance)
     if isinstance(write_resp, dict) and write_resp.get("success"):
         pass  # Optional sentinel reload removed (deprecated)
     return _with_norm(

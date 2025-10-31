@@ -85,7 +85,28 @@ def apply_text_edits(
                       "Optional strict flag, used to enforce strict mode"] | None = None,
     options: Annotated[dict[str, Any],
                        "Optional options, used to pass additional options to the script editor"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
+    """
+    Apply one or more text edits to a C# script located under the Assets/ directory.
+    
+    Parameters:
+        ctx (Context): Execution context / logger.
+        uri (str): URI or path identifying the script (e.g. unity://path/Assets/..., file://..., or Assets/...).
+        edits (list[dict[str, Any]]): List of edits to apply. Each edit must include either explicit 1-based
+            `startLine`, `startCol`, `endLine`, `endCol`, and `newText`, or a normalizable `range` (LSP-style
+            `{start:{line,character},end:{...}}` or a `[startIndex,endIndex]` pair) and `newText`/`text`.
+        precondition_sha256 (str|None): Optional SHA256 expected for the current file to guard against concurrent changes.
+        strict (bool|None): If true, reject edits that require normalization (e.g., zero-based explicit fields) instead of auto-normalizing.
+        options (dict[str, Any]|None): Additional editor options (e.g., `applyMode`, `debug_preview`, `force_sentinel_reload`).
+        unity_instance (str|None): Target Unity instance identifier; if omitted the default instance is used.
+    
+    Returns:
+        dict[str, Any]: The Unity/tool response. On success `data.normalizedEdits` will contain the edits sent,
+        and `data.warnings` may include normalization warnings. On failure returns a dict with `success: False`
+        and error `code`/`message` (e.g., overlap, missing_field, zero_based_explicit_fields).
+    """
     ctx.info(f"Processing apply_text_edits: {uri}")
     name, directory = _split_uri(uri)
 
@@ -107,7 +128,7 @@ def apply_text_edits(
             "action": "read",
             "name": name,
             "path": directory,
-        })
+        }, instance_id=unity_instance)
         if not (isinstance(read_resp, dict) and read_resp.get("success")):
             return read_resp if isinstance(read_resp, dict) else {"success": False, "message": str(read_resp)}
         data = read_resp.get("data", {})
@@ -304,7 +325,7 @@ def apply_text_edits(
         "options": opts,
     }
     params = {k: v for k, v in params.items() if v is not None}
-    resp = unity_connection.send_command_with_retry("manage_script", params)
+    resp = unity_connection.send_command_with_retry("manage_script", params, instance_id=unity_instance)
     if isinstance(resp, dict):
         data = resp.setdefault("data", {})
         data.setdefault("normalizedEdits", normalized_edits)
@@ -331,6 +352,11 @@ def apply_text_edits(
                         return None
 
                 def _flip_async():
+                    """
+                    Trigger a sentinel flip in the Unity editor if the editor is not currently reloading.
+                    
+                    Performs the action after a short delay; if the editor is not in a reloading state, sends the "MCP/Flip Reload Sentinel" menu command to the configured Unity instance. All exceptions raised during the operation are suppressed and the function does not return a value.
+                    """
                     try:
                         time.sleep(0.1)
                         st = _latest_status()
@@ -341,6 +367,7 @@ def apply_text_edits(
                             {"menuPath": "MCP/Flip Reload Sentinel"},
                             max_retries=0,
                             retry_ms=0,
+                            instance_id=unity_instance,
                         )
                     except Exception:
                         pass
@@ -359,7 +386,23 @@ def create_script(
     contents: Annotated[str, "Contents of the script to create. Note, this is Base64 encoded over transport."],
     script_type: Annotated[str, "Script type (e.g., 'C#')"] | None = None,
     namespace: Annotated[str, "Namespace for the script"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
+    """
+    Create a new C# script file under the project's Assets/ directory.
+    
+    Parameters:
+        ctx (Context): Request context and logger.
+        path (str): Path under Assets/ where the script will be created (e.g., "Assets/Scripts/My.cs").
+        contents (str): Script contents to write; will be base64-encoded for transport.
+        script_type (str | None): Script type (for example, "C#"); included in the create request when provided.
+        namespace (str | None): Namespace to assign to the new script.
+        unity_instance (str | None): Target Unity instance identifier (project name, hash, or "Name@hash"). If omitted, the default instance is used.
+    
+    Returns:
+        dict: Unity tool response on success, or a dict with "success": False and an error code/message on validation or failure.
+    """
     ctx.info(f"Processing create_script: {path}")
     name = os.path.splitext(os.path.basename(path))[0]
     directory = os.path.dirname(path)
@@ -386,22 +429,33 @@ def create_script(
             contents.encode("utf-8")).decode("utf-8")
         params["contentsEncoded"] = True
     params = {k: v for k, v in params.items() if v is not None}
-    resp = unity_connection.send_command_with_retry("manage_script", params)
+    resp = unity_connection.send_command_with_retry("manage_script", params, instance_id=unity_instance)
     return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}
 
 
 @mcp_for_unity_tool(description=("Delete a C# script by URI or Assets-relative path."))
 def delete_script(
     ctx: Context,
-    uri: Annotated[str, "URI of the script to delete under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."]
+    uri: Annotated[str, "URI of the script to delete under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
-    """Delete a C# script by URI."""
+    """
+    Delete a C# script identified by a URI under the Assets/ directory.
+    
+    Parameters:
+        uri (str): Path or URI pointing to a script inside the project Assets (examples: "unity://path/Assets/...", "file://...", or "Assets/...").
+        unity_instance (str | None): Target Unity instance identifier (project name, hash, or "Name@hash"). If omitted, the default instance is used.
+    
+    Returns:
+        dict: Operation result from the Unity toolbridge. On success includes `success: True` and any returned data; on failure includes `success: False` and error details.
+    """
     ctx.info(f"Processing delete_script: {uri}")
     name, directory = _split_uri(uri)
     if not directory or directory.split("/")[0].lower() != "assets":
         return {"success": False, "code": "path_outside_assets", "message": "URI must resolve under 'Assets/'."}
     params = {"action": "delete", "name": name, "path": directory}
-    resp = unity_connection.send_command_with_retry("manage_script", params)
+    resp = unity_connection.send_command_with_retry("manage_script", params, instance_id=unity_instance)
     return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}
 
 
@@ -412,8 +466,26 @@ def validate_script(
     level: Annotated[Literal['basic', 'standard'],
                      "Validation level"] = "basic",
     include_diagnostics: Annotated[bool,
-                                   "Include full diagnostics and summary"] = False
+                                   "Include full diagnostics and summary"] = False,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
+    """
+    Validate a C# script under the Assets/ tree and optionally return diagnostics.
+    
+    Parameters:
+        ctx (Context): Request context / logger.
+        uri (str): URI or path resolving to a script under Assets/ (e.g. unity://path/Assets/..., file://..., or Assets/...).
+        level (Literal['basic','standard']): Validation thoroughness; must be 'basic' or 'standard'.
+        include_diagnostics (bool): If True, include the full diagnostics list and a warnings/errors summary; otherwise return only the summary counts.
+        unity_instance (str|None): Optional target Unity instance identifier; if omitted the default instance is used.
+    
+    Returns:
+        dict: On success, a dict with "success": True and "data" containing either:
+            - {"diagnostics": [...], "summary": {"warnings": int, "errors": int}} when include_diagnostics is True, or
+            - {"warnings": int, "errors": int} when include_diagnostics is False.
+        On failure, a dict with "success": False and an error code/message (for example "path_outside_assets" or "bad_level"), or the raw response from the Unity bridge if it indicates an error.
+    """
     ctx.info(f"Processing validate_script: {uri}")
     name, directory = _split_uri(uri)
     if not directory or directory.split("/")[0].lower() != "assets":
@@ -426,7 +498,7 @@ def validate_script(
         "path": directory,
         "level": level,
     }
-    resp = unity_connection.send_command_with_retry("manage_script", params)
+    resp = unity_connection.send_command_with_retry("manage_script", params, instance_id=unity_instance)
     if isinstance(resp, dict) and resp.get("success"):
         diags = resp.get("data", {}).get("diagnostics", []) or []
         warnings = sum(1 for d in diags if str(
@@ -450,7 +522,25 @@ def manage_script(
     script_type: Annotated[str, "Script type (e.g., 'C#')",
                            "Type hint (e.g., 'MonoBehaviour')"] | None = None,
     namespace: Annotated[str, "Namespace for the script"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
+    """
+    Route create/read/delete script operations to the Unity toolbridge and normalize encoded contents in responses.
+    
+    Parameters:
+        ctx (Context): Execution context for logging and tool calls.
+        action (Literal['create','read','delete']): Operation to perform on the script.
+        name (str): Script base name without the `.cs` extension.
+        path (str): Asset-relative path for the script (for example, "Assets/Scripts/My.cs").
+        contents (str | None): Script contents to send for create or update operations.
+        script_type (str | None): Optional script type hint (for example, "MonoBehaviour").
+        namespace (str | None): Optional namespace to assign to the script.
+        unity_instance (str | None): Optional target Unity instance identifier; if omitted the default instance is used.
+    
+    Returns:
+        dict[str, Any]: Operation result. On success includes `"success": True`, a `"message"`, and optional `"data"` (when present, any encoded contents are decoded to `data["contents"]`). On failure returns a dict with `"success": False` and a `"message"`.
+    """
     ctx.info(f"Processing manage_script: {action}")
     try:
         # Prepare parameters for Unity
@@ -473,7 +563,7 @@ def manage_script(
 
         params = {k: v for k, v in params.items() if v is not None}
 
-        response = unity_connection.send_command_with_retry("manage_script", params)
+        response = unity_connection.send_command_with_retry("manage_script", params, instance_id=unity_instance)
 
         if isinstance(response, dict):
             if response.get("success"):
@@ -535,13 +625,26 @@ def manage_script_capabilities(ctx: Context) -> dict[str, Any]:
 @mcp_for_unity_tool(description="Get SHA256 and basic metadata for a Unity C# script without returning file contents")
 def get_sha(
     ctx: Context,
-    uri: Annotated[str, "URI of the script to edit under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."]
+    uri: Annotated[str, "URI of the script to edit under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
+    """
+    Retrieve the SHA-256 hash and byte length for a script located under the Assets/ directory.
+    
+    Parameters:
+        uri (str): Path or URI identifying the script (e.g., "unity://path/Assets/...", "file://...", or "Assets/...").
+        unity_instance (str | None): Optional Unity instance identifier (project name, hash, or "Name@hash"); when omitted the default instance is used.
+    
+    Returns:
+        dict: On success, {"success": True, "data": {"sha256": <hex-string-or-none>, "lengthBytes": <int-or-none>}}.
+              On failure, either the original response dict from Unity or {"success": False, "message": <error-string>}.
+    """
     ctx.info(f"Processing get_sha: {uri}")
     try:
         name, directory = _split_uri(uri)
         params = {"action": "get_sha", "name": name, "path": directory}
-        resp = unity_connection.send_command_with_retry("manage_script", params)
+        resp = unity_connection.send_command_with_retry("manage_script", params, instance_id=unity_instance)
         if isinstance(resp, dict) and resp.get("success"):
             data = resp.get("data", {})
             minimal = {"sha256": data.get(

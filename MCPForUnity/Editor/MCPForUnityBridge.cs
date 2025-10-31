@@ -297,6 +297,12 @@ namespace MCPForUnity.Editor
             return false;
         }
 
+        /// <summary>
+        /// Starts the MCPForUnity bridge: binds a local TCP listener, marks the bridge running, starts the background listener loop, registers editor update and lifecycle handlers, and emits an initial heartbeat.
+        /// </summary>
+        /// <remarks>
+        /// The method prefers a persisted per-project port and will attempt short retries; if the preferred port is occupied it will obtain an alternative port and continue. On success it sets bridge runtime state (including <c>isRunning</c> and <c>currentUnityPort</c>), initializes command handling, and schedules regular heartbeats. Errors encountered while binding the listener are logged.
+        /// </remarks>
         public static void Start()
         {
             lock (startStopLock)
@@ -362,7 +368,22 @@ namespace MCPForUnity.Editor
                         }
                         catch (SocketException se) when (se.SocketErrorCode == SocketError.AddressAlreadyInUse && attempt >= maxImmediateRetries)
                         {
+                            // Port is occupied by another instance, get a new available port
+                            int oldPort = currentUnityPort;
                             currentUnityPort = PortManager.GetPortWithFallback();
+
+                            // Safety check: ensure we got a different port
+                            if (currentUnityPort == oldPort)
+                            {
+                                McpLog.Error($"Port {oldPort} is occupied and no alternative port available");
+                                throw;
+                            }
+
+                            if (IsDebugEnabled())
+                            {
+                                McpLog.Info($"Port {oldPort} occupied, switching to port {currentUnityPort}");
+                            }
+
                             listener = new TcpListener(IPAddress.Loopback, currentUnityPort);
                             listener.Server.SetSocketOption(
                                 SocketOptionLevel.Socket,
@@ -417,6 +438,18 @@ namespace MCPForUnity.Editor
             }
         }
 
+        /// <summary>
+        /// Stops the MCP-for-Unity bridge, tears down network listeners and client connections, and cleans up runtime state.
+        /// </summary>
+        /// <remarks>
+        /// This method is safe to call multiple times and performs a best-effort, non-blocking shutdown:
+        /// - Cancels the listener loop and stops the TCP listener.
+        /// - Closes active client sockets to unblock pending I/O.
+        /// - Waits briefly for the listener task to exit.
+        /// - Unsubscribes editor and assembly reload events.
+        /// - Attempts to delete the per-project status file under the user's profile directory.
+        /// Exceptions encountered during shutdown are caught and logged; callers should not rely on exceptions being thrown.
+        /// </remarks>
         public static void Stop()
         {
             Task toWait = null;
@@ -473,6 +506,22 @@ namespace MCPForUnity.Editor
             try { AssemblyReloadEvents.beforeAssemblyReload -= OnBeforeAssemblyReload; } catch { }
             try { AssemblyReloadEvents.afterAssemblyReload -= OnAfterAssemblyReload; } catch { }
             try { EditorApplication.quitting -= Stop; } catch { }
+
+            // Clean up status file when Unity stops
+            try
+            {
+                string statusDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".unity-mcp");
+                string statusFile = Path.Combine(statusDir, $"unity-mcp-status-{ComputeProjectHash(Application.dataPath)}.json");
+                if (File.Exists(statusFile))
+                {
+                    File.Delete(statusFile);
+                    if (IsDebugEnabled()) McpLog.Info($"Deleted status file: {statusFile}");
+                }
+            }
+            catch (Exception ex)
+            {
+                if (IsDebugEnabled()) McpLog.Warn($"Failed to delete status file: {ex.Message}");
+            }
 
             if (IsDebugEnabled()) McpLog.Info("MCPForUnityBridge stopped.");
         }
@@ -1172,6 +1221,11 @@ namespace MCPForUnity.Editor
             ScheduleInitRetry();
         }
 
+        /// <summary>
+        /// Writes a per-project status JSON file for external monitoring containing bridge state and metadata.
+        /// </summary>
+        /// <param name="reloading">If true, indicates the editor is reloading; affects the default reason value.</param>
+        /// <param name="reason">Optional custom reason to include in the status file. If null, defaults to "reloading" when <paramref name="reloading"/> is true, otherwise "ready".</param>
         private static void WriteHeartbeat(bool reloading, string reason = null)
         {
             try
@@ -1184,6 +1238,29 @@ namespace MCPForUnity.Editor
                 }
                 Directory.CreateDirectory(dir);
                 string filePath = Path.Combine(dir, $"unity-mcp-status-{ComputeProjectHash(Application.dataPath)}.json");
+
+                // Extract project name from path
+                string projectName = "Unknown";
+                try
+                {
+                    string projectPath = Application.dataPath;
+                    if (!string.IsNullOrEmpty(projectPath))
+                    {
+                        // Remove trailing /Assets or \Assets
+                        projectPath = projectPath.TrimEnd('/', '\\');
+                        if (projectPath.EndsWith("Assets", StringComparison.OrdinalIgnoreCase))
+                        {
+                            projectPath = projectPath.Substring(0, projectPath.Length - 6).TrimEnd('/', '\\');
+                        }
+                        projectName = Path.GetFileName(projectPath);
+                        if (string.IsNullOrEmpty(projectName))
+                        {
+                            projectName = "Unknown";
+                        }
+                    }
+                }
+                catch { }
+
                 var payload = new
                 {
                     unity_port = currentUnityPort,
@@ -1191,6 +1268,8 @@ namespace MCPForUnity.Editor
                     reason = reason ?? (reloading ? "reloading" : "ready"),
                     seq = heartbeatSeq,
                     project_path = Application.dataPath,
+                    project_name = projectName,
+                    unity_version = Application.unityVersion,
                     last_heartbeat = DateTime.UtcNow.ToString("O")
                 };
                 File.WriteAllText(filePath, JsonConvert.SerializeObject(payload), new System.Text.UTF8Encoding(false));

@@ -45,7 +45,19 @@ async def run_tests(
         description="Unity test mode to run")] = "edit",
     timeout_seconds: Annotated[str, Field(
         description="Optional timeout in seconds for the Unity test run (string, e.g. '30')")] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> RunTestsResponse:
+    """
+    Run Unity test suites for the specified mode.
+    
+    Parameters:
+        timeout_seconds (str | None): Optional timeout for the test run expressed as a string (e.g., "30"). Accepts numeric strings or floats; values like "", "none", or "null" are treated as not provided.
+        unity_instance (str | None): Target Unity instance identifier (project name, hash, or "Name@hash"). If not provided, the default instance is used.
+    
+    Returns:
+        RunTestsResponse | Any: A RunTestsResponse constructed from the command response when the response is a dict; otherwise the original response object.
+    """
     await ctx.info(f"Processing run_tests: mode={mode}")
 
     # Coerce timeout defensively (string/float -> int)
@@ -69,6 +81,6 @@ async def run_tests(
     if ts is not None:
         params["timeoutSeconds"] = ts
 
-    response = await async_send_command_with_retry("run_tests", params)
+    response = await async_send_command_with_retry("run_tests", params, instance_id=unity_instance)
     await ctx.info(f'Response {response}')
     return RunTestsResponse(**response) if isinstance(response, dict) else response

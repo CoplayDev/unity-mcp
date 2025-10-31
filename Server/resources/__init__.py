@@ -2,6 +2,7 @@
 MCP Resources package - Auto-discovers and registers all resources in this directory.
 """
 import logging
+import inspect
 from pathlib import Path
 
 from fastmcp import FastMCP
@@ -16,12 +17,72 @@ logger = logging.getLogger("mcp-for-unity-server")
 __all__ = ['register_all_resources']
 
 
+def _create_fixed_wrapper(original_func, has_other_params):
+    """
+    Create a call wrapper that invokes `original_func` with `unity_instance=None`, preserving the original function's synchronous or asynchronous nature.
+    
+    Parameters:
+        original_func (callable): The function to wrap; may be synchronous or an async coroutine function.
+        has_other_params (bool): True if the wrapper should accept and forward other parameters besides `unity_instance`.
+    
+    Returns:
+        fixed_wrapper (callable): A wrapper function that calls `original_func` with `unity_instance=None`. If `original_func` is async, the wrapper will be an async function; otherwise it will be a regular function. The wrapper forwards any provided args/kwargs when `has_other_params` is True, and accepts no arguments when `has_other_params` is False.
+    """
+    is_async = inspect.iscoroutinefunction(original_func)
+
+    if has_other_params:
+        if is_async:
+            async def fixed_wrapper(*args, **kwargs):
+                """
+                Invoke the original callable with `unity_instance` set to None while forwarding all other arguments.
+                
+                @returns The value returned by the original callable.
+                """
+                return await original_func(*args, **kwargs, unity_instance=None)
+        else:
+            def fixed_wrapper(*args, **kwargs):
+                """
+                Call the original resource function with any provided arguments and inject a fixed `unity_instance=None`.
+                
+                Parameters:
+                    *args: Positional arguments forwarded to the original function.
+                    **kwargs: Keyword arguments forwarded to the original function.
+                
+                Returns:
+                    The value returned by the original function.
+                """
+                return original_func(*args, **kwargs, unity_instance=None)
+    else:
+        if is_async:
+            async def fixed_wrapper():
+                """
+                Call the original resource function with `unity_instance` set to None.
+                
+                Returns:
+                    The value returned by the original function.
+                """
+                return await original_func(unity_instance=None)
+        else:
+            def fixed_wrapper():
+                """
+                Call the wrapped resource function with unity_instance set to None and return its result.
+                
+                Returns:
+                    The value returned by the wrapped resource function.
+                """
+                return original_func(unity_instance=None)
+
+    return fixed_wrapper
+
+
 def register_all_resources(mcp: FastMCP):
     """
-    Auto-discover and register all resources in the resources/ directory.
-
-    Any .py file in this directory or subdirectories with @mcp_for_unity_resource decorated
-    functions will be automatically registered.
+    Auto-discovers Python modules in the resources package and registers all discovered MCP resources with the provided FastMCP instance.
+    
+    Scans this module's resources directory for modules that contain functions previously decorated/registered as MCP resources, imports them, and registers each discovered resource with the given FastMCP instance. For URIs that include query-parameter templates (identified by '{?'), two registrations are performed for compatibility: a template registration (preserving the original URI and parameters) and a fixed default registration (a second resource with the query portion removed and the function wrapped to call with unity_instance=None). Updates each resource entry to reference the template version when both registrations occur. If no resources are found, the function logs a warning and returns without raising.
+    
+    Parameters:
+        mcp (FastMCP): The FastMCP instance used to register discovered resources.
     """
     logger.info("Auto-discovering MCP for Unity Server resources...")
     # Dynamic import of all modules in this directory
@@ -36,6 +97,7 @@ def register_all_resources(mcp: FastMCP):
         logger.warning("No MCP resources registered!")
         return
 
+    registered_count = 0
     for resource_info in resources:
         func = resource_info['func']
         uri = resource_info['uri']
@@ -43,11 +105,68 @@ def register_all_resources(mcp: FastMCP):
         description = resource_info['description']
         kwargs = resource_info['kwargs']
 
-        # Apply the @mcp.resource decorator and telemetry
-        wrapped = telemetry_resource(resource_name)(func)
-        wrapped = mcp.resource(uri=uri, name=resource_name,
-                               description=description, **kwargs)(wrapped)
-        resource_info['func'] = wrapped
-        logger.debug(f"Registered resource: {resource_name} - {description}")
+        # Check if URI contains query parameters (e.g., {?unity_instance})
+        has_query_params = '{?' in uri
 
-    logger.info(f"Registered {len(resources)} MCP resources")
+        if has_query_params:
+            # Register two versions for backward compatibility:
+            # 1. Template version with query parameters (for multi-instance)
+            wrapped_template = telemetry_resource(resource_name)(func)
+            wrapped_template = mcp.resource(uri=uri, name=resource_name,
+                                           description=description, **kwargs)(wrapped_template)
+            logger.debug(f"Registered resource template: {resource_name} - {uri}")
+            registered_count += 1
+
+            # 2. Fixed version without query parameters (for single-instance/default)
+            # Remove query parameters from URI
+            fixed_uri = uri.split('{?')[0]
+            fixed_name = f"{resource_name}_default"
+            fixed_description = f"{description} (default instance)"
+
+            # Create a wrapper function that doesn't accept unity_instance parameter
+            # This wrapper will call the original function with unity_instance=None
+            sig = inspect.signature(func)
+            params = list(sig.parameters.values())
+
+            # Filter out unity_instance parameter
+            fixed_params = [p for p in params if p.name != 'unity_instance']
+
+            # Create wrapper using factory function to avoid closure issues
+            has_other_params = len(fixed_params) > 0
+            fixed_wrapper = _create_fixed_wrapper(func, has_other_params)
+
+            # Update signature to match filtered parameters
+            if has_other_params:
+                fixed_wrapper.__signature__ = sig.replace(parameters=fixed_params)
+                fixed_wrapper.__annotations__ = {
+                    k: v for k, v in getattr(func, '__annotations__', {}).items()
+                    if k != 'unity_instance'
+                }
+            else:
+                fixed_wrapper.__signature__ = inspect.Signature(parameters=[])
+                fixed_wrapper.__annotations__ = {
+                    k: v for k, v in getattr(func, '__annotations__', {}).items()
+                    if k == 'return'
+                }
+
+            # Preserve function metadata
+            fixed_wrapper.__name__ = fixed_name
+            fixed_wrapper.__doc__ = func.__doc__
+
+            wrapped_fixed = telemetry_resource(fixed_name)(fixed_wrapper)
+            wrapped_fixed = mcp.resource(uri=fixed_uri, name=fixed_name,
+                                        description=fixed_description, **kwargs)(wrapped_fixed)
+            logger.debug(f"Registered resource (fixed): {fixed_name} - {fixed_uri}")
+            registered_count += 1
+
+            resource_info['func'] = wrapped_template
+        else:
+            # No query parameters, register as-is
+            wrapped = telemetry_resource(resource_name)(func)
+            wrapped = mcp.resource(uri=uri, name=resource_name,
+                                   description=description, **kwargs)(wrapped)
+            resource_info['func'] = wrapped
+            logger.debug(f"Registered resource: {resource_name} - {description}")
+            registered_count += 1
+
+    logger.info(f"Registered {registered_count} MCP resources ({len(resources)} unique)")

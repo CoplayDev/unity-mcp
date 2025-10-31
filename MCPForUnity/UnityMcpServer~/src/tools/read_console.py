@@ -23,8 +23,27 @@ def read_console(
     format: Annotated[Literal['plain', 'detailed',
                               'json'], "Output format"] | None = None,
     include_stacktrace: Annotated[bool | str,
-                                  "Include stack traces in output (accepts true/false or 'true'/'false')"] | None = None
+                                  "Include stack traces in output (accepts true/false or 'true'/'false')"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None
 ) -> dict[str, Any]:
+    """
+    Read or clear Unity Editor console messages and return a structured response.
+    
+    Parameters:
+        ctx (Context): Execution context (logger/metadata).
+        action (str | None): "get" to retrieve messages or "clear" to clear the console. Defaults to "get".
+        types (list[str] | None): Message types to include (e.g., ["error","warning","log"] or ["all"]). Defaults to ["error","warning","log"].
+        count (int | str | None): Maximum number of messages to return. Accepts an int or numeric string; None can mean no limit.
+        filter_text (str | None): Substring to filter messages by text.
+        since_timestamp (str | None): ISO 8601 timestamp; only messages after this time are returned.
+        format (str | None): Output format: "plain", "detailed", or "json". Defaults to "detailed".
+        include_stacktrace (bool | str | None): Whether to include stack traces in returned messages. Accepts boolean or strings like "true"/"false". Defaults to True.
+        unity_instance (str | None): Target Unity instance identifier (project name, hash, or "Name@hash"); when omitted the default instance is used.
+    
+    Returns:
+        dict[str, Any]: A response dictionary from the Unity command. On success the dict typically contains "success": True and a "data" payload; if the underlying call returns a non-dict value, the function returns {"success": False, "message": str(resp)}.
+    """
     ctx.info(f"Processing read_console: {action}")
     # Set defaults if values are None
     action = action if action is not None else 'get'
@@ -87,8 +106,8 @@ def read_console(
     if 'count' not in params_dict:
         params_dict['count'] = None
 
-    # Use centralized retry helper
-    resp = send_command_with_retry("read_console", params_dict)
+    # Use centralized retry helper with instance routing
+    resp = send_command_with_retry("read_console", params_dict, instance_id=unity_instance)
     if isinstance(resp, dict) and resp.get("success") and not include_stacktrace:
         # Strip stacktrace fields from returned lines if present
         try:
