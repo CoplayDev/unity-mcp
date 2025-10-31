@@ -36,10 +36,16 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                         "Programs", "Python", "Python312", "python.exe"),
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                         "Programs", "Python", "Python311", "python.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "Programs", "Python", "Python310", "python.exe"),
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                         "Python313", "python.exe"),
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                        "Python312", "python.exe")
+                        "Python312", "python.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                        "Python311", "python.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                        "Python310", "python.exe")
                 };
 
                 foreach (var candidate in candidates)
