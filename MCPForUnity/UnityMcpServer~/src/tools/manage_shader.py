@@ -16,6 +16,8 @@ def manage_shader(
     path: Annotated[str, "Asset path (default: \"Assets/\")"],
     contents: Annotated[str,
                         "Shader code for 'create'/'update'"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
     ctx.info(f"Processing manage_shader: {action}")
     try:
@@ -39,8 +41,8 @@ def manage_shader(
         # Remove None values so they don't get sent as null
         params = {k: v for k, v in params.items() if v is not None}
 
-        # Send command via centralized retry helper
-        response = send_command_with_retry("manage_shader", params)
+        # Send command via centralized retry helper with instance routing
+        response = send_command_with_retry("manage_shader", params, instance_id=unity_instance)
 
         # Process response from Unity
         if isinstance(response, dict) and response.get("success"):

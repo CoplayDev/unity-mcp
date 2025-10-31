@@ -28,6 +28,8 @@ def manage_prefabs(
                                "Allow replacing an existing prefab at the same path"] | None = None,
     search_inactive: Annotated[bool,
                                "Include inactive objects when resolving the target name"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
     ctx.info(f"Processing manage_prefabs: {action}")
     try:
@@ -45,7 +47,7 @@ def manage_prefabs(
             params["allowOverwrite"] = bool(allow_overwrite)
         if search_inactive is not None:
             params["searchInactive"] = bool(search_inactive)
-        response = send_command_with_retry("manage_prefabs", params)
+        response = send_command_with_retry("manage_prefabs", params, instance_id=unity_instance)
 
         if isinstance(response, dict) and response.get("success"):
             return {

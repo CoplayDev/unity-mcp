@@ -15,6 +15,8 @@ def manage_scene(
                     "Asset path for scene operations (default: 'Assets/')"] | None = None,
     build_index: Annotated[int | str,
                            "Build index for load/build settings actions (accepts int or string, e.g., 0 or '0')"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
     ctx.info(f"Processing manage_scene: {action}")
     try:
@@ -44,8 +46,8 @@ def manage_scene(
         if coerced_build_index is not None:
             params["buildIndex"] = coerced_build_index
 
-        # Use centralized retry helper
-        response = send_command_with_retry("manage_scene", params)
+        # Use centralized retry helper with instance routing
+        response = send_command_with_retry("manage_scene", params, instance_id=unity_instance)
 
         # Preserve structured failure data; unwrap success into a friendlier shape
         if isinstance(response, dict) and response.get("success"):

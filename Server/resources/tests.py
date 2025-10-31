@@ -17,15 +17,29 @@ class GetTestsResponse(MCPResponse):
     data: list[TestItem] = []
 
 
-@mcp_for_unity_resource(uri="mcpforunity://tests", name="get_tests", description="Provides a list of all tests.")
-async def get_tests() -> GetTestsResponse:
-    """Provides a list of all tests."""
-    response = await async_send_command_with_retry("get_tests", {})
+@mcp_for_unity_resource(uri="mcpforunity://tests{?unity_instance}", name="get_tests", description="Provides a list of all tests.")
+async def get_tests(unity_instance: str | None = None) -> GetTestsResponse:
+    """Provides a list of all tests.
+
+    Args:
+        unity_instance: Target Unity instance (project name, hash, or 'Name@hash').
+                       If not specified, uses default instance.
+    """
+    response = await async_send_command_with_retry("get_tests", {}, instance_id=unity_instance)
     return GetTestsResponse(**response) if isinstance(response, dict) else response
 
 
-@mcp_for_unity_resource(uri="mcpforunity://tests/{mode}", name="get_tests_for_mode", description="Provides a list of tests for a specific mode.")
-async def get_tests_for_mode(mode: Annotated[Literal["EditMode", "PlayMode"], Field(description="The mode to filter tests by.")]) -> GetTestsResponse:
-    """Provides a list of tests for a specific mode."""
-    response = await async_send_command_with_retry("get_tests_for_mode", {"mode": mode})
+@mcp_for_unity_resource(uri="mcpforunity://tests/{mode}{?unity_instance}", name="get_tests_for_mode", description="Provides a list of tests for a specific mode.")
+async def get_tests_for_mode(
+    mode: Annotated[Literal["EditMode", "PlayMode"], Field(description="The mode to filter tests by.")],
+    unity_instance: str | None = None
+) -> GetTestsResponse:
+    """Provides a list of tests for a specific mode.
+
+    Args:
+        mode: The test mode to filter by (EditMode or PlayMode).
+        unity_instance: Target Unity instance (project name, hash, or 'Name@hash').
+                       If not specified, uses default instance.
+    """
+    response = await async_send_command_with_retry("get_tests_for_mode", {"mode": mode}, instance_id=unity_instance)
     return GetTestsResponse(**response) if isinstance(response, dict) else response

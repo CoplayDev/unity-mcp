@@ -21,6 +21,8 @@ def manage_editor(
                         "Tag name when adding and removing tags"] | None = None,
     layer_name: Annotated[str,
                           "Layer name when adding and removing layers"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
     ctx.info(f"Processing manage_editor: {action}")
 
@@ -62,8 +64,8 @@ def manage_editor(
         }
         params = {k: v for k, v in params.items() if v is not None}
 
-        # Send command using centralized retry helper
-        response = send_command_with_retry("manage_editor", params)
+        # Send command using centralized retry helper with instance routing
+        response = send_command_with_retry("manage_editor", params, instance_id=unity_instance)
 
         # Preserve structured failure data; unwrap success into a friendlier shape
         if isinstance(response, dict) and response.get("success"):

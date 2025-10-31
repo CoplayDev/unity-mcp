@@ -42,7 +42,7 @@ def _coerce_int(value: Any, default: int | None = None, minimum: int | None = No
         return default
 
 
-def _resolve_project_root(override: str | None) -> Path:
+def _resolve_project_root(override: str | None, unity_instance: str | None = None) -> Path:
     # 1) Explicit override
     if override:
         pr = Path(override).expanduser().resolve()
@@ -60,7 +60,7 @@ def _resolve_project_root(override: str | None) -> Path:
     # 3) Ask Unity via manage_editor.get_project_root
     try:
         resp = send_command_with_retry(
-            "manage_editor", {"action": "get_project_root"})
+            "manage_editor", {"action": "get_project_root"}, instance_id=unity_instance)
         if isinstance(resp, dict) and resp.get("success"):
             pr = Path(resp.get("data", {}).get(
                 "projectRoot", "")).expanduser().resolve()
@@ -141,10 +141,12 @@ async def list_resources(
                      "Folder under project root, default is Assets"] = "Assets",
     limit: Annotated[int, "Page limit"] = 200,
     project_root: Annotated[str, "Project path"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
     ctx.info(f"Processing list_resources: {pattern}")
     try:
-        project = _resolve_project_root(project_root)
+        project = _resolve_project_root(project_root, unity_instance)
         base = (project / under).resolve()
         try:
             base.relative_to(project)
@@ -201,6 +203,8 @@ async def read_resource(
     project_root: Annotated[str,
                             "The project root directory"] | None = None,
     request: Annotated[str, "The request ID"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
     ctx.info(f"Processing read_resource: {uri}")
     try:
@@ -266,7 +270,7 @@ async def read_resource(
             sha = hashlib.sha256(spec_json.encode("utf-8")).hexdigest()
             return {"success": True, "data": {"text": spec_json, "metadata": {"sha256": sha}}}
 
-        project = _resolve_project_root(project_root)
+        project = _resolve_project_root(project_root, unity_instance)
         p = _resolve_safe_path_from_uri(uri, project)
         if not p or not p.exists() or not p.is_file():
             return {"success": False, "error": f"Resource not found: {uri}"}
@@ -356,10 +360,12 @@ async def find_in_file(
                             "The project root directory"] | None = None,
     max_results: Annotated[int,
                            "Cap results to avoid huge payloads"] = 200,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
     ctx.info(f"Processing find_in_file: {uri}")
     try:
-        project = _resolve_project_root(project_root)
+        project = _resolve_project_root(project_root, unity_instance)
         p = _resolve_safe_path_from_uri(uri, project)
         if not p or not p.exists() or not p.is_file():
             return {"success": False, "error": f"Resource not found: {uri}"}

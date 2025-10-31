@@ -23,7 +23,9 @@ def read_console(
     format: Annotated[Literal['plain', 'detailed',
                               'json'], "Output format"] | None = None,
     include_stacktrace: Annotated[bool | str,
-                                  "Include stack traces in output (accepts true/false or 'true'/'false')"] | None = None
+                                  "Include stack traces in output (accepts true/false or 'true'/'false')"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None
 ) -> dict[str, Any]:
     ctx.info(f"Processing read_console: {action}")
     # Set defaults if values are None
@@ -87,8 +89,8 @@ def read_console(
     if 'count' not in params_dict:
         params_dict['count'] = None
 
-    # Use centralized retry helper
-    resp = send_command_with_retry("read_console", params_dict)
+    # Use centralized retry helper with instance routing
+    resp = send_command_with_retry("read_console", params_dict, instance_id=unity_instance)
     if isinstance(resp, dict) and resp.get("success") and not include_stacktrace:
         # Strip stacktrace fields from returned lines if present
         try:

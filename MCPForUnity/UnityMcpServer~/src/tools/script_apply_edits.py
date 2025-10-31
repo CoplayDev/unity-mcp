@@ -365,6 +365,8 @@ def script_apply_edits(
                            "Type of the script to edit"] = "MonoBehaviour",
     namespace: Annotated[str,
                          "Namespace of the script to edit"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
     ctx.info(f"Processing script_apply_edits: {name}")
     # Normalize locator first so downstream calls target the correct script file.
@@ -586,7 +588,7 @@ def script_apply_edits(
             "options": opts2,
         }
         resp_struct = send_command_with_retry(
-            "manage_script", params_struct)
+            "manage_script", params_struct, instance_id=unity_instance)
         if isinstance(resp_struct, dict) and resp_struct.get("success"):
             pass  # Optional sentinel reload removed (deprecated)
         return _with_norm(resp_struct if isinstance(resp_struct, dict) else {"success": False, "message": str(resp_struct)}, normalized_for_echo, routing="structured")
@@ -598,7 +600,7 @@ def script_apply_edits(
         "path": path,
         "namespace": namespace,
         "scriptType": script_type,
-    })
+    }, instance_id=unity_instance)
     if not isinstance(read_resp, dict) or not read_resp.get("success"):
         return read_resp if isinstance(read_resp, dict) else {"success": False, "message": str(read_resp)}
 
@@ -722,7 +724,7 @@ def script_apply_edits(
                     "options": {"refresh": (options or {}).get("refresh", "debounced"), "validate": (options or {}).get("validate", "standard"), "applyMode": ("atomic" if len(at_edits) > 1 else (options or {}).get("applyMode", "sequential"))}
                 }
                 resp_text = send_command_with_retry(
-                    "manage_script", params_text)
+                    "manage_script", params_text, instance_id=unity_instance)
                 if not (isinstance(resp_text, dict) and resp_text.get("success")):
                     return _with_norm(resp_text if isinstance(resp_text, dict) else {"success": False, "message": str(resp_text)}, normalized_for_echo, routing="mixed/text-first")
                 # Optional sentinel reload removed (deprecated)
@@ -743,7 +745,7 @@ def script_apply_edits(
                 "options": opts2
             }
             resp_struct = send_command_with_retry(
-                "manage_script", params_struct)
+                "manage_script", params_struct, instance_id=unity_instance)
             if isinstance(resp_struct, dict) and resp_struct.get("success"):
                 pass  # Optional sentinel reload removed (deprecated)
             return _with_norm(resp_struct if isinstance(resp_struct, dict) else {"success": False, "message": str(resp_struct)}, normalized_for_echo, routing="mixed/text-first")
@@ -871,7 +873,7 @@ def script_apply_edits(
                     "applyMode": ("atomic" if len(at_edits) > 1 else (options or {}).get("applyMode", "sequential"))
                 }
             }
-            resp = send_command_with_retry("manage_script", params)
+            resp = send_command_with_retry("manage_script", params, instance_id=unity_instance)
             if isinstance(resp, dict) and resp.get("success"):
                 pass  # Optional sentinel reload removed (deprecated)
             return _with_norm(
@@ -955,7 +957,7 @@ def script_apply_edits(
         "options": options or {"validate": "standard", "refresh": "debounced"},
     }
 
-    write_resp = send_command_with_retry("manage_script", params)
+    write_resp = send_command_with_retry("manage_script", params, instance_id=unity_instance)
     if isinstance(write_resp, dict) and write_resp.get("success"):
         pass  # Optional sentinel reload removed (deprecated)
     return _with_norm(

@@ -64,6 +64,8 @@ def manage_gameobject(
     # Controls whether serialization of private [SerializeField] fields is included
     includeNonPublicSerialized: Annotated[bool | str,
                                           "Controls whether serialization of private [SerializeField] fields is included (accepts true/false or 'true'/'false')"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
     ctx.info(f"Processing manage_gameobject: {action}")
 
@@ -195,8 +197,8 @@ def manage_gameobject(
         params.pop("prefabFolder", None)
         # --------------------------------
 
-        # Use centralized retry helper
-        response = send_command_with_retry("manage_gameobject", params)
+        # Use centralized retry helper with instance routing
+        response = send_command_with_retry("manage_gameobject", params, instance_id=unity_instance)
 
         # Check if the response indicates success
         # If the response is not successful, raise an exception with the error message
