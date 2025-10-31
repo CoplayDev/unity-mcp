@@ -33,6 +33,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                     "/usr/bin/python3",
                     "/usr/local/bin/python3",
                     "/opt/homebrew/bin/python3",
+                    "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3",
                     "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3",
                     "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3",
                     "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3",

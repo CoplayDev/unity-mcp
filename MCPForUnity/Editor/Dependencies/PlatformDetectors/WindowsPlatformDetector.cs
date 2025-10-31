@@ -31,6 +31,8 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                     "python.exe",
                     "python3.exe",
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "Programs", "Python", "Python314", "python.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                         "Programs", "Python", "Python313", "python.exe"),
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                         "Programs", "Python", "Python312", "python.exe"),
@@ -38,6 +40,8 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                         "Programs", "Python", "Python311", "python.exe"),
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                         "Programs", "Python", "Python310", "python.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                        "Python314", "python.exe"),
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                         "Python313", "python.exe"),
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
@@ -100,7 +104,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             return @"Windows Installation Recommendations:
 
 1. Python: Install from Microsoft Store or python.org
-   - Microsoft Store: Search for 'Python 3.12' or 'Python 3.13'
+   - Microsoft Store: Search for 'Python 3.10' or higher
    - Direct download: https://python.org/downloads/windows/
 
 2. UV Package Manager: Install via PowerShell
