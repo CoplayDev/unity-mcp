@@ -18,7 +18,7 @@
 
 MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to interact directly with your Unity Editor via a local **MCP (Model Context Protocol) Client**. Give your LLM tools to manage assets, control scenes, edit scripts, and automate tasks within Unity.
 
-![MCP for Unity](docs/images/readme_ui.png)
+<img width="406" height="704" alt="MCP for Unity screenshot" src="docs/images/readme_ui.png">
 
 ---
 
