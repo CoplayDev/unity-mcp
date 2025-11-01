@@ -4,9 +4,6 @@ import logging
 from logging.handlers import RotatingFileHandler
 import os
 from contextlib import asynccontextmanager
-import signal
-import sys
-import threading
 from typing import AsyncIterator, Dict, Any
 from config import config
 from tools import register_all_tools
@@ -65,10 +62,6 @@ except Exception:
 
 # Global connection state
 _unity_connection: UnityConnection = None
-
-# Global shutdown coordination
-_shutdown_flag = threading.Event()
-_exit_timer_scheduled = threading.Event()
 
 
 @asynccontextmanager
@@ -196,99 +189,6 @@ def asset_creation_strategy() -> str:
     )
 
 
-def _force_exit(code: int = 0):
-    """Force process exit, bypassing any background threads that might linger."""
-    os._exit(code)
-
-
-def _signal_handler(signum, frame):
-    logger.info(f"Received signal {signum}, initiating shutdown...")
-    _shutdown_flag.set()
-    if not _exit_timer_scheduled.is_set():
-        _exit_timer_scheduled.set()
-        threading.Timer(1.0, _force_exit, args=(0,)).start()
-
-
-def _monitor_stdin():
-    """Background thread to detect stdio detach (stdin EOF) or parent exit."""
-    try:
-        parent_pid = os.getppid() if hasattr(os, "getppid") else None
-        while not _shutdown_flag.is_set():
-            if _shutdown_flag.wait(0.5):
-                break
-
-            if parent_pid is not None:
-                try:
-                    os.kill(parent_pid, 0)
-                except ValueError:
-                    # Signal 0 unsupported on this platform (e.g., Windows); disable parent probing
-                    parent_pid = None
-                except (ProcessLookupError, OSError):
-                    logger.info(f"Parent process {parent_pid} no longer exists; shutting down")
-                    break
-
-            try:
-                if sys.stdin.closed:
-                    logger.info("stdin.closed is True; client disconnected")
-                    break
-                fd = sys.stdin.fileno()
-                if fd < 0:
-                    logger.info("stdin fd invalid; client disconnected")
-                    break
-            except (ValueError, OSError, AttributeError):
-                # Closed pipe or unavailable stdin
-                break
-            except Exception:
-                # Ignore transient errors
-                logger.debug("Transient error checking stdin", exc_info=True)
-
-        if not _shutdown_flag.is_set():
-            logger.info("Client disconnected (stdin or parent), initiating shutdown...")
-            _shutdown_flag.set()
-            if not _exit_timer_scheduled.is_set():
-                _exit_timer_scheduled.set()
-                threading.Timer(0.5, _force_exit, args=(0,)).start()
-    except Exception:
-        # Never let monitor thread crash the process
-        logger.debug("Monitor thread error", exc_info=True)
-
-
-def main():
-    try:
-        signal.signal(signal.SIGTERM, _signal_handler)
-        signal.signal(signal.SIGINT, _signal_handler)
-        if hasattr(signal, "SIGPIPE"):
-            signal.signal(signal.SIGPIPE, signal.SIG_IGN)
-        if hasattr(signal, "SIGBREAK"):
-            signal.signal(signal.SIGBREAK, _signal_handler)
-    except Exception:
-        # Signals can fail in some environments
-        pass
-
-    t = threading.Thread(target=_monitor_stdin, daemon=True)
-    t.start()
-
-    try:
-        mcp.run(transport='stdio')
-        logger.info("FastMCP run() returned (stdin EOF or disconnect)")
-    except (KeyboardInterrupt, SystemExit):
-        logger.info("Server interrupted; shutting down")
-        _shutdown_flag.set()
-    except BrokenPipeError:
-        logger.info("Broken pipe; shutting down")
-        _shutdown_flag.set()
-    except Exception as e:
-        logger.error(f"Server error: {e}", exc_info=True)
-        _shutdown_flag.set()
-        _force_exit(1)
-    finally:
-        _shutdown_flag.set()
-        logger.info("Server main loop exited")
-        if not _exit_timer_scheduled.is_set():
-            _exit_timer_scheduled.set()
-            threading.Timer(0.5, _force_exit, args=(0,)).start()
-
-
 # Run the server
 if __name__ == "__main__":
-    main()
+    mcp.run(transport='stdio')
