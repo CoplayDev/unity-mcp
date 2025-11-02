@@ -15,7 +15,23 @@ def manage_scene(
                     "Asset path for scene operations (default: 'Assets/')"] | None = None,
     build_index: Annotated[int | str,
                            "Build index for load/build settings actions (accepts int or string, e.g., 0 or '0')"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
+    """
+    Manage Unity scene operations (create, load, save) and scene queries.
+    
+    Parameters:
+        path (str | None): Asset path for scene operations. Defaults to the Unity project Assets root (e.g., "Assets/") if not provided.
+        build_index (int | str | None): Build index for actions that accept an index (accepts integers or numeric strings like "0"); non-numeric or missing values are treated as not provided.
+        unity_instance (str | None): Target Unity instance identifier (project name, hash, or "Name@hash"). If omitted, the default instance is used.
+    
+    Returns:
+        dict[str, Any]: A normalized response with keys:
+            - `success` (bool): `true` if the operation succeeded, `false` otherwise.
+            - `message` (str): Human-readable status or error message.
+            - `data` (Any, optional): Optional payload returned by the Unity side when available.
+    """
     ctx.info(f"Processing manage_scene: {action}")
     try:
         # Coerce numeric inputs defensively
@@ -44,8 +60,8 @@ def manage_scene(
         if coerced_build_index is not None:
             params["buildIndex"] = coerced_build_index
 
-        # Use centralized retry helper
-        response = send_command_with_retry("manage_scene", params)
+        # Use centralized retry helper with instance routing
+        response = send_command_with_retry("manage_scene", params, instance_id=unity_instance)
 
         # Preserve structured failure data; unwrap success into a friendlier shape
         if isinstance(response, dict) and response.get("success"):

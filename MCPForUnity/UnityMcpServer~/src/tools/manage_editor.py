@@ -21,7 +21,27 @@ def manage_editor(
                         "Tag name when adding and removing tags"] | None = None,
     layer_name: Annotated[str,
                           "Layer name when adding and removing layers"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
+    """
+    Control or query Unity Editor state and settings.
+    
+    Parameters:
+        ctx (Context): Execution context used for logging and environment.
+        action (str): Editor operation to perform or query (e.g., "play", "pause", "get_state", "add_tag", "telemetry_status").
+        wait_for_completion (bool | str | None): If True, wait for the editor action to complete; accepts boolean or common truthy/falsey strings (e.g., "true", "false"). If None, default behavior is used.
+        tool_name (str | None): Name of the tool when action is "set_active_tool".
+        tag_name (str | None): Tag name when action is "add_tag" or "remove_tag".
+        layer_name (str | None): Layer name when action is "add_layer" or "remove_layer".
+        unity_instance (str | None): Target Unity instance identifier (project name, hash, or "Name@hash"); if omitted, the default instance is used.
+    
+    Returns:
+        dict[str, Any]: A response dictionary. Typically contains:
+            - "success" (bool): Operation success flag.
+            - "message" (str): Human-readable status or error message.
+            - "data" (Any, optional): Additional data returned by the editor for successful queries.
+    """
     ctx.info(f"Processing manage_editor: {action}")
 
     # Coerce boolean parameters defensively to tolerate 'true'/'false' strings
@@ -62,8 +82,8 @@ def manage_editor(
         }
         params = {k: v for k, v in params.items() if v is not None}
 
-        # Send command using centralized retry helper
-        response = send_command_with_retry("manage_editor", params)
+        # Send command using centralized retry helper with instance routing
+        response = send_command_with_retry("manage_editor", params, instance_id=unity_instance)
 
         # Preserve structured failure data; unwrap success into a friendlier shape
         if isinstance(response, dict) and response.get("success"):

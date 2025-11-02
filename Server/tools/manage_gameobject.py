@@ -64,7 +64,37 @@ def manage_gameobject(
     # Controls whether serialization of private [SerializeField] fields is included
     includeNonPublicSerialized: Annotated[bool | str,
                                           "Controls whether serialization of private [SerializeField] fields is included (accepts true/false or 'true'/'false')"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
+    """
+    Perform the requested action on a Unity GameObject or its components.
+    
+    Parameters:
+        ctx (Context): Execution context (logging, environment) — not documented further.
+        action (Literal): One of "create", "modify", "delete", "find", "add_component", "remove_component", "set_component_property", "get_components", "get_component".
+        target (str|None): Identifier (name or path) of the target GameObject for modify/delete/component actions.
+        search_method (Literal|None): Strategy for locating objects (e.g., "by_id", "by_name", "by_path", "by_tag", "by_layer", "by_component"); used with `find` and some target lookups.
+        name (str|None): Initial or new GameObject name for "create" or "modify". Do NOT use for "find" — use `search_term`.
+        search_term (str|None): Term to search with when action is "find". Required for "find"; `name` must not be provided.
+        position, rotation, scale (list[float]|str|None): 3-element vectors. Accepts list [x,y,z] or tolerant string forms like "[x,y,z]", "x,y,z", or "x y z".
+        save_as_prefab (bool|str|None): If truthy, saves created GameObject as a prefab. Accepts booleans or string booleans.
+        prefab_path (str|None): Explicit path for prefab (must end with ".prefab" if provided). If omitted and saving as prefab, a default path is constructed from `prefab_folder` and `name`.
+        prefab_folder (str|None): Folder used when constructing a default prefab path.
+        component_properties (dict|str|None): Mapping of component names to property dictionaries to set. May be provided as a JSON string (will be parsed). Example:
+            {"MyScript": {"player": {"find": "Player", "component": "HealthComponent"}}} or {"MeshRenderer": {"sharedMaterial.color": [1,0,0,1]}}.
+        components_to_add / components_to_remove (list[str]|None): Component names to add or remove.
+        set_active (bool|str|None), find_all (bool|str|None), search_in_children (bool|str|None), search_inactive (bool|str|None), includeNonPublicSerialized (bool|str|None):
+            Boolean-like flags accepted as booleans or string booleans ("true"/"false", "1"/"0", etc.).
+        component_name (str|None): Component name used by add/remove component actions.
+        unity_instance (str|None): Target Unity instance identifier (project name, hash, or "Name@hash"); if omitted, the default instance is used.
+    
+    Returns:
+        dict: Result object with keys:
+            - "success" (bool): `true` when the operation succeeded, `false` otherwise.
+            - "message" (str): Human-readable status or error message.
+            - "data" (Any|None): Additional data returned by the Unity side when available.
+    """
     ctx.info(f"Processing manage_gameobject: {action}")
 
     # Coercers to tolerate stringified booleans and vectors
@@ -195,8 +225,8 @@ def manage_gameobject(
         params.pop("prefabFolder", None)
         # --------------------------------
 
-        # Use centralized retry helper
-        response = send_command_with_retry("manage_gameobject", params)
+        # Use centralized retry helper with instance routing
+        response = send_command_with_retry("manage_gameobject", params, instance_id=unity_instance)
 
         # Check if the response indicates success
         # If the response is not successful, raise an exception with the error message

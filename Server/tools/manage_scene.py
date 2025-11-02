@@ -15,7 +15,27 @@ def manage_scene(
                     "Asset path for scene operations (default: 'Assets/')"] | None = None,
     build_index: Annotated[int | str,
                            "Build index for load/build settings actions (accepts int or string, e.g., 0 or '0')"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
+    """
+    Manage Unity scenes by creating, loading, saving, or querying scene information.
+    
+    Parameters:
+        action (Literal["create", "load", "save", "get_hierarchy", "get_active", "get_build_settings"]):
+            Operation to perform on the scene.
+        name (str | None):
+            Scene name for operations that require a scene (not required for `get_active` or `get_build_settings`).
+        path (str | None):
+            Asset path for scene operations (defaults to "Assets/" if not provided).
+        build_index (int | str | None):
+            Build index for load or build-settings operations. Accepts integers or numeric strings; empty, boolean, or non-convertible values are treated as unspecified.
+        unity_instance (str | None):
+            Target Unity instance identifier (project name, hash, or "Name@hash"). If omitted, the default instance is used.
+    
+    Returns:
+        dict: A result dictionary. On success: `{"success": True, "message": <message>, "data": <data>}`. On failure: a dict with `success: False` and a `message` describing the error, or the original response dict if it was non-success structured data.
+    """
     ctx.info(f"Processing manage_scene: {action}")
     try:
         # Coerce numeric inputs defensively
@@ -44,8 +64,8 @@ def manage_scene(
         if coerced_build_index is not None:
             params["buildIndex"] = coerced_build_index
 
-        # Use centralized retry helper
-        response = send_command_with_retry("manage_scene", params)
+        # Use centralized retry helper with instance routing
+        response = send_command_with_retry("manage_scene", params, instance_id=unity_instance)
 
         # Preserve structured failure data; unwrap success into a friendlier shape
         if isinstance(response, dict) and response.get("success"):

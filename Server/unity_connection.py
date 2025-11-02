@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import errno
 import json
 import logging
+import os
 from pathlib import Path
 from port_discovery import PortDiscovery
 import random
@@ -11,9 +12,9 @@ import socket
 import struct
 import threading
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Optional, List
 
-from models import MCPResponse
+from models import MCPResponse, UnityInstanceInfo
 
 
 # Configure logging using settings from config
@@ -37,9 +38,14 @@ class UnityConnection:
     port: int = None  # Will be set dynamically
     sock: socket.socket = None  # Socket for Unity communication
     use_framing: bool = False  # Negotiated per-connection
+    instance_id: str | None = None  # Instance identifier for reconnection
 
     def __post_init__(self):
-        """Set port from discovery if not explicitly provided"""
+        """
+        Ensure the connection has a port and initialize per-instance locks.
+        
+        If `port` is None, discover and assign the Unity port. Create `_io_lock` for serializing send/receive I/O and `_conn_lock` for guarding connection lifecycle operations.
+        """
         if self.port is None:
             self.port = PortDiscovery.discover_unity_port()
         self._io_lock = threading.Lock()
@@ -224,7 +230,20 @@ class UnityConnection:
             raise
 
     def send_command(self, command_type: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Send a command with retry/backoff and port rediscovery. Pings only when requested."""
+        """
+        Send a command to the Unity Editor, handling framing negotiation, retries with backoff, and per-instance port rediscovery.
+        
+        Parameters:
+            command_type (str): The MCP command name to invoke (e.g., "ping").
+            params (Dict[str, Any] | None): Parameters to include with the command. If `None` this function returns an MCPResponse indicating a placeholder/invalid call.
+        
+        Returns:
+            dict: The parsed `result` object from Unity's successful response (e.g., {"message": "pong"} for a ping). In the early placeholder case (`params is None`) an MCPResponse with success=False and an error message is returned.
+        
+        Raises:
+            ValueError: If `command_type` is empty.
+            Exception: If communication repeatedly fails or Unity returns an error; underlying socket/JSON errors may be propagated after retries.
+        """
         # Defensive guard: catch empty/placeholder invocations early
         if not command_type:
             raise ValueError("MCP call missing command_type")
@@ -328,9 +347,28 @@ class UnityConnection:
                 finally:
                     self.sock = None
 
-                # Re-discover port each time
+                # Re-discover the port for this specific instance
                 try:
-                    new_port = PortDiscovery.discover_unity_port()
+                    new_port: int | None = None
+                    if self.instance_id:
+                        # Try to rediscover the specific instance
+                        pool = get_unity_connection_pool()
+                        refreshed = pool.discover_all_instances(force_refresh=True)
+                        match = next((inst for inst in refreshed if inst.id == self.instance_id), None)
+                        if match:
+                            new_port = match.port
+                            logger.debug(f"Rediscovered instance {self.instance_id} on port {new_port}")
+                        else:
+                            logger.warning(f"Instance {self.instance_id} not found during reconnection")
+
+                    # Fallback to generic port discovery if instance-specific discovery failed
+                    if new_port is None:
+                        if self.instance_id:
+                            raise ConnectionError(
+                                f"Unity instance '{self.instance_id}' could not be rediscovered"
+                            ) from e
+                        new_port = PortDiscovery.discover_unity_port()
+
                     if new_port != self.port:
                         logger.info(
                             f"Unity port changed {self.port} -> {new_port}")
@@ -371,32 +409,272 @@ class UnityConnection:
                 raise
 
 
-# Global Unity connection
-_unity_connection = None
+# -----------------------------
+# Connection Pool for Multiple Unity Instances
+# -----------------------------
 
+class UnityConnectionPool:
+    """Manages connections to multiple Unity Editor instances"""
 
-def get_unity_connection() -> UnityConnection:
-    """Retrieve or establish a persistent Unity connection.
+    def __init__(self):
+        """
+        Initialize a UnityConnectionPool, preparing internal caches, synchronization primitives, and an optional default instance identifier from the environment.
+        
+        Initializes:
+        - a mapping of instance IDs to active UnityConnection objects,
+        - a mapping of discovered UnityInstanceInfo objects,
+        - a timestamp and interval used to cache discovery results,
+        - a lock to guard pool operations,
+        - an optional default instance id taken from the UNITY_MCP_DEFAULT_INSTANCE environment variable when present.
+        """
+        self._connections: Dict[str, UnityConnection] = {}
+        self._known_instances: Dict[str, UnityInstanceInfo] = {}
+        self._last_full_scan: float = 0
+        self._scan_interval: float = 5.0  # Cache for 5 seconds
+        self._pool_lock = threading.Lock()
+        self._default_instance_id: Optional[str] = None
 
-    Note: Do NOT ping on every retrieval to avoid connection storms. Rely on
-    send_command() exceptions to detect broken sockets and reconnect there.
-    """
-    global _unity_connection
-    if _unity_connection is not None:
-        return _unity_connection
+        # Check for default instance from environment
+        env_default = os.environ.get("UNITY_MCP_DEFAULT_INSTANCE", "").strip()
+        if env_default:
+            self._default_instance_id = env_default
+            logger.info(f"Default Unity instance set from environment: {env_default}")
 
-    # Double-checked locking to avoid concurrent socket creation
-    with _connection_lock:
-        if _unity_connection is not None:
-            return _unity_connection
-        logger.info("Creating new Unity connection")
-        _unity_connection = UnityConnection()
-        if not _unity_connection.connect():
-            _unity_connection = None
+    def discover_all_instances(self, force_refresh: bool = False) -> List[UnityInstanceInfo]:
+        """
+        Return discovered Unity Editor instances, using cached results unless a fresh scan is requested.
+        
+        Parameters:
+        	force_refresh (bool): If True, bypass the cache and perform an immediate discovery scan.
+        
+        Returns:
+        	instances (List[UnityInstanceInfo]): A list of discovered UnityInstanceInfo objects.
+        """
+        now = time.time()
+
+        # Return cached results if valid
+        if not force_refresh and (now - self._last_full_scan) < self._scan_interval:
+            logger.debug(f"Returning cached Unity instances (age: {now - self._last_full_scan:.1f}s)")
+            return list(self._known_instances.values())
+
+        # Scan for instances
+        logger.debug("Scanning for Unity instances...")
+        instances = PortDiscovery.discover_all_unity_instances()
+
+        # Update cache
+        with self._pool_lock:
+            self._known_instances = {inst.id: inst for inst in instances}
+            self._last_full_scan = now
+
+        logger.info(f"Found {len(instances)} Unity instances: {[inst.id for inst in instances]}")
+        return instances
+
+    def _resolve_instance_id(self, instance_identifier: Optional[str], instances: List[UnityInstanceInfo]) -> UnityInstanceInfo:
+        """
+        Resolve a user-supplied identifier to a specific Unity instance.
+        
+        Accepts identifiers in any of these forms: instance id, project name, hash (full or prefix),
+        "Name@Hash", "Name@Port", filesystem path, or port number. If no identifier is provided,
+        uses the pool's default instance if configured, otherwise returns the most recently heartbeated instance.
+        
+        Parameters:
+            instance_identifier (Optional[str]): Identifier to resolve (see accepted forms above).
+            instances (List[UnityInstanceInfo]): Available Unity instances to search.
+        
+        Returns:
+            UnityInstanceInfo: The matching Unity instance.
+        
+        Raises:
+            ConnectionError: If no instances are available or the identifier cannot be unambiguously resolved.
+        """
+        if not instances:
             raise ConnectionError(
-                "Could not connect to Unity. Ensure the Unity Editor and MCP Bridge are running.")
-        logger.info("Connected to Unity on startup")
-        return _unity_connection
+                "No Unity Editor instances found. Please ensure Unity is running with MCP for Unity bridge."
+            )
+
+        # Use default instance if no identifier provided
+        if instance_identifier is None:
+            if self._default_instance_id:
+                instance_identifier = self._default_instance_id
+                logger.debug(f"Using default instance: {instance_identifier}")
+            else:
+                # Use the most recently active instance
+                # Instances with no heartbeat (None) should be sorted last (use epoch as sentinel)
+                from datetime import datetime
+                sorted_instances = sorted(instances, key=lambda i: i.last_heartbeat or datetime.fromtimestamp(0), reverse=True)
+                logger.info(f"No instance specified, using most recent: {sorted_instances[0].id}")
+                return sorted_instances[0]
+
+        identifier = instance_identifier.strip()
+
+        # Try exact ID match first
+        for inst in instances:
+            if inst.id == identifier:
+                return inst
+
+        # Try project name match
+        name_matches = [inst for inst in instances if inst.name == identifier]
+        if len(name_matches) == 1:
+            return name_matches[0]
+        elif len(name_matches) > 1:
+            # Multiple projects with same name - return helpful error
+            suggestions = [
+                {
+                    "id": inst.id,
+                    "path": inst.path,
+                    "port": inst.port,
+                    "suggest": f"Use unity_instance='{inst.id}'"
+                }
+                for inst in name_matches
+            ]
+            raise ConnectionError(
+                f"Project name '{identifier}' matches {len(name_matches)} instances. "
+                f"Please use the full format (e.g., '{name_matches[0].id}'). "
+                f"Available instances: {suggestions}"
+            )
+
+        # Try hash match
+        hash_matches = [inst for inst in instances if inst.hash == identifier or inst.hash.startswith(identifier)]
+        if len(hash_matches) == 1:
+            return hash_matches[0]
+        elif len(hash_matches) > 1:
+            raise ConnectionError(
+                f"Hash '{identifier}' matches multiple instances: {[inst.id for inst in hash_matches]}"
+            )
+
+        # Try composite format: Name@Hash or Name@Port
+        if "@" in identifier:
+            name_part, hint_part = identifier.split("@", 1)
+            composite_matches = [
+                inst for inst in instances
+                if inst.name == name_part and (
+                    inst.hash.startswith(hint_part) or str(inst.port) == hint_part
+                )
+            ]
+            if len(composite_matches) == 1:
+                return composite_matches[0]
+
+        # Try port match (as string)
+        try:
+            port_num = int(identifier)
+            port_matches = [inst for inst in instances if inst.port == port_num]
+            if len(port_matches) == 1:
+                return port_matches[0]
+        except ValueError:
+            pass
+
+        # Try path match
+        path_matches = [inst for inst in instances if inst.path == identifier]
+        if len(path_matches) == 1:
+            return path_matches[0]
+
+        # Nothing matched
+        available_ids = [inst.id for inst in instances]
+        raise ConnectionError(
+            f"Unity instance '{identifier}' not found. "
+            f"Available instances: {available_ids}. "
+            f"Use list_unity_instances() to see all instances."
+        )
+
+    def get_connection(self, instance_identifier: Optional[str] = None) -> UnityConnection:
+        """
+        Return a UnityConnection for the specified Unity instance, creating and connecting one if necessary.
+        
+        Parameters:
+            instance_identifier (Optional[str]): Identifier for selecting a Unity instance. May be an instance id, project name, hash, composite forms like "Name@Hash" or "Name@Port", port string, or filesystem path. If None, uses the pool's default instance or the most recently heartbeated instance.
+        
+        Returns:
+            UnityConnection: A connected UnityConnection for the resolved instance.
+        
+        Raises:
+            ConnectionError: If the specified instance cannot be resolved or if a new connection cannot be established.
+        """
+        # Refresh instance list if cache expired
+        instances = self.discover_all_instances()
+
+        # Resolve identifier to specific instance
+        target = self._resolve_instance_id(instance_identifier, instances)
+
+        # Return existing connection or create new one
+        with self._pool_lock:
+            if target.id not in self._connections:
+                logger.info(f"Creating new connection to Unity instance: {target.id} (port {target.port})")
+                conn = UnityConnection(port=target.port, instance_id=target.id)
+                if not conn.connect():
+                    raise ConnectionError(
+                        f"Failed to connect to Unity instance '{target.id}' on port {target.port}. "
+                        f"Ensure the Unity Editor is running."
+                    )
+                self._connections[target.id] = conn
+            else:
+                # Update existing connection with instance_id and port if changed
+                conn = self._connections[target.id]
+                conn.instance_id = target.id
+                if conn.port != target.port:
+                    logger.info(f"Updating cached port for {target.id}: {conn.port} -> {target.port}")
+                    conn.port = target.port
+                logger.debug(f"Reusing existing connection to: {target.id}")
+
+            return self._connections[target.id]
+
+    def disconnect_all(self):
+        """
+        Close and remove all UnityConnection instances held by the pool.
+        
+        Attempts to gracefully disconnect each active connection while holding the pool lock,
+        logs any errors encountered per-instance, and clears the pool's internal connection mapping.
+        """
+        with self._pool_lock:
+            for instance_id, conn in self._connections.items():
+                try:
+                    logger.info(f"Disconnecting from Unity instance: {instance_id}")
+                    conn.disconnect()
+                except Exception:
+                    logger.exception(f"Error disconnecting from {instance_id}")
+            self._connections.clear()
+
+
+# Global Unity connection pool
+_unity_connection_pool: Optional[UnityConnectionPool] = None
+_pool_init_lock = threading.Lock()
+
+
+def get_unity_connection_pool() -> UnityConnectionPool:
+    """
+    Return the global UnityConnectionPool, creating and caching it on first access.
+    
+    Initializes the pool in a thread-safe manner if it does not already exist.
+    
+    Returns:
+        UnityConnectionPool: The singleton global UnityConnectionPool instance.
+    """
+    global _unity_connection_pool
+
+    if _unity_connection_pool is not None:
+        return _unity_connection_pool
+
+    with _pool_init_lock:
+        if _unity_connection_pool is not None:
+            return _unity_connection_pool
+
+        logger.info("Initializing Unity connection pool")
+        _unity_connection_pool = UnityConnectionPool()
+        return _unity_connection_pool
+
+
+# Backwards compatibility: keep old single-connection function
+def get_unity_connection(instance_identifier: Optional[str] = None) -> UnityConnection:
+    """
+    Get a UnityConnection for a specific Unity Editor instance or the default/recent instance.
+    
+    Parameters:
+        instance_identifier (Optional[str]): Identifier to select the target instance. May be an instance id, project name, instance hash, "Name@Hash" / "Name@Port" composite, port number, or project path. If omitted, uses the environment default (if set) or the most recently heartbeated instance.
+    
+    Returns:
+        UnityConnection: Connection object for the resolved Unity instance.
+    """
+    pool = get_unity_connection_pool()
+    return pool.get_connection(instance_identifier)
 
 
 # -----------------------------
@@ -404,7 +682,15 @@ def get_unity_connection() -> UnityConnection:
 # -----------------------------
 
 def _is_reloading_response(resp: dict) -> bool:
-    """Return True if the Unity response indicates the editor is reloading."""
+    """
+    Determine whether a Unity response indicates the editor is reloading.
+    
+    Parameters:
+        resp (dict): The parsed response object from Unity to inspect.
+    
+    Returns:
+        bool: `True` if the response indicates Unity is reloading (`state` == "reloading" or the `message`/`error` text contains "reload"), `False` otherwise.
+    """
     if not isinstance(resp, dict):
         return False
     if resp.get("state") == "reloading":
@@ -413,13 +699,30 @@ def _is_reloading_response(resp: dict) -> bool:
     return "reload" in message_text
 
 
-def send_command_with_retry(command_type: str, params: Dict[str, Any], *, max_retries: int | None = None, retry_ms: int | None = None) -> Dict[str, Any]:
-    """Send a command via the shared connection, waiting politely through Unity reloads.
-
-    Uses config.reload_retry_ms and config.reload_max_retries by default. Preserves the
-    structured failure if retries are exhausted.
+def send_command_with_retry(
+    command_type: str,
+    params: Dict[str, Any],
+    *,
+    instance_id: Optional[str] = None,
+    max_retries: int | None = None,
+    retry_ms: int | None = None
+) -> Dict[str, Any]:
     """
-    conn = get_unity_connection()
+    Send a command to a Unity instance and retry while the editor reports reloading.
+    
+    Retries the command until Unity stops reporting a reload state or the retry limit is reached. If a response contains `retry_after_ms`, that value is used as the delay before the next attempt; otherwise `retry_ms` (or the config default) is used.
+    
+    Parameters:
+        command_type (str): The command type to send.
+        params (dict): Command parameters.
+        instance_id (Optional[str]): Optional Unity instance identifier (id, name, hash, `name@hash`, port, or path) used to target a specific editor.
+        max_retries (int | None): Maximum number of retry attempts; when `None` uses `config.reload_max_retries`.
+        retry_ms (int | None): Milliseconds to wait between retries when not specified by the response; when `None` uses `config.reload_retry_ms`.
+    
+    Returns:
+        dict: The response dictionary returned by Unity.
+    """
+    conn = get_unity_connection(instance_id)
     if max_retries is None:
         max_retries = getattr(config, "reload_max_retries", 40)
     if retry_ms is None:
@@ -436,8 +739,28 @@ def send_command_with_retry(command_type: str, params: Dict[str, Any], *, max_re
     return response
 
 
-async def async_send_command_with_retry(command_type: str, params: dict[str, Any], *, loop=None, max_retries: int | None = None, retry_ms: int | None = None) -> dict[str, Any] | MCPResponse:
-    """Async wrapper that runs the blocking retry helper in a thread pool."""
+async def async_send_command_with_retry(
+    command_type: str,
+    params: dict[str, Any],
+    *,
+    instance_id: Optional[str] = None,
+    loop=None,
+    max_retries: int | None = None,
+    retry_ms: int | None = None
+) -> dict[str, Any] | MCPResponse:
+    """Async wrapper that runs the blocking retry helper in a thread pool.
+
+    Args:
+        command_type: The command type to send
+        params: Command parameters
+        instance_id: Optional Unity instance identifier
+        loop: Optional asyncio event loop
+        max_retries: Maximum number of retries for reload states
+        retry_ms: Delay between retries in milliseconds
+
+    Returns:
+        Response dictionary or MCPResponse on error
+    """
     try:
         import asyncio  # local import to avoid mandatory asyncio dependency for sync callers
         if loop is None:
@@ -445,7 +768,7 @@ async def async_send_command_with_retry(command_type: str, params: dict[str, Any
         return await loop.run_in_executor(
             None,
             lambda: send_command_with_retry(
-                command_type, params, max_retries=max_retries, retry_ms=retry_ms),
+                command_type, params, instance_id=instance_id, max_retries=max_retries, retry_ms=retry_ms),
         )
     except Exception as e:
         return MCPResponse(success=False, error=str(e))

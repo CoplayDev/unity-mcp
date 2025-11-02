@@ -18,8 +18,16 @@ from unity_connection import send_command_with_retry
 
 
 def _coerce_int(value: Any, default: int | None = None, minimum: int | None = None) -> int | None:
-    """Safely coerce various inputs (str/float/etc.) to an int.
-    Returns default on failure; clamps to minimum when provided.
+    """
+    Coerce a value to an integer, returning a fallback when conversion is not possible.
+    
+    Parameters:
+        value (Any): Value to convert to int. Booleans are treated as invalid and will yield the `default`.
+        default (int | None): Value to return when `value` is None or cannot be converted.
+        minimum (int | None): If provided, ensure the returned integer is at least this value (clamped).
+    
+    Returns:
+        int | None: The coerced integer (possibly clamped to `minimum`), or `default` if conversion fails.
     """
     if value is None:
         return default
@@ -42,8 +50,20 @@ def _coerce_int(value: Any, default: int | None = None, minimum: int | None = No
         return default
 
 
-def _resolve_project_root(override: str | None) -> Path:
+def _resolve_project_root(override: str | None, unity_instance: str | None = None) -> Path:
     # 1) Explicit override
+    """
+    Determine the Unity project root directory.
+    
+    Attempts to resolve a filesystem path that represents the Unity project root by using, in order: an explicit override path, the UNITY_PROJECT_ROOT environment variable, a query to the Unity editor identified by `unity_instance`, an upward search from the current working directory for a folder containing both `Assets` and `ProjectSettings`, and a shallow downward search from the repository root. If none of these yield a valid project root, the current working directory is returned.
+    
+    Parameters:
+        override (str | None): Optional explicit path to use as the project root.
+        unity_instance (str | None): Optional Unity instance identifier to query for the project root.
+    
+    Returns:
+        pathlib.Path: The resolved project root directory. When possible, the returned path will contain an `Assets` subdirectory; otherwise the current working directory is returned as a fallback.
+    """
     if override:
         pr = Path(override).expanduser().resolve()
         if (pr / "Assets").exists():
@@ -60,7 +80,7 @@ def _resolve_project_root(override: str | None) -> Path:
     # 3) Ask Unity via manage_editor.get_project_root
     try:
         resp = send_command_with_retry(
-            "manage_editor", {"action": "get_project_root"})
+            "manage_editor", {"action": "get_project_root"}, instance_id=unity_instance)
         if isinstance(resp, dict) and resp.get("success"):
             pr = Path(resp.get("data", {}).get(
                 "projectRoot", "")).expanduser().resolve()
@@ -141,10 +161,27 @@ async def list_resources(
                      "Folder under project root, default is Assets"] = "Assets",
     limit: Annotated[int, "Page limit"] = 200,
     project_root: Annotated[str, "Project path"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
+    """
+    List Unity C# script resources under a project folder and return their unity:// URIs.
+    
+    Parameters:
+        ctx (Context): Request context for logging and telemetry.
+        pattern (str | None): Filename glob to filter results (default: "*.cs"); only files with a `.cs` extension are returned.
+        under (str): Subfolder under the project root to search (default: "Assets"); listing is restricted to the Assets subtree.
+        limit (int): Maximum number of results to return (default: 200); values are coerced to an integer and clamped to at least 1.
+        project_root (str | None): Override path to the Unity project root; if None the project root is resolved automatically.
+        unity_instance (str | None): Target Unity instance identifier (name, hash, or "Name@hash"); if omitted the default instance is used.
+    
+    Returns:
+        dict: On success, {"success": True, "data": {"uris": [<unity://path/...>], "count": <int>}}.
+              On failure, {"success": False, "error": "<message>"}.
+    """
     ctx.info(f"Processing list_resources: {pattern}")
     try:
-        project = _resolve_project_root(project_root)
+        project = _resolve_project_root(project_root, unity_instance)
         base = (project / under).resolve()
         try:
             base.relative_to(project)
@@ -201,7 +238,33 @@ async def read_resource(
     project_root: Annotated[str,
                             "The project root directory"] | None = None,
     request: Annotated[str, "The request ID"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
+    """
+    Read a Unity project resource under Assets/ with optional byte- or line-based slicing and return file metadata and optionally a text selection.
+    
+    Parameters:
+        uri (str): The resource URI to read (supports forms like `unity://path/...`, `file://...`, or `Assets/...`). A special canonical value `spec/script-edits` (with or without scheme) returns a predefined JSON spec.
+        start_line (int | float | str | None): Starting line number (1-based as accepted in requests; will be coerced to int). Used together with `line_count` to select a line window.
+        line_count (int | float | str | None): Number of lines to read starting at `start_line`.
+        head_bytes (int | float | str | None): Number of bytes to read from the start of the file; takes highest precedence when specified.
+        tail_lines (int | float | str | None): Number of lines to read from the end of the file; used when `head_bytes` is not specified.
+        project_root (str | None): Path or override for the Unity project root; if omitted, the project root will be resolved automatically.
+        request (str | None): Natural-language convenience hints (e.g., "last 120 lines", "first 200 lines", "show 40 lines around MethodName") that can set selection parameters.
+        unity_instance (str | None): Target Unity instance identifier (project name, hash, or "Name@hash"); if omitted, the default instance is used.
+    
+    Returns:
+        dict: On success, returns {"success": True, "data": ...} where "data" contains either:
+            - "metadata": {"sha256": <sha256 hex of full file>, "lengthBytes": <file size in bytes>} (when no selection requested), or
+            - "text": <selected text>, "metadata": {...} (when a byte/line selection or `request` hint caused text extraction).
+        On failure, returns {"success": False, "error": "<error message>"}.
+    
+    Notes:
+        - Reads are restricted to the Assets/ subtree; attempts to read outside Assets/ return an error.
+        - Selection precedence: `head_bytes` (highest), then `tail_lines`, then `start_line` + `line_count`; if none are specified only metadata is returned.
+        - Numeric inputs are coerced from strings/floats where applicable; invalid numeric inputs are treated as absent.
+    """
     ctx.info(f"Processing read_resource: {uri}")
     try:
         # Serve the canonical spec directly when requested (allow bare or with scheme)
@@ -266,7 +329,7 @@ async def read_resource(
             sha = hashlib.sha256(spec_json.encode("utf-8")).hexdigest()
             return {"success": True, "data": {"text": spec_json, "metadata": {"sha256": sha}}}
 
-        project = _resolve_project_root(project_root)
+        project = _resolve_project_root(project_root, unity_instance)
         p = _resolve_safe_path_from_uri(uri, project)
         if not p or not p.exists() or not p.is_file():
             return {"success": False, "error": f"Resource not found: {uri}"}
@@ -356,10 +419,29 @@ async def find_in_file(
                             "The project root directory"] | None = None,
     max_results: Annotated[int,
                            "Cap results to avoid huge payloads"] = 200,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
+    """
+    Search a file addressed by a Unity/file URI for lines that match a regular expression and return matching line/column ranges.
+    
+    Parameters:
+        ctx (Context): Execution context (log/client handle).
+        uri (str): Resource identifier; supports unity://..., file://..., or Assets/... paths resolved relative to the Unity project.
+        pattern (str): Regular expression to search for.
+        ignore_case (bool | str | None): Case-insensitive search flag; accepts booleans or string values like "true"/"false"/"1"/"0". Defaults to True.
+        project_root (str | None): Optional override for the Unity project root directory.
+        max_results (int): Maximum number of matches to return; used to limit payload size.
+        unity_instance (str | None): Optional target Unity instance identifier (name, hash, or "Name@hash").
+    
+    Returns:
+        dict: On success: {"success": True, "data": {"matches": [match, ...], "count": n}}
+              Each match is {"startLine": int, "startCol": int, "endLine": int, "endCol": int} with 1-based indices.
+              On failure: {"success": False, "error": "<message>"}
+    """
     ctx.info(f"Processing find_in_file: {uri}")
     try:
-        project = _resolve_project_root(project_root)
+        project = _resolve_project_root(project_root, unity_instance)
         p = _resolve_safe_path_from_uri(uri, project)
         if not p or not p.exists() or not p.is_file():
             return {"success": False, "error": f"Resource not found: {uri}"}

@@ -28,7 +28,35 @@ def manage_prefabs(
                                "Allow replacing an existing prefab at the same path"] | None = None,
     search_inactive: Annotated[bool,
                                "Include inactive objects when resolving the target name"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
+    """
+    Send a prefab management command to Unity to control prefab stages or create prefabs.
+    
+    Parameters:
+        action (Literal["open_stage", "close_stage", "save_open_stage", "create_from_gameobject"]):
+            The operation to perform: "open_stage", "close_stage", "save_open_stage", or "create_from_gameobject".
+        prefab_path (str | None):
+            Prefab asset path relative to the project Assets folder (e.g. "Assets/Prefabs/favorite.prefab").
+        mode (str | None):
+            Optional prefab stage mode (only "InIsolation" is currently supported).
+        save_before_close (bool | None):
+            When true and action is "close_stage", save the prefab before exiting the stage.
+        target (str | None):
+            Scene GameObject name required when action is "create_from_gameobject".
+        allow_overwrite (bool | None):
+            When true, allow replacing an existing prefab at the same path.
+        search_inactive (bool | None):
+            When true, include inactive objects when resolving the target GameObject name.
+        unity_instance (str | None):
+            Target Unity instance identifier (project name, hash, or "Name@hash"); if omitted the default instance is used.
+    
+    Returns:
+        dict[str, Any]:
+            A result dictionary. On success: {"success": True, "message": <message>, "data": <optional data>}.
+            On failure: a dict describing the error or {"success": False, "message": <error message>}.
+    """
     ctx.info(f"Processing manage_prefabs: {action}")
     try:
         params: dict[str, Any] = {"action": action}
@@ -45,7 +73,7 @@ def manage_prefabs(
             params["allowOverwrite"] = bool(allow_overwrite)
         if search_inactive is not None:
             params["searchInactive"] = bool(search_inactive)
-        response = send_command_with_retry("manage_prefabs", params)
+        response = send_command_with_retry("manage_prefabs", params, instance_id=unity_instance)
 
         if isinstance(response, dict) and response.get("success"):
             return {

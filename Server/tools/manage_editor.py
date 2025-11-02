@@ -21,7 +21,26 @@ def manage_editor(
                         "Tag name when adding and removing tags"] | None = None,
     layer_name: Annotated[str,
                           "Layer name when adding and removing layers"] | None = None,
+    unity_instance: Annotated[str,
+                             "Target Unity instance (project name, hash, or 'Name@hash'). If not specified, uses default instance."] | None = None,
 ) -> dict[str, Any]:
+    """
+    Manage or query Unity Editor state and perform editor-related actions.
+    
+    Parameters:
+        wait_for_completion (bool | str | None): Optional. If True, wait for actions that support completion waiting; accepts boolean or string representations like 'true'/'false'.
+        tool_name (str | None): Name of the tool when setting the active tool.
+        tag_name (str | None): Tag name when adding or removing tags.
+        layer_name (str | None): Layer name when adding or removing layers.
+        unity_instance (str | None): Target Unity instance identifier (project name, hash, or 'Name@hash'); if omitted, the default instance is used.
+    
+    Returns:
+        dict[str, Any]: Result object. On success may contain
+            - "success" (bool): true,
+            - "message" (str): human-readable status,
+            - "data" (Any): optional payload returned by the editor.
+        On failure returns a dict with "success": False and a "message" describing the error or failure reason.
+    """
     ctx.info(f"Processing manage_editor: {action}")
 
     # Coerce boolean parameters defensively to tolerate 'true'/'false' strings
@@ -62,8 +81,8 @@ def manage_editor(
         }
         params = {k: v for k, v in params.items() if v is not None}
 
-        # Send command using centralized retry helper
-        response = send_command_with_retry("manage_editor", params)
+        # Send command using centralized retry helper with instance routing
+        response = send_command_with_retry("manage_editor", params, instance_id=unity_instance)
 
         # Preserve structured failure data; unwrap success into a friendlier shape
         if isinstance(response, dict) and response.get("success"):
