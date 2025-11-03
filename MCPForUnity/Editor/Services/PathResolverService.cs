@@ -76,21 +76,21 @@ namespace MCPForUnity.Editor.Services
                     // Common Windows Python installation paths
                     string[] windowsCandidates =
                     {
+                        @"C:\Python314\python.exe",
                         @"C:\Python313\python.exe",
                         @"C:\Python312\python.exe",
                         @"C:\Python311\python.exe",
                         @"C:\Python310\python.exe",
-                        @"C:\Python39\python.exe",
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\Python\Python314\python.exe"),
                         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\Python\Python313\python.exe"),
                         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\Python\Python312\python.exe"),
                         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\Python\Python311\python.exe"),
                         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\Python\Python310\python.exe"),
-                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\Python\Python39\python.exe"),
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Python314\python.exe"),
                         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Python313\python.exe"),
                         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Python312\python.exe"),
                         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Python311\python.exe"),
                         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Python310\python.exe"),
-                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Python39\python.exe"),
                     };
 
                     foreach (string c in windowsCandidates)
@@ -134,8 +134,11 @@ namespace MCPForUnity.Editor.Services
                         "/usr/bin/python3",
                         "/opt/local/bin/python3",
                         Path.Combine(home, ".local", "bin", "python3"),
+                        "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3",
                         "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3",
                         "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3",
+                        "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3",
+                        "/Library/Frameworks/Python.framework/Versions/3.10/bin/python3",
                     };
                     foreach (string c in candidates)
                     {

@@ -19,7 +19,7 @@ import struct
 from datetime import datetime
 from pathlib import Path
 import socket
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from models import UnityInstanceInfo
 
@@ -228,7 +228,7 @@ class PortDiscovery:
         Returns:
             List of UnityInstanceInfo objects for all discovered instances
         """
-        instances = []
+        instances_by_port: Dict[int, tuple[UnityInstanceInfo, datetime]] = {}
         base = PortDiscovery.get_registry_dir()
 
         # Scan all status files
@@ -237,7 +237,10 @@ class PortDiscovery:
 
         for status_file_path in status_files:
             try:
-                with open(status_file_path, 'r') as f:
+                status_path = Path(status_file_path)
+                file_mtime = datetime.fromtimestamp(status_path.stat().st_mtime)
+
+                with status_path.open('r') as f:
                     data = json.load(f)
 
                 # Extract hash from filename: unity-mcp-status-{hash}.json
@@ -266,6 +269,19 @@ class PortDiscovery:
                     logger.debug(f"Instance {project_name}@{hash_value} has heartbeat but port {port} not responding")
                     continue
 
+                freshness = last_heartbeat or file_mtime
+
+                existing = instances_by_port.get(port)
+                if existing:
+                    _, existing_time = existing
+                    if existing_time >= freshness:
+                        logger.debug(
+                            "Skipping stale status entry %s in favor of more recent data for port %s",
+                            status_path.name,
+                            port,
+                        )
+                        continue
+
                 # Create instance info
                 instance = UnityInstanceInfo(
                     id=f"{project_name}@{hash_value}",
@@ -278,12 +294,14 @@ class PortDiscovery:
                     unity_version=data.get('unity_version')  # May not be available in current version
                 )
 
-                instances.append(instance)
+                instances_by_port[port] = (instance, freshness)
                 logger.debug(f"Discovered Unity instance: {instance.id} on port {instance.port}")
 
             except Exception as e:
                 logger.debug(f"Failed to parse status file {status_file_path}: {e}")
                 continue
 
-        logger.info(f"Discovered {len(instances)} Unity instances")
-        return instances
+        deduped_instances = [entry[0] for entry in sorted(instances_by_port.values(), key=lambda item: item[1], reverse=True)]
+
+        logger.info(f"Discovered {len(deduped_instances)} Unity instances (after de-duplication by port)")
+        return deduped_instances

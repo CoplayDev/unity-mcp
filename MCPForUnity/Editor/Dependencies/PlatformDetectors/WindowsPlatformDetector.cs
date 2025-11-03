@@ -31,15 +31,25 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                     "python.exe",
                     "python3.exe",
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "Programs", "Python", "Python314", "python.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                         "Programs", "Python", "Python313", "python.exe"),
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                         "Programs", "Python", "Python312", "python.exe"),
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                         "Programs", "Python", "Python311", "python.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "Programs", "Python", "Python310", "python.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                        "Python314", "python.exe"),
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                         "Python313", "python.exe"),
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                        "Python312", "python.exe")
+                        "Python312", "python.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                        "Python311", "python.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                        "Python310", "python.exe")
                 };
 
                 foreach (var candidate in candidates)
@@ -68,7 +78,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                     }
                 }
 
-                status.ErrorMessage = "Python not found. Please install Python 3.11 or later.";
+                status.ErrorMessage = "Python not found. Please install Python 3.10 or later.";
                 status.Details = "Checked common installation paths and PATH environment variable.";
             }
             catch (Exception ex)
@@ -94,7 +104,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             return @"Windows Installation Recommendations:
 
 1. Python: Install from Microsoft Store or python.org
-   - Microsoft Store: Search for 'Python 3.12' or 'Python 3.13'
+   - Microsoft Store: Search for 'Python 3.10' or higher
    - Direct download: https://python.org/downloads/windows/
 
 2. UV Package Manager: Install via PowerShell
@@ -132,10 +142,10 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                     version = output.Substring(7); // Remove "Python " prefix
                     fullPath = pythonPath;
 
-                    // Validate minimum version (Python 4+ or Python 3.11+)
+                    // Validate minimum version (Python 4+ or Python 3.10+)
                     if (TryParseVersion(version, out var major, out var minor))
                     {
-                        return major > 3 || (major >= 3 && minor >= 11);
+                        return major > 3 || (major >= 3 && minor >= 10);
                     }
                 }
             }

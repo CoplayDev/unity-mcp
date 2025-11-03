@@ -62,7 +62,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                     }
                 }
 
-                status.ErrorMessage = "Python not found. Please install Python 3.11 or later.";
+                status.ErrorMessage = "Python not found. Please install Python 3.10 or later.";
                 status.Details = "Checked common installation paths including system, snap, and user-local locations.";
             }
             catch (Exception ex)
@@ -144,10 +144,10 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
                     version = output.Substring(7); // Remove "Python " prefix
                     fullPath = pythonPath;
 
-                    // Validate minimum version (Python 4+ or Python 3.11+)
+                    // Validate minimum version (Python 4+ or Python 3.10+)
                     if (TryParseVersion(version, out var major, out var minor))
                     {
-                        return major > 3 || (major >= 3 && minor >= 11);
+                        return major > 3 || (major >= 3 && minor >= 10);
                     }
                 }
             }

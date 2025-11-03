@@ -733,10 +733,12 @@ namespace MCPForUnity.Editor.Helpers
                     Path.Combine(programFiles, "WinGet", "Links", "uv.exe"),
 
                     // Common per-user installs
+                    Path.Combine(localAppData, @"Programs\Python\Python314\Scripts\uv.exe"),
                     Path.Combine(localAppData, @"Programs\Python\Python313\Scripts\uv.exe"),
                     Path.Combine(localAppData, @"Programs\Python\Python312\Scripts\uv.exe"),
                     Path.Combine(localAppData, @"Programs\Python\Python311\Scripts\uv.exe"),
                     Path.Combine(localAppData, @"Programs\Python\Python310\Scripts\uv.exe"),
+                    Path.Combine(appData, @"Python\Python314\Scripts\uv.exe"),
                     Path.Combine(appData, @"Python\Python313\Scripts\uv.exe"),
                     Path.Combine(appData, @"Python\Python312\Scripts\uv.exe"),
                     Path.Combine(appData, @"Python\Python311\Scripts\uv.exe"),
@@ -761,8 +763,11 @@ namespace MCPForUnity.Editor.Helpers
                     Path.Combine(home, ".local", "bin", "uv"),
                     "/opt/homebrew/opt/uv/bin/uv",
                     // Framework Python installs
+                    "/Library/Frameworks/Python.framework/Versions/3.14/bin/uv",
                     "/Library/Frameworks/Python.framework/Versions/3.13/bin/uv",
                     "/Library/Frameworks/Python.framework/Versions/3.12/bin/uv",
+                    "/Library/Frameworks/Python.framework/Versions/3.11/bin/uv",
+                    "/Library/Frameworks/Python.framework/Versions/3.10/bin/uv",
                     // Fallback to PATH resolution by name
                     "uv"
                 };

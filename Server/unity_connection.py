@@ -235,23 +235,39 @@ class UnityConnection:
         attempts = max(config.max_retries, 5)
         base_backoff = max(0.5, config.retry_delay)
 
-        def read_status_file() -> dict | None:
+        def read_status_file(target_hash: str | None = None) -> dict | None:
             try:
-                status_files = sorted(Path.home().joinpath(
-                    '.unity-mcp').glob('unity-mcp-status-*.json'), key=lambda p: p.stat().st_mtime, reverse=True)
+                base_path = Path.home().joinpath('.unity-mcp')
+                status_files = sorted(
+                    base_path.glob('unity-mcp-status-*.json'),
+                    key=lambda p: p.stat().st_mtime,
+                    reverse=True,
+                )
                 if not status_files:
                     return None
-                latest = status_files[0]
-                with latest.open('r') as f:
+                if target_hash:
+                    for status_path in status_files:
+                        if status_path.stem.endswith(target_hash):
+                            with status_path.open('r') as f:
+                                return json.load(f)
+                # Fallback: return most recent regardless of hash
+                with status_files[0].open('r') as f:
                     return json.load(f)
             except Exception:
                 return None
 
         last_short_timeout = None
 
+        # Extract hash suffix from instance id (e.g., Project@hash)
+        target_hash: str | None = None
+        if self.instance_id and '@' in self.instance_id:
+            maybe_hash = self.instance_id.split('@', 1)[1].strip()
+            if maybe_hash:
+                target_hash = maybe_hash
+
         # Preflight: if Unity reports reloading, return a structured hint so clients can retry politely
         try:
-            status = read_status_file()
+            status = read_status_file(target_hash)
             if status and (status.get('reloading') or status.get('reason') == 'reloading'):
                 return MCPResponse(
                     success=False,
@@ -361,7 +377,7 @@ class UnityConnection:
 
                 if attempt < attempts:
                     # Heartbeat-aware, jittered backoff
-                    status = read_status_file()
+                    status = read_status_file(target_hash)
                     # Base exponential backoff
                     backoff = base_backoff * (2 ** attempt)
                     # Decorrelated jitter multiplier
