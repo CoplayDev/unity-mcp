@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Collections;
 using NUnit.Framework;
 using UnityEngine;
-using UnityEditor;
 using UnityEngine.TestTools;
 using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Tools;

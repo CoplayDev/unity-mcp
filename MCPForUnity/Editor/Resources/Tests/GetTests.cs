@@ -87,19 +87,19 @@ namespace MCPForUnity.Editor.Resources.Tests
                 return false;
             }
 
-            if (modeStr.Equals("edit", StringComparison.OrdinalIgnoreCase))
+            if (modeStr.Equals("EditMode", StringComparison.OrdinalIgnoreCase))
             {
                 mode = TestMode.EditMode;
                 return true;
             }
 
-            if (modeStr.Equals("play", StringComparison.OrdinalIgnoreCase))
+            if (modeStr.Equals("PlayMode", StringComparison.OrdinalIgnoreCase))
             {
                 mode = TestMode.PlayMode;
                 return true;
             }
 
-            error = $"Unknown test mode: '{modeStr}'. Use 'edit' or 'play'";
+            error = $"Unknown test mode: '{modeStr}'. Use 'EditMode' or 'PlayMode'";
             return false;
         }
     }

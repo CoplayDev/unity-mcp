@@ -1,19 +1,14 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.IO;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditorInternal; // Required for tag management
-using UnityEditor.SceneManagement;
-using UnityEngine;
 using MCPForUnity.Editor.Helpers;
 
 namespace MCPForUnity.Editor.Tools
 {
     /// <summary>
-    /// Handles operations related to controlling and querying the Unity Editor state,
-    /// including managing Tags and Layers.
+    /// Handles editor control actions including play mode control, tool selection,
+    /// and tag/layer management. For reading editor state, use MCP resources instead.
     /// </summary>
     [McpForUnityTool("manage_editor")]
     public static class ManageEditor
@@ -89,19 +84,7 @@ namespace MCPForUnity.Editor.Tools
                         return Response.Error($"Error stopping play mode: {e.Message}");
                     }
 
-                // Editor State/Info
-                case "get_state":
-                    return GetEditorState();
-                case "get_project_root":
-                    return GetProjectRoot();
-                case "get_windows":
-                    return GetEditorWindows();
-                case "get_active_tool":
-                    return GetActiveTool();
-                case "get_selection":
-                    return GetSelection();
-                case "get_prefab_stage":
-                    return GetPrefabStageInfo();
+                // Tool Control
                 case "set_active_tool":
                     string toolName = @params["toolName"]?.ToString();
                     if (string.IsNullOrEmpty(toolName))
@@ -117,9 +100,6 @@ namespace MCPForUnity.Editor.Tools
                     if (string.IsNullOrEmpty(tagName))
                         return Response.Error("'tagName' parameter required for remove_tag.");
                     return RemoveTag(tagName);
-                case "get_tags":
-                    return GetTags(); // Helper to list current tags
-
                 // Layer Management
                 case "add_layer":
                     if (string.IsNullOrEmpty(layerName))
@@ -129,9 +109,6 @@ namespace MCPForUnity.Editor.Tools
                     if (string.IsNullOrEmpty(layerName))
                         return Response.Error("'layerName' parameter required for remove_layer.");
                     return RemoveLayer(layerName);
-                case "get_layers":
-                    return GetLayers(); // Helper to list current layers
-
                 // --- Settings (Example) ---
                 // case "set_resolution":
                 //     int? width = @params["width"]?.ToObject<int?>();
@@ -144,167 +121,12 @@ namespace MCPForUnity.Editor.Tools
 
                 default:
                     return Response.Error(
-                        $"Unknown action: '{action}'. Supported actions include play, pause, stop, get_state, get_project_root, get_windows, get_active_tool, get_selection, get_prefab_stage, set_active_tool, add_tag, remove_tag, get_tags, add_layer, remove_layer, get_layers."
+                        $"Unknown action: '{action}'. Supported actions: play, pause, stop, set_active_tool, add_tag, remove_tag, add_layer, remove_layer. Use MCP resources for reading editor state, project info, tags, layers, selection, windows, prefab stage, and active tool."
                     );
             }
         }
 
-        // --- Editor State/Info Methods ---
-        private static object GetEditorState()
-        {
-            try
-            {
-                var state = new
-                {
-                    isPlaying = EditorApplication.isPlaying,
-                    isPaused = EditorApplication.isPaused,
-                    isCompiling = EditorApplication.isCompiling,
-                    isUpdating = EditorApplication.isUpdating,
-                    applicationPath = EditorApplication.applicationPath,
-                    applicationContentsPath = EditorApplication.applicationContentsPath,
-                    timeSinceStartup = EditorApplication.timeSinceStartup,
-                };
-                return Response.Success("Retrieved editor state.", state);
-            }
-            catch (Exception e)
-            {
-                return Response.Error($"Error getting editor state: {e.Message}");
-            }
-        }
-
-        private static object GetProjectRoot()
-        {
-            try
-            {
-                // Application.dataPath points to <Project>/Assets
-                string assetsPath = Application.dataPath.Replace('\\', '/');
-                string projectRoot = Directory.GetParent(assetsPath)?.FullName.Replace('\\', '/');
-                if (string.IsNullOrEmpty(projectRoot))
-                {
-                    return Response.Error("Could not determine project root from Application.dataPath");
-                }
-                return Response.Success("Project root resolved.", new { projectRoot });
-            }
-            catch (Exception e)
-            {
-                return Response.Error($"Error getting project root: {e.Message}");
-            }
-        }
-
-        private static object GetEditorWindows()
-        {
-            try
-            {
-                // Get all types deriving from EditorWindow
-                var windowTypes = AppDomain
-                    .CurrentDomain.GetAssemblies()
-                    .SelectMany(assembly => assembly.GetTypes())
-                    .Where(type => type.IsSubclassOf(typeof(EditorWindow)))
-                    .ToList();
-
-                var openWindows = new List<object>();
-
-                // Find currently open instances
-                // Resources.FindObjectsOfTypeAll seems more reliable than GetWindow for finding *all* open windows
-                EditorWindow[] allWindows = UnityEngine.Resources.FindObjectsOfTypeAll<EditorWindow>();
-
-                foreach (EditorWindow window in allWindows)
-                {
-                    if (window == null)
-                        continue; // Skip potentially destroyed windows
-
-                    try
-                    {
-                        openWindows.Add(
-                            new
-                            {
-                                title = window.titleContent.text,
-                                typeName = window.GetType().FullName,
-                                isFocused = EditorWindow.focusedWindow == window,
-                                position = new
-                                {
-                                    x = window.position.x,
-                                    y = window.position.y,
-                                    width = window.position.width,
-                                    height = window.position.height,
-                                },
-                                instanceID = window.GetInstanceID(),
-                            }
-                        );
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogWarning(
-                            $"Could not get info for window {window.GetType().Name}: {ex.Message}"
-                        );
-                    }
-                }
-
-                return Response.Success("Retrieved list of open editor windows.", openWindows);
-            }
-            catch (Exception e)
-            {
-                return Response.Error($"Error getting editor windows: {e.Message}");
-            }
-        }
-
-        private static object GetPrefabStageInfo()
-        {
-            try
-            {
-                PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
-                if (stage == null)
-                {
-                    return Response.Success
-                    ("No prefab stage is currently open.", new { isOpen = false });
-                }
-
-                return Response.Success(
-                    "Prefab stage info retrieved.",
-                    new
-                    {
-                        isOpen = true,
-                        assetPath = stage.assetPath,
-                        prefabRootName = stage.prefabContentsRoot != null ? stage.prefabContentsRoot.name : null,
-                        mode = stage.mode.ToString(),
-                        isDirty = stage.scene.isDirty
-                    }
-                );
-            }
-            catch (Exception e)
-            {
-                return Response.Error($"Error getting prefab stage info: {e.Message}");
-            }
-        }
-
-        private static object GetActiveTool()
-        {
-            try
-            {
-                Tool currentTool = UnityEditor.Tools.current;
-                string toolName = currentTool.ToString(); // Enum to string
-                bool customToolActive = UnityEditor.Tools.current == Tool.Custom; // Check if a custom tool is active
-                string activeToolName = customToolActive
-                    ? EditorTools.GetActiveToolName()
-                    : toolName; // Get custom name if needed
-
-                var toolInfo = new
-                {
-                    activeTool = activeToolName,
-                    isCustom = customToolActive,
-                    pivotMode = UnityEditor.Tools.pivotMode.ToString(),
-                    pivotRotation = UnityEditor.Tools.pivotRotation.ToString(),
-                    handleRotation = UnityEditor.Tools.handleRotation.eulerAngles, // Euler for simplicity
-                    handlePosition = UnityEditor.Tools.handlePosition,
-                };
-
-                return Response.Success("Retrieved active tool information.", toolInfo);
-            }
-            catch (Exception e)
-            {
-                return Response.Error($"Error getting active tool: {e.Message}");
-            }
-        }
+        // --- Tool Control Methods ---
 
         private static object SetActiveTool(string toolName)
         {
@@ -341,43 +163,6 @@ namespace MCPForUnity.Editor.Tools
             }
         }
 
-        private static object GetSelection()
-        {
-            try
-            {
-                var selectionInfo = new
-                {
-                    activeObject = Selection.activeObject?.name,
-                    activeGameObject = Selection.activeGameObject?.name,
-                    activeTransform = Selection.activeTransform?.name,
-                    activeInstanceID = Selection.activeInstanceID,
-                    count = Selection.count,
-                    objects = Selection
-                        .objects.Select(obj => new
-                        {
-                            name = obj?.name,
-                            type = obj?.GetType().FullName,
-                            instanceID = obj?.GetInstanceID(),
-                        })
-                        .ToList(),
-                    gameObjects = Selection
-                        .gameObjects.Select(go => new
-                        {
-                            name = go?.name,
-                            instanceID = go?.GetInstanceID(),
-                        })
-                        .ToList(),
-                    assetGUIDs = Selection.assetGUIDs, // GUIDs for selected assets in Project view
-                };
-
-                return Response.Success("Retrieved current selection details.", selectionInfo);
-            }
-            catch (Exception e)
-            {
-                return Response.Error($"Error getting selection: {e.Message}");
-            }
-        }
-
         // --- Tag Management Methods ---
 
         private static object AddTag(string tagName)
@@ -386,7 +171,7 @@ namespace MCPForUnity.Editor.Tools
                 return Response.Error("Tag name cannot be empty or whitespace.");
 
             // Check if tag already exists
-            if (InternalEditorUtility.tags.Contains(tagName))
+            if (System.Linq.Enumerable.Contains(InternalEditorUtility.tags, tagName))
             {
                 return Response.Error($"Tag '{tagName}' already exists.");
             }
@@ -413,7 +198,7 @@ namespace MCPForUnity.Editor.Tools
                 return Response.Error("Cannot remove the built-in 'Untagged' tag.");
 
             // Check if tag exists before attempting removal
-            if (!InternalEditorUtility.tags.Contains(tagName))
+            if (!System.Linq.Enumerable.Contains(InternalEditorUtility.tags, tagName))
             {
                 return Response.Error($"Tag '{tagName}' does not exist.");
             }
@@ -430,19 +215,6 @@ namespace MCPForUnity.Editor.Tools
             {
                 // Catch potential issues if the tag is somehow in use or removal fails
                 return Response.Error($"Failed to remove tag '{tagName}': {e.Message}");
-            }
-        }
-
-        private static object GetTags()
-        {
-            try
-            {
-                string[] tags = InternalEditorUtility.tags;
-                return Response.Success("Retrieved current tags.", tags);
-            }
-            catch (Exception e)
-            {
-                return Response.Error($"Failed to retrieve tags: {e.Message}");
             }
         }
 
@@ -569,27 +341,6 @@ namespace MCPForUnity.Editor.Tools
             }
         }
 
-        private static object GetLayers()
-        {
-            try
-            {
-                var layers = new Dictionary<int, string>();
-                for (int i = 0; i < TotalLayerCount; i++)
-                {
-                    string layerName = LayerMask.LayerToName(i);
-                    if (!string.IsNullOrEmpty(layerName)) // Only include layers that have names
-                    {
-                        layers.Add(i, layerName);
-                    }
-                }
-                return Response.Success("Retrieved current named layers.", layers);
-            }
-            catch (Exception e)
-            {
-                return Response.Error($"Failed to retrieve layers: {e.Message}");
-            }
-        }
-
         // --- Helper Methods ---
 
         /// <summary>
@@ -605,7 +356,7 @@ namespace MCPForUnity.Editor.Tools
                 );
                 if (tagManagerAssets == null || tagManagerAssets.Length == 0)
                 {
-                    Debug.LogError("[ManageEditor] TagManager.asset not found in ProjectSettings.");
+                    McpLog.Error("[ManageEditor] TagManager.asset not found in ProjectSettings.");
                     return null;
                 }
                 // The first object in the asset file should be the TagManager
@@ -613,7 +364,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ManageEditor] Error accessing TagManager.asset: {e.Message}");
+                McpLog.Error($"[ManageEditor] Error accessing TagManager.asset: {e.Message}");
                 return null;
             }
         }
@@ -623,23 +374,5 @@ namespace MCPForUnity.Editor.Tools
         private static object SetGameViewResolution(int width, int height) { ... }
         private static object SetQualityLevel(JToken qualityLevelToken) { ... }
         */
-    }
-
-    // Helper class to get custom tool names (remains the same)
-    internal static class EditorTools
-    {
-        public static string GetActiveToolName()
-        {
-            // This is a placeholder. Real implementation depends on how custom tools
-            // are registered and tracked in the specific Unity project setup.
-            // It might involve checking static variables, calling methods on specific tool managers, etc.
-            if (UnityEditor.Tools.current == Tool.Custom)
-            {
-                // Example: Check a known custom tool manager
-                // if (MyCustomToolManager.IsActive) return MyCustomToolManager.ActiveToolName;
-                return "Unknown Custom Tool";
-            }
-            return UnityEditor.Tools.current.ToString();
-        }
     }
 }

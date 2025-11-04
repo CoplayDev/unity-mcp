@@ -5,7 +5,6 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using MCPForUnity.Editor.Tools.Prefabs;
-using MCPForUnity.Editor.Tools;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -53,11 +52,11 @@ namespace MCPForUnityTests.Editor.Tools
 
                 Assert.IsTrue(openResult.Value<bool>("success"), "open_stage should succeed for a valid prefab.");
 
-                PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
+                UnityEditor.SceneManagement.PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
                 Assert.IsNotNull(stage, "Prefab stage should be open after open_stage.");
                 Assert.AreEqual(prefabPath, stage.assetPath, "Opened stage should match prefab path.");
 
-                var stageInfo = ToJObject(ManageEditor.HandleCommand(new JObject { ["action"] = "get_prefab_stage" }));
+                var stageInfo = ToJObject(MCPForUnity.Editor.Resources.Editor.PrefabStage.HandleCommand(new JObject()));
                 Assert.IsTrue(stageInfo.Value<bool>("success"), "get_prefab_stage should succeed when stage is open.");
 
                 var data = stageInfo["data"] as JObject;
@@ -125,7 +124,7 @@ namespace MCPForUnityTests.Editor.Tools
                     ["prefabPath"] = prefabPath
                 });
 
-                PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
+                UnityEditor.SceneManagement.PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
                 Assert.IsNotNull(stage, "Stage should be open before modifying.");
 
                 stage.prefabContentsRoot.transform.localScale = new Vector3(2f, 2f, 2f);

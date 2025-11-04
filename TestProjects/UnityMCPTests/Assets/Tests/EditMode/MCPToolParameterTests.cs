@@ -1,7 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
-using System.Collections;
 using UnityEditor;
 using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Tools;

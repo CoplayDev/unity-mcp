@@ -1,9 +1,7 @@
-using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using MCPForUnity.Editor.Tools;
-using static MCPForUnity.Editor.Tools.ManageGameObject;
 
 namespace MCPForUnityTests.Editor.Tools
 {
