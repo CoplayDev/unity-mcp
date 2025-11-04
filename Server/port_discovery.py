@@ -228,7 +228,7 @@ class PortDiscovery:
         Returns:
             List of UnityInstanceInfo objects for all discovered instances
         """
-        instances_by_port: Dict[int, tuple[UnityInstanceInfo, datetime]] = {}
+        instances_by_port: Dict[int, tuple[UnityInstanceInfo, float]] = {}
         base = PortDiscovery.get_registry_dir()
 
         # Scan all status files
@@ -238,7 +238,7 @@ class PortDiscovery:
         for status_file_path in status_files:
             try:
                 status_path = Path(status_file_path)
-                file_mtime = datetime.fromtimestamp(status_path.stat().st_mtime)
+                file_mtime = status_path.stat().st_mtime
 
                 with status_path.open('r') as f:
                     data = json.load(f)
@@ -269,12 +269,12 @@ class PortDiscovery:
                     logger.debug(f"Instance {project_name}@{hash_value} has heartbeat but port {port} not responding")
                     continue
 
-                freshness = last_heartbeat or file_mtime
+                freshness = last_heartbeat.timestamp() if last_heartbeat else file_mtime
 
                 existing = instances_by_port.get(port)
                 if existing:
-                    _, existing_time = existing
-                    if existing_time >= freshness:
+                    _, existing_freshness = existing
+                    if existing_freshness >= freshness:
                         logger.debug(
                             "Skipping stale status entry %s in favor of more recent data for port %s",
                             status_path.name,
