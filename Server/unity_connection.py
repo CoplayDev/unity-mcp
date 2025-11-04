@@ -225,7 +225,7 @@ class UnityConnection:
             logger.error(f"Error during receive: {str(e)}")
             raise
 
-    def send_command(self, command_type: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    def send_command(self, command_type: str, params: dict[str, Any] | None = None) -> dict[str, Any] | MCPResponse:
         """Send a command with retry/backoff and port rediscovery. Pings only when requested."""
         # Defensive guard: catch empty/placeholder invocations early
         if not command_type:
