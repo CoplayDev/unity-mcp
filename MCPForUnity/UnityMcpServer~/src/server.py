@@ -165,11 +165,11 @@ Important Workflows:
 
 Resources vs Tools:
 - Use RESOURCES to read editor state (editor_state, project_info, project_tags, tests, etc)
-- Use TOOLS to perform actions and mutations (manage_editor for play mode control, tag/layer management)
+- Use TOOLS to perform actions and mutations (manage_editor for play mode control, tag/layer management, etc)
 - Always check related resources before modifying the engine state with tools
 
 Script Management:
-1. After creating or modifying scripts with `manage_script`, ALWAYS call `reload_domain` immediately
+1. After creating or modifying scripts (by your own tools or the `manage_script` tool), ALWAYS call `reload_domain` immediately
 2. Wait for Unity to recompile (domain reload is asynchronous) by checking the `editor_state` resource
 3. Use `read_console` to check for compilation errors before proceeding
 4. Only after successful compilation can new components/types be used
