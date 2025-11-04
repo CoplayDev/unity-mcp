@@ -263,10 +263,14 @@ class UnityConnection:
 
         # Extract hash suffix from instance id (e.g., Project@hash)
         target_hash: str | None = None
-        if self.instance_id and '@' in self.instance_id:
-            maybe_hash = self.instance_id.split('@', 1)[1].strip()
-            if maybe_hash:
-                target_hash = maybe_hash
+        if self.instance_id:
+            if '@' in self.instance_id:
+                maybe_hash = self.instance_id.split('@', 1)[1].strip()
+                if maybe_hash:
+                    target_hash = maybe_hash
+            else:
+                # instance_id is just the hash (fallback format)
+                target_hash = self.instance_id.strip()
 
         # Preflight: if Unity reports reloading, return a structured hint so clients can retry politely
         try:
