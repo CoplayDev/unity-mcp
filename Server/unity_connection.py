@@ -4,7 +4,6 @@ from dataclasses import dataclass
 import errno
 import json
 import logging
-import os
 from pathlib import Path
 from port_discovery import PortDiscovery
 import random
