@@ -225,7 +225,7 @@ class UnityConnection:
             logger.error(f"Error during receive: {str(e)}")
             raise
 
-    def send_command(self, command_type: str, params: dict[str, Any] | None = None) -> dict[str, Any] | MCPResponse:
+    def send_command(self, command_type: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Send a command with retry/backoff and port rediscovery. Pings only when requested."""
         # Defensive guard: catch empty/placeholder invocations early
         if not command_type:
@@ -276,12 +276,12 @@ class UnityConnection:
         try:
             status = read_status_file(target_hash)
             if status and (status.get('reloading') or status.get('reason') == 'reloading'):
-                return MCPResponse(
-                    success=False,
-                    error="Unity domain reload in progress, please try again shortly",
-                    data={"state": "reloading", "retry_after_ms": int(
-                        config.reload_retry_ms)}
-                )
+                return {
+                    "success": False,
+                    "state": "reloading",
+                    "retry_after_ms": int(config.reload_retry_ms),
+                    "error": "Unity domain reload in progress, please try again shortly",
+                }
         except Exception:
             pass
 
