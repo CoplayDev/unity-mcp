@@ -169,10 +169,9 @@ Resources vs Tools:
 - Always check related resources before modifying the engine state with tools
 
 Script Management:
-1. After creating or modifying scripts (by your own tools or the `manage_script` tool), ALWAYS call `reload_domain` immediately
-2. Wait for Unity to recompile (domain reload is asynchronous) by checking the `editor_state` resource
-3. Use `read_console` to check for compilation errors before proceeding
-4. Only after successful compilation can new components/types be used
+- After creating or modifying scripts (by your own tools or the `manage_script` tool) use `read_console` to check for compilation errors before proceeding
+- Only after successful compilation can new components/types be used
+- You can poll the `editor_state` resource's `isCompiling` field to check if the domain reload is complete
 
 Scene Setup:
 - Always include a Camera and main Light (Directional Light) in new scenes
