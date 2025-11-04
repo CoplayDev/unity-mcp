@@ -226,13 +226,13 @@ class UnityConnection:
             logger.error(f"Error during receive: {str(e)}")
             raise
 
-    def send_command(self, command_type: str, params: dict[str, Any] = None) -> dict[str, Any]:
+    def send_command(self, command_type: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Send a command with retry/backoff and port rediscovery. Pings only when requested."""
         # Defensive guard: catch empty/placeholder invocations early
         if not command_type:
             raise ValueError("MCP call missing command_type")
         if params is None:
-            return MCPResponse(success=False, error="MCP call received with no parameters (client placeholder?)")
+            params = {}
         attempts = max(config.max_retries, 5)
         base_backoff = max(0.5, config.retry_delay)
 
@@ -251,7 +251,10 @@ class UnityConnection:
                         if status_path.stem.endswith(target_hash):
                             with status_path.open('r') as f:
                                 return json.load(f)
-                # Fallback: return most recent regardless of hash
+                    # Target hash not found - don't fallback to avoid reading wrong instance's status
+                    logger.debug(f"Status file for hash '{target_hash}' not found, available: {[p.stem for p in status_files[:3]]}")
+                    return None
+                # Only return most recent when no specific hash requested
                 with status_files[0].open('r') as f:
                     return json.load(f)
             except Exception:
