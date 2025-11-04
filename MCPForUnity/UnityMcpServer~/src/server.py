@@ -168,8 +168,10 @@ Available tools:\n
 - `manage_gameobject`: Manages GameObjects in the scene.\n
 - `manage_script`: Manages C# script files.\n
 - `manage_asset`: Manages prefabs and assets.\n
-- `manage_shader`: Manages shaders.\n\n
-- Tips:\n
+- `manage_shader`: Manages shaders.\n
+- `reload_domain`: Triggers Unity domain reload to recompile scripts and refresh assemblies.\n\n
+Tips:\n
+- Always reload the domain after creating or modifying scripts before attempting to use them. Use `reload_domain` immediately after script changes, then check `read_console` for compile errors.\n
 - Create prefabs for reusable GameObjects.\n
 - Always include a camera and main light in your scenes.\n
 - Unless specified otherwise, paths are relative to the project's `Assets/` folder.\n
