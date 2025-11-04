@@ -40,18 +40,19 @@ MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to 
 
   Your LLM can use functions like:
 
-  * `read_console`: Gets messages from or clears the console.
-  * `manage_script`: Manages C# scripts (create, read, update, delete).
-  * `manage_editor`: Controls and queries the editor's state and settings.
-  * `manage_scene`: Manages scenes (load, save, create, get hierarchy, etc.).
-  * `manage_asset`: Performs asset operations (import, create, modify, delete, etc.).
-  * `manage_shader`: Performs shader CRUD operations (create, read, modify, delete).
-  * `manage_gameobject`: Manages GameObjects: create, modify, delete, find, and component operations.
   * `execute_menu_item`: Executes Unity Editor menu items (e.g., "File/Save Project").
+  * `manage_asset`: Performs asset operations (import, create, modify, delete, etc.).
+  * `manage_editor`: Controls and queries the editor's state and settings.
+  * `manage_gameobject`: Manages GameObjects: create, modify, delete, find, and component operations.
+  * `manage_scene`: Manages scenes (load, save, create, get hierarchy, etc.).
+  * `manage_script`: Manages C# scripts (create, read, update, delete).
+  * `manage_shader`: Performs shader CRUD operations (create, read, modify, delete).
+  * `read_console`: Gets messages from or clears the console.
+  * `reload_domain`: Reloads the Unity domain.
+  * `run_test`: Runs a tests in the Unity Editor.
   * `apply_text_edits`: Precise text edits with precondition hashes and atomic multi-edit batches.
   * `script_apply_edits`: Structured C# method/class edits (insert/replace/delete) with safer boundaries.
   * `validate_script`: Fast validation (basic/standard) to catch syntax/structure issues before/after writes.
-  * `run_test`: Runs a tests in the Unity Editor.
 </details>
 
 

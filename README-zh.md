@@ -38,14 +38,16 @@ MCP for Unity 作为桥梁，允许 AI 助手（如 Claude、Cursor）通过本�
 
   您的大语言模型可以使用以下功能：
 
-  * `read_console`: 获取控制台消息或清除控制台。
-  * `manage_script`: 管理 C# 脚本（创建、读取、更新、删除）。
-  * `manage_editor`: 控制和查询编辑器的状态和设置。
-  * `manage_scene`: 管理场景（加载、保存、创建、获取层次结构等）。
+  * `execute_menu_item`: 执行 Unity 编辑器菜单项（例如，"File/Save Project"）。
   * `manage_asset`: 执行资源操作（导入、创建、修改、删除等）。
-  * `manage_shader`: 执行着色器 CRUD 操作（创建、读取、修改、删除）。
+  * `manage_editor`: 控制和查询编辑器的状态和设置。
   * `manage_gameobject`: 管理游戏对象：创建、修改、删除、查找和组件操作。
-  * `execute_menu_item`: 执行 Unity 编辑器菜单项（例如，执行"File/Save Project"）。
+  * `manage_scene`: 管理场景（加载、保存、创建、获取层次结构等）。
+  * `manage_script`: 管理 C# 脚本（创建、读取、更新、删除）。
+  * `manage_shader`: 执行着色器 CRUD 操作（创建、读取、修改、删除）。
+  * `read_console`: 获取控制台消息或清除控制台。
+  * `reload_domain`: 重新加载 Unity 域。
+  * `run_test`: 在 Unity 编辑器中运行测试。
   * `apply_text_edits`: 具有前置条件哈希和原子多编辑批次的精确文本编辑。
   * `script_apply_edits`: 结构化 C# 方法/类编辑（插入/替换/删除），具有更安全的边界。
   * `validate_script`: 快速验证（基本/标准）以在写入前后捕获语法/结构问题。
