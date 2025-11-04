@@ -13,7 +13,7 @@ import threading
 import time
 from typing import Any
 
-from models import MCPResponse, UnityInstanceInfo
+from models import MCPResponse
 from connection_pool import get_unity_connection_pool
 
 
@@ -270,7 +270,7 @@ class UnityConnection:
                     target_hash = maybe_hash
             else:
                 # instance_id is just the hash (fallback format)
-                target_hash = self.instance_id.strip()
+                target_hash = self.instance_id.strip() or None
 
         # Preflight: if Unity reports reloading, return a structured hint so clients can retry politely
         try:
