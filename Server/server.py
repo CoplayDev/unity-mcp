@@ -108,12 +108,14 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
             instances = _unity_connection_pool.discover_all_instances()
 
             if instances:
-                logger.info(f"Discovered {len(instances)} Unity instance(s): {[i.id for i in instances]}")
+                logger.info(
+                    f"Discovered {len(instances)} Unity instance(s): {[i.id for i in instances]}")
 
                 # Try to connect to default instance
                 try:
                     _unity_connection_pool.get_connection()
-                    logger.info("Connected to default Unity instance on startup")
+                    logger.info(
+                        "Connected to default Unity instance on startup")
 
                     # Record successful Unity connection (deferred)
                     import threading as _t
@@ -126,7 +128,8 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
                         }
                     )).start()
                 except Exception as e:
-                    logger.warning("Could not connect to default Unity instance: %s", e)
+                    logger.warning(
+                        "Could not connect to default Unity instance: %s", e)
             else:
                 logger.warning("No Unity instances found on startup")
 
@@ -177,10 +180,9 @@ This server provides tools to interact with the Unity Game Engine Editor.
 Important Workflows:
 
 Script Management:
-1. After creating or modifying scripts with `manage_script`, ALWAYS call `reload_domain` immediately
-2. Wait for Unity to recompile (domain reload is asynchronous)
-3. Use `read_console` to check for compilation errors before proceeding
-4. Only after successful compilation can new components/types be used
+1. After creating or modifying scripts with `manage_script`
+2. Use `read_console` to check for compilation errors before proceeding
+3. Only after successful compilation can new components/types be used
 
 Scene Setup:
 - Always include a Camera and main Light (Directional Light) in new scenes
@@ -246,7 +248,8 @@ Examples:
     # Set environment variable if --default-instance is provided
     if args.default_instance:
         os.environ["UNITY_MCP_DEFAULT_INSTANCE"] = args.default_instance
-        logger.info(f"Using default Unity instance from command-line: {args.default_instance}")
+        logger.info(
+            f"Using default Unity instance from command-line: {args.default_instance}")
 
     mcp.run(transport='stdio')
 

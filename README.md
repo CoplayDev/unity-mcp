@@ -48,7 +48,6 @@ MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to 
   * `manage_script`: Manages C# scripts (create, read, update, delete).
   * `manage_shader`: Performs shader CRUD operations (create, read, modify, delete).
   * `read_console`: Gets messages from or clears the console.
-  * `reload_domain`: Reloads the Unity domain.
   * `run_test`: Runs a tests in the Unity Editor.
   * `set_active_instance`: Routes subsequent tool calls to a specific Unity instance (when multiple are running).
   * `apply_text_edits`: Precise text edits with precondition hashes and atomic multi-edit batches.
