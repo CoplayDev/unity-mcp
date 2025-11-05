@@ -2,8 +2,6 @@ import pytest
 import asyncio
 
 from .test_helpers import DummyContext
-import tools.manage_script as manage_script_module
-import tools.manage_asset as manage_asset_module
 
 
 class DummyMCP:
