@@ -46,4 +46,4 @@ jobs:
           name: pytest-results
           path: |
             MCPForUnity/UnityMcpServer~/src/.pytest_cache/
-            tests/
+            MCPForUnity/UnityMcpServer~/src/tests/
