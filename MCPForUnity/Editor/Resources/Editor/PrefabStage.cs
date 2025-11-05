@@ -15,7 +15,6 @@ namespace MCPForUnity.Editor.Resources.Editor
         {
             try
             {
-                PrefabStageUtility.GetCurrentPrefabStage();
                 var stage = PrefabStageUtility.GetCurrentPrefabStage();
                 
                 if (stage == null)
