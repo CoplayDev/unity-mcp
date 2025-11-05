@@ -13,7 +13,7 @@ from unity_connection import get_unity_connection_pool
     name="unity_instances",
     description="Lists all running Unity Editor instances with their details."
 )
-def unity_instances(ctx: Context) -> dict[str, Any]:
+async def unity_instances(ctx: Context) -> dict[str, Any]:
     """
     List all available Unity Editor instances.
 
@@ -30,7 +30,7 @@ def unity_instances(ctx: Context) -> dict[str, Any]:
     Returns:
         Dictionary containing list of instances and metadata
     """
-    ctx.info("Listing Unity instances")
+    await ctx.info("Listing Unity instances")
 
     try:
         pool = get_unity_connection_pool()
@@ -58,7 +58,7 @@ def unity_instances(ctx: Context) -> dict[str, Any]:
         return result
 
     except Exception as e:
-        ctx.error(f"Error listing Unity instances: {e}")
+        await ctx.error(f"Error listing Unity instances: {e}")
         return {
             "success": False,
             "error": f"Failed to list Unity instances: {str(e)}",
