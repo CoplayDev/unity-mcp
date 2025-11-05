@@ -20,7 +20,7 @@ namespace MCPForUnity.Editor.Tools
             string modeStr = @params?["mode"]?.ToString();
             if (string.IsNullOrWhiteSpace(modeStr))
             {
-                modeStr = "edit";
+                modeStr = "EditMode";
             }
 
             if (!ModeParser.TryParse(modeStr, out var parsedMode, out var parseError))

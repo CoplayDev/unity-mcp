@@ -41,8 +41,8 @@ class RunTestsResponse(MCPResponse):
 @mcp_for_unity_tool(description="Runs Unity tests for the specified mode")
 async def run_tests(
     ctx: Context,
-    mode: Annotated[Literal["edit", "play"], Field(
-        description="Unity test mode to run")] = "edit",
+    mode: Annotated[Literal["EditMode", "PlayMode"], Field(
+        description="Unity test mode to run")] = "EditMode",
     timeout_seconds: Annotated[str, Field(
         description="Optional timeout in seconds for the Unity test run (string, e.g. '30')")] | None = None,
 ) -> RunTestsResponse:
