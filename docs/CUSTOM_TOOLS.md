@@ -29,7 +29,7 @@ Create a Python file **anywhere in your Unity project**. For example, `Assets/Ed
 
 ```python
 from typing import Annotated, Any
-from mcp.server.fastmcp import Context
+from fastmcp import Context
 from registry import mcp_for_unity_tool
 from unity_connection import send_command_with_retry
 
@@ -127,7 +127,7 @@ Here's a complete example showing how to create a screenshot capture tool.
 ```python
 from typing import Annotated, Any
 
-from mcp.server.fastmcp import Context
+from fastmcp import Context
 
 from registry import mcp_for_unity_tool
 from unity_connection import send_command_with_retry
