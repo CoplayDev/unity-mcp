@@ -1,26 +1,9 @@
-import sys
-import pathlib
-import importlib.util
 import pytest
 import asyncio
 
-# add server src to path and load modules without triggering package imports
-ROOT = pathlib.Path(__file__).resolve().parents[1]
-SRC = ROOT / "MCPForUnity" / "UnityMcpServer~" / "src"
-sys.path.insert(0, str(SRC))
-
-
-def load_module(path, name):
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-manage_script_module = load_module(
-    SRC / "tools" / "manage_script.py", "manage_script_module")
-manage_asset_module = load_module(
-    SRC / "tools" / "manage_asset.py", "manage_asset_module")
+from tests.integration.test_helpers import DummyContext
+import tools.manage_script as manage_script_module
+import tools.manage_asset as manage_asset_module
 
 
 class DummyMCP:
@@ -32,9 +15,6 @@ class DummyMCP:
             self.tools[func.__name__] = func
             return func
         return decorator
-
-
-from tests.test_helpers import DummyContext
 
 
 def setup_manage_script():

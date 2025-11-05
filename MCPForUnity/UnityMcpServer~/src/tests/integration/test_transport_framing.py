@@ -23,7 +23,7 @@ if SRC is None:
         "MCP for Unity server source not found. Tried:\n" + searched,
         allow_module_level=True,
     )
-sys.path.insert(0, str(SRC))
+# Tests can now import directly from parent package
 
 
 def start_dummy_server(greeting: bytes, respond_ping: bool = False):

@@ -6,10 +6,7 @@ def _get_decorator_module():
     import sys
     import pathlib
     import types
-    ROOT = pathlib.Path(__file__).resolve().parents[1]
-    SRC = ROOT / "MCPForUnity" / "UnityMcpServer~" / "src"
-    if str(SRC) not in sys.path:
-        sys.path.insert(0, str(SRC))
+    # Tests can now import directly from parent package
     # Remove any previously stubbed module to force real import
     sys.modules.pop("telemetry_decorator", None)
     # Preload a minimal telemetry stub to satisfy telemetry_decorator imports

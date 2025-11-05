@@ -1,33 +1,6 @@
-import sys
-from pathlib import Path
 import pytest
-import types
 
-# locate server src dynamically to avoid hardcoded layout assumptions
-ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "MCPForUnity" / "UnityMcpServer~" / "src"
-sys.path.insert(0, str(SRC))
-
-# Stub telemetry modules to avoid file I/O during import of tools package
-telemetry = types.ModuleType("telemetry")
-def _noop(*args, **kwargs):
-    pass
-class MilestoneType:  # minimal placeholder
-    pass
-telemetry.record_resource_usage = _noop
-telemetry.record_tool_usage = _noop
-telemetry.record_milestone = _noop
-telemetry.MilestoneType = MilestoneType
-telemetry.get_package_version = lambda: "0.0.0"
-sys.modules.setdefault("telemetry", telemetry)
-
-telemetry_decorator = types.ModuleType("telemetry_decorator")
-def telemetry_tool(*_args, **_kwargs):
-    def _wrap(fn):
-        return fn
-    return _wrap
-telemetry_decorator.telemetry_tool = telemetry_tool
-sys.modules.setdefault("telemetry_decorator", telemetry_decorator)
+from tests.integration.test_helpers import DummyContext
 
 
 class DummyMCP:
@@ -39,9 +12,6 @@ class DummyMCP:
             self._tools[fn.__name__] = fn
             return fn
         return deco
-
-
-from tests.test_helpers import DummyContext
 
 
 @pytest.fixture()

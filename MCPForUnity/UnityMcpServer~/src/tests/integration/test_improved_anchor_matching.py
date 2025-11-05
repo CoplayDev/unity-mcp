@@ -2,25 +2,9 @@
 Test the improved anchor matching logic.
 """
 
-import sys
-import pathlib
-import importlib.util
+import re
 
-# add server src to path and load modules
-ROOT = pathlib.Path(__file__).resolve().parents[1]
-SRC = ROOT / "MCPForUnity" / "UnityMcpServer~" / "src"
-sys.path.insert(0, str(SRC))
-
-
-def load_module(path, name):
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-script_apply_edits_module = load_module(
-    SRC / "tools" / "script_apply_edits.py", "script_apply_edits_module")
+import tools.script_apply_edits as script_apply_edits_module
 
 
 def test_improved_anchor_matching():
@@ -40,8 +24,6 @@ public class TestClass : MonoBehaviour
         // Update logic
     }
 }'''
-
-    import re
 
     # Test the problematic anchor pattern
     anchor_pattern = r"\s*}\s*$"

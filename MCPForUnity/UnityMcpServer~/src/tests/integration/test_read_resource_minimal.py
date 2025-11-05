@@ -1,30 +1,7 @@
-import sys
-import pathlib
 import asyncio
-import types
 import pytest
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
-SRC = ROOT / "MCPForUnity" / "UnityMcpServer~" / "src"
-sys.path.insert(0, str(SRC))
-
-# Stub mcp.server.fastmcp to satisfy imports without full package
-mcp_pkg = types.ModuleType("mcp")
-server_pkg = types.ModuleType("mcp.server")
-fastmcp_pkg = types.ModuleType("mcp.server.fastmcp")
-
-
-class _Dummy:
-    pass
-
-
-fastmcp_pkg.FastMCP = _Dummy
-fastmcp_pkg.Context = _Dummy
-server_pkg.fastmcp = fastmcp_pkg
-mcp_pkg.server = server_pkg
-sys.modules.setdefault("mcp", mcp_pkg)
-sys.modules.setdefault("mcp.server", server_pkg)
-sys.modules.setdefault("mcp.server.fastmcp", fastmcp_pkg)
+from tests.integration.test_helpers import DummyContext
 
 
 class DummyMCP:
@@ -36,9 +13,6 @@ class DummyMCP:
             self.tools[fn.__name__] = fn
             return fn
         return deco
-
-
-from tests.test_helpers import DummyContext
 
 
 @pytest.fixture()

@@ -1,40 +1,6 @@
-# import triggers registration elsewhere; no direct use here
-import sys
-import types
-from pathlib import Path
-
 import pytest
 
-
-# Locate server src dynamically to avoid hardcoded layout assumptions (same as other tests)
-ROOT = Path(__file__).resolve().parents[1]
-candidates = [
-    ROOT / "MCPForUnity" / "UnityMcpServer~" / "src",
-    ROOT / "UnityMcpServer~" / "src",
-]
-SRC = next((p for p in candidates if p.exists()), None)
-if SRC is None:
-    searched = "\n".join(str(p) for p in candidates)
-    pytest.skip(
-        "MCP for Unity server source not found. Tried:\n" + searched,
-        allow_module_level=True,
-    )
-sys.path.insert(0, str(SRC))
-
-# Stub fastmcp to avoid real MCP deps
-fastmcp_pkg = types.ModuleType("fastmcp")
-
-
-class _Dummy:
-    pass
-
-
-fastmcp_pkg.FastMCP = _Dummy
-fastmcp_pkg.Context = _Dummy
-sys.modules.setdefault("fastmcp", fastmcp_pkg)
-
-
-# Import target module after path injection
+from tests.integration.test_helpers import DummyContext
 
 
 class DummyMCP:
@@ -46,12 +12,6 @@ class DummyMCP:
             self.tools[fn.__name__] = fn
             return fn
         return _decorator
-
-
-# (removed unused DummyCtx)
-
-
-from tests.test_helpers import DummyContext
 
 
 def _register_tools():

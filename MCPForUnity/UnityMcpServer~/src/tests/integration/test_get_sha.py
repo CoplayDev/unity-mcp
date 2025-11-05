@@ -1,24 +1,4 @@
-import sys
-import pathlib
-import importlib.util
-
-
-ROOT = pathlib.Path(__file__).resolve().parents[1]
-SRC = ROOT / "MCPForUnity" / "UnityMcpServer~" / "src"
-sys.path.insert(0, str(SRC))
-
-
-def _load_module(path: pathlib.Path, name: str):
-    spec = importlib.util.spec_from_file_location(name, path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Cannot load module {name} from {path}")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-manage_script = _load_module(
-    SRC / "tools" / "manage_script.py", "manage_script_mod")
+from tests.integration.test_helpers import DummyContext
 
 
 class DummyMCP:
@@ -30,9 +10,6 @@ class DummyMCP:
             self.tools[fn.__name__] = fn
             return fn
         return deco
-
-
-from tests.test_helpers import DummyContext
 
 
 def setup_tools():

@@ -7,14 +7,7 @@ def test_endpoint_rejects_non_http(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     monkeypatch.setenv("UNITY_MCP_TELEMETRY_ENDPOINT", "file:///etc/passwd")
 
-    # Import the telemetry module from the correct path
-    import sys
-    import pathlib
-    ROOT = pathlib.Path(__file__).resolve().parents[1]
-    SRC = ROOT / "MCPForUnity" / "UnityMcpServer~" / "src"
-    sys.path.insert(0, str(SRC))
-    
-    monkeypatch.chdir(str(SRC))
+    # Import the telemetry module
     telemetry = importlib.import_module("telemetry")
     importlib.reload(telemetry)
 
@@ -29,18 +22,10 @@ def test_config_preferred_then_env_override(tmp_path, monkeypatch):
     monkeypatch.delenv("UNITY_MCP_TELEMETRY_ENDPOINT", raising=False)
 
     # Patch config.telemetry_endpoint via import mocking
-    import importlib
-    import sys
-    import pathlib
-    ROOT = pathlib.Path(__file__).resolve().parents[1]
-    SRC = ROOT / "MCPForUnity" / "UnityMcpServer~" / "src"
-    sys.path.insert(0, str(SRC))
-    
     cfg_mod = importlib.import_module("config")
     old_endpoint = cfg_mod.config.telemetry_endpoint
     cfg_mod.config.telemetry_endpoint = "https://example.com/telemetry"
     try:
-        monkeypatch.chdir(str(SRC))
         telemetry = importlib.import_module("telemetry")
         importlib.reload(telemetry)
         tc = telemetry.TelemetryCollector()
@@ -50,7 +35,6 @@ def test_config_preferred_then_env_override(tmp_path, monkeypatch):
         # Env should override config
         monkeypatch.setenv("UNITY_MCP_TELEMETRY_ENDPOINT",
                            "https://override.example/ep")
-        monkeypatch.chdir(str(SRC))
         importlib.reload(telemetry)
         tc2 = telemetry.TelemetryCollector()
         assert tc2.config.endpoint == "https://override.example/ep"
@@ -61,14 +45,7 @@ def test_config_preferred_then_env_override(tmp_path, monkeypatch):
 def test_uuid_preserved_on_malformed_milestones(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
 
-    # Import the telemetry module from the correct path
-    import sys
-    import pathlib
-    ROOT = pathlib.Path(__file__).resolve().parents[1]
-    SRC = ROOT / "MCPForUnity" / "UnityMcpServer~" / "src"
-    sys.path.insert(0, str(SRC))
-    
-    monkeypatch.chdir(str(SRC))
+    # Import the telemetry module
     telemetry = importlib.import_module("telemetry")
     importlib.reload(telemetry)
 
