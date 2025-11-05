@@ -21,7 +21,7 @@ class GetTestsResponse(MCPResponse):
 
 
 @mcp_for_unity_resource(uri="mcpforunity://tests", name="get_tests", description="Provides a list of all tests.")
-async def get_tests(ctx: Context) -> GetTestsResponse:
+async def get_tests(ctx: Context) -> GetTestsResponse | MCPResponse:
     """Provides a list of all tests.
     """
     unity_instance = get_unity_instance_from_context(ctx)
@@ -38,7 +38,7 @@ async def get_tests(ctx: Context) -> GetTestsResponse:
 async def get_tests_for_mode(
     ctx: Context,
     mode: Annotated[Literal["EditMode", "PlayMode"], Field(description="The mode to filter tests by.")],
-) -> GetTestsResponse:
+) -> GetTestsResponse | MCPResponse:
     """Provides a list of tests for a specific mode.
 
     Args:

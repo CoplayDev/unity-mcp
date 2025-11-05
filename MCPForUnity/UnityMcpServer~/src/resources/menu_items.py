@@ -15,7 +15,7 @@ class GetMenuItemsResponse(MCPResponse):
     name="menu_items",
     description="Provides a list of all menu items."
 )
-async def get_menu_items(ctx: Context) -> GetMenuItemsResponse:
+async def get_menu_items(ctx: Context) -> GetMenuItemsResponse | MCPResponse:
     """Provides a list of all menu items.
     """
     unity_instance = get_unity_instance_from_context(ctx)

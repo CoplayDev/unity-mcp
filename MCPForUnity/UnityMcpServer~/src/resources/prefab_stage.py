@@ -23,7 +23,7 @@ class PrefabStageResponse(MCPResponse):
     name="editor_prefab_stage",
     description="Current prefab editing context if a prefab is open in isolation mode. Returns isOpen=false if no prefab is being edited."
 )
-async def get_prefab_stage() -> PrefabStageResponse:
+async def get_prefab_stage() -> PrefabStageResponse | MCPResponse:
     """Get current prefab stage information."""
     response = await async_send_command_with_retry("get_prefab_stage", {})
     return PrefabStageResponse(**response) if isinstance(response, dict) else response

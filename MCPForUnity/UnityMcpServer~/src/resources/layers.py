@@ -13,7 +13,7 @@ class LayersResponse(MCPResponse):
     name="project_layers",
     description="All layers defined in the project's TagManager with their indices (0-31). Read this before using add_layer or remove_layer tools."
 )
-async def get_layers() -> LayersResponse:
+async def get_layers() -> LayersResponse | MCPResponse:
     """Get all project layers with their indices."""
     response = await async_send_command_with_retry("get_layers", {})
     return LayersResponse(**response) if isinstance(response, dict) else response

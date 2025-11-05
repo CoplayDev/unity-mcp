@@ -23,7 +23,7 @@ class ProjectInfoResponse(MCPResponse):
     name="project_info",
     description="Static project information including root path, Unity version, and platform. This data rarely changes."
 )
-async def get_project_info() -> ProjectInfoResponse:
+async def get_project_info() -> ProjectInfoResponse | MCPResponse:
     """Get static project configuration information."""
     response = await async_send_command_with_retry("get_project_info", {})
     return ProjectInfoResponse(**response) if isinstance(response, dict) else response

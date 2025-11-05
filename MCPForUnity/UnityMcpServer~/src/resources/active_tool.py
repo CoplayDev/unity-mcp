@@ -31,7 +31,7 @@ class ActiveToolResponse(MCPResponse):
     name="editor_active_tool",
     description="Currently active editor tool (Move, Rotate, Scale, etc.) and transform handle settings."
 )
-async def get_active_tool() -> ActiveToolResponse:
+async def get_active_tool() -> ActiveToolResponse | MCPResponse:
     """Get active editor tool information."""
     response = await async_send_command_with_retry("get_active_tool", {})
     return ActiveToolResponse(**response) if isinstance(response, dict) else response

@@ -26,7 +26,7 @@ class EditorStateResponse(MCPResponse):
     name="editor_state",
     description="Current editor runtime state including play mode, compilation status, active scene, and selection summary. Refresh frequently for up-to-date information."
 )
-async def get_editor_state() -> EditorStateResponse:
+async def get_editor_state() -> EditorStateResponse | MCPResponse:
     """Get current editor runtime state."""
     response = await async_send_command_with_retry("get_editor_state", {})
     return EditorStateResponse(**response) if isinstance(response, dict) else response

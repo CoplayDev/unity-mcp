@@ -39,7 +39,7 @@ class SelectionResponse(MCPResponse):
     name="editor_selection",
     description="Detailed information about currently selected objects in the editor, including GameObjects, assets, and their properties."
 )
-async def get_selection() -> SelectionResponse:
+async def get_selection() -> SelectionResponse | MCPResponse:
     """Get detailed editor selection information."""
     response = await async_send_command_with_retry("get_selection", {})
     return SelectionResponse(**response) if isinstance(response, dict) else response

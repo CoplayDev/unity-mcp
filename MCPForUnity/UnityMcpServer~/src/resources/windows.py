@@ -31,7 +31,7 @@ class WindowsResponse(MCPResponse):
     name="editor_windows",
     description="All currently open editor windows with their titles, types, positions, and focus state."
 )
-async def get_windows() -> WindowsResponse:
+async def get_windows() -> WindowsResponse | MCPResponse:
     """Get all open editor windows."""
     response = await async_send_command_with_retry("get_windows", {})
     return WindowsResponse(**response) if isinstance(response, dict) else response

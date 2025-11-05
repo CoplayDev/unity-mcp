@@ -14,7 +14,7 @@ class TagsResponse(MCPResponse):
     name="project_tags",
     description="All tags defined in the project's TagManager. Read this before using add_tag or remove_tag tools."
 )
-async def get_tags() -> TagsResponse:
+async def get_tags() -> TagsResponse | MCPResponse:
     """Get all project tags."""
     response = await async_send_command_with_retry("get_tags", {})
     return TagsResponse(**response) if isinstance(response, dict) else response
