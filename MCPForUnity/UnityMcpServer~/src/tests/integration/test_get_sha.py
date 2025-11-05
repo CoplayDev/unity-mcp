@@ -1,4 +1,4 @@
-from tests.integration.test_helpers import DummyContext
+from .test_helpers import DummyContext
 
 
 class DummyMCP:

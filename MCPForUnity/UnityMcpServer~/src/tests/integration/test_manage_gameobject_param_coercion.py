@@ -1,4 +1,4 @@
-from tests.integration.test_helpers import DummyContext
+from .test_helpers import DummyContext
 import tools.manage_gameobject as manage_go_mod
 
 

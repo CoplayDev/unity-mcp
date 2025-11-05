@@ -1,7 +1,7 @@
 import pytest
 import asyncio
 
-from tests.integration.test_helpers import DummyContext
+from .test_helpers import DummyContext
 import tools.manage_script as manage_script_module
 import tools.manage_asset as manage_asset_module
 

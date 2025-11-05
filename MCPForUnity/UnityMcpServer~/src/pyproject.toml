@@ -37,4 +37,4 @@ py-modules = [
     "telemetry_decorator",
     "unity_connection"
 ]
-packages = ["tools", "resources", "registry", "tests", "tests.integration"]
+packages = ["tools", "resources", "registry"]
