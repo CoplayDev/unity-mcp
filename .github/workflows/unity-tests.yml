@@ -3,7 +3,7 @@ name: Unity Tests
 on:
   workflow_dispatch: {}
   push:
-    branches: ['**']
+    branches: ["**"]
     paths:
       - TestProjects/UnityMCPTests/**
       - MCPForUnity/Editor/**
