@@ -9,7 +9,7 @@ class GetMenuItemsResponse(MCPResponse):
 
 @mcp_for_unity_resource(
     uri="mcpforunity://menu-items",
-    name="get_menu_items",
+    name="menu_items",
     description="Provides a list of all menu items."
 )
 async def get_menu_items() -> GetMenuItemsResponse:
