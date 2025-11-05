@@ -199,7 +199,7 @@ Console Monitoring:
 
 Menu Items:
 - Use `execute_menu_item` when you have read the menu items resource
-- This let's you interact with Unity's menu system and third-party tools
+- This lets you interact with Unity's menu system and third-party tools
 """
 )
 
