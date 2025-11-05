@@ -38,18 +38,42 @@ MCP for Unity 作为桥梁，允许 AI 助手（如 Claude、Cursor）通过本�
 
   您的大语言模型可以使用以下功能：
 
-  * `execute_menu_item`: 执行 Unity 编辑器菜单项（例如，"File/Save Project"）。
-  * `manage_asset`: 执行资源操作（导入、创建、修改、删除等）。
-  * `manage_editor`: 控制和查询编辑器的状态和设置。
-  * `manage_gameobject`: 管理游戏对象：创建、修改、删除、查找和组件操作。
-  * `manage_scene`: 管理场景（加载、保存、创建、获取层次结构等）。
-  * `manage_script`: 管理 C# 脚本（创建、读取、更新、删除）。
-  * `manage_shader`: 执行着色器 CRUD 操作（创建、读取、修改、删除）。
-  * `read_console`: 获取控制台消息或清除控制台。
-  * `run_test`: 在 Unity 编辑器中运行测试。
-  * `apply_text_edits`: 具有前置条件哈希和原子多编辑批次的精确文本编辑。
-  * `script_apply_edits`: 结构化 C# 方法/类编辑（插入/替换/删除），具有更安全的边界。
-  * `validate_script`: 快速验证（基本/标准）以在写入前后捕获语法/结构问题。
+* `execute_menu_item`: 执行 Unity 编辑器菜单项（例如，"File/Save Project"）。
+* `manage_asset`: 执行资源操作（导入、创建、修改、删除等）。
+* `manage_editor`: 控制和查询编辑器的状态和设置。
+* `manage_gameobject`: 管理游戏对象：创建、修改、删除、查找和组件操作。
+* `manage_prefabs`: 执行预制件操作（创建、修改、删除等）。
+* `manage_scene`: 管理场景（加载、保存、创建、获取层次结构等）。
+* `manage_script`: 传统脚本操作的兼容性路由器（创建、读取、删除）。建议使用 `apply_text_edits` 或 `script_apply_edits` 进行编辑。
+* `manage_shader`: 执行着色器 CRUD 操作（创建、读取、修改、删除）。
+* `read_console`: 获取控制台消息或清除控制台。
+* `run_tests`: 在 Unity 编辑器中运行测试。
+* `set_active_instance`: 将后续工具调用路由到特定的 Unity 实例（当运行多个实例时）。
+* `apply_text_edits`: 具有前置条件哈希和原子多编辑批次的精确文本编辑。
+* `script_apply_edits`: 结构化 C# 方法/类编辑（插入/替换/删除），具有更安全的边界。
+* `validate_script`: 快速验证（基本/标准）以在写入前后捕获语法/结构问题。
+* `create_script`: 在给定的项目路径创建新的 C# 脚本。
+* `delete_script`: 通过 URI 或 Assets 相对路径删除 C# 脚本。
+* `get_sha`: 获取 Unity C# 脚本的 SHA256 和基本元数据，而不返回文件内容。
+</details>
+
+
+<details open>
+  <summary><strong> 可用资源 </strong></summary>
+
+  您的大语言模型可以检索以下资源：
+
+* `unity_instances`: 列出所有正在运行的 Unity 编辑器实例及其详细信息（名称、路径、端口、状态）。
+* `menu_items`: 检索 Unity 编辑器中所有可用的菜单项。
+* `tests`: 检索 Unity 编辑器中所有可用的测试。可以选择特定类型的测试（例如，"EditMode"、"PlayMode"）。
+* `editor_active_tool`: 当前活动的编辑器工具（移动、旋转、缩放等）和变换手柄设置。
+* `editor_prefab_stage`: 如果预制件在隔离模式下打开，则为当前预制件编辑上下文。
+* `editor_selection`: 有关编辑器中当前选定对象的详细信息。
+* `editor_state`: 当前编辑器运行时状态，包括播放模式、编译状态、活动场景和选择摘要。
+* `editor_windows`: 所有当前打开的编辑器窗口及其标题、类型、位置和焦点状态。
+* `project_info`: 静态项目信息，包括根路径、Unity 版本和平台。
+* `project_layers`: 项目 TagManager 中定义的所有层及其索引（0-31）。
+* `project_tags`: 项目 TagManager 中定义的所有标签。
 </details>
 
 ---

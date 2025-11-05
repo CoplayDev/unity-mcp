@@ -40,19 +40,23 @@ MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to 
 
   Your LLM can use functions like:
 
-  * `execute_menu_item`: Executes Unity Editor menu items (e.g., "File/Save Project").
-  * `manage_asset`: Performs asset operations (import, create, modify, delete, etc.).
-  * `manage_editor`: Controls and queries the editor's state and settings.
-  * `manage_gameobject`: Manages GameObjects: create, modify, delete, find, and component operations.
-  * `manage_scene`: Manages scenes (load, save, create, get hierarchy, etc.).
-  * `manage_script`: Manages C# scripts (create, read, update, delete).
-  * `manage_shader`: Performs shader CRUD operations (create, read, modify, delete).
-  * `read_console`: Gets messages from or clears the console.
-  * `run_test`: Runs a tests in the Unity Editor.
-  * `set_active_instance`: Routes subsequent tool calls to a specific Unity instance (when multiple are running).
-  * `apply_text_edits`: Precise text edits with precondition hashes and atomic multi-edit batches.
-  * `script_apply_edits`: Structured C# method/class edits (insert/replace/delete) with safer boundaries.
-  * `validate_script`: Fast validation (basic/standard) to catch syntax/structure issues before/after writes.
+* `execute_menu_item`: Executes Unity Editor menu items (e.g., "File/Save Project").
+* `manage_asset`: Performs asset operations (import, create, modify, delete, etc.).
+* `manage_editor`: Controls and queries the editor's state and settings.
+* `manage_gameobject`: Manages GameObjects: create, modify, delete, find, and component operations.
+* `manage_prefabs`: Performs prefab operations (create, modify, delete, etc.).
+* `manage_scene`: Manages scenes (load, save, create, get hierarchy, etc.).
+* `manage_script`: Compatibility router for legacy script operations (create, read, delete). Prefer `apply_text_edits` or `script_apply_edits` for edits.
+* `manage_shader`: Performs shader CRUD operations (create, read, modify, delete).
+* `read_console`: Gets messages from or clears the console.
+* `run_tests`: Runs tests in the Unity Editor.
+* `set_active_instance`: Routes subsequent tool calls to a specific Unity instance (when multiple are running).
+* `apply_text_edits`: Precise text edits with precondition hashes and atomic multi-edit batches.
+* `script_apply_edits`: Structured C# method/class edits (insert/replace/delete) with safer boundaries.
+* `validate_script`: Fast validation (basic/standard) to catch syntax/structure issues before/after writes.
+* `create_script`: Create a new C# script at the given project path.
+* `delete_script`: Delete a C# script by URI or Assets-relative path.
+* `get_sha`: Get SHA256 and basic metadata for a Unity C# script without returning file contents.
 </details>
 
 
@@ -61,9 +65,17 @@ MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to 
 
   Your LLM can retrieve the following resources:
 
-  * `unity_instances`: Lists all running Unity Editor instances with their details (name, path, port, status).
-  * `menu_items`: Retrieves all available menu items in the Unity Editor.
-  * `tests`: Retrieves all available tests in the Unity Editor. Can select tests of a specific type (e.g., "EditMode", "PlayMode").
+* `unity_instances`: Lists all running Unity Editor instances with their details (name, path, port, status).
+* `menu_items`: Retrieves all available menu items in the Unity Editor.
+* `tests`: Retrieves all available tests in the Unity Editor. Can select tests of a specific type (e.g., "EditMode", "PlayMode").
+* `editor_active_tool`: Currently active editor tool (Move, Rotate, Scale, etc.) and transform handle settings.
+* `editor_prefab_stage`: Current prefab editing context if a prefab is open in isolation mode.
+* `editor_selection`: Detailed information about currently selected objects in the editor.
+* `editor_state`: Current editor runtime state including play mode, compilation status, active scene, and selection summary.
+* `editor_windows`: All currently open editor windows with their titles, types, positions, and focus state.
+* `project_info`: Static project information including root path, Unity version, and platform.
+* `project_layers`: All layers defined in the project's TagManager with their indices (0-31).
+* `project_tags`: All tags defined in the project's TagManager.
 </details>
 ---
 
