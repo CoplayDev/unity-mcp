@@ -3,6 +3,7 @@ from typing import Annotated, Any, Literal
 
 from fastmcp import Context
 from registry import mcp_for_unity_tool
+from tools import get_unity_instance_from_context, send_with_unity_instance
 from unity_connection import send_command_with_retry
 
 
@@ -17,7 +18,9 @@ def manage_shader(
     contents: Annotated[str,
                         "Shader code for 'create'/'update'"] | None = None,
 ) -> dict[str, Any]:
-    ctx.info(f"Processing manage_shader: {action}")
+    # Get active instance from session state
+    # Removed session_state import
+    unity_instance = get_unity_instance_from_context(ctx)
     try:
         # Prepare parameters for Unity
         params = {
@@ -39,8 +42,8 @@ def manage_shader(
         # Remove None values so they don't get sent as null
         params = {k: v for k, v in params.items() if v is not None}
 
-        # Send command via centralized retry helper
-        response = send_command_with_retry("manage_shader", params)
+        # Send command via centralized retry helper with instance routing
+        response = send_with_unity_instance(send_command_with_retry, unity_instance, "manage_shader", params)
 
         # Process response from Unity
         if isinstance(response, dict) and response.get("success"):

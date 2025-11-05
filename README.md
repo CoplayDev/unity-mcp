@@ -50,6 +50,7 @@ MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to 
   * `read_console`: Gets messages from or clears the console.
   * `reload_domain`: Reloads the Unity domain.
   * `run_test`: Runs a tests in the Unity Editor.
+  * `set_active_instance`: Routes subsequent tool calls to a specific Unity instance (when multiple are running).
   * `apply_text_edits`: Precise text edits with precondition hashes and atomic multi-edit batches.
   * `script_apply_edits`: Structured C# method/class edits (insert/replace/delete) with safer boundaries.
   * `validate_script`: Fast validation (basic/standard) to catch syntax/structure issues before/after writes.
@@ -61,6 +62,7 @@ MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to 
 
   Your LLM can retrieve the following resources:
 
+  * `unity_instances`: Lists all running Unity Editor instances with their details (name, path, port, status).
   * `menu_items`: Retrieves all available menu items in the Unity Editor.
   * `tests`: Retrieves all available tests in the Unity Editor. Can select tests of a specific type (e.g., "EditMode", "PlayMode").
 </details>
@@ -275,8 +277,30 @@ On Windows, set `command` to the absolute shim, e.g. `C:\\Users\\YOU\\AppData\\L
 2. **Start your MCP Client** (Claude, Cursor, etc.). It should automatically launch the MCP for Unity Server (Python) using the configuration from Installation Step 2.
     
 3. **Interact!** Unity tools should now be available in your MCP Client.
-    
+
     Example Prompt: `Create a 3D player controller`, `Create a tic-tac-toe game in 3D`, `Create a cool shader and apply to a cube`.
+
+### Working with Multiple Unity Instances
+
+MCP for Unity supports multiple Unity Editor instances simultaneously. Each instance is isolated per MCP client session.
+
+**To direct tool calls to a specific instance:**
+
+1. List available instances: Ask your LLM to check the `unity_instances` resource
+2. Set the active instance: Use `set_active_instance` with the instance name (e.g., `MyProject@abc123`)
+3. All subsequent tools route to that instance until changed
+
+**Example:**
+```
+User: "List all Unity instances"
+LLM: [Shows ProjectA@abc123 and ProjectB@def456]
+
+User: "Set active instance to ProjectA@abc123"
+LLM: [Calls set_active_instance("ProjectA@abc123")]
+
+User: "Create a red cube"
+LLM: [Creates cube in ProjectA]
+```
 
 ---
 

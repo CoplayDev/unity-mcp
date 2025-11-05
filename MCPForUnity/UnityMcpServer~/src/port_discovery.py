@@ -14,9 +14,14 @@ What changed and why:
 import glob
 import json
 import logging
+import os
+import struct
+from datetime import datetime
 from pathlib import Path
 import socket
-from typing import Optional, List
+from typing import Optional, List, Dict
+
+from models import UnityInstanceInfo
 
 logger = logging.getLogger("mcp-for-unity-server")
 
@@ -56,22 +61,55 @@ class PortDiscovery:
     @staticmethod
     def _try_probe_unity_mcp(port: int) -> bool:
         """Quickly check if a MCP for Unity listener is on this port.
-        Tries a short TCP connect, sends 'ping', expects Unity bridge welcome message.
+        Uses Unity's framed protocol: receives handshake, sends framed ping, expects framed pong.
         """
         try:
             with socket.create_connection(("127.0.0.1", port), PortDiscovery.CONNECT_TIMEOUT) as s:
                 s.settimeout(PortDiscovery.CONNECT_TIMEOUT)
                 try:
-                    s.sendall(b"ping")
-                    data = s.recv(512)
-                    # Check for Unity bridge welcome message format
-                    if data and (b"WELCOME UNITY-MCP" in data or b'"message":"pong"' in data):
-                        return True
-                except Exception:
+                    # 1. Receive handshake from Unity
+                    handshake = s.recv(512)
+                    if not handshake or b"FRAMING=1" not in handshake:
+                        # Try legacy mode as fallback
+                        s.sendall(b"ping")
+                        data = s.recv(512)
+                        return data and b'"message":"pong"' in data
+
+                    # 2. Send framed ping command
+                    # Frame format: 8-byte length header (big-endian uint64) + payload
+                    payload = b"ping"
+                    header = struct.pack('>Q', len(payload))
+                    s.sendall(header + payload)
+
+                    # 3. Receive framed response
+                    # Helper to receive exact number of bytes
+                    def _recv_exact(expected: int) -> bytes | None:
+                        chunks = bytearray()
+                        while len(chunks) < expected:
+                            chunk = s.recv(expected - len(chunks))
+                            if not chunk:
+                                return None
+                            chunks.extend(chunk)
+                        return bytes(chunks)
+
+                    response_header = _recv_exact(8)
+                    if response_header is None:
+                        return False
+
+                    response_length = struct.unpack('>Q', response_header)[0]
+                    if response_length > 10000:  # Sanity check
+                        return False
+
+                    response = _recv_exact(response_length)
+                    if response is None:
+                        return False
+                    return b'"message":"pong"' in response
+                except Exception as e:
+                    logger.debug(f"Port probe failed for {port}: {e}")
                     return False
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Connection failed for port {port}: {e}")
             return False
-        return False
 
     @staticmethod
     def _read_latest_status() -> Optional[dict]:
@@ -158,3 +196,112 @@ class PortDiscovery:
                 logger.warning(
                     f"Could not read port configuration {path}: {e}")
         return None
+
+    @staticmethod
+    def _extract_project_name(project_path: str) -> str:
+        """Extract project name from Assets path.
+
+        Examples:
+            /Users/sakura/Projects/MyGame/Assets -> MyGame
+            C:\\Projects\\TestProject\\Assets -> TestProject
+        """
+        if not project_path:
+            return "Unknown"
+
+        try:
+            # Remove trailing /Assets or \Assets
+            path = project_path.rstrip('/\\')
+            if path.endswith('Assets'):
+                path = path[:-6].rstrip('/\\')
+
+            # Get the last directory name
+            name = os.path.basename(path)
+            return name if name else "Unknown"
+        except Exception:
+            return "Unknown"
+
+    @staticmethod
+    def discover_all_unity_instances() -> List[UnityInstanceInfo]:
+        """
+        Discover all running Unity Editor instances by scanning status files.
+
+        Returns:
+            List of UnityInstanceInfo objects for all discovered instances
+        """
+        instances_by_port: Dict[int, tuple[UnityInstanceInfo, datetime]] = {}
+        base = PortDiscovery.get_registry_dir()
+
+        # Scan all status files
+        status_pattern = str(base / "unity-mcp-status-*.json")
+        status_files = glob.glob(status_pattern)
+
+        for status_file_path in status_files:
+            try:
+                status_path = Path(status_file_path)
+                file_mtime = datetime.fromtimestamp(status_path.stat().st_mtime)
+
+                with status_path.open('r') as f:
+                    data = json.load(f)
+
+                # Extract hash from filename: unity-mcp-status-{hash}.json
+                filename = os.path.basename(status_file_path)
+                hash_value = filename.replace('unity-mcp-status-', '').replace('.json', '')
+
+                # Extract information
+                project_path = data.get('project_path', '')
+                project_name = PortDiscovery._extract_project_name(project_path)
+                port = data.get('unity_port')
+                is_reloading = data.get('reloading', False)
+
+                # Parse last_heartbeat
+                last_heartbeat = None
+                heartbeat_str = data.get('last_heartbeat')
+                if heartbeat_str:
+                    try:
+                        last_heartbeat = datetime.fromisoformat(heartbeat_str.replace('Z', '+00:00'))
+                    except Exception:
+                        pass
+
+                # Verify port is actually responding
+                is_alive = PortDiscovery._try_probe_unity_mcp(port) if isinstance(port, int) else False
+
+                if not is_alive:
+                    logger.debug(f"Instance {project_name}@{hash_value} has heartbeat but port {port} not responding")
+                    continue
+
+                freshness = last_heartbeat or file_mtime
+
+                existing = instances_by_port.get(port)
+                if existing:
+                    _, existing_time = existing
+                    if existing_time >= freshness:
+                        logger.debug(
+                            "Skipping stale status entry %s in favor of more recent data for port %s",
+                            status_path.name,
+                            port,
+                        )
+                        continue
+
+                # Create instance info
+                instance = UnityInstanceInfo(
+                    id=f"{project_name}@{hash_value}",
+                    name=project_name,
+                    path=project_path,
+                    hash=hash_value,
+                    port=port,
+                    status="reloading" if is_reloading else "running",
+                    last_heartbeat=last_heartbeat,
+                    unity_version=data.get('unity_version')  # May not be available in current version
+                )
+
+                instances_by_port[port] = (instance, freshness)
+                logger.debug(f"Discovered Unity instance: {instance.id} on port {instance.port}")
+
+            except Exception as e:
+                logger.debug(f"Failed to parse status file {status_file_path}: {e}")
+                continue
+
+        deduped_instances = [entry[0] for entry in sorted(instances_by_port.values(), key=lambda item: item[1], reverse=True)]
+
+        logger.info(f"Discovered {len(deduped_instances)} Unity instances (after de-duplication by port)")
+        return deduped_instances

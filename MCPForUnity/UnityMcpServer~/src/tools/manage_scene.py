@@ -2,21 +2,23 @@ from typing import Annotated, Literal, Any
 
 from fastmcp import Context
 from registry import mcp_for_unity_tool
+from tools import get_unity_instance_from_context, send_with_unity_instance
 from unity_connection import send_command_with_retry
 
 
-@mcp_for_unity_tool(description="Manage Unity scenes. Tip: For broad client compatibility, pass build_index as a quoted string (e.g., '0').")
+@mcp_for_unity_tool(
+    description="Performs CRUD operations on Unity scenes."
+)
 def manage_scene(
     ctx: Context,
     action: Annotated[Literal["create", "load", "save", "get_hierarchy", "get_active", "get_build_settings"], "Perform CRUD operations on Unity scenes."],
-    name: Annotated[str,
-                    "Scene name. Not required get_active/get_build_settings"] | None = None,
-    path: Annotated[str,
-                    "Asset path for scene operations (default: 'Assets/')"] | None = None,
-    build_index: Annotated[int | str,
-                           "Build index for load/build settings actions (accepts int or string, e.g., 0 or '0')"] | None = None,
+    name: Annotated[str, "Scene name."] | None = None,
+    path: Annotated[str, "Scene path."] | None = None,
+    build_index: Annotated[int | str, "Unity build index (quote as string, e.g., '0')."] | None = None,
 ) -> dict[str, Any]:
-    ctx.info(f"Processing manage_scene: {action}")
+    # Get active instance from session state
+    # Removed session_state import
+    unity_instance = get_unity_instance_from_context(ctx)
     try:
         # Coerce numeric inputs defensively
         def _coerce_int(value, default=None):
@@ -44,8 +46,8 @@ def manage_scene(
         if coerced_build_index is not None:
             params["buildIndex"] = coerced_build_index
 
-        # Use centralized retry helper
-        response = send_command_with_retry("manage_scene", params)
+        # Use centralized retry helper with instance routing
+        response = send_with_unity_instance(send_command_with_retry, unity_instance, "manage_scene", params)
 
         # Preserve structured failure data; unwrap success into a friendlier shape
         if isinstance(response, dict) and response.get("success"):

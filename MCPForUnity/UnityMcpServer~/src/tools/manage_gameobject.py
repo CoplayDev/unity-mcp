@@ -3,15 +3,16 @@ from typing import Annotated, Any, Literal
 
 from fastmcp import Context
 from registry import mcp_for_unity_tool
+from tools import get_unity_instance_from_context, send_with_unity_instance
 from unity_connection import send_command_with_retry
 
 
 @mcp_for_unity_tool(
-    description="Manage GameObjects. For booleans, send true/false; if your client only sends strings, 'true'/'false' are accepted. Vectors may be [x,y,z] or a string like '[x,y,z]'. For 'get_components', the `data` field contains a dictionary of component names and their serialized properties. For 'get_component', specify 'component_name' to retrieve only that component's serialized data."
+    description="Performs CRUD operations on GameObjects and components."
 )
 def manage_gameobject(
     ctx: Context,
-    action: Annotated[Literal["create", "modify", "delete", "find", "add_component", "remove_component", "set_component_property", "get_components", "get_component"], "Perform CRUD operations on GameObjects and components."],
+    action: Annotated[Literal["create", "modify", "delete", "find", "add_component", "remove_component", "set_component_property", "get_components"], "Perform CRUD operations on GameObjects and components."],
     target: Annotated[str,
                       "GameObject identifier by name or path for modify/delete/component actions"] | None = None,
     search_method: Annotated[Literal["by_id", "by_name", "by_path", "by_tag", "by_layer", "by_component"],
@@ -65,7 +66,9 @@ def manage_gameobject(
     includeNonPublicSerialized: Annotated[bool | str,
                                           "Controls whether serialization of private [SerializeField] fields is included (accepts true/false or 'true'/'false')"] | None = None,
 ) -> dict[str, Any]:
-    ctx.info(f"Processing manage_gameobject: {action}")
+    # Get active instance from session state
+    # Removed session_state import
+    unity_instance = get_unity_instance_from_context(ctx)
 
     # Coercers to tolerate stringified booleans and vectors
     def _coerce_bool(value, default=None):
@@ -195,8 +198,8 @@ def manage_gameobject(
         params.pop("prefabFolder", None)
         # --------------------------------
 
-        # Use centralized retry helper
-        response = send_command_with_retry("manage_gameobject", params)
+        # Use centralized retry helper with instance routing
+        response = send_with_unity_instance(send_command_with_retry, unity_instance, "manage_gameobject", params)
 
         # Check if the response indicates success
         # If the response is not successful, raise an exception with the error message

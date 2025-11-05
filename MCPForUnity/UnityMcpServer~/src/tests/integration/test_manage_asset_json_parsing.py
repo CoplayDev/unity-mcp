@@ -3,7 +3,8 @@ Tests for JSON string parameter parsing in manage_asset tool.
 """
 import pytest
 import json
-from unittest.mock import Mock, AsyncMock
+
+from .test_helpers import DummyContext
 from tools.manage_asset import manage_asset
 
 
@@ -14,12 +15,10 @@ class TestManageAssetJsonParsing:
     async def test_properties_json_string_parsing(self, monkeypatch):
         """Test that JSON string properties are correctly parsed to dict."""
         # Mock context
-        ctx = Mock()
-        ctx.info = Mock()
-        ctx.warning = Mock()
+        ctx = DummyContext()
         
         # Patch Unity transport
-        async def fake_async(cmd, params, loop=None):
+        async def fake_async(cmd, params, **kwargs):
             return {"success": True, "message": "Asset created successfully", "data": {"path": "Assets/Test.mat"}}
         monkeypatch.setattr("tools.manage_asset.async_send_command_with_retry", fake_async)
         
@@ -33,7 +32,7 @@ class TestManageAssetJsonParsing:
         )
         
         # Verify JSON parsing was logged
-        ctx.info.assert_any_call("manage_asset: coerced properties from JSON string to dict")
+        assert "manage_asset: coerced properties from JSON string to dict" in ctx.log_info
         
         # Verify the result
         assert result["success"] is True
@@ -42,11 +41,9 @@ class TestManageAssetJsonParsing:
     @pytest.mark.asyncio
     async def test_properties_invalid_json_string(self, monkeypatch):
         """Test handling of invalid JSON string properties."""
-        ctx = Mock()
-        ctx.info = Mock()
-        ctx.warning = Mock()
+        ctx = DummyContext()
         
-        async def fake_async(cmd, params, loop=None):
+        async def fake_async(cmd, params, **kwargs):
             return {"success": True, "message": "Asset created successfully"}
         monkeypatch.setattr("tools.manage_asset.async_send_command_with_retry", fake_async)
         
@@ -60,16 +57,15 @@ class TestManageAssetJsonParsing:
         )
         
         # Verify behavior: no coercion log for invalid JSON; warning may be emitted by some runtimes
-        assert not any("coerced properties" in str(c) for c in ctx.info.call_args_list)
+        assert not any("coerced properties" in msg for msg in ctx.log_info)
         assert result.get("success") is True
     
     @pytest.mark.asyncio
     async def test_properties_dict_unchanged(self, monkeypatch):
         """Test that dict properties are passed through unchanged."""
-        ctx = Mock()
-        ctx.info = Mock()
+        ctx = DummyContext()
         
-        async def fake_async(cmd, params, loop=None):
+        async def fake_async(cmd, params, **kwargs):
             return {"success": True, "message": "Asset created successfully"}
         monkeypatch.setattr("tools.manage_asset.async_send_command_with_retry", fake_async)
         
@@ -85,16 +81,15 @@ class TestManageAssetJsonParsing:
         )
         
         # Verify no JSON parsing was attempted (allow initial Processing log)
-        assert not any("coerced properties" in str(c) for c in ctx.info.call_args_list)
+        assert not any("coerced properties" in msg for msg in ctx.log_info)
         assert result["success"] is True
     
     @pytest.mark.asyncio
     async def test_properties_none_handling(self, monkeypatch):
         """Test that None properties are handled correctly."""
-        ctx = Mock()
-        ctx.info = Mock()
-        
-        async def fake_async(cmd, params, loop=None):
+        ctx = DummyContext()
+
+        async def fake_async(cmd, params, **kwargs):
             return {"success": True, "message": "Asset created successfully"}
         monkeypatch.setattr("tools.manage_asset.async_send_command_with_retry", fake_async)
         
@@ -108,7 +103,7 @@ class TestManageAssetJsonParsing:
         )
         
         # Verify no JSON parsing was attempted (allow initial Processing log)
-        assert not any("coerced properties" in str(c) for c in ctx.info.call_args_list)
+        assert not any("coerced properties" in msg for msg in ctx.log_info)
         assert result["success"] is True
 
 
@@ -120,11 +115,9 @@ class TestManageGameObjectJsonParsing:
         """Test that JSON string component_properties are correctly parsed."""
         from tools.manage_gameobject import manage_gameobject
         
-        ctx = Mock()
-        ctx.info = Mock()
-        ctx.warning = Mock()
-        
-        def fake_send(cmd, params):
+        ctx = DummyContext()
+
+        def fake_send(cmd, params, **kwargs):
             return {"success": True, "message": "GameObject created successfully"}
         monkeypatch.setattr("tools.manage_gameobject.send_command_with_retry", fake_send)
         
@@ -137,7 +130,7 @@ class TestManageGameObjectJsonParsing:
         )
         
         # Verify JSON parsing was logged
-        ctx.info.assert_called_with("manage_gameobject: coerced component_properties from JSON string to dict")
+        assert "manage_gameobject: coerced component_properties from JSON string to dict" in ctx.log_info
         
         # Verify the result
         assert result["success"] is True

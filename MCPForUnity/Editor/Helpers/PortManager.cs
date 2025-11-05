@@ -60,14 +60,17 @@ namespace MCPForUnity.Editor.Helpers
                     if (IsDebugEnabled()) Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Stored port {storedConfig.unity_port} became available after short wait");
                     return storedConfig.unity_port;
                 }
-                // Prefer sticking to the same port; let the caller handle bind retries/fallbacks
-                return storedConfig.unity_port;
+                // Port is still busy after waiting - find a new available port instead
+                if (IsDebugEnabled()) Debug.Log($"<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: Stored port {storedConfig.unity_port} is occupied by another instance, finding alternative...");
+                int newPort = FindAvailablePort();
+                SavePort(newPort);
+                return newPort;
             }
 
             // If no valid stored port, find a new one and save it
-            int newPort = FindAvailablePort();
-            SavePort(newPort);
-            return newPort;
+            int foundPort = FindAvailablePort();
+            SavePort(foundPort);
+            return foundPort;
         }
 
         /// <summary>

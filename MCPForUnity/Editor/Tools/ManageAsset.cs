@@ -911,7 +911,7 @@ namespace MCPForUnity.Editor.Tools
             // Example: Set color property
             if (properties["color"] is JObject colorProps)
             {
-                string propName = colorProps["name"]?.ToString() ?? "_Color"; // Default main color
+                string propName = colorProps["name"]?.ToString() ?? GetMainColorPropertyName(mat); // Auto-detect if not specified
                 if (colorProps["value"] is JArray colArr && colArr.Count >= 3)
                 {
                     try
@@ -922,10 +922,20 @@ namespace MCPForUnity.Editor.Tools
                             colArr[2].ToObject<float>(),
                             colArr.Count > 3 ? colArr[3].ToObject<float>() : 1.0f
                         );
-                        if (mat.HasProperty(propName) && mat.GetColor(propName) != newColor)
+                        if (mat.HasProperty(propName))
                         {
-                            mat.SetColor(propName, newColor);
-                            modified = true;
+                            if (mat.GetColor(propName) != newColor)
+                            {
+                                mat.SetColor(propName, newColor);
+                                modified = true;
+                            }
+                        }
+                        else
+                        {
+                            Debug.LogWarning(
+                                $"Material '{mat.name}' with shader '{mat.shader.name}' does not have color property '{propName}'. " +
+                                $"Color not applied. Common color properties: _BaseColor (URP), _Color (Standard)"
+                            );
                         }
                     }
                     catch (Exception ex)
@@ -938,7 +948,8 @@ namespace MCPForUnity.Editor.Tools
             }
             else if (properties["color"] is JArray colorArr) //Use color now with examples set in manage_asset.py
             {
-                string propName = "_Color";
+                // Auto-detect the main color property for the shader
+                string propName = GetMainColorPropertyName(mat);
                 try
                 {
                     if (colorArr.Count >= 3)
@@ -949,10 +960,20 @@ namespace MCPForUnity.Editor.Tools
                             colorArr[2].ToObject<float>(),
                             colorArr.Count > 3 ? colorArr[3].ToObject<float>() : 1.0f
                         );
-                        if (mat.HasProperty(propName) && mat.GetColor(propName) != newColor)
+                        if (mat.HasProperty(propName))
                         {
-                            mat.SetColor(propName, newColor);
-                            modified = true;
+                            if (mat.GetColor(propName) != newColor)
+                            {
+                                mat.SetColor(propName, newColor);
+                                modified = true;
+                            }
+                        }
+                        else
+                        {
+                            Debug.LogWarning(
+                                $"Material '{mat.name}' with shader '{mat.shader.name}' does not have color property '{propName}'. " +
+                                $"Color not applied. Common color properties: _BaseColor (URP), _Color (Standard)"
+                            );
                         }
                     }
                 }
@@ -1138,6 +1159,27 @@ namespace MCPForUnity.Editor.Tools
 
 			// TODO: Add handlers for other property types (Vectors, Ints, Keywords, RenderQueue, etc.)
             return modified;
+        }
+
+        /// <summary>
+        /// Auto-detects the main color property name for a material's shader.
+        /// Tries common color property names in order: _BaseColor (URP), _Color (Standard), etc.
+        /// </summary>
+        private static string GetMainColorPropertyName(Material mat)
+        {
+            if (mat == null || mat.shader == null)
+                return "_Color";
+
+            // Try common color property names in order of likelihood
+            string[] commonColorProps = { "_BaseColor", "_Color", "_MainColor", "_Tint", "_TintColor" };
+            foreach (var prop in commonColorProps)
+            {
+                if (mat.HasProperty(prop))
+                    return prop;
+            }
+
+            // Fallback to _Color if none found
+            return "_Color";
         }
 
         /// <summary>

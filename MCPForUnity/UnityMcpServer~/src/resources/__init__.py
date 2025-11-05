@@ -1,6 +1,7 @@
 """
 MCP Resources package - Auto-discovers and registers all resources in this directory.
 """
+import inspect
 import logging
 from pathlib import Path
 
@@ -36,6 +37,7 @@ def register_all_resources(mcp: FastMCP):
         logger.warning("No MCP resources registered!")
         return
 
+    registered_count = 0
     for resource_info in resources:
         func = resource_info['func']
         uri = resource_info['uri']
@@ -43,11 +45,30 @@ def register_all_resources(mcp: FastMCP):
         description = resource_info['description']
         kwargs = resource_info['kwargs']
 
-        # Apply the @mcp.resource decorator and telemetry
-        wrapped = telemetry_resource(resource_name)(func)
-        wrapped = mcp.resource(uri=uri, name=resource_name,
-                               description=description, **kwargs)(wrapped)
-        resource_info['func'] = wrapped
-        logger.debug(f"Registered resource: {resource_name} - {description}")
+        # Check if URI contains query parameters (e.g., {?unity_instance})
+        has_query_params = '{?' in uri
 
-    logger.info(f"Registered {len(resources)} MCP resources")
+        if has_query_params:
+            wrapped_template = telemetry_resource(resource_name)(func)
+            wrapped_template = mcp.resource(
+                uri=uri,
+                name=resource_name,
+                description=description,
+                **kwargs,
+            )(wrapped_template)
+            logger.debug(f"Registered resource template: {resource_name} - {uri}")
+            registered_count += 1
+            resource_info['func'] = wrapped_template
+        else:
+            wrapped = telemetry_resource(resource_name)(func)
+            wrapped = mcp.resource(
+                uri=uri,
+                name=resource_name,
+                description=description,
+                **kwargs,
+            )(wrapped)
+            resource_info['func'] = wrapped
+            logger.debug(f"Registered resource: {resource_name} - {description}")
+            registered_count += 1
+
+    logger.info(f"Registered {registered_count} MCP resources ({len(resources)} unique)")

@@ -43,6 +43,24 @@ class _DummyFastMCP:
 class _DummyContext:
     pass
 
+class _DummyMiddleware:
+    """Base middleware class stub."""
+    pass
+
+class _DummyMiddlewareContext:
+    """Middleware context stub."""
+    pass
+
 fastmcp.FastMCP = _DummyFastMCP
 fastmcp.Context = _DummyContext
 sys.modules.setdefault("fastmcp", fastmcp)
+
+# Stub fastmcp.server.middleware submodule
+fastmcp_server = types.ModuleType("fastmcp.server")
+fastmcp_server_middleware = types.ModuleType("fastmcp.server.middleware")
+fastmcp_server_middleware.Middleware = _DummyMiddleware
+fastmcp_server_middleware.MiddlewareContext = _DummyMiddlewareContext
+fastmcp.server = fastmcp_server
+fastmcp_server.middleware = fastmcp_server_middleware
+sys.modules.setdefault("fastmcp.server", fastmcp_server)
+sys.modules.setdefault("fastmcp.server.middleware", fastmcp_server_middleware)

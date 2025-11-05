@@ -3,6 +3,7 @@ from typing import Annotated, Any, Literal
 from fastmcp import Context
 from registry import mcp_for_unity_tool
 from telemetry import is_telemetry_enabled, record_tool_usage
+from tools import get_unity_instance_from_context, send_with_unity_instance
 from unity_connection import send_command_with_retry
 
 
@@ -22,7 +23,8 @@ def manage_editor(
     layer_name: Annotated[str,
                           "Layer name when adding and removing layers"] | None = None,
 ) -> dict[str, Any]:
-    ctx.info(f"Processing manage_editor: {action}")
+    # Get active instance from request state (injected by middleware)
+    unity_instance = get_unity_instance_from_context(ctx)
 
     # Coerce boolean parameters defensively to tolerate 'true'/'false' strings
     def _coerce_bool(value, default=None):
@@ -62,8 +64,8 @@ def manage_editor(
         }
         params = {k: v for k, v in params.items() if v is not None}
 
-        # Send command using centralized retry helper
-        response = send_command_with_retry("manage_editor", params)
+        # Send command using centralized retry helper with instance routing
+        response = send_with_unity_instance(send_command_with_retry, unity_instance, "manage_editor", params)
 
         # Preserve structured failure data; unwrap success into a friendlier shape
         if isinstance(response, dict) and response.get("success"):
