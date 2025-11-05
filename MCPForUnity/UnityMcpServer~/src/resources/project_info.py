@@ -1,6 +1,9 @@
 from pydantic import BaseModel
+from fastmcp import Context
+
 from models import MCPResponse
 from registry import mcp_for_unity_resource
+from tools import get_unity_instance_from_context, async_send_with_unity_instance
 from unity_connection import async_send_command_with_retry
 
 
@@ -23,7 +26,13 @@ class ProjectInfoResponse(MCPResponse):
     name="project_info",
     description="Static project information including root path, Unity version, and platform. This data rarely changes."
 )
-async def get_project_info() -> ProjectInfoResponse | MCPResponse:
+async def get_project_info(ctx: Context) -> ProjectInfoResponse | MCPResponse:
     """Get static project configuration information."""
-    response = await async_send_command_with_retry("get_project_info", {})
+    unity_instance = get_unity_instance_from_context(ctx)
+    response = await async_send_with_unity_instance(
+        async_send_command_with_retry,
+        unity_instance,
+        "get_project_info",
+        {}
+    )
     return ProjectInfoResponse(**response) if isinstance(response, dict) else response

@@ -1,6 +1,9 @@
 from pydantic import Field
+from fastmcp import Context
+
 from models import MCPResponse
 from registry import mcp_for_unity_resource
+from tools import get_unity_instance_from_context, async_send_with_unity_instance
 from unity_connection import async_send_command_with_retry
 
 
@@ -14,7 +17,13 @@ class TagsResponse(MCPResponse):
     name="project_tags",
     description="All tags defined in the project's TagManager. Read this before using add_tag or remove_tag tools."
 )
-async def get_tags() -> TagsResponse | MCPResponse:
+async def get_tags(ctx: Context) -> TagsResponse | MCPResponse:
     """Get all project tags."""
-    response = await async_send_command_with_retry("get_tags", {})
+    unity_instance = get_unity_instance_from_context(ctx)
+    response = await async_send_with_unity_instance(
+        async_send_command_with_retry,
+        unity_instance,
+        "get_tags",
+        {}
+    )
     return TagsResponse(**response) if isinstance(response, dict) else response

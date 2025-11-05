@@ -1,6 +1,9 @@
 from pydantic import BaseModel
+from fastmcp import Context
+
 from models import MCPResponse
 from registry import mcp_for_unity_resource
+from tools import get_unity_instance_from_context, async_send_with_unity_instance
 from unity_connection import async_send_command_with_retry
 
 
@@ -26,7 +29,13 @@ class EditorStateResponse(MCPResponse):
     name="editor_state",
     description="Current editor runtime state including play mode, compilation status, active scene, and selection summary. Refresh frequently for up-to-date information."
 )
-async def get_editor_state() -> EditorStateResponse | MCPResponse:
+async def get_editor_state(ctx: Context) -> EditorStateResponse | MCPResponse:
     """Get current editor runtime state."""
-    response = await async_send_command_with_retry("get_editor_state", {})
+    unity_instance = get_unity_instance_from_context(ctx)
+    response = await async_send_with_unity_instance(
+        async_send_command_with_retry,
+        unity_instance,
+        "get_editor_state",
+        {}
+    )
     return EditorStateResponse(**response) if isinstance(response, dict) else response

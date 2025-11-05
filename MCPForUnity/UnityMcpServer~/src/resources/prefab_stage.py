@@ -1,6 +1,9 @@
 from pydantic import BaseModel
+from fastmcp import Context
+
 from models import MCPResponse
 from registry import mcp_for_unity_resource
+from tools import get_unity_instance_from_context, async_send_with_unity_instance
 from unity_connection import async_send_command_with_retry
 
 
@@ -23,7 +26,13 @@ class PrefabStageResponse(MCPResponse):
     name="editor_prefab_stage",
     description="Current prefab editing context if a prefab is open in isolation mode. Returns isOpen=false if no prefab is being edited."
 )
-async def get_prefab_stage() -> PrefabStageResponse | MCPResponse:
+async def get_prefab_stage(ctx: Context) -> PrefabStageResponse | MCPResponse:
     """Get current prefab stage information."""
-    response = await async_send_command_with_retry("get_prefab_stage", {})
+    unity_instance = get_unity_instance_from_context(ctx)
+    response = await async_send_with_unity_instance(
+        async_send_command_with_retry,
+        unity_instance,
+        "get_prefab_stage",
+        {}
+    )
     return PrefabStageResponse(**response) if isinstance(response, dict) else response

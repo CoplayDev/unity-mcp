@@ -1,6 +1,9 @@
 from pydantic import BaseModel
+from fastmcp import Context
+
 from models import MCPResponse
 from registry import mcp_for_unity_resource
+from tools import get_unity_instance_from_context, async_send_with_unity_instance
 from unity_connection import async_send_command_with_retry
 
 
@@ -39,7 +42,13 @@ class SelectionResponse(MCPResponse):
     name="editor_selection",
     description="Detailed information about currently selected objects in the editor, including GameObjects, assets, and their properties."
 )
-async def get_selection() -> SelectionResponse | MCPResponse:
+async def get_selection(ctx: Context) -> SelectionResponse | MCPResponse:
     """Get detailed editor selection information."""
-    response = await async_send_command_with_retry("get_selection", {})
+    unity_instance = get_unity_instance_from_context(ctx)
+    response = await async_send_with_unity_instance(
+        async_send_command_with_retry,
+        unity_instance,
+        "get_selection",
+        {}
+    )
     return SelectionResponse(**response) if isinstance(response, dict) else response

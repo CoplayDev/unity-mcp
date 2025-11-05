@@ -1,6 +1,9 @@
 from pydantic import BaseModel
+from fastmcp import Context
+
 from models import MCPResponse
 from registry import mcp_for_unity_resource
+from tools import get_unity_instance_from_context, async_send_with_unity_instance
 from unity_connection import async_send_command_with_retry
 
 
@@ -31,7 +34,13 @@ class WindowsResponse(MCPResponse):
     name="editor_windows",
     description="All currently open editor windows with their titles, types, positions, and focus state."
 )
-async def get_windows() -> WindowsResponse | MCPResponse:
+async def get_windows(ctx: Context) -> WindowsResponse | MCPResponse:
     """Get all open editor windows."""
-    response = await async_send_command_with_retry("get_windows", {})
+    unity_instance = get_unity_instance_from_context(ctx)
+    response = await async_send_with_unity_instance(
+        async_send_command_with_retry,
+        unity_instance,
+        "get_windows",
+        {}
+    )
     return WindowsResponse(**response) if isinstance(response, dict) else response
