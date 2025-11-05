@@ -1,3 +1,4 @@
+from pydantic import Field
 from models import MCPResponse
 from registry import mcp_for_unity_resource
 from unity_connection import async_send_command_with_retry
@@ -5,7 +6,7 @@ from unity_connection import async_send_command_with_retry
 
 class TagsResponse(MCPResponse):
     """List of all tags in the project."""
-    data: list[str] = []
+    data: list[str] = Field(default_factory=list)
 
 
 @mcp_for_unity_resource(
