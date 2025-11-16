@@ -10,6 +10,8 @@ dependencies = [
  "mcp>=1.16.0",
  "pydantic>=2.12.0",
  "tomli>=2.3.0",
+ "fastapi>=0.104.0",
+ "uvicorn>=0.24.0",
 ]
 
 [project.optional-dependencies]
@@ -33,9 +35,14 @@ py-modules = [
     "port_discovery",
     "reload_sentinel",
     "server",
+    "plugin_hub",
+    "plugin_registry",
+    "stdio_port_registry",
+    "custom_tool_service",
     "telemetry",
     "telemetry_decorator",
     "unity_connection",
-    "unity_instance_middleware"
+    "unity_transport",
+    "unity_response"
 ]
 packages = ["tools", "resources", "registry"]

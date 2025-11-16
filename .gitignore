@@ -16,8 +16,6 @@ build/
 dist/
 wheels/
 *.egg-info
-UnityMcpServer/**/*.meta
-UnityMcpServer.meta
 
 # Virtual environments
 .venv

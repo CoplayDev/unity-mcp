@@ -38,6 +38,7 @@
 /* Setting Rows */
 .setting-row {
     flex-direction: row;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 8px;
@@ -55,6 +56,7 @@
 
 .setting-label {
     min-width: 140px;
+    flex-shrink: 0;
     -unity-text-align: middle-left;
 }
 
@@ -78,7 +80,7 @@
     flex-grow: 1;
     flex-shrink: 1;
     min-width: 150px;
-    max-width: 100%;
+    flex-basis: 200px;
 }
 
 /* Validation Description */
@@ -95,6 +97,14 @@
 .port-field {
     width: 100px;
     margin-left: auto;
+}
+
+/* URL Fields */
+.url-field {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 200px;
+    flex-basis: 250px;
 }
 
 .port-field > .unity-text-field__input {
@@ -317,6 +327,9 @@
     -unity-font-style: bold;
     margin-bottom: 8px;
     color: rgba(150, 150, 150, 1);
+    white-space: normal;
+    flex-shrink: 1;
+    min-width: 0;
 }
 
 .override-row {
@@ -330,6 +343,17 @@
     font-size: 11px;
     -unity-font-style: bold;
     min-width: 120px;
+    white-space: normal;
+    flex-shrink: 1;
+}
+
+.help-text {
+    font-size: 10px;
+    color: rgba(120, 120, 120, 1);
+    white-space: normal;
+    flex-shrink: 1;
+    min-width: 0;
+    margin-bottom: 4px;
 }
 
 .path-override-controls {

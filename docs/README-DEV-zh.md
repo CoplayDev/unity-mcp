@@ -95,7 +95,7 @@ X:\UnityProject\Library\PackageCache\com.coplaydev.unity-mcp@272123cfd97e
 3. 右键单击包并选择"在资源管理器中显示"
 4. 这将打开 Unity 为您的项目使用的确切缓存文件夹
 
-注意：在最新版本中，Python 服务器源代码也打包在包内的 `UnityMcpServer~/src` 下。这对于本地测试或将 MCP 客户端直接指向打包服务器很方便。
+注意：在最新版本中，Python 服务器源代码也打包在包内的 `Server` 下。这对于本地测试或将 MCP 客户端直接指向打包服务器很方便。
 
 ## MCP Bridge 压力测试
 

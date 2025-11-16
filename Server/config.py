@@ -18,11 +18,13 @@ class ServerConfig:
     # Connection settings
     connection_timeout: float = 30.0
     buffer_size: int = 16 * 1024 * 1024  # 16MB buffer
-    # Framed receive behavior
-    # max seconds to wait while consuming heartbeats only
+
+    # STDIO framing behaviour
+    require_framing: bool = True
+    handshake_timeout: float = 1.0
     framed_receive_timeout: float = 2.0
-    # cap heartbeat frames consumed before giving up
     max_heartbeat_frames: int = 16
+    heartbeat_timeout: float = 2.0
 
     # Logging settings
     log_level: str = "INFO"
@@ -37,10 +39,17 @@ class ServerConfig:
     # 40 × 250ms ≈ 10s default window
     reload_max_retries: int = 40
 
+    # Port discovery cache
+    port_registry_ttl: float = 5.0
+
     # Telemetry settings
     telemetry_enabled: bool = True
     # Align with telemetry.py default Cloud Run endpoint
     telemetry_endpoint: str = "https://api-prod.coplay.dev/telemetry/events"
+
+    def configure_logging(self) -> None:
+        level = getattr(logging, self.log_level, logging.INFO)
+        logging.basicConfig(level=level, format=self.log_format)
 
 
 # Create a global config instance

@@ -10,7 +10,7 @@ namespace MCPForUnity.Editor.Tools
     /// <summary>
     /// Executes Unity tests for a specified mode and returns detailed results.
     /// </summary>
-    [McpForUnityTool("run_tests")]
+    [McpForUnityTool("run_tests", AutoRegister = false)]
     public static class RunTests
     {
         private const int DefaultTimeoutSeconds = 600; // 10 minutes

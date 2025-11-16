@@ -13,7 +13,7 @@ To contribute or run tests, you need to install the development dependencies usi
 
 ```bash
 # Navigate to the server source directory
-cd MCPForUnity/UnityMcpServer~/src
+cd Server
 
 # Install the package in editable mode with dev dependencies
 uv pip install -e ".[dev]"
@@ -28,7 +28,7 @@ This installs:
 
 ```bash
 # From the server source directory
-cd MCPForUnity/UnityMcpServer~/src
+cd Server
 uv run pytest tests/ -v
 ```
 
@@ -36,7 +36,7 @@ Or from the repo root:
 
 ```bash
 # Using uv from the server directory
-cd MCPForUnity/UnityMcpServer~/src && uv run pytest tests/ -v
+cd Server && uv run pytest tests/ -v
 ```
 
 To run only integration tests:
@@ -151,7 +151,7 @@ To find it reliably:
 3. Right click the package and choose "Show in Explorer"
 4. That opens the exact cache folder Unity is using for your project
 
-Note: In recent builds, the Python server sources are also bundled inside the package under `UnityMcpServer~/src`. This is handy for local testing or pointing MCP clients directly at the packaged server.
+Note: In recent builds, the Python server sources are also bundled inside the package under `Server`. This is handy for local testing or pointing MCP clients directly at the packaged server.
 
 ## MCP Bridge Stress Test
 

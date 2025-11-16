@@ -67,11 +67,22 @@ jobs:
           jq ".version = \"${NEW_VERSION}\"" MCPForUnity/package.json > MCPForUnity/package.json.tmp
           mv MCPForUnity/package.json.tmp MCPForUnity/package.json
 
-          echo "Updating MCPForUnity/UnityMcpServer~/src/pyproject.toml to $NEW_VERSION"
-          sed -i '0,/^version = ".*"/s//version = "'"$NEW_VERSION"'"/' "MCPForUnity/UnityMcpServer~/src/pyproject.toml"
+          echo "Updating Server/pyproject.toml to $NEW_VERSION"
+          sed -i '0,/^version = ".*"/s//version = "'"$NEW_VERSION"'"/' "Server/pyproject.toml"
 
-          echo "Updating MCPForUnity/UnityMcpServer~/src/server_version.txt to $NEW_VERSION"
-          echo "$NEW_VERSION" > "MCPForUnity/UnityMcpServer~/src/server_version.txt"
+          echo "Updating Server/server_version.txt to $NEW_VERSION"
+          echo "$NEW_VERSION" > "Server/server_version.txt"
+
+          echo "Updating README.md version references to v$NEW_VERSION"
+          sed -i 's|https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v[0-9]\+\.[0-9]\+\.[0-9]\+|https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v'"$NEW_VERSION"'|g' README.md
+          sed -i 's|git+https://github.com/CoplayDev/unity-mcp@v[0-9]\+\.[0-9]\+\.[0-9]\+#subdirectory=Server|git+https://github.com/CoplayDev/unity-mcp@v'"$NEW_VERSION"'#subdirectory=Server|g' README.md
+
+          echo "Updating README-zh.md version references to v$NEW_VERSION"
+          sed -i 's|https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v[0-9]\+\.[0-9]\+\.[0-9]\+|https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v'"$NEW_VERSION"'|g' README-zh.md
+          sed -i 's|git+https://github.com/CoplayDev/unity-mcp@v[0-9]\+\.[0-9]\+\.[0-9]\+#subdirectory=Server|git+https://github.com/CoplayDev/unity-mcp@v'"$NEW_VERSION"'#subdirectory=Server|g' README-zh.md
+
+          echo "Updating Server/README.md version references to v$NEW_VERSION"
+          sed -i 's|git+https://github.com/CoplayDev/unity-mcp@v[0-9]\+\.[0-9]\+\.[0-9]\+#subdirectory=Server|git+https://github.com/CoplayDev/unity-mcp@v'"$NEW_VERSION"'#subdirectory=Server|g' Server/README.md
 
       - name: Commit and push changes
         env:
@@ -81,7 +92,7 @@ jobs:
           set -euo pipefail
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add MCPForUnity/package.json "MCPForUnity/UnityMcpServer~/src/pyproject.toml" "MCPForUnity/UnityMcpServer~/src/server_version.txt"
+          git add MCPForUnity/package.json "Server/pyproject.toml" "Server/server_version.txt" README.md README-zh.md Server/README.md
           if git diff --cached --quiet; then
             echo "No version changes to commit."
           else

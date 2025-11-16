@@ -25,18 +25,6 @@
                 <ui:Foldout name="advanced-settings-foldout" text="Advanced Settings" class="advanced-settings-foldout">
                     <ui:VisualElement class="advanced-settings-content">
                         <ui:Label text="Path Overrides (leave empty for auto-detection):" class="advanced-label" />
-                        
-                        <!-- MCP Server Path Override -->
-                        <ui:VisualElement class="override-row">
-                            <ui:Label text="MCP Server Path:" class="override-label" />
-                            <ui:VisualElement class="status-indicator-small" name="mcp-server-path-status" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="path-override-controls">
-                            <ui:TextField name="python-path-override" readonly="true" class="override-field" />
-                            <ui:Button name="browse-python-button" text="Browse" class="icon-button" />
-                            <ui:Button name="clear-python-button" text="Clear" class="icon-button" />
-                        </ui:VisualElement>
-                        
                         <!-- UV Path Override -->
                         <ui:VisualElement class="override-row">
                             <ui:Label text="UV Path:" class="override-label" />
@@ -47,6 +35,21 @@
                             <ui:Button name="browse-uv-button" text="Browse" class="icon-button" />
                             <ui:Button name="clear-uv-button" text="Clear" class="icon-button" />
                         </ui:VisualElement>
+                        
+                        <!-- Server Git URL Override -->
+                        <ui:Label text="Server Source Override:" class="advanced-label" style="margin-top: 10px;" />
+                        <ui:Label text="Override the source used for uvx --from. Leave empty to use default package." class="help-text" />
+                        <ui:VisualElement class="override-row">
+                            <ui:Label text="Source Path/URL:" class="override-label" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="path-override-controls">
+                            <ui:TextField name="git-url-override" placeholder-text="/path/to/Server or git+https://..." class="override-field" />
+                            <ui:Button name="clear-git-url-button" text="Clear" class="icon-button" />
+                        </ui:VisualElement>
+                        <ui:Label text="Examples:" class="help-text" style="margin-top: 5px;" />
+                        <ui:Label text="• Local: /Users/you/Projects/unity-mcp/Server" class="help-text" />
+                        <ui:Label text="• Remote: git+https://github.com/CoplayDev/unity-mcp@v6.3.0#subdirectory=Server" class="help-text" />
+                        <ui:Button name="clear-uvx-cache-button" text="Clear uv Cache" class="secondary-button" style="margin-top: 12px; align-self: flex-start;" />
                     </ui:VisualElement>
                 </ui:Foldout>
             </ui:VisualElement>
@@ -57,16 +60,27 @@
             <ui:Label text="Connection" class="section-title" />
             <ui:VisualElement class="section-content">
                 <ui:VisualElement class="setting-row">
-                    <ui:Label text="Protocol:" class="setting-label" />
-                    <uie:EnumField name="protocol-dropdown" class="setting-dropdown-inline" />
+                    <ui:Label text="Transport:" class="setting-label" />
+                    <uie:EnumField name="transport-dropdown" class="setting-dropdown-inline" />
                 </ui:VisualElement>
-                <ui:VisualElement class="setting-row">
-                    <ui:Label text="Unity Port:" class="setting-label" />
-                    <ui:TextField name="unity-port" readonly="true" class="port-field" />
+                <ui:VisualElement class="setting-row" name="http-url-row">
+                    <ui:Label text="HTTP URL:" class="setting-label" />
+                    <ui:TextField name="http-url" class="url-field" placeholder-text="http://localhost:8080" />
                 </ui:VisualElement>
-                <ui:VisualElement class="setting-row">
-                    <ui:Label text="Server Port:" class="setting-label" />
-                    <ui:TextField name="server-port" readonly="true" class="port-field" />
+                <ui:Foldout name="http-server-command-foldout" text="HTTP Server Command" class="manual-config-foldout" value="false">
+                    <ui:VisualElement class="manual-config-content">
+                        <ui:Label text="Use this command to launch the server manually:" class="config-label" />
+                        <ui:VisualElement class="config-json-row">
+                            <ui:TextField name="http-server-command" readonly="true" multiline="true" class="config-json-field" />
+                            <ui:Button name="copy-http-server-command-button" text="Copy" class="icon-button-vertical" />
+                        </ui:VisualElement>
+                        <ui:Label name="http-server-command-hint" class="help-text" />
+                        <ui:Button name="start-http-server-button" text="Start Local HTTP Server" class="secondary-button" style="align-self: flex-start; margin-bottom: 6px;" />
+                    </ui:VisualElement>
+                </ui:Foldout>
+                <ui:VisualElement class="setting-row" name="unity-socket-port-row">
+                    <ui:Label text="Unity Socket Port:" class="setting-label" />
+                    <ui:TextField name="unity-port" class="port-field" />
                 </ui:VisualElement>
                 <ui:VisualElement class="setting-row">
                     <ui:VisualElement class="status-container">
@@ -82,17 +96,6 @@
                         <ui:Label name="health-status" text="Unknown" class="status-text" />
                     </ui:VisualElement>
                     <ui:Button name="test-connection-button" text="Test" class="action-button" />
-                </ui:VisualElement>
-
-                <!-- Server Status Banner -->
-                <ui:VisualElement name="server-status-banner" class="banner" style="display: none; background-color: rgba(255, 193, 7, 0.2); padding: 8px; margin: 8px 0; border-radius: 4px; border-left-width: 3px; border-left-color: rgb(255, 193, 7);">
-                    <ui:Label name="server-status-message" text="" style="-unity-text-align: middle-left; white-space: normal;" />
-                </ui:VisualElement>
-
-                <!-- Server Management Buttons -->
-                <ui:VisualElement class="button-row" style="flex-direction: row; margin-top: 8px;">
-                    <ui:Button name="download-server-button" text="Download &amp; Install Server" class="secondary-button" style="display: none; flex: 1;" />
-                    <ui:Button name="rebuild-server-button" text="Rebuild Server" class="secondary-button" style="flex: 1;" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

@@ -3,14 +3,15 @@ from typing import Annotated, Any, Literal
 
 from fastmcp import Context
 from registry import mcp_for_unity_tool
-from tools import get_unity_instance_from_context, send_with_unity_instance
-from unity_connection import send_command_with_retry
+from tools import get_unity_instance_from_context
+from unity_transport import send_with_unity_instance
+from unity_connection import async_send_command_with_retry
 
 
 @mcp_for_unity_tool(
     description="Performs CRUD operations on GameObjects and components."
 )
-def manage_gameobject(
+async def manage_gameobject(
     ctx: Context,
     action: Annotated[Literal["create", "modify", "delete", "find", "add_component", "remove_component", "set_component_property", "get_components"], "Perform CRUD operations on GameObjects and components."],
     target: Annotated[str,
@@ -199,7 +200,12 @@ def manage_gameobject(
         # --------------------------------
 
         # Use centralized retry helper with instance routing
-        response = send_with_unity_instance(send_command_with_retry, unity_instance, "manage_gameobject", params)
+        response = await send_with_unity_instance(
+            async_send_command_with_retry,
+            unity_instance,
+            "manage_gameobject",
+            params,
+        )
 
         # Check if the response indicates success
         # If the response is not successful, raise an exception with the error message

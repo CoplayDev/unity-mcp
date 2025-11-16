@@ -28,7 +28,7 @@ namespace MCPForUnity.Editor.Resources.Editor
                     selectionCount = UnityEditor.Selection.count,
                     activeObjectName = UnityEditor.Selection.activeObject?.name
                 };
-                
+
                 return Response.Success("Retrieved editor state.", state);
             }
             catch (Exception e)

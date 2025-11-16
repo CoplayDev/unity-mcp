@@ -14,8 +14,9 @@ from urllib.parse import urlparse, unquote
 from fastmcp import Context
 
 from registry import mcp_for_unity_tool
-from tools import get_unity_instance_from_context, send_with_unity_instance, async_send_with_unity_instance
-from unity_connection import send_command_with_retry
+from tools import get_unity_instance_from_context
+from unity_transport import send_with_unity_instance
+from unity_connection import async_send_command_with_retry
 
 
 def _coerce_int(value: Any, default: int | None = None, minimum: int | None = None) -> int | None:
@@ -43,7 +44,7 @@ def _coerce_int(value: Any, default: int | None = None, minimum: int | None = No
         return default
 
 
-def _resolve_project_root(ctx: Context, override: str | None) -> Path:
+async def _resolve_project_root(ctx: Context, override: str | None) -> Path:
     unity_instance = get_unity_instance_from_context(ctx)
     # 1) Explicit override
     if override:
@@ -61,8 +62,8 @@ def _resolve_project_root(ctx: Context, override: str | None) -> Path:
             return pr
     # 3) Ask Unity via manage_editor.get_project_root
     try:
-        response = send_with_unity_instance(
-            send_command_with_retry,
+        response = await send_with_unity_instance(
+            async_send_command_with_retry,
             unity_instance,
             "manage_editor",
             {"action": "get_project_root"},
@@ -151,7 +152,7 @@ async def list_resources(
     unity_instance = get_unity_instance_from_context(ctx)
     ctx.info(f"Processing list_resources: {pattern} (unity_instance={unity_instance or 'default'})")
     try:
-        project = _resolve_project_root(ctx, project_root)
+        project = await _resolve_project_root(ctx, project_root)
         base = (project / under).resolve()
         try:
             base.relative_to(project)
@@ -274,7 +275,7 @@ async def read_resource(
             sha = hashlib.sha256(spec_json.encode("utf-8")).hexdigest()
             return {"success": True, "data": {"text": spec_json, "metadata": {"sha256": sha}}}
 
-        project = _resolve_project_root(ctx, project_root)
+        project = await _resolve_project_root(ctx, project_root)
         p = _resolve_safe_path_from_uri(uri, project)
         if not p or not p.exists() or not p.is_file():
             return {"success": False, "error": f"Resource not found: {uri}"}
@@ -368,7 +369,7 @@ async def find_in_file(
     unity_instance = get_unity_instance_from_context(ctx)
     ctx.info(f"Processing find_in_file: {uri} (unity_instance={unity_instance or 'default'})")
     try:
-        project = _resolve_project_root(ctx, project_root)
+        project = await _resolve_project_root(ctx, project_root)
         p = _resolve_safe_path_from_uri(uri, project)
         if not p or not p.exists() or not p.is_file():
             return {"success": False, "error": f"Resource not found: {uri}"}

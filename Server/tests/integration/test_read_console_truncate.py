@@ -1,3 +1,5 @@
+import pytest
+
 from .test_helpers import DummyContext
 
 
@@ -27,13 +29,14 @@ def setup_tools():
     return mcp.tools
 
 
-def test_read_console_full_default(monkeypatch):
+@pytest.mark.asyncio
+async def test_read_console_full_default(monkeypatch):
     tools = setup_tools()
     read_console = tools["read_console"]
 
     captured = {}
 
-    def fake_send(cmd, params):
+    async def fake_send(cmd, params, **kwargs):
         captured["params"] = params
         return {
             "success": True,
@@ -42,10 +45,13 @@ def test_read_console_full_default(monkeypatch):
 
     # Patch the send_command_with_retry function in the tools module
     import tools.read_console
-    monkeypatch.setattr(tools.read_console,
-                        "send_command_with_retry", fake_send)
+    monkeypatch.setattr(
+        tools.read_console,
+        "async_send_command_with_retry",
+        fake_send,
+    )
 
-    resp = read_console(ctx=DummyContext(), action="get", count=10)
+    resp = await read_console(ctx=DummyContext(), action="get", count=10)
     assert resp == {
         "success": True,
         "data": {"lines": [{"level": "error", "message": "oops", "stacktrace": "trace", "time": "t"}]},
@@ -54,13 +60,14 @@ def test_read_console_full_default(monkeypatch):
     assert captured["params"]["includeStacktrace"] is True
 
 
-def test_read_console_truncated(monkeypatch):
+@pytest.mark.asyncio
+async def test_read_console_truncated(monkeypatch):
     tools = setup_tools()
     read_console = tools["read_console"]
 
     captured = {}
 
-    def fake_send(cmd, params):
+    async def fake_send(cmd, params, **kwargs):
         captured["params"] = params
         return {
             "success": True,
@@ -69,10 +76,13 @@ def test_read_console_truncated(monkeypatch):
 
     # Patch the send_command_with_retry function in the tools module
     import tools.read_console
-    monkeypatch.setattr(tools.read_console,
-                        "send_command_with_retry", fake_send)
+    monkeypatch.setattr(
+        tools.read_console,
+        "async_send_command_with_retry",
+        fake_send,
+    )
 
-    resp = read_console(ctx=DummyContext(), action="get", count=10, include_stacktrace=False)
+    resp = await read_console(ctx=DummyContext(), action="get", count=10, include_stacktrace=False)
     assert resp == {"success": True, "data": {
         "lines": [{"level": "error", "message": "oops"}]}}
     assert captured["params"]["includeStacktrace"] is False

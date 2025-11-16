@@ -1,7 +1,10 @@
+import pytest
+
 from .test_helpers import DummyContext
 
 
-def test_manage_gameobject_uses_session_state(monkeypatch):
+@pytest.mark.asyncio
+async def test_manage_gameobject_uses_session_state(monkeypatch):
     """Test that tools use session-stored active instance via middleware"""
 
     from unity_instance_middleware import UnityInstanceMiddleware, set_unity_instance_middleware
@@ -20,17 +23,20 @@ def test_manage_gameobject_uses_session_state(monkeypatch):
     captured = {}
 
     # Monkeypatch transport to capture the resolved instance_id
-    def fake_send(command_type, params, **kwargs):
+    async def fake_send(command_type, params, **kwargs):
         captured["command_type"] = command_type
         captured["params"] = params
         captured["instance_id"] = kwargs.get("instance_id")
         return {"success": True, "data": {}}
 
     import tools.manage_gameobject as mg
-    monkeypatch.setattr("tools.manage_gameobject.send_command_with_retry", fake_send)
+    monkeypatch.setattr(
+        "tools.manage_gameobject.async_send_command_with_retry",
+        fake_send,
+    )
 
     # Act: call tool - should use session state from context
-    res = mg.manage_gameobject(
+    res = await mg.manage_gameobject(
         ctx,
         action="create",
         name="SessionSphere",
@@ -43,7 +49,8 @@ def test_manage_gameobject_uses_session_state(monkeypatch):
     assert captured.get("instance_id") == "SessionProj@AAAA1111"
 
 
-def test_manage_gameobject_without_active_instance(monkeypatch):
+@pytest.mark.asyncio
+async def test_manage_gameobject_without_active_instance(monkeypatch):
     """Test that tools work with no active instance set (uses None/default)"""
 
     from unity_instance_middleware import UnityInstanceMiddleware, set_unity_instance_middleware
@@ -58,15 +65,18 @@ def test_manage_gameobject_without_active_instance(monkeypatch):
 
     captured = {}
 
-    def fake_send(command_type, params, **kwargs):
+    async def fake_send(command_type, params, **kwargs):
         captured["instance_id"] = kwargs.get("instance_id")
         return {"success": True, "data": {}}
 
     import tools.manage_gameobject as mg
-    monkeypatch.setattr("tools.manage_gameobject.send_command_with_retry", fake_send)
+    monkeypatch.setattr(
+        "tools.manage_gameobject.async_send_command_with_retry",
+        fake_send,
+    )
 
     # Act: call without active instance
-    res = mg.manage_gameobject(
+    res = await mg.manage_gameobject(
         ctx,
         action="create",
         name="DefaultSphere",

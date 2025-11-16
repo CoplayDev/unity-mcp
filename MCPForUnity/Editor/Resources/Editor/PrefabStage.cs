@@ -16,7 +16,7 @@ namespace MCPForUnity.Editor.Resources.Editor
             try
             {
                 var stage = PrefabStageUtility.GetCurrentPrefabStage();
-                
+
                 if (stage == null)
                 {
                     return Response.Success("No prefab stage is currently open.", new { isOpen = false });

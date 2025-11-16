@@ -5,7 +5,7 @@ echo ===============================================
 echo MCP for Unity Development Restore Script
 echo ===============================================
 echo.
-echo Note: The Python server is bundled under MCPForUnity\UnityMcpServer~ in the package.
+echo Note: The Python server is bundled under Server in the package.
 echo       This script restores your installed server path from backups, not the repo copy.
 echo.
 

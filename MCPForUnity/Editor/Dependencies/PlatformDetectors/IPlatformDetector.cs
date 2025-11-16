@@ -28,11 +28,6 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
         DependencyStatus DetectUV();
 
         /// <summary>
-        /// Detect MCP server installation on this platform
-        /// </summary>
-        DependencyStatus DetectMCPServer();
-
-        /// <summary>
         /// Get platform-specific installation recommendations
         /// </summary>
         string GetInstallationRecommendations();

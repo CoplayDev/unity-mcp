@@ -6,7 +6,8 @@ from pydantic import BaseModel, Field
 
 from models import MCPResponse
 from registry import mcp_for_unity_tool
-from tools import get_unity_instance_from_context, async_send_with_unity_instance
+from tools import get_unity_instance_from_context
+from unity_transport import send_with_unity_instance
 from unity_connection import async_send_command_with_retry
 
 
@@ -72,6 +73,6 @@ async def run_tests(
     if ts is not None:
         params["timeoutSeconds"] = ts
 
-    response = await async_send_with_unity_instance(async_send_command_with_retry, unity_instance, "run_tests", params)
+    response = await send_with_unity_instance(async_send_command_with_retry, unity_instance, "run_tests", params)
     await ctx.info(f'Response {response}')
     return RunTestsResponse(**response) if isinstance(response, dict) else response

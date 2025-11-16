@@ -2,14 +2,15 @@ using System;
 using NUnit.Framework;
 using UnityEditor;
 using MCPForUnity.Editor.Services;
+using MCPForUnity.Editor.Constants;
 
 namespace MCPForUnityTests.Editor.Services
 {
     public class PackageUpdateServiceTests
     {
         private PackageUpdateService _service;
-        private const string TestLastCheckDateKey = "MCPForUnity.LastUpdateCheck";
-        private const string TestCachedVersionKey = "MCPForUnity.LatestKnownVersion";
+        private const string TestLastCheckDateKey = EditorPrefKeys.LastUpdateCheck;
+        private const string TestCachedVersionKey = EditorPrefKeys.LatestKnownVersion;
 
         [SetUp]
         public void SetUp()

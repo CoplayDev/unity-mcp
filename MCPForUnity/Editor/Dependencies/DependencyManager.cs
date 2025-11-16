@@ -60,10 +60,6 @@ namespace MCPForUnity.Editor.Dependencies
                 var uvStatus = detector.DetectUV();
                 result.Dependencies.Add(uvStatus);
 
-                // Check MCP Server
-                var serverStatus = detector.DetectMCPServer();
-                result.Dependencies.Add(serverStatus);
-
                 // Generate summary and recommendations
                 result.GenerateSummary();
                 GenerateRecommendations(result, detector);

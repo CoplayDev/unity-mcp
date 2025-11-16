@@ -9,7 +9,7 @@ using UnityEngine.SceneManagement;
 
 namespace MCPForUnity.Editor.Tools.Prefabs
 {
-    [McpForUnityTool("manage_prefabs")]
+    [McpForUnityTool("manage_prefabs", AutoRegister = false)]
     public static class ManagePrefabs
     {
         private const string SupportedActions = "open_stage, close_stage, save_open_stage, create_from_gameobject";

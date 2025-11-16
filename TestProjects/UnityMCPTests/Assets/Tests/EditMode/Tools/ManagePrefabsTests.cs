@@ -23,15 +23,22 @@ namespace MCPForUnityTests.Editor.Tools
         public void TearDown()
         {
             StageUtility.GoToMainStage();
-        }
-
-        [OneTimeTearDown]
-        public void CleanupAll()
-        {
-            StageUtility.GoToMainStage();
+            
+            // Clean up temp directory after each test
             if (AssetDatabase.IsValidFolder(TempDirectory))
             {
                 AssetDatabase.DeleteAsset(TempDirectory);
+            }
+            
+            // Clean up parent Temp folder if it's empty
+            if (AssetDatabase.IsValidFolder("Assets/Temp"))
+            {
+                var remainingDirs = Directory.GetDirectories("Assets/Temp");
+                var remainingFiles = Directory.GetFiles("Assets/Temp");
+                if (remainingDirs.Length == 0 && remainingFiles.Length == 0)
+                {
+                    AssetDatabase.DeleteAsset("Assets/Temp");
+                }
             }
         }
 

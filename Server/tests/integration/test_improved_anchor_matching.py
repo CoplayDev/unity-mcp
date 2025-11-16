@@ -4,6 +4,8 @@ Test the improved anchor matching logic.
 
 import re
 
+import pytest
+
 import tools.script_apply_edits as script_apply_edits_module
 
 
@@ -92,7 +94,8 @@ public class TestClass : MonoBehaviour
         2, f"expected class-end match near end (>= {total_lines-2}), got {new_line}"
 
 
-def test_apply_edits_with_improved_matching():
+@pytest.mark.asyncio
+async def test_apply_edits_with_improved_matching():
     """Test that _apply_edits_locally uses improved matching."""
 
     original_code = '''using UnityEngine;
@@ -115,7 +118,7 @@ public class TestClass : MonoBehaviour
         "text": "\n    public void NewMethod() { Debug.Log(\"Added at class end\"); }\n"
     }]
 
-    result = script_apply_edits_module._apply_edits_locally(
+    result = await script_apply_edits_module._apply_edits_locally(
         original_code, edits)
     lines = result.split('\n')
     try:

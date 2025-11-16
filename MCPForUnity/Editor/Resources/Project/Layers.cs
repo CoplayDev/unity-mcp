@@ -27,7 +27,7 @@ namespace MCPForUnity.Editor.Resources.Project
                         layers.Add(i, layerName);
                     }
                 }
-                
+
                 return Response.Success("Retrieved current named layers.", layers);
             }
             catch (Exception e)

@@ -9,14 +9,18 @@ from typing import Optional
 
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 
-# Global instance for access from tools
-_unity_instance_middleware: Optional['UnityInstanceMiddleware'] = None
+from plugin_hub import PluginHub
+
+# Store a global reference to the middleware instance so tools can interact
+# with it to set or clear the active unity instance.
+_unity_instance_middleware = None
 
 
 def get_unity_instance_middleware() -> 'UnityInstanceMiddleware':
     """Get the global Unity instance middleware."""
     if _unity_instance_middleware is None:
-        raise RuntimeError("UnityInstanceMiddleware not initialized. Call set_unity_instance_middleware first.")
+        raise RuntimeError(
+            "UnityInstanceMiddleware not initialized. Call set_unity_instance_middleware first.")
     return _unity_instance_middleware
 
 
@@ -67,19 +71,27 @@ class UnityInstanceMiddleware(Middleware):
         with self._lock:
             return self._active_by_key.get(key)
 
+    def clear_active_instance(self, ctx) -> None:
+        """Clear the stored instance for this session."""
+        key = self._get_session_key(ctx)
+        with self._lock:
+            self._active_by_key.pop(key, None)
+
     async def on_call_tool(self, context: MiddlewareContext, call_next):
-        """
-        Intercept tool calls and inject the active Unity instance into request state.
-        """
-        # Get the FastMCP context
+        """Inject active Unity instance into tool context if available."""
         ctx = context.fastmcp_context
 
-        # Look up the active instance for this session
         active_instance = self.get_active_instance(ctx)
+        if active_instance:
+            session_id: Optional[str] = None
+            if PluginHub.is_configured():
+                try:
+                    session_id = await PluginHub._resolve_session_id(active_instance)
+                except Exception:
+                    self.clear_active_instance(ctx)
+                    return await call_next(context)
 
-        # Inject into request-scoped state (accessible via ctx.get_state)
-        if active_instance is not None:
             ctx.set_state("unity_instance", active_instance)
-
-        # Continue with tool execution
+            if session_id is not None:
+                ctx.set_state("unity_session_id", session_id)
         return await call_next(context)

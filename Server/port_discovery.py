@@ -238,18 +238,21 @@ class PortDiscovery:
         for status_file_path in status_files:
             try:
                 status_path = Path(status_file_path)
-                file_mtime = datetime.fromtimestamp(status_path.stat().st_mtime)
+                file_mtime = datetime.fromtimestamp(
+                    status_path.stat().st_mtime)
 
                 with status_path.open('r') as f:
                     data = json.load(f)
 
                 # Extract hash from filename: unity-mcp-status-{hash}.json
                 filename = os.path.basename(status_file_path)
-                hash_value = filename.replace('unity-mcp-status-', '').replace('.json', '')
+                hash_value = filename.replace(
+                    'unity-mcp-status-', '').replace('.json', '')
 
                 # Extract information
                 project_path = data.get('project_path', '')
-                project_name = PortDiscovery._extract_project_name(project_path)
+                project_name = PortDiscovery._extract_project_name(
+                    project_path)
                 port = data.get('unity_port')
                 is_reloading = data.get('reloading', False)
 
@@ -258,15 +261,18 @@ class PortDiscovery:
                 heartbeat_str = data.get('last_heartbeat')
                 if heartbeat_str:
                     try:
-                        last_heartbeat = datetime.fromisoformat(heartbeat_str.replace('Z', '+00:00'))
+                        last_heartbeat = datetime.fromisoformat(
+                            heartbeat_str.replace('Z', '+00:00'))
                     except Exception:
                         pass
 
                 # Verify port is actually responding
-                is_alive = PortDiscovery._try_probe_unity_mcp(port) if isinstance(port, int) else False
+                is_alive = PortDiscovery._try_probe_unity_mcp(
+                    port) if isinstance(port, int) else False
 
                 if not is_alive:
-                    logger.debug(f"Instance {project_name}@{hash_value} has heartbeat but port {port} not responding")
+                    logger.debug(
+                        f"Instance {project_name}@{hash_value} has heartbeat but port {port} not responding")
                     continue
 
                 freshness = last_heartbeat or file_mtime
@@ -291,17 +297,22 @@ class PortDiscovery:
                     port=port,
                     status="reloading" if is_reloading else "running",
                     last_heartbeat=last_heartbeat,
-                    unity_version=data.get('unity_version')  # May not be available in current version
+                    # May not be available in current version
+                    unity_version=data.get('unity_version')
                 )
 
                 instances_by_port[port] = (instance, freshness)
-                logger.debug(f"Discovered Unity instance: {instance.id} on port {instance.port}")
+                logger.debug(
+                    f"Discovered Unity instance: {instance.id} on port {instance.port}")
 
             except Exception as e:
-                logger.debug(f"Failed to parse status file {status_file_path}: {e}")
+                logger.debug(
+                    f"Failed to parse status file {status_file_path}: {e}")
                 continue
 
-        deduped_instances = [entry[0] for entry in sorted(instances_by_port.values(), key=lambda item: item[1], reverse=True)]
+        deduped_instances = [entry[0] for entry in sorted(
+            instances_by_port.values(), key=lambda item: item[1], reverse=True)]
 
-        logger.info(f"Discovered {len(deduped_instances)} Unity instances (after de-duplication by port)")
+        logger.info(
+            f"Discovered {len(deduped_instances)} Unity instances (after de-duplication by port)")
         return deduped_instances

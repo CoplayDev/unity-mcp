@@ -3,6 +3,7 @@ using MCPForUnity.Editor.Dependencies;
 using MCPForUnity.Editor.Dependencies.Models;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Windows;
+using MCPForUnity.Editor.Constants;
 using UnityEditor;
 using UnityEngine;
 
@@ -14,8 +15,8 @@ namespace MCPForUnity.Editor.Setup
     [InitializeOnLoad]
     public static class SetupWizard
     {
-        private const string SETUP_COMPLETED_KEY = "MCPForUnity.SetupCompleted";
-        private const string SETUP_DISMISSED_KEY = "MCPForUnity.SetupDismissed";
+        private const string SETUP_COMPLETED_KEY = EditorPrefKeys.SetupCompleted;
+        private const string SETUP_DISMISSED_KEY = EditorPrefKeys.SetupDismissed;
         private static bool _hasCheckedThisSession = false;
 
         static SetupWizard()

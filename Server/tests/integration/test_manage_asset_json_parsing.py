@@ -117,12 +117,15 @@ class TestManageGameObjectJsonParsing:
         
         ctx = DummyContext()
 
-        def fake_send(cmd, params, **kwargs):
+        async def fake_send(cmd, params, **kwargs):
             return {"success": True, "message": "GameObject created successfully"}
-        monkeypatch.setattr("tools.manage_gameobject.send_command_with_retry", fake_send)
+        monkeypatch.setattr(
+            "tools.manage_gameobject.async_send_command_with_retry",
+            fake_send,
+        )
         
         # Test with JSON string component_properties
-        result = manage_gameobject(
+        result = await manage_gameobject(
             ctx=ctx,
             action="create",
             name="TestObject",

@@ -3,7 +3,9 @@ using System.IO;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
+using MCPForUnity.Editor.Constants;
 using PackageInfo = UnityEditor.PackageManager.PackageInfo;
+using MCPForUnity.Editor.Services;
 
 namespace MCPForUnity.Editor.Helpers
 {
@@ -49,7 +51,7 @@ namespace MCPForUnity.Editor.Helpers
 
                 // Fallback to AssetDatabase for Asset Store installs (Assets/MCPForUnity)
                 string[] guids = AssetDatabase.FindAssets($"t:Script {nameof(AssetPathUtility)}");
-                
+
                 if (guids.Length == 0)
                 {
                     McpLog.Warn("Could not find AssetPathUtility script in AssetDatabase");
@@ -57,11 +59,11 @@ namespace MCPForUnity.Editor.Helpers
                 }
 
                 string scriptPath = AssetDatabase.GUIDToAssetPath(guids[0]);
-                
+
                 // Script is at: {packageRoot}/Editor/Helpers/AssetPathUtility.cs
                 // Extract {packageRoot}
                 int editorIndex = scriptPath.IndexOf("/Editor/", StringComparison.Ordinal);
-                
+
                 if (editorIndex >= 0)
                 {
                     return scriptPath.Substring(0, editorIndex);
@@ -136,7 +138,60 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
-        /// Gets the version string from the package.json file.
+        /// Gets the uvx command with the correct package version for running the MCP server
+        /// </summary>
+        /// <returns>Uvx command string, or "uvx" if version is unknown</returns>
+        public static string GetUvxCommand()
+        {
+            string version = GetPackageVersion();
+            if (version == "unknown")
+            {
+                return "uvx";
+            }
+
+            return $"uvx --from git+https://github.com/CoplayDev/unity-mcp@v{version}#subdirectory=Server";
+        }
+
+        /// <summary>
+        /// Gets just the git URL part for the MCP server package
+        /// Checks for EditorPrefs override first, then falls back to package version
+        /// </summary>
+        /// <returns>Git URL string, or empty string if version is unknown and no override</returns>
+        public static string GetMcpServerGitUrl()
+        {
+            // Check for Git URL override first
+            string gitUrlOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
+            if (!string.IsNullOrEmpty(gitUrlOverride))
+            {
+                return gitUrlOverride;
+            }
+
+            // Fall back to default package version
+            string version = GetPackageVersion();
+            if (version == "unknown")
+            {
+                // Fall back to main repo without pinned version so configs remain valid in test scenarios
+                return "git+https://github.com/CoplayDev/unity-mcp#subdirectory=Server";
+            }
+
+            return $"git+https://github.com/CoplayDev/unity-mcp@v{version}#subdirectory=Server";
+        }
+
+        /// <summary>
+        /// Gets structured uvx command parts for different client configurations
+        /// </summary>
+        /// <returns>Tuple containing (uvxPath, fromUrl, packageName)</returns>
+        public static (string uvxPath, string fromUrl, string packageName) GetUvxCommandParts()
+        {
+            string uvxPath = MCPServiceLocator.Paths.GetUvxPath() ?? "uvx";
+            string fromUrl = GetMcpServerGitUrl();
+            string packageName = "mcp-for-unity";
+
+            return (uvxPath, fromUrl, packageName);
+        }
+
+        /// <summary>
+        /// Gets the package version from package.json
         /// </summary>
         /// <returns>Version string, or "unknown" if not found</returns>
         public static string GetPackageVersion()

@@ -1,7 +1,10 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Constants;
 using UnityEditor;
 using UnityEngine;
 
@@ -12,164 +15,181 @@ namespace MCPForUnity.Editor.Services
     /// </summary>
     public class PathResolverService : IPathResolverService
     {
-        private const string PythonDirOverrideKey = "MCPForUnity.PythonDirOverride";
-        private const string UvPathOverrideKey = "MCPForUnity.UvPath";
-        private const string ClaudeCliPathOverrideKey = "MCPForUnity.ClaudeCliPath";
+        public bool HasUvxPathOverride => !string.IsNullOrEmpty(EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, null));
+        public bool HasClaudeCliPathOverride => !string.IsNullOrEmpty(EditorPrefs.GetString(EditorPrefKeys.ClaudeCliPathOverride, null));
 
-        public bool HasMcpServerOverride => !string.IsNullOrEmpty(EditorPrefs.GetString(PythonDirOverrideKey, null));
-        public bool HasUvPathOverride => !string.IsNullOrEmpty(EditorPrefs.GetString(UvPathOverrideKey, null));
-        public bool HasClaudeCliPathOverride => !string.IsNullOrEmpty(EditorPrefs.GetString(ClaudeCliPathOverrideKey, null));
-
-        public string GetMcpServerPath()
+        public string GetUvxPath(bool verifyPath = true)
         {
-            // Check for override first
-            string overridePath = EditorPrefs.GetString(PythonDirOverrideKey, null);
-            if (!string.IsNullOrEmpty(overridePath) && File.Exists(Path.Combine(overridePath, "server.py")))
-            {
-                return overridePath;
-            }
-
-            // Fall back to automatic detection
-            return McpPathResolver.FindPackagePythonDirectory(false);
-        }
-
-        public string GetUvPath()
-        {
-            // Check for override first
-            string overridePath = EditorPrefs.GetString(UvPathOverrideKey, null);
-            if (!string.IsNullOrEmpty(overridePath) && File.Exists(overridePath))
-            {
-                return overridePath;
-            }
-
-            // Fall back to automatic detection
             try
             {
-                return ServerInstaller.FindUvPath();
+                string overridePath = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
+                if (!string.IsNullOrEmpty(overridePath))
+                {
+                    return overridePath;
+                }
             }
             catch
             {
-                return null;
+                // ignore EditorPrefs read errors and fall back to default command
             }
+
+            return "uvx";
         }
 
         public string GetClaudeCliPath()
         {
-            // Check for override first
-            string overridePath = EditorPrefs.GetString(ClaudeCliPathOverrideKey, null);
-            if (!string.IsNullOrEmpty(overridePath) && File.Exists(overridePath))
+            try
             {
-                return overridePath;
+                string overridePath = EditorPrefs.GetString(EditorPrefKeys.ClaudeCliPathOverride, string.Empty);
+                if (!string.IsNullOrEmpty(overridePath) && File.Exists(overridePath))
+                {
+                    return overridePath;
+                }
+            }
+            catch { /* ignore */ }
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                string[] candidates = new[]
+                {
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "claude", "claude.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "claude", "claude.exe"),
+                    "claude.exe"
+                };
+
+                foreach (var c in candidates)
+                {
+                    if (File.Exists(c)) return c;
+                }
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                string[] candidates = new[]
+                {
+                    "/opt/homebrew/bin/claude",
+                    "/usr/local/bin/claude",
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), ".local", "bin", "claude")
+                };
+
+                foreach (var c in candidates)
+                {
+                    if (File.Exists(c)) return c;
+                }
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                string[] candidates = new[]
+                {
+                    "/usr/bin/claude",
+                    "/usr/local/bin/claude",
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), ".local", "bin", "claude")
+                };
+
+                foreach (var c in candidates)
+                {
+                    if (File.Exists(c)) return c;
+                }
             }
 
-            // Fall back to automatic detection
-            return ExecPath.ResolveClaude();
+            return null;
         }
 
         public bool IsPythonDetected()
         {
             try
             {
-                // Windows-specific Python detection
-                if (Application.platform == RuntimePlatform.WindowsEditor)
+                var psi = new ProcessStartInfo
                 {
-                    // Common Windows Python installation paths
-                    string[] windowsCandidates =
-                    {
-                        @"C:\Python314\python.exe",
-                        @"C:\Python313\python.exe",
-                        @"C:\Python312\python.exe",
-                        @"C:\Python311\python.exe",
-                        @"C:\Python310\python.exe",
-                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\Python\Python314\python.exe"),
-                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\Python\Python313\python.exe"),
-                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\Python\Python312\python.exe"),
-                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\Python\Python311\python.exe"),
-                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\Python\Python310\python.exe"),
-                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Python314\python.exe"),
-                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Python313\python.exe"),
-                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Python312\python.exe"),
-                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Python311\python.exe"),
-                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Python310\python.exe"),
-                    };
+                    FileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "python.exe" : "python3",
+                    Arguments = "--version",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                using var p = Process.Start(psi);
+                p.WaitForExit(2000);
+                return p.ExitCode == 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
-                    foreach (string c in windowsCandidates)
-                    {
-                        if (File.Exists(c)) return true;
-                    }
+        public bool IsUvxDetected()
+        {
+            return !string.IsNullOrEmpty(GetUvxPath());
+        }
 
-                    // Try 'where python' command (Windows equivalent of 'which')
-                    var psi = new ProcessStartInfo
+        public string GetUvxPackageSourcePath()
+        {
+            try
+            {
+                // Get the uv cache directory
+                var cacheDirProcess = new ProcessStartInfo
+                {
+                    FileName = "uv",
+                    Arguments = "cache dir",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                using var process = Process.Start(cacheDirProcess);
+                if (process == null) return null;
+
+                string cacheDir = process.StandardOutput.ReadToEnd().Trim();
+                process.WaitForExit(5000);
+
+                if (process.ExitCode != 0 || string.IsNullOrEmpty(cacheDir))
+                {
+                    McpLog.Error("Failed to get uv cache directory");
+                    return null;
+                }
+
+                // Normalize path for cross-platform compatibility
+                cacheDir = Path.GetFullPath(cacheDir);
+
+                // Look for git checkouts directory
+                string gitCheckoutsDir = Path.Combine(cacheDir, "git-v0", "checkouts");
+                if (!Directory.Exists(gitCheckoutsDir))
+                {
+                    McpLog.Error($"Git checkouts directory not found: {gitCheckoutsDir}");
+                    return null;
+                }
+
+                // Find the unity-mcp checkout directory
+                // The pattern is: git-v0/checkouts/{hash}/{commit-hash}/
+                foreach (var hashDir in Directory.GetDirectories(gitCheckoutsDir))
+                {
+                    foreach (var commitDir in Directory.GetDirectories(hashDir))
                     {
-                        FileName = "where",
-                        Arguments = "python",
-                        UseShellExecute = false,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        CreateNoWindow = true
-                    };
-                    using (var p = Process.Start(psi))
-                    {
-                        string outp = p.StandardOutput.ReadToEnd().Trim();
-                        p.WaitForExit(2000);
-                        if (p.ExitCode == 0 && !string.IsNullOrEmpty(outp))
+                        // Check for the new Server structure
+                        string serverPath = Path.Combine(commitDir, "Server");
+                        if (Directory.Exists(serverPath))
                         {
-                            string[] lines = outp.Split('\n');
-                            foreach (string line in lines)
+                            // Verify it has the expected pyproject.toml
+                            string pyprojectPath = Path.Combine(serverPath, "pyproject.toml");
+                            if (File.Exists(pyprojectPath))
                             {
-                                string trimmed = line.Trim();
-                                if (File.Exists(trimmed)) return true;
+                                McpLog.Info($"Found uvx package source at: {serverPath}");
+                                return serverPath;
                             }
                         }
                     }
                 }
-                else
-                {
-                    // macOS/Linux detection
-                    string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) ?? string.Empty;
-                    string[] candidates =
-                    {
-                        "/opt/homebrew/bin/python3",
-                        "/usr/local/bin/python3",
-                        "/usr/bin/python3",
-                        "/opt/local/bin/python3",
-                        Path.Combine(home, ".local", "bin", "python3"),
-                        "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3",
-                        "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3",
-                        "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3",
-                        "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3",
-                        "/Library/Frameworks/Python.framework/Versions/3.10/bin/python3",
-                    };
-                    foreach (string c in candidates)
-                    {
-                        if (File.Exists(c)) return true;
-                    }
 
-                    // Try 'which python3'
-                    var psi = new ProcessStartInfo
-                    {
-                        FileName = "/usr/bin/which",
-                        Arguments = "python3",
-                        UseShellExecute = false,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        CreateNoWindow = true
-                    };
-                    using (var p = Process.Start(psi))
-                    {
-                        string outp = p.StandardOutput.ReadToEnd().Trim();
-                        p.WaitForExit(2000);
-                        if (p.ExitCode == 0 && !string.IsNullOrEmpty(outp) && File.Exists(outp)) return true;
-                    }
-                }
+                var packageVersion = AssetPathUtility.GetPackageVersion();
+                McpLog.Error($"Server package source not found in uv cache. Make sure to run: uvx --from git+https://github.com/CoplayDev/unity-mcp@{packageVersion}#subdirectory=Server mcp-for-unity");
+                return null;
             }
-            catch { }
-            return false;
-        }
-
-        public bool IsUvDetected()
-        {
-            return !string.IsNullOrEmpty(GetUvPath());
+            catch (System.Exception ex)
+            {
+                McpLog.Error($"Failed to find uvx package source: {ex.Message}");
+                return null;
+            }
         }
 
         public bool IsClaudeCliDetected()
@@ -177,36 +197,20 @@ namespace MCPForUnity.Editor.Services
             return !string.IsNullOrEmpty(GetClaudeCliPath());
         }
 
-        public void SetMcpServerOverride(string path)
+        public void SetUvxPathOverride(string path)
         {
             if (string.IsNullOrEmpty(path))
             {
-                ClearMcpServerOverride();
-                return;
-            }
-
-            if (!File.Exists(Path.Combine(path, "server.py")))
-            {
-                throw new ArgumentException("The selected folder does not contain server.py");
-            }
-
-            EditorPrefs.SetString(PythonDirOverrideKey, path);
-        }
-
-        public void SetUvPathOverride(string path)
-        {
-            if (string.IsNullOrEmpty(path))
-            {
-                ClearUvPathOverride();
+                ClearUvxPathOverride();
                 return;
             }
 
             if (!File.Exists(path))
             {
-                throw new ArgumentException("The selected UV executable does not exist");
+                throw new ArgumentException("The selected UVX executable does not exist");
             }
 
-            EditorPrefs.SetString(UvPathOverrideKey, path);
+            EditorPrefs.SetString(EditorPrefKeys.UvxPathOverride, path);
         }
 
         public void SetClaudeCliPathOverride(string path)
@@ -222,24 +226,17 @@ namespace MCPForUnity.Editor.Services
                 throw new ArgumentException("The selected Claude CLI executable does not exist");
             }
 
-            EditorPrefs.SetString(ClaudeCliPathOverrideKey, path);
-            // Also update the ExecPath helper for backwards compatibility
-            ExecPath.SetClaudeCliPath(path);
+            EditorPrefs.SetString(EditorPrefKeys.ClaudeCliPathOverride, path);
         }
 
-        public void ClearMcpServerOverride()
+        public void ClearUvxPathOverride()
         {
-            EditorPrefs.DeleteKey(PythonDirOverrideKey);
-        }
-
-        public void ClearUvPathOverride()
-        {
-            EditorPrefs.DeleteKey(UvPathOverrideKey);
+            EditorPrefs.DeleteKey(EditorPrefKeys.UvxPathOverride);
         }
 
         public void ClearClaudeCliPathOverride()
         {
-            EditorPrefs.DeleteKey(ClaudeCliPathOverrideKey);
+            EditorPrefs.DeleteKey(EditorPrefKeys.ClaudeCliPathOverride);
         }
     }
 }

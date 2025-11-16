@@ -7,7 +7,8 @@ from fastmcp import Context
 
 from models import MCPResponse
 from registry import mcp_for_unity_tool
-from tools import get_unity_instance_from_context, async_send_with_unity_instance
+from tools import get_unity_instance_from_context
+from unity_transport import send_with_unity_instance
 from unity_connection import async_send_command_with_retry
 
 
@@ -24,5 +25,5 @@ async def execute_menu_item(
     unity_instance = get_unity_instance_from_context(ctx)
     params_dict: dict[str, Any] = {"menuPath": menu_path}
     params_dict = {k: v for k, v in params_dict.items() if v is not None}
-    result = await async_send_with_unity_instance(async_send_command_with_retry, unity_instance, "execute_menu_item", params_dict)
+    result = await send_with_unity_instance(async_send_command_with_retry, unity_instance, "execute_menu_item", params_dict)
     return MCPResponse(**result) if isinstance(result, dict) else result

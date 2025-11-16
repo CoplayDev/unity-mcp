@@ -55,14 +55,14 @@ jobs:
           uv venv
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> "$GITHUB_ENV"
           echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
-          if [ -f MCPForUnity/UnityMcpServer~/src/pyproject.toml ]; then
-            uv pip install -e MCPForUnity/UnityMcpServer~/src
-          elif [ -f MCPForUnity/UnityMcpServer~/src/requirements.txt ]; then
-            uv pip install -r MCPForUnity/UnityMcpServer~/src/requirements.txt
-          elif [ -f MCPForUnity/UnityMcpServer~/pyproject.toml ]; then
-            uv pip install -e MCPForUnity/UnityMcpServer~/
-          elif [ -f MCPForUnity/UnityMcpServer~/requirements.txt ]; then
-            uv pip install -r MCPForUnity/UnityMcpServer~/requirements.txt
+          if [ -f Server/pyproject.toml ]; then
+            uv pip install -e Server
+          elif [ -f Server/requirements.txt ]; then
+            uv pip install -r Server/requirements.txt
+          elif [ -f Server/pyproject.toml ]; then
+            uv pip install -e Server
+          elif [ -f Server/requirements.txt ]; then
+            uv pip install -r Server/requirements.txt
           else
             echo "No MCP Python deps found (skipping)"
           fi
@@ -217,7 +217,7 @@ jobs:
               -stackTraceLogType Full \
               -projectPath /workspace/TestProjects/UnityMCPTests \
               "${manual_args[@]}" \
-              -executeMethod MCPForUnity.Editor.MCPForUnityBridge.StartAutoConnect
+              -executeMethod MCPForUnity.Editor.Services.Transport.Transports.StdioBridgeHost.StartAutoConnect
 
       # ---------- Wait for Unity bridge ----------
       - name: Wait for Unity bridge (robust)
@@ -285,7 +285,7 @@ jobs:
             "mcpServers": {
               "unity": {
                 "command": "uv",
-                "args": ["run","--active","--directory","MCPForUnity/UnityMcpServer~/src","python","server.py"],
+                "args": ["run","--active","--directory","Server","python","server.py"],
                 "transport": { "type": "stdio" },
                 "env": {
                   "PYTHONUNBUFFERED": "1",

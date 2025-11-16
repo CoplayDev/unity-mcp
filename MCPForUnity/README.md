@@ -13,8 +13,8 @@ The window has four areas: Server Status, Unity Bridge, MCP Client Configuration
 1. Open Window > MCP for Unity.
 2. Click “Auto-Setup”.
 3. If prompted:
-   - Select the server folder that contains `server.py` (UnityMcpServer~/src).
-   - Install Python and/or uv if missing.
+   - Select the packaged server folder (`Server`) if you want to run the bundled implementation.
+   - Install Python and/or uv/uvx if missing so the server can be managed locally.
    - For Claude Code, ensure the `claude` CLI is installed.
 4. Click “Start Bridge” if the Unity Bridge shows “Stopped”.
 5. Use your MCP client (Cursor, VS Code, Windsurf, Claude Code) to connect.
@@ -33,6 +33,9 @@ The window has four areas: Server Status, Unity Bridge, MCP Client Configuration
   - Select server folder…: Choose the folder containing `server.py`.
   - Verify again: Re-checks server presence.
   - If Python isn’t detected, use “Open Install Instructions”.
+- HTTP Server Command foldout:
+  - Expands to display the exact `uvx` command Unity will run.
+  - Includes a copy button and the “Start Local HTTP Server” action so you can launch or reuse the command elsewhere.
 
 ---
 
@@ -47,11 +50,11 @@ The window has four areas: Server Status, Unity Bridge, MCP Client Configuration
 - Select Client: Choose your target MCP client (e.g., Cursor, VS Code, Windsurf, Claude Code).
 - Per-client actions:
   - Cursor / VS Code / Windsurf:
-    - Auto Configure: Writes/updates your config to launch the server via uv:
-      - Command: uv
-      - Args: run --directory <pythonDir> server.py
+    - Auto Configure: Writes/updates your config to launch the server via `uvx` with the current package version:
+      - Command: uvx (or your overridden path)
+      - Args: --from <git-url> mcp-for-unity
     - Manual Setup: Opens a window with a pre-filled JSON snippet to copy/paste into your client config.
-    - Choose `uv` Install Location: If uv isn’t on PATH, select the uv binary.
+    - Choose UV Install Location: If uv/uvx isn’t on PATH, select the executable.
     - A compact “Config:” line shows the resolved config file name once uv/server are detected.
   - Claude Code:
     - Register with Claude Code / Unregister MCP for Unity with Claude Code.
@@ -83,6 +86,7 @@ Notes:
 ---
 
 ## Tips
+- Use Cmd+Shift+M (macOS) / Ctrl+Shift+M (Windows, Linux) to toggle the MCP for Unity window.
 - Enable “Show Debug Logs” in the header for more details in the Console when diagnosing issues.
 
 ---

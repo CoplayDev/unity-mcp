@@ -34,6 +34,7 @@ MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to 
 * **🛠️ Powerful Tools:** Manage assets, scenes, materials, scripts, and editor functions.
 * **🤖 Automation:** Automate repetitive Unity workflows.
 * **🧩 Extensible:** Designed to work with various MCP Clients.
+* **🌐 HTTP-First Transport:** Ships with HTTP connections enabled by default (stdio is still available as a fallback).
 
 <details open>
   <summary><strong>Tools</strong></summary>
@@ -84,7 +85,7 @@ MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to 
 MCP for Unity connects your tools using two components:
 
 1. **MCP for Unity Bridge:** A Unity package running inside the Editor. (Installed via Package Manager).
-2. **MCP for Unity Server:** A Python server that runs locally, communicating between the Unity Bridge and your MCP Client. (Installed automatically by the package on first run or via Auto-Setup; manual setup is available as a fallback).
+2. **MCP for Unity Server:** A Python server that runs locally (from a terminal window) and speaks HTTP/JSON-RPC to your MCP client. The Unity window launches it for you in HTTP mode by default; stdio is still available if you switch transports.
 
 <img width="562" height="121" alt="image" src="https://github.com/user-attachments/assets/9abf9c66-70d1-4b82-9587-658e0d45dc3e" />
 
@@ -141,7 +142,7 @@ MCP for Unity connects your tools using two components:
 3. Click `+` -> `Add package from git URL...`.
 4. Enter:
     ```
-    https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity
+    https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v7.0.0
     ```
 5. Click `Add`.
 
@@ -153,18 +154,39 @@ MCP for Unity connects your tools using two components:
 
 **Note:** If you installed the MCP Server before Coplay's maintenance, you will need to uninstall the old package before re-installing the new one.
 
-### 🛠️ Step 2: Configure Your MCP Client
-Connect your MCP Client (Claude, Cursor, etc.) to the Python server set up in Step 1 (auto) or via Manual Configuration (below).
+### ⚡️ Step 2: Start the Local HTTP Server (Default)
+
+HTTP transport is enabled out of the box. The Unity window can launch the FastMCP server for you:
+
+1. Open `Window > MCP for Unity`.
+2. Make sure the **Transport** dropdown is set to `HTTP` (default) and the **HTTP URL** is what you want (defaults to `http://localhost:8080`).
+3. Click **Start Local HTTP Server**. Unity spawns a new operating-system terminal running `uv ... server.py --transport http`.
+4. Keep that terminal window open while you work; closing it stops the server. Use the **Stop Session** button in the Unity window if you need to tear it down cleanly.
+
+> Prefer stdio? Change the transport dropdown to `Stdio` and Unity will fall back to the embedded TCP bridge instead of launching the HTTP server.
+
+**Manual launch (optional)**
+
+You can also start the server yourself from a terminal—useful for CI or when you want to see raw logs:
+
+```bash
+uvx --from "git+https://github.com/CoplayDev/unity-mcp@v7.0.0#subdirectory=Server" mcp-for-unity --transport http --http-url http://localhost:8080
+```
+
+Keep the process running while clients are connected.
+
+### 🛠️ Step 3: Configure Your MCP Client
+Connect your MCP Client (Claude, Cursor, etc.) to the HTTP server from Step 2 (auto) or via Manual Configuration (below).
 
 **Option A: Auto-Setup (Recommended for Claude/Cursor/VSC Copilot)**
 
 1. In Unity, go to `Window > MCP for Unity`.
 2. Click `Auto-Setup`.
-3. Look for a green status indicator 🟢 and "Connected ✓". *(This attempts to modify the MCP Client's config file automatically).* 
+3. Look for a green status indicator 🟢 and "Connected ✓". *(This writes the HTTP `url` pointing at the server you launched in Step 2.)* 
 
 <details><summary><strong>Client-specific troubleshooting</strong></summary>
 
-  - **VSCode**: uses `Code/User/mcp.json` with top-level `servers.unityMCP` and `"type": "stdio"`. On Windows, MCP for Unity writes an absolute `uv.exe` (prefers WinGet Links shim) to avoid PATH issues.
+  - **VSCode**: uses `Code/User/mcp.json` with top-level `servers.unityMCP`, `"type": "http"`, and the URL from Step 2. On Windows, MCP for Unity still prefers an absolute `uv.exe` path when you switch back to stdio.
   - **Cursor / Windsurf** [(**help link**)](https://github.com/CoplayDev/unity-mcp/wiki/1.-Fix-Unity-MCP-and-Cursor,-VSCode-&-Windsurf): if `uv` is missing, the MCP for Unity window shows "uv Not Found" with a quick [HELP] link and a "Choose `uv` Install Location" button.
   - **Claude Code** [(**help link**)](https://github.com/CoplayDev/unity-mcp/wiki/2.-Fix-Unity-MCP-and-Claude-Code): if `claude` isn't found, the window shows "Claude Not Found" with [HELP] and a "Choose Claude Location" button. Unregister now updates the UI immediately.</details>
 
@@ -176,7 +198,7 @@ If Auto-Setup fails or you use a different client:
 1. **Find your MCP Client's configuration file.** (Check client documentation).
     * *Claude Example (macOS):* `~/Library/Application Support/Claude/claude_desktop_config.json`
     * *Claude Example (Windows):* `%APPDATA%\Claude\claude_desktop_config.json`
-2. **Edit the file** to add/update the `mcpServers` section, using the *exact* paths from Step 1.
+2. **Edit the file** to add/update the `mcpServers` section so it points at the HTTP endpoint from Step 2.
 
 <details>
 <summary><strong>Click for Client-Specific JSON Configuration Snippets...</strong></summary>
@@ -197,44 +219,59 @@ claude mcp add --scope user UnityMCP -- uv --directory /Users/USERNAME/Library/A
 ```bash
 claude mcp add --scope user UnityMCP -- "C:/Users/USERNAME/AppData/Local/Microsoft/WinGet/Links/uv.exe" --directory "C:/Users/USERNAME/AppData/Local/UnityMCP/UnityMcpServer/src" run server.py
 ```
-**VSCode (all OS)**
+**VSCode (all OS – HTTP default)**
 
 ```json
 {
   "servers": {
     "unityMCP": {
-      "command": "uv",
-      "args": ["--directory","<ABSOLUTE_PATH_TO>/UnityMcpServer/src","run","server.py"],
-      "type": "stdio"
+      "type": "http",
+      "url": "http://localhost:8080/mcp"
     }
   }
 }
 ```
 
-On Windows, set `command` to the absolute shim, e.g. `C:\\Users\\YOU\\AppData\\Local\\Microsoft\\WinGet\\Links\\uv.exe`.
+**macOS / Windows / Linux (Claude Desktop, Cursor, Claude Code, Windsurf, etc. – HTTP default)**
 
-**Windows:**
-
-  ```json
-  {
-    "mcpServers": {
-      "UnityMCP": {
-        "command": "uv",
-        "args": [
-          "run",
-          "--directory",
-          "C:\\Users\\YOUR_USERNAME\\AppData\\Local\\UnityMCP\\UnityMcpServer\\src",
-          "server.py"
-        ]
-      }
-      // ... other servers might be here ...
+```json
+{
+  "mcpServers": {
+    "UnityMCP": {
+      "url": "http://localhost:8080/mcp"
     }
   }
-``` 
+}
+```
 
-(Remember to replace YOUR_USERNAME and use double backslashes \\)
+Set the URL to match whatever you entered in the Unity window (include `/mcp`).
 
-**macOS:**
+#### Stdio configuration examples (legacy / optional)
+
+Switch the Unity transport dropdown to `Stdio`, then use one of the following `command`/`args` blocks.
+
+**VSCode (stdio)**
+
+```json
+{
+  "servers": {
+    "unityMCP": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--directory",
+        "<ABSOLUTE_PATH_TO>/UnityMcpServer/src",
+        "run",
+        "server.py",
+        "--transport",
+        "stdio"
+      ]
+    }
+  }
+}
+```
+
+**macOS / Linux (stdio)**
 
 ```json
 {
@@ -245,37 +282,36 @@ On Windows, set `command` to the absolute shim, e.g. `C:\\Users\\YOU\\AppData\\L
         "run",
         "--directory",
         "/Users/YOUR_USERNAME/Library/AppSupport/UnityMCP/UnityMcpServer/src",
-        "server.py"
+        "server.py",
+        "--transport",
+        "stdio"
       ]
     }
-    // ... other servers might be here ...
   }
 }
 ```
 
-(Replace YOUR_USERNAME. Note: AppSupport is a symlink to "Application Support" to avoid quoting issues)
-
-**Linux:**
+**Windows (stdio)**
 
 ```json
 {
   "mcpServers": {
     "UnityMCP": {
-      "command": "uv",
+      "command": "C:/Users/YOUR_USERNAME/AppData/Local/Microsoft/WinGet/Links/uv.exe",
       "args": [
         "run",
         "--directory",
-        "/home/YOUR_USERNAME/.local/share/UnityMCP/UnityMcpServer/src",
-        "server.py"
+        "C:/Users/YOUR_USERNAME/AppData/Local/UnityMCP/UnityMcpServer/src",
+        "server.py",
+        "--transport",
+        "stdio"
       ]
     }
-    // ... other servers might be here ...
   }
 }
 ```
 
-(Replace YOUR_USERNAME)
-
+Replace `YOUR_USERNAME` and `AppSupport` path segments as needed for your platform.
 
 </details>
 
@@ -283,9 +319,9 @@ On Windows, set `command` to the absolute shim, e.g. `C:\\Users\\YOU\\AppData\\L
 
 ## Usage ▶️
 
-1. **Open your Unity Project.** The MCP for Unity package should connect automatically. Check status via Window > MCP for Unity.
+1. **Open your Unity Project** and verify the HTTP server is running (Window > MCP for Unity > Start Local HTTP Server). The indicator should show "Session Active" once the server is up.
     
-2. **Start your MCP Client** (Claude, Cursor, etc.). It should automatically launch the MCP for Unity Server (Python) using the configuration from Installation Step 2.
+2. **Start your MCP Client** (Claude, Cursor, etc.). It connects to the HTTP endpoint configured in Step 3—no extra terminals will be spawned by the client.
     
 3. **Interact!** Unity tools should now be available in your MCP Client.
 
@@ -359,6 +395,7 @@ Your privacy matters to us. All telemetry is optional and designed to respect yo
     - Check the status window: Window > MCP for Unity.
     - Restart Unity.
 - **MCP Client Not Connecting / Server Not Starting:**
+    - Make sure the local HTTP server is running (Window > MCP for Unity > Start Local HTTP Server). Keep the spawned terminal window open.
     - **Verify Server Path:** Double-check the --directory path in your MCP Client's JSON config. It must exactly match the installation location:
       - **Windows:** `%USERPROFILE%\AppData\Local\UnityMCP\UnityMcpServer\src`
       - **macOS:** `~/Library/AppSupport/UnityMCP/UnityMcpServer\src` 

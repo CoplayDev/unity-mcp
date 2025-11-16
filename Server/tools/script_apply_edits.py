@@ -6,11 +6,12 @@ from typing import Annotated, Any
 from fastmcp import Context
 
 from registry import mcp_for_unity_tool
-from tools import get_unity_instance_from_context, send_with_unity_instance
-from unity_connection import send_command_with_retry
+from tools import get_unity_instance_from_context
+from unity_transport import send_with_unity_instance
+from unity_connection import async_send_command_with_retry
 
 
-def _apply_edits_locally(original_text: str, edits: list[dict[str, Any]]) -> str:
+async def _apply_edits_locally(original_text: str, edits: list[dict[str, Any]]) -> str:
     text = original_text
     for edit in edits or []:
         op = (
@@ -355,7 +356,7 @@ def _err(code: str, message: str, *, expected: dict[str, Any] | None = None, rew
     }
     ]"""
 ))
-def script_apply_edits(
+async def script_apply_edits(
     ctx: Context,
     name: Annotated[str, "Name of the script to edit"],
     path: Annotated[str, "Path to the script to edit under Assets/ directory"],
@@ -587,8 +588,8 @@ def script_apply_edits(
             "edits": edits,
             "options": opts2,
         }
-        resp_struct = send_with_unity_instance(
-            send_command_with_retry,
+        resp_struct = await send_with_unity_instance(
+            async_send_command_with_retry,
             unity_instance,
             "manage_script",
             params_struct,
@@ -598,7 +599,7 @@ def script_apply_edits(
         return _with_norm(resp_struct if isinstance(resp_struct, dict) else {"success": False, "message": str(resp_struct)}, normalized_for_echo, routing="structured")
 
     # 1) read from Unity
-    read_resp = send_command_with_retry("manage_script", {
+    read_resp = async_send_command_with_retry("manage_script", {
         "action": "read",
         "name": name,
         "path": path,
@@ -727,8 +728,8 @@ def script_apply_edits(
                     "precondition_sha256": sha,
                     "options": {"refresh": (options or {}).get("refresh", "debounced"), "validate": (options or {}).get("validate", "standard"), "applyMode": ("atomic" if len(at_edits) > 1 else (options or {}).get("applyMode", "sequential"))}
                 }
-                resp_text = send_with_unity_instance(
-                    send_command_with_retry,
+                resp_text = await send_with_unity_instance(
+                    async_send_command_with_retry,
                     unity_instance,
                     "manage_script",
                     params_text,
@@ -752,8 +753,8 @@ def script_apply_edits(
                 "edits": struct_edits,
                 "options": opts2
             }
-            resp_struct = send_with_unity_instance(
-                send_command_with_retry,
+            resp_struct = await send_with_unity_instance(
+                async_send_command_with_retry,
                 unity_instance,
                 "manage_script",
                 params_struct,
@@ -885,8 +886,8 @@ def script_apply_edits(
                     "applyMode": ("atomic" if len(at_edits) > 1 else (options or {}).get("applyMode", "sequential"))
                 }
             }
-            resp = send_with_unity_instance(
-                send_command_with_retry,
+            resp = await send_with_unity_instance(
+                async_send_command_with_retry,
                 unity_instance,
                 "manage_script",
                 params,
@@ -974,8 +975,8 @@ def script_apply_edits(
         "options": options or {"validate": "standard", "refresh": "debounced"},
     }
 
-    write_resp = send_with_unity_instance(
-        send_command_with_retry,
+    write_resp = await send_with_unity_instance(
+        async_send_command_with_retry,
         unity_instance,
         "manage_script",
         params,

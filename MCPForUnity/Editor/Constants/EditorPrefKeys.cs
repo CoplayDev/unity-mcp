@@ -1,0 +1,40 @@
+namespace MCPForUnity.Editor.Constants
+{
+    /// <summary>
+    /// Centralized list of EditorPrefs keys used by the MCP for Unity package.
+    /// Keeping them in one place avoids typos and simplifies migrations.
+    /// </summary>
+    internal static class EditorPrefKeys
+    {
+        internal const string UseHttpTransport = "MCPForUnity.UseHttpTransport";
+        internal const string DebugLogs = "MCPForUnity.DebugLogs";
+        internal const string ValidationLevel = "MCPForUnity.ValidationLevel";
+        internal const string UnitySocketPort = "MCPForUnity.UnitySocketPort";
+        internal const string ResumeHttpAfterReload = "MCPForUnity.ResumeHttpAfterReload";
+
+        internal const string UvxPathOverride = "MCPForUnity.UvxPath";
+        internal const string ClaudeCliPathOverride = "MCPForUnity.ClaudeCliPath";
+
+        internal const string HttpBaseUrl = "MCPForUnity.HttpUrl";
+        internal const string WebSocketSessionId = "MCPForUnity.WebSocketSessionId";
+        internal const string WebSocketUrlOverride = "MCPForUnity.WebSocketUrl";
+        internal const string GitUrlOverride = "MCPForUnity.GitUrlOverride";
+
+        internal const string ServerSrc = "MCPForUnity.ServerSrc";
+        internal const string UseEmbeddedServer = "MCPForUnity.UseEmbeddedServer";
+        internal const string LockCursorConfig = "MCPForUnity.LockCursorConfig";
+        internal const string AutoRegisterEnabled = "MCPForUnity.AutoRegisterEnabled";
+
+        internal const string SetupCompleted = "MCPForUnity.SetupCompleted";
+        internal const string SetupDismissed = "MCPForUnity.SetupDismissed";
+
+        internal const string CustomToolRegistrationEnabled = "MCPForUnity.CustomToolRegistrationEnabled";
+
+        internal const string LastUpdateCheck = "MCPForUnity.LastUpdateCheck";
+        internal const string LatestKnownVersion = "MCPForUnity.LatestKnownVersion";
+        internal const string LastStdIoUpgradeVersion = "MCPForUnity.LastStdIoUpgradeVersion";
+
+        internal const string TelemetryDisabled = "MCPForUnity.TelemetryDisabled";
+        internal const string CustomerUuid = "MCPForUnity.CustomerUUID";
+    }
+}

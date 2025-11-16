@@ -106,8 +106,7 @@ class TelemetryConfig:
             # Prefer plain module to respect test-time overrides and sys.path injection
             "config",
             "src.config",
-            "MCPForUnity.UnityMcpServer~.src.config",
-            "MCPForUnity.UnityMcpServer.src.config",
+            "Server.config",
         ):
             try:
                 mod = import_module(modname)

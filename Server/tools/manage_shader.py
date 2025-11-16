@@ -3,14 +3,15 @@ from typing import Annotated, Any, Literal
 
 from fastmcp import Context
 from registry import mcp_for_unity_tool
-from tools import get_unity_instance_from_context, send_with_unity_instance
-from unity_connection import send_command_with_retry
+from tools import get_unity_instance_from_context
+from unity_transport import send_with_unity_instance
+from unity_connection import async_send_command_with_retry
 
 
 @mcp_for_unity_tool(
     description="Manages shader scripts in Unity (create, read, update, delete)."
 )
-def manage_shader(
+async def manage_shader(
     ctx: Context,
     action: Annotated[Literal['create', 'read', 'update', 'delete'], "Perform CRUD operations on shader scripts."],
     name: Annotated[str, "Shader name (no .cs extension)"],
@@ -43,7 +44,7 @@ def manage_shader(
         params = {k: v for k, v in params.items() if v is not None}
 
         # Send command via centralized retry helper with instance routing
-        response = send_with_unity_instance(send_command_with_retry, unity_instance, "manage_shader", params)
+        response = await send_with_unity_instance(async_send_command_with_retry, unity_instance, "manage_shader", params)
 
         # Process response from Unity
         if isinstance(response, dict) and response.get("success"):

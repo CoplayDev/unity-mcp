@@ -3,7 +3,8 @@ from fastmcp import Context
 
 from models import MCPResponse
 from registry import mcp_for_unity_resource
-from tools import get_unity_instance_from_context, async_send_with_unity_instance
+from tools import get_unity_instance_from_context
+from unity_transport import send_with_unity_instance
 from unity_connection import async_send_command_with_retry
 
 
@@ -29,7 +30,7 @@ class ProjectInfoResponse(MCPResponse):
 async def get_project_info(ctx: Context) -> ProjectInfoResponse | MCPResponse:
     """Get static project configuration information."""
     unity_instance = get_unity_instance_from_context(ctx)
-    response = await async_send_with_unity_instance(
+    response = await send_with_unity_instance(
         async_send_command_with_retry,
         unity_instance,
         "get_project_info",

@@ -5,14 +5,15 @@ from typing import Annotated, Any, Literal
 
 from fastmcp import Context
 from registry import mcp_for_unity_tool
-from tools import get_unity_instance_from_context, send_with_unity_instance
-from unity_connection import send_command_with_retry
+from tools import get_unity_instance_from_context
+from unity_transport import send_with_unity_instance
+from unity_connection import async_send_command_with_retry
 
 
 @mcp_for_unity_tool(
     description="Gets messages from or clears the Unity Editor console. Note: For maximum client compatibility, pass count as a quoted string (e.g., '5')."
 )
-def read_console(
+async def read_console(
     ctx: Context,
     action: Annotated[Literal['get', 'clear'], "Get or clear the Unity Editor console."] | None = None,
     types: Annotated[list[Literal['error', 'warning',
@@ -91,7 +92,7 @@ def read_console(
         params_dict['count'] = None
 
     # Use centralized retry helper with instance routing
-    resp = send_with_unity_instance(send_command_with_retry, unity_instance, "read_console", params_dict)
+    resp = await send_with_unity_instance(async_send_command_with_retry, unity_instance, "read_console", params_dict)
     if isinstance(resp, dict) and resp.get("success") and not include_stacktrace:
         # Strip stacktrace fields from returned lines if present
         try:

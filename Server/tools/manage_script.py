@@ -6,7 +6,8 @@ from urllib.parse import urlparse, unquote
 from fastmcp import FastMCP, Context
 
 from registry import mcp_for_unity_tool
-from tools import get_unity_instance_from_context, send_with_unity_instance
+from tools import get_unity_instance_from_context
+from unity_transport import send_with_unity_instance
 import unity_connection
 
 
@@ -76,7 +77,7 @@ def _split_uri(uri: str) -> tuple[str, str]:
         - Lines, columns are 1-indexed
         - Tabs count as 1 column"""
 ))
-def apply_text_edits(
+async def apply_text_edits(
     ctx: Context,
     uri: Annotated[str, "URI of the script to edit under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
     edits: Annotated[list[dict[str, Any]], "List of edits to apply to the script, i.e. a list of {startLine,startCol,endLine,endCol,newText} (1-indexed!)"],
@@ -105,8 +106,8 @@ def apply_text_edits(
     warnings: list[str] = []
     if _needs_normalization(edits):
         # Read file to support index->line/col conversion when needed
-        read_resp = send_with_unity_instance(
-            unity_connection.send_command_with_retry,
+        read_resp = await send_with_unity_instance(
+            unity_connection.async_send_command_with_retry,
             unity_instance,
             "manage_script",
             {
@@ -311,8 +312,8 @@ def apply_text_edits(
         "options": opts,
     }
     params = {k: v for k, v in params.items() if v is not None}
-    resp = send_with_unity_instance(
-        unity_connection.send_command_with_retry,
+    resp = await send_with_unity_instance(
+        unity_connection.async_send_command_with_retry,
         unity_instance,
         "manage_script",
         params,
@@ -342,13 +343,13 @@ def apply_text_edits(
                     except Exception:
                         return None
 
-                def _flip_async():
+                async def _flip_async():
                     try:
                         time.sleep(0.1)
                         st = _latest_status()
                         if st and st.get("reloading"):
                             return
-                        unity_connection.send_command_with_retry(
+                        await unity_connection.async_send_command_with_retry(
                             "execute_menu_item",
                             {"menuPath": "MCP/Flip Reload Sentinel"},
                             max_retries=0,
@@ -366,7 +367,7 @@ def apply_text_edits(
 
 
 @mcp_for_unity_tool(description=("Create a new C# script at the given project path."))
-def create_script(
+async def create_script(
     ctx: Context,
     path: Annotated[str, "Path under Assets/ to create the script at, e.g., 'Assets/Scripts/My.cs'"],
     contents: Annotated[str, "Contents of the script to create. Note, this is Base64 encoded over transport."],
@@ -400,8 +401,8 @@ def create_script(
             contents.encode("utf-8")).decode("utf-8")
         params["contentsEncoded"] = True
     params = {k: v for k, v in params.items() if v is not None}
-    resp = send_with_unity_instance(
-        unity_connection.send_command_with_retry,
+    resp = await send_with_unity_instance(
+        unity_connection.async_send_command_with_retry,
         unity_instance,
         "manage_script",
         params,
@@ -410,7 +411,7 @@ def create_script(
 
 
 @mcp_for_unity_tool(description=("Delete a C# script by URI or Assets-relative path."))
-def delete_script(
+async def delete_script(
     ctx: Context,
     uri: Annotated[str, "URI of the script to delete under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
 ) -> dict[str, Any]:
@@ -421,8 +422,8 @@ def delete_script(
     if not directory or directory.split("/")[0].lower() != "assets":
         return {"success": False, "code": "path_outside_assets", "message": "URI must resolve under 'Assets/'."}
     params = {"action": "delete", "name": name, "path": directory}
-    resp = send_with_unity_instance(
-        unity_connection.send_command_with_retry,
+    resp = await send_with_unity_instance(
+        unity_connection.async_send_command_with_retry,
         unity_instance,
         "manage_script",
         params,
@@ -431,7 +432,7 @@ def delete_script(
 
 
 @mcp_for_unity_tool(description=("Validate a C# script and return diagnostics."))
-def validate_script(
+async def validate_script(
     ctx: Context,
     uri: Annotated[str, "URI of the script to validate under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
     level: Annotated[Literal['basic', 'standard'],
@@ -452,8 +453,8 @@ def validate_script(
         "path": directory,
         "level": level,
     }
-    resp = send_with_unity_instance(
-        unity_connection.send_command_with_retry,
+    resp = await send_with_unity_instance(
+        unity_connection.async_send_command_with_retry,
         unity_instance,
         "manage_script",
         params,
@@ -471,7 +472,7 @@ def validate_script(
 
 
 @mcp_for_unity_tool(description=("Compatibility router for legacy script operations. Prefer apply_text_edits (ranges) or script_apply_edits (structured) for edits."))
-def manage_script(
+async def manage_script(
     ctx: Context,
     action: Annotated[Literal['create', 'read', 'delete'], "Perform CRUD operations on C# scripts."],
     name: Annotated[str, "Script name (no .cs extension)", "Name of the script to create"],
@@ -505,8 +506,8 @@ def manage_script(
 
         params = {k: v for k, v in params.items() if v is not None}
 
-        response = send_with_unity_instance(
-            unity_connection.send_command_with_retry,
+        response = await send_with_unity_instance(
+            unity_connection.async_send_command_with_retry,
             unity_instance,
             "manage_script",
             params,
@@ -545,7 +546,7 @@ def manage_script(
         - max_edit_payload_bytes: server edit payload cap
         - guards: header/using guard enabled flag"""
 ))
-def manage_script_capabilities(ctx: Context) -> dict[str, Any]:
+async def manage_script_capabilities(ctx: Context) -> dict[str, Any]:
     ctx.info("Processing manage_script_capabilities")
     try:
         # Keep in sync with server/Editor ManageScript implementation
@@ -570,7 +571,7 @@ def manage_script_capabilities(ctx: Context) -> dict[str, Any]:
 
 
 @mcp_for_unity_tool(description="Get SHA256 and basic metadata for a Unity C# script without returning file contents")
-def get_sha(
+async def get_sha(
     ctx: Context,
     uri: Annotated[str, "URI of the script to edit under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
 ) -> dict[str, Any]:
@@ -579,8 +580,8 @@ def get_sha(
     try:
         name, directory = _split_uri(uri)
         params = {"action": "get_sha", "name": name, "path": directory}
-        resp = send_with_unity_instance(
-            unity_connection.send_command_with_retry,
+        resp = await send_with_unity_instance(
+            unity_connection.async_send_command_with_retry,
             unity_instance,
             "manage_script",
             params,

@@ -50,6 +50,24 @@ namespace MCPForUnityTests.Editor.Tools
             TryDeleteAsset(_baseMapPath);
             TryDeleteAsset(_normalMapPath);
             TryDeleteAsset(_occlusionMapPath);
+            
+            // Clean up temp directory after each test
+            if (AssetDatabase.IsValidFolder(TempRoot))
+            {
+                AssetDatabase.DeleteAsset(TempRoot);
+            }
+            
+            // Clean up parent Temp folder if it's empty
+            if (AssetDatabase.IsValidFolder("Assets/Temp"))
+            {
+                var remainingDirs = Directory.GetDirectories("Assets/Temp");
+                var remainingFiles = Directory.GetFiles("Assets/Temp");
+                if (remainingDirs.Length == 0 && remainingFiles.Length == 0)
+                {
+                    AssetDatabase.DeleteAsset("Assets/Temp");
+                }
+            }
+            
             AssetDatabase.Refresh();
         }
 

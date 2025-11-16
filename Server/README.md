@@ -22,10 +22,28 @@ Model Context Protocol server for Unity Editor integration. Control Unity throug
 Run directly from GitHub without installation:
 
 ```bash
-uvx --from git+https://github.com/CoplayDev/unity-mcp@v7.0.0#subdirectory=Server mcp-for-unity
+# HTTP (default)
+uvx --from git+https://github.com/CoplayDev/unity-mcp@v7.0.0#subdirectory=Server \
+    mcp-for-unity --transport http --http-url http://localhost:8080
+
+# Stdio
+uvx --from git+https://github.com/CoplayDev/unity-mcp@v7.0.0#subdirectory=Server \
+    mcp-for-unity --transport stdio
 ```
 
-**MCP Client Configuration:**
+**MCP Client Configuration (HTTP):**
+
+```json
+{
+  "mcpServers": {
+    "UnityMCP": {
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
+```
+
+**MCP Client Configuration (stdio):**
 
 ```json
 {
@@ -35,8 +53,11 @@ uvx --from git+https://github.com/CoplayDev/unity-mcp@v7.0.0#subdirectory=Server
       "args": [
         "--from",
         "git+https://github.com/CoplayDev/unity-mcp@v7.0.0#subdirectory=Server",
-        "mcp-for-unity"
-      ]
+        "mcp-for-unity",
+        "--transport",
+        "stdio"
+      ],
+      "type": "stdio"
     }
   }
 }
@@ -51,13 +72,25 @@ For local development or custom installations:
 git clone https://github.com/CoplayDev/unity-mcp.git
 cd unity-mcp/Server
 
-# Run with uv
-uv run server.py
+# Run with uv (HTTP)
+uv run server.py --transport http --http-url http://localhost:8080
+
+# Run with uv (stdio)
+uv run server.py --transport stdio
 ```
 
-**MCP Client Configuration:**
+**MCP Client Configuration (HTTP):**
+```json
+{
+  "mcpServers": {
+    "UnityMCP": {
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
+```
 
-**Windows:**
+**MCP Client Configuration (stdio – Windows):**
 ```json
 {
   "mcpServers": {
@@ -67,14 +100,16 @@ uv run server.py
         "run",
         "--directory",
         "C:\\path\\to\\unity-mcp\\Server",
-        "server.py"
+        "server.py",
+        "--transport",
+        "stdio"
       ]
     }
   }
 }
 ```
 
-**macOS/Linux:**
+**MCP Client Configuration (stdio – macOS/Linux):**
 ```json
 {
   "mcpServers": {
@@ -84,7 +119,9 @@ uv run server.py
         "run",
         "--directory",
         "/path/to/unity-mcp/Server",
-        "server.py"
+        "server.py",
+        "--transport",
+        "stdio"
       ]
     }
   }
@@ -95,21 +132,10 @@ uv run server.py
 
 ```bash
 docker build -t unity-mcp-server .
-docker run unity-mcp-server
+docker run -p 8080:8080 unity-mcp-server --transport http --http-url http://0.0.0.0:8080
 ```
 
-**MCP Client Configuration:**
-
-```json
-{
-  "mcpServers": {
-    "UnityMCP": {
-      "command": "docker",
-      "args": ["run", "-i", "unity-mcp-server"]
-    }
-  }
-}
-```
+Configure your MCP client with `"url": "http://localhost:8080/mcp"`. For stdio-in-docker (rare), run the container with `--transport stdio` and use the same `command`/`args` pattern as the uv examples, wrapping it in `docker run -i ...` if needed.
 
 ---
 

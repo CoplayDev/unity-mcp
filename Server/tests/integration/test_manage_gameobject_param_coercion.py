@@ -1,18 +1,25 @@
+import pytest
+
 from .test_helpers import DummyContext
 import tools.manage_gameobject as manage_go_mod
 
 
-def test_manage_gameobject_boolean_and_tag_mapping(monkeypatch):
+@pytest.mark.asyncio
+async def test_manage_gameobject_boolean_and_tag_mapping(monkeypatch):
     captured = {}
 
-    def fake_send(cmd, params):
+    async def fake_send(cmd, params, **kwargs):
         captured["params"] = params
         return {"success": True, "data": {}}
 
-    monkeypatch.setattr(manage_go_mod, "send_command_with_retry", fake_send)
+    monkeypatch.setattr(
+        manage_go_mod,
+        "async_send_command_with_retry",
+        fake_send,
+    )
 
     # find by tag: allow tag to map to searchTerm
-    resp = manage_go_mod.manage_gameobject(
+    resp = await manage_go_mod.manage_gameobject(
         ctx=DummyContext(),
         action="find",
         search_method="by_tag",

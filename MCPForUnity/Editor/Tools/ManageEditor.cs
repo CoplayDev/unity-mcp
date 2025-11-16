@@ -10,7 +10,7 @@ namespace MCPForUnity.Editor.Tools
     /// Handles editor control actions including play mode control, tool selection,
     /// and tag/layer management. For reading editor state, use MCP resources instead.
     /// </summary>
-    [McpForUnityTool("manage_editor")]
+    [McpForUnityTool("manage_editor", AutoRegister = false)]
     public static class ManageEditor
     {
         // Constant for starting user layer index

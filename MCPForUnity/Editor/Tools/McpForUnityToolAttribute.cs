@@ -3,17 +3,43 @@ using System;
 namespace MCPForUnity.Editor.Tools
 {
     /// <summary>
-    /// Marks a class as an MCP tool handler for auto-discovery.
-    /// The class must have a public static HandleCommand(JObject) method.
+    /// Marks a class as an MCP tool handler
     /// </summary>
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
     public class McpForUnityToolAttribute : Attribute
     {
         /// <summary>
+        /// Tool name (if null, derived from class name)
+        /// </summary>
+        public string Name { get; set; }
+
+        /// <summary>
+        /// Tool description for LLM
+        /// </summary>
+        public string Description { get; set; }
+
+        /// <summary>
+        /// Whether this tool returns structured output
+        /// </summary>
+        public bool StructuredOutput { get; set; } = true;
+
+        /// <summary>
+        /// Controls whether this tool is automatically registered with FastMCP.
+        /// Defaults to true so most tools opt-in automatically. Set to false
+        /// for legacy/built-in tools that already exist server-side.
+        /// </summary>
+        public bool AutoRegister { get; set; } = true;
+
+        /// <summary>
         /// The command name used to route requests to this tool.
         /// If not specified, defaults to the PascalCase class name converted to snake_case.
+        /// Kept for backward compatibility.
         /// </summary>
-        public string CommandName { get; }
+        public string CommandName
+        {
+            get => Name;
+            set => Name = value;
+        }
 
         /// <summary>
         /// Create an MCP tool attribute with auto-generated command name.
@@ -22,16 +48,48 @@ namespace MCPForUnity.Editor.Tools
         /// </summary>
         public McpForUnityToolAttribute()
         {
-            CommandName = null; // Will be auto-generated
+            Name = null; // Will be auto-generated
         }
 
         /// <summary>
         /// Create an MCP tool attribute with explicit command name.
         /// </summary>
-        /// <param name="commandName">The command name (e.g., "manage_asset")</param>
-        public McpForUnityToolAttribute(string commandName)
+        /// <param name="name">The command name (e.g., "manage_asset")</param>
+        public McpForUnityToolAttribute(string name = null)
         {
-            CommandName = commandName;
+            Name = name;
+        }
+    }
+
+    /// <summary>
+    /// Describes a tool parameter
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = false)]
+    public class ToolParameterAttribute : Attribute
+    {
+        /// <summary>
+        /// Parameter name (if null, derived from property/field name)
+        /// </summary>
+        public string Name { get; }
+
+        /// <summary>
+        /// Parameter description for LLM
+        /// </summary>
+        public string Description { get; set; }
+
+        /// <summary>
+        /// Whether this parameter is required
+        /// </summary>
+        public bool Required { get; set; } = true;
+
+        /// <summary>
+        /// Default value (as string)
+        /// </summary>
+        public string DefaultValue { get; set; }
+
+        public ToolParameterAttribute(string description)
+        {
+            Description = description;
         }
     }
 }

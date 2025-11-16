@@ -3,14 +3,15 @@ from typing import Annotated, Any, Literal
 from fastmcp import Context
 from registry import mcp_for_unity_tool
 from telemetry import is_telemetry_enabled, record_tool_usage
-from tools import get_unity_instance_from_context, send_with_unity_instance
-from unity_connection import send_command_with_retry
+from tools import get_unity_instance_from_context
+from unity_transport import send_with_unity_instance
+from unity_connection import async_send_command_with_retry
 
 
 @mcp_for_unity_tool(
     description="Controls and queries the Unity editor's state and settings. Tip: pass booleans as true/false; if your client only sends strings, 'true'/'false' are accepted."
 )
-def manage_editor(
+async def manage_editor(
     ctx: Context,
     action: Annotated[Literal["telemetry_status", "telemetry_ping", "play", "pause", "stop", "get_state", "get_project_root", "get_windows",
                               "get_active_tool", "get_selection", "get_prefab_stage", "set_active_tool", "add_tag", "remove_tag", "get_tags", "add_layer", "remove_layer", "get_layers"], "Get and update the Unity Editor state."],
@@ -65,7 +66,7 @@ def manage_editor(
         params = {k: v for k, v in params.items() if v is not None}
 
         # Send command using centralized retry helper with instance routing
-        response = send_with_unity_instance(send_command_with_retry, unity_instance, "manage_editor", params)
+        response = await send_with_unity_instance(async_send_command_with_retry, unity_instance, "manage_editor", params)
 
         # Preserve structured failure data; unwrap success into a friendlier shape
         if isinstance(response, dict) and response.get("success"):
