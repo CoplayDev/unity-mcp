@@ -208,6 +208,31 @@ namespace MCPForUnity.Editor.Data
                 mcpType = McpTypes.Codex,
                 configStatus = "Not Configured",
             },
+            // CodeBuddy
+            new()
+            {
+                name = "CodeBuddy",
+                windowsConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".CodeBuddy",
+                    "settings",
+                    "mcp.json"
+                ),
+                macConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".CodeBuddy",
+                    "settings",
+                    "mcp.json"
+                ),
+                linuxConfigPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".CodeBuddy",
+                    "settings",
+                    "mcp.json"
+                ),
+                mcpType = McpTypes.CodeBuddy,
+                configStatus = "Not Configured",
+            },
         };
 
         // Initialize status enums after construction
