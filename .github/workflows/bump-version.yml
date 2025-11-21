@@ -70,9 +70,6 @@ jobs:
           echo "Updating Server/pyproject.toml to $NEW_VERSION"
           sed -i '0,/^version = ".*"/s//version = "'"$NEW_VERSION"'"/' "Server/pyproject.toml"
 
-          echo "Updating Server/server_version.txt to $NEW_VERSION"
-          echo "$NEW_VERSION" > "Server/server_version.txt"
-
           echo "Updating README.md version references to v$NEW_VERSION"
           sed -i 's|https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v[0-9]\+\.[0-9]\+\.[0-9]\+|https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v'"$NEW_VERSION"'|g' README.md
           sed -i 's|git+https://github.com/CoplayDev/unity-mcp@v[0-9]\+\.[0-9]\+\.[0-9]\+#subdirectory=Server|git+https://github.com/CoplayDev/unity-mcp@v'"$NEW_VERSION"'#subdirectory=Server|g' README.md
@@ -92,7 +89,7 @@ jobs:
           set -euo pipefail
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add MCPForUnity/package.json "Server/pyproject.toml" "Server/server_version.txt" README.md README-zh.md Server/README.md
+          git add MCPForUnity/package.json "Server/pyproject.toml" README.md README-zh.md Server/README.md
           if git diff --cached --quiet; then
             echo "No version changes to commit."
           else

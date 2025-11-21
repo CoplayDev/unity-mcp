@@ -19,7 +19,7 @@ from services.custom_tool_service import CustomToolService
 from transport.plugin_hub import PluginHub
 from transport.plugin_registry import PluginRegistry
 from services.resources import register_all_resources
-from core.telemetry import record_milestone, record_telemetry, MilestoneType, RecordType
+from core.telemetry import record_milestone, record_telemetry, MilestoneType, RecordType, get_package_version
 from services.tools import register_all_tools
 from transport.legacy.unity_connection import get_unity_connection_pool, UnityConnectionPool
 from transport.unity_instance_middleware import UnityInstanceMiddleware, set_unity_instance_middleware
@@ -111,11 +111,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
     # Record server startup telemetry
     start_time = time.time()
     start_clk = time.perf_counter()
-    try:
-        ver_path = Path(__file__).parent / "core" / "server_version.txt"
-        server_version = ver_path.read_text(encoding="utf-8").strip()
-    except Exception:
-        server_version = "unknown"
+    server_version = get_package_version()
     # Defer initial telemetry by 1s to avoid stdio handshake interference
     import threading
 
