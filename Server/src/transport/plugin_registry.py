@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Dict
 
 import asyncio
 
@@ -30,8 +29,8 @@ class PluginRegistry:
     """
 
     def __init__(self) -> None:
-        self._sessions: Dict[str, PluginSession] = {}
-        self._hash_to_session: Dict[str, str] = {}
+        self._sessions: dict[str, PluginSession] = {}
+        self._hash_to_session: dict[str, str] = {}
         self._lock = asyncio.Lock()
 
     async def register(
@@ -99,7 +98,7 @@ class PluginRegistry:
         async with self._lock:
             return self._hash_to_session.get(project_hash)
 
-    async def list_sessions(self) -> Dict[str, PluginSession]:
+    async def list_sessions(self) -> dict[str, PluginSession]:
         """Return a shallow copy of all known sessions."""
 
         async with self._lock:

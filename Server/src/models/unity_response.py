@@ -34,7 +34,7 @@ def normalize_unity_response(response: Any) -> Any:
         if not data:
             data = None
 
-    normalized: Dict[str, Any] = {
+    normalized: dict[str, Any] = {
         "success": success,
         "message": message,
         "error": error if not success else None,

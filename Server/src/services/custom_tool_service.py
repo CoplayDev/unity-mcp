@@ -2,7 +2,7 @@ import asyncio
 import inspect
 import logging
 import time
-from typing import Dict, List
+from typing import List
 
 from fastmcp import Context, FastMCP
 from pydantic import BaseModel, Field, ValidationError
@@ -54,8 +54,8 @@ class RegisterToolsPayload(BaseModel):
 class CustomToolService:
     def __init__(self, mcp: FastMCP):
         self._mcp = mcp
-        self._project_tools: Dict[str, Dict[str, object]] = {}
-        self._metadata: Dict[str, List[ToolDefinitionModel]] = {}
+        self._project_tools: dict[str, dict[str, object]] = {}
+        self._metadata: dict[str, List[ToolDefinitionModel]] = {}
         self._register_http_routes()
 
     # --- HTTP Routes -----------------------------------------------------
@@ -109,7 +109,7 @@ class CustomToolService:
             )
 
     # --- Public API for MCP tools ---------------------------------------
-    def list_registered_tools(self) -> Dict[str, object]:
+    def list_registered_tools(self) -> dict[str, object]:
         tools = []
         for entries in self._metadata.values():
             tools.extend(entry.model_dump() for entry in entries)
@@ -196,7 +196,7 @@ class CustomToolService:
 
         return inspect.Signature(parameters=sig_params)
 
-    def _build_input_schema(self, parameters: List[ToolParameterModel]) -> Dict[str, object]:
+    def _build_input_schema(self, parameters: List[ToolParameterModel]) -> dict[str, object]:
         schema = {"type": "object", "properties": {},
                   "additionalProperties": False}
         required = []
@@ -217,7 +217,7 @@ class CustomToolService:
         self,
         tool_name: str,
         unity_instance,
-        initial_params: Dict[str, object],
+        initial_params: dict[str, object],
         initial_response,
         poll_action: str,
     ):

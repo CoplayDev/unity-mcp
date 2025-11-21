@@ -26,8 +26,8 @@ class PluginHub(WebSocketEndpoint):
     COMMAND_TIMEOUT = 30
 
     _registry: PluginRegistry | None = None
-    _connections: Dict[str, WebSocket] = {}
-    _pending: Dict[str, asyncio.Future] = {}
+    _connections: dict[str, WebSocket] = {}
+    _pending: dict[str, asyncio.Future] = {}
     _lock: asyncio.Lock | None = None
     _loop: asyncio.AbstractEventLoop | None = None
 
@@ -90,7 +90,7 @@ class PluginHub(WebSocketEndpoint):
     # Public API
     # ------------------------------------------------------------------
     @classmethod
-    async def send_command(cls, session_id: str, command_type: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def send_command(cls, session_id: str, command_type: str, params: dict[str, Any]) -> dict[str, Any]:
         websocket = await cls._get_connection(session_id)
         command_id = str(uuid.uuid4())
         future: asyncio.Future = asyncio.get_running_loop().create_future()
@@ -122,7 +122,7 @@ class PluginHub(WebSocketEndpoint):
                 cls._pending.pop(command_id, None)
 
     @classmethod
-    async def get_sessions(cls) -> Dict[str, Any]:
+    async def get_sessions(cls) -> dict[str, Any]:
         if cls._registry is None:
             return {"sessions": {}}
         sessions = await cls._registry.list_sessions()
@@ -141,7 +141,7 @@ class PluginHub(WebSocketEndpoint):
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-    async def _handle_register(self, websocket: WebSocket, payload: Dict[str, Any]) -> None:
+    async def _handle_register(self, websocket: WebSocket, payload: dict[str, Any]) -> None:
         cls = type(self)
         registry = cls._registry
         lock = cls._lock
@@ -170,7 +170,7 @@ class PluginHub(WebSocketEndpoint):
             cls._connections[session.session_id] = websocket
         logger.info("Plugin registered: %s (%s)", project_name, project_hash)
 
-    async def _handle_command_result(self, payload: Dict[str, Any]) -> None:
+    async def _handle_command_result(self, payload: dict[str, Any]) -> None:
         cls = type(self)
         lock = cls._lock
         if lock is None:
@@ -187,7 +187,7 @@ class PluginHub(WebSocketEndpoint):
         if future and not future.done():
             future.set_result(result)
 
-    async def _handle_pong(self, payload: Dict[str, Any]) -> None:
+    async def _handle_pong(self, payload: dict[str, Any]) -> None:
         cls = type(self)
         registry = cls._registry
         if registry is None:
@@ -305,8 +305,8 @@ class PluginHub(WebSocketEndpoint):
         cls,
         unity_instance: str | None,
         command_type: str,
-        params: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
         session_id = await cls._resolve_session_id(unity_instance)
         return await cls.send_command(session_id, command_type, params)
 
@@ -336,14 +336,14 @@ class PluginHub(WebSocketEndpoint):
         cls,
         unity_instance: str | None,
         command_type: str,
-        params: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
         return cls._run_coroutine_sync(
             cls.send_command_for_instance(unity_instance, command_type, params)
         )
 
     @classmethod
-    def list_sessions_sync(cls) -> Dict[str, Any]:
+    def list_sessions_sync(cls) -> dict[str, Any]:
         return cls._run_coroutine_sync(cls.get_sessions())
 
 
@@ -351,6 +351,6 @@ def send_command_to_plugin(
     *,
     unity_instance: str | None,
     command_type: str,
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+) -> dict[str, Any]:
     return PluginHub.send_command_blocking(unity_instance, command_type, params)

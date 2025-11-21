@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Dict, List
+from typing import List
 
 from core.config import config
 from models.models import UnityInstanceInfo
@@ -19,7 +19,7 @@ class StdioPortRegistry:
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
-        self._instances: Dict[str, UnityInstanceInfo] = {}
+        self._instances: dict[str, UnityInstanceInfo] = {}
         self._last_refresh: float = 0.0
 
     def _refresh_locked(self) -> None:

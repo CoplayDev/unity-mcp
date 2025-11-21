@@ -82,7 +82,7 @@ custom_tool_service: CustomToolService | None = None
 
 
 @asynccontextmanager
-async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
+async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     """Handle server startup and shutdown."""
     global _unity_connection_pool
     logger.info("MCP for Unity Server starting up")

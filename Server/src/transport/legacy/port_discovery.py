@@ -227,7 +227,7 @@ class PortDiscovery:
         Returns:
             List of UnityInstanceInfo objects for all discovered instances
         """
-        instances_by_port: Dict[int, tuple[UnityInstanceInfo, datetime]] = {}
+        instances_by_port: dict[int, tuple[UnityInstanceInfo, datetime]] = {}
         base = PortDiscovery.get_registry_dir()
 
         # Scan all status files

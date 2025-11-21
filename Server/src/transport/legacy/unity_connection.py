@@ -231,7 +231,7 @@ class UnityConnection:
             logger.error(f"Error during receive: {str(e)}")
             raise
 
-    def send_command(self, command_type: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
+    def send_command(self, command_type: str, params: dict[str, Any] = None) -> dict[str, Any]:
         """Send a command with retry/backoff and port rediscovery. Pings only when requested."""
         # Defensive guard: catch empty/placeholder invocations early
         if not command_type:
@@ -436,8 +436,8 @@ class UnityConnectionPool:
     """Manages connections to multiple Unity Editor instances"""
 
     def __init__(self):
-        self._connections: Dict[str, UnityConnection] = {}
-        self._known_instances: Dict[str, UnityInstanceInfo] = {}
+        self._connections: dict[str, UnityConnection] = {}
+        self._known_instances: dict[str, UnityInstanceInfo] = {}
         self._last_full_scan: float = 0
         self._scan_interval: float = 5.0  # Cache for 5 seconds
         self._pool_lock = threading.Lock()
@@ -716,7 +716,7 @@ def _is_reloading_response(resp: object) -> bool:
 
 def send_command_with_retry(
     command_type: str,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     *,
     instance_id: str | None = None,
     max_retries: int | None = None,
