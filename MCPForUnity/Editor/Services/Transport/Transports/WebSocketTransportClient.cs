@@ -42,6 +42,9 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
         private Uri _endpointUri;
         private string _sessionId;
+        private string _projectHash;
+        private string _projectName;
+        private string _unityVersion;
         private TimeSpan _keepAliveInterval = DefaultKeepAliveInterval;
         private TimeSpan _socketKeepAliveInterval = DefaultKeepAliveInterval;
         private volatile bool _isConnected;
@@ -54,11 +57,16 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
         public async Task<bool> StartAsync()
         {
+            // Capture identity values on the main thread before any async context switching
+            _projectName = ProjectIdentityUtility.GetProjectName();
+            _projectHash = ProjectIdentityUtility.GetProjectHash();
+            _unityVersion = Application.unityVersion;
+
             await StopAsync();
 
             _lifecycleCts = new CancellationTokenSource();
             _endpointUri = BuildWebSocketUri(HttpEndpointUtility.GetBaseUrl());
-            _sessionId = ProjectIdentityUtility.GetOrCreateSessionId();
+            _sessionId = null;
 
             if (!await EstablishConnectionAsync(_lifecycleCts.Token))
             {
@@ -66,7 +74,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 return false;
             }
 
-            _state = TransportState.Connected(TransportDisplayName, sessionId: _sessionId, details: _endpointUri.ToString());
+            // State is connected but session ID might be pending until 'registered' message
+            _state = TransportState.Connected(TransportDisplayName, sessionId: "pending", details: _endpointUri.ToString());
             _isConnected = true;
             return true;
         }
@@ -281,6 +290,9 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 case "welcome":
                     ApplyWelcome(payload);
                     break;
+                case "registered":
+                    HandleRegistered(payload);
+                    break;
                 case "execute":
                     await HandleExecuteAsync(payload, token).ConfigureAwait(false);
                     break;
@@ -308,6 +320,18 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 int sourceSeconds = keepAliveSeconds ?? serverTimeoutSeconds.Value;
                 int safeSeconds = Math.Max(5, Math.Min(serverTimeoutSeconds.Value, sourceSeconds));
                 _socketKeepAliveInterval = TimeSpan.FromSeconds(safeSeconds);
+            }
+        }
+
+        private void HandleRegistered(JObject payload)
+        {
+            string newSessionId = payload.Value<string>("session_id");
+            if (!string.IsNullOrEmpty(newSessionId))
+            {
+                _sessionId = newSessionId;
+                ProjectIdentityUtility.SetSessionId(_sessionId);
+                _state = TransportState.Connected(TransportDisplayName, sessionId: _sessionId, details: _endpointUri.ToString());
+                McpLog.Info($"[WebSocket] Registered with session ID: {_sessionId}");
             }
         }
 
@@ -409,10 +433,10 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             var registerPayload = new JObject
             {
                 ["type"] = "register",
-                ["session_id"] = _sessionId,
-                ["project_name"] = ProjectIdentityUtility.GetProjectName(),
-                ["project_hash"] = ProjectIdentityUtility.GetProjectHash(),
-                ["unity_version"] = Application.unityVersion
+                // session_id is now server-authoritative; omitted here or sent as null
+                ["project_name"] = _projectName,
+                ["project_hash"] = _projectHash,
+                ["unity_version"] = _unityVersion
             };
 
             await SendJsonAsync(registerPayload, token).ConfigureAwait(false);

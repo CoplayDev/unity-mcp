@@ -94,7 +94,7 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     sb.Append(b.ToString("x2"));
                 }
-                return sb.ToString(0, Math.Min(8, sb.Length));
+                return sb.ToString(0, Math.Min(16, sb.Length));
             }
             catch
             {
@@ -120,6 +120,32 @@ namespace MCPForUnity.Editor.Helpers
             {
                 return "Unknown";
             }
+        }
+
+        /// <summary>
+        /// Persists a server-assigned session id.
+        /// Safe to call from background threads.
+        /// </summary>
+        public static void SetSessionId(string sessionId)
+        {
+            if (string.IsNullOrEmpty(sessionId))
+            {
+                return;
+            }
+
+            EditorApplication.delayCall += () =>
+            {
+                try
+                {
+                    string projectHash = GetProjectHash();
+                    string projectSpecificKey = $"{SessionPrefKey}_{projectHash}";
+                    EditorPrefs.SetString(projectSpecificKey, sessionId);
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Warn($"Failed to persist session ID: {ex.Message}");
+                }
+            };
         }
 
         /// <summary>

@@ -149,15 +149,21 @@ class PluginHub(WebSocketEndpoint):
             await websocket.close(code=1011)
             raise RuntimeError("PluginHub not configured")
 
-        session_id = payload.get("session_id")
         project_name = payload.get("project_name", "Unknown Project")
         project_hash = payload.get("project_hash")
         unity_version = payload.get("unity_version", "Unknown")
 
-        if not session_id or not project_hash:
+        if not project_hash:
             await websocket.close(code=4400)
             raise ValueError(
-                "Plugin registration missing session_id or project_hash")
+                "Plugin registration missing project_hash")
+
+        session_id = str(uuid.uuid4())
+        # Inform the plugin of its assigned session ID
+        await websocket.send_json({
+            "type": "registered",
+            "session_id": session_id
+        })
 
         session = await registry.register(session_id, project_name, project_hash, unity_version)
         async with lock:
