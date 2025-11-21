@@ -99,8 +99,6 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
         http_port = int(os.environ.get("UNITY_MCP_HTTP_PORT", "8080"))
         logger.info(
             f"HTTP tool registry will be available on http://{http_host}:{http_port}")
-    else:
-        logger.info("HTTP server disabled - using stdio transport")
 
     global _plugin_registry
     if _plugin_registry is None:

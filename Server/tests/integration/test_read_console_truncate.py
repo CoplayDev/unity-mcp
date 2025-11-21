@@ -17,9 +17,9 @@ class DummyMCP:
 def setup_tools():
     mcp = DummyMCP()
     # Import the tools module to trigger decorator registration
-    import tools.read_console
+    import services.tools.read_console
     # Get the registered tools from the registry
-    from registry import get_registered_tools
+    from services.registry import get_registered_tools
     registered_tools = get_registered_tools()
     # Add all console-related tools to our dummy MCP
     for tool_info in registered_tools:
@@ -44,9 +44,9 @@ async def test_read_console_full_default(monkeypatch):
         }
 
     # Patch the send_command_with_retry function in the tools module
-    import tools.read_console
+    import services.tools.read_console
     monkeypatch.setattr(
-        tools.read_console,
+        services.tools.read_console,
         "async_send_command_with_retry",
         fake_send,
     )
@@ -75,9 +75,9 @@ async def test_read_console_truncated(monkeypatch):
         }
 
     # Patch the send_command_with_retry function in the tools module
-    import tools.read_console
+    import services.tools.read_console
     monkeypatch.setattr(
-        tools.read_console,
+        services.tools.read_console,
         "async_send_command_with_retry",
         fake_send,
     )

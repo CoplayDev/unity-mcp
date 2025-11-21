@@ -3,7 +3,7 @@ import threading
 import time
 import queue as q
 
-import telemetry
+import core.telemetry as telemetry
 
 
 def test_telemetry_queue_backpressure_and_single_worker(monkeypatch, caplog):

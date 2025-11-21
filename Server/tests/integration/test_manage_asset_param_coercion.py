@@ -1,7 +1,7 @@
 import asyncio
 
 from .test_helpers import DummyContext
-import tools.manage_asset as manage_asset_mod
+import services.tools.manage_asset as manage_asset_mod
 
 
 def test_manage_asset_pagination_coercion(monkeypatch):

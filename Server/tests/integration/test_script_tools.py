@@ -18,9 +18,9 @@ class DummyMCP:
 def setup_manage_script():
     mcp = DummyMCP()
     # Import the tools module to trigger decorator registration
-    import tools.manage_script
+    import services.tools.manage_script
     # Get the registered tools from the registry
-    from registry import get_registered_tools
+    from services.registry import get_registered_tools
     tools = get_registered_tools()
     # Add all script-related tools to our dummy MCP
     for tool_info in tools:
@@ -33,9 +33,9 @@ def setup_manage_script():
 def setup_manage_asset():
     mcp = DummyMCP()
     # Import the tools module to trigger decorator registration
-    import tools.manage_asset
+    import services.tools.manage_asset
     # Get the registered tools from the registry
-    from registry import get_registered_tools
+    from services.registry import get_registered_tools
     tools = get_registered_tools()
     # Add all asset-related tools to our dummy MCP
     for tool_info in tools:
@@ -57,9 +57,9 @@ async def test_apply_text_edits_long_file(monkeypatch):
         return {"success": True}
 
     # Patch the send_command_with_retry function at the module level where it's imported
-    import unity_connection
+    import transport.legacy.unity_connection
     monkeypatch.setattr(
-        unity_connection,
+        transport.legacy.unity_connection,
         "async_send_command_with_retry",
         fake_send,
     )
@@ -86,9 +86,9 @@ async def test_sequential_edits_use_precondition(monkeypatch):
         return {"success": True, "sha256": f"hash{len(calls)}"}
 
     # Patch the send_command_with_retry function at the module level where it's imported
-    import unity_connection
+    import transport.legacy.unity_connection
     monkeypatch.setattr(
-        unity_connection,
+        transport.legacy.unity_connection,
         "async_send_command_with_retry",
         fake_send,
     )
@@ -121,9 +121,9 @@ async def test_apply_text_edits_forwards_options(monkeypatch):
         return {"success": True}
 
     # Patch the send_command_with_retry function at the module level where it's imported
-    import unity_connection
+    import transport.legacy.unity_connection
     monkeypatch.setattr(
-        unity_connection,
+        transport.legacy.unity_connection,
         "async_send_command_with_retry",
         fake_send,
     )
@@ -150,9 +150,9 @@ async def test_apply_text_edits_defaults_atomic_for_multi_span(monkeypatch):
         return {"success": True}
 
     # Patch the send_command_with_retry function at the module level where it's imported
-    import unity_connection
+    import transport.legacy.unity_connection
     monkeypatch.setattr(
-        unity_connection,
+        transport.legacy.unity_connection,
         "async_send_command_with_retry",
         fake_send,
     )
@@ -185,7 +185,7 @@ async def test_manage_asset_prefab_modify_request(monkeypatch):
         return {"success": True}
 
     # Patch the async function in the tools module
-    import tools.manage_asset as tools_manage_asset
+    import services.tools.manage_asset as tools_manage_asset
     # Patch both at the module and at the function closure location
     monkeypatch.setattr(tools_manage_asset,
                         "async_send_command_with_retry", fake_async)

@@ -222,10 +222,19 @@ class PluginHub(WebSocketEndpoint):
         retry_ms = float(getattr(config, "reload_retry_ms", 250))
         sleep_seconds = max(0.05, retry_ms / 1000.0)
 
+        # Allow callers to provide either just the hash or Name@hash
+        target_hash: Optional[str] = None
+        if unity_instance:
+            if "@" in unity_instance:
+                _, _, suffix = unity_instance.rpartition("@")
+                target_hash = suffix or None
+            else:
+                target_hash = unity_instance
+
         async def _try_once() -> Optional[str]:
             # Prefer a specific Unity instance if one was requested
-            if unity_instance:
-                session_id = await cls._registry.get_session_id_by_hash(unity_instance)
+            if target_hash:
+                session_id = await cls._registry.get_session_id_by_hash(target_hash)
                 if session_id:
                     return session_id
 

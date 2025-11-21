@@ -14,8 +14,9 @@ import pytest
 from unittest.mock import AsyncMock, Mock, MagicMock, patch
 from fastmcp import Context
 
-from unity_instance_middleware import UnityInstanceMiddleware
-from tools import get_unity_instance_from_context
+from transport.unity_instance_middleware import UnityInstanceMiddleware
+from services.tools import get_unity_instance_from_context
+from services.tools.set_active_instance import set_active_instance as set_active_instance_tool
 
 
 class TestInstanceRoutingBasics:
@@ -166,6 +167,131 @@ class TestInstanceRoutingToolCategories:
         """All tool categories must respect set_active_instance."""
         # This is a specification test - individual tools need separate implementation tests
         pass  # Placeholder for category-level test
+
+
+class TestInstanceRoutingHTTP:
+    """Validate HTTP-specific routing helpers."""
+
+    @pytest.mark.asyncio
+    async def test_set_active_instance_http_transport(self, monkeypatch):
+        """set_active_instance should enumerate PluginHub sessions under HTTP."""
+        middleware = UnityInstanceMiddleware()
+        ctx = Mock(spec=Context)
+        ctx.session_id = "http-session"
+        state_storage = {}
+        ctx.set_state = Mock(side_effect=lambda k, v: state_storage.__setitem__(k, v))
+        ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
+
+        monkeypatch.setenv("UNITY_MCP_TRANSPORT", "http")
+        fake_sessions = {
+            "sessions": {
+                "sess-1": {
+                    "project": "Ramble",
+                    "hash": "8e29de57",
+                    "unity_version": "6000.2.10f1",
+                    "connected_at": "2025-11-21T03:30:03.682353+00:00",
+                }
+            }
+        }
+        monkeypatch.setattr(
+            "services.tools.set_active_instance.PluginHub.get_sessions",
+            AsyncMock(return_value=fake_sessions),
+        )
+        monkeypatch.setattr(
+            "services.tools.set_active_instance.get_unity_instance_middleware",
+            lambda: middleware,
+        )
+
+        result = await set_active_instance_tool(ctx, "Ramble@8e29de57")
+
+        assert result["success"] is True
+        assert middleware.get_active_instance(ctx) == "Ramble@8e29de57"
+
+    @pytest.mark.asyncio
+    async def test_set_active_instance_http_hash_only(self, monkeypatch):
+        """Hash-only selection should resolve via PluginHub registry."""
+        middleware = UnityInstanceMiddleware()
+        ctx = Mock(spec=Context)
+        ctx.session_id = "http-session-2"
+        state_storage = {}
+        ctx.set_state = Mock(side_effect=lambda k, v: state_storage.__setitem__(k, v))
+        ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
+
+        monkeypatch.setenv("UNITY_MCP_TRANSPORT", "http")
+        fake_sessions = {
+            "sessions": {
+                "sess-99": {
+                    "project": "UnityMCPTests",
+                    "hash": "cc8756d4",
+                    "unity_version": "2021.3.45f2",
+                    "connected_at": "2025-11-21T03:37:01.501022+00:00",
+                }
+            }
+        }
+        monkeypatch.setattr(
+            "services.tools.set_active_instance.PluginHub.get_sessions",
+            AsyncMock(return_value=fake_sessions),
+        )
+        monkeypatch.setattr(
+            "services.tools.set_active_instance.get_unity_instance_middleware",
+            lambda: middleware,
+        )
+
+        result = await set_active_instance_tool(ctx, "cc8756d4")
+
+        assert result["success"] is True
+        assert middleware.get_active_instance(ctx) == "UnityMCPTests@cc8756d4"
+
+    @pytest.mark.asyncio
+    async def test_set_active_instance_http_hash_missing(self, monkeypatch):
+        """Unknown hashes should surface a clear error."""
+        middleware = UnityInstanceMiddleware()
+        ctx = Mock(spec=Context)
+        ctx.session_id = "http-session-3"
+
+        monkeypatch.setenv("UNITY_MCP_TRANSPORT", "http")
+        fake_sessions = {"sessions": {}}
+        monkeypatch.setattr(
+            "services.tools.set_active_instance.PluginHub.get_sessions",
+            AsyncMock(return_value=fake_sessions),
+        )
+        monkeypatch.setattr(
+            "services.tools.set_active_instance.get_unity_instance_middleware",
+            lambda: middleware,
+        )
+
+        result = await set_active_instance_tool(ctx, "deadbeef")
+
+        assert result["success"] is False
+        assert "No Unity instances" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_set_active_instance_http_hash_ambiguous(self, monkeypatch):
+        """Ambiguous hash prefixes should mirror stdio error messaging."""
+        middleware = UnityInstanceMiddleware()
+        ctx = Mock(spec=Context)
+        ctx.session_id = "http-session-4"
+
+        monkeypatch.setenv("UNITY_MCP_TRANSPORT", "http")
+        fake_sessions = {
+            "sessions": {
+                "sess-a": {"project": "ProjA", "hash": "abc12345"},
+                "sess-b": {"project": "ProjB", "hash": "abc98765"},
+            }
+        }
+        monkeypatch.setattr(
+            "services.tools.set_active_instance.PluginHub.get_sessions",
+            AsyncMock(return_value=fake_sessions),
+        )
+        monkeypatch.setattr(
+            "services.tools.set_active_instance.get_unity_instance_middleware",
+            lambda: middleware,
+        )
+
+        result = await set_active_instance_tool(ctx, "abc")
+
+        assert result["success"] is False
+        assert "matches multiple instances" in result["error"]
 
 
 class TestInstanceRoutingRaceConditions:

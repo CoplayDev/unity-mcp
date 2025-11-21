@@ -7,7 +7,7 @@ from .test_helpers import DummyContext
 async def test_manage_gameobject_uses_session_state(monkeypatch):
     """Test that tools use session-stored active instance via middleware"""
 
-    from unity_instance_middleware import UnityInstanceMiddleware, set_unity_instance_middleware
+    from transport.unity_instance_middleware import UnityInstanceMiddleware, set_unity_instance_middleware
 
     # Arrange: Initialize middleware and set a session-scoped active instance
     middleware = UnityInstanceMiddleware()
@@ -29,9 +29,9 @@ async def test_manage_gameobject_uses_session_state(monkeypatch):
         captured["instance_id"] = kwargs.get("instance_id")
         return {"success": True, "data": {}}
 
-    import tools.manage_gameobject as mg
+    import services.tools.manage_gameobject as mg
     monkeypatch.setattr(
-        "tools.manage_gameobject.async_send_command_with_retry",
+        "services.tools.manage_gameobject.async_send_command_with_retry",
         fake_send,
     )
 
@@ -53,7 +53,7 @@ async def test_manage_gameobject_uses_session_state(monkeypatch):
 async def test_manage_gameobject_without_active_instance(monkeypatch):
     """Test that tools work with no active instance set (uses None/default)"""
 
-    from unity_instance_middleware import UnityInstanceMiddleware, set_unity_instance_middleware
+    from transport.unity_instance_middleware import UnityInstanceMiddleware, set_unity_instance_middleware
 
     # Arrange: Initialize middleware with no active instance set
     middleware = UnityInstanceMiddleware()
@@ -69,9 +69,9 @@ async def test_manage_gameobject_without_active_instance(monkeypatch):
         captured["instance_id"] = kwargs.get("instance_id")
         return {"success": True, "data": {}}
 
-    import tools.manage_gameobject as mg
+    import services.tools.manage_gameobject as mg
     monkeypatch.setattr(
-        "tools.manage_gameobject.async_send_command_with_retry",
+        "services.tools.manage_gameobject.async_send_command_with_retry",
         fake_send,
     )
 

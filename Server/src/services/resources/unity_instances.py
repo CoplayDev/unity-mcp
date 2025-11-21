@@ -6,6 +6,12 @@ from typing import Any
 from fastmcp import Context
 from services.registry import mcp_for_unity_resource
 from transport.legacy.unity_connection import get_unity_connection_pool
+from transport.plugin_hub import PluginHub
+from transport.unity_transport import _is_http_transport as _core_is_http_transport
+
+
+def _is_http_transport() -> bool:
+    return _core_is_http_transport()
 
 
 @mcp_for_unity_resource(
@@ -20,12 +26,13 @@ async def unity_instances(ctx: Context) -> dict[str, Any]:
     Returns information about each instance including:
     - id: Unique identifier (ProjectName@hash)
     - name: Project name
-    - path: Full project path
+    - path: Full project path (stdio only)
     - hash: 8-character hash of project path
-    - port: TCP port number
-    - status: Current status (running, reloading, etc.)
-    - last_heartbeat: Last heartbeat timestamp
+    - port: TCP port number (stdio only)
+    - status: Current status (running, reloading, etc.) (stdio only)
+    - last_heartbeat: Last heartbeat timestamp (stdio only)
     - unity_version: Unity version (if available)
+    - connected_at: Connection timestamp (HTTP only)
 
     Returns:
         Dictionary containing list of instances and metadata
@@ -33,29 +40,81 @@ async def unity_instances(ctx: Context) -> dict[str, Any]:
     await ctx.info("Listing Unity instances")
 
     try:
-        pool = get_unity_connection_pool()
-        instances = pool.discover_all_instances(force_refresh=False)
+        if _is_http_transport():
+            # HTTP/WebSocket transport: query PluginHub
+            sessions_data = await PluginHub.get_sessions()
+            sessions = sessions_data.get("sessions", {})
 
-        # Check for duplicate project names
-        name_counts = {}
-        for inst in instances:
-            name_counts[inst.name] = name_counts.get(inst.name, 0) + 1
+            instances = []
+            for session_id, session_info in sessions.items():
+                project = session_info.get(
+                    "project") or session_info.get("project_name")
+                project_hash = session_info.get("hash")
 
-        duplicates = [name for name, count in name_counts.items() if count > 1]
+                if not project or not project_hash:
+                    raise ValueError(
+                        "PluginHub session missing required 'project' or 'hash' fields."
+                    )
 
-        result = {
-            "success": True,
-            "instance_count": len(instances),
-            "instances": [inst.to_dict() for inst in instances],
-        }
+                instances.append({
+                    "id": f"{project}@{project_hash}",
+                    "name": project,
+                    "hash": project_hash,
+                    "unity_version": session_info.get("unity_version"),
+                    "connected_at": session_info.get("connected_at"),
+                    "session_id": session_id,
+                })
 
-        if duplicates:
-            result["warning"] = (
-                f"Multiple instances found with duplicate project names: {duplicates}. "
-                f"Use full format (e.g., 'ProjectName@hash') to specify which instance."
-            )
+            # Check for duplicate project names
+            name_counts = {}
+            for inst in instances:
+                name_counts[inst["name"]] = name_counts.get(
+                    inst["name"], 0) + 1
 
-        return result
+            duplicates = [name for name,
+                          count in name_counts.items() if count > 1]
+
+            result = {
+                "success": True,
+                "transport": "http",
+                "instance_count": len(instances),
+                "instances": instances,
+            }
+
+            if duplicates:
+                result["warning"] = (
+                    f"Multiple instances found with duplicate project names: {duplicates}. "
+                    f"Use full format (e.g., 'ProjectName@hash') to specify which instance."
+                )
+
+            return result
+        else:
+            # Stdio/TCP transport: query connection pool
+            pool = get_unity_connection_pool()
+            instances = pool.discover_all_instances(force_refresh=False)
+
+            # Check for duplicate project names
+            name_counts = {}
+            for inst in instances:
+                name_counts[inst.name] = name_counts.get(inst.name, 0) + 1
+
+            duplicates = [name for name,
+                          count in name_counts.items() if count > 1]
+
+            result = {
+                "success": True,
+                "transport": "stdio",
+                "instance_count": len(instances),
+                "instances": [inst.to_dict() for inst in instances],
+            }
+
+            if duplicates:
+                result["warning"] = (
+                    f"Multiple instances found with duplicate project names: {duplicates}. "
+                    f"Use full format (e.g., 'ProjectName@hash') to specify which instance."
+                )
+
+            return result
 
     except Exception as e:
         await ctx.error(f"Error listing Unity instances: {e}")

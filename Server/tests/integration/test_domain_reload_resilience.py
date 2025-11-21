@@ -16,8 +16,8 @@ from .test_helpers import DummyContext
 async def test_plugin_hub_waits_for_reconnection_during_reload():
     """Test that PluginHub._resolve_session_id waits for plugin reconnection."""
     # Import after conftest stubs are set up
-    from plugin_hub import PluginHub
-    from plugin_registry import PluginRegistry, PluginSession
+    from transport.plugin_hub import PluginHub
+    from transport.plugin_registry import PluginRegistry, PluginSession
     
     # Create a mock registry
     mock_registry = AsyncMock(spec=PluginRegistry)
@@ -71,8 +71,8 @@ async def test_plugin_hub_waits_for_reconnection_during_reload():
 @pytest.mark.asyncio
 async def test_plugin_hub_fails_after_timeout():
     """Test that PluginHub._resolve_session_id eventually times out if plugin never reconnects."""
-    from plugin_hub import PluginHub
-    from plugin_registry import PluginRegistry
+    from transport.plugin_hub import PluginHub
+    from transport.plugin_registry import PluginRegistry
     
     # Create a mock registry that never returns sessions
     mock_registry = AsyncMock(spec=PluginRegistry)
@@ -89,7 +89,7 @@ async def test_plugin_hub_fails_after_timeout():
     PluginHub._lock = asyncio.Lock()
     
     # Temporarily override config for a short timeout
-    with patch('plugin_hub.config') as mock_config:
+    with patch('transport.plugin_hub.config') as mock_config:
         mock_config.reload_max_retries = 3  # Only 3 retries
         mock_config.reload_retry_ms = 10    # 10ms between retries
         
@@ -114,7 +114,7 @@ async def test_read_console_during_simulated_reload(monkeypatch):
     3. The plugin disconnects and reconnects during those calls
     """
     # Setup tools
-    from tools.read_console import read_console
+    from services.tools.read_console import read_console
     
     call_count = [0]
     
@@ -128,9 +128,9 @@ async def test_read_console_during_simulated_reload(monkeypatch):
         }
     
     # Patch the async_send_command_with_retry directly
-    import tools.read_console
+    import services.tools.read_console
     monkeypatch.setattr(
-        tools.read_console,
+        services.tools.read_console,
         "async_send_command_with_retry",
         fake_send_command
     )
@@ -161,8 +161,8 @@ async def test_read_console_during_simulated_reload(monkeypatch):
 @pytest.mark.asyncio
 async def test_plugin_hub_respects_unity_instance_preference():
     """Test that _resolve_session_id prefers a specific Unity instance if requested."""
-    from plugin_hub import PluginHub
-    from plugin_registry import PluginRegistry, PluginSession
+    from transport.plugin_hub import PluginHub
+    from transport.plugin_registry import PluginRegistry, PluginSession
     
     # Create a mock registry with two sessions
     mock_registry = AsyncMock(spec=PluginRegistry)
@@ -222,4 +222,3 @@ async def test_plugin_hub_respects_unity_instance_preference():
         # Clean up: restore original PluginHub state
         PluginHub._registry = original_registry
         PluginHub._lock = original_lock
-

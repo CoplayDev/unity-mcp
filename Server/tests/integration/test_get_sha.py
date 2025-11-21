@@ -17,9 +17,9 @@ class DummyMCP:
 def setup_tools():
     mcp = DummyMCP()
     # Import the tools module to trigger decorator registration
-    import tools.manage_script
+    import services.tools.manage_script
     # Get the registered tools from the registry
-    from registry import get_registered_tools
+    from services.registry import get_registered_tools
     tools = get_registered_tools()
     # Add all script-related tools to our dummy MCP
     for tool_info in tools:
@@ -42,9 +42,9 @@ async def test_get_sha_param_shape_and_routing(monkeypatch):
         return {"success": True, "data": {"sha256": "abc", "lengthBytes": 1, "lastModifiedUtc": "2020-01-01T00:00:00Z", "uri": "unity://path/Assets/Scripts/A.cs", "path": "Assets/Scripts/A.cs"}}
 
     # Patch the send_command_with_retry function at the module level where it's imported
-    import unity_connection
+    import transport.legacy.unity_connection
     monkeypatch.setattr(
-        unity_connection,
+        transport.legacy.unity_connection,
         "async_send_command_with_retry",
         fake_send,
     )

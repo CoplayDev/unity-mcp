@@ -8,7 +8,7 @@ from fastmcp import FastMCP, Context
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
-import unity_connection
+import transport.legacy.unity_connection
 
 
 def _split_uri(uri: str) -> tuple[str, str]:
@@ -107,7 +107,7 @@ async def apply_text_edits(
     if _needs_normalization(edits):
         # Read file to support index->line/col conversion when needed
         read_resp = await send_with_unity_instance(
-            unity_connection.async_send_command_with_retry,
+            transport.legacy.unity_connection.async_send_command_with_retry,
             unity_instance,
             "manage_script",
             {
@@ -313,7 +313,7 @@ async def apply_text_edits(
     }
     params = {k: v for k, v in params.items() if v is not None}
     resp = await send_with_unity_instance(
-        unity_connection.async_send_command_with_retry,
+        transport.legacy.unity_connection.async_send_command_with_retry,
         unity_instance,
         "manage_script",
         params,
@@ -349,7 +349,7 @@ async def apply_text_edits(
                         st = _latest_status()
                         if st and st.get("reloading"):
                             return
-                        await unity_connection.async_send_command_with_retry(
+                        await transport.legacy.unity_connection.async_send_command_with_retry(
                             "execute_menu_item",
                             {"menuPath": "MCP/Flip Reload Sentinel"},
                             max_retries=0,
@@ -402,7 +402,7 @@ async def create_script(
         params["contentsEncoded"] = True
     params = {k: v for k, v in params.items() if v is not None}
     resp = await send_with_unity_instance(
-        unity_connection.async_send_command_with_retry,
+        transport.legacy.unity_connection.async_send_command_with_retry,
         unity_instance,
         "manage_script",
         params,
@@ -423,7 +423,7 @@ async def delete_script(
         return {"success": False, "code": "path_outside_assets", "message": "URI must resolve under 'Assets/'."}
     params = {"action": "delete", "name": name, "path": directory}
     resp = await send_with_unity_instance(
-        unity_connection.async_send_command_with_retry,
+        transport.legacy.unity_connection.async_send_command_with_retry,
         unity_instance,
         "manage_script",
         params,
@@ -454,7 +454,7 @@ async def validate_script(
         "level": level,
     }
     resp = await send_with_unity_instance(
-        unity_connection.async_send_command_with_retry,
+        transport.legacy.unity_connection.async_send_command_with_retry,
         unity_instance,
         "manage_script",
         params,
@@ -507,7 +507,7 @@ async def manage_script(
         params = {k: v for k, v in params.items() if v is not None}
 
         response = await send_with_unity_instance(
-            unity_connection.async_send_command_with_retry,
+            transport.legacy.unity_connection.async_send_command_with_retry,
             unity_instance,
             "manage_script",
             params,
@@ -581,7 +581,7 @@ async def get_sha(
         name, directory = _split_uri(uri)
         params = {"action": "get_sha", "name": name, "path": directory}
         resp = await send_with_unity_instance(
-            unity_connection.async_send_command_with_retry,
+            transport.legacy.unity_connection.async_send_command_with_retry,
             unity_instance,
             "manage_script",
             params,

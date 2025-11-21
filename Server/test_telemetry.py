@@ -17,7 +17,7 @@ def test_telemetry_basic():
     # Avoid stdout noise in tests
 
     try:
-        from telemetry import (
+        from core.telemetry import (
             get_telemetry, record_telemetry, record_milestone,
             RecordType, MilestoneType, is_telemetry_enabled
         )
@@ -73,7 +73,7 @@ def test_telemetry_disabled():
     import telemetry
     importlib.reload(telemetry)
 
-    from telemetry import is_telemetry_enabled, record_telemetry, RecordType
+    core.telemetry import is_telemetry_enabled, record_telemetry, RecordType
 
     _ = is_telemetry_enabled()
 
@@ -95,7 +95,7 @@ def test_data_storage():
     # Silent for tests
 
     try:
-        from telemetry import get_telemetry
+        core.telemetry import get_telemetry
 
         collector = get_telemetry()
         data_dir = collector.config.data_dir

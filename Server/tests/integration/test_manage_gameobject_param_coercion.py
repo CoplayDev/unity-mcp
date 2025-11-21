@@ -1,7 +1,7 @@
 import pytest
 
 from .test_helpers import DummyContext
-import tools.manage_gameobject as manage_go_mod
+import services.tools.manage_gameobject as manage_go_mod
 
 
 @pytest.mark.asyncio

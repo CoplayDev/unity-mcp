@@ -16,6 +16,7 @@ namespace MCPForUnity.Editor.Helpers
     internal static class ProjectIdentityUtility
     {
         private const string SessionPrefKey = EditorPrefKeys.WebSocketSessionId;
+        private static bool _legacyKeyCleared;
         private static string _cachedProjectName = "Unknown";
         private static string _cachedProjectHash = "default";
         private static bool _cacheScheduled;
@@ -69,6 +70,7 @@ namespace MCPForUnity.Editor.Helpers
         /// </summary>
         public static string GetProjectHash()
         {
+            EnsureIdentityCache();
             return _cachedProjectHash;
         }
 
@@ -122,16 +124,21 @@ namespace MCPForUnity.Editor.Helpers
 
         /// <summary>
         /// Retrieves a persistent session id for the plugin, creating one if absent.
+        /// The session id is unique per project (scoped by project hash).
         /// </summary>
         public static string GetOrCreateSessionId()
         {
             try
             {
-                string sessionId = EditorPrefs.GetString(SessionPrefKey, string.Empty);
+                // Make the session ID project-specific by including the project hash in the key
+                string projectHash = GetProjectHash();
+                string projectSpecificKey = $"{SessionPrefKey}_{projectHash}";
+
+                string sessionId = EditorPrefs.GetString(projectSpecificKey, string.Empty);
                 if (string.IsNullOrEmpty(sessionId))
                 {
                     sessionId = Guid.NewGuid().ToString();
-                    EditorPrefs.SetString(SessionPrefKey, sessionId);
+                    EditorPrefs.SetString(projectSpecificKey, sessionId);
                 }
                 return sessionId;
             }
@@ -149,14 +156,68 @@ namespace MCPForUnity.Editor.Helpers
         {
             try
             {
-                if (EditorPrefs.HasKey(SessionPrefKey))
+                // Clear the project-specific session ID
+                string projectHash = GetProjectHash();
+                string projectSpecificKey = $"{SessionPrefKey}_{projectHash}";
+
+                if (EditorPrefs.HasKey(projectSpecificKey))
+                {
+                    EditorPrefs.DeleteKey(projectSpecificKey);
+                }
+
+                if (!_legacyKeyCleared && EditorPrefs.HasKey(SessionPrefKey))
                 {
                     EditorPrefs.DeleteKey(SessionPrefKey);
+                    _legacyKeyCleared = true;
                 }
             }
             catch
             {
                 // Ignore
+            }
+        }
+
+        private static void EnsureIdentityCache()
+        {
+            // When Application.dataPath is unavailable (e.g., batch mode) we fall back to
+            // hashing the current working directory/Assets path so each project still
+            // derives a deterministic, per-project session id rather than sharing "default".
+            if (!string.IsNullOrEmpty(_cachedProjectHash) && _cachedProjectHash != "default")
+            {
+                return;
+            }
+
+            UpdateIdentityCache();
+
+            if (!string.IsNullOrEmpty(_cachedProjectHash) && _cachedProjectHash != "default")
+            {
+                return;
+            }
+
+            string fallback = TryComputeFallbackProjectHash();
+            if (!string.IsNullOrEmpty(fallback))
+            {
+                _cachedProjectHash = fallback;
+            }
+        }
+
+        private static string TryComputeFallbackProjectHash()
+        {
+            try
+            {
+                string workingDirectory = Directory.GetCurrentDirectory();
+                if (string.IsNullOrEmpty(workingDirectory))
+                {
+                    return "default";
+                }
+
+                // Normalise trailing separators so hashes remain stable
+                workingDirectory = workingDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                return ComputeProjectHash(Path.Combine(workingDirectory, "Assets"));
+            }
+            catch
+            {
+                return "default";
             }
         }
     }

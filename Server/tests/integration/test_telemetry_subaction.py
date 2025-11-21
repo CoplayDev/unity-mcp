@@ -8,9 +8,9 @@ def _get_decorator_module():
     import types
     # Tests can now import directly from parent package
     # Remove any previously stubbed module to force real import
-    sys.modules.pop("telemetry_decorator", None)
+    sys.modules.pop("core.telemetry_decorator", None)
     # Preload a minimal telemetry stub to satisfy telemetry_decorator imports
-    tel = types.ModuleType("telemetry")
+    tel = types.ModuleType("core.telemetry")
     class _MilestoneType:
         FIRST_TOOL_USAGE = "first_tool_usage"
         FIRST_SCRIPT_CREATION = "first_script_creation"
@@ -22,10 +22,10 @@ def _get_decorator_module():
     tel.record_tool_usage = _noop
     tel.record_milestone = _noop
     tel.get_package_version = lambda: "0.0.0"
-    sys.modules.setdefault("telemetry", tel)
-    mod = importlib.import_module("telemetry_decorator")
+    sys.modules.setdefault("core.telemetry", tel)
+    mod = importlib.import_module("core.telemetry_decorator")
     # Drop stub to avoid bleed-through into other tests
-    sys.modules.pop("telemetry", None)
+    sys.modules.pop("core.telemetry", None)
     # Ensure attributes exist for monkeypatch targets even if not exported
     if not hasattr(mod, "record_tool_usage"):
         def _noop_record_tool_usage(*a, **k):

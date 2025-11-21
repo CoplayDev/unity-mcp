@@ -18,9 +18,9 @@ class DummyMCP:
 def resource_tools():
     mcp = DummyMCP()
     # Import the tools module to trigger decorator registration
-    import tools.resource_tools
+    import services.tools.resource_tools
     # Get the registered tools from the registry
-    from registry import get_registered_tools
+    from services.registry import get_registered_tools
     tools = get_registered_tools()
     # Add all resource-related tools to our dummy MCP
     for tool_info in tools:

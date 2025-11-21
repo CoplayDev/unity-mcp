@@ -6,7 +6,7 @@ import re
 
 import pytest
 
-import tools.script_apply_edits as script_apply_edits_module
+import services.tools.script_apply_edits as script_apply_edits_module
 
 
 def test_improved_anchor_matching():

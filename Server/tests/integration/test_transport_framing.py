@@ -1,4 +1,4 @@
-from unity_connection import UnityConnection
+from transport.legacy.unity_connection import UnityConnection
 import sys
 import json
 import struct
