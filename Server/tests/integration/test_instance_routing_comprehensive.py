@@ -17,6 +17,7 @@ from fastmcp import Context
 from transport.unity_instance_middleware import UnityInstanceMiddleware
 from services.tools import get_unity_instance_from_context
 from services.tools.set_active_instance import set_active_instance as set_active_instance_tool
+from transport.models import SessionList, SessionDetails
 
 
 class TestInstanceRoutingBasics:
@@ -188,16 +189,16 @@ class TestInstanceRoutingHTTP:
         ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
 
         monkeypatch.setenv("UNITY_MCP_TRANSPORT", "http")
-        fake_sessions = {
-            "sessions": {
-                "sess-1": {
-                    "project": "Ramble",
-                    "hash": "8e29de57",
-                    "unity_version": "6000.2.10f1",
-                    "connected_at": "2025-11-21T03:30:03.682353+00:00",
-                }
+        fake_sessions = SessionList(
+            sessions={
+                "sess-1": SessionDetails(
+                    project="Ramble",
+                    hash="8e29de57",
+                    unity_version="6000.2.10f1",
+                    connected_at="2025-11-21T03:30:03.682353+00:00",
+                )
             }
-        }
+        )
         monkeypatch.setattr(
             "services.tools.set_active_instance.PluginHub.get_sessions",
             AsyncMock(return_value=fake_sessions),
@@ -224,16 +225,16 @@ class TestInstanceRoutingHTTP:
         ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
 
         monkeypatch.setenv("UNITY_MCP_TRANSPORT", "http")
-        fake_sessions = {
-            "sessions": {
-                "sess-99": {
-                    "project": "UnityMCPTests",
-                    "hash": "cc8756d4",
-                    "unity_version": "2021.3.45f2",
-                    "connected_at": "2025-11-21T03:37:01.501022+00:00",
-                }
+        fake_sessions = SessionList(
+            sessions={
+                "sess-99": SessionDetails(
+                    project="UnityMCPTests",
+                    hash="cc8756d4",
+                    unity_version="2021.3.45f2",
+                    connected_at="2025-11-21T03:37:01.501022+00:00",
+                )
             }
-        }
+        )
         monkeypatch.setattr(
             "services.tools.set_active_instance.PluginHub.get_sessions",
             AsyncMock(return_value=fake_sessions),
@@ -256,7 +257,7 @@ class TestInstanceRoutingHTTP:
         ctx.session_id = "http-session-3"
 
         monkeypatch.setenv("UNITY_MCP_TRANSPORT", "http")
-        fake_sessions = {"sessions": {}}
+        fake_sessions = SessionList(sessions={})
         monkeypatch.setattr(
             "services.tools.set_active_instance.PluginHub.get_sessions",
             AsyncMock(return_value=fake_sessions),
@@ -279,12 +280,12 @@ class TestInstanceRoutingHTTP:
         ctx.session_id = "http-session-4"
 
         monkeypatch.setenv("UNITY_MCP_TRANSPORT", "http")
-        fake_sessions = {
-            "sessions": {
-                "sess-a": {"project": "ProjA", "hash": "abc12345"},
-                "sess-b": {"project": "ProjB", "hash": "abc98765"},
+        fake_sessions = SessionList(
+            sessions={
+                "sess-a": SessionDetails(project="ProjA", hash="abc12345", unity_version="2022", connected_at="now"),
+                "sess-b": SessionDetails(project="ProjB", hash="abc98765", unity_version="2022", connected_at="now"),
             }
-        }
+        )
         monkeypatch.setattr(
             "services.tools.set_active_instance.PluginHub.get_sessions",
             AsyncMock(return_value=fake_sessions),

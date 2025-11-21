@@ -19,13 +19,11 @@ async def set_active_instance(
     # Discover running instances based on transport
     if _is_http_transport():
         sessions_data = await PluginHub.get_sessions()
-        sessions = sessions_data.get("sessions", {}) if isinstance(
-            sessions_data, dict) else {}
+        sessions = sessions_data.sessions
         instances = []
         for session_id, session in sessions.items():
-            project = session.get("project") or session.get(
-                "project_name") or "Unknown"
-            hash_value = session.get("hash")
+            project = session.project or "Unknown"
+            hash_value = session.hash
             if not hash_value:
                 continue
             inst_id = f"{project}@{hash_value}"

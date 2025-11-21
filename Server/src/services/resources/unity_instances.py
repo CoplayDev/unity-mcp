@@ -39,13 +39,12 @@ async def unity_instances(ctx: Context) -> dict[str, Any]:
         if _is_http_transport():
             # HTTP/WebSocket transport: query PluginHub
             sessions_data = await PluginHub.get_sessions()
-            sessions = sessions_data.get("sessions", {})
+            sessions = sessions_data.sessions
 
             instances = []
             for session_id, session_info in sessions.items():
-                project = session_info.get(
-                    "project") or session_info.get("project_name")
-                project_hash = session_info.get("hash")
+                project = session_info.project
+                project_hash = session_info.hash
 
                 if not project or not project_hash:
                     raise ValueError(
@@ -56,8 +55,8 @@ async def unity_instances(ctx: Context) -> dict[str, Any]:
                     "id": f"{project}@{project_hash}",
                     "name": project,
                     "hash": project_hash,
-                    "unity_version": session_info.get("unity_version"),
-                    "connected_at": session_info.get("connected_at"),
+                    "unity_version": session_info.unity_version,
+                    "connected_at": session_info.connected_at,
                     "session_id": session_id,
                 })
 

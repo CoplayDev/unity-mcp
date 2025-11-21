@@ -13,6 +13,16 @@ from starlette.websockets import WebSocket
 
 from core.config import config
 from transport.plugin_registry import PluginRegistry
+from transport.models import (
+    WelcomeMessage,
+    RegisteredMessage,
+    ExecuteCommandMessage,
+    RegisterMessage,
+    PongMessage,
+    CommandResultMessage,
+    SessionList,
+    SessionDetails,
+)
 
 logger = logging.getLogger("mcp-for-unity-server")
 
@@ -48,13 +58,11 @@ class PluginHub(WebSocketEndpoint):
 
     async def on_connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
-        await websocket.send_json(
-            {
-                "type": "welcome",
-                "serverTimeout": self.SERVER_TIMEOUT,
-                "keepAliveInterval": self.KEEP_ALIVE_INTERVAL,
-            }
+        msg = WelcomeMessage(
+            serverTimeout=self.SERVER_TIMEOUT,
+            keepAliveInterval=self.KEEP_ALIVE_INTERVAL,
         )
+        await websocket.send_json(msg.model_dump())
 
     async def on_receive(self, websocket: WebSocket, data: Any) -> None:
         if not isinstance(data, dict):
@@ -62,14 +70,17 @@ class PluginHub(WebSocketEndpoint):
             return
 
         message_type = data.get("type")
-        if message_type == "register":
-            await self._handle_register(websocket, data)
-        elif message_type == "pong":
-            await self._handle_pong(data)
-        elif message_type == "command_result":
-            await self._handle_command_result(data)
-        else:
-            logger.debug("Ignoring plugin message: %s", data)
+        try:
+            if message_type == "register":
+                await self._handle_register(websocket, RegisterMessage(**data))
+            elif message_type == "pong":
+                await self._handle_pong(PongMessage(**data))
+            elif message_type == "command_result":
+                await self._handle_command_result(CommandResultMessage(**data))
+            else:
+                logger.debug("Ignoring plugin message: %s", data)
+        except Exception as e:
+            logger.error("Error handling message type %s: %s", message_type, e)
 
     async def on_disconnect(self, websocket: WebSocket, close_code: int) -> None:
         cls = type(self)
@@ -106,15 +117,13 @@ class PluginHub(WebSocketEndpoint):
             cls._pending[command_id] = future
 
         try:
-            await websocket.send_json(
-                {
-                    "type": "execute",
-                    "id": command_id,
-                    "name": command_type,
-                    "params": params,
-                    "timeout": cls.COMMAND_TIMEOUT,
-                }
+            msg = ExecuteCommandMessage(
+                id=command_id,
+                name=command_type,
+                params=params,
+                timeout=cls.COMMAND_TIMEOUT,
             )
+            await websocket.send_json(msg.model_dump())
             result = await asyncio.wait_for(future, timeout=cls.COMMAND_TIMEOUT)
             return result
         finally:
@@ -122,26 +131,26 @@ class PluginHub(WebSocketEndpoint):
                 cls._pending.pop(command_id, None)
 
     @classmethod
-    async def get_sessions(cls) -> dict[str, Any]:
+    async def get_sessions(cls) -> SessionList:
         if cls._registry is None:
-            return {"sessions": {}}
+            return SessionList(sessions={})
         sessions = await cls._registry.list_sessions()
-        return {
-            "sessions": {
-                session_id: {
-                    "project": session.project_name,
-                    "hash": session.project_hash,
-                    "unity_version": session.unity_version,
-                    "connected_at": session.connected_at.isoformat(),
-                }
+        return SessionList(
+            sessions={
+                session_id: SessionDetails(
+                    project=session.project_name,
+                    hash=session.project_hash,
+                    unity_version=session.unity_version,
+                    connected_at=session.connected_at.isoformat(),
+                )
                 for session_id, session in sessions.items()
             }
-        }
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-    async def _handle_register(self, websocket: WebSocket, payload: dict[str, Any]) -> None:
+    async def _handle_register(self, websocket: WebSocket, payload: RegisterMessage) -> None:
         cls = type(self)
         registry = cls._registry
         lock = cls._lock
@@ -149,9 +158,9 @@ class PluginHub(WebSocketEndpoint):
             await websocket.close(code=1011)
             raise RuntimeError("PluginHub not configured")
 
-        project_name = payload.get("project_name", "Unknown Project")
-        project_hash = payload.get("project_hash")
-        unity_version = payload.get("unity_version", "Unknown")
+        project_name = payload.project_name
+        project_hash = payload.project_hash
+        unity_version = payload.unity_version
 
         if not project_hash:
             await websocket.close(code=4400)
@@ -160,23 +169,21 @@ class PluginHub(WebSocketEndpoint):
 
         session_id = str(uuid.uuid4())
         # Inform the plugin of its assigned session ID
-        await websocket.send_json({
-            "type": "registered",
-            "session_id": session_id
-        })
+        response = RegisteredMessage(session_id=session_id)
+        await websocket.send_json(response.model_dump())
 
         session = await registry.register(session_id, project_name, project_hash, unity_version)
         async with lock:
             cls._connections[session.session_id] = websocket
         logger.info("Plugin registered: %s (%s)", project_name, project_hash)
 
-    async def _handle_command_result(self, payload: dict[str, Any]) -> None:
+    async def _handle_command_result(self, payload: CommandResultMessage) -> None:
         cls = type(self)
         lock = cls._lock
         if lock is None:
             return
-        command_id = payload.get("id")
-        result = payload.get("result", {})
+        command_id = payload.id
+        result = payload.result
 
         if not command_id:
             logger.warning("Command result missing id: %s", payload)
@@ -187,12 +194,12 @@ class PluginHub(WebSocketEndpoint):
         if future and not future.done():
             future.set_result(result)
 
-    async def _handle_pong(self, payload: dict[str, Any]) -> None:
+    async def _handle_pong(self, payload: PongMessage) -> None:
         cls = type(self)
         registry = cls._registry
         if registry is None:
             return
-        session_id = payload.get("session_id")
+        session_id = payload.session_id
         if session_id:
             await registry.touch(session_id)
 
@@ -343,7 +350,7 @@ class PluginHub(WebSocketEndpoint):
         )
 
     @classmethod
-    def list_sessions_sync(cls) -> dict[str, Any]:
+    def list_sessions_sync(cls) -> SessionList:
         return cls._run_coroutine_sync(cls.get_sessions())
 
 
