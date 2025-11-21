@@ -17,9 +17,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 import socket
-from typing import List, Dict
 
-from core.config import config
 from models.models import UnityInstanceInfo
 
 logger = logging.getLogger("mcp-for-unity-server")
@@ -41,7 +39,7 @@ class PortDiscovery:
         return Path.home() / ".unity-mcp"
 
     @staticmethod
-    def list_candidate_files() -> List[Path]:
+    def list_candidate_files() -> list[Path]:
         """Return candidate registry files, newest first.
         Includes hashed per-project files and the legacy file (if present).
         """
@@ -220,7 +218,7 @@ class PortDiscovery:
             return "Unknown"
 
     @staticmethod
-    def discover_all_unity_instances() -> List[UnityInstanceInfo]:
+    def discover_all_unity_instances() -> list[UnityInstanceInfo]:
         """
         Discover all running Unity Editor instances by scanning status files.
 

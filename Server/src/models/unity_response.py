@@ -1,7 +1,7 @@
 """Utilities for normalizing Unity transport responses."""
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 
 def normalize_unity_response(response: Any) -> Any:

@@ -6,7 +6,7 @@ import asyncio
 import logging
 import time
 import uuid
-from typing import Any, Dict
+from typing import Any
 
 from starlette.endpoints import WebSocketEndpoint
 from starlette.websockets import WebSocket

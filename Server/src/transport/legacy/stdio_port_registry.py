@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import List
 
 from core.config import config
 from models.models import UnityInstanceInfo
@@ -29,7 +28,7 @@ class StdioPortRegistry:
         logger.debug(
             "STDIO port registry refreshed with %d instance(s)", len(instances))
 
-    def get_instances(self, *, force_refresh: bool = False) -> List[UnityInstanceInfo]:
+    def get_instances(self, *, force_refresh: bool = False) -> list[UnityInstanceInfo]:
         ttl = getattr(config, "port_registry_ttl", 5.0)
         with self._lock:
             now = time.time()

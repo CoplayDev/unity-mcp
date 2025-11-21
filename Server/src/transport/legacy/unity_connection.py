@@ -12,7 +12,7 @@ import socket
 import struct
 import threading
 import time
-from typing import Any, Dict, List
+from typing import Any
 
 from models.models import MCPResponse, UnityInstanceInfo
 from transport.legacy.stdio_port_registry import stdio_port_registry
@@ -450,7 +450,7 @@ class UnityConnectionPool:
             logger.info(
                 f"Default Unity instance set from environment: {env_default}")
 
-    def discover_all_instances(self, force_refresh: bool = False) -> List[UnityInstanceInfo]:
+    def discover_all_instances(self, force_refresh: bool = False) -> list[UnityInstanceInfo]:
         """
         Discover all running Unity Editor instances.
 
@@ -481,7 +481,7 @@ class UnityConnectionPool:
             f"Found {len(instances)} Unity instances: {[inst.id for inst in instances]}")
         return instances
 
-    def _resolve_instance_id(self, instance_identifier: str | None, instances: List[UnityInstanceInfo]) -> UnityInstanceInfo:
+    def _resolve_instance_id(self, instance_identifier: str | None, instances: list[UnityInstanceInfo]) -> UnityInstanceInfo:
         """
         Resolve an instance identifier to a specific Unity instance.
 

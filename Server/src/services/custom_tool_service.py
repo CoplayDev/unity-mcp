@@ -2,7 +2,6 @@ import asyncio
 import inspect
 import logging
 import time
-from typing import List
 
 from fastmcp import Context, FastMCP
 from pydantic import BaseModel, Field, ValidationError
@@ -43,19 +42,19 @@ class ToolDefinitionModel(BaseModel):
     structured_output: bool | None = True
     requires_polling: bool | None = False
     poll_action: str | None = "status"
-    parameters: List[ToolParameterModel] = Field(default_factory=list)
+    parameters: list[ToolParameterModel] = Field(default_factory=list)
 
 
 class RegisterToolsPayload(BaseModel):
     project_id: str
-    tools: List[ToolDefinitionModel]
+    tools: list[ToolDefinitionModel]
 
 
 class CustomToolService:
     def __init__(self, mcp: FastMCP):
         self._mcp = mcp
         self._project_tools: dict[str, dict[str, object]] = {}
-        self._metadata: dict[str, List[ToolDefinitionModel]] = {}
+        self._metadata: dict[str, list[ToolDefinitionModel]] = {}
         self._register_http_routes()
 
     # --- HTTP Routes -----------------------------------------------------
@@ -115,7 +114,7 @@ class CustomToolService:
             tools.extend(entry.model_dump() for entry in entries)
         return {"success": True, "tools": tools, "count": len(tools)}
 
-    def unregister_project(self, project_id: str) -> List[str]:
+    def unregister_project(self, project_id: str) -> list[str]:
         removed = []
         entries = self._project_tools.pop(project_id, {})
         for name, tool in entries.items():
@@ -175,7 +174,7 @@ class CustomToolService:
         tool.parameters = self._build_input_schema(definition.parameters)
         return tool
 
-    def _build_signature(self, parameters: List[ToolParameterModel]) -> inspect.Signature:
+    def _build_signature(self, parameters: list[ToolParameterModel]) -> inspect.Signature:
         sig_params = [
             inspect.Parameter(
                 "ctx",
@@ -196,7 +195,7 @@ class CustomToolService:
 
         return inspect.Signature(parameters=sig_params)
 
-    def _build_input_schema(self, parameters: List[ToolParameterModel]) -> dict[str, object]:
+    def _build_input_schema(self, parameters: list[ToolParameterModel]) -> dict[str, object]:
         schema = {"type": "object", "properties": {},
                   "additionalProperties": False}
         required = []
