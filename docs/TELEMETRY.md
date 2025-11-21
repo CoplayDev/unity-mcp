@@ -105,12 +105,6 @@ Files created:
 
 ## 🛠️ For Developers
 
-### Testing Telemetry
-```bash
-cd Server
-python test_telemetry.py
-```
-
 ### Custom Telemetry Events
 ```python
 core.telemetry import record_telemetry, RecordType
