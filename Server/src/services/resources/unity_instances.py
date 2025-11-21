@@ -7,11 +7,7 @@ from fastmcp import Context
 from services.registry import mcp_for_unity_resource
 from transport.legacy.unity_connection import get_unity_connection_pool
 from transport.plugin_hub import PluginHub
-from transport.unity_transport import _is_http_transport as _core_is_http_transport
-
-
-def _is_http_transport() -> bool:
-    return _core_is_http_transport()
+from transport.unity_transport import _is_http_transport
 
 
 @mcp_for_unity_resource(

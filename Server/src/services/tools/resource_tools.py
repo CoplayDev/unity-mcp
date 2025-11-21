@@ -86,10 +86,9 @@ async def _resolve_project_root(ctx: Context, override: str | None) -> Path:
         cur = cur.parent
     # 5) Search downwards (shallow) from repo root for first folder with Assets + ProjectSettings
     try:
-        import os as _os
         root = Path.cwd().resolve()
         max_depth = 3
-        for dirpath, dirnames, _ in _os.walk(root):
+        for dirpath, dirnames, _ in os.walk(root):
             rel = Path(dirpath).resolve()
             try:
                 depth = len(rel.relative_to(root).parts)
@@ -118,11 +117,10 @@ def _resolve_safe_path_from_uri(uri: str, project: Path) -> Path | None:
         raw = unquote(parsed.path or "")
         # On Windows, urlparse('file:///C:/x') -> path='/C:/x'. Strip the leading slash for drive letters.
         try:
-            import os as _os
-            if _os.name == "nt" and raw.startswith("/") and re.match(r"^/[A-Za-z]:/", raw):
+            if os.name == "nt" and raw.startswith("/") and re.match(r"^/[A-Za-z]:/", raw):
                 raw = raw[1:]
             # UNC paths: file://server/share -> netloc='server', path='/share'. Treat as \\\\server/share
-            if _os.name == "nt" and parsed.netloc:
+            if os.name == "nt" and parsed.netloc:
                 raw = f"//{parsed.netloc}{raw}"
         except Exception:
             pass

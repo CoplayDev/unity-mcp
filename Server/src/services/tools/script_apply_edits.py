@@ -787,7 +787,6 @@ async def script_apply_edits(
                 return line, col
 
             at_edits: list[dict[str, Any]] = []
-            import re as _re
             for e in edits or []:
                 op = (e.get("op") or e.get("operation") or e.get(
                     "type") or e.get("mode") or "").strip().lower()

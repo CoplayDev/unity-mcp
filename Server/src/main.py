@@ -3,6 +3,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 import os
+import threading
 import time
 from typing import AsyncIterator, Any
 from urllib.parse import urlparse
@@ -110,7 +111,6 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     start_clk = time.perf_counter()
     server_version = get_package_version()
     # Defer initial telemetry by 1s to avoid stdio handshake interference
-    import threading
 
     def _emit_startup():
         try:
@@ -145,8 +145,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
                         "Connected to default Unity instance on startup")
 
                     # Record successful Unity connection (deferred)
-                    import threading as _t
-                    _t.Timer(1.0, lambda: record_telemetry(
+                    threading.Timer(1.0, lambda: record_telemetry(
                         RecordType.UNITY_CONNECTION,
                         {
                             "status": "connected",
@@ -164,9 +163,8 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
         logger.warning("Could not connect to Unity on startup: %s", e)
 
         # Record connection failure (deferred)
-        import threading as _t
         _err_msg = str(e)[:200]
-        _t.Timer(1.0, lambda: record_telemetry(
+        threading.Timer(1.0, lambda: record_telemetry(
             RecordType.UNITY_CONNECTION,
             {
                 "status": "failed",
@@ -177,9 +175,8 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     except Exception as e:
         logger.warning(
             "Unexpected error connecting to Unity on startup: %s", e)
-        import threading as _t
         _err_msg = str(e)[:200]
-        _t.Timer(1.0, lambda: record_telemetry(
+        threading.Timer(1.0, lambda: record_telemetry(
             RecordType.UNITY_CONNECTION,
             {
                 "status": "failed",

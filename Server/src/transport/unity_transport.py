@@ -24,11 +24,9 @@ def with_unity_instance(
     kwarg_name: str = "unity_instance",
 ):
     def _decorate(fn: Callable[..., T]):
-        import asyncio as _asyncio
-
         from src.services.tools import get_unity_instance_from_context
 
-        is_coro = _asyncio.iscoroutinefunction(fn)
+        is_coro = asyncio.iscoroutinefunction(fn)
 
         def _compose_message(ctx: Context, a: tuple, k: dict, inst: str | None) -> str | None:
             if log is None:
