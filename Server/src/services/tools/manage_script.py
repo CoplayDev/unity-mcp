@@ -89,7 +89,7 @@ async def apply_text_edits(
                        "Optional options, used to pass additional options to the script editor"] | None = None,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
-    ctx.info(
+    await ctx.info(
         f"Processing apply_text_edits: {uri} (unity_instance={unity_instance or 'default'})")
     name, directory = _split_uri(uri)
 
@@ -376,7 +376,7 @@ async def create_script(
     namespace: Annotated[str, "Namespace for the script"] | None = None,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
-    ctx.info(
+    await ctx.info(
         f"Processing create_script: {path} (unity_instance={unity_instance or 'default'})")
     name = os.path.splitext(os.path.basename(path))[0]
     directory = os.path.dirname(path)
@@ -419,7 +419,7 @@ async def delete_script(
 ) -> dict[str, Any]:
     """Delete a C# script by URI."""
     unity_instance = get_unity_instance_from_context(ctx)
-    ctx.info(
+    await ctx.info(
         f"Processing delete_script: {uri} (unity_instance={unity_instance or 'default'})")
     name, directory = _split_uri(uri)
     if not directory or directory.split("/")[0].lower() != "assets":
@@ -444,7 +444,7 @@ async def validate_script(
                                    "Include full diagnostics and summary"] = False,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
-    ctx.info(
+    await ctx.info(
         f"Processing validate_script: {uri} (unity_instance={unity_instance or 'default'})")
     name, directory = _split_uri(uri)
     if not directory or directory.split("/")[0].lower() != "assets":
@@ -488,7 +488,7 @@ async def manage_script(
     namespace: Annotated[str, "Namespace for the script"] | None = None,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
-    ctx.info(
+    await ctx.info(
         f"Processing manage_script: {action} (unity_instance={unity_instance or 'default'})")
     try:
         # Prepare parameters for Unity
@@ -552,7 +552,7 @@ async def manage_script(
         - guards: header/using guard enabled flag"""
 ))
 async def manage_script_capabilities(ctx: Context) -> dict[str, Any]:
-    ctx.info("Processing manage_script_capabilities")
+    await ctx.info("Processing manage_script_capabilities")
     try:
         # Keep in sync with server/Editor ManageScript implementation
         ops = [
@@ -581,7 +581,7 @@ async def get_sha(
     uri: Annotated[str, "URI of the script to edit under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
-    ctx.info(
+    await ctx.info(
         f"Processing get_sha: {uri} (unity_instance={unity_instance or 'default'})")
     try:
         name, directory = _split_uri(uri)

@@ -124,7 +124,7 @@ async def manage_gameobject(
     if isinstance(component_properties, str):
         try:
             component_properties = json.loads(component_properties)
-            ctx.info(
+            await ctx.info(
                 "manage_gameobject: coerced component_properties from JSON string to dict")
         except json.JSONDecodeError as e:
             return {"success": False, "message": f"Invalid JSON in component_properties: {e}"}

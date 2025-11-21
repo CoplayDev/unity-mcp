@@ -47,26 +47,18 @@ def with_unity_instance(
                 msg = _compose_message(ctx, args, kwargs, inst)
                 if msg:
                     try:
-                        result = ctx.info(msg)
-                        if inspect.isawaitable(result):
-                            await result
+                        await ctx.info(msg)
                     except Exception:
                         pass
                 kwargs.setdefault(kwarg_name, inst)
                 return await fn(ctx, *args, **kwargs)
         else:
-            def _wrapper(ctx: Context, *args, **kwargs):
+            async def _wrapper(ctx: Context, *args, **kwargs):
                 inst = get_unity_instance_from_context(ctx)
                 msg = _compose_message(ctx, args, kwargs, inst)
                 if msg:
                     try:
-                        result = ctx.info(msg)
-                        if inspect.isawaitable(result):
-                            try:
-                                loop = asyncio.get_running_loop()
-                                loop.create_task(result)
-                            except RuntimeError:
-                                pass
+                        await ctx.info(msg)
                     except Exception:
                         pass
                 kwargs.setdefault(kwarg_name, inst)

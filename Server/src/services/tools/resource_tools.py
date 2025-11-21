@@ -148,7 +148,7 @@ async def list_resources(
     project_root: Annotated[str, "Project path"] | None = None,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
-    ctx.info(
+    await ctx.info(
         f"Processing list_resources: {pattern} (unity_instance={unity_instance or 'default'})")
     try:
         project = await _resolve_project_root(ctx, project_root)
@@ -210,7 +210,7 @@ async def read_resource(
     request: Annotated[str, "The request ID"] | None = None,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
-    ctx.info(
+    await ctx.info(
         f"Processing read_resource: {uri} (unity_instance={unity_instance or 'default'})")
     try:
         # Serve the canonical spec directly when requested (allow bare or with scheme)
@@ -368,7 +368,7 @@ async def find_in_file(
                            "Cap results to avoid huge payloads"] = 200,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
-    ctx.info(
+    await ctx.info(
         f"Processing find_in_file: {uri} (unity_instance={unity_instance or 'default'})")
     try:
         project = await _resolve_project_root(ctx, project_root)
