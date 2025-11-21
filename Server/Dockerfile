@@ -26,4 +26,6 @@ RUN uv sync --frozen --no-dev
 
 EXPOSE 8080
 
-CMD ["uv", "run", "server.py", "--transport", "http", "--http-host", "0.0.0.0", "--http-port", "8080"]
+ENV PYTHONPATH=/app/Server/src
+
+CMD ["uv", "run", "python", "src/main.py", "--transport", "http", "--http-host", "0.0.0.0", "--http-port", "8080"]

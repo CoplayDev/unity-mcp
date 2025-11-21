@@ -8,4 +8,6 @@ services:
     ports:
       - "8080:8080"
     restart: unless-stopped
-    command: ["uv", "run", "server.py", "--transport", "http", "--http-host", "0.0.0.0", "--http-port", "8080"]
+    environment:
+      - PYTHONPATH=/app/Server/src
+    command: ["uv", "run", "python", "src/main.py", "--transport", "http", "--http-host", "0.0.0.0", "--http-port", "8080"]
