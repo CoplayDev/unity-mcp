@@ -19,7 +19,6 @@ import json
 import pathlib
 import subprocess
 import sys
-from typing import Optional
 
 PKG_NAME = "com.coplaydev.unity-mcp"
 BRIDGE_SUBPATH = "MCPForUnity"
@@ -46,7 +45,7 @@ def normalize_origin_to_https(url: str) -> str:
     return url
 
 
-def detect_repo_root(explicit: Optional[str]) -> pathlib.Path:
+def detect_repo_root(explicit: str | None) -> pathlib.Path:
     if explicit:
         return pathlib.Path(explicit).resolve()
     # Prefer the git toplevel from the script's directory
@@ -67,7 +66,7 @@ def detect_origin(repo: pathlib.Path) -> str:
     return normalize_origin_to_https(url)
 
 
-def find_manifest(explicit: Optional[str]) -> pathlib.Path:
+def find_manifest(explicit: str | None) -> pathlib.Path:
     if explicit:
         return pathlib.Path(explicit).resolve()
     # Walk up from CWD looking for Packages/manifest.json

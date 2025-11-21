@@ -5,7 +5,6 @@ This middleware intercepts all tool calls and injects the active Unity instance
 into the request-scoped state, allowing tools to access it via ctx.get_state("unity_instance").
 """
 from threading import RLock
-from typing import Optional
 
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 
@@ -65,7 +64,7 @@ class UnityInstanceMiddleware(Middleware):
         with self._lock:
             self._active_by_key[key] = instance_id
 
-    def get_active_instance(self, ctx) -> Optional[str]:
+    def get_active_instance(self, ctx) -> str | None:
         """Retrieve the active instance for this session."""
         key = self._get_session_key(ctx)
         with self._lock:
@@ -83,7 +82,7 @@ class UnityInstanceMiddleware(Middleware):
 
         active_instance = self.get_active_instance(ctx)
         if active_instance:
-            session_id: Optional[str] = None
+            session_id: str | None = None
             if PluginHub.is_configured():
                 try:
                     session_id = await PluginHub._resolve_session_id(active_instance)

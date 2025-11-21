@@ -6,7 +6,7 @@ import asyncio
 import logging
 import time
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from starlette.endpoints import WebSocketEndpoint
 from starlette.websockets import WebSocket
@@ -29,13 +29,13 @@ class PluginHub(WebSocketEndpoint):
     _connections: Dict[str, WebSocket] = {}
     _pending: Dict[str, asyncio.Future] = {}
     _lock: asyncio.Lock | None = None
-    _loop: Optional[asyncio.AbstractEventLoop] = None
+    _loop: asyncio.AbstractEventLoop | None = None
 
     @classmethod
     def configure(
         cls,
         registry: PluginRegistry,
-        loop: Optional[asyncio.AbstractEventLoop] = None,
+        loop: asyncio.AbstractEventLoop | None = None,
     ) -> None:
         cls._registry = registry
         cls._loop = loop or asyncio.get_running_loop()
@@ -211,7 +211,7 @@ class PluginHub(WebSocketEndpoint):
     # Session resolution helpers
     # ------------------------------------------------------------------
     @classmethod
-    async def _resolve_session_id(cls, unity_instance: Optional[str]) -> str:
+    async def _resolve_session_id(cls, unity_instance: str | None) -> str:
         """Resolve a project hash (Unity instance id) to an active plugin session.
 
         During Unity domain reloads the plugin's WebSocket session is torn down
@@ -229,7 +229,7 @@ class PluginHub(WebSocketEndpoint):
         sleep_seconds = max(0.05, retry_ms / 1000.0)
 
         # Allow callers to provide either just the hash or Name@hash
-        target_hash: Optional[str] = None
+        target_hash: str | None = None
         if unity_instance:
             if "@" in unity_instance:
                 _, _, suffix = unity_instance.rpartition("@")
@@ -303,7 +303,7 @@ class PluginHub(WebSocketEndpoint):
     @classmethod
     async def send_command_for_instance(
         cls,
-        unity_instance: Optional[str],
+        unity_instance: str | None,
         command_type: str,
         params: Dict[str, Any],
     ) -> Dict[str, Any]:
@@ -334,7 +334,7 @@ class PluginHub(WebSocketEndpoint):
     @classmethod
     def send_command_blocking(
         cls,
-        unity_instance: Optional[str],
+        unity_instance: str | None,
         command_type: str,
         params: Dict[str, Any],
     ) -> Dict[str, Any]:
@@ -349,7 +349,7 @@ class PluginHub(WebSocketEndpoint):
 
 def send_command_to_plugin(
     *,
-    unity_instance: Optional[str],
+    unity_instance: str | None,
     command_type: str,
     params: Dict[str, Any],
 ) -> Dict[str, Any]:

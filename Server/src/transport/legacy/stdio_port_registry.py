@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from core.config import config
 from models.models import UnityInstanceInfo
@@ -38,7 +38,7 @@ class StdioPortRegistry:
             self._refresh_locked()
             return list(self._instances.values())
 
-    def get_instance(self, instance_id: Optional[str]) -> Optional[UnityInstanceInfo]:
+    def get_instance(self, instance_id: str | None) -> UnityInstanceInfo | None:
         instances = self.get_instances()
         if instance_id:
             return next((inst for inst in instances if inst.id == instance_id), None)
@@ -51,7 +51,7 @@ class StdioPortRegistry:
 
         return max(instances, key=_instance_sort_key)
 
-    def get_port(self, instance_id: Optional[str] = None) -> int:
+    def get_port(self, instance_id: str | None = None) -> int:
         instance = self.get_instance(instance_id)
         if instance and isinstance(instance.port, int):
             return instance.port

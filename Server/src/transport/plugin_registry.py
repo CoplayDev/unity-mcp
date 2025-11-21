@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Dict, Optional
+from typing import Dict
 
 import asyncio
 
@@ -87,13 +87,13 @@ class PluginRegistry:
                 if mapped == session_id:
                     del self._hash_to_session[session.project_hash]
 
-    async def get_session(self, session_id: str) -> Optional[PluginSession]:
+    async def get_session(self, session_id: str) -> PluginSession | None:
         """Fetch a session by its ``session_id``."""
 
         async with self._lock:
             return self._sessions.get(session_id)
 
-    async def get_session_id_by_hash(self, project_hash: str) -> Optional[str]:
+    async def get_session_id_by_hash(self, project_hash: str) -> str | None:
         """Resolve a ``project_hash`` (Unity instance id) to a session id."""
 
         async with self._lock:

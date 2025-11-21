@@ -17,7 +17,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 import socket
-from typing import Optional, List, Dict
+from typing import List, Dict
 
 from core.config import config
 from models.models import UnityInstanceInfo
@@ -111,7 +111,7 @@ class PortDiscovery:
             return False
 
     @staticmethod
-    def _read_latest_status() -> Optional[dict]:
+    def _read_latest_status() -> dict | None:
         try:
             base = PortDiscovery.get_registry_dir()
             status_files = sorted(
@@ -147,7 +147,7 @@ class PortDiscovery:
 
         candidates = PortDiscovery.list_candidate_files()
 
-        first_seen_port: Optional[int] = None
+        first_seen_port: int | None = None
 
         for path in candidates:
             try:
@@ -175,7 +175,7 @@ class PortDiscovery:
         return PortDiscovery.DEFAULT_PORT
 
     @staticmethod
-    def get_port_config() -> Optional[dict]:
+    def get_port_config() -> dict | None:
         """
         Get the most relevant port configuration from registry.
         Returns the most recent hashed file's config if present,

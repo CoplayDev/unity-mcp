@@ -12,7 +12,7 @@ import socket
 import struct
 import threading
 import time
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List
 
 from models.models import MCPResponse, UnityInstanceInfo
 from transport.legacy.stdio_port_registry import stdio_port_registry
@@ -441,7 +441,7 @@ class UnityConnectionPool:
         self._last_full_scan: float = 0
         self._scan_interval: float = 5.0  # Cache for 5 seconds
         self._pool_lock = threading.Lock()
-        self._default_instance_id: Optional[str] = None
+        self._default_instance_id: str | None = None
 
         # Check for default instance from environment
         env_default = os.environ.get("UNITY_MCP_DEFAULT_INSTANCE", "").strip()
@@ -481,7 +481,7 @@ class UnityConnectionPool:
             f"Found {len(instances)} Unity instances: {[inst.id for inst in instances]}")
         return instances
 
-    def _resolve_instance_id(self, instance_identifier: Optional[str], instances: List[UnityInstanceInfo]) -> UnityInstanceInfo:
+    def _resolve_instance_id(self, instance_identifier: str | None, instances: List[UnityInstanceInfo]) -> UnityInstanceInfo:
         """
         Resolve an instance identifier to a specific Unity instance.
 
@@ -591,7 +591,7 @@ class UnityConnectionPool:
             f"Check unity://instances resource for all instances."
         )
 
-    def get_connection(self, instance_identifier: Optional[str] = None) -> UnityConnection:
+    def get_connection(self, instance_identifier: str | None = None) -> UnityConnection:
         """
         Get or create a connection to a Unity instance.
 
@@ -649,7 +649,7 @@ class UnityConnectionPool:
 
 
 # Global Unity connection pool
-_unity_connection_pool: Optional[UnityConnectionPool] = None
+_unity_connection_pool: UnityConnectionPool | None = None
 _pool_init_lock = threading.Lock()
 
 
@@ -670,7 +670,7 @@ def get_unity_connection_pool() -> UnityConnectionPool:
 
 
 # Backwards compatibility: keep old single-connection function
-def get_unity_connection(instance_identifier: Optional[str] = None) -> UnityConnection:
+def get_unity_connection(instance_identifier: str | None = None) -> UnityConnection:
     """Retrieve or establish a Unity connection.
 
     Args:
@@ -718,7 +718,7 @@ def send_command_with_retry(
     command_type: str,
     params: Dict[str, Any],
     *,
-    instance_id: Optional[str] = None,
+    instance_id: str | None = None,
     max_retries: int | None = None,
     retry_ms: int | None = None
 ) -> dict[str, Any] | MCPResponse:
@@ -758,7 +758,7 @@ async def async_send_command_with_retry(
     command_type: str,
     params: dict[str, Any],
     *,
-    instance_id: Optional[str] = None,
+    instance_id: str | None = None,
     loop=None,
     max_retries: int | None = None,
     retry_ms: int | None = None
