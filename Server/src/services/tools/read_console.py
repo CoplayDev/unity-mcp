@@ -15,10 +15,12 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 )
 async def read_console(
     ctx: Context,
-    action: Annotated[Literal['get', 'clear'], "Get or clear the Unity Editor console."] | None = None,
+    action: Annotated[Literal['get', 'clear'],
+                      "Get or clear the Unity Editor console."] | None = None,
     types: Annotated[list[Literal['error', 'warning',
                                   'log', 'all']], "Message types to get"] | None = None,
-    count: Annotated[int | str, "Max messages to return (accepts int or string, e.g., 5 or '5')"] | None = None,
+    count: Annotated[int | str,
+                     "Max messages to return (accepts int or string, e.g., 5 or '5')"] | None = None,
     filter_text: Annotated[str, "Text filter for messages"] | None = None,
     since_timestamp: Annotated[str,
                                "Get messages after this timestamp (ISO 8601)"] | None = None,
@@ -35,6 +37,7 @@ async def read_console(
     types = types if types is not None else ['error', 'warning', 'log']
     format = format if format is not None else 'detailed'
     # Coerce booleans defensively (strings like 'true'/'false')
+
     def _coerce_bool(value, default=None):
         if value is None:
             return default

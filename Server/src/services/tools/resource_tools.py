@@ -150,7 +150,8 @@ async def list_resources(
     project_root: Annotated[str, "Project path"] | None = None,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
-    ctx.info(f"Processing list_resources: {pattern} (unity_instance={unity_instance or 'default'})")
+    ctx.info(
+        f"Processing list_resources: {pattern} (unity_instance={unity_instance or 'default'})")
     try:
         project = await _resolve_project_root(ctx, project_root)
         base = (project / under).resolve()
@@ -211,7 +212,8 @@ async def read_resource(
     request: Annotated[str, "The request ID"] | None = None,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
-    ctx.info(f"Processing read_resource: {uri} (unity_instance={unity_instance or 'default'})")
+    ctx.info(
+        f"Processing read_resource: {uri} (unity_instance={unity_instance or 'default'})")
     try:
         # Serve the canonical spec directly when requested (allow bare or with scheme)
         if uri in ("unity://spec/script-edits", "spec/script-edits", "script-edits"):
@@ -360,14 +362,16 @@ async def find_in_file(
     ctx: Context,
     uri: Annotated[str, "The resource URI to search under Assets/ or file path form supported by read_resource"],
     pattern: Annotated[str, "The regex pattern to search for"],
-    ignore_case: Annotated[bool | str, "Case-insensitive search (accepts true/false or 'true'/'false')"] | None = True,
+    ignore_case: Annotated[bool | str,
+                           "Case-insensitive search (accepts true/false or 'true'/'false')"] | None = True,
     project_root: Annotated[str,
                             "The project root directory"] | None = None,
     max_results: Annotated[int,
                            "Cap results to avoid huge payloads"] = 200,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
-    ctx.info(f"Processing find_in_file: {uri} (unity_instance={unity_instance or 'default'})")
+    ctx.info(
+        f"Processing find_in_file: {uri} (unity_instance={unity_instance or 'default'})")
     try:
         project = await _resolve_project_root(ctx, project_root)
         p = _resolve_safe_path_from_uri(uri, project)
@@ -376,6 +380,7 @@ async def find_in_file(
 
         text = p.read_text(encoding="utf-8")
         # Tolerant boolean coercion for clients that stringify booleans
+
         def _coerce_bool(val, default=None):
             if val is None:
                 return default

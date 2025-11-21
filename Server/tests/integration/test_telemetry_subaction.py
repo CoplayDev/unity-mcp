@@ -11,11 +11,13 @@ def _get_decorator_module():
     sys.modules.pop("core.telemetry_decorator", None)
     # Preload a minimal telemetry stub to satisfy telemetry_decorator imports
     tel = types.ModuleType("core.telemetry")
+
     class _MilestoneType:
         FIRST_TOOL_USAGE = "first_tool_usage"
         FIRST_SCRIPT_CREATION = "first_script_creation"
         FIRST_SCENE_MODIFICATION = "first_scene_modification"
     tel.MilestoneType = _MilestoneType
+
     def _noop(*a, **k):
         pass
     tel.record_resource_usage = _noop

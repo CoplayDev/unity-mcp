@@ -89,6 +89,7 @@ async def manage_gameobject(
         if value is None:
             return default
         import math
+
         def _to_vec3(parts):
             try:
                 vec = [float(parts[0]), float(parts[1]), float(parts[2])]
@@ -103,7 +104,8 @@ async def manage_gameobject(
             if s.startswith("[") and s.endswith("]"):
                 s = s[1:-1]
             # support "x,y,z" and "x y z"
-            parts = [p.strip() for p in (s.split(",") if "," in s else s.split())]
+            parts = [p.strip()
+                     for p in (s.split(",") if "," in s else s.split())]
             if len(parts) == 3:
                 return _to_vec3(parts)
         return default
@@ -122,7 +124,8 @@ async def manage_gameobject(
     if isinstance(component_properties, str):
         try:
             component_properties = json.loads(component_properties)
-            ctx.info("manage_gameobject: coerced component_properties from JSON string to dict")
+            ctx.info(
+                "manage_gameobject: coerced component_properties from JSON string to dict")
         except json.JSONDecodeError as e:
             return {"success": False, "message": f"Invalid JSON in component_properties: {e}"}
     # Ensure final type is a dict (object) if provided

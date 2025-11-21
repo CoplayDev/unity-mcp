@@ -32,8 +32,10 @@ async def manage_asset(
     filter_type: Annotated[str, "Filter type for search"] | None = None,
     filter_date_after: Annotated[str,
                                  "Date after which to filter"] | None = None,
-    page_size: Annotated[int | float | str, "Page size for pagination"] | None = None,
-    page_number: Annotated[int | float | str, "Page number for pagination"] | None = None,
+    page_size: Annotated[int | float | str,
+                         "Page size for pagination"] | None = None,
+    page_number: Annotated[int | float | str,
+                           "Page number for pagination"] | None = None,
 ) -> dict[str, Any]:
     # Get active instance from session state
     # Removed session_state import
@@ -44,7 +46,8 @@ async def manage_asset(
             properties = json.loads(properties)
             ctx.info("manage_asset: coerced properties from JSON string to dict")
         except Exception as e:
-            ctx.warn(f"manage_asset: failed to parse properties JSON string: {e}")
+            ctx.warn(
+                f"manage_asset: failed to parse properties JSON string: {e}")
             # Leave properties as-is; Unity side may handle defaults
     # Ensure properties is a dict if None
     if properties is None:

@@ -25,7 +25,8 @@ async def manage_prefabs(
                                "Allow replacing an existing prefab at the same path"] | None = None,
     search_inactive: Annotated[bool,
                                "Include inactive objects when resolving the target name"] | None = None,
-    component_properties: Annotated[str, "Component properties in JSON format"] | None = None,
+    component_properties: Annotated[str,
+                                    "Component properties in JSON format"] | None = None,
 ) -> dict[str, Any]:
     # Get active instance from session state
     # Removed session_state import

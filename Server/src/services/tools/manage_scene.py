@@ -15,7 +15,8 @@ async def manage_scene(
     action: Annotated[Literal["create", "load", "save", "get_hierarchy", "get_active", "get_build_settings"], "Perform CRUD operations on Unity scenes."],
     name: Annotated[str, "Scene name."] | None = None,
     path: Annotated[str, "Scene path."] | None = None,
-    build_index: Annotated[int | str, "Unity build index (quote as string, e.g., '0')."] | None = None,
+    build_index: Annotated[int | str,
+                           "Unity build index (quote as string, e.g., '0')."] | None = None,
 ) -> dict[str, Any]:
     # Get active instance from session state
     # Removed session_state import

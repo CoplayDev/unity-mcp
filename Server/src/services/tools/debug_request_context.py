@@ -57,5 +57,3 @@ def debug_request_context(ctx: Context) -> dict[str, Any]:
             "available_attributes": ctx_attrs,
         },
     }
-
-

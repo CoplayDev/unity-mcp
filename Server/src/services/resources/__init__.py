@@ -56,7 +56,8 @@ def register_all_resources(mcp: FastMCP):
                 description=description,
                 **kwargs,
             )(wrapped_template)
-            logger.debug(f"Registered resource template: {resource_name} - {uri}")
+            logger.debug(
+                f"Registered resource template: {resource_name} - {uri}")
             registered_count += 1
             resource_info['func'] = wrapped_template
         else:
@@ -68,7 +69,9 @@ def register_all_resources(mcp: FastMCP):
                 **kwargs,
             )(wrapped)
             resource_info['func'] = wrapped
-            logger.debug(f"Registered resource: {resource_name} - {description}")
+            logger.debug(
+                f"Registered resource: {resource_name} - {description}")
             registered_count += 1
 
-    logger.info(f"Registered {registered_count} MCP resources ({len(resources)} unique)")
+    logger.info(
+        f"Registered {registered_count} MCP resources ({len(resources)} unique)")

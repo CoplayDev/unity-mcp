@@ -34,5 +34,3 @@ async def test_manage_gameobject_boolean_and_tag_mapping(monkeypatch):
     assert captured["params"]["searchTerm"] == "Player"
     assert captured["params"]["findAll"] == "true" or captured["params"]["findAll"] is True
     assert captured["params"]["searchInactive"] in ("0", False, 0)
-
-

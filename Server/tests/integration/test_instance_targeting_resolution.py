@@ -86,5 +86,3 @@ async def test_manage_gameobject_without_active_instance(monkeypatch):
     # Assert: uses None (connection pool will pick default)
     assert res.get("success") is True
     assert captured.get("instance_id") is None
-
-

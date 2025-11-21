@@ -22,43 +22,44 @@ def parse_properties_json(properties):
 
 class TestJsonParsingLogic:
     """Test the core JSON parsing logic."""
-    
+
     def test_valid_json_string_parsing(self):
         """Test that valid JSON strings are correctly parsed."""
         json_string = '{"shader": "Universal Render Pipeline/Lit", "color": [0, 0, 1, 1]}'
-        
+
         result, status = parse_properties_json(json_string)
-        
+
         assert status == "success"
         assert isinstance(result, dict)
         assert result["shader"] == "Universal Render Pipeline/Lit"
         assert result["color"] == [0, 0, 1, 1]
-    
+
     def test_invalid_json_string_handling(self):
         """Test that invalid JSON strings are handled gracefully."""
         invalid_json = '{"invalid": json, "missing": quotes}'
-        
+
         result, status = parse_properties_json(invalid_json)
-        
+
         assert "failed to parse" in status
         assert result == invalid_json  # Original string returned
-    
+
     def test_dict_input_unchanged(self):
         """Test that dict inputs are passed through unchanged."""
-        original_dict = {"shader": "Universal Render Pipeline/Lit", "color": [0, 0, 1, 1]}
-        
+        original_dict = {
+            "shader": "Universal Render Pipeline/Lit", "color": [0, 0, 1, 1]}
+
         result, status = parse_properties_json(original_dict)
-        
+
         assert status == "no_parsing_needed"
         assert result == original_dict
-    
+
     def test_none_input_handled(self):
         """Test that None input is handled correctly."""
         result, status = parse_properties_json(None)
-        
+
         assert status == "no_parsing_needed"
         assert result is None
-    
+
     def test_complex_json_parsing(self):
         """Test parsing of complex JSON with nested objects and arrays."""
         complex_json = '''
@@ -69,9 +70,9 @@ class TestJsonParsingLogic:
             "texture": {"name": "_MainTex", "path": "Assets/Textures/Test.png"}
         }
         '''
-        
+
         result, status = parse_properties_json(complex_json)
-        
+
         assert status == "success"
         assert isinstance(result, dict)
         assert result["shader"] == "Universal Render Pipeline/Lit"
@@ -80,17 +81,17 @@ class TestJsonParsingLogic:
         assert result["float"]["value"] == 0.5
         assert result["texture"]["name"] == "_MainTex"
         assert result["texture"]["path"] == "Assets/Textures/Test.png"
-    
+
     def test_empty_json_string(self):
         """Test handling of empty JSON string."""
         empty_json = "{}"
-        
+
         result, status = parse_properties_json(empty_json)
-        
+
         assert status == "success"
         assert isinstance(result, dict)
         assert len(result) == 0
-    
+
     def test_malformed_json_edge_cases(self):
         """Test various malformed JSON edge cases."""
         test_cases = [
@@ -101,7 +102,7 @@ class TestJsonParsingLogic:
             'not json at all',
             '{"nested": {"broken": }'
         ]
-        
+
         for malformed_json in test_cases:
             result, status = parse_properties_json(malformed_json)
             assert "failed to parse" in status

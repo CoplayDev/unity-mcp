@@ -89,7 +89,8 @@ async def apply_text_edits(
                        "Optional options, used to pass additional options to the script editor"] | None = None,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
-    ctx.info(f"Processing apply_text_edits: {uri} (unity_instance={unity_instance or 'default'})")
+    ctx.info(
+        f"Processing apply_text_edits: {uri} (unity_instance={unity_instance or 'default'})")
     name, directory = _split_uri(uri)
 
     # Normalize common aliases/misuses for resilience:
@@ -375,7 +376,8 @@ async def create_script(
     namespace: Annotated[str, "Namespace for the script"] | None = None,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
-    ctx.info(f"Processing create_script: {path} (unity_instance={unity_instance or 'default'})")
+    ctx.info(
+        f"Processing create_script: {path} (unity_instance={unity_instance or 'default'})")
     name = os.path.splitext(os.path.basename(path))[0]
     directory = os.path.dirname(path)
     # Local validation to avoid round-trips on obviously bad input
@@ -417,7 +419,8 @@ async def delete_script(
 ) -> dict[str, Any]:
     """Delete a C# script by URI."""
     unity_instance = get_unity_instance_from_context(ctx)
-    ctx.info(f"Processing delete_script: {uri} (unity_instance={unity_instance or 'default'})")
+    ctx.info(
+        f"Processing delete_script: {uri} (unity_instance={unity_instance or 'default'})")
     name, directory = _split_uri(uri)
     if not directory or directory.split("/")[0].lower() != "assets":
         return {"success": False, "code": "path_outside_assets", "message": "URI must resolve under 'Assets/'."}
@@ -441,7 +444,8 @@ async def validate_script(
                                    "Include full diagnostics and summary"] = False,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
-    ctx.info(f"Processing validate_script: {uri} (unity_instance={unity_instance or 'default'})")
+    ctx.info(
+        f"Processing validate_script: {uri} (unity_instance={unity_instance or 'default'})")
     name, directory = _split_uri(uri)
     if not directory or directory.split("/")[0].lower() != "assets":
         return {"success": False, "code": "path_outside_assets", "message": "URI must resolve under 'Assets/'."}
@@ -484,7 +488,8 @@ async def manage_script(
     namespace: Annotated[str, "Namespace for the script"] | None = None,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
-    ctx.info(f"Processing manage_script: {action} (unity_instance={unity_instance or 'default'})")
+    ctx.info(
+        f"Processing manage_script: {action} (unity_instance={unity_instance or 'default'})")
     try:
         # Prepare parameters for Unity
         params = {
@@ -576,7 +581,8 @@ async def get_sha(
     uri: Annotated[str, "URI of the script to edit under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
-    ctx.info(f"Processing get_sha: {uri} (unity_instance={unity_instance or 'default'})")
+    ctx.info(
+        f"Processing get_sha: {uri} (unity_instance={unity_instance or 'default'})")
     try:
         name, directory = _split_uri(uri)
         params = {"action": "get_sha", "name": name, "path": directory}

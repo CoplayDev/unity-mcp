@@ -369,7 +369,8 @@ async def script_apply_edits(
                          "Namespace of the script to edit"] | None = None,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
-    ctx.info(f"Processing script_apply_edits: {name} (unity_instance={unity_instance or 'default'})")
+    ctx.info(
+        f"Processing script_apply_edits: {name} (unity_instance={unity_instance or 'default'})")
     # Normalize locator first so downstream calls target the correct script file.
     name, path = _normalize_script_locator(name, path)
     # Normalize unsupported or aliased ops to known structured/text paths
