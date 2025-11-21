@@ -207,6 +207,10 @@ mcp = FastMCP(
     instructions="""
 This server provides tools to interact with the Unity Game Engine Editor.
 
+Targeting Unity instances:
+- Use the resource unity://instances to list active Unity sessions (Name@hash).
+- When multiple instances are connected, call set_active_instance with the exact Name@hash before using tools/resources. The server will error if multiple are connected and no active instance is set.
+
 Important Workflows:
 
 Resources vs Tools:

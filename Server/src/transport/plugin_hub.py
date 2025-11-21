@@ -237,27 +237,35 @@ class PluginHub(WebSocketEndpoint):
             else:
                 target_hash = unity_instance
 
-        async def _try_once() -> Optional[str]:
+        async def _try_once() -> tuple[str | None, int]:
             # Prefer a specific Unity instance if one was requested
             if target_hash:
                 session_id = await cls._registry.get_session_id_by_hash(target_hash)
-                if session_id:
-                    return session_id
+                sessions = await cls._registry.list_sessions()
+                return session_id, len(sessions)
 
-            # Fallback: use the first available plugin session, if any
+            # No target provided: determine if we can auto-select
             sessions = await cls._registry.list_sessions()
-            if not sessions:
-                return None
-            # Deterministic order: rely on insertion ordering
-            return next(iter(sessions.keys()))
+            count = len(sessions)
+            if count == 0:
+                return None, count
+            if count == 1:
+                return next(iter(sessions.keys())), count
+            # Multiple sessions but no explicit target is ambiguous
+            return None, count
 
-        session_id = await _try_once()
+        session_id, session_count = await _try_once()
         deadline = time.monotonic() + (max_retries * sleep_seconds)
         wait_started = None
 
         # If there is no active plugin yet (e.g., Unity starting up or reloading),
         # wait politely for a session to appear before surfacing an error.
         while session_id is None and time.monotonic() < deadline:
+            if not target_hash and session_count > 1:
+                raise RuntimeError(
+                    "Multiple Unity instances are connected. "
+                    "Call set_active_instance with Name@hash from unity://instances."
+                )
             if wait_started is None:
                 wait_started = time.monotonic()
                 logger.debug(
@@ -266,13 +274,18 @@ class PluginHub(WebSocketEndpoint):
                     deadline - wait_started,
                 )
             await asyncio.sleep(sleep_seconds)
-            session_id = await _try_once()
+            session_id, session_count = await _try_once()
 
         if session_id is not None and wait_started is not None:
             logger.debug(
                 "Plugin session restored after %.3fs (instance=%s)",
                 time.monotonic() - wait_started,
                 unity_instance or "default",
+            )
+        if session_id is None and not target_hash and session_count > 1:
+            raise RuntimeError(
+                "Multiple Unity instances are connected. "
+                "Call set_active_instance with Name@hash from unity://instances."
             )
 
         if session_id is None:

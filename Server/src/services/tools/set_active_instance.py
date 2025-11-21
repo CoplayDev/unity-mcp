@@ -55,28 +55,18 @@ async def set_active_instance(
         # exact hash and prefix map; last write wins but we'll detect ambiguity
         hashes.setdefault(inst.hash, inst)
 
-    # Disallow plain names to ensure determinism
+    # Disallow anything except the explicit Name@hash id to ensure determinism
     value = (instance or "").strip()
-    if not value:
+    if not value or "@" not in value:
         return {
             "success": False,
-            "error": "Instance identifier must not be empty. Specify Name@hash or a unique hash prefix."
+            "error": "Instance identifier must be Name@hash. "
+                     "Use unity://instances to copy the exact id (e.g., MyProject@abcd1234)."
         }
     resolved = None
-    if "@" in value:
-        resolved = ids.get(value)
-        if resolved is None:
-            return {"success": False, "error": f"Instance '{value}' not found. Check unity://instances resource."}
-    else:
-        # Treat as hash/prefix; require unique match
-        candidates = [
-            inst for inst in instances if inst.hash.startswith(value)]
-        if len(candidates) == 1:
-            resolved = candidates[0]
-        elif len(candidates) == 0:
-            return {"success": False, "error": f"No instance with hash '{value}'."}
-        else:
-            return {"success": False, "error": f"Hash '{value}' matches multiple instances: {[c.id for c in candidates]}"}
+    resolved = ids.get(value)
+    if resolved is None:
+        return {"success": False, "error": f"Instance '{value}' not found. Use unity://instances to choose a valid Name@hash."}
 
     # Store selection in middleware (session-scoped)
     middleware = get_unity_instance_middleware()

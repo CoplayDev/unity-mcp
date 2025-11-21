@@ -51,7 +51,7 @@ MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to 
 * `manage_shader`: Performs shader CRUD operations (create, read, modify, delete).
 * `read_console`: Gets messages from or clears the console.
 * `run_tests`: Runs tests in the Unity Editor.
-* `set_active_instance`: Routes subsequent tool calls to a specific Unity instance (when multiple are running).
+* `set_active_instance`: Routes subsequent tool calls to a specific Unity instance (when multiple are running). Requires the exact `Name@hash` from `unity_instances`.
 * `apply_text_edits`: Precise text edits with precondition hashes and atomic multi-edit batches.
 * `script_apply_edits`: Structured C# method/class edits (insert/replace/delete) with safer boundaries.
 * `validate_script`: Fast validation (basic/standard) to catch syntax/structure issues before/after writes.
@@ -334,8 +334,8 @@ MCP for Unity supports multiple Unity Editor instances simultaneously. Each inst
 **To direct tool calls to a specific instance:**
 
 1. List available instances: Ask your LLM to check the `unity_instances` resource
-2. Set the active instance: Use `set_active_instance` with the instance name (e.g., `MyProject@abc123`)
-3. All subsequent tools route to that instance until changed
+2. Set the active instance: Use `set_active_instance` with the exact `Name@hash` shown (e.g., `MyProject@abc123`)
+3. All subsequent tools route to that instance until changed. If multiple instances are running and no active instance is set, the server will error and instruct you to select one.
 
 **Example:**
 ```
