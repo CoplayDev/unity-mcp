@@ -89,7 +89,8 @@ class TestInstanceRoutingIntegration:
         ctx = Mock(spec=Context)
         ctx.session_id = "test-session"
         state_storage = {}
-        ctx.set_state = Mock(side_effect=lambda k, v: state_storage.__setitem__(k, v))
+        ctx.set_state = Mock(side_effect=lambda k,
+                             v: state_storage.__setitem__(k, v))
         ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
 
         # Create middleware context
@@ -107,7 +108,8 @@ class TestInstanceRoutingIntegration:
         await middleware.on_call_tool(middleware_ctx, mock_call_next)
 
         # Verify state was injected
-        ctx.set_state.assert_called_once_with("unity_instance", "TestProject@abc123")
+        ctx.set_state.assert_called_once_with(
+            "unity_instance", "TestProject@abc123")
 
     def test_get_unity_instance_from_context_checks_state(self):
         """get_unity_instance_from_context must read from ctx.get_state()."""
@@ -146,7 +148,8 @@ class TestInstanceRoutingToolCategories:
         # Set up state storage (only source of truth)
         state_storage = {"unity_instance": instance_id}
         ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
-        ctx.set_state = Mock(side_effect=lambda k, v: state_storage.__setitem__(k, v))
+        ctx.set_state = Mock(side_effect=lambda k,
+                             v: state_storage.__setitem__(k, v))
 
         return ctx
 
@@ -160,7 +163,8 @@ class TestInstanceRoutingToolCategories:
         ("Shader", ["manage_shader"]),
         ("Prefab", ["manage_prefabs"]),
         ("Tests", ["run_tests"]),
-        ("Script", ["create_script", "delete_script", "apply_text_edits", "script_apply_edits"]),
+        ("Script", ["create_script", "delete_script",
+         "apply_text_edits", "script_apply_edits"]),
         ("Resources", ["unity_instances", "menu_items", "tests"]),
     ])
     def test_tool_category_respects_active_instance(self, tool_category, tool_names):
@@ -179,7 +183,8 @@ class TestInstanceRoutingHTTP:
         ctx = Mock(spec=Context)
         ctx.session_id = "http-session"
         state_storage = {}
-        ctx.set_state = Mock(side_effect=lambda k, v: state_storage.__setitem__(k, v))
+        ctx.set_state = Mock(side_effect=lambda k,
+                             v: state_storage.__setitem__(k, v))
         ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
 
         monkeypatch.setenv("UNITY_MCP_TRANSPORT", "http")
@@ -214,7 +219,8 @@ class TestInstanceRoutingHTTP:
         ctx = Mock(spec=Context)
         ctx.session_id = "http-session-2"
         state_storage = {}
-        ctx.set_state = Mock(side_effect=lambda k, v: state_storage.__setitem__(k, v))
+        ctx.set_state = Mock(side_effect=lambda k,
+                             v: state_storage.__setitem__(k, v))
         ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
 
         monkeypatch.setenv("UNITY_MCP_TRANSPORT", "http")
@@ -237,7 +243,7 @@ class TestInstanceRoutingHTTP:
             lambda: middleware,
         )
 
-        result = await set_active_instance_tool(ctx, "cc8756d4")
+        result = await set_active_instance_tool(ctx, "UnityMCPTests@cc8756d4")
 
         assert result["success"] is True
         assert middleware.get_active_instance(ctx) == "UnityMCPTests@cc8756d4"
@@ -260,7 +266,7 @@ class TestInstanceRoutingHTTP:
             lambda: middleware,
         )
 
-        result = await set_active_instance_tool(ctx, "deadbeef")
+        result = await set_active_instance_tool(ctx, "Unknown@deadbeef")
 
         assert result["success"] is False
         assert "No Unity instances" in result["error"]
@@ -291,7 +297,7 @@ class TestInstanceRoutingHTTP:
         result = await set_active_instance_tool(ctx, "abc")
 
         assert result["success"] is False
-        assert "matches multiple instances" in result["error"]
+        assert "Name@hash" in result["error"]
 
 
 class TestInstanceRoutingRaceConditions:
@@ -305,7 +311,8 @@ class TestInstanceRoutingRaceConditions:
         ctx.session_id = "test-session"
 
         state_storage = {}
-        ctx.set_state = Mock(side_effect=lambda k, v: state_storage.__setitem__(k, v))
+        ctx.set_state = Mock(side_effect=lambda k,
+                             v: state_storage.__setitem__(k, v))
         ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
 
         instances = ["Project1@aaa", "Project2@bbb", "Project3@ccc"]
@@ -337,7 +344,8 @@ class TestInstanceRoutingRaceConditions:
         ctx.info = Mock()
 
         state_storage = {}
-        ctx.set_state = Mock(side_effect=lambda k, v: state_storage.__setitem__(k, v))
+        ctx.set_state = Mock(side_effect=lambda k,
+                             v: state_storage.__setitem__(k, v))
         ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
         ctx.request_context = None
 
@@ -406,7 +414,8 @@ class TestInstanceRoutingSequentialOperations:
         ctx.info = Mock()
 
         state_storage = {}
-        ctx.set_state = Mock(side_effect=lambda k, v: state_storage.__setitem__(k, v))
+        ctx.set_state = Mock(side_effect=lambda k,
+                             v: state_storage.__setitem__(k, v))
         ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
 
         # Execute sequence
