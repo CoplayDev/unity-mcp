@@ -21,29 +21,8 @@ dev = [
 ]
 
 [project.scripts]
-mcp-for-unity = "server:main"
+mcp-for-unity = "main:main"
 
 [build-system]
 requires = ["setuptools>=64.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
-
-[tool.setuptools]
-py-modules = [
-    "config",
-    "models",
-    "module_discovery",
-    "port_discovery",
-    "reload_sentinel",
-    "server",
-    "plugin_hub",
-    "plugin_registry",
-    "stdio_port_registry",
-    "custom_tool_service",
-    "telemetry",
-    "telemetry_decorator",
-    "unity_connection",
-    "unity_instance_middleware",
-    "unity_transport",
-    "unity_response"
-]
-packages = ["tools", "resources", "registry"]
