@@ -6,6 +6,12 @@ namespace MCPForUnity.Editor.Services
     public interface IServerManagementService
     {
         /// <summary>
+        /// Clear the local uvx cache for the MCP server package
+        /// </summary>
+        /// <returns>True if successful, false otherwise</returns>
+        bool ClearUvxCache();
+
+        /// <summary>
         /// Start the local HTTP server in a new terminal window.
         /// Stops any existing server on the port and clears the uvx cache first.
         /// </summary>
