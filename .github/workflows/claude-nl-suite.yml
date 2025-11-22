@@ -59,10 +59,9 @@ jobs:
             uv pip install -e Server
           elif [ -f Server/requirements.txt ]; then
             uv pip install -r Server/requirements.txt
-          elif [ -f Server/pyproject.toml ]; then
-            uv pip install -e Server
-          elif [ -f Server/requirements.txt ]; then
-            uv pip install -r Server/requirements.txt
+          else
+            echo "No MCP Python deps found (skipping)"
+          fi
           else
             echo "No MCP Python deps found (skipping)"
           fi
