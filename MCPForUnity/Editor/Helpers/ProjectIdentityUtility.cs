@@ -15,7 +15,7 @@ namespace MCPForUnity.Editor.Helpers
     [InitializeOnLoad]
     internal static class ProjectIdentityUtility
     {
-        private const string SessionPrefKey = EditorPrefKeys.WebSocketSessionId;
+        private const string SessionPrefKey = EditorPrefKeys.SessionId;
         private static bool _legacyKeyCleared;
         private static string _cachedProjectName = "Unknown";
         private static string _cachedProjectHash = "default";
