@@ -52,6 +52,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private volatile bool _isConnected;
         private volatile bool _isReconnecting;
         private TransportState _state = TransportState.Disconnected(TransportDisplayName, "Transport not started");
+        private bool _disposed;
 
         public WebSocketTransportClient(IToolDiscoveryService toolDiscoveryService = null)
         {
@@ -154,9 +155,25 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
         public void Dispose()
         {
+            if (_disposed)
+            {
+                return;
+            }
+
+            try
+            {
+                // Ensure background loops are stopped before disposing shared resources
+                StopAsync().GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                McpLog.Warn($"[WebSocket] Dispose failed to stop cleanly: {ex.Message}");
+            }
+
             _sendLock?.Dispose();
             _socket?.Dispose();
             _lifecycleCts?.Dispose();
+            _disposed = true;
         }
 
         private async Task<bool> EstablishConnectionAsync(CancellationToken token)
