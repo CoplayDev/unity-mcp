@@ -349,6 +349,10 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             catch (Exception ex)
             {
                 McpLog.Warn($"Failed to persist Unity socket port: {ex.Message}");
+                EditorUtility.DisplayDialog(
+                    "Port Unavailable",
+                    $"The requested port could not be used:\n\n{ex.Message}\n\nReverting to the active Unity port.",
+                    "OK");
                 unityPortField.value = MCPServiceLocator.Bridge.CurrentPort.ToString();
             }
         }
