@@ -242,6 +242,8 @@ namespace MCPForUnity.Editor.Services
                     return false;
                 }
 
+                McpLog.Info($"Attempting to stop any process listening on local port {port}. This will terminate the owning process even if it is not the MCP server.");
+
                 int pid = GetProcessIdForPort(port);
                 if (pid > 0)
                 {
@@ -297,11 +299,20 @@ namespace MCPForUnity.Editor.Services
                     if (!System.IO.File.Exists(lsofPath)) lsofPath = "lsof"; // Fallback
 
                     success = ExecPath.TryRun(lsofPath, $"-i :{port} -t", Application.dataPath, out stdout, out stderr);
-                    if (success && !string.IsNullOrEmpty(stdout))
+                    if (success && !string.IsNullOrWhiteSpace(stdout))
                     {
-                        if (int.TryParse(stdout.Trim(), out int pid))
+                        var pidStrings = stdout.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                        foreach (var pidString in pidStrings)
                         {
-                            return pid;
+                            if (int.TryParse(pidString.Trim(), out int pid))
+                            {
+                                if (pidStrings.Length > 1)
+                                {
+                                    McpLog.Debug($"Multiple processes found on port {port}; attempting to stop PID {pid} returned by lsof -t.");
+                                }
+
+                                return pid;
+                            }
                         }
                     }
                 }
