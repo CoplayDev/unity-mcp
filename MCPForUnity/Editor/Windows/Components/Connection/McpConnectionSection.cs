@@ -298,7 +298,19 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
         private void OnStopLocalHttpServerClicked()
         {
-            MCPServiceLocator.Server.StopLocalHttpServer();
+            try
+            {
+                bool stopped = MCPServiceLocator.Server.StopLocalHttpServer();
+                if (!stopped)
+                {
+                    McpLog.Warn("Failed to stop HTTP server or no server was running");
+                }
+            }
+            catch (Exception ex)
+            {
+                McpLog.Error($"Failed to stop server: {ex.Message}");
+                EditorUtility.DisplayDialog("Error", $"Failed to stop server:\n\n{ex.Message}", "OK");
+            }
         }
 
         private void PersistUnityPortFromField()
