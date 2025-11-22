@@ -279,10 +279,7 @@ class PortDiscovery:
                     _, existing_time = existing
                     if existing_time >= freshness:
                         logger.debug(
-                            "Skipping stale status entry %s in favor of more recent data for port %s",
-                            status_path.name,
-                            port,
-                        )
+                            f"Skipping stale status entry {status_path.name} in favor of more recent data for port {port}")
                         continue
 
                 # Create instance info

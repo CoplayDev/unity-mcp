@@ -26,7 +26,7 @@ class StdioPortRegistry:
         self._instances = {inst.id: inst for inst in instances}
         self._last_refresh = time.time()
         logger.debug(
-            "STDIO port registry refreshed with %d instance(s)", len(instances))
+            f"STDIO port registry refreshed with {len(instances)} instance(s)")
 
     def get_instances(self, *, force_refresh: bool = False) -> list[UnityInstanceInfo]:
         ttl = getattr(config, "port_registry_ttl", 5.0)

@@ -155,12 +155,12 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
                     )).start()
                 except Exception as e:
                     logger.warning(
-                        "Could not connect to default Unity instance: %s", e)
+                        f"Could not connect to default Unity instance: {e}")
             else:
                 logger.warning("No Unity instances found on startup")
 
     except ConnectionError as e:
-        logger.warning("Could not connect to Unity on startup: %s", e)
+        logger.warning(f"Could not connect to Unity on startup: {e}")
 
         # Record connection failure (deferred)
         _err_msg = str(e)[:200]
@@ -173,8 +173,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
             }
         )).start()
     except Exception as e:
-        logger.warning(
-            "Unexpected error connecting to Unity on startup: %s", e)
+        logger.warning(f"Unexpected error connecting to Unity on startup: {e}")
         _err_msg = str(e)[:200]
         threading.Timer(1.0, lambda: record_telemetry(
             RecordType.UNITY_CONNECTION,
@@ -202,6 +201,8 @@ mcp = FastMCP(
     lifespan=server_lifespan,
     instructions="""
 This server provides tools to interact with the Unity Game Engine Editor.
+
+I have a dynamic tool system. Always check the unity://custom-tools resource first to see what special capabilities are available for the current project.
 
 Targeting Unity instances:
 - Use the resource unity://instances to list active Unity sessions (Name@hash).

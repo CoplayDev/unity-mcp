@@ -47,7 +47,7 @@ class UnityConnection:
         try:
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         except OSError as exc:
-            logger.debug("Unable to set TCP_NODELAY: %s", exc)
+            logger.debug(f"Unable to set TCP_NODELAY: {exc}")
 
     def connect(self) -> bool:
         """Establish a connection to the Unity Editor."""
@@ -152,7 +152,7 @@ class UnityConnection:
                     if payload_len == 0:
                         heartbeat_count += 1
                         logger.debug(
-                            "Received heartbeat frame #%d", heartbeat_count)
+                            f"Received heartbeat frame #{heartbeat_count}")
                         if heartbeat_count >= heartbeat_limit or (time.monotonic() - heartbeat_started) > heartbeat_window:
                             raise TimeoutError(
                                 "Unity sent heartbeat frames without payload within configured threshold"
@@ -163,7 +163,7 @@ class UnityConnection:
                             f"Invalid framed length: {payload_len}")
                     payload = self._read_exact(sock, payload_len)
                     logger.debug(
-                        "Received framed response (%d bytes)", len(payload))
+                        f"Received framed response ({len(payload)} bytes)")
                     return payload
             except socket.timeout as exc:
                 logger.warning("Socket timeout during framed receive")
@@ -171,7 +171,7 @@ class UnityConnection:
             except TimeoutError:
                 raise
             except Exception as exc:
-                logger.error("Error during framed receive: %s", exc)
+                logger.error(f"Error during framed receive: {exc}")
                 raise
 
         chunks = []
@@ -264,13 +264,13 @@ class UnityConnection:
                     "Unity status file disappeared before it could be read")
                 return None
             except json.JSONDecodeError as exc:
-                logger.warning("Malformed Unity status file: %s", exc)
+                logger.warning(f"Malformed Unity status file: {exc}")
                 return None
             except OSError as exc:
-                logger.warning("Failed to read Unity status file: %s", exc)
+                logger.warning(f"Failed to read Unity status file: {exc}")
                 return None
             except Exception as exc:
-                logger.debug("Preflight status check failed: %s", exc)
+                logger.debug(f"Preflight status check failed: {exc}")
                 return None
 
         last_short_timeout = None
@@ -292,7 +292,7 @@ class UnityConnection:
                     hint="retry",
                 )
         except Exception as exc:
-            logger.debug("Preflight status check failed: %s", exc)
+            logger.debug(f"Preflight status check failed: {exc}")
 
         for attempt in range(attempts + 1):
             try:
@@ -314,11 +314,7 @@ class UnityConnection:
                     mode = 'framed' if self.use_framing else 'legacy'
                     with contextlib.suppress(Exception):
                         logger.debug(
-                            "send %d bytes; mode=%s; head=%s",
-                            len(payload),
-                            mode,
-                            (payload[:32]).decode('utf-8', 'ignore'),
-                        )
+                            f"send {len(payload)} bytes; mode={mode}; head={payload[:32].decode('utf-8', 'ignore')}")
                     if self.use_framing:
                         header = struct.pack('>Q', len(payload))
                         self.sock.sendall(header)
@@ -334,8 +330,8 @@ class UnityConnection:
                     try:
                         response_data = self.receive_full_response(self.sock)
                         with contextlib.suppress(Exception):
-                            logger.debug("recv %d bytes; mode=%s",
-                                         len(response_data), mode)
+                            logger.debug(
+                                f"recv {len(response_data)} bytes; mode={mode}")
                     finally:
                         if restore_timeout is not None:
                             self.sock.settimeout(restore_timeout)
@@ -373,12 +369,10 @@ class UnityConnection:
                         if refreshed_instance and isinstance(refreshed_instance.port, int):
                             new_port = refreshed_instance.port
                             logger.debug(
-                                "Rediscovered instance %s on port %s", self.instance_id, new_port
-                            )
+                                f"Rediscovered instance {self.instance_id} on port {new_port}")
                         else:
                             logger.warning(
-                                "Instance %s not found during reconnection; falling back to port scan",
-                                self.instance_id,
+                                f"Instance {self.instance_id} not found during reconnection; falling back to port scan",
                             )
 
                     # Fallback to registry default if instance-specific discovery failed
@@ -386,14 +380,14 @@ class UnityConnection:
                         new_port = stdio_port_registry.get_port(
                             self.instance_id)
                         logger.info(
-                            "Using Unity port from stdio_port_registry: %s", new_port)
+                            f"Using Unity port from stdio_port_registry: {new_port}")
 
                     if new_port != self.port:
                         logger.info(
                             f"Unity port changed {self.port} -> {new_port}")
                     self.port = new_port
                 except Exception as de:
-                    logger.debug("Port discovery failed: %s", de)
+                    logger.debug(f"Port discovery failed: {de}")
 
                 if attempt < attempts:
                     # Heartbeat-aware, jittered backoff

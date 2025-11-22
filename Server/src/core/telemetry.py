@@ -136,11 +136,7 @@ class TelemetryConfig:
             self.endpoint = self._validated_endpoint(default_ep, default_ep)
         try:
             logger.info(
-                "Telemetry configured: endpoint=%s (default=%s), timeout_env=%s",
-                self.endpoint,
-                default_ep,
-                os.environ.get("UNITY_MCP_TELEMETRY_TIMEOUT") or "<unset>"
-            )
+                f"Telemetry configured: endpoint={self.endpoint} (default={default_ep}), timeout_env={os.environ.get('UNITY_MCP_TELEMETRY_TIMEOUT') or '<unset>'}")
         except Exception:
             pass
 
@@ -156,7 +152,7 @@ class TelemetryConfig:
         except Exception:
             self.timeout = 1.5
         try:
-            logger.info("Telemetry timeout=%.2fs", self.timeout)
+            logger.info(f"Telemetry timeout={self.timeout:.2f}s")
         except Exception:
             pass
 
@@ -324,8 +320,8 @@ class TelemetryCollector:
         try:
             self._queue.put_nowait(record)
         except queue.Full:
-            logger.debug("Telemetry queue full; dropping %s",
-                         record.record_type)
+            logger.debug(
+                f"Telemetry queue full; dropping {record.record_type}")
 
     def _worker_loop(self):
         """Background worker that serializes telemetry sends."""
