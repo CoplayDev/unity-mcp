@@ -6,10 +6,16 @@ namespace MCPForUnity.Editor.Services
     public interface IServerManagementService
     {
         /// <summary>
-        /// Start the local HTTP server in a new terminal window
+        /// Start the local HTTP server in a new terminal window.
+        /// Stops any existing server on the port and clears the uvx cache first.
         /// </summary>
         /// <returns>True if server was started successfully, false otherwise</returns>
         bool StartLocalHttpServer();
+
+        /// <summary>
+        /// Stop the local HTTP server by finding the process listening on the configured port
+        /// </summary>
+        bool StopLocalHttpServer();
 
         /// <summary>
         /// Attempts to get the command that will be executed when starting the local HTTP server

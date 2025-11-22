@@ -18,7 +18,10 @@
                     <ui:Button name="copy-http-server-command-button" text="Copy" class="icon-button-vertical" />
                 </ui:VisualElement>
                 <ui:Label name="http-server-command-hint" class="help-text" />
-                <ui:Button name="start-http-server-button" text="Start Local HTTP Server" class="secondary-button" style="align-self: flex-start; margin-bottom: 6px;" />
+                <ui:VisualElement style="flex-direction: row; justify-content: flex-start; margin-bottom: 6px;">
+                    <ui:Button name="start-http-server-button" text="Start Server" class="secondary-button" style="width: auto; flex-grow: 1; margin-right: 5px;" />
+                    <ui:Button name="stop-http-server-button" text="Stop Server" class="secondary-button" style="width: auto; flex-grow: 1;" />
+                </ui:VisualElement>
             </ui:VisualElement>
             <ui:VisualElement class="setting-row" name="unity-socket-port-row">
                 <ui:Label text="Unity Socket Port:" class="setting-label" />

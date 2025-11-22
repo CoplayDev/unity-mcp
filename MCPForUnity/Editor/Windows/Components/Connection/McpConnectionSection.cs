@@ -1,13 +1,13 @@
 using System;
 using System.Threading.Tasks;
-using UnityEditor;
-using UnityEditor.UIElements;
-using UnityEngine;
-using UnityEngine.UIElements;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Services.Transport;
+using UnityEditor;
+using UnityEditor.UIElements;
+using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace MCPForUnity.Editor.Windows.Components.Connection
 {
@@ -33,6 +33,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         private Label httpServerCommandHint;
         private TextField httpUrlField;
         private Button startHttpServerButton;
+        private Button stopHttpServerButton;
         private VisualElement unitySocketPortRow;
         private TextField unityPortField;
         private VisualElement statusIndicator;
@@ -67,6 +68,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             httpServerCommandHint = Root.Q<Label>("http-server-command-hint");
             httpUrlField = Root.Q<TextField>("http-url");
             startHttpServerButton = Root.Q<Button>("start-http-server-button");
+            stopHttpServerButton = Root.Q<Button>("stop-http-server-button");
             unitySocketPortRow = Root.Q<VisualElement>("unity-socket-port-row");
             unityPortField = Root.Q<TextField>("unity-port");
             statusIndicator = Root.Q<VisualElement>("status-indicator");
@@ -120,6 +122,11 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             if (startHttpServerButton != null)
             {
                 startHttpServerButton.clicked += OnStartLocalHttpServerClicked;
+            }
+
+            if (stopHttpServerButton != null)
+            {
+                stopHttpServerButton.clicked += OnStopLocalHttpServerClicked;
             }
 
             if (copyHttpServerCommandButton != null)
@@ -265,6 +272,15 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             startHttpServerButton.tooltip = canStart
                 ? string.Empty
                 : "Start Local HTTP Server is available only for localhost URLs.";
+
+            if (stopHttpServerButton != null)
+            {
+                stopHttpServerButton.SetEnabled(canStart);
+                stopHttpServerButton.tooltip = canStart
+                    ? string.Empty
+                    : "Stop Local HTTP Server is available only for localhost URLs.";
+            }
+
             UpdateHttpServerCommandDisplay();
         }
 
@@ -278,6 +294,11 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             {
                 UpdateStartHttpButtonState();
             }
+        }
+
+        private void OnStopLocalHttpServerClicked()
+        {
+            MCPServiceLocator.Server.StopLocalHttpServer();
         }
 
         private void PersistUnityPortFromField()

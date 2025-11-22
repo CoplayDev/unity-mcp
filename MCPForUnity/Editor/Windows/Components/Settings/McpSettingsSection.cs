@@ -1,13 +1,13 @@
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Services;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
-using MCPForUnity.Editor.Constants;
-using MCPForUnity.Editor.Helpers;
-using MCPForUnity.Editor.Services;
 
 namespace MCPForUnity.Editor.Windows.Components.Settings
 {
@@ -26,7 +26,6 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
         private TextField uvxPathOverride;
         private Button browseUvxButton;
         private Button clearUvxButton;
-        private Button clearUvxCacheButton;
         private VisualElement uvxPathStatus;
         private TextField gitUrlOverride;
         private Button clearGitUrlButton;
@@ -70,7 +69,6 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             uvxPathStatus = Root.Q<VisualElement>("uv-path-status");
             gitUrlOverride = Root.Q<TextField>("git-url-override");
             clearGitUrlButton = Root.Q<Button>("clear-git-url-button");
-            clearUvxCacheButton = Root.Q<Button>("clear-uvx-cache-button");
         }
 
         private void InitializeUI()
@@ -107,11 +105,6 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
 
             browseUvxButton.clicked += OnBrowseUvxClicked;
             clearUvxButton.clicked += OnClearUvxClicked;
-
-            if (clearUvxCacheButton != null)
-            {
-                clearUvxCacheButton.clicked += OnClearUvxCacheClicked;
-            }
 
             gitUrlOverride.RegisterValueChangedCallback(evt =>
             {
@@ -231,29 +224,6 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             MCPServiceLocator.Paths.ClearUvxPathOverride();
             UpdatePathOverrides();
             McpLog.Info("UV path override cleared");
-        }
-
-        private void OnClearUvxCacheClicked()
-        {
-            if (EditorUtility.DisplayDialog("Clear uv Cache",
-                "This will clear the local uv cache for the MCP server package. The server will be re-downloaded on next launch.\n\nContinue?",
-                "Clear Cache",
-                "Cancel"))
-            {
-                bool success = MCPServiceLocator.Cache.ClearUvxCache();
-
-                if (success)
-                {
-                    McpLog.Info("uv cache cleared successfully");
-                }
-                else
-                {
-                    McpLog.Error("Failed to clear uv cache");
-                    EditorUtility.DisplayDialog("Error",
-                        "Failed to clear uv cache. Check the console for details.",
-                        "OK");
-                }
-            }
         }
     }
 }
