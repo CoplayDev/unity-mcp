@@ -50,7 +50,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private TimeSpan _keepAliveInterval = DefaultKeepAliveInterval;
         private TimeSpan _socketKeepAliveInterval = DefaultKeepAliveInterval;
         private volatile bool _isConnected;
-        private volatile bool _isReconnecting;
+        private int _isReconnectingFlag;
         private TransportState _state = TransportState.Disconnected(TransportDisplayName, "Transport not started");
         private bool _disposed;
 
@@ -605,7 +605,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 return;
             }
 
-            if (_isReconnecting)
+            if (Interlocked.CompareExchange(ref _isReconnectingFlag, 1, 0) != 0)
             {
                 return;
             }
@@ -616,7 +616,6 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
             await StopConnectionLoopsAsync(awaitTasks: false).ConfigureAwait(false);
 
-            _isReconnecting = true;
             _ = Task.Run(() => AttemptReconnectAsync(_lifecycleCts.Token), CancellationToken.None);
         }
 
@@ -650,7 +649,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             }
             finally
             {
-                _isReconnecting = false;
+                Interlocked.Exchange(ref _isReconnectingFlag, 0);
             }
 
             _state = TransportState.Disconnected(TransportDisplayName, "Failed to reconnect");
