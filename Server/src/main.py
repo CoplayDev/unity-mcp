@@ -254,7 +254,7 @@ async def health_http(_: Request) -> JSONResponse:
 @mcp.custom_route("/plugin/sessions", methods=["GET"])
 async def plugin_sessions_route(_: Request) -> JSONResponse:
     data = await PluginHub.get_sessions()
-    return JSONResponse(data)
+    return JSONResponse(data.model_dump())
 
 
 # Initialize and register middleware for session-based Unity instance routing
