@@ -18,7 +18,7 @@ namespace MCPForUnity.Editor.Services.Transport
         public TransportManager()
         {
             Configure(
-                () => new WebSocketTransportClient(),
+                () => new WebSocketTransportClient(MCPServiceLocator.ToolDiscovery),
                 () => new StdioTransportClient());
         }
 

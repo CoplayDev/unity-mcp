@@ -381,12 +381,6 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 healthStatusLabel.text = "Healthy";
                 healthIndicator.AddToClassList("healthy");
                 McpLog.Debug($"Connection verification successful: {result.Message}");
-
-                var mode = bridgeService.ActiveMode;
-                if (mode == TransportMode.Http)
-                {
-                    CustomToolRegistrationProcessor.NotifyHttpConnectionHealthy();
-                }
             }
             else if (result.HandshakeValid)
             {

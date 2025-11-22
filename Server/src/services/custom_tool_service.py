@@ -1,61 +1,56 @@
 import asyncio
-import inspect
 import logging
 import time
+from hashlib import sha256
+from typing import Optional
 
-from fastmcp import Context, FastMCP
+from fastmcp import FastMCP
 from pydantic import BaseModel, Field, ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from services.registry import mcp_for_unity_tool
-from core.telemetry_decorator import telemetry_tool
-from services.tools import get_unity_instance_from_context
+from models.models import MCPResponse, ToolDefinitionModel, ToolParameterModel
 from transport.unity_transport import send_with_unity_instance
-from transport.legacy.unity_connection import async_send_command_with_retry
+from transport.legacy.unity_connection import (
+    async_send_command_with_retry,
+    get_unity_connection_pool,
+)
+from transport.plugin_hub import PluginHub
 
 logger = logging.getLogger("mcp-for-unity-server")
 
-_TYPE_MAP = {
-    "string": {"type": "string"},
-    "integer": {"type": "integer"},
-    "number": {"type": "number"},
-    "boolean": {"type": "boolean"},
-    "array": {"type": "array"},
-    "object": {"type": "object"},
-}
 _DEFAULT_POLL_INTERVAL = 1.0
 _MAX_POLL_SECONDS = 600
 
 
-class ToolParameterModel(BaseModel):
-    name: str
-    description: str | None = None
-    type: str = Field(default="string")
-    required: bool = Field(default=True)
-    default_value: str | None = None
-
-
-class ToolDefinitionModel(BaseModel):
-    name: str
-    description: str | None = None
-    structured_output: bool | None = True
-    requires_polling: bool | None = False
-    poll_action: str | None = "status"
-    parameters: list[ToolParameterModel] = Field(default_factory=list)
-
-
 class RegisterToolsPayload(BaseModel):
     project_id: str
+    project_hash: str | None = None
     tools: list[ToolDefinitionModel]
 
 
+class ToolRegistrationResponse(BaseModel):
+    success: bool
+    registered: list[str]
+    replaced: list[str]
+    message: str
+
+
 class CustomToolService:
+    _instance: "CustomToolService | None" = None
+
     def __init__(self, mcp: FastMCP):
+        CustomToolService._instance = self
         self._mcp = mcp
-        self._project_tools: dict[str, dict[str, object]] = {}
-        self._metadata: dict[str, list[ToolDefinitionModel]] = {}
+        self._project_tools: dict[str, dict[str, ToolDefinitionModel]] = {}
+        self._hash_to_project: dict[str, str] = {}
         self._register_http_routes()
+
+    @classmethod
+    def get_instance(cls) -> "CustomToolService":
+        if cls._instance is None:
+            raise RuntimeError("CustomToolService has not been initialized")
+        return cls._instance
 
     # --- HTTP Routes -----------------------------------------------------
     def _register_http_routes(self) -> None:
@@ -66,151 +61,90 @@ class CustomToolService:
             except ValidationError as exc:
                 return JSONResponse({"success": False, "error": exc.errors()}, status_code=400)
 
-            duplicates = [
-                tool.name for tool in payload.tools if self._is_name_taken(tool.name)]
-            if duplicates:
-                return JSONResponse(
-                    {
-                        "success": False,
-                        "error": f"Tool(s) already exist: {', '.join(duplicates)}",
-                        "duplicates": duplicates,
-                    },
-                    status_code=409,
-                )
-
-            registered = []
+            registered: list[str] = []
+            replaced: list[str] = []
             for tool in payload.tools:
+                if self._is_registered(payload.project_id, tool.name):
+                    replaced.append(tool.name)
                 self._register_tool(payload.project_id, tool)
                 registered.append(tool.name)
 
-            return JSONResponse(
-                {
-                    "success": True,
-                    "registered": registered,
-                    "message": f"Registered {len(registered)} tool(s)",
-                }
-            )
+            if payload.project_hash:
+                self._hash_to_project[payload.project_hash.lower(
+                )] = payload.project_id
 
-        @self._mcp.custom_route("/tools", methods=["GET"])
-        async def list_tools(_: Request) -> JSONResponse:
-            return JSONResponse(self.list_registered_tools())
+            message = f"Registered {len(registered)} tool(s)"
+            if replaced:
+                message += f" (replaced: {', '.join(replaced)})"
 
-        @self._mcp.custom_route("/tools/{project_id}", methods=["DELETE"])
-        async def unregister_project(request: Request) -> JSONResponse:
-            project_id = request.path_params.get("project_id", "")
-            removed = self.unregister_project(project_id)
-            return JSONResponse(
-                {
-                    "success": True,
-                    "unregistered": removed,
-                    "message": f"Unregistered {len(removed)} tool(s) from project {project_id}",
-                }
+            response = ToolRegistrationResponse(
+                success=True,
+                registered=registered,
+                replaced=replaced,
+                message=message,
             )
+            return JSONResponse(response.model_dump())
 
     # --- Public API for MCP tools ---------------------------------------
-    def list_registered_tools(self) -> dict[str, object]:
-        tools = []
-        for entries in self._metadata.values():
-            tools.extend(entry.model_dump() for entry in entries)
-        return {"success": True, "tools": tools, "count": len(tools)}
+    async def list_registered_tools(self, project_id: str) -> list[ToolDefinitionModel]:
+        legacy = list(self._project_tools.get(project_id, {}).values())
+        hub_tools = await PluginHub.get_tools_for_project(project_id)
+        return legacy + hub_tools
 
-    def unregister_project(self, project_id: str) -> list[str]:
-        removed = []
-        entries = self._project_tools.pop(project_id, {})
-        for name, tool in entries.items():
-            removed.append(name)
-            try:
-                tool.disable()
-                self._mcp._tool_manager.remove_tool(name)
-            except Exception as exc:  # pragma: no cover - best effort
-                logger.debug("Failed to disable tool %s: %s", name, exc)
-        self._metadata.pop(project_id, None)
-        return removed
+    async def get_tool_definition(self, project_id: str, tool_name: str) -> ToolDefinitionModel | None:
+        tool = self._project_tools.get(project_id, {}).get(tool_name)
+        if tool:
+            return tool
+        return await PluginHub.get_tool_definition(project_id, tool_name)
+
+    async def execute_tool(
+        self,
+        project_id: str,
+        tool_name: str,
+        unity_instance: str | None,
+        params: dict[str, object] | None = None,
+    ) -> MCPResponse:
+        params = params or {}
+        logger.info(
+            f"Executing tool '{tool_name}' for project '{project_id}' (instance={unity_instance}) with params: {params}"
+        )
+
+        definition = await self.get_tool_definition(project_id, tool_name)
+        if definition is None:
+            return MCPResponse(
+                success=False,
+                message=f"Tool '{tool_name}' not found for project {project_id}",
+            )
+
+        response = await send_with_unity_instance(
+            async_send_command_with_retry,
+            unity_instance,
+            tool_name,
+            params,
+        )
+
+        if not definition.requires_polling:
+            result = self._normalize_response(response)
+            logger.info(f"Tool '{tool_name}' immediate response: {result}")
+            return result
+
+        result = await self._poll_until_complete(
+            tool_name,
+            unity_instance,
+            params,
+            response,
+            definition.poll_action or "status",
+        )
+        logger.info(f"Tool '{tool_name}' polled response: {result}")
+        return result
 
     # --- Internal helpers ------------------------------------------------
-    def _is_name_taken(self, tool_name: str) -> bool:
-        if tool_name in getattr(self._mcp._tool_manager, "_tools", {}):
-            return True
-        for tools in self._project_tools.values():
-            if tool_name in tools:
-                return True
-        return False
+    def _is_registered(self, project_id: str, tool_name: str) -> bool:
+        return tool_name in self._project_tools.get(project_id, {})
 
     def _register_tool(self, project_id: str, definition: ToolDefinitionModel) -> None:
-        tool = self._create_dynamic_tool(project_id, definition)
-        self._project_tools.setdefault(project_id, {})[definition.name] = tool
-        self._metadata.setdefault(project_id, []).append(definition)
-
-    def _create_dynamic_tool(self, project_id: str, definition: ToolDefinitionModel):
-        tool_name = definition.name
-
-        @mcp_for_unity_tool(name=tool_name, description=definition.description)
-        async def dynamic_tool(ctx: Context, **kwargs):
-            unity_instance = get_unity_instance_from_context(ctx)
-            params = {k: v for k, v in kwargs.items() if v is not None}
-            response = await send_with_unity_instance(
-                async_send_command_with_retry, unity_instance, tool_name, params
-            )
-
-            if not definition.requires_polling:
-                if isinstance(response, dict):
-                    return response
-                return {"success": False, "message": str(response)}
-
-            return await self._poll_until_complete(
-                tool_name,
-                unity_instance,
-                params,
-                response,
-                definition.poll_action or "status",
-            )
-
-        dynamic_tool.__signature__ = self._build_signature(
-            definition.parameters)
-
-        wrapped = telemetry_tool(tool_name)(dynamic_tool)
-        tool = self._mcp.tool(
-            name=tool_name, description=definition.description)(wrapped)
-        tool.parameters = self._build_input_schema(definition.parameters)
-        return tool
-
-    def _build_signature(self, parameters: list[ToolParameterModel]) -> inspect.Signature:
-        sig_params = [
-            inspect.Parameter(
-                "ctx",
-                inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                annotation=Context,
-            )
-        ]
-
-        for param in parameters:
-            default = inspect._empty if param.required else None
-            sig_params.append(
-                inspect.Parameter(
-                    param.name,
-                    inspect.Parameter.KEYWORD_ONLY,
-                    default=default,
-                )
-            )
-
-        return inspect.Signature(parameters=sig_params)
-
-    def _build_input_schema(self, parameters: list[ToolParameterModel]) -> dict[str, object]:
-        schema = {"type": "object", "properties": {},
-                  "additionalProperties": False}
-        required = []
-        for param in parameters:
-            prop = _TYPE_MAP.get(param.type, {"type": "string"}).copy()
-            if param.description:
-                prop["description"] = param.description
-            if param.default_value is not None:
-                prop["default"] = param.default_value
-            schema["properties"][param.name] = prop
-            if param.required:
-                required.append(param.name)
-        if required:
-            schema["required"] = required
-        return schema
+        self._project_tools.setdefault(project_id, {})[
+            definition.name] = definition
 
     async def _poll_until_complete(
         self,
@@ -219,7 +153,7 @@ class CustomToolService:
         initial_params: dict[str, object],
         initial_response,
         poll_action: str,
-    ):
+    ) -> MCPResponse:
         poll_params = dict(initial_params)
         poll_params["action"] = poll_action or "status"
 
@@ -233,11 +167,11 @@ class CustomToolService:
                 return self._normalize_response(response)
 
             if time.time() > deadline:
-                return {
-                    "success": False,
-                    "message": f"Timeout waiting for {tool_name} to complete",
-                    "data": self._safe_response(response),
-                }
+                return MCPResponse(
+                    success=False,
+                    message=f"Timeout waiting for {tool_name} to complete",
+                    data=self._safe_response(response),
+                )
 
             await asyncio.sleep(poll_interval)
 
@@ -246,8 +180,7 @@ class CustomToolService:
                     async_send_command_with_retry, unity_instance, tool_name, poll_params
                 )
             except Exception as exc:  # pragma: no cover - network/domain reload variability
-                logger.debug("Polling %s failed, will retry: %s",
-                             tool_name, exc)
+                logger.debug(f"Polling {tool_name} failed, will retry: {exc}")
                 # Back off modestly but stay responsive.
                 response = {
                     "_mcp_status": "pending",
@@ -287,10 +220,39 @@ class CustomToolService:
 
         return "final", _DEFAULT_POLL_INTERVAL
 
-    def _normalize_response(self, response):
-        if isinstance(response, dict):
+    def _normalize_response(self, response) -> MCPResponse:
+        if isinstance(response, MCPResponse):
             return response
-        return {"success": False, "message": str(response)}
+        if isinstance(response, dict):
+            return MCPResponse(
+                success=response.get("success", True),
+                message=response.get("message"),
+                error=response.get("error"),
+                data=response.get(
+                    "data", response) if "data" not in response else response["data"],
+            )
+
+        success = True
+        message = None
+        error = None
+        data = None
+
+        if isinstance(response, dict):
+            success = response.get("success", True)
+            if "_mcp_status" in response and response["_mcp_status"] == "error":
+                success = False
+            message = str(response.get("message")) if response.get(
+                "message") else None
+            error = str(response.get("error")) if response.get(
+                "error") else None
+            data = response.get("data")
+            if "success" not in response and "_mcp_status" not in response:
+                data = response
+        else:
+            success = False
+            message = str(response)
+
+        return MCPResponse(success=success, message=message, error=error, data=data)
 
     def _safe_response(self, response):
         if isinstance(response, dict):
@@ -298,3 +260,67 @@ class CustomToolService:
         if response is None:
             return None
         return {"message": str(response)}
+
+    def _safe_response(self, response):
+        if isinstance(response, dict):
+            return response
+        if response is None:
+            return None
+        return {"message": str(response)}
+
+
+def compute_project_id(project_name: str, project_path: str) -> str:
+    combined = f"{project_name}:{project_path}"
+    return sha256(combined.encode("utf-8")).hexdigest().upper()[:16]
+
+
+def resolve_project_id_for_unity_instance(unity_instance: str | None) -> str | None:
+    if unity_instance is None:
+        return None
+
+    # stdio transport: resolve via discovered instances with name+path
+    try:
+        pool = get_unity_connection_pool()
+        instances = pool.discover_all_instances()
+        target = None
+        if "@" in unity_instance:
+            name_part, _, hash_hint = unity_instance.partition("@")
+            target = next(
+                (
+                    inst for inst in instances
+                    if inst.name == name_part and inst.hash.startswith(hash_hint)
+                ),
+                None,
+            )
+        else:
+            target = next(
+                (
+                    inst for inst in instances
+                    if inst.id == unity_instance or inst.hash.startswith(unity_instance)
+                ),
+                None,
+            )
+
+        if target:
+            return compute_project_id(target.name, target.path)
+    except Exception:
+        logger.debug(
+            f"Failed to resolve project id via connection pool for {unity_instance}")
+
+    # HTTP/WebSocket transport: resolve via PluginHub using project_hash
+    try:
+        hash_part: Optional[str] = None
+        if "@" in unity_instance:
+            _, _, suffix = unity_instance.partition("@")
+            hash_part = suffix or None
+        else:
+            hash_part = unity_instance
+
+        if hash_part:
+            # Return the hash directly as the identifier for WebSocket tools
+            return hash_part.lower()
+    except Exception:
+        logger.debug(
+            f"Failed to resolve project id via plugin hub for {unity_instance}")
+
+    return None

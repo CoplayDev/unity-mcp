@@ -17,7 +17,6 @@ namespace MCPForUnity.Editor.Services
         private static IPackageUpdateService _packageUpdateService;
         private static IPlatformService _platformService;
         private static IToolDiscoveryService _toolDiscoveryService;
-        private static ICustomToolRegistrationService _customToolRegistrationService;
         private static ICacheManagementService _cacheManagementService;
         private static IServerManagementService _serverManagementService;
         private static TransportManager _transportManager;
@@ -29,7 +28,6 @@ namespace MCPForUnity.Editor.Services
         public static IPackageUpdateService Updates => _packageUpdateService ??= new PackageUpdateService();
         public static IPlatformService Platform => _platformService ??= new PlatformService();
         public static IToolDiscoveryService ToolDiscovery => _toolDiscoveryService ??= new ToolDiscoveryService();
-        public static ICustomToolRegistrationService CustomToolRegistration => _customToolRegistrationService ??= new CustomToolRegistrationService(ToolDiscovery);
         public static ICacheManagementService Cache => _cacheManagementService ??= new CacheManagementService();
         public static IServerManagementService Server => _serverManagementService ??= new ServerManagementService();
         public static TransportManager TransportManager => _transportManager ??= new TransportManager();
@@ -55,8 +53,6 @@ namespace MCPForUnity.Editor.Services
                 _platformService = ps;
             else if (implementation is IToolDiscoveryService td)
                 _toolDiscoveryService = td;
-            else if (implementation is ICustomToolRegistrationService ctr)
-                _customToolRegistrationService = ctr;
             else if (implementation is ICacheManagementService cm)
                 _cacheManagementService = cm;
             else if (implementation is IServerManagementService sm)
@@ -77,7 +73,6 @@ namespace MCPForUnity.Editor.Services
             (_packageUpdateService as IDisposable)?.Dispose();
             (_platformService as IDisposable)?.Dispose();
             (_toolDiscoveryService as IDisposable)?.Dispose();
-            (_customToolRegistrationService as IDisposable)?.Dispose();
             (_cacheManagementService as IDisposable)?.Dispose();
             (_serverManagementService as IDisposable)?.Dispose();
             (_transportManager as IDisposable)?.Dispose();
@@ -89,7 +84,6 @@ namespace MCPForUnity.Editor.Services
             _packageUpdateService = null;
             _platformService = null;
             _toolDiscoveryService = null;
-            _customToolRegistrationService = null;
             _cacheManagementService = null;
             _serverManagementService = null;
             _transportManager = null;

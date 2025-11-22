@@ -18,6 +18,7 @@ from transport.models import (
     RegisteredMessage,
     ExecuteCommandMessage,
     RegisterMessage,
+    RegisterToolsMessage,
     PongMessage,
     CommandResultMessage,
     SessionList,
@@ -66,21 +67,23 @@ class PluginHub(WebSocketEndpoint):
 
     async def on_receive(self, websocket: WebSocket, data: Any) -> None:
         if not isinstance(data, dict):
-            logger.warning("Received non-object payload from plugin: %r", data)
+            logger.warning(f"Received non-object payload from plugin: {data}")
             return
 
         message_type = data.get("type")
         try:
             if message_type == "register":
                 await self._handle_register(websocket, RegisterMessage(**data))
+            elif message_type == "register_tools":
+                await self._handle_register_tools(websocket, RegisterToolsMessage(**data))
             elif message_type == "pong":
                 await self._handle_pong(PongMessage(**data))
             elif message_type == "command_result":
                 await self._handle_command_result(CommandResultMessage(**data))
             else:
-                logger.debug("Ignoring plugin message: %s", data)
+                logger.debug(f"Ignoring plugin message: {data}")
         except Exception as e:
-            logger.error("Error handling message type %s: %s", message_type, e)
+            logger.error(f"Error handling message type {message_type}: {e}")
 
     async def on_disconnect(self, websocket: WebSocket, close_code: int) -> None:
         cls = type(self)
@@ -94,8 +97,8 @@ class PluginHub(WebSocketEndpoint):
                 cls._connections.pop(session_id, None)
                 if cls._registry:
                     await cls._registry.unregister(session_id)
-                logger.info("Plugin session %s disconnected (%s)",
-                            session_id, close_code)
+                logger.info(
+                    f"Plugin session {session_id} disconnected ({close_code})")
 
     # ------------------------------------------------------------------
     # Public API
@@ -147,6 +150,38 @@ class PluginHub(WebSocketEndpoint):
             }
         )
 
+    @classmethod
+    async def get_tools_for_project(cls, project_hash: str) -> list[Any]:
+        """Retrieve tools registered for a active project hash."""
+        if cls._registry is None:
+            return []
+
+        session_id = await cls._registry.get_session_id_by_hash(project_hash)
+        if not session_id:
+            return []
+
+        session = await cls._registry.get_session(session_id)
+        if not session:
+            return []
+
+        return list(session.tools.values())
+
+    @classmethod
+    async def get_tool_definition(cls, project_hash: str, tool_name: str) -> Any | None:
+        """Retrieve a specific tool definition for an active project hash."""
+        if cls._registry is None:
+            return None
+
+        session_id = await cls._registry.get_session_id_by_hash(project_hash)
+        if not session_id:
+            return None
+
+        session = await cls._registry.get_session(session_id)
+        if not session:
+            return None
+
+        return session.tools.get(tool_name)
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -175,7 +210,27 @@ class PluginHub(WebSocketEndpoint):
         session = await registry.register(session_id, project_name, project_hash, unity_version)
         async with lock:
             cls._connections[session.session_id] = websocket
-        logger.info("Plugin registered: %s (%s)", project_name, project_hash)
+        logger.info(f"Plugin registered: {project_name} ({project_hash})")
+
+    async def _handle_register_tools(self, websocket: WebSocket, payload: RegisterToolsMessage) -> None:
+        cls = type(self)
+        registry = cls._registry
+        lock = cls._lock
+        if registry is None or lock is None:
+            return
+
+        # Find session_id for this websocket
+        async with lock:
+            session_id = next(
+                (sid for sid, ws in cls._connections.items() if ws is websocket), None)
+
+        if not session_id:
+            logger.warning("Received register_tools from unknown connection")
+            return
+
+        await registry.register_tools_for_session(session_id, payload.tools)
+        logger.info(
+            f"Registered {len(payload.tools)} tools for session {session_id}")
 
     async def _handle_command_result(self, payload: CommandResultMessage) -> None:
         cls = type(self)
@@ -186,7 +241,7 @@ class PluginHub(WebSocketEndpoint):
         result = payload.result
 
         if not command_id:
-            logger.warning("Command result missing id: %s", payload)
+            logger.warning(f"Command result missing id: {payload}")
             return
 
         async with lock:
@@ -276,18 +331,14 @@ class PluginHub(WebSocketEndpoint):
             if wait_started is None:
                 wait_started = time.monotonic()
                 logger.debug(
-                    "No plugin session available (instance=%s); waiting up to %.2fs",
-                    unity_instance or "default",
-                    deadline - wait_started,
+                    f"No plugin session available (instance={unity_instance or 'default'}); waiting up to {deadline - wait_started:.2f}s",
                 )
             await asyncio.sleep(sleep_seconds)
             session_id, session_count = await _try_once()
 
         if session_id is not None and wait_started is not None:
             logger.debug(
-                "Plugin session restored after %.3fs (instance=%s)",
-                time.monotonic() - wait_started,
-                unity_instance or "default",
+                f"Plugin session restored after {time.monotonic() - wait_started:.3f}s (instance={unity_instance or 'default'})",
             )
         if session_id is None and not target_hash and session_count > 1:
             raise RuntimeError(
@@ -297,9 +348,7 @@ class PluginHub(WebSocketEndpoint):
 
         if session_id is None:
             logger.warning(
-                "No Unity plugin reconnected within %.2fs (instance=%s)",
-                max_retries * sleep_seconds,
-                unity_instance or "default",
+                f"No Unity plugin reconnected within {max_retries * sleep_seconds:.2f}s (instance={unity_instance or 'default'})",
             )
             # At this point we've given the plugin ample time to reconnect; surface
             # a clear error so the client can prompt the user to open Unity.

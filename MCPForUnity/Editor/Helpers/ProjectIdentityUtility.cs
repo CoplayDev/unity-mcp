@@ -94,7 +94,7 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     sb.Append(b.ToString("x2"));
                 }
-                return sb.ToString(0, Math.Min(16, sb.Length));
+                return sb.ToString(0, Math.Min(16, sb.Length)).ToLowerInvariant();
             }
             catch
             {

@@ -1,5 +1,6 @@
 from typing import Any
 from pydantic import BaseModel, Field
+from models.models import ToolDefinitionModel
 
 # Outgoing (Server -> Plugin)
 
@@ -30,6 +31,11 @@ class RegisterMessage(BaseModel):
     project_name: str = "Unknown Project"
     project_hash: str
     unity_version: str = "Unknown"
+
+
+class RegisterToolsMessage(BaseModel):
+    type: str = "register_tools"
+    tools: list[ToolDefinitionModel]
 
 
 class PongMessage(BaseModel):

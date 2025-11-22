@@ -34,6 +34,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private static readonly TimeSpan DefaultKeepAliveInterval = TimeSpan.FromSeconds(15);
         private static readonly TimeSpan DefaultCommandTimeout = TimeSpan.FromSeconds(30);
 
+        private readonly IToolDiscoveryService _toolDiscoveryService;
         private ClientWebSocket _socket;
         private CancellationTokenSource _lifecycleCts;
         private Task _receiveTask;
@@ -50,6 +51,11 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private volatile bool _isConnected;
         private volatile bool _isReconnecting;
         private TransportState _state = TransportState.Disconnected(TransportDisplayName, "Transport not started");
+
+        public WebSocketTransportClient(IToolDiscoveryService toolDiscoveryService = null)
+        {
+            _toolDiscoveryService = toolDiscoveryService;
+        }
 
         public bool IsConnected => _isConnected;
         public string TransportName => TransportDisplayName;
@@ -291,7 +297,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     ApplyWelcome(payload);
                     break;
                 case "registered":
-                    HandleRegistered(payload);
+                    await HandleRegisteredAsync(payload, token).ConfigureAwait(false);
                     break;
                 case "execute":
                     await HandleExecuteAsync(payload, token).ConfigureAwait(false);
@@ -323,7 +329,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             }
         }
 
-        private void HandleRegistered(JObject payload)
+        private async Task HandleRegisteredAsync(JObject payload, CancellationToken token)
         {
             string newSessionId = payload.Value<string>("session_id");
             if (!string.IsNullOrEmpty(newSessionId))
@@ -332,7 +338,56 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 ProjectIdentityUtility.SetSessionId(_sessionId);
                 _state = TransportState.Connected(TransportDisplayName, sessionId: _sessionId, details: _endpointUri.ToString());
                 McpLog.Info($"[WebSocket] Registered with session ID: {_sessionId}");
+
+                await SendRegisterToolsAsync(token).ConfigureAwait(false);
             }
+        }
+
+        private async Task SendRegisterToolsAsync(CancellationToken token)
+        {
+            if (_toolDiscoveryService == null) return;
+
+            var tools = _toolDiscoveryService.DiscoverAllTools();
+            var toolsArray = new JArray();
+
+            foreach (var tool in tools)
+            {
+                var toolObj = new JObject
+                {
+                    ["name"] = tool.Name,
+                    ["description"] = tool.Description,
+                    ["structured_output"] = tool.StructuredOutput,
+                    ["requires_polling"] = tool.RequiresPolling,
+                    ["poll_action"] = tool.PollAction
+                };
+
+                var paramsArray = new JArray();
+                if (tool.Parameters != null)
+                {
+                    foreach (var p in tool.Parameters)
+                    {
+                        paramsArray.Add(new JObject
+                        {
+                            ["name"] = p.Name,
+                            ["description"] = p.Description,
+                            ["type"] = p.Type,
+                            ["required"] = p.Required,
+                            ["default_value"] = p.DefaultValue
+                        });
+                    }
+                }
+                toolObj["parameters"] = paramsArray;
+                toolsArray.Add(toolObj);
+            }
+
+            var payload = new JObject
+            {
+                ["type"] = "register_tools",
+                ["tools"] = toolsArray
+            };
+
+            await SendJsonAsync(payload, token).ConfigureAwait(false);
+            McpLog.Info($"[WebSocket] Sent {tools.Count} tools registration");
         }
 
         private async Task HandleExecuteAsync(JObject payload, CancellationToken token)

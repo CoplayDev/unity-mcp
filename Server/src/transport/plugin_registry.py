@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 import asyncio
+
+from models.models import ToolDefinitionModel
 
 
 @dataclass(slots=True)
@@ -18,6 +20,8 @@ class PluginSession:
     unity_version: str
     registered_at: datetime
     connected_at: datetime
+    tools: dict[str, ToolDefinitionModel] = field(default_factory=dict)
+    project_id: str | None = None
 
 
 class PluginRegistry:
@@ -85,6 +89,17 @@ class PluginRegistry:
                 mapped = self._hash_to_session.get(session.project_hash)
                 if mapped == session_id:
                     del self._hash_to_session[session.project_hash]
+
+    async def register_tools_for_session(self, session_id: str, tools: list[ToolDefinitionModel]) -> None:
+        """Register tools for a specific session."""
+        async with self._lock:
+            session = self._sessions.get(session_id)
+            if session:
+                # Replace existing tools or merge? Usually replace for "set state".
+                # We will replace the dict but keep the field.
+                session.tools.clear()
+                for tool in tools:
+                    session.tools[tool.name] = tool
 
     async def get_session(self, session_id: str) -> PluginSession | None:
         """Fetch a session by its ``session_id``."""
