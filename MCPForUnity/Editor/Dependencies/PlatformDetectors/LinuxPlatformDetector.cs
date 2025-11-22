@@ -66,7 +66,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             return "https://www.python.org/downloads/source/";
         }
 
-        public override string GetUVInstallUrl()
+        public override string GetUvInstallUrl()
         {
             return "https://docs.astral.sh/uv/getting-started/installation/#linux";
         }
@@ -90,11 +90,11 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
         }
 
-        public override DependencyStatus DetectUV()
+        public override DependencyStatus DetectUv()
         {
             var status = new DependencyStatus("uv Package Manager", isRequired: true)
             {
-                InstallationHint = GetUVInstallUrl()
+                InstallationHint = GetUvInstallUrl()
             };
 
             try

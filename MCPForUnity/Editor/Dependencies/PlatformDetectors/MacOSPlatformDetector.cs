@@ -66,7 +66,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             return "https://www.python.org/downloads/macos/";
         }
 
-        public override string GetUVInstallUrl()
+        public override string GetUvInstallUrl()
         {
             return "https://docs.astral.sh/uv/getting-started/installation/#macos";
         }
@@ -88,11 +88,11 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
         }
 
-        public override DependencyStatus DetectUV()
+        public override DependencyStatus DetectUv()
         {
             var status = new DependencyStatus("uv Package Manager", isRequired: true)
             {
-                InstallationHint = GetUVInstallUrl()
+                InstallationHint = GetUvInstallUrl()
             };
 
             try

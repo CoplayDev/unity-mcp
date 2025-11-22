@@ -57,7 +57,7 @@ namespace MCPForUnity.Editor.Dependencies
                 result.Dependencies.Add(pythonStatus);
 
                 // Check uv
-                var uvStatus = detector.DetectUV();
+                var uvStatus = detector.DetectUv();
                 result.Dependencies.Add(uvStatus);
 
                 // Generate summary and recommendations
@@ -100,7 +100,7 @@ namespace MCPForUnity.Editor.Dependencies
             try
             {
                 var detector = GetCurrentPlatformDetector();
-                return (detector.GetPythonInstallUrl(), detector.GetUVInstallUrl());
+                return (detector.GetPythonInstallUrl(), detector.GetUvInstallUrl());
             }
             catch
             {
@@ -126,7 +126,7 @@ namespace MCPForUnity.Editor.Dependencies
                 }
                 else if (dep.Name == "uv Package Manager")
                 {
-                    result.RecommendedActions.Add($"Install uv package manager from: {detector.GetUVInstallUrl()}");
+                    result.RecommendedActions.Add($"Install uv package manager from: {detector.GetUvInstallUrl()}");
                 }
                 else if (dep.Name == "MCP Server")
                 {

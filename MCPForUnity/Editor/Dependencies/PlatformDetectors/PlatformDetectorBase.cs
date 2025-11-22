@@ -14,14 +14,14 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
         public abstract DependencyStatus DetectPython();
         public abstract string GetPythonInstallUrl();
-        public abstract string GetUVInstallUrl();
+        public abstract string GetUvInstallUrl();
         public abstract string GetInstallationRecommendations();
 
-        public virtual DependencyStatus DetectUV()
+        public virtual DependencyStatus DetectUv()
         {
             var status = new DependencyStatus("uv Package Manager", isRequired: true)
             {
-                InstallationHint = GetUVInstallUrl()
+                InstallationHint = GetUvInstallUrl()
             };
 
             try

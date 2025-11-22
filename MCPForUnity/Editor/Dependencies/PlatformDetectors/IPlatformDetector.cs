@@ -25,7 +25,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
         /// <summary>
         /// Detect uv package manager on this platform
         /// </summary>
-        DependencyStatus DetectUV();
+        DependencyStatus DetectUv();
 
         /// <summary>
         /// Get platform-specific installation recommendations
@@ -40,6 +40,6 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
         /// <summary>
         /// Get platform-specific uv installation URL
         /// </summary>
-        string GetUVInstallUrl();
+        string GetUvInstallUrl();
     }
 }

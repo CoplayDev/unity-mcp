@@ -66,7 +66,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             return "https://apps.microsoft.com/store/detail/python-313/9NCVDN91XZQP";
         }
 
-        public override string GetUVInstallUrl()
+        public override string GetUvInstallUrl()
         {
             return "https://docs.astral.sh/uv/getting-started/installation/#windows";
         }
