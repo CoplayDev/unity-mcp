@@ -76,10 +76,12 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
-        /// Returns a human friendly project name derived from the Assets directory path.
+        /// Returns a human friendly project name derived from the Assets directory path,
+        /// or "Unknown" if the name cannot be determined.
         /// </summary>
         public static string GetProjectName()
         {
+            EnsureIdentityCache();
             return _cachedProjectName;
         }
 

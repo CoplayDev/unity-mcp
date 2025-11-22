@@ -116,6 +116,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 HttpEndpointUtility.SaveBaseUrl(evt.newValue);
                 httpUrlField.value = HttpEndpointUtility.GetBaseUrl();
                 OnManualConfigUpdateRequested?.Invoke();
+                UpdateStartHttpButtonState();
                 UpdateHttpServerCommandDisplay();
             });
 

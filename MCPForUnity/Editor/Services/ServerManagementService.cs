@@ -61,7 +61,7 @@ namespace MCPForUnity.Editor.Services
                         McpLog.Debug("UV override was not found at specified location, falling back to system PATH.");
                     }
                 }
-                else if (string.Equals(uvCommand, "uv", StringComparison.OrdinalIgnoreCase))
+                else
                 {
                     McpLog.Debug("No UV override configured; using 'uv' from system PATH.");
                 }
@@ -460,7 +460,7 @@ namespace MCPForUnity.Editor.Services
                         RedirectStandardOutput = true,
                         CreateNoWindow = true
                     });
-                    which.WaitForExit();
+                    which.WaitForExit(5000); // Wait for up to 5 seconds, the command is typically instantaneous
                     if (which.ExitCode == 0)
                     {
                         terminalCmd = term;
