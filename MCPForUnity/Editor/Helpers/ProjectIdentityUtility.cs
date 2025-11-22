@@ -65,7 +65,7 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
-        /// Returns the SHA1 hash of the current project path (truncated to 8 characters).
+        /// Returns the SHA1 hash of the current project path (truncated to 16 characters).
         /// Matches the legacy hash used by the stdio bridge and server registry.
         /// </summary>
         public static string GetProjectHash()
