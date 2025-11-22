@@ -51,7 +51,8 @@ def register_all_resources(mcp: FastMCP):
 
         if has_query_params:
             wrapped_template = log_execution(resource_name, "Resource")(func)
-            wrapped_template = telemetry_resource(resource_name)(wrapped_template)
+            wrapped_template = telemetry_resource(
+                resource_name)(wrapped_template)
             wrapped_template = mcp.resource(
                 uri=uri,
                 name=resource_name,
