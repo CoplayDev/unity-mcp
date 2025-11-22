@@ -95,8 +95,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             unityPortField.value = unityPort.ToString();
 
             UpdateHttpFieldVisibility();
-            UpdateStartHttpButtonState();
-            UpdateHttpServerCommandDisplay();
+            RefreshHttpUi();
         }
 
         private void RegisterCallbacks()
@@ -106,7 +105,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 bool useHttp = (TransportProtocol)evt.newValue == TransportProtocol.HTTP;
                 EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, useHttp);
                 UpdateHttpFieldVisibility();
-                UpdateHttpServerCommandDisplay();
+                RefreshHttpUi();
                 OnManualConfigUpdateRequested?.Invoke();
                 McpLog.Info($"Transport changed to: {evt.newValue}");
             });
@@ -116,8 +115,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 HttpEndpointUtility.SaveBaseUrl(evt.newValue);
                 httpUrlField.value = HttpEndpointUtility.GetBaseUrl();
                 OnManualConfigUpdateRequested?.Invoke();
-                UpdateStartHttpButtonState();
-                UpdateHttpServerCommandDisplay();
+                RefreshHttpUi();
             });
 
             if (startHttpServerButton != null)
@@ -249,9 +247,6 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
             httpUrlRow.style.display = useHttp ? DisplayStyle.Flex : DisplayStyle.None;
             unitySocketPortRow.style.display = useHttp ? DisplayStyle.None : DisplayStyle.Flex;
-
-            UpdateStartHttpButtonState();
-            UpdateHttpServerCommandDisplay();
         }
 
         private void UpdateStartHttpButtonState()
@@ -264,7 +259,6 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             {
                 startHttpServerButton.SetEnabled(false);
                 startHttpServerButton.tooltip = string.Empty;
-                UpdateHttpServerCommandDisplay();
                 return;
             }
 
@@ -281,7 +275,11 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                     ? string.Empty
                     : "Stop Local HTTP Server is available only for localhost URLs.";
             }
+        }
 
+        private void RefreshHttpUi()
+        {
+            UpdateStartHttpButtonState();
             UpdateHttpServerCommandDisplay();
         }
 
@@ -293,7 +291,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             }
             finally
             {
-                UpdateStartHttpButtonState();
+                RefreshHttpUi();
             }
         }
 
