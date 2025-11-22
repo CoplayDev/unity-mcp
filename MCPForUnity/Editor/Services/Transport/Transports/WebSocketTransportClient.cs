@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.WebSockets;
@@ -308,36 +309,44 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 return null;
             }
 
-            var buffer = new ArraySegment<byte>(new byte[8192]);
-            using var ms = new MemoryStream();
+            byte[] rentedBuffer = ArrayPool<byte>.Shared.Rent(8192);
+            var buffer = new ArraySegment<byte>(rentedBuffer);
+            using var ms = new MemoryStream(8192);
 
-            while (!token.IsCancellationRequested)
+            try
             {
-                WebSocketReceiveResult result = await _socket.ReceiveAsync(buffer, token).ConfigureAwait(false);
-
-                if (result.MessageType == WebSocketMessageType.Close)
+                while (!token.IsCancellationRequested)
                 {
-                    await HandleSocketClosureAsync(result.CloseStatusDescription ?? "Server closed connection").ConfigureAwait(false);
+                    WebSocketReceiveResult result = await _socket.ReceiveAsync(buffer, token).ConfigureAwait(false);
+
+                    if (result.MessageType == WebSocketMessageType.Close)
+                    {
+                        await HandleSocketClosureAsync(result.CloseStatusDescription ?? "Server closed connection").ConfigureAwait(false);
+                        return null;
+                    }
+
+                    if (result.Count > 0)
+                    {
+                        ms.Write(buffer.Array!, buffer.Offset, result.Count);
+                    }
+
+                    if (result.EndOfMessage)
+                    {
+                        break;
+                    }
+                }
+
+                if (ms.Length == 0)
+                {
                     return null;
                 }
 
-                if (result.Count > 0)
-                {
-                    ms.Write(buffer.Array!, buffer.Offset, result.Count);
-                }
-
-                if (result.EndOfMessage)
-                {
-                    break;
-                }
+                return Encoding.UTF8.GetString(ms.ToArray());
             }
-
-            if (ms.Length == 0)
+            finally
             {
-                return null;
+                ArrayPool<byte>.Shared.Return(rentedBuffer);
             }
-
-            return Encoding.UTF8.GetString(ms.ToArray());
         }
 
         private async Task HandleMessageAsync(string message, CancellationToken token)
