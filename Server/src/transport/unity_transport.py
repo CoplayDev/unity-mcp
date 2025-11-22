@@ -10,6 +10,7 @@ from fastmcp import Context
 
 from transport.plugin_hub import PluginHub
 from models.unity_response import normalize_unity_response
+from services.tools import get_unity_instance_from_context
 
 T = TypeVar("T")
 
@@ -24,8 +25,6 @@ def with_unity_instance(
     kwarg_name: str = "unity_instance",
 ):
     def _decorate(fn: Callable[..., T]):
-        from src.services.tools import get_unity_instance_from_context
-
         is_coro = asyncio.iscoroutinefunction(fn)
 
         def _compose_message(ctx: Context, a: tuple, k: dict, inst: str | None) -> str | None:
