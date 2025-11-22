@@ -35,6 +35,17 @@ namespace Tests.EditMode.Tools
             {
                 AssetDatabase.DeleteAsset(TempDir);
             }
+
+            // Remove parent temp folder if nothing else is inside
+            if (AssetDatabase.IsValidFolder("Assets/Temp"))
+            {
+                var remainingDirs = Directory.GetDirectories("Assets/Temp");
+                var remainingFiles = Directory.GetFiles("Assets/Temp");
+                if (remainingDirs.Length == 0 && remainingFiles.Length == 0)
+                {
+                    AssetDatabase.DeleteAsset("Assets/Temp");
+                }
+            }
         }
 
         /// <summary>
@@ -264,4 +275,3 @@ public class RapidScript{i} : MonoBehaviour
         }
     }
 }
-
