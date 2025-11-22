@@ -285,6 +285,11 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
         private void OnStartLocalHttpServerClicked()
         {
+            if (startHttpServerButton != null)
+            {
+                startHttpServerButton.SetEnabled(false);
+            }
+
             try
             {
                 MCPServiceLocator.Server.StartLocalHttpServer();
@@ -297,6 +302,11 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
         private void OnStopLocalHttpServerClicked()
         {
+            if (stopHttpServerButton != null)
+            {
+                stopHttpServerButton.SetEnabled(false);
+            }
+
             try
             {
                 bool stopped = MCPServiceLocator.Server.StopLocalHttpServer();
@@ -309,6 +319,10 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             {
                 McpLog.Error($"Failed to stop server: {ex.Message}");
                 EditorUtility.DisplayDialog("Error", $"Failed to stop server:\n\n{ex.Message}", "OK");
+            }
+            finally
+            {
+                RefreshHttpUi();
             }
         }
 
