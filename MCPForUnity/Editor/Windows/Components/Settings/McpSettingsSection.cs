@@ -203,14 +203,14 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             string suggested = RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
                 ? "/opt/homebrew/bin"
                 : Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-            string picked = EditorUtility.OpenFilePanel("Select UV Executable", suggested, "");
+            string picked = EditorUtility.OpenFilePanel("Select uv Executable", suggested, "");
             if (!string.IsNullOrEmpty(picked))
             {
                 try
                 {
                     MCPServiceLocator.Paths.SetUvxPathOverride(picked);
                     UpdatePathOverrides();
-                    McpLog.Info($"UV path override set to: {picked}");
+                    McpLog.Info($"uv path override set to: {picked}");
                 }
                 catch (Exception ex)
                 {
@@ -223,7 +223,7 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
         {
             MCPServiceLocator.Paths.ClearUvxPathOverride();
             UpdatePathOverrides();
-            McpLog.Info("UV path override cleared");
+            McpLog.Info("uv path override cleared");
         }
     }
 }

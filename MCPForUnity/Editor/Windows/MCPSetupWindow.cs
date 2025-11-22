@@ -124,8 +124,8 @@ namespace MCPForUnity.Editor.Windows
                 UpdateDependencyStatus(pythonIndicator, pythonVersion, pythonDetails, pythonDep);
             }
 
-            // Update UV status
-            var uvDep = _dependencyResult.Dependencies.Find(d => d.Name == "UV Package Manager");
+            // Update uv status
+            var uvDep = _dependencyResult.Dependencies.Find(d => d.Name == "uv Package Manager");
             if (uvDep != null)
             {
                 UpdateDependencyStatus(uvIndicator, uvVersion, uvDetails, uvDep);

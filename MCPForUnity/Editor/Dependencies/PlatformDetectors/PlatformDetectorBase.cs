@@ -19,7 +19,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
         public virtual DependencyStatus DetectUV()
         {
-            var status = new DependencyStatus("UV Package Manager", isRequired: true)
+            var status = new DependencyStatus("uv Package Manager", isRequired: true)
             {
                 InstallationHint = GetUVInstallUrl()
             };
@@ -32,16 +32,16 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                     status.IsAvailable = true;
                     status.Version = version;
                     status.Path = uvPath;
-                    status.Details = $"Found UV {version} in PATH";
+                    status.Details = $"Found uv {version} in PATH";
                     return status;
                 }
 
-                status.ErrorMessage = "UV not found in PATH";
-                status.Details = "Install UV package manager and ensure it's added to PATH.";
+                status.ErrorMessage = "uv not found in PATH";
+                status.Details = "Install uv package manager and ensure it's added to PATH.";
             }
             catch (Exception ex)
             {
-                status.ErrorMessage = $"Error detecting UV: {ex.Message}";
+                status.ErrorMessage = $"Error detecting uv: {ex.Message}";
             }
 
             return status;
@@ -52,7 +52,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             uvPath = null;
             version = null;
 
-            // Try common UV command names
+            // Try common uv command names
             var commands = new[] { "uvx", "uv" };
             
             foreach (var cmd in commands)

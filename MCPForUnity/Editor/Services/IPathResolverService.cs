@@ -6,7 +6,7 @@ namespace MCPForUnity.Editor.Services
     public interface IPathResolverService
     {
         /// <summary>
-        /// Gets the UVX package manager path (respects override if set)
+        /// Gets the uvx package manager path (respects override if set)
         /// </summary>
         /// <returns>Path to the uvx executable, or null if not found</returns>
         string GetUvxPath(bool verifyPath = true);
@@ -24,9 +24,9 @@ namespace MCPForUnity.Editor.Services
         bool IsPythonDetected();
 
         /// <summary>
-        /// Checks if UVX is detected on the system
+        /// Checks if uvx is detected on the system
         /// </summary>
-        /// <returns>True if UVX is found</returns>
+        /// <returns>True if uvx is found</returns>
         bool IsUvxDetected();
 
         /// <summary>
@@ -36,7 +36,7 @@ namespace MCPForUnity.Editor.Services
         bool IsClaudeCliDetected();
 
         /// <summary>
-        /// Sets an override for the UVX path
+        /// Sets an override for the uvx path
         /// </summary>
         /// <param name="path">Path to override with</param>
         void SetUvxPathOverride(string path);
@@ -48,7 +48,7 @@ namespace MCPForUnity.Editor.Services
         void SetClaudeCliPathOverride(string path);
 
         /// <summary>
-        /// Clears the UVX path override
+        /// Clears the uvx path override
         /// </summary>
         void ClearUvxPathOverride();
 
@@ -58,7 +58,7 @@ namespace MCPForUnity.Editor.Services
         void ClearClaudeCliPathOverride();
 
         /// <summary>
-        /// Gets whether a UVX path override is active
+        /// Gets whether a uvx path override is active
         /// </summary>
         bool HasUvxPathOverride { get; }
 

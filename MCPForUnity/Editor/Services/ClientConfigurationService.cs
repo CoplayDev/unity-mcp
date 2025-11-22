@@ -73,11 +73,11 @@ namespace MCPForUnity.Editor.Services
                     }
                     else
                     {
-                        // Other clients require UVX
+                        // Other clients require uvx
                         if (!pathService.IsUvxDetected())
                         {
                             summary.SkippedCount++;
-                            summary.Messages.Add($"➜ {client.name}: UVX not found");
+                            summary.Messages.Add($"➜ {client.name}: uvx not found");
                             continue;
                         }
 

@@ -56,7 +56,7 @@ namespace MCPForUnity.Editor.Dependencies
                 var pythonStatus = detector.DetectPython();
                 result.Dependencies.Add(pythonStatus);
 
-                // Check UV
+                // Check uv
                 var uvStatus = detector.DetectUV();
                 result.Dependencies.Add(uvStatus);
 
@@ -124,9 +124,9 @@ namespace MCPForUnity.Editor.Dependencies
                 {
                     result.RecommendedActions.Add($"Install Python 3.10+ from: {detector.GetPythonInstallUrl()}");
                 }
-                else if (dep.Name == "UV Package Manager")
+                else if (dep.Name == "uv Package Manager")
                 {
-                    result.RecommendedActions.Add($"Install UV package manager from: {detector.GetUVInstallUrl()}");
+                    result.RecommendedActions.Add($"Install uv package manager from: {detector.GetUVInstallUrl()}");
                 }
                 else if (dep.Name == "MCP Server")
                 {

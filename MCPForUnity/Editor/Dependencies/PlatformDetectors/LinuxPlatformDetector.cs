@@ -81,7 +81,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
    - Arch: sudo pacman -S python python-pip
    - Or use pyenv: https://github.com/pyenv/pyenv
 
-2. UV Package Manager: Install via curl
+2. uv Package Manager: Install via curl
    - Run: curl -LsSf https://astral.sh/uv/install.sh | sh
    - Or download from: https://github.com/astral-sh/uv/releases
 
@@ -92,7 +92,7 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
 
         public override DependencyStatus DetectUV()
         {
-            var status = new DependencyStatus("UV Package Manager", isRequired: true)
+            var status = new DependencyStatus("uv Package Manager", isRequired: true)
             {
                 InstallationHint = GetUVInstallUrl()
             };
@@ -106,7 +106,7 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
                     status.IsAvailable = true;
                     status.Version = version;
                     status.Path = fullPath;
-                    status.Details = $"Found UV {version} in PATH";
+                    status.Details = $"Found uv {version} in PATH";
                     return status;
                 }
 
@@ -119,17 +119,17 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
                         status.IsAvailable = true;
                         status.Version = version;
                         status.Path = fullPath;
-                        status.Details = $"Found UV {version} in PATH";
+                        status.Details = $"Found uv {version} in PATH";
                         return status;
                     }
                 }
 
-                status.ErrorMessage = "UV not found in PATH";
-                status.Details = "Install UV package manager and ensure it's added to PATH.";
+                status.ErrorMessage = "uv not found in PATH";
+                status.Details = "Install uv package manager and ensure it's added to PATH.";
             }
             catch (Exception ex)
             {
-                status.ErrorMessage = $"Error detecting UV: {ex.Message}";
+                status.ErrorMessage = $"Error detecting uv: {ex.Message}";
             }
 
             return status;

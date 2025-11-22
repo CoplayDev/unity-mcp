@@ -207,7 +207,7 @@ namespace MCPForUnity.Editor.Services
 
             if (!File.Exists(path))
             {
-                throw new ArgumentException("The selected UVX executable does not exist");
+                throw new ArgumentException("The selected uvx executable does not exist");
             }
 
             EditorPrefs.SetString(EditorPrefKeys.UvxPathOverride, path);

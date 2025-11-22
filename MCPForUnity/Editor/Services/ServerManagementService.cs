@@ -42,7 +42,7 @@ namespace MCPForUnity.Editor.Services
                             if (File.Exists(uvSibling))
                             {
                                 uvCommand = uvSibling;
-                                McpLog.Debug($"Using UV executable inferred from override: {uvSibling}");
+                                McpLog.Debug($"Using uv executable inferred from override: {uvSibling}");
                             }
                             else
                             {
@@ -58,12 +58,12 @@ namespace MCPForUnity.Editor.Services
                     }
                     else
                     {
-                        McpLog.Debug("UV override was not found at specified location, falling back to system PATH.");
+                        McpLog.Debug("uv override was not found at specified location, falling back to system PATH.");
                     }
                 }
                 else
                 {
-                    McpLog.Debug("No UV override configured; using 'uv' from system PATH.");
+                    McpLog.Debug("No uv override configured; using 'uv' from system PATH.");
                 }
 
                 // Get the package name
@@ -76,65 +76,7 @@ namespace MCPForUnity.Editor.Services
                 string stdout;
                 string stderr;
 
-                if (!string.Equals(uvCommand, "uv", StringComparison.OrdinalIgnoreCase))
-                {
-                    success = ExecPath.TryRun(uvCommand, args, Application.dataPath, out stdout, out stderr, 30000);
-                }
-                else
-                {
-                    string command = $"uv {args}";
-                    string extraPathPrepend = null;
-
-                    if (Application.platform == RuntimePlatform.OSXEditor)
-                    {
-                        extraPathPrepend = string.Join(Path.PathSeparator.ToString(), new[]
-                        {
-                            "/opt/homebrew/bin",
-                            "/usr/local/bin",
-                            "/usr/bin",
-                            "/bin"
-                        });
-                    }
-                    else if (Application.platform == RuntimePlatform.LinuxEditor)
-                    {
-                        extraPathPrepend = string.Join(Path.PathSeparator.ToString(), new[]
-                        {
-                            "/usr/local/bin",
-                            "/usr/bin",
-                            "/bin"
-                        });
-                    }
-                    else if (Application.platform == RuntimePlatform.WindowsEditor)
-                    {
-                        string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                        string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-
-                        extraPathPrepend = string.Join(Path.PathSeparator.ToString(), new[]
-                        {
-                            !string.IsNullOrEmpty(localAppData) ? Path.Combine(localAppData, "Programs", "uv") : null,
-                            !string.IsNullOrEmpty(programFiles) ? Path.Combine(programFiles, "uv") : null
-                        }.Where(p => !string.IsNullOrEmpty(p)).ToArray());
-                    }
-
-                    if (Application.platform == RuntimePlatform.WindowsEditor)
-                    {
-                        success = ExecPath.TryRun("cmd.exe", $"/c {command}", Application.dataPath, out stdout, out stderr, 30000, extraPathPrepend);
-                    }
-                    else
-                    {
-                        string shell = File.Exists("/bin/bash") ? "/bin/bash" : "/bin/sh";
-
-                        if (!string.IsNullOrEmpty(shell) && File.Exists(shell))
-                        {
-                            string escaped = command.Replace("\"", "\\\"");
-                            success = ExecPath.TryRun(shell, $"-lc \"{escaped}\"", Application.dataPath, out stdout, out stderr, 30000, extraPathPrepend);
-                        }
-                        else
-                        {
-                            success = ExecPath.TryRun("uv", args, Application.dataPath, out stdout, out stderr, 30000, extraPathPrepend);
-                        }
-                    }
-                }
+                success = ExecuteUvCommand(uvCommand, args, out stdout, out stderr);
 
                 if (success)
                 {
@@ -147,7 +89,7 @@ namespace MCPForUnity.Editor.Services
                         ? "Unknown error"
                         : stderr;
 
-                    McpLog.Error($"Failed to clear uv cache using '{uvCommand} {args}': {errorMessage}. Ensure UV/UVX is installed, available on PATH, or set an override in Advanced Settings.");
+                    McpLog.Error($"Failed to clear uv cache using '{uvCommand} {args}': {errorMessage}. Ensure uv is installed, available on PATH, or set an override in Advanced Settings.");
                     return false;
                 }
             }
@@ -156,6 +98,73 @@ namespace MCPForUnity.Editor.Services
                 McpLog.Error($"Error clearing uv cache: {ex.Message}");
                 return false;
             }
+        }
+
+        private bool ExecuteUvCommand(string uvCommand, string args, out string stdout, out string stderr)
+        {
+            stdout = null;
+            stderr = null;
+
+            if (!string.Equals(uvCommand, "uv", StringComparison.OrdinalIgnoreCase))
+            {
+                return ExecPath.TryRun(uvCommand, args, Application.dataPath, out stdout, out stderr, 30000);
+            }
+
+            string command = $"uv {args}";
+            string extraPathPrepend = GetPlatformSpecificPathPrepend();
+
+            if (Application.platform == RuntimePlatform.WindowsEditor)
+            {
+                return ExecPath.TryRun("cmd.exe", $"/c {command}", Application.dataPath, out stdout, out stderr, 30000, extraPathPrepend);
+            }
+
+            string shell = File.Exists("/bin/bash") ? "/bin/bash" : "/bin/sh";
+
+            if (!string.IsNullOrEmpty(shell) && File.Exists(shell))
+            {
+                string escaped = command.Replace("\"", "\\\"");
+                return ExecPath.TryRun(shell, $"-lc \"{escaped}\"", Application.dataPath, out stdout, out stderr, 30000, extraPathPrepend);
+            }
+
+            return ExecPath.TryRun("uv", args, Application.dataPath, out stdout, out stderr, 30000, extraPathPrepend);
+        }
+
+        private string GetPlatformSpecificPathPrepend()
+        {
+            if (Application.platform == RuntimePlatform.OSXEditor)
+            {
+                return string.Join(Path.PathSeparator.ToString(), new[]
+                {
+                    "/opt/homebrew/bin",
+                    "/usr/local/bin",
+                    "/usr/bin",
+                    "/bin"
+                });
+            }
+
+            if (Application.platform == RuntimePlatform.LinuxEditor)
+            {
+                return string.Join(Path.PathSeparator.ToString(), new[]
+                {
+                    "/usr/local/bin",
+                    "/usr/bin",
+                    "/bin"
+                });
+            }
+
+            if (Application.platform == RuntimePlatform.WindowsEditor)
+            {
+                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+
+                return string.Join(Path.PathSeparator.ToString(), new[]
+                {
+                    !string.IsNullOrEmpty(localAppData) ? Path.Combine(localAppData, "Programs", "uv") : null,
+                    !string.IsNullOrEmpty(programFiles) ? Path.Combine(programFiles, "uv") : null
+                }.Where(p => !string.IsNullOrEmpty(p)).ToArray());
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -369,7 +378,7 @@ namespace MCPForUnity.Editor.Services
             var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
             if (string.IsNullOrEmpty(uvxPath))
             {
-                error = "UV/UVX is not installed or found in PATH. Install it or set an override in Advanced Settings.";
+                error = "uv is not installed or found in PATH. Install it or set an override in Advanced Settings.";
                 return false;
             }
 

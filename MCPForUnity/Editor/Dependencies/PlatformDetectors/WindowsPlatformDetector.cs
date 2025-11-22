@@ -79,7 +79,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
    - Microsoft Store: Search for 'Python 3.10' or higher
    - Direct download: https://python.org/downloads/windows/
 
-2. UV Package Manager: Install via PowerShell
+2. uv Package Manager: Install via PowerShell
    - Run: powershell -ExecutionPolicy ByPass -c ""irm https://astral.sh/uv/install.ps1 | iex""
    - Or download from: https://github.com/astral-sh/uv/releases
 

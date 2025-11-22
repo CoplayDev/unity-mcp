@@ -23,7 +23,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
         DependencyStatus DetectPython();
 
         /// <summary>
-        /// Detect UV package manager on this platform
+        /// Detect uv package manager on this platform
         /// </summary>
         DependencyStatus DetectUV();
 
@@ -38,7 +38,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
         string GetPythonInstallUrl();
 
         /// <summary>
-        /// Get platform-specific UV installation URL
+        /// Get platform-specific uv installation URL
         /// </summary>
         string GetUVInstallUrl();
     }

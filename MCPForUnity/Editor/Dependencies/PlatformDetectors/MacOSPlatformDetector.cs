@@ -79,7 +79,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
    - Homebrew: brew install python3
    - Direct download: https://python.org/downloads/macos/
 
-2. UV Package Manager: Install via curl or Homebrew
+2. uv Package Manager: Install via curl or Homebrew
    - Curl: curl -LsSf https://astral.sh/uv/install.sh | sh
    - Homebrew: brew install uv
 
@@ -90,7 +90,7 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
 
         public override DependencyStatus DetectUV()
         {
-            var status = new DependencyStatus("UV Package Manager", isRequired: true)
+            var status = new DependencyStatus("uv Package Manager", isRequired: true)
             {
                 InstallationHint = GetUVInstallUrl()
             };
@@ -104,7 +104,7 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
                     status.IsAvailable = true;
                     status.Version = version;
                     status.Path = fullPath;
-                    status.Details = $"Found UV {version} in PATH";
+                    status.Details = $"Found uv {version} in PATH";
                     return status;
                 }
 
@@ -117,17 +117,17 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
                         status.IsAvailable = true;
                         status.Version = version;
                         status.Path = fullPath;
-                        status.Details = $"Found UV {version} in PATH";
+                        status.Details = $"Found uv {version} in PATH";
                         return status;
                     }
                 }
 
-                status.ErrorMessage = "UV not found in PATH";
-                status.Details = "Install UV package manager and ensure it's added to PATH.";
+                status.ErrorMessage = "uv not found in PATH";
+                status.Details = "Install uv package manager and ensure it's added to PATH.";
             }
             catch (Exception ex)
             {
-                status.ErrorMessage = $"Error detecting UV: {ex.Message}";
+                status.ErrorMessage = $"Error detecting uv: {ex.Message}";
             }
 
             return status;
