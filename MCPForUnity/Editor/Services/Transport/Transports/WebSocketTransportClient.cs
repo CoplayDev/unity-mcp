@@ -37,6 +37,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private readonly IToolDiscoveryService _toolDiscoveryService;
         private ClientWebSocket _socket;
         private CancellationTokenSource _lifecycleCts;
+        private CancellationTokenSource _connectionCts;
         private Task _receiveTask;
         private Task _keepAliveTask;
         private readonly SemaphoreSlim _sendLock = new(1, 1);
@@ -99,17 +100,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             }
             catch { }
 
-            if (_keepAliveTask != null)
-            {
-                try { await _keepAliveTask.ConfigureAwait(false); } catch { }
-                _keepAliveTask = null;
-            }
-
-            if (_receiveTask != null)
-            {
-                try { await _receiveTask.ConfigureAwait(false); } catch { }
-                _receiveTask = null;
-            }
+            await StopConnectionLoopsAsync().ConfigureAwait(false);
 
             if (_socket != null)
             {
@@ -170,13 +161,19 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
         private async Task<bool> EstablishConnectionAsync(CancellationToken token)
         {
+            await StopConnectionLoopsAsync().ConfigureAwait(false);
+
+            _connectionCts?.Dispose();
+            _connectionCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+            CancellationToken connectionToken = _connectionCts.Token;
+
             _socket?.Dispose();
             _socket = new ClientWebSocket();
             _socket.Options.KeepAliveInterval = _socketKeepAliveInterval;
 
             try
             {
-                await _socket.ConnectAsync(_endpointUri, token).ConfigureAwait(false);
+                await _socket.ConnectAsync(_endpointUri, connectionToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -184,11 +181,11 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 return false;
             }
 
-            StartBackgroundLoops(token);
+            StartBackgroundLoops(connectionToken);
 
             try
             {
-                await SendRegisterAsync(token).ConfigureAwait(false);
+                await SendRegisterAsync(connectionToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -199,8 +196,58 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             return true;
         }
 
+        /// <summary>
+        /// Stops the connection loops and disposes of the connection CTS.
+        /// Particularly useful when reconnecting, we want to ensure that background loops are cancelled correctly before starting new oens
+        /// </summary>
+        /// <param name="awaitTasks">Whether to await the receive and keep alive tasks before disposing.</param>
+        private async Task StopConnectionLoopsAsync(bool awaitTasks = true)
+        {
+            if (_connectionCts != null && !_connectionCts.IsCancellationRequested)
+            {
+                try { _connectionCts.Cancel(); } catch { }
+            }
+
+            if (_receiveTask != null)
+            {
+                if (awaitTasks)
+                {
+                    try { await _receiveTask.ConfigureAwait(false); } catch { }
+                    _receiveTask = null;
+                }
+                else if (_receiveTask.IsCompleted)
+                {
+                    _receiveTask = null;
+                }
+            }
+
+            if (_keepAliveTask != null)
+            {
+                if (awaitTasks)
+                {
+                    try { await _keepAliveTask.ConfigureAwait(false); } catch { }
+                    _keepAliveTask = null;
+                }
+                else if (_keepAliveTask.IsCompleted)
+                {
+                    _keepAliveTask = null;
+                }
+            }
+
+            if (_connectionCts != null)
+            {
+                _connectionCts.Dispose();
+                _connectionCts = null;
+            }
+        }
+
         private void StartBackgroundLoops(CancellationToken token)
         {
+            if ((_receiveTask != null && !_receiveTask.IsCompleted) || (_keepAliveTask != null && !_keepAliveTask.IsCompleted))
+            {
+                return;
+            }
+
             _receiveTask = Task.Run(() => ReceiveLoopAsync(token), CancellationToken.None);
             _keepAliveTask = Task.Run(() => KeepAliveLoopAsync(token), CancellationToken.None);
         }
@@ -534,31 +581,34 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             }
         }
 
-        private Task HandleSocketClosureAsync(string reason)
+        private async Task HandleSocketClosureAsync(string reason)
         {
             if (_lifecycleCts == null || _lifecycleCts.IsCancellationRequested)
             {
-                return Task.CompletedTask;
+                return;
             }
 
             if (_isReconnecting)
             {
-                return Task.CompletedTask;
+                return;
             }
 
             _isConnected = false;
             _state = _state.WithError(reason ?? "Connection closed");
             McpLog.Warn($"[WebSocket] Connection closed: {reason}");
 
+            await StopConnectionLoopsAsync(awaitTasks: false).ConfigureAwait(false);
+
             _isReconnecting = true;
             _ = Task.Run(() => AttemptReconnectAsync(_lifecycleCts.Token), CancellationToken.None);
-            return Task.CompletedTask;
         }
 
         private async Task AttemptReconnectAsync(CancellationToken token)
         {
             try
             {
+                await StopConnectionLoopsAsync().ConfigureAwait(false);
+
                 foreach (TimeSpan delay in ReconnectSchedule)
                 {
                     if (token.IsCancellationRequested)
