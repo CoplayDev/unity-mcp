@@ -19,6 +19,7 @@ namespace MCPForUnity.Editor.Helpers
         private static bool _legacyKeyCleared;
         private static string _cachedProjectName = "Unknown";
         private static string _cachedProjectHash = "default";
+        private static string _fallbackSessionId;
         private static bool _cacheScheduled;
 
         static ProjectIdentityUtility()
@@ -171,7 +172,12 @@ namespace MCPForUnity.Editor.Helpers
             catch
             {
                 // If prefs are unavailable (e.g. during batch tests) fall back to runtime guid.
-                return Guid.NewGuid().ToString();
+                if (string.IsNullOrEmpty(_fallbackSessionId))
+                {
+                    _fallbackSessionId = Guid.NewGuid().ToString();
+                }
+
+                return _fallbackSessionId;
             }
         }
 
@@ -196,6 +202,8 @@ namespace MCPForUnity.Editor.Helpers
                     EditorPrefs.DeleteKey(SessionPrefKey);
                     _legacyKeyCleared = true;
                 }
+
+                _fallbackSessionId = null;
             }
             catch
             {
