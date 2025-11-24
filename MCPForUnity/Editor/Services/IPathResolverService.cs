@@ -9,7 +9,7 @@ namespace MCPForUnity.Editor.Services
         /// Gets the uvx package manager path (respects override if set)
         /// </summary>
         /// <returns>Path to the uvx executable, or null if not found</returns>
-        string GetUvxPath(bool verifyPath = true);
+        string GetUvxPath();
 
         /// <summary>
         /// Gets the Claude CLI path (respects override if set)

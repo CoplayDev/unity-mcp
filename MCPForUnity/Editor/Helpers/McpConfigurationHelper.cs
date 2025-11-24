@@ -3,15 +3,15 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using UnityEditor;
-using UnityEngine;
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Dependencies;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
 using MCPForUnity.Editor.Services;
-using MCPForUnity.Editor.Constants;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using UnityEditor;
+using UnityEngine;
 
 namespace MCPForUnity.Editor.Helpers
 {
@@ -96,7 +96,7 @@ namespace MCPForUnity.Editor.Helpers
             catch { }
 
             // 1) Start from existing, only fill gaps (prefer trusted resolver)
-            string uvxPath = MCPServiceLocator.Paths.GetUvxPath(verifyPath: true);
+            string uvxPath = MCPServiceLocator.Paths.GetUvxPath();
             if (uvxPath == null) return "uv package manager not found. Please install uv first.";
 
             // Ensure containers exist and write back configuration

@@ -3,8 +3,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Helpers;
 using UnityEditor;
 using UnityEngine;
 
@@ -18,7 +18,7 @@ namespace MCPForUnity.Editor.Services
         public bool HasUvxPathOverride => !string.IsNullOrEmpty(EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, null));
         public bool HasClaudeCliPathOverride => !string.IsNullOrEmpty(EditorPrefs.GetString(EditorPrefKeys.ClaudeCliPathOverride, null));
 
-        public string GetUvxPath(bool verifyPath = true)
+        public string GetUvxPath()
         {
             try
             {
