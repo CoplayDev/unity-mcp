@@ -575,7 +575,6 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             var payload = new JObject
             {
                 ["type"] = "pong",
-                ["session_id"] = _sessionId
             };
             return SendJsonAsync(payload, token);
         }
