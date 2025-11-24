@@ -31,6 +31,7 @@ namespace MCPForUnity.Editor.Services
             catch
             {
                 // ignore EditorPrefs read errors and fall back to default command
+                McpLog.Debug("No uvx path override found, falling back to default command");
             }
 
             return "uvx";
