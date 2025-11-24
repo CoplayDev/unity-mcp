@@ -66,11 +66,5 @@ namespace MCPForUnity.Editor.Services
         /// Gets whether a Claude CLI path override is active
         /// </summary>
         bool HasClaudeCliPathOverride { get; }
-
-        /// <summary>
-        /// Gets the source path of the uvx-installed unity-mcp package
-        /// </summary>
-        /// <returns>The path to the source directory, or null if not found</returns>
-        string GetUvxPackageSourcePath();
     }
 }
