@@ -395,27 +395,44 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         private System.Diagnostics.ProcessStartInfo CreateTerminalProcessStartInfo(string command)
         {
+            if (string.IsNullOrWhiteSpace(command))
+                throw new ArgumentException("Command cannot be empty", nameof(command));
+
+            command = command.Replace("\r", "").Replace("\n", "");
+
 #if UNITY_EDITOR_OSX
-            // macOS: Use osascript to open Terminal.app
+            // macOS: Use osascript directly to avoid shell metacharacter injection via bash
+            // Escape for AppleScript: backslash and double quotes
+            string escapedCommand = command.Replace("\\", "\\\\").Replace("\"", "\\\"");
             return new System.Diagnostics.ProcessStartInfo
             {
-                FileName = "/bin/bash",
-                Arguments = $"-c \"osascript -e 'tell app \\\"Terminal\\\" to do script \\\"{command}\\\"'\"",
+                FileName = "/usr/bin/osascript",
+                Arguments = $"-e \"tell application \\\"Terminal\\\" to do script \\\"{escapedCommand}\\\" activate\"",
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
 #elif UNITY_EDITOR_WIN
             // Windows: Use cmd.exe with start command to open new window
+            // Wrap in quotes for /k and escape internal quotes
+            string escapedCommandWin = command.Replace("\"", "\\\"");
             return new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "cmd.exe",
-                Arguments = $"/c start cmd.exe /k \"{command}\"",
+                Arguments = $"/c start \"MCP Server\" cmd.exe /k \"{escapedCommandWin}\"",
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
 #else
             // Linux: Try common terminal emulators
-            // Priority: gnome-terminal, xterm, konsole, xfce4-terminal
+            // We use bash -c to execute the command, so we must properly quote/escape for bash
+            // Escape single quotes for the inner bash string
+            string escapedCommandLinux = command.Replace("'", "'\\''");
+            // Wrap the command in single quotes for bash -c
+            string script = $"'{escapedCommandLinux}; exec bash'";
+            // Escape double quotes for the outer Process argument string
+            string escapedScriptForArg = script.Replace("\"", "\\\"");
+            string bashCmdArgs = $"bash -c \"{escapedScriptForArg}\"";
+            
             string[] terminals = { "gnome-terminal", "xterm", "konsole", "xfce4-terminal" };
             string terminalCmd = null;
             
@@ -450,19 +467,20 @@ namespace MCPForUnity.Editor.Services
             string args;
             if (terminalCmd == "gnome-terminal")
             {
-                args = $"-- bash -c \"{command}; exec bash\"";
+                args = $"-- {bashCmdArgs}";
             }
             else if (terminalCmd == "konsole")
             {
-                args = $"-e bash -c \"{command}; exec bash\"";
+                args = $"-e {bashCmdArgs}";
             }
             else if (terminalCmd == "xfce4-terminal")
             {
-                args = $"--hold -e \"bash -c '{command}'\"";
+                // xfce4-terminal expects -e "command string" or -e command arg
+                args = $"--hold -e \"{bashCmdArgs.Replace("\"", "\\\"")}\"";
             }
             else // xterm and others
             {
-                args = $"-hold -e bash -c \"{command}\"";
+                args = $"-hold -e {bashCmdArgs}";
             }
             
             return new System.Diagnostics.ProcessStartInfo
