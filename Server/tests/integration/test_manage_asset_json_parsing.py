@@ -58,9 +58,9 @@ class TestManageAssetJsonParsing:
             properties='{"invalid": json, "missing": quotes}'
         )
 
-        # Verify behavior: no coercion log for invalid JSON; warning may be emitted by some runtimes
-        assert not any("coerced properties" in msg for msg in ctx.log_info)
-        assert result.get("success") is True
+        # Verify behavior: parsing fails with a clear error
+        assert result.get("success") is False
+        assert "failed to parse properties string" in result.get("message", "")
 
     @pytest.mark.asyncio
     async def test_properties_dict_unchanged(self, monkeypatch):

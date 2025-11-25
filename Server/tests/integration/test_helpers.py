@@ -33,17 +33,17 @@ class DummyContext:
 
         self.request_context = _RequestContext(self._meta)
 
-    def info(self, message):
+    async def info(self, message):
         self.log_info.append(message)
 
-    def warning(self, message):
+    async def warning(self, message):
         self.log_warning.append(message)
 
     # Some code paths call warn(); treat it as an alias of warning()
-    def warn(self, message):
-        self.warning(message)
+    async def warn(self, message):
+        await self.warning(message)
 
-    def error(self, message):
+    async def error(self, message):
         self.log_error.append(message)
 
     def set_state(self, key, value):

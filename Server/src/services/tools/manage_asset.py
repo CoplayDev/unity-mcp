@@ -45,13 +45,13 @@ async def manage_asset(
             parsed = json.loads(raw)
             if not isinstance(parsed, dict):
                 return None, f"manage_asset: properties JSON must decode to a dictionary; received {type(parsed)}"
-            return parsed, "json"
+            return parsed, "JSON"
         except json.JSONDecodeError as json_err:
             try:
                 parsed = ast.literal_eval(raw)
                 if not isinstance(parsed, dict):
                     return None, f"manage_asset: properties string must evaluate to a dictionary; received {type(parsed)}"
-                return parsed, "literal_eval"
+                return parsed, "Python literal"
             except (ValueError, SyntaxError) as literal_err:
                 return None, f"manage_asset: failed to parse properties string. JSON error: {json_err}; literal_eval error: {literal_err}"
 
@@ -68,6 +68,7 @@ async def manage_asset(
                 return None, source
             await ctx.info(f"manage_asset: coerced properties from {source} string to dict")
             return parsed, None
+        return None, f"manage_asset: properties must be a dict or JSON string; received {type(raw)}"
 
     properties, parse_error = await _normalize_properties(properties)
     if parse_error:
