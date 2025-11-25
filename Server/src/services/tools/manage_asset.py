@@ -1,6 +1,7 @@
 """
 Defines the manage_asset tool for interacting with Unity assets.
 """
+import ast
 import asyncio
 import json
 from typing import Annotated, Any, Literal
@@ -21,8 +22,8 @@ async def manage_asset(
     path: Annotated[str, "Asset path (e.g., 'Materials/MyMaterial.mat') or search scope."],
     asset_type: Annotated[str,
                           "Asset type (e.g., 'Material', 'Folder') - required for 'create'."] | None = None,
-    properties: Annotated[dict[str, Any],
-                          "Dictionary of properties for 'create'/'modify'."] | None = None,
+    properties: Annotated[dict[str, Any] | str,
+                          "Dictionary (or JSON string) of properties for 'create'/'modify'."] | None = None,
     destination: Annotated[str,
                            "Target path for 'duplicate'/'move'."] | None = None,
     generate_preview: Annotated[bool,
@@ -37,21 +38,41 @@ async def manage_asset(
     page_number: Annotated[int | float | str,
                            "Page number for pagination"] | None = None,
 ) -> dict[str, Any]:
-    # Get active instance from session state
-    # Removed session_state import
     unity_instance = get_unity_instance_from_context(ctx)
-    # Coerce 'properties' from JSON string to dict for client compatibility
-    if isinstance(properties, str):
+
+    def _parse_properties_string(raw: str) -> tuple[dict[str, Any] | None, str | None]:
         try:
-            properties = json.loads(properties)
-            await ctx.info("manage_asset: coerced properties from JSON string to dict")
-        except Exception as e:
-            await ctx.warn(
-                f"manage_asset: failed to parse properties JSON string: {e}")
-            # Leave properties as-is; Unity side may handle defaults
-    # Ensure properties is a dict if None
-    if properties is None:
-        properties = {}
+            parsed = json.loads(raw)
+            if not isinstance(parsed, dict):
+                return None, f"manage_asset: properties JSON must decode to a dictionary; received {type(parsed)}"
+            return parsed, "json"
+        except json.JSONDecodeError as json_err:
+            try:
+                parsed = ast.literal_eval(raw)
+                if not isinstance(parsed, dict):
+                    return None, f"manage_asset: properties string must evaluate to a dictionary; received {type(parsed)}"
+                return parsed, "literal_eval"
+            except (ValueError, SyntaxError) as literal_err:
+                return None, f"manage_asset: failed to parse properties string. JSON error: {json_err}; literal_eval error: {literal_err}"
+
+    async def _normalize_properties(raw: dict[str, Any] | str | None) -> tuple[dict[str, Any] | None, str | None]:
+        if raw is None:
+            return {}, None
+        if isinstance(raw, dict):
+            await ctx.info(f"manage_asset: received properties as dict with keys: {list(raw.keys())}")
+            return raw, None
+        if isinstance(raw, str):
+            await ctx.info(f"manage_asset: received properties as string (first 100 chars): {raw[:100]}")
+            parsed, source = _parse_properties_string(raw)
+            if parsed is None:
+                return None, source
+            await ctx.info(f"manage_asset: coerced properties from {source} string to dict")
+            return parsed, None
+
+    properties, parse_error = await _normalize_properties(properties)
+    if parse_error:
+        await ctx.warn(parse_error)
+        return {"success": False, "message": parse_error}
 
     # Coerce numeric inputs defensively
     def _coerce_int(value, default=None):
