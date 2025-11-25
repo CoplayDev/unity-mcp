@@ -24,12 +24,6 @@ namespace MCPForUnity.Editor.Services
         bool IsPythonDetected();
 
         /// <summary>
-        /// Checks if uvx is detected on the system
-        /// </summary>
-        /// <returns>True if uvx is found</returns>
-        bool IsUvxDetected();
-
-        /// <summary>
         /// Checks if Claude CLI is detected on the system
         /// </summary>
         /// <returns>True if Claude CLI is found</returns>

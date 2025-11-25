@@ -118,11 +118,6 @@ namespace MCPForUnity.Editor.Services
             }
         }
 
-        public bool IsUvxDetected()
-        {
-            return !string.IsNullOrEmpty(GetUvxPath());
-        }
-
         public bool IsClaudeCliDetected()
         {
             return !string.IsNullOrEmpty(GetClaudeCliPath());

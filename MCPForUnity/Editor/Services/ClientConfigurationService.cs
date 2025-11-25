@@ -2,9 +2,9 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Data;
 using MCPForUnity.Editor.Helpers;
-using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -73,14 +73,6 @@ namespace MCPForUnity.Editor.Services
                     }
                     else
                     {
-                        // Other clients require uvx
-                        if (!pathService.IsUvxDetected())
-                        {
-                            summary.SkippedCount++;
-                            summary.Messages.Add($"➜ {client.name}: uvx not found");
-                            continue;
-                        }
-
                         ConfigureClient(client);
                         summary.SuccessCount++;
                         summary.Messages.Add($"✓ {client.name}: Configured successfully");
@@ -512,7 +504,7 @@ namespace MCPForUnity.Editor.Services
             {
                 var pathService = MCPServiceLocator.Paths;
                 string claudePath = pathService.GetClaudeCliPath();
-                
+
                 if (string.IsNullOrEmpty(claudePath))
                 {
                     client.SetStatus(McpStatus.NotConfigured, "Claude CLI not found");
