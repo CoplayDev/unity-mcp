@@ -22,49 +22,8 @@ namespace MCPForUnity.Editor.Services
         {
             try
             {
-                var pathService = MCPServiceLocator.Paths;
-                bool hasOverride = pathService.HasUvxPathOverride;
-                string uvCommand = "uv";
-
-                if (hasOverride)
-                {
-                    string overridePath = pathService.GetUvxPath();
-
-                    if (!string.IsNullOrEmpty(overridePath) && File.Exists(overridePath))
-                    {
-                        string overrideDirectory = Path.GetDirectoryName(overridePath);
-                        string overrideExtension = Path.GetExtension(overridePath);
-                        string overrideName = Path.GetFileNameWithoutExtension(overridePath);
-
-                        if (!string.IsNullOrEmpty(overrideDirectory) && overrideName.Equals("uvx", StringComparison.OrdinalIgnoreCase))
-                        {
-                            string uvSibling = Path.Combine(overrideDirectory, string.IsNullOrEmpty(overrideExtension) ? "uv" : $"uv{overrideExtension}");
-                            if (File.Exists(uvSibling))
-                            {
-                                uvCommand = uvSibling;
-                                McpLog.Debug($"Using uv executable inferred from override: {uvSibling}");
-                            }
-                            else
-                            {
-                                uvCommand = overridePath;
-                                McpLog.Debug($"Using override executable: {overridePath}");
-                            }
-                        }
-                        else
-                        {
-                            uvCommand = overridePath;
-                            McpLog.Debug($"Using override executable: {overridePath}");
-                        }
-                    }
-                    else
-                    {
-                        McpLog.Debug("uv override was not found at specified location, falling back to system PATH.");
-                    }
-                }
-                else
-                {
-                    McpLog.Debug("No uv override configured; using 'uv' from system PATH.");
-                }
+                string uvxPath = MCPServiceLocator.Paths.GetUvxPath();
+                string uvCommand = uvxPath.Remove(uvxPath.Length - 1, 1);
 
                 // Get the package name
                 string packageName = "mcp-for-unity";
@@ -105,12 +64,15 @@ namespace MCPForUnity.Editor.Services
             stdout = null;
             stderr = null;
 
-            if (!string.Equals(uvCommand, "uv", StringComparison.OrdinalIgnoreCase))
+            string uvxPath = MCPServiceLocator.Paths.GetUvxPath();
+            string uvPath = uvxPath.Remove(uvxPath.Length - 1, 1);
+
+            if (!string.Equals(uvCommand, uvPath, StringComparison.OrdinalIgnoreCase))
             {
                 return ExecPath.TryRun(uvCommand, args, Application.dataPath, out stdout, out stderr, 30000);
             }
 
-            string command = $"uv {args}";
+            string command = $"{uvPath} {args}";
             string extraPathPrepend = GetPlatformSpecificPathPrepend();
 
             if (Application.platform == RuntimePlatform.WindowsEditor)
@@ -126,7 +88,7 @@ namespace MCPForUnity.Editor.Services
                 return ExecPath.TryRun(shell, $"-lc \"{escaped}\"", Application.dataPath, out stdout, out stderr, 30000, extraPathPrepend);
             }
 
-            return ExecPath.TryRun("uv", args, Application.dataPath, out stdout, out stderr, 30000, extraPathPrepend);
+            return ExecPath.TryRun(uvPath, args, Application.dataPath, out stdout, out stderr, 30000, extraPathPrepend);
         }
 
         private string GetPlatformSpecificPathPrepend()
