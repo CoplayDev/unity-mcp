@@ -29,6 +29,9 @@ namespace MCPForUnity.Editor.Helpers
                 // HTTP mode: Use url field
                 string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
                 unityMCP["url"] = new TomlString { Value = httpUrl };
+
+                // Enable Codex's Rust MCP client for HTTP/SSE transport
+                EnsureRmcpClientFeature(table);
             }
             else
             {
@@ -71,6 +74,8 @@ namespace MCPForUnity.Editor.Helpers
             // Parse existing TOML or create new root table
             var root = TryParseToml(existingToml) ?? new TomlTable();
 
+            bool useHttpTransport = EditorPrefs.GetBool(MCPForUnity.Editor.Constants.EditorPrefKeys.UseHttpTransport, true);
+
             // Ensure mcp_servers table exists
             if (!root.TryGetNode("mcp_servers", out var mcpServersNode) || !(mcpServersNode is TomlTable))
             {
@@ -80,6 +85,11 @@ namespace MCPForUnity.Editor.Helpers
 
             // Create or update unityMCP table
             mcpServers["unityMCP"] = CreateUnityMcpTable(uvPath);
+
+            if (useHttpTransport)
+            {
+                EnsureRmcpClientFeature(root);
+            }
 
             // Serialize back to TOML
             using var writer = new StringWriter();
@@ -198,6 +208,22 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             return unityMCP;
+        }
+
+        /// <summary>
+        /// Ensures the features table contains the rmcp_client flag for HTTP/SSE transport.
+        /// </summary>
+        private static void EnsureRmcpClientFeature(TomlTable root)
+        {
+            if (root == null) return;
+
+            if (!root.TryGetNode("features", out var featuresNode) || featuresNode is not TomlTable features)
+            {
+                features = new TomlTable();
+                root["features"] = features;
+            }
+
+            features["rmcp_client"] = new TomlBoolean { Value = true };
         }
 
         private static bool TryGetTable(TomlTable parent, string key, out TomlTable table)

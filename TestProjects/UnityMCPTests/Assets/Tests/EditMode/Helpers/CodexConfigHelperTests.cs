@@ -462,6 +462,14 @@ namespace MCPForUnityTests.Editor.Helpers
             Assert.IsInstanceOf<TomlTable>(unityMcpNode, "unityMCP should be a table");
 
             var unityMcp = unityMcpNode as TomlTable;
+
+            // Verify features.rmcp_client is enabled for HTTP transport
+            Assert.IsTrue(parsed.TryGetNode("features", out var featuresNode), "HTTP mode should include features table");
+            Assert.IsInstanceOf<TomlTable>(featuresNode, "features should be a table");
+            var features = featuresNode as TomlTable;
+            Assert.IsTrue(features.TryGetNode("rmcp_client", out var rmcpNode), "features should include rmcp_client flag");
+            Assert.IsInstanceOf<TomlBoolean>(rmcpNode, "rmcp_client should be a boolean");
+            Assert.IsTrue((rmcpNode as TomlBoolean).Value, "rmcp_client should be true");
             
             // Verify url field is present
             Assert.IsTrue(unityMcp.TryGetNode("url", out var urlNode), "unityMCP should contain url in HTTP mode");
@@ -535,6 +543,14 @@ namespace MCPForUnityTests.Editor.Helpers
             Assert.IsInstanceOf<TomlTable>(unityMcpNode, "unityMCP should be a table");
 
             var unityMcp = unityMcpNode as TomlTable;
+
+            // Verify features.rmcp_client is enabled for HTTP transport
+            Assert.IsTrue(parsed.TryGetNode("features", out var featuresNode), "HTTP mode should include features table");
+            Assert.IsInstanceOf<TomlTable>(featuresNode, "features should be a table");
+            var features = featuresNode as TomlTable;
+            Assert.IsTrue(features.TryGetNode("rmcp_client", out var rmcpNode), "features should include rmcp_client flag");
+            Assert.IsInstanceOf<TomlBoolean>(rmcpNode, "rmcp_client should be a boolean");
+            Assert.IsTrue((rmcpNode as TomlBoolean).Value, "rmcp_client should be true");
 
             // Verify url field is present
             Assert.IsTrue(unityMcp.TryGetNode("url", out var urlNode), "unityMCP should contain url in HTTP mode");
