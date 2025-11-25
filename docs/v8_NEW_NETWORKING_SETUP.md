@@ -180,11 +180,16 @@ Parameters are defined using the `ToolParameterAttribute`, which contains `Name`
 
 The `ToolDiscoveryService` class uses reflection to find all classes with `McpForUnityToolAttribute`. It does the same for `ToolParameterAttribute`. With that data, it constructs a `ToolMetadata` object. These tools are stored in-memory in a dictionary that maps tool names with their metadata.
 
-The `CustomToolRegistrationProcessor` uses the cached tools and sends a request to the MCP server to register them. There's some logic here, when the domain reloads (I've noticed `DidReloadScripts` triggers for domain reloads and at startup), we invalidate the tools cache and mark them as pending registration. Why not just send them right away?
+When we initiate a websocket connection, after successfully registering and retrieving a session ID, we call the `SendRegisterToolsAsync` function. This function sends a JSON payload to the server with all the tools that were found in the `ToolDiscoveryService`.
 
-The first time users set up the plugin, the server would likely not be running. Also, we check our connection to the HTTP server periodically, if it's not a healthy state, why bother sending a request to register tools? So we mark them as ready, but we only send them when the HTTP connection is healthy.
+In the `plugin_hub`'s `on_receive` handler, we look out for the `register_tools` message type, and map the tools to the session ID. This is important, we only want custom tools to be available for the project they've been added to.
 
-The request is sent to the `/register-tools` endpoint on the server. That request dynamically registers the tool on the server.
+That requirement of keeping tools local to the projeect made this implementation a bit trickier. We have the requirement because in this project, we can run multiple Unity instances at the same time. So it doesn't make sense to make every tool globally available to all connected projects.
+
+To make tools local to the project, we add a `unity://custom-tools` resource which lists all tools mapped to a session (which is retrieve from FastMCP's context). And then we add a `execute_custom_tool` function tool which can call the tools the user added. This worked surprisingly well, but required some tweaks:
+
+- We removed the fallback for session IDs in the server. If there's more than one Unity instance connected to the server, the MCP client MUST call `set_active_instance` so the mapping between session IDs and Unity instances will be correct.
+- We removed the `read_resources` tool. It simply did not work, and LLMs would go in circles for a long time before actually reading the resource directly. This only works because MCP resources have up to date information and gives the MCP clients the right context to call the tools.
 
 > **Note**: FastMCP can register and deregister tools while the server is running, however, not all MCP clients can process the updates in real time. We recommend that users refresh/reconfigure the MCP servers in the clients so they can see the new custom tools.
 
@@ -202,6 +207,8 @@ Relevant commits:
 - https://github.com/CoplayDev/unity-mcp/pull/375/commits/a84c2c29a08cabc3345e50147afa896ea4ae37bf
 - https://github.com/CoplayDev/unity-mcp/pull/375/commits/4f22d54ae38f84cfc05e50ad30675f4bb728f76d
 - https://github.com/CoplayDev/unity-mcp/pull/375/commits/01976a507396bf7fca1fd253172dd4c83ff33867
+- https://github.com/CoplayDev/unity-mcp/pull/375/commits/7525dfa547db5730cd911db25d2baa8bad969c71
+- https://github.com/CoplayDev/unity-mcp/pull/375/commits/53a397597df3fcaa4fa54188e9920348158c7425
 
 ### Window logic has been split into separate classes
 
