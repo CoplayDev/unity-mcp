@@ -41,6 +41,7 @@ MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to 
 
   Your LLM can use functions like:
 
+* `execute_custom_tool`: Execute a project-scoped custom tool registered by Unity.
 * `execute_menu_item`: Executes Unity Editor menu items (e.g., "File/Save Project").
 * `manage_asset`: Performs asset operations (import, create, modify, delete, etc.).
 * `manage_editor`: Controls and queries the editor's state and settings.
@@ -66,6 +67,7 @@ MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to 
 
   Your LLM can retrieve the following resources:
 
+* `custom_tools`: Lists custom tools available for the active Unity project.
 * `unity_instances`: Lists all running Unity Editor instances with their details (name, path, port, status).
 * `menu_items`: Retrieves all available menu items in the Unity Editor.
 * `tests`: Retrieves all available tests in the Unity Editor. Can select tests of a specific type (e.g., "EditMode", "PlayMode").

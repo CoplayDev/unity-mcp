@@ -39,6 +39,7 @@ MCP for Unity 作为桥梁，允许 AI 助手（如 Claude、Cursor）通过本�
 
   您的大语言模型可以使用以下功能：
 
+* `execute_custom_tool`: 执行由 Unity 注册的项目范围自定义工具。
 * `execute_menu_item`: 执行 Unity 编辑器菜单项（例如，"File/Save Project"）。
 * `manage_asset`: 执行资源操作（导入、创建、修改、删除等）。
 * `manage_editor`: 控制和查询编辑器的状态和设置。
@@ -64,6 +65,7 @@ MCP for Unity 作为桥梁，允许 AI 助手（如 Claude、Cursor）通过本�
 
   您的大语言模型可以检索以下资源：
 
+* `custom_tools`: 列出活动 Unity 项目可用的自定义工具。
 * `unity_instances`: 列出所有正在运行的 Unity 编辑器实例及其详细信息（名称、路径、端口、状态）。
 * `menu_items`: 检索 Unity 编辑器中所有可用的菜单项。
 * `tests`: 检索 Unity 编辑器中所有可用的测试。可以选择特定类型的测试（例如，"EditMode"、"PlayMode"）。
