@@ -15,6 +15,30 @@ namespace MCPForUnity.Editor.Services
     public class ServerManagementService : IServerManagementService
     {
         /// <summary>
+        /// Convert a uvx path to a uv path by replacing "uvx" with "uv" while preserving the extension
+        /// </summary>
+        private string ConvertUvxToUv(string uvxPath)
+        {
+            if (string.IsNullOrEmpty(uvxPath))
+                return uvxPath;
+
+            // Handle case-insensitive replacement of "uvx" with "uv"
+            // This works for paths like:
+            // - /usr/bin/uvx -> /usr/bin/uv
+            // - C:\path\to\uvx.exe -> C:\path\to\uv.exe
+            // - uvx -> uv
+            
+            int lastIndex = uvxPath.LastIndexOf("uvx", StringComparison.OrdinalIgnoreCase);
+            if (lastIndex >= 0)
+            {
+                return uvxPath.Substring(0, lastIndex) + "uv" + uvxPath.Substring(lastIndex + 3);
+            }
+
+            // Fallback: if "uvx" not found, try removing last character (original behavior)
+            return uvxPath.Length > 0 ? uvxPath.Remove(uvxPath.Length - 1, 1) : uvxPath;
+        }
+
+        /// <summary>
         /// Clear the local uvx cache for the MCP server package
         /// </summary>
         /// <returns>True if successful, false otherwise</returns>
@@ -23,7 +47,7 @@ namespace MCPForUnity.Editor.Services
             try
             {
                 string uvxPath = MCPServiceLocator.Paths.GetUvxPath();
-                string uvCommand = uvxPath.Remove(uvxPath.Length - 1, 1);
+                string uvCommand = ConvertUvxToUv(uvxPath);
 
                 // Get the package name
                 string packageName = "mcp-for-unity";
@@ -65,7 +89,7 @@ namespace MCPForUnity.Editor.Services
             stderr = null;
 
             string uvxPath = MCPServiceLocator.Paths.GetUvxPath();
-            string uvPath = uvxPath.Remove(uvxPath.Length - 1, 1);
+            string uvPath = ConvertUvxToUv(uvxPath);
 
             if (!string.Equals(uvCommand, uvPath, StringComparison.OrdinalIgnoreCase))
             {
