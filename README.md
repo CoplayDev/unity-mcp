@@ -144,7 +144,7 @@ MCP for Unity connects your tools using two components:
 3. Click `+` -> `Add package from git URL...`.
 4. Enter:
     ```
-    https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v8.0.0
+    https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v8.0.1
     ```
 5. Click `Add`.
 
@@ -172,7 +172,7 @@ HTTP transport is enabled out of the box. The Unity window can launch the FastMC
 You can also start the server yourself from a terminal—useful for CI or when you want to see raw logs:
 
 ```bash
-uvx --from "git+https://github.com/CoplayDev/unity-mcp@v8.0.0#subdirectory=Server" mcp-for-unity --transport http --http-url http://localhost:8080
+uvx --from "git+https://github.com/CoplayDev/unity-mcp@v8.0.1#subdirectory=Server" mcp-for-unity --transport http --http-url http://localhost:8080
 ```
 
 Keep the process running while clients are connected.
