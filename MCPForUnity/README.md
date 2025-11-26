@@ -82,6 +82,10 @@ Notes:
   - Help: [Fix MCP for Unity with Cursor, VS Code & Windsurf](https://github.com/CoplayDev/unity-mcp/wiki/1.-Fix-Unity-MCP-and-Cursor,-VSCode-&-Windsurf)
 - Claude CLI not found:
   - Help: [Fix MCP for Unity with Claude Code](https://github.com/CoplayDev/unity-mcp/wiki/2.-Fix-Unity-MCP-and-Claude-Code)
+- Claude Desktop "spawn uvx ENOENT" error on macOS:
+  - Claude Desktop may not inherit your shell's PATH.
+  - The MCP for Unity plugin attempts to automatically resolve the absolute path to `uvx`.
+  - If this fails, use the "Choose UV Install Location" button in the MCP for Unity window to select your `uvx` executable (typically `~/.local/bin/uvx`), or manually update your Claude Desktop config to use the absolute path to `uvx`.
 
 ---
 
