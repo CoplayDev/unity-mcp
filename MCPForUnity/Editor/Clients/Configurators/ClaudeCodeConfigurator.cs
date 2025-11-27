@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using MCPForUnity.Editor.Models;
 
-namespace MCPForUnity.Editor.Clients
+namespace MCPForUnity.Editor.Clients.Configurators
 {
     public class ClaudeCodeConfigurator : ClaudeCliMcpConfigurator
     {

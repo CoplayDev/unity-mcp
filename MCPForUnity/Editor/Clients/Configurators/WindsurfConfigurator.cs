@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using MCPForUnity.Editor.Models;
 
-namespace MCPForUnity.Editor.Clients
+namespace MCPForUnity.Editor.Clients.Configurators
 {
     public class WindsurfConfigurator : JsonFileMcpConfigurator
     {

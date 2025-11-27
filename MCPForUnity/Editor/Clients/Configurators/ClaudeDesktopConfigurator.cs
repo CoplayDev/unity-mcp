@@ -5,7 +5,7 @@ using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Models;
 using UnityEditor;
 
-namespace MCPForUnity.Editor.Clients
+namespace MCPForUnity.Editor.Clients.Configurators
 {
     public class ClaudeDesktopConfigurator : JsonFileMcpConfigurator
     {
