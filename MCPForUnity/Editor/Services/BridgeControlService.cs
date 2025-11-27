@@ -75,7 +75,7 @@ namespace MCPForUnity.Editor.Services
         }
 
         public bool IsAutoConnectMode => StdioBridgeHost.IsAutoConnectMode();
-        public TransportMode? ActiveMode => _preferredMode;
+        public TransportMode? ActiveMode => ResolvePreferredMode();
 
         public async Task<bool> StartAsync()
         {
