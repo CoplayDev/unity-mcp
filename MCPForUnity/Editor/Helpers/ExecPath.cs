@@ -132,6 +132,56 @@ namespace MCPForUnity.Editor.Helpers
             catch { return null; }
         }
 
+        // Resolve uvx absolute path. Pref -> env -> common locations -> PATH.
+        internal static string ResolveUvx()
+        {
+            try
+            {
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX) || RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                {
+                    string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) ?? string.Empty;
+                    string[] candidates =
+                    {
+                        Path.Combine(home, ".local", "bin", "uvx"),
+                        Path.Combine(home, ".cargo", "bin", "uvx"),
+                        "/usr/local/bin/uvx",
+                        "/opt/homebrew/bin/uvx",
+                        "/usr/bin/uvx"
+                    };
+                    foreach (string c in candidates) { if (File.Exists(c)) return c; }
+
+#if UNITY_EDITOR_OSX || UNITY_EDITOR_LINUX
+                    return Which("uvx", "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin");
+#else
+                    return null;
+#endif
+                }
+
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+#if UNITY_EDITOR_WIN
+                    string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                    string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                    
+                    string[] candidates =
+                    {
+                        Path.Combine(userProfile, ".cargo", "bin", "uvx.exe"),
+                        Path.Combine(localAppData, "uv", "uvx.exe"),
+                        Path.Combine(userProfile, "uv", "uvx.exe"),
+                    };
+                    foreach (string c in candidates) { if (File.Exists(c)) return c; }
+                    
+                    string fromWhere = Where("uvx.exe") ?? Where("uvx");
+                    if (!string.IsNullOrEmpty(fromWhere)) return fromWhere;
+#endif
+                    return null;
+                }
+            }
+            catch { }
+
+            return null;
+        }
+
         // Explicitly set the Claude CLI absolute path override in EditorPrefs
         internal static void SetClaudeCliPath(string absolutePath)
         {

@@ -85,15 +85,31 @@ namespace MCPForUnity.Editor.Helpers
                 // Stdio mode: Use uvx command
                 var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
 
-                unity["command"] = uvxPath;
+                var args = new List<string>();
 
-                var args = new List<string> { packageName };
-                if (!string.IsNullOrEmpty(fromUrl))
+                // Fix for Windows GUI apps (Claude Desktop, Cursor, etc.): 
+                // Wrap in cmd /c to ensure PATH and environment are properly resolved.
+                if (UnityEngine.Application.platform == UnityEngine.RuntimePlatform.WindowsEditor)
                 {
-                    args.Insert(0, fromUrl);
-                    args.Insert(0, "--from");
+                    unity["command"] = "cmd";
+                    args.Add("/c");
+                    
+                    // If uvxPath contains spaces, we might need to ensure it's treated as a command.
+                    // But typically in JSON args, it's just the next argument.
+                    args.Add(uvxPath);
+                }
+                else
+                {
+                    unity["command"] = uvxPath;
                 }
 
+                if (!string.IsNullOrEmpty(fromUrl))
+                {
+                    args.Add("--from");
+                    args.Add(fromUrl);
+                }
+                
+                args.Add(packageName);
                 args.Add("--transport");
                 args.Add("stdio");
 

@@ -34,6 +34,13 @@ namespace MCPForUnity.Editor.Services
                 McpLog.Debug("No uvx path override found, falling back to default command");
             }
 
+            // Auto-discovery of absolute path
+            string discovered = ExecPath.ResolveUvx();
+            if (!string.IsNullOrEmpty(discovered))
+            {
+                return discovered;
+            }
+
             return "uvx";
         }
 
