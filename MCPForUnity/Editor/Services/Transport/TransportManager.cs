@@ -10,8 +10,10 @@ namespace MCPForUnity.Editor.Services.Transport
     /// </summary>
     public class TransportManager
     {
-        private IMcpTransportClient _active;
-        private TransportMode? _activeMode;
+        private IMcpTransportClient _httpClient;
+        private IMcpTransportClient _stdioClient;
+        private TransportState _httpState = TransportState.Disconnected("http");
+        private TransportState _stdioState = TransportState.Disconnected("stdio");
         private Func<IMcpTransportClient> _webSocketFactory;
         private Func<IMcpTransportClient> _stdioFactory;
 
@@ -22,8 +24,8 @@ namespace MCPForUnity.Editor.Services.Transport
                 () => new StdioTransportClient());
         }
 
-        public IMcpTransportClient ActiveTransport => _active;
-        public TransportMode? ActiveMode => _activeMode;
+        public IMcpTransportClient ActiveTransport => null; // Deprecated single-transport accessor
+        public TransportMode? ActiveMode => null; // Deprecated single-transport accessor
 
         public void Configure(
             Func<IMcpTransportClient> webSocketFactory,
@@ -33,68 +35,90 @@ namespace MCPForUnity.Editor.Services.Transport
             _stdioFactory = stdioFactory ?? throw new ArgumentNullException(nameof(stdioFactory));
         }
 
+        private IMcpTransportClient GetOrCreateClient(TransportMode mode)
+        {
+            return mode switch
+            {
+                TransportMode.Http => _httpClient ??= _webSocketFactory(),
+                TransportMode.Stdio => _stdioClient ??= _stdioFactory(),
+                _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported transport mode"),
+            };
+        }
+
         public async Task<bool> StartAsync(TransportMode mode)
         {
-            await StopAsync();
+            IMcpTransportClient client = GetOrCreateClient(mode);
 
-            IMcpTransportClient next = mode switch
-            {
-                TransportMode.Stdio => _stdioFactory(),
-                TransportMode.Http => _webSocketFactory(),
-                _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported transport mode")
-            } ?? throw new InvalidOperationException($"Factory returned null for transport mode {mode}");
-
-            bool started = await next.StartAsync();
+            bool started = await client.StartAsync();
             if (!started)
             {
-                await next.StopAsync();
-                _active = null;
-                _activeMode = null;
+                await client.StopAsync();
+                UpdateState(mode, TransportState.Disconnected(mode.ToString().ToLowerInvariant(), "Failed to start"));
                 return false;
             }
 
-            _active = next;
-            _activeMode = mode;
+            UpdateState(mode, client.State ?? TransportState.Connected(client.TransportName));
             return true;
         }
 
-        public async Task StopAsync()
+        public async Task StopAsync(TransportMode? mode = null)
         {
-            if (_active != null)
+            async Task StopClient(IMcpTransportClient client, TransportMode clientMode)
             {
-                try
-                {
-                    await _active.StopAsync();
-                }
-                catch (Exception ex)
-                {
-                    McpLog.Warn($"Error while stopping transport {_active.TransportName}: {ex.Message}");
-                }
-                finally
-                {
-                    _active = null;
-                    _activeMode = null;
-                }
+                if (client == null) return;
+                try { await client.StopAsync(); }
+                catch (Exception ex) { McpLog.Warn($"Error while stopping transport {client.TransportName}: {ex.Message}"); }
+                finally { UpdateState(clientMode, TransportState.Disconnected(client.TransportName)); }
+            }
+
+            if (mode == null)
+            {
+                await StopClient(_httpClient, TransportMode.Http);
+                await StopClient(_stdioClient, TransportMode.Stdio);
+                return;
+            }
+
+            if (mode == TransportMode.Http)
+            {
+                await StopClient(_httpClient, TransportMode.Http);
+            }
+            else
+            {
+                await StopClient(_stdioClient, TransportMode.Stdio);
             }
         }
 
-        public async Task<bool> VerifyAsync()
+        public async Task<bool> VerifyAsync(TransportMode mode)
         {
-            if (_active == null)
+            IMcpTransportClient client = mode == TransportMode.Http ? _httpClient : _stdioClient;
+            if (client == null)
             {
                 return false;
             }
-            return await _active.VerifyAsync();
+
+            bool ok = await client.VerifyAsync();
+            var state = client.State ?? TransportState.Disconnected(client.TransportName, "No state reported");
+            UpdateState(mode, state);
+            return ok;
         }
 
-        public TransportState GetState()
+        public TransportState GetState(TransportMode mode)
         {
-            if (_active == null)
-            {
-                return TransportState.Disconnected(_activeMode?.ToString()?.ToLowerInvariant() ?? "unknown", "Transport not started");
-            }
+            return mode == TransportMode.Http ? _httpState : _stdioState;
+        }
 
-            return _active.State ?? TransportState.Disconnected(_active.TransportName, "No state reported");
+        public bool IsRunning(TransportMode mode) => GetState(mode).IsConnected;
+
+        private void UpdateState(TransportMode mode, TransportState state)
+        {
+            if (mode == TransportMode.Http)
+            {
+                _httpState = state;
+            }
+            else
+            {
+                _stdioState = state;
+            }
         }
     }
 

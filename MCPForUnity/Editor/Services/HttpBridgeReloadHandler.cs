@@ -24,8 +24,8 @@ namespace MCPForUnity.Editor.Services
         {
             try
             {
-                var bridge = MCPServiceLocator.Bridge;
-                bool shouldResume = bridge.IsRunning && bridge.ActiveMode == TransportMode.Http;
+                var transport = MCPServiceLocator.TransportManager;
+                bool shouldResume = transport.IsRunning(TransportMode.Http);
 
                 if (shouldResume)
                 {
@@ -36,9 +36,9 @@ namespace MCPForUnity.Editor.Services
                     EditorPrefs.DeleteKey(EditorPrefKeys.ResumeHttpAfterReload);
                 }
 
-                if (bridge.IsRunning)
+                if (shouldResume)
                 {
-                    var stopTask = bridge.StopAsync();
+                    var stopTask = transport.StopAsync(TransportMode.Http);
                     stopTask.ContinueWith(t =>
                     {
                         if (t.IsFaulted && t.Exception != null)
@@ -59,7 +59,9 @@ namespace MCPForUnity.Editor.Services
             bool resume = false;
             try
             {
-                resume = EditorPrefs.GetBool(EditorPrefKeys.ResumeHttpAfterReload, false);
+                // Only resume HTTP if it is still the selected transport.
+                bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+                resume = useHttp && EditorPrefs.GetBool(EditorPrefKeys.ResumeHttpAfterReload, false);
                 if (resume)
                 {
                     EditorPrefs.DeleteKey(EditorPrefKeys.ResumeHttpAfterReload);
@@ -90,7 +92,7 @@ namespace MCPForUnity.Editor.Services
             {
                 try
                 {
-                    var startTask = MCPServiceLocator.Bridge.StartAsync();
+                    var startTask = MCPServiceLocator.TransportManager.StartAsync(TransportMode.Http);
                     startTask.ContinueWith(t =>
                     {
                         if (t.IsFaulted)
@@ -123,7 +125,7 @@ namespace MCPForUnity.Editor.Services
             {
                 try
                 {
-                    bool started = await MCPServiceLocator.Bridge.StartAsync();
+                    bool started = await MCPServiceLocator.TransportManager.StartAsync(TransportMode.Http);
                     if (!started)
                     {
                         McpLog.Warn("Failed to resume HTTP MCP bridge after domain reload");

@@ -49,13 +49,21 @@ namespace MCPForUnity.Editor.Services
             };
         }
 
-        public bool IsRunning => _transportManager.GetState().IsConnected;
+        public bool IsRunning
+        {
+            get
+            {
+                var mode = ResolvePreferredMode();
+                return _transportManager.IsRunning(mode);
+            }
+        }
 
         public int CurrentPort
         {
             get
             {
-                var state = _transportManager.GetState();
+                var mode = ResolvePreferredMode();
+                var state = _transportManager.GetState(mode);
                 if (state.Port.HasValue)
                 {
                     return state.Port.Value;
@@ -67,7 +75,7 @@ namespace MCPForUnity.Editor.Services
         }
 
         public bool IsAutoConnectMode => StdioBridgeHost.IsAutoConnectMode();
-        public TransportMode? ActiveMode => _transportManager.ActiveMode;
+        public TransportMode? ActiveMode => _preferredMode;
 
         public async Task<bool> StartAsync()
         {
@@ -92,7 +100,8 @@ namespace MCPForUnity.Editor.Services
         {
             try
             {
-                await _transportManager.StopAsync();
+                var mode = ResolvePreferredMode();
+                await _transportManager.StopAsync(mode);
             }
             catch (Exception ex)
             {
@@ -102,17 +111,17 @@ namespace MCPForUnity.Editor.Services
 
         public async Task<BridgeVerificationResult> VerifyAsync()
         {
-            var mode = _transportManager.ActiveMode ?? ResolvePreferredMode();
-            bool pingSucceeded = await _transportManager.VerifyAsync();
-            var state = _transportManager.GetState();
+            var mode = ResolvePreferredMode();
+            bool pingSucceeded = await _transportManager.VerifyAsync(mode);
+            var state = _transportManager.GetState(mode);
             return BuildVerificationResult(state, mode, pingSucceeded);
         }
 
         public BridgeVerificationResult Verify(int port)
         {
-            var mode = _transportManager.ActiveMode ?? ResolvePreferredMode();
-            bool pingSucceeded = _transportManager.VerifyAsync().GetAwaiter().GetResult();
-            var state = _transportManager.GetState();
+            var mode = ResolvePreferredMode();
+            bool pingSucceeded = _transportManager.VerifyAsync(mode).GetAwaiter().GetResult();
+            var state = _transportManager.GetState(mode);
 
             if (mode == TransportMode.Stdio)
             {

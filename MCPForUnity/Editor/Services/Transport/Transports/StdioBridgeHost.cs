@@ -57,7 +57,6 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private static int mainThreadId;
         private static int currentUnityPort = 6400;
         private static bool isAutoConnectMode = false;
-        private static bool shouldRestartAfterReload = false;
         private const ulong MaxFrameBytes = 64UL * 1024 * 1024;
         private const int FrameIOTimeoutMs = 30000;
 
@@ -162,8 +161,6 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 }
             }
             EditorApplication.quitting += Stop;
-            AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
-            AssemblyReloadEvents.afterAssemblyReload += OnAfterAssemblyReload;
             EditorApplication.playModeStateChanged += _ =>
             {
                 if (ShouldAutoStartBridge())
@@ -406,10 +403,6 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     listenerTask = Task.Run(() => ListenerLoopAsync(cts.Token));
                     CommandRegistry.Initialize();
                     EditorApplication.update += ProcessCommands;
-                    try { AssemblyReloadEvents.beforeAssemblyReload -= OnBeforeAssemblyReload; } catch { }
-                    try { AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload; } catch { }
-                    try { AssemblyReloadEvents.afterAssemblyReload -= OnAfterAssemblyReload; } catch { }
-                    try { AssemblyReloadEvents.afterAssemblyReload += OnAfterAssemblyReload; } catch { }
                     try { EditorApplication.quitting -= Stop; } catch { }
                     try { EditorApplication.quitting += Stop; } catch { }
                     heartbeatSeq++;
@@ -470,8 +463,6 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             }
 
             try { EditorApplication.update -= ProcessCommands; } catch { }
-            try { AssemblyReloadEvents.beforeAssemblyReload -= OnBeforeAssemblyReload; } catch { }
-            try { AssemblyReloadEvents.afterAssemblyReload -= OnAfterAssemblyReload; } catch { }
             try { EditorApplication.quitting -= Stop; } catch { }
 
             try
@@ -1023,47 +1014,6 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             return false;
         }
 
-        private static void OnBeforeAssemblyReload()
-        {
-            if (isRunning)
-            {
-                shouldRestartAfterReload = true;
-            }
-            try { Stop(); } catch { }
-        }
-
-        private static void OnAfterAssemblyReload()
-        {
-            WriteHeartbeat(false, "idle");
-            LogBreadcrumb("Idle");
-            bool shouldResume = ShouldAutoStartBridge() || shouldRestartAfterReload;
-            if (shouldRestartAfterReload)
-            {
-                shouldRestartAfterReload = false;
-            }
-            if (!shouldResume)
-            {
-                return;
-            }
-
-            // If we're not compiling, try to bring the bridge up immediately to avoid depending on editor focus.
-            if (!IsCompiling())
-            {
-                try
-                {
-                    Start();
-                    return; // Successful immediate start; no need to schedule a delayed retry
-                }
-                catch (Exception ex)
-                {
-                    // Fall through to delayed retry if immediate start fails
-                    McpLog.Warn($"Immediate STDIO bridge restart after reload failed: {ex.Message}");
-                }
-            }
-
-            // Fallback path when compiling or if immediate start failed
-            ScheduleInitRetry();
-        }
 
         private static void WriteHeartbeat(bool reloading, string reason = null)
         {
