@@ -214,7 +214,8 @@ namespace MCPForUnity.Editor.Clients
             }
             catch (Exception ex)
             {
-                return $"{{ \"error\": \"{ex.Message}\" }}";
+                var errorObj = new { error = ex.Message };
+                return JsonConvert.SerializeObject(errorObj);
             }
         }
 
