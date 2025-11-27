@@ -26,11 +26,5 @@ namespace MCPForUnity.Editor.Clients.Configurators
             "Paste the configuration JSON",
             "Save and restart Windsurf"
         };
-
-        public override string GetManualSnippet()
-        {
-            // Force consistent handling for Windsurf; reuse base behavior
-            return base.GetManualSnippet();
-        }
     }
 }
