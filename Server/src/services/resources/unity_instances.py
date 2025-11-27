@@ -9,6 +9,11 @@ from transport.legacy.unity_connection import get_unity_connection_pool
 from transport.plugin_hub import PluginHub
 from transport.unity_transport import _is_http_transport
 
+try:
+    pass
+except: pass
+
+
 
 @mcp_for_unity_resource(
     uri="unity://instances",

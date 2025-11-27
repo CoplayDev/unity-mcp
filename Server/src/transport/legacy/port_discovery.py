@@ -29,7 +29,7 @@ class PortDiscovery:
     """Handles port discovery from Unity Bridge registry"""
     REGISTRY_FILE = "unity-mcp-port.json"  # legacy single-project file
     DEFAULT_PORT = 6400
-    CONNECT_TIMEOUT = 0.3  # seconds, keep this snappy during discovery
+    CONNECT_TIMEOUT = 1.0  # seconds, keep this snappy during discovery
 
     @staticmethod
     def get_registry_path() -> Path:
@@ -102,6 +102,7 @@ class PortDiscovery:
                     response = _recv_exact(response_length)
                     if response is None:
                         return False
+                    
                     return b'"message":"pong"' in response
                 except Exception as e:
                     logger.debug(f"Port probe failed for {port}: {e}")
@@ -308,7 +309,7 @@ class PortDiscovery:
 
         deduped_instances = [entry[0] for entry in sorted(
             instances_by_port.values(), key=lambda item: item[1], reverse=True)]
-
+        
         logger.info(
             f"Discovered {len(deduped_instances)} Unity instances (after de-duplication by port)")
         return deduped_instances
