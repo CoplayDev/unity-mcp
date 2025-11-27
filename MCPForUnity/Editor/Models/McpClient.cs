@@ -12,11 +12,11 @@ namespace MCPForUnity.Editor.Models
         public McpStatus status = McpStatus.NotConfigured;
 
         // Capability flags/config for JSON-based configurators
-        public bool IsVsCodeLayout;
-        public bool SupportsHttpTransport = true;
-        public bool EnsureEnvObject;
-        public bool StripEnvWhenNotRequired;
-        public string HttpUrlProperty = "url";
+        public bool IsVsCodeLayout; // Whether the config file follows VS Code layout (env object at root)
+        public bool SupportsHttpTransport = true; // Whether the MCP server supports HTTP transport
+        public bool EnsureEnvObject; // Whether to ensure the env object is present in the config
+        public bool StripEnvWhenNotRequired; // Whether to strip the env object when not required
+        public string HttpUrlProperty = "url"; // The property name for the HTTP URL in the config
         public Dictionary<string, object> DefaultUnityFields = new();
 
         // Helper method to convert the enum to a display string
