@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace MCPForUnity.Editor.Models
 {
     public class McpClient
@@ -6,9 +8,16 @@ namespace MCPForUnity.Editor.Models
         public string windowsConfigPath;
         public string macConfigPath;
         public string linuxConfigPath;
-        public McpTypes mcpType;
         public string configStatus;
         public McpStatus status = McpStatus.NotConfigured;
+
+        // Capability flags/config for JSON-based configurators
+        public bool IsVsCodeLayout;
+        public bool SupportsHttpTransport = true;
+        public bool EnsureEnvObject;
+        public bool StripEnvWhenNotRequired;
+        public string HttpUrlProperty = "url";
+        public Dictionary<string, object> DefaultUnityFields = new();
 
         // Helper method to convert the enum to a display string
         public string GetStatusDisplayString()

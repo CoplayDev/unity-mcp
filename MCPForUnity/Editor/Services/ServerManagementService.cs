@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Linq;
 using MCPForUnity.Editor.Constants;
-using MCPForUnity.Editor.Data;
 using MCPForUnity.Editor.Helpers;
 using UnityEditor;
 using UnityEngine;

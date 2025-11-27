@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using MCPForUnity.Editor.Data;
+using MCPForUnity.Editor.Clients;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
 using MCPForUnity.Editor.Services;
@@ -8,6 +8,7 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 using MCPForUnity.Editor.Constants;
+using System.Linq;
 
 namespace MCPForUnity.Editor.Migrations
 {
@@ -48,21 +49,24 @@ namespace MCPForUnity.Editor.Migrations
             bool hadFailures = false;
             bool touchedAny = false;
 
-            var clients = new McpClients().clients;
-            foreach (var client in clients)
+            var configurators = McpClientRegistry.All.OfType<McpClientConfiguratorBase>().ToList();
+            foreach (var configurator in configurators)
             {
                 try
                 {
-                    if (!ConfigUsesStdIo(client))
+                    if (!ConfigUsesStdIo(configurator.Client))
                         continue;
 
-                    MCPServiceLocator.Client.ConfigureClient(client);
+                    if (!configurator.SupportsAutoConfigure)
+                        continue;
+
+                    MCPServiceLocator.Client.ConfigureClient(configurator);
                     touchedAny = true;
                 }
                 catch (Exception ex)
                 {
                     hadFailures = true;
-                    McpLog.Warn($"Failed to refresh stdio config for {client.name}: {ex.Message}");
+                    McpLog.Warn($"Failed to refresh stdio config for {configurator.DisplayName}: {ex.Message}");
                 }
             }
 
@@ -90,13 +94,7 @@ namespace MCPForUnity.Editor.Migrations
 
         private static bool ConfigUsesStdIo(McpClient client)
         {
-            switch (client.mcpType)
-            {
-                case McpTypes.Codex:
-                    return CodexConfigUsesStdIo(client);
-                default:
-                    return JsonConfigUsesStdIo(client);
-            }
+            return JsonConfigUsesStdIo(client);
         }
 
         private static bool JsonConfigUsesStdIo(McpClient client)
@@ -112,7 +110,7 @@ namespace MCPForUnity.Editor.Migrations
                 var root = JObject.Parse(File.ReadAllText(configPath));
 
                 JToken unityNode = null;
-                if (client.mcpType == McpTypes.VSCode)
+                if (client.IsVsCodeLayout)
                 {
                     unityNode = root.SelectToken("servers.unityMCP")
                                ?? root.SelectToken("mcp.servers.unityMCP");
@@ -132,24 +130,5 @@ namespace MCPForUnity.Editor.Migrations
             }
         }
 
-        private static bool CodexConfigUsesStdIo(McpClient client)
-        {
-            try
-            {
-                string configPath = McpConfigurationHelper.GetClientConfigPath(client);
-                if (string.IsNullOrEmpty(configPath) || !File.Exists(configPath))
-                {
-                    return false;
-                }
-
-                string toml = File.ReadAllText(configPath);
-                return CodexConfigHelper.TryParseCodexServer(toml, out var command, out _)
-                       && !string.IsNullOrEmpty(command);
-            }
-            catch
-            {
-                return false;
-            }
-        }
     }
 }

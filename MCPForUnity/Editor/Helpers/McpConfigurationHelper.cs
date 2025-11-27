@@ -79,7 +79,7 @@ namespace MCPForUnity.Editor.Helpers
             // Determine existing entry references (command/args)
             string existingCommand = null;
             string[] existingArgs = null;
-            bool isVSCode = (mcpClient?.mcpType == McpTypes.VSCode);
+            bool isVSCode = (mcpClient?.IsVsCodeLayout == true);
             try
             {
                 if (isVSCode)

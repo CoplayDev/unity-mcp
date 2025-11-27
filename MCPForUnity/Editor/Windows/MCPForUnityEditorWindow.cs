@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
-using MCPForUnity.Editor.Data;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Windows.Components.Settings;
@@ -20,8 +19,6 @@ namespace MCPForUnity.Editor.Windows
         private McpConnectionSection connectionSection;
         private McpClientConfigSection clientConfigSection;
 
-        // Data
-        private readonly McpClients mcpClients = new();
         private static readonly HashSet<MCPForUnityEditorWindow> OpenWindows = new();
 
         public static void ShowWindow()
@@ -105,7 +102,7 @@ namespace MCPForUnity.Editor.Windows
             {
                 var clientConfigRoot = clientConfigTree.Instantiate();
                 sectionsContainer.Add(clientConfigRoot);
-                clientConfigSection = new McpClientConfigSection(clientConfigRoot, mcpClients);
+                clientConfigSection = new McpClientConfigSection(clientConfigRoot);
             }
 
             // Initial updates

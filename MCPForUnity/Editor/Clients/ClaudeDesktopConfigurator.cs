@@ -1,0 +1,53 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Models;
+using UnityEditor;
+
+namespace MCPForUnity.Editor.Clients
+{
+    public class ClaudeDesktopConfigurator : JsonFileMcpConfigurator
+    {
+        public ClaudeDesktopConfigurator() : base(new McpClient
+        {
+            name = "Claude Desktop",
+            windowsConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Claude", "claude_desktop_config.json"),
+            macConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Application Support", "Claude", "claude_desktop_config.json"),
+            linuxConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "Claude", "claude_desktop_config.json"),
+            SupportsHttpTransport = false
+        })
+        { }
+
+        public override IList<string> GetInstallationSteps() => new List<string>
+        {
+            "Open Claude Desktop",
+            "Settings > Developer > Edit Config (or open path)",
+            "Paste JSON",
+            "Save and restart"
+        };
+
+        public override void Configure()
+        {
+            bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            if (useHttp)
+            {
+                throw new InvalidOperationException("Claude Desktop does not support HTTP transport. Switch to stdio in settings before configuring.");
+            }
+
+            base.Configure();
+        }
+
+        public override string GetManualSnippet()
+        {
+            bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            if (useHttp)
+            {
+                return "# Claude Desktop does not support HTTP transport.\n" +
+                       "# Open Advanced Settings and disable HTTP transport to use stdio, then regenerate.";
+            }
+
+            return base.GetManualSnippet();
+        }
+    }
+}

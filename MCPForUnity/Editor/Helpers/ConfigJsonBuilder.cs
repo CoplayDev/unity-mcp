@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Models;
@@ -13,16 +14,8 @@ namespace MCPForUnity.Editor.Helpers
         public static string BuildManualConfigJson(string uvPath, McpClient client)
         {
             var root = new JObject();
-            bool isVSCode = client?.mcpType == McpTypes.VSCode;
-            JObject container;
-            if (isVSCode)
-            {
-                container = EnsureObject(root, "servers");
-            }
-            else
-            {
-                container = EnsureObject(root, "mcpServers");
-            }
+            bool isVSCode = client?.IsVsCodeLayout == true;
+            JObject container = isVSCode ? EnsureObject(root, "servers") : EnsureObject(root, "mcpServers");
 
             var unity = new JObject();
             PopulateUnityNode(unity, uvPath, client, isVSCode);
@@ -35,7 +28,7 @@ namespace MCPForUnity.Editor.Helpers
         public static JObject ApplyUnityServerToExistingConfig(JObject root, string uvPath, McpClient client)
         {
             if (root == null) root = new JObject();
-            bool isVSCode = client?.mcpType == McpTypes.VSCode;
+            bool isVSCode = client?.IsVsCodeLayout == true;
             JObject container = isVSCode ? EnsureObject(root, "servers") : EnsureObject(root, "mcpServers");
             JObject unity = container["unityMCP"] as JObject ?? new JObject();
             PopulateUnityNode(unity, uvPath, client, isVSCode);
@@ -54,21 +47,20 @@ namespace MCPForUnity.Editor.Helpers
         private static void PopulateUnityNode(JObject unity, string uvPath, McpClient client, bool isVSCode)
         {
             // Get transport preference (default to HTTP)
-            bool useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
-            bool isWindsurf = client?.mcpType == McpTypes.Windsurf;
+            bool useHttpTransport = client?.SupportsHttpTransport != false && EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            string httpProperty = string.IsNullOrEmpty(client?.HttpUrlProperty) ? "url" : client.HttpUrlProperty;
+            var urlPropsToRemove = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "url", "serverUrl" };
+            urlPropsToRemove.Remove(httpProperty);
 
             if (useHttpTransport)
             {
                 // HTTP mode: Use URL, no command
                 string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
-                string httpProperty = isWindsurf ? "serverUrl" : "url";
                 unity[httpProperty] = httpUrl;
 
-                // Remove legacy property for Windsurf (or vice versa)
-                string staleProperty = isWindsurf ? "url" : "serverUrl";
-                if (unity[staleProperty] != null)
+                foreach (var prop in urlPropsToRemove)
                 {
-                    unity.Remove(staleProperty);
+                    if (unity[prop] != null) unity.Remove(prop);
                 }
 
                 // Remove command/args if they exist from previous config
@@ -102,6 +94,10 @@ namespace MCPForUnity.Editor.Helpers
                 // Remove url/serverUrl if they exist from previous config
                 if (unity["url"] != null) unity.Remove("url");
                 if (unity["serverUrl"] != null) unity.Remove("serverUrl");
+                foreach (var prop in urlPropsToRemove)
+                {
+                    if (unity[prop] != null) unity.Remove(prop);
+                }
 
                 if (isVSCode)
                 {
@@ -115,8 +111,8 @@ namespace MCPForUnity.Editor.Helpers
                 unity.Remove("type");
             }
 
-            bool requiresEnv = client?.mcpType == McpTypes.Kiro;
-            bool requiresDisabled = client != null && (client.mcpType == McpTypes.Windsurf || client.mcpType == McpTypes.Kiro);
+            bool requiresEnv = client?.EnsureEnvObject == true;
+            bool stripEnv = client?.StripEnvWhenNotRequired == true;
 
             if (requiresEnv)
             {
@@ -125,14 +121,20 @@ namespace MCPForUnity.Editor.Helpers
                     unity["env"] = new JObject();
                 }
             }
-            else if (isWindsurf && unity["env"] != null)
+            else if (stripEnv && unity["env"] != null)
             {
                 unity.Remove("env");
             }
 
-            if (requiresDisabled && unity["disabled"] == null)
+            if (client?.DefaultUnityFields != null)
             {
-                unity["disabled"] = false;
+                foreach (var kvp in client.DefaultUnityFields)
+                {
+                    if (unity[kvp.Key] == null)
+                    {
+                        unity[kvp.Key] = kvp.Value != null ? JToken.FromObject(kvp.Value) : JValue.CreateNull();
+                    }
+                }
             }
         }
 
