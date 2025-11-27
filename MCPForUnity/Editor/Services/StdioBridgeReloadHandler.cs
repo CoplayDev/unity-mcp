@@ -26,19 +26,25 @@ namespace MCPForUnity.Editor.Services
                 // Only persist resume intent when stdio is the active transport and the bridge is running.
                 bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
                 bool isRunning = MCPServiceLocator.TransportManager.IsRunning(TransportMode.Stdio);
-                if (!useHttp && isRunning)
+                bool shouldResume = !useHttp && isRunning;
+
+                if (shouldResume)
                 {
                     EditorPrefs.SetBool(EditorPrefKeys.ResumeStdioAfterReload, true);
+
+                    // Stop only the stdio bridge; leave HTTP untouched if it is running concurrently.
+                    var stopTask = MCPServiceLocator.TransportManager.StopAsync(TransportMode.Stdio);
+                    stopTask.ContinueWith(t =>
+                    {
+                        if (t.IsFaulted && t.Exception != null)
+                        {
+                            McpLog.Warn($"Error stopping stdio bridge before reload: {t.Exception.GetBaseException()?.Message}");
+                        }
+                    }, System.Threading.Tasks.TaskScheduler.Default);
                 }
                 else
                 {
                     EditorPrefs.DeleteKey(EditorPrefKeys.ResumeStdioAfterReload);
-                }
-
-                if (!useHttp && isRunning)
-                {
-                    // Stop only the stdio bridge; leave HTTP untouched if it is running concurrently.
-                    MCPServiceLocator.TransportManager.StopAsync(TransportMode.Stdio);
                 }
             }
             catch (Exception ex)
@@ -76,15 +82,23 @@ namespace MCPForUnity.Editor.Services
 
         private static void TryStartBridgeImmediate()
         {
-            try
+            var startTask = MCPServiceLocator.TransportManager.StartAsync(TransportMode.Stdio);
+            startTask.ContinueWith(t =>
             {
-                MCPServiceLocator.TransportManager.StartAsync(TransportMode.Stdio);
+                if (t.IsFaulted)
+                {
+                    var baseEx = t.Exception?.GetBaseException();
+                    McpLog.Warn($"Failed to resume stdio bridge after reload: {baseEx?.Message}");
+                    return;
+                }
+                if (!t.Result)
+                {
+                    McpLog.Warn("Failed to resume stdio bridge after domain reload");
+                    return;
+                }
+
                 MCPForUnity.Editor.Windows.MCPForUnityEditorWindow.RequestHealthVerification();
-            }
-            catch (Exception ex)
-            {
-                McpLog.Warn($"Failed to resume stdio bridge after reload: {ex.Message}");
-            }
+            }, System.Threading.Tasks.TaskScheduler.Default);
         }
     }
 }
