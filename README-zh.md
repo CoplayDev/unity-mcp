@@ -143,7 +143,7 @@ MCP for Unity 使用两个组件连接您的工具：
 3. 点击 `+` -> `Add package from git URL...`。
 4. 输入：
     ```
-    https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v8.0.0
+    https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v8.0.1
     ```
 5. 点击 `Add`。
 
@@ -171,7 +171,7 @@ HTTP 传输默认启用。Unity 窗口可以为您启动 FastMCP 服务器：
 您也可以从终端自己启动服务器——对 CI 或当您想查看原始日志时很有用：
 
 ```bash
-uvx --from "git+https://github.com/CoplayDev/unity-mcp@v8.0.0#subdirectory=Server" mcp-for-unity --transport http --http-url http://localhost:8080
+uvx --from "git+https://github.com/CoplayDev/unity-mcp@v8.0.1#subdirectory=Server" mcp-for-unity --transport http --http-url http://localhost:8080
 ```
 
 在客户端连接时保持进程运行。
