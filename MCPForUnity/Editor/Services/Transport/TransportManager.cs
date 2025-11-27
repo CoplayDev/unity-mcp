@@ -45,6 +45,16 @@ namespace MCPForUnity.Editor.Services.Transport
             };
         }
 
+        private IMcpTransportClient GetClient(TransportMode mode)
+        {
+            return mode switch
+            {
+                TransportMode.Http => _httpClient,
+                TransportMode.Stdio => _stdioClient,
+                _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported transport mode"),
+            };
+        }
+
         public async Task<bool> StartAsync(TransportMode mode)
         {
             IMcpTransportClient client = GetOrCreateClient(mode);
@@ -52,8 +62,15 @@ namespace MCPForUnity.Editor.Services.Transport
             bool started = await client.StartAsync();
             if (!started)
             {
-                await client.StopAsync();
-                UpdateState(mode, TransportState.Disconnected(mode.ToString().ToLowerInvariant(), "Failed to start"));
+                try
+                {
+                    await client.StopAsync();
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Warn($"Error while stopping transport {client.TransportName}: {ex.Message}");
+                }
+                UpdateState(mode, TransportState.Disconnected(client.TransportName, "Failed to start"));
                 return false;
             }
 
@@ -90,7 +107,7 @@ namespace MCPForUnity.Editor.Services.Transport
 
         public async Task<bool> VerifyAsync(TransportMode mode)
         {
-            IMcpTransportClient client = mode == TransportMode.Http ? _httpClient : _stdioClient;
+            IMcpTransportClient client = GetClient(mode);
             if (client == null)
             {
                 return false;
@@ -104,20 +121,28 @@ namespace MCPForUnity.Editor.Services.Transport
 
         public TransportState GetState(TransportMode mode)
         {
-            return mode == TransportMode.Http ? _httpState : _stdioState;
+            return mode switch
+            {
+                TransportMode.Http => _httpState,
+                TransportMode.Stdio => _stdioState,
+                _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported transport mode"),
+            };
         }
 
         public bool IsRunning(TransportMode mode) => GetState(mode).IsConnected;
 
         private void UpdateState(TransportMode mode, TransportState state)
         {
-            if (mode == TransportMode.Http)
+            switch (mode)
             {
-                _httpState = state;
-            }
-            else
-            {
-                _stdioState = state;
+                case TransportMode.Http:
+                    _httpState = state;
+                    break;
+                case TransportMode.Stdio:
+                    _stdioState = state;
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported transport mode");
             }
         }
     }
