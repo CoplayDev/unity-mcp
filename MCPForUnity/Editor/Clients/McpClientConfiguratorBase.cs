@@ -482,9 +482,15 @@ namespace MCPForUnity.Editor.Clients
             }
 
             string projectDir = Path.GetDirectoryName(Application.dataPath);
-            string pathPrepend = Application.platform == RuntimePlatform.OSXEditor
-                ? "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
-                : null;
+            string pathPrepend = null;
+            if (Application.platform == RuntimePlatform.OSXEditor)
+            {
+                pathPrepend = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin";
+            }
+            else if (Application.platform == RuntimePlatform.LinuxEditor)
+            {
+                pathPrepend = "/usr/local/bin:/usr/bin:/bin";
+            }
 
             bool serverExists = ExecPath.TryRun(claudePath, "mcp get UnityMCP", projectDir, out _, out _, 7000, pathPrepend);
 
