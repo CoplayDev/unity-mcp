@@ -22,9 +22,9 @@ namespace MCPForUnity.Editor.Clients
         public override IList<string> GetInstallationSteps() => new List<string>
         {
             "Open Claude Desktop",
-            "Settings > Developer > Edit Config (or open path)",
-            "Paste JSON",
-            "Save and restart"
+            "Go to Settings > Developer > Edit Config\nOR open the config path",
+            "Paste the configuration JSON",
+            "Save and restart Claude Desktop"
         };
 
         public override void Configure()

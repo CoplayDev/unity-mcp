@@ -19,9 +19,9 @@ namespace MCPForUnity.Editor.Clients
         public override IList<string> GetInstallationSteps() => new List<string>
         {
             "Open Cursor",
-            "Settings > MCP > Add new global MCP server",
-            "Paste config JSON",
-            "Save and restart"
+            "Go to File > Preferences > Cursor Settings > MCP > Add new global MCP server\nOR open the config file at the path above",
+            "Paste the configuration JSON",
+            "Save and restart Cursor"
         };
     }
 }

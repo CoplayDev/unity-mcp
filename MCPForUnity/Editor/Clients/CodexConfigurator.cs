@@ -18,8 +18,8 @@ namespace MCPForUnity.Editor.Clients
 
         public override IList<string> GetInstallationSteps() => new List<string>
         {
-            "Run 'codex config edit' or open the config path",
-            "Paste the TOML",
+            "Run 'codex config edit' in a terminal\nOR open the config file at the path above",
+            "Paste the configuration TOML",
             "Save and restart Codex"
         };
     }

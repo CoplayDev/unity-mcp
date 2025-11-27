@@ -22,9 +22,9 @@ namespace MCPForUnity.Editor.Clients
         public override IList<string> GetInstallationSteps() => new List<string>
         {
             "Open Windsurf",
-            "Settings > MCP > Manage MCPs > View raw config",
-            "Paste JSON",
-            "Save and restart"
+            "Go to File > Preferences > Windsurf Settings > MCP > Manage MCPs > View raw config\nOR open the config file at the path above",
+            "Paste the configuration JSON",
+            "Save and restart Windsurf"
         };
 
         public override string GetManualSnippet()

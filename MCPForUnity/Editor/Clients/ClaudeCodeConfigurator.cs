@@ -17,7 +17,7 @@ namespace MCPForUnity.Editor.Clients
         public override IList<string> GetInstallationSteps() => new List<string>
         {
             "Ensure Claude CLI is installed",
-            "Use Register to add UnityMCP (or run claude mcp add UnityMCP)",
+            "Use the Register button to register automatically\nOR manually run: claude mcp add UnityMCP",
             "Restart Claude Code"
         };
     }

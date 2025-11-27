@@ -21,9 +21,9 @@ namespace MCPForUnity.Editor.Clients
         public override IList<string> GetInstallationSteps() => new List<string>
         {
             "Open Kiro",
-            "Settings > search \"MCP\" > Open Workspace MCP Config",
-            "Paste JSON",
-            "Save and restart"
+            "Go to File > Settings > Settings > Search for \"MCP\" > Open Workspace MCP Config\nOR open the config file at the path above",
+            "Paste the configuration JSON",
+            "Save and restart Kiro"
         };
     }
 }

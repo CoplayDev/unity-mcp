@@ -18,9 +18,13 @@ namespace MCPForUnity.Editor.Clients
 
         public override IList<string> GetInstallationSteps() => new List<string>
         {
-            "Open Trae > Settings > MCP > Add Manually",
-            "Paste JSON or point to mcp.json",
-            "Save and restart"
+            "Open Trae and go to Settings > MCP",
+            "Select Add Server > Add Manually",
+            "Paste the JSON or point to the mcp.json file\n"+
+                "Windows: %AppData%\\Trae\\mcp.json\n" +
+                "macOS: ~/Library/Application Support/Trae/mcp.json\n" +
+                "Linux: ~/.config/Trae/mcp.json\n",
+            "Save and restart Trae"
         };
     }
 }

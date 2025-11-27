@@ -20,8 +20,8 @@ namespace MCPForUnity.Editor.Clients
         public override IList<string> GetInstallationSteps() => new List<string>
         {
             "Install GitHub Copilot extension",
-            "Open/Create mcp.json at the path",
-            "Paste JSON",
+            "Open or create mcp.json at the path above",
+            "Paste the configuration JSON",
             "Save and restart VSCode"
         };
     }
