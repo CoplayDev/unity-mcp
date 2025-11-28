@@ -8,11 +8,11 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 
 
 @mcp_for_unity_tool(
-    description="Performs prefab operations (create, modify, delete, etc.)."
+    description="Performs prefab operations (open_stage, close_stage, save_open_stage, create_from_gameobject)."
 )
 async def manage_prefabs(
     ctx: Context,
-    action: Annotated[Literal["create", "modify", "delete", "get_components"], "Perform prefab operations."],
+    action: Annotated[Literal["open_stage", "close_stage", "save_open_stage", "create_from_gameobject"], "Perform prefab operations."],
     prefab_path: Annotated[str,
                            "Prefab asset path relative to Assets e.g. Assets/Prefabs/favorite.prefab"] | None = None,
     mode: Annotated[str,
@@ -25,8 +25,6 @@ async def manage_prefabs(
                                "Allow replacing an existing prefab at the same path"] | None = None,
     search_inactive: Annotated[bool,
                                "Include inactive objects when resolving the target name"] | None = None,
-    component_properties: Annotated[str,
-                                    "Component properties in JSON format"] | None = None,
 ) -> dict[str, Any]:
     # Get active instance from session state
     # Removed session_state import
