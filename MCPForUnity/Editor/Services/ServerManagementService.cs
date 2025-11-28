@@ -41,15 +41,22 @@ namespace MCPForUnity.Editor.Services
                     McpLog.Debug($"uv cache cleared successfully: {stdout}");
                     return true;
                 }
-                else
-                {
-                    string errorMessage = string.IsNullOrEmpty(stderr)
-                        ? "Unknown error"
-                        : stderr;
+                string combinedOutput = string.Join(
+                    Environment.NewLine,
+                    new[] { stderr, stdout }.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()));
 
-                    McpLog.Error($"Failed to clear uv cache using '{uvCommand} {args}': {errorMessage}. Ensure uv is installed, available on PATH, or set an override in Advanced Settings.");
-                    return false;
+                string lockHint = (!string.IsNullOrEmpty(combinedOutput) &&
+                                   combinedOutput.IndexOf("currently in-use", StringComparison.OrdinalIgnoreCase) >= 0)
+                    ? "Another uv process may be holding the cache lock; wait a moment and try again or clear with '--force' from a terminal."
+                    : string.Empty;
+
+                if (string.IsNullOrEmpty(combinedOutput))
+                {
+                    combinedOutput = "Command failed with no output. Ensure uv is installed, on PATH, or set an override in Advanced Settings.";
                 }
+
+                McpLog.Error($"Failed to clear uv cache using '{uvCommand} {args}'. Details: {combinedOutput} {(string.IsNullOrEmpty(lockHint) ? string.Empty : lockHint)}");
+                return false;
             }
             catch (Exception ex)
             {
