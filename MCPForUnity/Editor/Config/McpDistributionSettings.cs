@@ -17,34 +17,6 @@ namespace MCPForUnity.Editor.Config
         internal bool IsRemoteDefault =>
             !string.IsNullOrWhiteSpace(defaultHttpBaseUrl)
             && !IsLocalAddress(defaultHttpBaseUrl);
-    }
-
-    internal static class McpDistribution
-    {
-        private const string ResourcePath = "McpDistributionSettings";
-        private static McpDistributionSettings _cached;
-
-        internal static McpDistributionSettings Settings
-        {
-            get
-            {
-                if (_cached != null)
-                {
-                    return _cached;
-                }
-
-                _cached = UnityEngine.Resources.Load<McpDistributionSettings>(ResourcePath);
-                if (_cached != null)
-                {
-                    return _cached;
-                }
-
-                // No asset present (git/dev installs) - fall back to baked-in defaults.
-                _cached = ScriptableObject.CreateInstance<McpDistributionSettings>();
-                _cached.name = "McpDistributionSettings (Runtime Defaults)";
-                return _cached;
-            }
-        }
 
         private static bool IsLocalAddress(string url)
         {
@@ -100,6 +72,34 @@ namespace MCPForUnity.Editor.Config
             }
 
             return false;
+        }
+    }
+
+    internal static class McpDistribution
+    {
+        private const string ResourcePath = "McpDistributionSettings";
+        private static McpDistributionSettings _cached;
+
+        internal static McpDistributionSettings Settings
+        {
+            get
+            {
+                if (_cached != null)
+                {
+                    return _cached;
+                }
+
+                _cached = UnityEngine.Resources.Load<McpDistributionSettings>(ResourcePath);
+                if (_cached != null)
+                {
+                    return _cached;
+                }
+
+                // No asset present (git/dev installs) - fall back to baked-in defaults.
+                _cached = ScriptableObject.CreateInstance<McpDistributionSettings>();
+                _cached.name = "McpDistributionSettings (Runtime Defaults)";
+                return _cached;
+            }
         }
     }
 }
