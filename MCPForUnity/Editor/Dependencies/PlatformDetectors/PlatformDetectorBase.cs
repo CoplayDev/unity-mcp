@@ -54,7 +54,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
             // Try common uv command names
             var commands = new[] { "uvx", "uv" };
-            
+
             foreach (var cmd in commands)
             {
                 try

@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using MCPForUnity.Editor.Helpers; // For Response class
+using MCPForUnity.Runtime.Serialization;
 using Newtonsoft.Json; // Added for JsonSerializationException
 using Newtonsoft.Json.Linq;
 using UnityEditor;
@@ -11,8 +13,6 @@ using UnityEditor.SceneManagement;
 using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using MCPForUnity.Editor.Helpers; // For Response class
-using MCPForUnity.Runtime.Serialization;
 
 namespace MCPForUnity.Editor.Tools
 {

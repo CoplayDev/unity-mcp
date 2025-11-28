@@ -1,6 +1,6 @@
+using MCPForUnity.Editor.Constants;
 using UnityEditor;
 using UnityEngine;
-using MCPForUnity.Editor.Constants;
 
 namespace MCPForUnity.Editor.Helpers
 {
