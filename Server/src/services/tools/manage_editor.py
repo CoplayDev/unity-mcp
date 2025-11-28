@@ -13,8 +13,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 )
 async def manage_editor(
     ctx: Context,
-    action: Annotated[Literal["telemetry_status", "telemetry_ping", "play", "pause", "stop", "get_state", "get_project_root", "get_windows",
-                              "get_active_tool", "get_selection", "get_prefab_stage", "set_active_tool", "add_tag", "remove_tag", "get_tags", "add_layer", "remove_layer", "get_layers"], "Get and update the Unity Editor state."],
+    action: Annotated[Literal["telemetry_status", "telemetry_ping", "play", "pause", "stop", "set_active_tool", "add_tag", "remove_tag", "add_layer", "remove_layer"], "Get and update the Unity Editor state."],
     wait_for_completion: Annotated[bool | str,
                                    "Optional. If True, waits for certain actions (accepts true/false or 'true'/'false')"] | None = None,
     tool_name: Annotated[str,
