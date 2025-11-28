@@ -55,7 +55,9 @@ namespace MCPForUnity.Editor.Services
                     combinedOutput = "Command failed with no output. Ensure uv is installed, on PATH, or set an override in Advanced Settings.";
                 }
 
-                McpLog.Error($"Failed to clear uv cache using '{uvCommand} {args}'. Details: {combinedOutput} {(string.IsNullOrEmpty(lockHint) ? string.Empty : lockHint)}");
+                McpLog.Error(
+                    $"Failed to clear uv cache using '{uvCommand} {args}'. " +
+                    $"Details: {combinedOutput}{(string.IsNullOrEmpty(lockHint) ? string.Empty : " Hint: " + lockHint)}");
                 return false;
             }
             catch (Exception ex)
