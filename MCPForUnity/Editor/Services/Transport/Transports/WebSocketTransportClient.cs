@@ -6,6 +6,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using MCPForUnity.Editor.Config;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services.Transport;
 using Newtonsoft.Json;
@@ -667,7 +668,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         {
             if (string.IsNullOrWhiteSpace(baseUrl))
             {
-                baseUrl = "http://localhost:8080";
+                baseUrl = McpDistribution.Settings.defaultHttpBaseUrl;
             }
 
             if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var httpUri))
