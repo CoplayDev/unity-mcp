@@ -18,7 +18,11 @@ namespace MCPForUnity.Editor.Setup
     {
         private const string SETUP_COMPLETED_KEY = EditorPrefKeys.SetupCompleted;
         private const string SETUP_DISMISSED_KEY = EditorPrefKeys.SetupDismissed;
-        private static bool _hasCheckedThisSession = false;
+
+        // Use SessionState to persist "checked this editor session" across domain reloads.
+        // SessionState survives assembly reloads within the same Editor session, which prevents
+        // the setup window from reappearing after code reloads / playmode transitions.
+        private const string SessionCheckedKey = "MCPForUnity.SetupWindowCheckedThisEditorSession";
 
         static SetupWindowService()
         {
@@ -35,10 +39,12 @@ namespace MCPForUnity.Editor.Setup
         /// </summary>
         private static void CheckSetupNeeded()
         {
-            if (_hasCheckedThisSession)
+            // Ensure we only run once per Editor session (survives domain reloads).
+            // This avoids showing the setup dialog repeatedly when scripts recompile or Play mode toggles.
+            if (SessionState.GetBool(SessionCheckedKey, false))
                 return;
 
-            _hasCheckedThisSession = true;
+            SessionState.SetBool(SessionCheckedKey, true);
 
             try
             {
@@ -48,11 +54,16 @@ namespace MCPForUnity.Editor.Setup
                 bool userOverrodeHttpUrl = EditorPrefs.HasKey(EditorPrefKeys.HttpBaseUrl);
 
                 // In Asset Store builds with a remote default URL (and no user override), skip the local setup wizard.
-                if (!userOverrodeHttpUrl
+                if (
+                    !userOverrodeHttpUrl
                     && McpDistribution.Settings.skipSetupWindowWhenRemoteDefault
-                    && McpDistribution.Settings.IsRemoteDefault)
+                    && McpDistribution.Settings.IsRemoteDefault
+                )
                 {
-                    McpLog.Info("Skipping Setup Window because this distribution ships with a hosted MCP URL. Open Window/MCP For Unity/Setup Window if you want to configure a local runtime.", always: false);
+                    McpLog.Info(
+                        "Skipping Setup Window because this distribution ships with a hosted MCP URL. Open Window/MCP For Unity/Setup Window if you want to configure a local runtime.",
+                        always: false
+                    );
                     return;
                 }
 
@@ -66,7 +77,10 @@ namespace MCPForUnity.Editor.Setup
                 }
                 else
                 {
-                    McpLog.Info("Setup Window skipped - previously completed or dismissed", always: false);
+                    McpLog.Info(
+                        "Setup Window skipped - previously completed or dismissed",
+                        always: false
+                    );
                 }
             }
             catch (Exception ex)
@@ -108,6 +122,5 @@ namespace MCPForUnity.Editor.Setup
             EditorPrefs.SetBool(SETUP_DISMISSED_KEY, true);
             McpLog.Info("Setup marked as dismissed");
         }
-
     }
 }
