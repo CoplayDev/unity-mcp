@@ -16,35 +16,9 @@ namespace MCPForUnity.Editor.MenuItems
         [MenuItem("Window/MCP For Unity/Toggle MCP Window %#m", priority = 2)]
         public static void ToggleMCPWindow()
         {
-            if (EditorWindow.HasOpenInstances<MCPForUnityEditorWindow>())
+            if (MCPForUnityEditorWindow.HasAnyOpenWindow())
             {
-                foreach (
-                    var window in UnityEngine.Resources.FindObjectsOfTypeAll<MCPForUnityEditorWindow>()
-                )
-                {
-                    if (window == null)
-                        continue;
-
-                    try
-                    {
-                        // Try the normal Close
-                        window.Close();
-                    }
-                    catch (System.Exception ex)
-                    {
-                        Debug.LogWarning(
-                            $"MCP window Close() threw: {ex.GetType().Name}: {ex.Message}\nFalling back to DestroyImmediate."
-                        );
-                        try
-                        {
-                            UnityEngine.Object.DestroyImmediate(window);
-                        }
-                        catch
-                        {
-                            // Ignore any exceptions during DestroyImmediate
-                        }
-                    }
-                }
+                MCPForUnityEditorWindow.CloseAllOpenWindows();
             }
             else
             {
