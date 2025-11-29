@@ -26,6 +26,33 @@ namespace MCPForUnity.Editor.Windows
             var window = GetWindow<MCPForUnityEditorWindow>("MCP For Unity");
             window.minSize = new Vector2(500, 600);
         }
+
+        // Helper to check and manage open windows from other classes
+        public static bool HasAnyOpenWindow()
+        {
+            return OpenWindows.Count > 0;
+        }
+
+        public static void CloseAllOpenWindows()
+        {
+            if (OpenWindows.Count == 0)
+                return;
+
+            // Copy to array to avoid modifying the collection while iterating
+            var arr = new MCPForUnityEditorWindow[OpenWindows.Count];
+            OpenWindows.CopyTo(arr);
+            foreach (var window in arr)
+            {
+                try
+                {
+                    window?.Close();
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"Error closing MCP window: {ex.Message}");
+                }
+            }
+        }
         public void CreateGUI()
         {
             string basePath = AssetPathUtility.GetMcpPackageRootPath();
