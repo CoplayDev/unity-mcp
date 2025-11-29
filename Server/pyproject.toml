@@ -21,7 +21,7 @@ dev = [
 ]
 
 [project.scripts]
-mcp-for-unity = "main:main"
+mcp-for-unity = "src.main:main"
 
 [build-system]
 requires = ["setuptools>=64.0.0", "wheel"]
