@@ -435,8 +435,8 @@ namespace MCPForUnity.Editor.Services
             // We use bash -c to execute the command, so we must properly quote/escape for bash
             // Escape single quotes for the inner bash string
             string escapedCommandLinux = command.Replace("'", "'\\''");
-            // Wrap the command in single quotes for bash -c
-            string script = $"'{escapedCommandLinux}; exec bash'";
+            // Build the script
+            string script = $"{escapedCommandLinux}; exec bash";
             // Escape double quotes for the outer Process argument string
             string escapedScriptForArg = script.Replace("\"", "\\\"");
             string bashCmdArgs = $"bash -c \"{escapedScriptForArg}\"";
