@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Clients.Configurators;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
 using Newtonsoft.Json;
@@ -176,7 +177,7 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             return Application.platform == RuntimePlatform.WindowsEditor &&
-                   string.Equals(client.name, "Claude Desktop", StringComparison.OrdinalIgnoreCase);
+                   string.Equals(client.name, ClaudeDesktopConfigurator.ClientName, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string ResolveCmdPath()

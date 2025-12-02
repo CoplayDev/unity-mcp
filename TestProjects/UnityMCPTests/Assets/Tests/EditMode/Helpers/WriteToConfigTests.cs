@@ -8,6 +8,7 @@ using UnityEditor;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
 using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Services;
 
 namespace MCPForUnityTests.Editor.Helpers
 {
@@ -175,7 +176,7 @@ namespace MCPForUnityTests.Editor.Helpers
 
             WithTransportPreference(false, () =>
             {
-                EditorPrefs.SetString(EditorPrefKeys.UvxPathOverride, "/abs/mock/uvx");
+                MCPServiceLocator.Paths.SetUvxPathOverride(_fakeUvPath);
                 try
                 {
                     var client = new McpClient
@@ -190,13 +191,13 @@ namespace MCPForUnityTests.Editor.Helpers
                     var root = JObject.Parse(File.ReadAllText(configPath));
                     var unity = (JObject)root.SelectToken("mcpServers.unityMCP");
                     Assert.NotNull(unity, "Expected mcpServers.unityMCP node");
-                    Assert.AreEqual("/abs/mock/uvx", (string)unity["command"], "Claude Desktop should use absolute uvx path");
+                    Assert.AreEqual(_fakeUvPath, (string)unity["command"], "Claude Desktop should use absolute uvx path");
                     Assert.IsNull(unity["env"], "Claude Desktop config should not include env block when not required");
                     AssertTransportConfiguration(unity, client);
                 }
                 finally
                 {
-                    EditorPrefs.DeleteKey(EditorPrefKeys.UvxPathOverride);
+                    MCPServiceLocator.Paths.ClearUvxPathOverride();
                 }
             });
         }

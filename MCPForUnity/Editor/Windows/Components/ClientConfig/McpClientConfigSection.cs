@@ -346,8 +346,13 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                 Task.Run(() =>
                 {
                     MCPServiceLocator.Client.CheckClientStatus(client, attemptAutoRewrite: false);
-                }).ContinueWith(_ =>
+                }).ContinueWith(t =>
                 {
+                    if (t.IsFaulted && t.Exception != null)
+                    {
+                        McpLog.Error($"Failed to refresh Claude CLI status: {t.Exception.GetBaseException().Message}");
+                    }
+
                     EditorApplication.delayCall += () =>
                     {
                         statusRefreshInFlight.Remove(client);
