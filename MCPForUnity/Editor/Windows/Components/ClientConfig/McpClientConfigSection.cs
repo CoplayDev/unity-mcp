@@ -327,7 +327,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
             }
 
             bool hasStatus = lastStatusChecks.ContainsKey(client);
-            bool needsRefresh = forceImmediate || !hasStatus || ShouldRefreshClient(client);
+            bool needsRefresh = !hasStatus || ShouldRefreshClient(client);
 
             if (!hasStatus)
             {
