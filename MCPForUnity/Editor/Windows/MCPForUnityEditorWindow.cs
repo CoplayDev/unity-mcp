@@ -21,6 +21,8 @@ namespace MCPForUnity.Editor.Windows
 
         private static readonly HashSet<MCPForUnityEditorWindow> OpenWindows = new();
         private bool guiCreated = false;
+        private double lastRefreshTime = 0;
+        private const double RefreshDebounceSeconds = 0.5;
 
         public static void ShowWindow()
         {
@@ -181,6 +183,14 @@ namespace MCPForUnity.Editor.Windows
 
         private void RefreshAllData()
         {
+            // Debounce rapid successive calls (e.g., from OnFocus being called multiple times)
+            double currentTime = EditorApplication.timeSinceStartup;
+            if (currentTime - lastRefreshTime < RefreshDebounceSeconds)
+            {
+                return;
+            }
+            lastRefreshTime = currentTime;
+
             connectionSection?.UpdateConnectionStatus();
 
             if (MCPServiceLocator.Bridge.IsRunning)
