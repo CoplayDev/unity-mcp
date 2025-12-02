@@ -101,10 +101,6 @@ namespace MCPForUnity.Editor.Helpers
                 // Remove url/serverUrl if they exist from previous config
                 if (unity["url"] != null) unity.Remove("url");
                 if (unity["serverUrl"] != null) unity.Remove("serverUrl");
-                foreach (var prop in urlPropsToRemove)
-                {
-                    if (unity[prop] != null) unity.Remove(prop);
-                }
 
                 if (isVSCode)
                 {

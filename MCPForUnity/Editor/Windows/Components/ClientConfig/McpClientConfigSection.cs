@@ -348,15 +348,27 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                     MCPServiceLocator.Client.CheckClientStatus(client, attemptAutoRewrite: false);
                 }).ContinueWith(t =>
                 {
+                    bool faulted = false;
+                    string errorMessage = null;
                     if (t.IsFaulted && t.Exception != null)
                     {
-                        McpLog.Error($"Failed to refresh Claude CLI status: {t.Exception.GetBaseException().Message}");
+                        var baseException = t.Exception.GetBaseException();
+                        errorMessage = baseException?.Message ?? "Status check failed";
+                        McpLog.Error($"Failed to refresh Claude CLI status: {errorMessage}");
+                        faulted = true;
                     }
 
                     EditorApplication.delayCall += () =>
                     {
                         statusRefreshInFlight.Remove(client);
                         lastStatusChecks[client] = DateTime.UtcNow;
+                        if (faulted)
+                        {
+                            if (client is McpClientConfiguratorBase baseConfigurator)
+                            {
+                                baseConfigurator.Client.SetStatus(McpStatus.Error, errorMessage ?? "Status check failed");
+                            }
+                        }
                         ApplyStatusToUi(client);
                     };
                 });
