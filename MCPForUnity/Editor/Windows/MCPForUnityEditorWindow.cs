@@ -20,6 +20,7 @@ namespace MCPForUnity.Editor.Windows
         private McpClientConfigSection clientConfigSection;
 
         private static readonly HashSet<MCPForUnityEditorWindow> OpenWindows = new();
+        private bool guiCreated = false;
 
         public static void ShowWindow()
         {
@@ -49,13 +50,17 @@ namespace MCPForUnity.Editor.Windows
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"Error closing MCP window: {ex.Message}");
+                    McpLog.Warn($"Error closing MCP window: {ex.Message}");
                 }
             }
         }
 
         public void CreateGUI()
         {
+            // Guard against repeated CreateGUI calls (e.g., domain reloads)
+            if (guiCreated)
+                return;
+
             string basePath = AssetPathUtility.GetMcpPackageRootPath();
 
             // Load main window UXML
@@ -138,6 +143,8 @@ namespace MCPForUnity.Editor.Windows
                 clientConfigSection = new McpClientConfigSection(clientConfigRoot);
             }
 
+            guiCreated = true;
+
             // Initial updates
             RefreshAllData();
         }
@@ -152,6 +159,7 @@ namespace MCPForUnity.Editor.Windows
         {
             EditorApplication.update -= OnEditorUpdate;
             OpenWindows.Remove(this);
+            guiCreated = false;
         }
 
         private void OnFocus()
