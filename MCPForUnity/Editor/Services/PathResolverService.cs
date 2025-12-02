@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -32,6 +33,12 @@ namespace MCPForUnity.Editor.Services
             {
                 // ignore EditorPrefs read errors and fall back to default command
                 McpLog.Debug("No uvx path override found, falling back to default command");
+            }
+
+            string discovered = ResolveUvxFromSystem();
+            if (!string.IsNullOrEmpty(discovered))
+            {
+                return discovered;
             }
 
             return "uvx";
@@ -121,6 +128,81 @@ namespace MCPForUnity.Editor.Services
         public bool IsClaudeCliDetected()
         {
             return !string.IsNullOrEmpty(GetClaudeCliPath());
+        }
+
+        private static string ResolveUvxFromSystem()
+        {
+            try
+            {
+                foreach (string candidate in EnumerateUvxCandidates())
+                {
+                    if (!string.IsNullOrEmpty(candidate) && File.Exists(candidate))
+                    {
+                        return candidate;
+                    }
+                }
+            }
+            catch
+            {
+                // fall back to bare command
+            }
+
+            return null;
+        }
+
+        private static IEnumerable<string> EnumerateUvxCandidates()
+        {
+            string exeName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "uvx.exe" : "uvx";
+
+            string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (!string.IsNullOrEmpty(home))
+            {
+                yield return Path.Combine(home, ".local", "bin", exeName);
+                yield return Path.Combine(home, ".cargo", "bin", exeName);
+            }
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                yield return "/opt/homebrew/bin/" + exeName;
+                yield return "/usr/local/bin/" + exeName;
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                yield return "/usr/local/bin/" + exeName;
+                yield return "/usr/bin/" + exeName;
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+
+                if (!string.IsNullOrEmpty(localAppData))
+                {
+                    yield return Path.Combine(localAppData, "Programs", "uv", exeName);
+                }
+
+                if (!string.IsNullOrEmpty(programFiles))
+                {
+                    yield return Path.Combine(programFiles, "uv", exeName);
+                }
+            }
+
+            string pathEnv = Environment.GetEnvironmentVariable("PATH");
+            if (!string.IsNullOrEmpty(pathEnv))
+            {
+                foreach (string rawDir in pathEnv.Split(Path.PathSeparator))
+                {
+                    if (string.IsNullOrWhiteSpace(rawDir)) continue;
+                    string dir = rawDir.Trim();
+                    yield return Path.Combine(dir, exeName);
+
+                    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                    {
+                        // Some PATH entries may already contain the file without extension
+                        yield return Path.Combine(dir, "uvx");
+                    }
+                }
+            }
         }
 
         public void SetUvxPathOverride(string path)

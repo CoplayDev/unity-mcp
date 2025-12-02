@@ -168,6 +168,40 @@ namespace MCPForUnityTests.Editor.Helpers
         }
 
         [Test]
+        public void ClaudeDesktop_UsesAbsoluteUvPath_WhenOverrideProvided()
+        {
+            var configPath = Path.Combine(_tempRoot, "claude-desktop.json");
+            WriteInitialConfig(configPath, isVSCode: false, command: "uvx", directory: "/old/path");
+
+            WithTransportPreference(false, () =>
+            {
+                EditorPrefs.SetString(EditorPrefKeys.UvxPathOverride, "/abs/mock/uvx");
+                try
+                {
+                    var client = new McpClient
+                    {
+                        name = "Claude Desktop",
+                        SupportsHttpTransport = false,
+                        StripEnvWhenNotRequired = true
+                    };
+
+                    InvokeWriteToConfig(configPath, client);
+
+                    var root = JObject.Parse(File.ReadAllText(configPath));
+                    var unity = (JObject)root.SelectToken("mcpServers.unityMCP");
+                    Assert.NotNull(unity, "Expected mcpServers.unityMCP node");
+                    Assert.AreEqual("/abs/mock/uvx", (string)unity["command"], "Claude Desktop should use absolute uvx path");
+                    Assert.IsNull(unity["env"], "Claude Desktop config should not include env block when not required");
+                    AssertTransportConfiguration(unity, client);
+                }
+                finally
+                {
+                    EditorPrefs.DeleteKey(EditorPrefKeys.UvxPathOverride);
+                }
+            });
+        }
+
+        [Test]
         public void PreservesExistingEnvAndDisabled_ForKiro()
         {
             var configPath = Path.Combine(_tempRoot, "preserve.json");
