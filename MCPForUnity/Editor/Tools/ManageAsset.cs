@@ -196,20 +196,26 @@ namespace MCPForUnity.Editor.Tools
                 }
                 else if (lowerAssetType == "material")
                 {
-                    // Prefer provided shader; fall back to common pipelines
                     var requested = properties?["shader"]?.ToString();
-                    Shader shader =
-                        (!string.IsNullOrEmpty(requested) ? Shader.Find(requested) : null)
-                        ?? Shader.Find("Universal Render Pipeline/Lit")
-                        ?? Shader.Find("HDRP/Lit")
-                        ?? Shader.Find("Standard")
-                        ?? Shader.Find("Unlit/Color");
+                    Shader shader = RenderPipelineUtility.ResolveShader(requested);
                     if (shader == null)
-                        return new ErrorResponse($"Could not find a suitable shader (requested: '{requested ?? "none"}').");
+                        return new ErrorResponse($"Could not find a project-compatible shader (requested: '{requested ?? "none"}'). Consider installing URP/HDRP or provide an explicit shader path.");
 
                     var mat = new Material(shader);
                     if (properties != null)
-                        ApplyMaterialProperties(mat, properties);
+                    {
+                        JObject propertiesForApply = properties;
+                        if (propertiesForApply["shader"] != null)
+                        {
+                            propertiesForApply = (JObject)properties.DeepClone();
+                            propertiesForApply.Remove("shader");
+                        }
+
+                        if (propertiesForApply.HasValues)
+                        {
+                            ApplyMaterialProperties(mat, propertiesForApply);
+                        }
+                    }
                     AssetDatabase.CreateAsset(mat, fullPath);
                     newAsset = mat;
                 }
@@ -901,7 +907,8 @@ namespace MCPForUnity.Editor.Tools
             // Example: Set shader
             if (properties["shader"]?.Type == JTokenType.String)
             {
-                Shader newShader = Shader.Find(properties["shader"].ToString());
+                string shaderRequest = properties["shader"].ToString();
+                Shader newShader = RenderPipelineUtility.ResolveShader(shaderRequest);
                 if (newShader != null && mat.shader != newShader)
                 {
                     mat.shader = newShader;
