@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.10"
 
 [[package]]
@@ -694,7 +694,7 @@ wheels = [
 
 [[package]]
 name = "mcpforunityserver"
-version = "7.0.0"
+version = "8.1.4"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
@@ -715,7 +715,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.104.0" },
-    { name = "fastmcp", specifier = ">=2.13.0" },
+    { name = "fastmcp", specifier = ">=2.13.0,<2.13.2" },
     { name = "httpx", specifier = ">=0.27.2" },
     { name = "mcp", specifier = ">=1.16.0" },
     { name = "pydantic", specifier = ">=2.12.0" },

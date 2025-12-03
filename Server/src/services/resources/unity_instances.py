@@ -10,6 +10,11 @@ from transport.plugin_hub import PluginHub
 from transport.unity_transport import _is_http_transport
 
 
+def _current_transport() -> str:
+    """Expose the active transport mode as a simple string identifier."""
+    return "http" if _is_http_transport() else "stdio"
+
+
 @mcp_for_unity_resource(
     uri="unity://instances",
     name="unity_instances",
@@ -36,7 +41,8 @@ async def unity_instances(ctx: Context) -> dict[str, Any]:
     await ctx.info("Listing Unity instances")
 
     try:
-        if _is_http_transport():
+        transport = _current_transport()
+        if transport == "http":
             # HTTP/WebSocket transport: query PluginHub
             sessions_data = await PluginHub.get_sessions()
             sessions = sessions_data.sessions
@@ -71,7 +77,7 @@ async def unity_instances(ctx: Context) -> dict[str, Any]:
 
             result = {
                 "success": True,
-                "transport": "http",
+                "transport": transport,
                 "instance_count": len(instances),
                 "instances": instances,
             }
@@ -98,7 +104,7 @@ async def unity_instances(ctx: Context) -> dict[str, Any]:
 
             result = {
                 "success": True,
-                "transport": "stdio",
+                "transport": transport,
                 "instance_count": len(instances),
                 "instances": [inst.to_dict() for inst in instances],
             }
