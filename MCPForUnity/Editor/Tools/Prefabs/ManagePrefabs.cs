@@ -10,9 +10,6 @@ using UnityEngine.SceneManagement;
 namespace MCPForUnity.Editor.Tools.Prefabs
 {
     [McpForUnityTool("manage_prefabs", AutoRegister = false)]
-    /// <summary>
-    /// Tool to manage Unity Prefab stages and create prefabs from GameObjects.
-    /// </summary>
     public static class ManagePrefabs
     {
         private const string SupportedActions = "open_stage, close_stage, save_open_stage, create_from_gameobject";

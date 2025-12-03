@@ -293,75 +293,6 @@
     margin-top: 4px;
 }
 
-/* Tools Section */
-.tool-actions {
-    flex-direction: row;
-    flex-wrap: wrap;
-    margin-top: 8px;
-    margin-bottom: 8px;
-}
-
-.tool-action-button {
-    flex-grow: 1;
-    min-width: 0;
-    height: 26px;
-    margin-bottom: 4px;
-}
-
-.tool-category-container {
-    flex-direction: column;
-    margin-top: 8px;
-}
-
-.tool-item {
-    flex-direction: column;
-    padding: 8px;
-    margin-bottom: 8px;
-    background-color: rgba(0, 0, 0, 0.04);
-    border-radius: 4px;
-    border-width: 1px;
-    border-color: rgba(0, 0, 0, 0.12);
-}
-
-.tool-item-header {
-    flex-direction: row;
-    align-items: center;
-}
-
-.tool-item-toggle {
-    flex-shrink: 0;
-    min-width: 0;
-}
-
-.tool-tags {
-    flex-direction: row;
-    flex-wrap: wrap;
-    margin-left: auto;
-    padding-left: 8px;
-}
-
-.tool-tag {
-    font-size: 10px;
-    padding: 2px 6px;
-    margin-left: 4px;
-    margin-top: 2px;
-    background-color: rgba(100, 100, 100, 0.25);
-    border-radius: 3px;
-    color: rgba(40, 40, 40, 1);
-}
-
-.tool-item-description,
-.tool-parameters {
-    font-size: 11px;
-    color: rgba(120, 120, 120, 1);
-    white-space: normal;
-    margin-top: 4px;
-}
-
-.tool-parameters {
-    font-style: italic;
-}
-
 /* Advanced Settings */
 .advanced-settings-foldout {
     margin-top: 16px;
@@ -468,22 +399,6 @@
     background-color: rgba(0, 0, 0, 0.03);
     border-color: rgba(0, 0, 0, 0.15);
 }
-
-.unity-theme-dark .tool-tag {
-    color: rgba(220, 220, 220, 1);
-    background-color: rgba(80, 80, 80, 0.6);
-}
-
-.unity-theme-dark .tool-item {
-    background-color: rgba(255, 255, 255, 0.04);
-    border-color: rgba(255, 255, 255, 0.08);
-}
-
-.unity-theme-dark .tool-item-description,
-.unity-theme-dark .tool-parameters {
-    color: rgba(200, 200, 200, 0.8);
-}
-
 
 .unity-theme-light .validation-description {
     background-color: rgba(100, 150, 200, 0.1);

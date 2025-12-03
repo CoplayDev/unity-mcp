@@ -421,8 +421,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         {
             if (_toolDiscoveryService == null) return;
 
-            var tools = _toolDiscoveryService.GetEnabledTools();
-            McpLog.Info($"[WebSocket] Preparing to register {tools.Count} tool(s) with the bridge.");
+            var tools = _toolDiscoveryService.DiscoverAllTools();
             var toolsArray = new JArray();
 
             foreach (var tool in tools)

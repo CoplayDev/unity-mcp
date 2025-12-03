@@ -26,8 +26,7 @@ namespace MCPForUnity.Editor.Tools
 {
     /// <summary>
     /// Handles CRUD operations for C# scripts within the Unity project.
-    /// </summary>
-    /// <remarks>
+    /// 
     /// ROSLYN INSTALLATION GUIDE:
     /// To enable advanced syntax validation with Roslyn compiler services:
     /// 
@@ -50,7 +49,7 @@ namespace MCPForUnity.Editor.Tools
     /// 
     /// Note: Without Roslyn, the system falls back to basic structural validation.
     /// Roslyn provides full C# compiler diagnostics with line numbers and detailed error messages.
-    /// </remarks>
+    /// </summary>
     [McpForUnityTool("manage_script", AutoRegister = false)]
     public static class ManageScript
     {

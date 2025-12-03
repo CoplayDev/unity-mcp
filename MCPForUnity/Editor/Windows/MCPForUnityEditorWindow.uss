@@ -1,39 +1,18 @@
-/* Root Layout */
+/* Root Container */
 #root-container {
     padding: 16px;
-    flex-direction: column;
-    flex-grow: 1;
+    flex-shrink: 1;
     overflow: hidden;
-    box-sizing: border-box;
 }
 
 /* Title */
 .title {
     font-size: 20px;
     -unity-font-style: bold;
-    margin-bottom: 16px;
+    margin-bottom: 20px;
     padding: 12px;
     background-color: rgba(0, 0, 0, 0.1);
     border-radius: 4px;
-}
-
-/* Tabs */
-.tab-toolbar {
-    margin-bottom: 8px;
-}
-
-.tab-toolbar .unity-toolbar-button {
-    flex-grow: 1;
-}
-
-/* Panels */
-.panel-scroll {
-    flex-grow: 1;
-    margin-top: 8px;
-}
-
-.hidden {
-    display: none;
 }
 
 .section-stack {

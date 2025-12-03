@@ -1,15 +1,6 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
-    <ui:VisualElement name="root-container" class="root-layout">
+    <ui:ScrollView name="root-container" style="padding: 16px;">
         <ui:Label text="MCP For Unity" name="title" class="title" />
-        <uie:Toolbar name="tab-toolbar" class="tab-toolbar">
-            <uie:ToolbarToggle name="settings-tab" text="Settings" value="true" />
-            <uie:ToolbarToggle name="tools-tab" text="Tools" />
-        </uie:Toolbar>
-        <ui:ScrollView name="settings-panel" class="panel-scroll" style="flex-grow: 1;">
-            <ui:VisualElement name="settings-container" class="section-stack" />
-        </ui:ScrollView>
-        <ui:ScrollView name="tools-panel" class="panel-scroll hidden" style="flex-grow: 1;">
-            <ui:VisualElement name="tools-container" class="section-stack" />
-        </ui:ScrollView>
-    </ui:VisualElement>
+        <ui:VisualElement name="sections-container" class="section-stack" />
+    </ui:ScrollView>
 </ui:UXML>

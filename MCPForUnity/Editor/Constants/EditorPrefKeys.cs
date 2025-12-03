@@ -25,9 +25,6 @@ namespace MCPForUnity.Editor.Constants
         internal const string UseEmbeddedServer = "MCPForUnity.UseEmbeddedServer";
         internal const string LockCursorConfig = "MCPForUnity.LockCursorConfig";
         internal const string AutoRegisterEnabled = "MCPForUnity.AutoRegisterEnabled";
-        internal const string ToolEnabledPrefix = "MCPForUnity.ToolEnabled.";
-        internal const string ToolFoldoutStatePrefix = "MCPForUnity.ToolFoldout.";
-        internal const string EditorWindowActivePanel = "MCPForUnity.EditorWindow.ActivePanel";
 
         internal const string SetupCompleted = "MCPForUnity.SetupCompleted";
         internal const string SetupDismissed = "MCPForUnity.SetupDismissed";
