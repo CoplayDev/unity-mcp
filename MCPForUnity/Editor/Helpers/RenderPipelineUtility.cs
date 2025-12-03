@@ -166,27 +166,27 @@ namespace MCPForUnity.Editor.Helpers
                 case PipelineKind.HighDefinition:
                     if (shaderLooksUrp)
                     {
-                        Debug.LogWarning($"[RenderPipelineUtility] Active pipeline is HDRP but shader '{shaderName}' looks URP-based. Asset may appear incorrect.");
+                        McpLog.Warn($"[RenderPipelineUtility] Active pipeline is HDRP but shader '{shaderName}' looks URP-based. Asset may appear incorrect.");
                     }
                     else if (shaderLooksBuiltin && !shaderLooksHdrp)
                     {
-                        Debug.LogWarning($"[RenderPipelineUtility] Active pipeline is HDRP but shader '{shaderName}' looks Built-in. Consider using an HDRP shader for correct results.");
+                        McpLog.Warn($"[RenderPipelineUtility] Active pipeline is HDRP but shader '{shaderName}' looks Built-in. Consider using an HDRP shader for correct results.");
                     }
                     break;
                 case PipelineKind.Universal:
                     if (shaderLooksHdrp)
                     {
-                        Debug.LogWarning($"[RenderPipelineUtility] Active pipeline is URP but shader '{shaderName}' looks HDRP-based. Asset may appear incorrect.");
+                        McpLog.Warn($"[RenderPipelineUtility] Active pipeline is URP but shader '{shaderName}' looks HDRP-based. Asset may appear incorrect.");
                     }
                     else if (shaderLooksBuiltin && !shaderLooksUrp)
                     {
-                        Debug.LogWarning($"[RenderPipelineUtility] Active pipeline is URP but shader '{shaderName}' looks Built-in. Consider using a URP shader for correct results.");
+                        McpLog.Warn($"[RenderPipelineUtility] Active pipeline is URP but shader '{shaderName}' looks Built-in. Consider using a URP shader for correct results.");
                     }
                     break;
                 case PipelineKind.BuiltIn:
                     if (shaderLooksSrp)
                     {
-                        Debug.LogWarning($"[RenderPipelineUtility] Active pipeline is Built-in but shader '{shaderName}' targets URP/HDRP. Asset may not render as expected.");
+                        McpLog.Warn($"[RenderPipelineUtility] Active pipeline is Built-in but shader '{shaderName}' targets URP/HDRP. Asset may not render as expected.");
                     }
                     break;
             }
