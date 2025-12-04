@@ -1,11 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Clients.Configurators;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
+using UnityEngine;
 
 namespace MCPForUnity.Editor.Helpers
 {
@@ -77,27 +81,26 @@ namespace MCPForUnity.Editor.Helpers
                 // Stdio mode: Use uvx command
                 var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
 
-                unity["command"] = uvxPath;
+                var toolArgs = BuildUvxArgs(fromUrl, packageName);
 
-                var args = new List<string> { packageName };
-                if (!string.IsNullOrEmpty(fromUrl))
+                if (ShouldUseWindowsCmdShim(client))
                 {
-                    args.Insert(0, fromUrl);
-                    args.Insert(0, "--from");
+                    unity["command"] = ResolveCmdPath();
+
+                    var cmdArgs = new List<string> { "/c", uvxPath };
+                    cmdArgs.AddRange(toolArgs);
+
+                    unity["args"] = JArray.FromObject(cmdArgs.ToArray());
                 }
-
-                args.Add("--transport");
-                args.Add("stdio");
-
-                unity["args"] = JArray.FromObject(args.ToArray());
+                else
+                {
+                    unity["command"] = uvxPath;
+                    unity["args"] = JArray.FromObject(toolArgs.ToArray());
+                }
 
                 // Remove url/serverUrl if they exist from previous config
                 if (unity["url"] != null) unity.Remove("url");
                 if (unity["serverUrl"] != null) unity.Remove("serverUrl");
-                foreach (var prop in urlPropsToRemove)
-                {
-                    if (unity[prop] != null) unity.Remove(prop);
-                }
 
                 if (isVSCode)
                 {
@@ -144,6 +147,45 @@ namespace MCPForUnity.Editor.Helpers
             var created = new JObject();
             parent[name] = created;
             return created;
+        }
+
+        private static IList<string> BuildUvxArgs(string fromUrl, string packageName)
+        {
+            var args = new List<string> { packageName };
+
+            if (!string.IsNullOrEmpty(fromUrl))
+            {
+                args.Insert(0, fromUrl);
+                args.Insert(0, "--from");
+            }
+
+            args.Add("--transport");
+            args.Add("stdio");
+
+            return args;
+        }
+
+        private static bool ShouldUseWindowsCmdShim(McpClient client)
+        {
+            if (client == null)
+            {
+                return false;
+            }
+
+            return Application.platform == RuntimePlatform.WindowsEditor &&
+                   string.Equals(client.name, ClaudeDesktopConfigurator.ClientName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string ResolveCmdPath()
+        {
+            var comSpec = Environment.GetEnvironmentVariable("ComSpec");
+            if (!string.IsNullOrEmpty(comSpec) && File.Exists(comSpec))
+            {
+                return comSpec;
+            }
+
+            string system32Cmd = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe");
+            return File.Exists(system32Cmd) ? system32Cmd : "cmd.exe";
         }
     }
 }

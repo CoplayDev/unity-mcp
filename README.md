@@ -185,6 +185,8 @@ Keep the process running while clients are connected.
 ### 🛠️ Step 3: Configure Your MCP Client
 Connect your MCP Client (Claude, Cursor, etc.) to the HTTP server from Step 2 (auto) or via Manual Configuration (below).
 
+For **Claude Desktop** Users, try using our manually scrapped Unity_Skills by downloading and uploading the claude_skill_unity.zip following this [link](https://www.claude.com/blog/skills).
+
 **Option A: Auto-Setup (Recommended for Claude/Cursor/VSC Copilot)**
 
 1. In Unity, go to `Window > MCP for Unity`.

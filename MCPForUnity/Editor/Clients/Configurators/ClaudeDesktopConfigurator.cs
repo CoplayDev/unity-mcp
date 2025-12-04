@@ -9,13 +9,16 @@ namespace MCPForUnity.Editor.Clients.Configurators
 {
     public class ClaudeDesktopConfigurator : JsonFileMcpConfigurator
     {
+        public const string ClientName = "Claude Desktop";
+
         public ClaudeDesktopConfigurator() : base(new McpClient
         {
-            name = "Claude Desktop",
+            name = ClientName,
             windowsConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Claude", "claude_desktop_config.json"),
             macConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Application Support", "Claude", "claude_desktop_config.json"),
             linuxConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "Claude", "claude_desktop_config.json"),
-            SupportsHttpTransport = false
+            SupportsHttpTransport = false,
+            StripEnvWhenNotRequired = true
         })
         { }
 

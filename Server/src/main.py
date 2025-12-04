@@ -22,7 +22,10 @@ from services.resources import register_all_resources
 from core.telemetry import record_milestone, record_telemetry, MilestoneType, RecordType, get_package_version
 from services.tools import register_all_tools
 from transport.legacy.unity_connection import get_unity_connection_pool, UnityConnectionPool
-from transport.unity_instance_middleware import UnityInstanceMiddleware, set_unity_instance_middleware
+from transport.unity_instance_middleware import (
+    UnityInstanceMiddleware,
+    get_unity_instance_middleware
+)
 
 # Configure logging using settings from config
 logging.basicConfig(
@@ -44,22 +47,25 @@ try:
     _fh.setFormatter(logging.Formatter(config.log_format))
     _fh.setLevel(getattr(logging, config.log_level))
     logger.addHandler(_fh)
+    logger.propagate = False  # Prevent double logging to root logger
     # Also route telemetry logger to the same rotating file and normal level
     try:
         tlog = logging.getLogger("unity-mcp-telemetry")
         tlog.setLevel(getattr(logging, config.log_level))
         tlog.addHandler(_fh)
-    except Exception:
+        tlog.propagate = False  # Prevent double logging for telemetry too
+    except Exception as exc:
         # Never let logging setup break startup
-        pass
-except Exception:
+        logger.debug("Failed to configure telemetry logger", exc_info=exc)
+except Exception as exc:
     # Never let logging setup break startup
-    pass
+    logger.debug("Failed to configure main logger file handler", exc_info=exc)
 # Quieten noisy third-party loggers to avoid clutter during stdio handshake
-for noisy in ("httpx", "urllib3"):
+for noisy in ("httpx", "urllib3", "mcp.server.lowlevel.server"):
     try:
         logging.getLogger(noisy).setLevel(
             max(logging.WARNING, getattr(logging, config.log_level)))
+        logging.getLogger(noisy).propagate = False
     except Exception:
         pass
 
@@ -258,8 +264,8 @@ async def plugin_sessions_route(_: Request) -> JSONResponse:
 
 
 # Initialize and register middleware for session-based Unity instance routing
-unity_middleware = UnityInstanceMiddleware()
-set_unity_instance_middleware(unity_middleware)
+# Using the singleton getter ensures we use the same instance everywhere
+unity_middleware = get_unity_instance_middleware()
 mcp.add_middleware(unity_middleware)
 logger.info("Registered Unity instance middleware for session-based routing")
 

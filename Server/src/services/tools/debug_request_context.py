@@ -3,6 +3,7 @@ from typing import Any
 from fastmcp import Context
 from services.registry import mcp_for_unity_tool
 from transport.unity_instance_middleware import get_unity_instance_middleware
+from transport.plugin_hub import PluginHub
 
 
 @mcp_for_unity_tool(
@@ -35,8 +36,15 @@ def debug_request_context(ctx: Context) -> dict[str, Any]:
 
     # Get session state info via middleware
     middleware = get_unity_instance_middleware()
-    derived_key = middleware._get_session_key(ctx)
+    derived_key = middleware.get_session_key(ctx)
     active_instance = middleware.get_active_instance(ctx)
+    
+    # Debugging middleware internals
+    with middleware._lock:
+        all_keys = list(middleware._active_by_key.keys())
+
+    # Debugging PluginHub state
+    plugin_hub_configured = PluginHub.is_configured()
 
     return {
         "success": True,
@@ -53,6 +61,9 @@ def debug_request_context(ctx: Context) -> dict[str, Any]:
             "session_state": {
                 "derived_key": derived_key,
                 "active_instance": active_instance,
+                "all_keys_in_store": all_keys,
+                "plugin_hub_configured": plugin_hub_configured,
+                "middleware_id": id(middleware),
             },
             "available_attributes": ctx_attrs,
         },

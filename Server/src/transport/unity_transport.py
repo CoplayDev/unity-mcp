@@ -19,6 +19,11 @@ def _is_http_transport() -> bool:
     return os.environ.get("UNITY_MCP_TRANSPORT", "stdio").lower() == "http"
 
 
+def _current_transport() -> str:
+    """Expose the active transport mode as a simple string identifier."""
+    return "http" if _is_http_transport() else "stdio"
+
+
 def with_unity_instance(
     log: str | Callable[[Context, tuple, dict, str | None], str] | None = None,
     *,

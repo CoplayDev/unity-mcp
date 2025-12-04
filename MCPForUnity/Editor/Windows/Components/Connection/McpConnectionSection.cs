@@ -44,6 +44,14 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         private Button testConnectionButton;
 
         private bool connectionToggleInProgress;
+        private Task verificationTask;
+        private string lastHealthStatus;
+
+        // Health status constants
+        private const string HealthStatusUnknown = "Unknown";
+        private const string HealthStatusHealthy = "Healthy";
+        private const string HealthStatusPingFailed = "Ping Failed";
+        private const string HealthStatusUnhealthy = "Unhealthy";
 
         // Events
         public event Action OnManualConfigUpdateRequested;
@@ -173,7 +181,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 statusIndicator.AddToClassList("disconnected");
                 connectionToggleButton.text = "Start Session";
 
-                healthStatusLabel.text = "Unknown";
+                healthStatusLabel.text = HealthStatusUnknown;
                 healthIndicator.RemoveFromClassList("healthy");
                 healthIndicator.RemoveFromClassList("warning");
                 healthIndicator.AddToClassList("unknown");
@@ -409,14 +417,32 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
         public async Task VerifyBridgeConnectionAsync()
         {
+            // Prevent concurrent verification calls
+            if (verificationTask != null && !verificationTask.IsCompleted)
+            {
+                return;
+            }
+
+            verificationTask = VerifyBridgeConnectionInternalAsync();
+            await verificationTask;
+        }
+
+        private async Task VerifyBridgeConnectionInternalAsync()
+        {
             var bridgeService = MCPServiceLocator.Bridge;
             if (!bridgeService.IsRunning)
             {
-                healthStatusLabel.text = "Disconnected";
+                healthStatusLabel.text = HealthStatusUnknown;
                 healthIndicator.RemoveFromClassList("healthy");
                 healthIndicator.RemoveFromClassList("warning");
                 healthIndicator.AddToClassList("unknown");
-                McpLog.Warn("Cannot verify connection: Bridge is not running");
+                
+                // Only log if state changed
+                if (lastHealthStatus != HealthStatusUnknown)
+                {
+                    McpLog.Warn("Cannot verify connection: Bridge is not running");
+                    lastHealthStatus = HealthStatusUnknown;
+                }
                 return;
             }
 
@@ -426,23 +452,45 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             healthIndicator.RemoveFromClassList("warning");
             healthIndicator.RemoveFromClassList("unknown");
 
+            string newStatus;
             if (result.Success && result.PingSucceeded)
             {
-                healthStatusLabel.text = "Healthy";
+                newStatus = HealthStatusHealthy;
+                healthStatusLabel.text = newStatus;
                 healthIndicator.AddToClassList("healthy");
-                McpLog.Debug($"Connection verification successful: {result.Message}");
+                
+                // Only log if state changed
+                if (lastHealthStatus != newStatus)
+                {
+                    McpLog.Debug($"Connection verification successful: {result.Message}");
+                    lastHealthStatus = newStatus;
+                }
             }
             else if (result.HandshakeValid)
             {
-                healthStatusLabel.text = "Ping Failed";
+                newStatus = HealthStatusPingFailed;
+                healthStatusLabel.text = newStatus;
                 healthIndicator.AddToClassList("warning");
-                McpLog.Warn($"Connection verification warning: {result.Message}");
+                
+                // Log once per distinct warning state
+                if (lastHealthStatus != newStatus)
+                {
+                    McpLog.Warn($"Connection verification warning: {result.Message}");
+                    lastHealthStatus = newStatus;
+                }
             }
             else
             {
-                healthStatusLabel.text = "Unhealthy";
+                newStatus = HealthStatusUnhealthy;
+                healthStatusLabel.text = newStatus;
                 healthIndicator.AddToClassList("warning");
-                McpLog.Error($"Connection verification failed: {result.Message}");
+                
+                // Log once per distinct error state
+                if (lastHealthStatus != newStatus)
+                {
+                    McpLog.Error($"Connection verification failed: {result.Message}");
+                    lastHealthStatus = newStatus;
+                }
             }
         }
     }

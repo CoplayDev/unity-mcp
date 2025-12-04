@@ -60,6 +60,8 @@ class UnityConnection:
                 # Bounded connect to avoid indefinite blocking
                 connect_timeout = float(
                     getattr(config, "connection_timeout", 1.0))
+                # We trust config.unity_host (default 127.0.0.1) but future improvements
+                # could dynamically prefer 'localhost' depending on OS resolver behavior.
                 self.sock = socket.create_connection(
                     (self.host, self.port), connect_timeout)
                 self._prepare_socket(self.sock)

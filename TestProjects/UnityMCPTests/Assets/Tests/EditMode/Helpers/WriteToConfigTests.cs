@@ -8,6 +8,7 @@ using UnityEditor;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
 using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Services;
 
 namespace MCPForUnityTests.Editor.Helpers
 {
@@ -165,6 +166,40 @@ namespace MCPForUnityTests.Editor.Helpers
             Assert.IsNull(unity["env"], "env should not be added for Trae client");
             Assert.IsNull(unity["disabled"], "disabled should not be added for Trae client");
             AssertTransportConfiguration(unity, client);
+        }
+
+        [Test]
+        public void ClaudeDesktop_UsesAbsoluteUvPath_WhenOverrideProvided()
+        {
+            var configPath = Path.Combine(_tempRoot, "claude-desktop.json");
+            WriteInitialConfig(configPath, isVSCode: false, command: "uvx", directory: "/old/path");
+
+            WithTransportPreference(false, () =>
+            {
+                MCPServiceLocator.Paths.SetUvxPathOverride(_fakeUvPath);
+                try
+                {
+                    var client = new McpClient
+                    {
+                        name = "Claude Desktop",
+                        SupportsHttpTransport = false,
+                        StripEnvWhenNotRequired = true
+                    };
+
+                    InvokeWriteToConfig(configPath, client);
+
+                    var root = JObject.Parse(File.ReadAllText(configPath));
+                    var unity = (JObject)root.SelectToken("mcpServers.unityMCP");
+                    Assert.NotNull(unity, "Expected mcpServers.unityMCP node");
+                    Assert.AreEqual(_fakeUvPath, (string)unity["command"], "Claude Desktop should use absolute uvx path");
+                    Assert.IsNull(unity["env"], "Claude Desktop config should not include env block when not required");
+                    AssertTransportConfiguration(unity, client);
+                }
+                finally
+                {
+                    MCPServiceLocator.Paths.ClearUvxPathOverride();
+                }
+            });
         }
 
         [Test]
