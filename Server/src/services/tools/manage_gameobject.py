@@ -14,7 +14,7 @@ from services.tools.utils import coerce_bool
 )
 async def manage_gameobject(
     ctx: Context,
-    action: Annotated[Literal["create", "modify", "delete", "find", "add_component", "remove_component", "set_component_property", "get_components", "get_component"], "Perform CRUD operations on GameObjects and components."],
+    action: Annotated[Literal["create", "modify", "delete", "find", "add_component", "remove_component", "set_component_property", "get_components", "get_component", "duplicate", "move_relative"], "Perform CRUD operations on GameObjects and components."],
     target: Annotated[str,
                       "GameObject identifier by name or path for modify/delete/component actions"] | None = None,
     search_method: Annotated[Literal["by_id", "by_name", "by_path", "by_tag", "by_layer", "by_component"],
@@ -67,6 +67,20 @@ async def manage_gameobject(
     # Controls whether serialization of private [SerializeField] fields is included
     includeNonPublicSerialized: Annotated[bool | str,
                                           "Controls whether serialization of private [SerializeField] fields is included (accepts true/false or 'true'/'false')"] | None = None,
+    # --- Parameters for 'duplicate' ---
+    new_name: Annotated[str,
+                        "New name for the duplicated object (default: SourceName_Copy)"] | None = None,
+    offset: Annotated[list[float] | str,
+                      "Offset from original/reference position - [x,y,z] or string '[x,y,z]'"] | None = None,
+    # --- Parameters for 'move_relative' ---
+    reference_object: Annotated[str,
+                               "Reference object for relative movement (required for move_relative)"] | None = None,
+    direction: Annotated[Literal["left", "right", "up", "down", "forward", "back", "front", "backward", "behind"],
+                        "Direction for relative movement (e.g., 'right', 'up', 'forward')"] | None = None,
+    distance: Annotated[float,
+                       "Distance to move in the specified direction (default: 1.0)"] | None = None,
+    world_space: Annotated[bool | str,
+                          "If True (default), use world space directions; if False, use reference object's local directions"] | None = None,
 ) -> dict[str, Any]:
     # Get active instance from session state
     # Removed session_state import
@@ -169,7 +183,15 @@ async def manage_gameobject(
             "searchInChildren": search_in_children,
             "searchInactive": search_inactive,
             "componentName": component_name,
-            "includeNonPublicSerialized": includeNonPublicSerialized
+            "includeNonPublicSerialized": includeNonPublicSerialized,
+            # Parameters for 'duplicate'
+            "new_name": new_name,
+            "offset": offset,
+            # Parameters for 'move_relative'
+            "reference_object": reference_object,
+            "direction": direction,
+            "distance": distance,
+            "world_space": world_space,
         }
         params = {k: v for k, v in params.items() if v is not None}
 

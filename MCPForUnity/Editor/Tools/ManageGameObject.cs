@@ -189,6 +189,10 @@ namespace MCPForUnity.Editor.Tools
                         return RemoveComponentFromTarget(@params, targetToken, searchMethod);
                     case "set_component_property":
                         return SetComponentPropertyOnTarget(@params, targetToken, searchMethod);
+                    case "duplicate":
+                        return DuplicateGameObject(@params, targetToken, searchMethod);
+                    case "move_relative":
+                        return MoveRelativeToObject(@params, targetToken, searchMethod);
 
                     default:
                         return new ErrorResponse($"Unknown action: '{action}'.");
@@ -896,6 +900,219 @@ namespace MCPForUnity.Editor.Tools
             //     $"GameObject '{targetGo.name}' modified successfully.",
             //     GetGameObjectData(targetGo));
 
+        }
+
+        /// <summary>
+        /// Duplicates a GameObject with all its properties, components, and children.
+        /// </summary>
+        private static object DuplicateGameObject(JObject @params, JToken targetToken, string searchMethod)
+        {
+            GameObject sourceGo = FindObjectInternal(targetToken, searchMethod);
+            if (sourceGo == null)
+            {
+                return new ErrorResponse(
+                    $"Target GameObject ('{targetToken}') not found using method '{searchMethod ?? "default"}'."
+                );
+            }
+
+            // Optional parameters
+            string newName = @params["new_name"]?.ToString();
+            Vector3? position = ParseVector3(@params["position"] as JArray);
+            Vector3? offset = ParseVector3(@params["offset"] as JArray);
+            JToken parentToken = @params["parent"];
+
+            // Duplicate the object
+            GameObject duplicatedGo = UnityEngine.Object.Instantiate(sourceGo);
+            Undo.RegisterCreatedObjectUndo(duplicatedGo, $"Duplicate {sourceGo.name}");
+
+            // Set name (default: SourceName_Copy or SourceName (1))
+            if (!string.IsNullOrEmpty(newName))
+            {
+                duplicatedGo.name = newName;
+            }
+            else
+            {
+                // Remove "(Clone)" suffix added by Instantiate and add "_Copy"
+                duplicatedGo.name = sourceGo.name.Replace("(Clone)", "").Trim() + "_Copy";
+            }
+
+            // Handle positioning
+            if (position.HasValue)
+            {
+                // Absolute position specified
+                duplicatedGo.transform.position = position.Value;
+            }
+            else if (offset.HasValue)
+            {
+                // Offset from original
+                duplicatedGo.transform.position = sourceGo.transform.position + offset.Value;
+            }
+            // else: keeps the same position as the original (default Instantiate behavior)
+
+            // Handle parent
+            if (parentToken != null)
+            {
+                if (parentToken.Type == JTokenType.Null || 
+                    (parentToken.Type == JTokenType.String && string.IsNullOrEmpty(parentToken.ToString())))
+                {
+                    // Explicit null parent - move to root
+                    duplicatedGo.transform.SetParent(null);
+                }
+                else
+                {
+                    GameObject newParent = FindObjectInternal(parentToken, "by_id_or_name_or_path");
+                    if (newParent != null)
+                    {
+                        duplicatedGo.transform.SetParent(newParent.transform, true);
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[ManageGameObject.Duplicate] Parent '{parentToken}' not found. Keeping original parent.");
+                    }
+                }
+            }
+            else
+            {
+                // Default: same parent as source
+                duplicatedGo.transform.SetParent(sourceGo.transform.parent, true);
+            }
+
+            // Mark scene dirty
+            EditorUtility.SetDirty(duplicatedGo);
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+
+            Selection.activeGameObject = duplicatedGo;
+
+            return new SuccessResponse(
+                $"Duplicated '{sourceGo.name}' as '{duplicatedGo.name}'.",
+                new
+                {
+                    originalName = sourceGo.name,
+                    originalId = sourceGo.GetInstanceID(),
+                    duplicatedObject = Helpers.GameObjectSerializer.GetGameObjectData(duplicatedGo)
+                }
+            );
+        }
+
+        /// <summary>
+        /// Moves a GameObject relative to another reference object.
+        /// Supports directional offsets (left, right, up, down, forward, back) and distance.
+        /// </summary>
+        private static object MoveRelativeToObject(JObject @params, JToken targetToken, string searchMethod)
+        {
+            GameObject targetGo = FindObjectInternal(targetToken, searchMethod);
+            if (targetGo == null)
+            {
+                return new ErrorResponse(
+                    $"Target GameObject ('{targetToken}') not found using method '{searchMethod ?? "default"}'."
+                );
+            }
+
+            // Get reference object (required for relative movement)
+            JToken referenceToken = @params["reference_object"];
+            if (referenceToken == null)
+            {
+                return new ErrorResponse("'reference_object' parameter is required for 'move_relative' action.");
+            }
+
+            GameObject referenceGo = FindObjectInternal(referenceToken, "by_id_or_name_or_path");
+            if (referenceGo == null)
+            {
+                return new ErrorResponse($"Reference object '{referenceToken}' not found.");
+            }
+
+            // Get movement parameters
+            string direction = @params["direction"]?.ToString()?.ToLower();
+            float distance = @params["distance"]?.ToObject<float>() ?? 1f;
+            Vector3? customOffset = ParseVector3(@params["offset"] as JArray);
+            bool useWorldSpace = @params["world_space"]?.ToObject<bool>() ?? true;
+
+            // Record for undo
+            Undo.RecordObject(targetGo.transform, $"Move {targetGo.name} relative to {referenceGo.name}");
+
+            Vector3 newPosition;
+
+            if (customOffset.HasValue)
+            {
+                // Custom offset vector provided
+                if (useWorldSpace)
+                {
+                    newPosition = referenceGo.transform.position + customOffset.Value;
+                }
+                else
+                {
+                    // Offset in reference object's local space
+                    newPosition = referenceGo.transform.TransformPoint(customOffset.Value);
+                }
+            }
+            else if (!string.IsNullOrEmpty(direction))
+            {
+                // Directional movement
+                Vector3 directionVector = GetDirectionVector(direction, referenceGo.transform, useWorldSpace);
+                newPosition = referenceGo.transform.position + directionVector * distance;
+            }
+            else
+            {
+                return new ErrorResponse("Either 'direction' or 'offset' parameter is required for 'move_relative' action.");
+            }
+
+            targetGo.transform.position = newPosition;
+
+            // Mark scene dirty
+            EditorUtility.SetDirty(targetGo);
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+
+            return new SuccessResponse(
+                $"Moved '{targetGo.name}' relative to '{referenceGo.name}'.",
+                new
+                {
+                    movedObject = targetGo.name,
+                    referenceObject = referenceGo.name,
+                    newPosition = new[] { targetGo.transform.position.x, targetGo.transform.position.y, targetGo.transform.position.z },
+                    direction = direction,
+                    distance = distance,
+                    gameObject = Helpers.GameObjectSerializer.GetGameObjectData(targetGo)
+                }
+            );
+        }
+
+        /// <summary>
+        /// Converts a direction string to a Vector3.
+        /// </summary>
+        private static Vector3 GetDirectionVector(string direction, Transform referenceTransform, bool useWorldSpace)
+        {
+            if (useWorldSpace)
+            {
+                // World space directions
+                switch (direction)
+                {
+                    case "right": return Vector3.right;
+                    case "left": return Vector3.left;
+                    case "up": return Vector3.up;
+                    case "down": return Vector3.down;
+                    case "forward": case "front": return Vector3.forward;
+                    case "back": case "backward": case "behind": return Vector3.back;
+                    default:
+                        Debug.LogWarning($"[ManageGameObject.MoveRelative] Unknown direction '{direction}', defaulting to forward.");
+                        return Vector3.forward;
+                }
+            }
+            else
+            {
+                // Reference object's local space directions
+                switch (direction)
+                {
+                    case "right": return referenceTransform.right;
+                    case "left": return -referenceTransform.right;
+                    case "up": return referenceTransform.up;
+                    case "down": return -referenceTransform.up;
+                    case "forward": case "front": return referenceTransform.forward;
+                    case "back": case "backward": case "behind": return -referenceTransform.forward;
+                    default:
+                        Debug.LogWarning($"[ManageGameObject.MoveRelative] Unknown direction '{direction}', defaulting to forward.");
+                        return referenceTransform.forward;
+                }
+            }
         }
 
         private static object DeleteGameObject(JToken targetToken, string searchMethod)

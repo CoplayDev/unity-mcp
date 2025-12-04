@@ -246,7 +246,7 @@ claude mcp add --scope user UnityMCP -- "C:/Users/USERNAME/AppData/Local/Microso
 ```json
 {
   "mcpServers": {
-    "UnityMCP": {
+    "unityMCP": {
       "url": "http://localhost:8080/mcp"
     }
   }
@@ -285,7 +285,7 @@ Switch the Unity transport dropdown to `Stdio`, then use one of the following `c
 ```json
 {
   "mcpServers": {
-    "UnityMCP": {
+    "unityMCP": {
       "command": "uv",
       "args": [
         "run",
@@ -305,7 +305,7 @@ Switch the Unity transport dropdown to `Stdio`, then use one of the following `c
 ```json
 {
   "mcpServers": {
-    "UnityMCP": {
+    "unityMCP": {
       "command": "C:/Users/YOUR_USERNAME/AppData/Local/Microsoft/WinGet/Links/uv.exe",
       "args": [
         "run",
