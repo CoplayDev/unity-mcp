@@ -115,12 +115,14 @@ async def manage_gameobject(
     position = _coerce_vec(position, default=position)
     rotation = _coerce_vec(rotation, default=rotation)
     scale = _coerce_vec(scale, default=scale)
+    offset = _coerce_vec(offset, default=offset)
     save_as_prefab = coerce_bool(save_as_prefab)
     set_active = coerce_bool(set_active)
     find_all = coerce_bool(find_all)
     search_in_children = coerce_bool(search_in_children)
     search_inactive = coerce_bool(search_inactive)
     includeNonPublicSerialized = coerce_bool(includeNonPublicSerialized)
+    world_space = coerce_bool(world_space, default=True)
 
     # Coerce 'component_properties' from JSON string to dict for client compatibility
     if isinstance(component_properties, str):
