@@ -163,7 +163,9 @@ namespace MCPForUnity.Editor.Tools
         private static object CreateAsset(JObject @params)
         {
             string path = @params["path"]?.ToString();
-            string assetType = @params["assetType"]?.ToString();
+            string assetType =
+                @params["assetType"]?.ToString()
+                ?? @params["asset_type"]?.ToString(); // tolerate snake_case payloads from batched commands
             JObject properties = @params["properties"] as JObject;
 
             if (string.IsNullOrEmpty(path))
