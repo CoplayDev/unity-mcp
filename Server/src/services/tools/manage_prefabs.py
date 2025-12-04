@@ -5,6 +5,7 @@ from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
+from Server.src.services.tools.utils import coerce_bool
 
 
 @mcp_for_unity_tool(
@@ -30,19 +31,6 @@ async def manage_prefabs(
     # Removed session_state import
     unity_instance = get_unity_instance_from_context(ctx)
 
-    def _coerce_bool(value, default=None):
-        if value is None:
-            return default
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, str):
-            v = value.strip().lower()
-            if v in ("true", "1", "yes", "on"):
-                return True
-            if v in ("false", "0", "no", "off"):
-                return False
-        return bool(value)
-
     try:
         params: dict[str, Any] = {"action": action}
 
@@ -50,15 +38,15 @@ async def manage_prefabs(
             params["prefabPath"] = prefab_path
         if mode:
             params["mode"] = mode
-        save_before_close_val = _coerce_bool(save_before_close)
+        save_before_close_val = coerce_bool(save_before_close)
         if save_before_close_val is not None:
             params["saveBeforeClose"] = save_before_close_val
         if target:
             params["target"] = target
-        allow_overwrite_val = _coerce_bool(allow_overwrite)
+        allow_overwrite_val = coerce_bool(allow_overwrite)
         if allow_overwrite_val is not None:
             params["allowOverwrite"] = allow_overwrite_val
-        search_inactive_val = _coerce_bool(search_inactive)
+        search_inactive_val = coerce_bool(search_inactive)
         if search_inactive_val is not None:
             params["searchInactive"] = search_inactive_val
         response = await send_with_unity_instance(async_send_command_with_retry, unity_instance, "manage_prefabs", params)

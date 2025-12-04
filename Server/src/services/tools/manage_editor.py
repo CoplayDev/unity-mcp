@@ -6,6 +6,7 @@ from core.telemetry import is_telemetry_enabled, record_tool_usage
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
+from Server.src.services.tools.utils import coerce_bool
 
 
 @mcp_for_unity_tool(
@@ -26,21 +27,7 @@ async def manage_editor(
     # Get active instance from request state (injected by middleware)
     unity_instance = get_unity_instance_from_context(ctx)
 
-    # Coerce boolean parameters defensively to tolerate 'true'/'false' strings
-    def _coerce_bool(value, default=None):
-        if value is None:
-            return default
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, str):
-            v = value.strip().lower()
-            if v in ("true", "1", "yes", "on"):  # common truthy strings
-                return True
-            if v in ("false", "0", "no", "off"):
-                return False
-        return bool(value)
-
-    wait_for_completion = _coerce_bool(wait_for_completion)
+    wait_for_completion = coerce_bool(wait_for_completion)
 
     try:
         # Diagnostics: quick telemetry checks

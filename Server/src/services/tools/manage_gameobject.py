@@ -6,6 +6,7 @@ from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
+from Server.src.services.tools.utils import coerce_bool
 
 
 @mcp_for_unity_tool(
@@ -72,19 +73,6 @@ async def manage_gameobject(
     unity_instance = get_unity_instance_from_context(ctx)
 
     # Coercers to tolerate stringified booleans and vectors
-    def _coerce_bool(value, default=None):
-        if value is None:
-            return default
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, str):
-            v = value.strip().lower()
-            if v in ("true", "1", "yes", "on"):
-                return True
-            if v in ("false", "0", "no", "off"):
-                return False
-        return bool(value)
-
     def _coerce_vec(value, default=None):
         if value is None:
             return default
@@ -113,12 +101,12 @@ async def manage_gameobject(
     position = _coerce_vec(position, default=position)
     rotation = _coerce_vec(rotation, default=rotation)
     scale = _coerce_vec(scale, default=scale)
-    save_as_prefab = _coerce_bool(save_as_prefab)
-    set_active = _coerce_bool(set_active)
-    find_all = _coerce_bool(find_all)
-    search_in_children = _coerce_bool(search_in_children)
-    search_inactive = _coerce_bool(search_inactive)
-    includeNonPublicSerialized = _coerce_bool(includeNonPublicSerialized)
+    save_as_prefab = coerce_bool(save_as_prefab)
+    set_active = coerce_bool(set_active)
+    find_all = coerce_bool(find_all)
+    search_in_children = coerce_bool(search_in_children)
+    search_inactive = coerce_bool(search_inactive)
+    includeNonPublicSerialized = coerce_bool(includeNonPublicSerialized)
 
     # Coerce 'component_properties' from JSON string to dict for client compatibility
     if isinstance(component_properties, str):
