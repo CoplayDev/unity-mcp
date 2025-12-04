@@ -29,6 +29,20 @@ async def manage_prefabs(
     # Get active instance from session state
     # Removed session_state import
     unity_instance = get_unity_instance_from_context(ctx)
+
+    def _coerce_bool(value, default=None):
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            v = value.strip().lower()
+            if v in ("true", "1", "yes", "on"):
+                return True
+            if v in ("false", "0", "no", "off"):
+                return False
+        return bool(value)
+
     try:
         params: dict[str, Any] = {"action": action}
 
@@ -36,14 +50,17 @@ async def manage_prefabs(
             params["prefabPath"] = prefab_path
         if mode:
             params["mode"] = mode
-        if save_before_close is not None:
-            params["saveBeforeClose"] = bool(save_before_close)
+        save_before_close_val = _coerce_bool(save_before_close)
+        if save_before_close_val is not None:
+            params["saveBeforeClose"] = save_before_close_val
         if target:
             params["target"] = target
-        if allow_overwrite is not None:
-            params["allowOverwrite"] = bool(allow_overwrite)
-        if search_inactive is not None:
-            params["searchInactive"] = bool(search_inactive)
+        allow_overwrite_val = _coerce_bool(allow_overwrite)
+        if allow_overwrite_val is not None:
+            params["allowOverwrite"] = allow_overwrite_val
+        search_inactive_val = _coerce_bool(search_inactive)
+        if search_inactive_val is not None:
+            params["searchInactive"] = search_inactive_val
         response = await send_with_unity_instance(async_send_command_with_retry, unity_instance, "manage_prefabs", params)
 
         if isinstance(response, dict) and response.get("success"):

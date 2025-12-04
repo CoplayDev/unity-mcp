@@ -146,6 +146,11 @@ class CustomToolService:
         self._project_tools.setdefault(project_id, {})[
             definition.name] = definition
 
+    def get_project_id_for_hash(self, project_hash: str | None) -> str | None:
+        if not project_hash:
+            return None
+        return self._hash_to_project.get(project_hash.lower())
+
     async def _poll_until_complete(
         self,
         tool_name: str,
@@ -317,8 +322,16 @@ def resolve_project_id_for_unity_instance(unity_instance: str | None) -> str | N
             hash_part = unity_instance
 
         if hash_part:
-            # Return the hash directly as the identifier for WebSocket tools
-            return hash_part.lower()
+            lowered = hash_part.lower()
+            mapped: Optional[str] = None
+            try:
+                service = CustomToolService.get_instance()
+                mapped = service.get_project_id_for_hash(lowered)
+            except RuntimeError:
+                mapped = None
+            if mapped:
+                return mapped
+            return lowered
     except Exception:
         logger.debug(
             f"Failed to resolve project id via plugin hub for {unity_instance}")

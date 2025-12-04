@@ -48,8 +48,17 @@ def get_package_version() -> str:
     except Exception:
         # Fallback for development: read from pyproject.toml
         try:
-            pyproject_path = Path(__file__).parent / "pyproject.toml"
-            with open(pyproject_path, "rb") as f:
+            pyproject_path: Path | None = None
+            current = Path(__file__).resolve()
+            for parent in current.parents:
+                candidate = parent / "pyproject.toml"
+                if candidate.exists():
+                    pyproject_path = candidate
+                    break
+            if pyproject_path is None:
+                raise FileNotFoundError("pyproject.toml not found in ancestors")
+
+            with pyproject_path.open("rb") as f:
                 data = tomli.load(f)
             return data["project"]["version"]
         except Exception:

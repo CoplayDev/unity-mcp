@@ -600,7 +600,7 @@ async def script_apply_edits(
         return _with_norm(resp_struct if isinstance(resp_struct, dict) else {"success": False, "message": str(resp_struct)}, normalized_for_echo, routing="structured")
 
     # 1) read from Unity
-    read_resp = async_send_command_with_retry("manage_script", {
+    read_resp = await async_send_command_with_retry("manage_script", {
         "action": "read",
         "name": name,
         "path": path,
