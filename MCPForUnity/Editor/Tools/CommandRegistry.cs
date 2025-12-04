@@ -249,6 +249,36 @@ namespace MCPForUnity.Editor.Tools
         }
 
         /// <summary>
+        /// Execute a command handler and return its raw result, regardless of sync or async implementation.
+        /// Used internally for features like batch execution where commands need to be composed.
+        /// </summary>
+        /// <param name="commandName">The registered command to execute.</param>
+        /// <param name="params">Parameters to pass to the command (optional).</param>
+        public static Task<object> InvokeCommandAsync(string commandName, JObject @params)
+        {
+            var handlerInfo = GetHandlerInfo(commandName);
+            var payload = @params ?? new JObject();
+
+            if (handlerInfo.IsAsync)
+            {
+                if (handlerInfo.AsyncHandler == null)
+                {
+                    throw new InvalidOperationException($"Async handler for '{commandName}' is not configured correctly");
+                }
+
+                return handlerInfo.AsyncHandler(payload);
+            }
+
+            if (handlerInfo.SyncHandler == null)
+            {
+                throw new InvalidOperationException($"Handler for '{commandName}' does not provide a synchronous implementation");
+            }
+
+            object result = handlerInfo.SyncHandler(payload);
+            return Task.FromResult(result);
+        }
+
+        /// <summary>
         /// Create a delegate for an async handler method that returns Task or Task<T>.
         /// The delegate will invoke the method and await its completion, returning the result.
         /// </summary>

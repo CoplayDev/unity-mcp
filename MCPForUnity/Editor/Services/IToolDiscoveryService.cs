@@ -13,9 +13,12 @@ namespace MCPForUnity.Editor.Services
         public List<ParameterMetadata> Parameters { get; set; }
         public string ClassName { get; set; }
         public string Namespace { get; set; }
+        public string AssemblyName { get; set; }
+        public string AssetPath { get; set; }
         public bool AutoRegister { get; set; } = true;
         public bool RequiresPolling { get; set; } = false;
         public string PollAction { get; set; } = "status";
+        public bool IsBuiltIn { get; set; }
     }
 
     /// <summary>
@@ -44,6 +47,21 @@ namespace MCPForUnity.Editor.Services
         /// Gets metadata for a specific tool
         /// </summary>
         ToolMetadata GetToolMetadata(string toolName);
+
+        /// <summary>
+        /// Returns only the tools currently enabled for registration
+        /// </summary>
+        List<ToolMetadata> GetEnabledTools();
+
+        /// <summary>
+        /// Checks whether a tool is currently enabled for registration
+        /// </summary>
+        bool IsToolEnabled(string toolName);
+
+        /// <summary>
+        /// Updates the enabled state for a tool
+        /// </summary>
+        void SetToolEnabled(string toolName, bool enabled);
 
         /// <summary>
         /// Invalidates the tool discovery cache
