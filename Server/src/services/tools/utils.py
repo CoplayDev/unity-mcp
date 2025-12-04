@@ -21,4 +21,5 @@ def coerce_bool(value: Any, default: bool | None = None) -> bool | None:
             return True
         if lowered in _FALSY:
             return False
+        return default
     return bool(value)
