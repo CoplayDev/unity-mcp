@@ -22,7 +22,7 @@ namespace MCPForUnity.Editor.Services
             try
             {
                 string uvxPath = MCPServiceLocator.Paths.GetUvxPath();
-                string uvCommand = uvxPath.Remove(uvxPath.Length - 1, 1);
+                string uvCommand = BuildUvPathFromUvx(uvxPath);
 
                 // Get the package name
                 string packageName = "mcp-for-unity";
@@ -73,7 +73,7 @@ namespace MCPForUnity.Editor.Services
             stderr = null;
 
             string uvxPath = MCPServiceLocator.Paths.GetUvxPath();
-            string uvPath = uvxPath.Remove(uvxPath.Length - 1, 1);
+            string uvPath = BuildUvPathFromUvx(uvxPath);
 
             if (!string.Equals(uvCommand, uvPath, StringComparison.OrdinalIgnoreCase))
             {
@@ -97,6 +97,22 @@ namespace MCPForUnity.Editor.Services
             }
 
             return ExecPath.TryRun(uvPath, args, Application.dataPath, out stdout, out stderr, 30000, extraPathPrepend);
+        }
+
+        private static string BuildUvPathFromUvx(string uvxPath)
+        {
+            if (string.IsNullOrWhiteSpace(uvxPath))
+            {
+                return uvxPath;
+            }
+
+            string directory = Path.GetDirectoryName(uvxPath);
+            string extension = Path.GetExtension(uvxPath);
+            string uvFileName = "uv" + extension;
+
+            return string.IsNullOrEmpty(directory)
+                ? uvFileName
+                : Path.Combine(directory, uvFileName);
         }
 
         private string GetPlatformSpecificPathPrepend()
