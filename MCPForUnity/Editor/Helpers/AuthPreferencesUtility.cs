@@ -42,27 +42,40 @@ namespace MCPForUnity.Editor.Helpers
 
         internal static string GenerateNewApiKey()
         {
-            // 32 bytes -> 43 base64 chars without padding; safe for headers
+            // 32 bytes -> ~43 base64url chars without padding; mirrors server token_urlsafe
             var bytes = new byte[32];
             using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
             {
                 rng.GetBytes(bytes);
             }
-            return Convert.ToBase64String(bytes).TrimEnd('=');
+
+            string base64 = Convert.ToBase64String(bytes)
+                .TrimEnd('=')
+                .Replace('+', '-')
+                .Replace('/', '_');
+
+            return base64;
         }
 
         internal static string GetApiKeyFilePath()
         {
-#if UNITY_EDITOR_WIN
+            // Keep UI in lockstep with server path resolution (supports UNITY_MCP_HOME override)
+            string overrideRoot = Environment.GetEnvironmentVariable("UNITY_MCP_HOME");
+            if (!string.IsNullOrEmpty(overrideRoot))
+            {
+            return Path.Combine(overrideRoot, "api_key");
+            }
+
+    #if UNITY_EDITOR_WIN
             string root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             return Path.Combine(root, "UnityMCP", "api_key");
-#elif UNITY_EDITOR_OSX
+    #elif UNITY_EDITOR_OSX
             string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), "Library", "Application Support", "UnityMCP");
             return Path.Combine(root, "api_key");
-#else
+    #else
             string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), ".local", "share", "UnityMCP");
             return Path.Combine(root, "api_key");
-#endif
+    #endif
         }
 
         private static string TryReadApiKeyFromDisk()
