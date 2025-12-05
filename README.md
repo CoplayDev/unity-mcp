@@ -144,13 +144,13 @@ MCP for Unity connects your tools using two components:
 3. Click `+` -> `Add package from git URL...`.
 4. Enter:
     ```
-    https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity
+    https://github.com/prophecygamestudio/unity-mcp.git?path=/MCPForUnity
     ```
 5. Click `Add`.
 
 **Need a fixed version?** Use a tagged URL instead (updates require uninstalling and re-installing):
 ```
-https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v8.0.0
+https://github.com/prophecygamestudio/unity-mcp.git?path=/MCPForUnity#v8.0.0
 ```
 
 #### To install via OpenUPM
@@ -177,7 +177,7 @@ HTTP transport is enabled out of the box. The Unity window can launch the FastMC
 You can also start the server yourself from a terminal—useful for CI or when you want to see raw logs:
 
 ```bash
-uvx --from "git+https://github.com/CoplayDev/unity-mcp@v8.1.0#subdirectory=Server" mcp-for-unity --transport http --http-url http://localhost:8080
+uvx --from "git+https://github.com/prophecygamestudio/unity-mcp@v8.1.0#subdirectory=Server" mcp-for-unity --transport http --http-url http://localhost:8080
 ```
 
 Keep the process running while clients are connected.
@@ -196,8 +196,8 @@ For **Claude Desktop** Users, try using our manually scrapped Unity_Skills by do
 <details><summary><strong>Client-specific troubleshooting</strong></summary>
 
   - **VSCode**: uses `Code/User/mcp.json` with top-level `servers.unityMCP`, `"type": "http"`, and the URL from Step 2. On Windows, MCP for Unity still prefers an absolute `uv.exe` path when you switch back to stdio.
-  - **Cursor / Windsurf** [(**help link**)](https://github.com/CoplayDev/unity-mcp/wiki/1.-Fix-Unity-MCP-and-Cursor,-VSCode-&-Windsurf): if `uv` is missing, the MCP for Unity window shows "uv Not Found" with a quick [HELP] link and a "Choose `uv` Install Location" button.
-  - **Claude Code** [(**help link**)](https://github.com/CoplayDev/unity-mcp/wiki/2.-Fix-Unity-MCP-and-Claude-Code): if `claude` isn't found, the window shows "Claude Not Found" with [HELP] and a "Choose Claude Location" button. Unregister now updates the UI immediately.</details>
+  - **Cursor / Windsurf** [(**help link**)](https://github.com/prophecygamestudio/unity-mcp/wiki/1.-Fix-Unity-MCP-and-Cursor,-VSCode-&-Windsurf): if `uv` is missing, the MCP for Unity window shows "uv Not Found" with a quick [HELP] link and a "Choose `uv` Install Location" button.
+  - **Claude Code** [(**help link**)](https://github.com/prophecygamestudio/unity-mcp/wiki/2.-Fix-Unity-MCP-and-Claude-Code): if `claude` isn't found, the window shows "Claude Not Found" with [HELP] and a "Choose Claude Location" button. Unregister now updates the UI immediately.</details>
 
 
 **Option B: Manual Configuration**
@@ -420,7 +420,7 @@ Your privacy matters to us. All telemetry is optional and designed to respect yo
 
 </details>  
 
-Still stuck? [Open an Issue](https://github.com/CoplayDev/unity-mcp/issues) or [Join the Discord](https://discord.gg/y4p8KfzrN4)!
+Still stuck? [Open an Issue](https://github.com/prophecygamestudio/unity-mcp/issues) or [Join the Discord](https://discord.gg/y4p8KfzrN4)!
 
 ---
 
