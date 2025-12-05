@@ -202,6 +202,19 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             {
                 await _socket.ConnectAsync(_endpointUri, connectionToken).ConfigureAwait(false);
             }
+            catch (WebSocketException wse)
+            {
+                string msg = wse.Message ?? string.Empty;
+                if (msg.Contains("401") || msg.Contains("403"))
+                {
+                    McpLog.Error("[WebSocket] Connection failed: unauthorized (check API key)");
+                }
+                else
+                {
+                    McpLog.Error($"[WebSocket] Connection failed: {wse.Message}");
+                }
+                return false;
+            }
             catch (Exception ex)
             {
                 McpLog.Error($"[WebSocket] Connection failed: {ex.Message}");
