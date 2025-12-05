@@ -299,6 +299,28 @@ register_all_tools(mcp)
 # Register all resources
 register_all_resources(mcp)
 
+# Attempt to attach HTTP auth guard when the FastMCP HTTP app becomes available
+_http_guard_registered = False
+
+
+def _try_register_http_guard(retries: int = 20, delay: float = 0.1):
+    import threading
+    global _http_guard_registered
+    if _http_guard_registered:
+        return
+    app = getattr(mcp, "_http_app", None)
+    if app is not None:
+        try:
+            app.add_middleware(HttpAuthGuard)
+            logger.info("HTTP auth guard middleware registered for /mcp endpoints (deferred)")
+            _http_guard_registered = True
+            return
+        except Exception:
+            logger.warning("Deferred HTTP auth guard registration failed", exc_info=True)
+    if retries > 0:
+        threading.Timer(delay, _try_register_http_guard, kwargs={"retries": retries - 1, "delay": delay}).start()
+    else:
+        logger.warning("HTTP auth guard middleware could not be registered after retries; auth may not be enforced on /mcp")
 
 # HTTP middleware to enforce auth on /mcp endpoints (FastMCP HTTP transport)
 class HttpAuthGuard(BaseHTTPMiddleware):
@@ -412,8 +434,11 @@ Examples:
         if hasattr(mcp, "_http_app") and mcp._http_app is not None:
             mcp._http_app.add_middleware(HttpAuthGuard)
             logger.info("HTTP auth guard middleware registered for /mcp endpoints")
+            global _http_guard_registered
+            _http_guard_registered = True
         else:
-            logger.warning("HTTP auth guard middleware not registered: mcp._http_app is not available yet")
+            logger.warning("HTTP auth guard middleware not registered yet: mcp._http_app is not available; deferring")
+            _try_register_http_guard()
     except Exception:
         logger.warning("Failed to register HTTP auth guard middleware", exc_info=True)
     # Session-based Unity instance routing
