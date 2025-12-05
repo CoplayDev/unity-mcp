@@ -73,10 +73,10 @@ git clone https://github.com/CoplayDev/unity-mcp.git
 cd unity-mcp/Server
 
 # Run with uv (HTTP)
-uv run server.py --transport http --http-url http://localhost:8080
+uv run -m src.main --transport http --http-url http://localhost:8080
 
 # Run with uv (stdio)
-uv run server.py --transport stdio
+uv run -m src.main --transport stdio
 ```
 
 **MCP Client Configuration (HTTP):**
@@ -100,7 +100,8 @@ uv run server.py --transport stdio
         "run",
         "--directory",
         "C:\\path\\to\\unity-mcp\\Server",
-        "server.py",
+        "-m",
+        "src.main",
         "--transport",
         "stdio"
       ]
@@ -119,7 +120,8 @@ uv run server.py --transport stdio
         "run",
         "--directory",
         "/path/to/unity-mcp/Server",
-        "server.py",
+        "-m",
+        "src.main",
         "--transport",
         "stdio"
       ]
