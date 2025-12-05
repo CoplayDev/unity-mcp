@@ -77,7 +77,7 @@ Notes:
 
 ---
 
-## Authentication (optional)
+## Authentication
 - Open the Authentication panel to enable/disable server auth.
 - Allowed IPs: comma-separated list (CIDR ok). Leave empty for no IP restriction.
 - Token: Unity can generate one for you; copy it when your MCP client prompts (auto-config adds a VS Code prompt input). Use Regenerate if you need to rotate it.
