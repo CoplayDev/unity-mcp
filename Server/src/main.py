@@ -26,7 +26,7 @@ from transport.unity_instance_middleware import (
     UnityInstanceMiddleware,
     get_unity_instance_middleware
 )
-from core.auth import AuthSettings, AuthMiddleware, verify_http_request
+from core.auth import AuthSettings, AuthMiddleware, verify_http_request, get_api_key_path
 from utils.network import resolve_http_host
 
 # Configure logging using settings from config
@@ -381,9 +381,13 @@ Examples:
     PluginHub.set_auth_settings(AUTH_SETTINGS)
 
     logger.info(
-        "Auth enabled; allowed IPs=%s; token configured",
+        "Auth enabled; allowed IPs=%s; API key required via X-API-Key or Authorization: Bearer <key>",
         AUTH_SETTINGS.normalized_allowed_ips,
     )
+    try:
+        logger.info("API key file location: %s", get_api_key_path())
+    except Exception:
+        logger.debug("Could not resolve API key file path", exc_info=True)
 
     # Register auth middleware first so it short-circuits unauthorized requests
     mcp.add_middleware(AuthMiddleware(AUTH_SETTINGS))
