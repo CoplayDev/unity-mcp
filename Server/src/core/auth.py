@@ -22,7 +22,7 @@ logger = logging.getLogger("mcp-for-unity-server")
 
 def _log_auth_context(kind: str, client_ip: str | None, has_auth_header: bool, has_api_key_header: bool) -> None:
     """Lightweight logging without leaking secrets."""
-    logger.info(
+    logger.debug(
         "%s auth context: ip=%s auth_header=%s api_key_header=%s",
         kind,
         client_ip or "unknown",
@@ -232,9 +232,9 @@ class AuthMiddleware(Middleware):
             return None
         result = verify_http_request(request, self.settings)
         if result is None:
-            logger.info("AuthMiddleware: request authorized")
+            logger.debug("AuthMiddleware: request authorized")
         else:
-            logger.info("AuthMiddleware: request rejected with status %s", result.status_code)
+            logger.debug("AuthMiddleware: request rejected with status %s", result.status_code)
         return result
 
     async def on_request(self, context: MiddlewareContext, call_next):
