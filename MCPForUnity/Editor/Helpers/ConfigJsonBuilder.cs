@@ -15,8 +15,6 @@ namespace MCPForUnity.Editor.Helpers
 {
     public static class ConfigJsonBuilder
     {
-        private const string AuthTokenInputKey = "Authorization";
-
         public static string BuildManualConfigJson(string uvPath, McpClient client)
         {
             var root = new JObject();
@@ -71,19 +69,6 @@ namespace MCPForUnity.Editor.Helpers
                     var headers = unity["headers"] as JObject ?? new JObject();
                     headers["Authorization"] = "${input:Authorization}";
                     unity["headers"] = headers;
-
-                    // Add inputs block at the root to trigger VS Code prompt
-                    var inputs = root["inputs"] as JObject ?? new JObject();
-                    if (inputs[AuthTokenInputKey] == null)
-                    {
-                        inputs[AuthTokenInputKey] = new JObject
-                        {
-                            ["type"] = "promptString",
-                            ["description"] = "Authorization header (e.g., Bearer <token>)",
-                            ["password"] = true
-                        };
-                    }
-                    root["inputs"] = inputs;
                 }
                 else
                 {
@@ -100,18 +85,6 @@ namespace MCPForUnity.Editor.Helpers
                         }
                     }
 
-                    if (root["inputs"] is JObject inputs && inputs.ContainsKey(AuthTokenInputKey))
-                    {
-                        inputs.Remove(AuthTokenInputKey);
-                        if (!inputs.Properties().Any())
-                        {
-                            root.Remove("inputs");
-                        }
-                        else
-                        {
-                            root["inputs"] = inputs;
-                        }
-                    }
                 }
 
                 foreach (var prop in urlPropsToRemove)
