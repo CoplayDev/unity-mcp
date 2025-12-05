@@ -26,6 +26,7 @@ from transport.unity_instance_middleware import (
     UnityInstanceMiddleware,
     get_unity_instance_middleware
 )
+from core.auth import AuthSettings, AuthMiddleware, verify_http_request
 
 # Configure logging using settings from config
 logging.basicConfig(
@@ -83,6 +84,9 @@ except Exception:
 _unity_connection_pool: UnityConnectionPool | None = None
 _plugin_registry: PluginRegistry | None = None
 
+# Authentication settings (populated during argument parsing)
+AUTH_SETTINGS: AuthSettings = AuthSettings()
+
 # In-memory custom tool service initialized after MCP construction
 custom_tool_service: CustomToolService | None = None
 
@@ -110,7 +114,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     if _plugin_registry is None:
         _plugin_registry = PluginRegistry()
         loop = asyncio.get_running_loop()
-        PluginHub.configure(_plugin_registry, loop)
+        PluginHub.configure(_plugin_registry, loop, auth_settings=AUTH_SETTINGS)
 
     # Record server startup telemetry
     start_time = time.time()
@@ -249,7 +253,10 @@ custom_tool_service = CustomToolService(mcp)
 
 
 @mcp.custom_route("/health", methods=["GET"])
-async def health_http(_: Request) -> JSONResponse:
+async def health_http(request: Request) -> JSONResponse:
+    failure = verify_http_request(request, AUTH_SETTINGS)
+    if failure:
+        return failure
     return JSONResponse({
         "status": "healthy",
         "timestamp": time.time(),
@@ -258,16 +265,16 @@ async def health_http(_: Request) -> JSONResponse:
 
 
 @mcp.custom_route("/plugin/sessions", methods=["GET"])
-async def plugin_sessions_route(_: Request) -> JSONResponse:
+async def plugin_sessions_route(request: Request) -> JSONResponse:
+    failure = verify_http_request(request, AUTH_SETTINGS)
+    if failure:
+        return failure
     data = await PluginHub.get_sessions()
     return JSONResponse(data.model_dump())
 
 
 # Initialize and register middleware for session-based Unity instance routing
 # Using the singleton getter ensures we use the same instance everywhere
-unity_middleware = get_unity_instance_middleware()
-mcp.add_middleware(unity_middleware)
-logger.info("Registered Unity instance middleware for session-based routing")
 
 # Mount plugin websocket hub at /hub/plugin when HTTP transport is active
 existing_routes = [
@@ -354,7 +361,52 @@ Examples:
              "Overrides UNITY_MCP_HTTP_PORT environment variable."
     )
 
+    parser.add_argument(
+        "--auth-enabled",
+        action="store_true",
+        help="Enable MCP HTTP/WebSocket auth (can also set UNITY_MCP_AUTH_ENABLED)."
+    )
+    parser.add_argument(
+        "--auth-token",
+        type=str,
+        default=None,
+        help="Bearer token required when auth is enabled (UNITY_MCP_AUTH_TOKEN)."
+    )
+    parser.add_argument(
+        "--allowed-ip",
+        dest="allowed_ips",
+        action="append",
+        default=None,
+        help="Allowed IP/CIDR (repeatable). Defaults to '*'. Overrides UNITY_MCP_ALLOWED_IPS when set."
+    )
+
     args = parser.parse_args()
+
+    global AUTH_SETTINGS
+    AUTH_SETTINGS = AuthSettings.from_env_and_args(
+        args_enabled=args.auth_enabled,
+        args_allowed_ips=args.allowed_ips,
+        args_token=args.auth_token,
+    )
+
+    if AUTH_SETTINGS.enabled:
+        logger.info(
+            "Auth enabled; allowed IPs=%s; token %s",
+            AUTH_SETTINGS.normalized_allowed_ips,
+            "configured" if AUTH_SETTINGS.token else "not set (token not required)",
+        )
+    else:
+        logger.info("Auth disabled (HTTP exposed without token/IP restrictions)")
+
+    # Register auth middleware first so it short-circuits unauthorized requests
+    mcp.add_middleware(AuthMiddleware(AUTH_SETTINGS))
+    # Session-based Unity instance routing
+    unity_middleware = get_unity_instance_middleware()
+    mcp.add_middleware(unity_middleware)
+    logger.info("Registered middleware: auth -> unity instance routing")
+
+    if custom_tool_service:
+        custom_tool_service.set_auth_settings(AUTH_SETTINGS)
 
     # Set environment variables from command line args
     if args.default_instance:
