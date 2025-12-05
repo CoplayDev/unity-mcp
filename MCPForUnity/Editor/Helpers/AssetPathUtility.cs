@@ -156,10 +156,10 @@ namespace MCPForUnity.Editor.Helpers
             if (version == "unknown")
             {
                 // Fall back to main repo without pinned version so configs remain valid in test scenarios
-                return "git+https://github.com/CoplayDev/unity-mcp#subdirectory=Server";
+                return "git+https://github.com/prophecygamestudio/unity-mcp#subdirectory=Server";
             }
 
-            return $"git+https://github.com/CoplayDev/unity-mcp@v{version}#subdirectory=Server";
+            return $"git+https://github.com/prophecygamestudio/unity-mcp@v{version}#subdirectory=Server";
         }
 
         /// <summary>
