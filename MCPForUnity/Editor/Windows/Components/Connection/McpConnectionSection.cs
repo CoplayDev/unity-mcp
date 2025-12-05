@@ -273,7 +273,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 httpServerCommandField.tooltip = command;
                 if (httpServerCommandHint != null)
                 {
-                    httpServerCommandHint.text = "Run this command in your shell to start the server. Auth is always enforced.";
+                    httpServerCommandHint.text = "Run this command in your shell if you prefer to start the server manually.";
                 }
                 if (copyHttpServerCommandButton != null)
                 {
