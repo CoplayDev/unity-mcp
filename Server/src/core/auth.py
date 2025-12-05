@@ -20,6 +20,17 @@ from starlette.websockets import WebSocket
 logger = logging.getLogger("mcp-for-unity-server")
 
 
+def _log_auth_context(kind: str, client_ip: str | None, has_auth_header: bool, has_api_key_header: bool) -> None:
+    """Lightweight debug logging without leaking secrets."""
+    logger.debug(
+        "%s auth context: ip=%s auth_header=%s api_key_header=%s",
+        kind,
+        client_ip or "unknown",
+        "present" if has_auth_header else "absent",
+        "present" if has_api_key_header else "absent",
+    )
+
+
 def _default_allowed_ips() -> list[str]:
     return ["*"]
 
@@ -134,6 +145,12 @@ def _unauthorized_response(message: str, status_code: int = 401) -> JSONResponse
 
 def verify_http_request(request: Request, settings: AuthSettings) -> JSONResponse | None:
     client_ip = request.client.host if request.client else None
+    _log_auth_context(
+        "HTTP",
+        client_ip,
+        has_auth_header=bool(request.headers.get("authorization") or request.headers.get("Authorization")),
+        has_api_key_header=bool(request.headers.get("x-api-key") or request.headers.get("X-API-Key")),
+    )
     if not _ip_in_allowlist(client_ip, settings.normalized_allowed_ips):
         logger.warning("HTTP auth denied: IP not allowed (%s)", client_ip)
         return _unauthorized_response("IP not allowed", status_code=403)
@@ -149,11 +166,18 @@ def verify_http_request(request: Request, settings: AuthSettings) -> JSONRespons
 
 async def verify_websocket(websocket: WebSocket, settings: AuthSettings) -> JSONResponse | None:
     client_ip = websocket.client.host if websocket.client else None
+    headers = dict(websocket.headers)
+    _log_auth_context(
+        "WS",
+        client_ip,
+        has_auth_header=bool(headers.get("authorization") or headers.get("Authorization")),
+        has_api_key_header=bool(headers.get("x-api-key") or headers.get("X-API-Key")),
+    )
     if not _ip_in_allowlist(client_ip, settings.normalized_allowed_ips):
         logger.warning("WS auth denied: IP not allowed (%s)", client_ip)
         return _unauthorized_response("IP not allowed", status_code=403)
 
-    api_key = _extract_api_key(dict(websocket.headers))
+    api_key = _extract_api_key(headers)
     if api_key != settings.token:
         logger.warning("WS auth denied: missing or invalid API key from %s", client_ip)
         return _unauthorized_response("Missing or invalid API key", status_code=401)
@@ -173,8 +197,12 @@ class AuthMiddleware(Middleware):
         try:
             request = get_http_request()
         except Exception:
-            return None
+            request = None
         if request is None:
+            # If we're serving HTTP transport, absence of a request means we cannot authenticate
+            if os.environ.get("UNITY_MCP_TRANSPORT", "stdio").lower() == "http":
+                logger.warning("HTTP auth denied: no request context available")
+                return _unauthorized_response("Missing request context")
             return None
         return verify_http_request(request, self.settings)
 
