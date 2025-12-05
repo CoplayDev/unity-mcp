@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using MCPForUnity.Editor.Constants;
@@ -368,11 +369,39 @@ namespace MCPForUnity.Editor.Services
                 return false;
             }
 
-            string args = string.IsNullOrEmpty(fromUrl)
-                ? $"{packageName} --transport http --http-url {httpUrl}"
-                : $"--from {fromUrl} {packageName} --transport http --http-url {httpUrl}";
+            var args = new List<string>();
 
-            command = $"{uvxPath} {args}";
+            if (!string.IsNullOrEmpty(fromUrl))
+            {
+                args.Add("--from");
+                args.Add(fromUrl);
+            }
+
+            args.Add(packageName);
+            args.Add("--transport");
+            args.Add("http");
+            args.Add("--http-url");
+            args.Add(httpUrl);
+
+            if (AuthPreferencesUtility.GetAuthEnabled())
+            {
+                string token = EnsureAuthTokenExists();
+                args.Add("--auth-enabled");
+
+                if (!string.IsNullOrEmpty(token))
+                {
+                    args.Add("--auth-token");
+                    args.Add(token);
+                }
+
+                foreach (string allowed in AuthPreferencesUtility.GetAllowedIps())
+                {
+                    args.Add("--allowed-ip");
+                    args.Add(allowed);
+                }
+            }
+
+            command = $"{QuoteArgument(uvxPath)} {string.Join(" ", args.Select(QuoteArgument))}";
             return true;
         }
 
@@ -515,6 +544,30 @@ namespace MCPForUnity.Editor.Services
                 CreateNoWindow = true
             };
 #endif
+        }
+
+        private static string QuoteArgument(string arg)
+        {
+            if (string.IsNullOrEmpty(arg))
+            {
+                return "\"\"";
+            }
+
+            bool needsQuotes = arg.IndexOfAny(new[] { ' ', '\"' }) >= 0;
+            return needsQuotes ? $"\"{arg.Replace("\"", "\\\"")}\"" : arg;
+        }
+
+        private static string EnsureAuthTokenExists()
+        {
+            string token = AuthPreferencesUtility.GetAuthToken();
+            if (!string.IsNullOrEmpty(token))
+            {
+                return token;
+            }
+
+            token = AuthPreferencesUtility.GenerateNewToken();
+            AuthPreferencesUtility.SetAuthToken(token);
+            return token;
         }
     }
 }

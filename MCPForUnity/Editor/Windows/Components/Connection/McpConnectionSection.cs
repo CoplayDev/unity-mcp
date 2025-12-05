@@ -230,9 +230,12 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             {
                 httpServerCommandField.value = command;
                 httpServerCommandField.tooltip = command;
+                bool authEnabled = AuthPreferencesUtility.GetAuthEnabled();
                 if (httpServerCommandHint != null)
                 {
-                    httpServerCommandHint.text = "Run this command in your shell if you prefer to start the server manually.";
+                    httpServerCommandHint.text = authEnabled
+                        ? "Run this command in your shell to start the server with auth (includes token and allowed IPs)."
+                        : "Run this command in your shell if you prefer to start the server manually.";
                 }
                 if (copyHttpServerCommandButton != null)
                 {

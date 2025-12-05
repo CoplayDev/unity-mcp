@@ -15,7 +15,7 @@ namespace MCPForUnity.Editor.Helpers
 {
     public static class ConfigJsonBuilder
     {
-        private const string AuthTokenInputKey = "UNITY_MCP_AUTH_TOKEN";
+        private const string AuthTokenInputKey = "Authorization";
 
         public static string BuildManualConfigJson(string uvPath, McpClient client)
         {
@@ -67,15 +67,10 @@ namespace MCPForUnity.Editor.Helpers
                 bool authEnabled = AuthPreferencesUtility.GetAuthEnabled();
                 if (authEnabled)
                 {
-                    // Prompt the user for a token via VS Code input binding; avoid storing the token in config
+                    // Align with GitHub-style input binding: Authorization header references an input
                     var headers = unity["headers"] as JObject ?? new JObject();
-                    headers["Authorization"] = "Bearer ${env:UNITY_MCP_AUTH_TOKEN}";
+                    headers["Authorization"] = "${input:Authorization}";
                     unity["headers"] = headers;
-
-                    // Ensure env is present with input placeholder
-                    var env = unity["env"] as JObject ?? new JObject();
-                    env["UNITY_MCP_AUTH_TOKEN"] = "${input:UNITY_MCP_AUTH_TOKEN}";
-                    unity["env"] = env;
 
                     // Add inputs block at the root to trigger VS Code prompt
                     var inputs = root["inputs"] as JObject ?? new JObject();
@@ -84,7 +79,7 @@ namespace MCPForUnity.Editor.Helpers
                         inputs[AuthTokenInputKey] = new JObject
                         {
                             ["type"] = "promptString",
-                            ["description"] = "Unity MCP auth token (copy from Unity MCP Auth panel)",
+                            ["description"] = "Authorization header (e.g., Bearer <token>)",
                             ["password"] = true
                         };
                     }
@@ -102,19 +97,6 @@ namespace MCPForUnity.Editor.Helpers
                         else
                         {
                             unity["headers"] = headers;
-                        }
-                    }
-
-                    if (unity["env"] is JObject env && env.ContainsKey("UNITY_MCP_AUTH_TOKEN"))
-                    {
-                        env.Remove("UNITY_MCP_AUTH_TOKEN");
-                        if (!env.Properties().Any())
-                        {
-                            unity.Remove("env");
-                        }
-                        else
-                        {
-                            unity["env"] = env;
                         }
                     }
 
