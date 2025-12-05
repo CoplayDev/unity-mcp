@@ -30,6 +30,7 @@ from core.auth import AuthSettings, AuthMiddleware, verify_http_request, get_api
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware import Middleware
 from utils.network import resolve_http_host
+from starlette.responses import JSONResponse
 
 # Configure logging using settings from config
 logging.basicConfig(
@@ -280,6 +281,24 @@ async def plugin_sessions_route(request: Request) -> JSONResponse:
         return failure
     data = await PluginHub.get_sessions()
     return JSONResponse(data.model_dump())
+
+
+# Explicitly answer OAuth discovery endpoints with a clear 401 so clients stop probing other flows
+@mcp.custom_route("/.well-known/oauth-authorization-server", methods=["GET"])
+@mcp.custom_route("/.well-known/openid-configuration", methods=["GET"])
+@mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])
+@mcp.custom_route("/.well-known/oauth-protected-resource/mcp", methods=["GET"])
+@mcp.custom_route("/register", methods=["GET", "POST"])
+async def oauth_discovery_blocker(request: Request) -> JSONResponse:
+    # Return the same unauthorized shape and WWW-Authenticate header used by our auth guard
+    headers = {
+        "WWW-Authenticate": 'Bearer error="invalid_token", error_description="Missing or invalid API key"'
+    }
+    return JSONResponse(
+        {"success": False, "error": "unauthorized", "message": "Missing or invalid API key"},
+        status_code=401,
+        headers=headers,
+    )
 
 
 # Initialize and register middleware for session-based Unity instance routing

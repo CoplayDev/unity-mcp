@@ -172,7 +172,13 @@ def verify_http_request(request: Request, settings: AuthSettings) -> JSONRespons
             provided[:4] + "***" if provided else "none",
             (settings.token or "")[:4] + "***",
         )
-        return _unauthorized_response("Missing or invalid API key", status_code=401)
+        # Use 401 when no key is present, 403 when an incorrect key is supplied to reduce client fallback to OAuth
+        status = 401 if not provided else 403
+        return _unauthorized_response(
+            "Missing or invalid API key",
+            status_code=status,
+            error="invalid_token" if status == 401 else "insufficient_scope",
+        )
 
     logger.debug("HTTP auth accepted for %s", client_ip)
     return None
