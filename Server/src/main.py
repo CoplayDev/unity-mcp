@@ -38,12 +38,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("mcp-for-unity-server")
 
-# Ensure console logging for startup visibility (stderr; avoids stdout used by MCP stdio)
-_console_handler = logging.StreamHandler()
-_console_handler.setFormatter(logging.Formatter(config.log_format))
-_console_handler.setLevel(getattr(logging, config.log_level))
-logger.addHandler(_console_handler)
-
 # Also write logs to a rotating file so logs are available when launched via stdio
 try:
     _log_dir = os.path.join(os.path.expanduser(

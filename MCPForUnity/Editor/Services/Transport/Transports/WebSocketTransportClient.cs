@@ -190,6 +190,14 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             _socket = new ClientWebSocket();
             _socket.Options.KeepAliveInterval = _socketKeepAliveInterval;
 
+            // Always send the server-required API key during the WebSocket handshake
+            string apiKey = AuthPreferencesUtility.GetApiKey();
+            if (!string.IsNullOrEmpty(apiKey))
+            {
+                _socket.Options.SetRequestHeader("X-API-Key", apiKey);
+                _socket.Options.SetRequestHeader("Authorization", $"Bearer {apiKey}");
+            }
+
             try
             {
                 await _socket.ConnectAsync(_endpointUri, connectionToken).ConfigureAwait(false);
