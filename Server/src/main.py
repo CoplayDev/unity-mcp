@@ -377,6 +377,9 @@ Examples:
         token=args.api_key,
     )
 
+    # Ensure plugin hub and services see the final auth settings (configure() ran earlier with defaults)
+    PluginHub.set_auth_settings(AUTH_SETTINGS)
+
     logger.info(
         "Auth enabled; allowed IPs=%s; token configured",
         AUTH_SETTINGS.normalized_allowed_ips,
