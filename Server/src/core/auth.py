@@ -26,9 +26,13 @@ def _default_allowed_ips() -> list[str]:
 
 @dataclass
 class AuthSettings:
-    enabled: bool = True
     allowed_ips: list[str] = field(default_factory=_default_allowed_ips)
     token: str | None = None
+
+    def __post_init__(self) -> None:
+        # Always ensure a non-empty token is present so auth cannot be disabled
+        if not self.token:
+            self.token = load_or_create_api_key()
 
     @property
     def normalized_allowed_ips(self) -> list[str]:
@@ -43,7 +47,7 @@ class AuthSettings:
     ) -> "AuthSettings":
         resolved_token = load_or_create_api_key(token)
         resolved_allowed = list(allowed_ips) if allowed_ips else _default_allowed_ips()
-        return cls(enabled=True, allowed_ips=resolved_allowed, token=resolved_token)
+        return cls(allowed_ips=resolved_allowed, token=resolved_token)
 
 
 def get_api_key_path() -> Path:
@@ -129,9 +133,6 @@ def _unauthorized_response(message: str, status_code: int = 401) -> JSONResponse
 
 
 def verify_http_request(request: Request, settings: AuthSettings) -> JSONResponse | None:
-    if not settings.enabled:
-        return None
-
     client_ip = request.client.host if request.client else None
     if not _ip_in_allowlist(client_ip, settings.normalized_allowed_ips):
         logger.warning("HTTP auth denied: IP not allowed (%s)", client_ip)
@@ -147,9 +148,6 @@ def verify_http_request(request: Request, settings: AuthSettings) -> JSONRespons
 
 
 async def verify_websocket(websocket: WebSocket, settings: AuthSettings) -> JSONResponse | None:
-    if not settings.enabled:
-        return None
-
     client_ip = websocket.client.host if websocket.client else None
     if not _ip_in_allowlist(client_ip, settings.normalized_allowed_ips):
         logger.warning("WS auth denied: IP not allowed (%s)", client_ip)
