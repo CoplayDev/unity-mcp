@@ -38,6 +38,12 @@ logging.basicConfig(
     force=True    # Ensure our handler replaces any prior stdout handlers
 )
 logger = logging.getLogger("mcp-for-unity-server")
+# Ensure console logging so auth diagnostics are visible during HTTP transport
+_console_handler = logging.StreamHandler()
+_console_handler.setFormatter(logging.Formatter(config.log_format))
+_console_handler.setLevel(getattr(logging, config.log_level))
+logger.addHandler(_console_handler)
+logger.propagate = True
 
 # Also write logs to a rotating file so logs are available when launched via stdio
 try:
@@ -406,6 +412,8 @@ Examples:
         if hasattr(mcp, "_http_app") and mcp._http_app is not None:
             mcp._http_app.add_middleware(HttpAuthGuard)
             logger.info("HTTP auth guard middleware registered for /mcp endpoints")
+        else:
+            logger.warning("HTTP auth guard middleware not registered: mcp._http_app is not available yet")
     except Exception:
         logger.warning("Failed to register HTTP auth guard middleware", exc_info=True)
     # Session-based Unity instance routing
