@@ -77,6 +77,14 @@ Notes:
 
 ---
 
+## Auth (optional)
+- Open the “Auth (optional)” foldout in Settings to enable/disable server auth.
+- Allowed IPs: comma-separated list (CIDR ok). Leave empty for no IP restriction.
+- Bearer token: set a strong token; the Unity client will send it on HTTP and WS calls.
+- When auth is off, the server defaults to `localhost` unless you explicitly set a host.
+
+---
+
 ## Troubleshooting
 - Python or `uv` not found:
   - Help: [Fix MCP for Unity with Cursor, VS Code & Windsurf](https://github.com/CoplayDev/unity-mcp/wiki/1.-Fix-Unity-MCP-and-Cursor,-VSCode-&-Windsurf)

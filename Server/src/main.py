@@ -27,6 +27,7 @@ from transport.unity_instance_middleware import (
     get_unity_instance_middleware
 )
 from core.auth import AuthSettings, AuthMiddleware, verify_http_request
+from utils.network import resolve_http_host
 
 # Configure logging using settings from config
 logging.basicConfig(
@@ -424,8 +425,12 @@ Examples:
     parsed_url = urlparse(http_url)
 
     # Allow individual host/port to override URL components
-    http_host = args.http_host or os.environ.get(
-        "UNITY_MCP_HTTP_HOST") or parsed_url.hostname or "localhost"
+    http_host, host_coerced = resolve_http_host(
+        AUTH_SETTINGS,
+        args.http_host,
+        os.environ.get("UNITY_MCP_HTTP_HOST"),
+        parsed_url.hostname,
+    )
     http_port = args.http_port or (int(os.environ.get("UNITY_MCP_HTTP_PORT")) if os.environ.get(
         "UNITY_MCP_HTTP_PORT") else None) or parsed_url.port or 8080
 
@@ -436,6 +441,8 @@ Examples:
         logger.info(f"HTTP URL set to: {http_url}")
     if args.http_host:
         logger.info(f"HTTP host override: {http_host}")
+    elif host_coerced:
+        logger.info("Auth disabled; coerced HTTP host to localhost to avoid 0.0.0.0 exposure")
     if args.http_port:
         logger.info(f"HTTP port override: {http_port}")
 
