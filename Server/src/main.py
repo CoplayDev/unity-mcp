@@ -33,8 +33,11 @@ from utils.network import resolve_http_host
 from starlette.responses import JSONResponse
 
 # Configure logging using settings from config
+# Reduce default verbosity: cap at WARNING unless explicitly overridden by env/config
+_configured_level = getattr(logging, config.log_level)
+_effective_level = max(logging.WARNING, _configured_level)
 logging.basicConfig(
-    level=getattr(logging, config.log_level),
+    level=_effective_level,
     format=config.log_format,
     stream=None,  # None -> defaults to sys.stderr; avoid stdout used by MCP stdio
     force=True    # Ensure our handler replaces any prior stdout handlers
@@ -43,7 +46,7 @@ logger = logging.getLogger("mcp-for-unity-server")
 # Ensure console logging so auth diagnostics are visible during HTTP transport
 _console_handler = logging.StreamHandler()
 _console_handler.setFormatter(logging.Formatter(config.log_format))
-_console_handler.setLevel(getattr(logging, config.log_level))
+_console_handler.setLevel(_effective_level)
 logger.addHandler(_console_handler)
 logger.propagate = True
 
@@ -56,7 +59,7 @@ try:
     _fh = RotatingFileHandler(
         _file_path, maxBytes=512*1024, backupCount=2, encoding="utf-8")
     _fh.setFormatter(logging.Formatter(config.log_format))
-    _fh.setLevel(getattr(logging, config.log_level))
+    _fh.setLevel(_effective_level)
     logger.addHandler(_fh)
     logger.propagate = False  # Prevent double logging to root logger
     # Also route telemetry logger to the same rotating file and normal level
