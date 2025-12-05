@@ -21,8 +21,8 @@ logger = logging.getLogger("mcp-for-unity-server")
 
 
 def _log_auth_context(kind: str, client_ip: str | None, has_auth_header: bool, has_api_key_header: bool) -> None:
-    """Lightweight debug logging without leaking secrets."""
-    logger.debug(
+    """Lightweight logging without leaking secrets."""
+    logger.info(
         "%s auth context: ip=%s auth_header=%s api_key_header=%s",
         kind,
         client_ip or "unknown",
@@ -157,7 +157,13 @@ def verify_http_request(request: Request, settings: AuthSettings) -> JSONRespons
 
     api_key = _extract_api_key(request.headers)
     if api_key != settings.token:
-        logger.warning("HTTP auth denied: missing or invalid API key from %s", client_ip)
+        provided = (api_key or "").strip()
+        logger.warning(
+            "HTTP auth denied: missing or invalid API key from %s (provided=%s expected=%s)",
+            client_ip,
+            provided[:4] + "***" if provided else "none",
+            (settings.token or "")[:4] + "***",
+        )
         return _unauthorized_response("Missing or invalid API key", status_code=401)
 
     logger.debug("HTTP auth accepted for %s", client_ip)
@@ -179,7 +185,13 @@ async def verify_websocket(websocket: WebSocket, settings: AuthSettings) -> JSON
 
     api_key = _extract_api_key(headers)
     if api_key != settings.token:
-        logger.warning("WS auth denied: missing or invalid API key from %s", client_ip)
+        provided = (api_key or "").strip()
+        logger.warning(
+            "WS auth denied: missing or invalid API key from %s (provided=%s expected=%s)",
+            client_ip,
+            provided[:4] + "***" if provided else "none",
+            (settings.token or "")[:4] + "***",
+        )
         return _unauthorized_response("Missing or invalid API key", status_code=401)
 
     logger.debug("WS auth accepted for %s", client_ip)
@@ -204,7 +216,12 @@ class AuthMiddleware(Middleware):
                 logger.warning("HTTP auth denied: no request context available")
                 return _unauthorized_response("Missing request context")
             return None
-        return verify_http_request(request, self.settings)
+        result = verify_http_request(request, self.settings)
+        if result is None:
+            logger.info("AuthMiddleware: request authorized")
+        else:
+            logger.info("AuthMiddleware: request rejected with status %s", result.status_code)
+        return result
 
     async def on_request(self, context: MiddlewareContext, call_next):
         failure = self._check_request_if_present()

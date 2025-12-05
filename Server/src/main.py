@@ -27,6 +27,7 @@ from transport.unity_instance_middleware import (
     get_unity_instance_middleware
 )
 from core.auth import AuthSettings, AuthMiddleware, verify_http_request, get_api_key_path
+from starlette.middleware.base import BaseHTTPMiddleware
 from utils.network import resolve_http_host
 
 # Configure logging using settings from config
@@ -293,6 +294,16 @@ register_all_tools(mcp)
 register_all_resources(mcp)
 
 
+# HTTP middleware to enforce auth on /mcp endpoints (FastMCP HTTP transport)
+class HttpAuthGuard(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        if request.url.path.startswith("/mcp"):
+            failure = verify_http_request(request, AUTH_SETTINGS)
+            if failure is not None:
+                return failure
+        return await call_next(request)
+
+
 def main():
     """Entry point for uvx and console scripts."""
     parser = argparse.ArgumentParser(
@@ -391,6 +402,12 @@ Examples:
 
     # Register auth middleware first so it short-circuits unauthorized requests
     mcp.add_middleware(AuthMiddleware(AUTH_SETTINGS))
+    try:
+        if hasattr(mcp, "_http_app") and mcp._http_app is not None:
+            mcp._http_app.add_middleware(HttpAuthGuard)
+            logger.info("HTTP auth guard middleware registered for /mcp endpoints")
+    except Exception:
+        logger.warning("Failed to register HTTP auth guard middleware", exc_info=True)
     # Session-based Unity instance routing
     unity_middleware = get_unity_instance_middleware()
     mcp.add_middleware(unity_middleware)
