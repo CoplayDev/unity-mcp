@@ -139,8 +139,16 @@ def _extract_api_key(headers: dict[str, str]) -> str | None:
     return None
 
 
-def _unauthorized_response(message: str, status_code: int = 401) -> JSONResponse:
-    return JSONResponse({"success": False, "error": "unauthorized", "message": message}, status_code=status_code)
+def _unauthorized_response(message: str, status_code: int = 401, error: str = "invalid_token") -> JSONResponse:
+    # Include a WWW-Authenticate header so clients surface the 401 instead of trying other auth flows
+    headers = {}
+    if status_code == 401:
+        headers["WWW-Authenticate"] = f'Bearer error="{error}", error_description="{message}"'
+    return JSONResponse(
+        {"success": False, "error": "unauthorized", "message": message},
+        status_code=status_code,
+        headers=headers,
+    )
 
 
 def verify_http_request(request: Request, settings: AuthSettings) -> JSONResponse | None:
