@@ -128,6 +128,7 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
                 OnGitUrlChanged?.Invoke();
                 OnHttpServerCommandUpdateRequested?.Invoke();
             };
+
         }
 
         public void UpdatePathOverrides()
@@ -159,6 +160,7 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             }
 
             gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
+
         }
 
         private void UpdateVersionLabel()

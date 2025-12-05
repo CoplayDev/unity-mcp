@@ -115,6 +115,7 @@ All of these follow the same pattern:
   - `SupportsHttpTransport` + `EditorPrefs.UseHttpTransport` decide whether to configure
     - `url` / `serverUrl` (HTTP), or
     - `command` + `args` (stdio with `uvx`).
+  - When HTTP is used and auth is enabled with a token in the Unity Auth panel, the configurator injects `headers.Authorization: Bearer <token>` into the client config so requests include the token automatically.
 - **URL property name**
   - `HttpUrlProperty` (default `"url"`) selects which JSON property to use for HTTP urls.
   - Example: Windsurf and Antigravity use `"serverUrl"`.

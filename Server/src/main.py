@@ -26,15 +26,29 @@ from transport.unity_instance_middleware import (
     UnityInstanceMiddleware,
     get_unity_instance_middleware
 )
+from core.auth import AuthSettings, AuthMiddleware, verify_http_request, get_api_key_path
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware import Middleware
+from utils.network import resolve_http_host
+from starlette.responses import JSONResponse
 
 # Configure logging using settings from config
+# Reduce default verbosity: cap at WARNING unless explicitly overridden by env/config
+_configured_level = getattr(logging, config.log_level)
+_effective_level = max(logging.WARNING, _configured_level)
 logging.basicConfig(
-    level=getattr(logging, config.log_level),
+    level=_effective_level,
     format=config.log_format,
     stream=None,  # None -> defaults to sys.stderr; avoid stdout used by MCP stdio
     force=True    # Ensure our handler replaces any prior stdout handlers
 )
 logger = logging.getLogger("mcp-for-unity-server")
+# Ensure console logging so auth diagnostics are visible during HTTP transport
+_console_handler = logging.StreamHandler()
+_console_handler.setFormatter(logging.Formatter(config.log_format))
+_console_handler.setLevel(_effective_level)
+logger.addHandler(_console_handler)
+logger.propagate = True
 
 # Also write logs to a rotating file so logs are available when launched via stdio
 try:
@@ -45,7 +59,7 @@ try:
     _fh = RotatingFileHandler(
         _file_path, maxBytes=512*1024, backupCount=2, encoding="utf-8")
     _fh.setFormatter(logging.Formatter(config.log_format))
-    _fh.setLevel(getattr(logging, config.log_level))
+    _fh.setLevel(_effective_level)
     logger.addHandler(_fh)
     logger.propagate = False  # Prevent double logging to root logger
     # Also route telemetry logger to the same rotating file and normal level
@@ -83,6 +97,9 @@ except Exception:
 _unity_connection_pool: UnityConnectionPool | None = None
 _plugin_registry: PluginRegistry | None = None
 
+# Authentication settings (populated during argument parsing)
+AUTH_SETTINGS: AuthSettings = AuthSettings()
+
 # In-memory custom tool service initialized after MCP construction
 custom_tool_service: CustomToolService | None = None
 
@@ -110,7 +127,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     if _plugin_registry is None:
         _plugin_registry = PluginRegistry()
         loop = asyncio.get_running_loop()
-        PluginHub.configure(_plugin_registry, loop)
+        PluginHub.configure(_plugin_registry, loop, auth_settings=AUTH_SETTINGS)
 
     # Record server startup telemetry
     start_time = time.time()
@@ -249,7 +266,10 @@ custom_tool_service = CustomToolService(mcp)
 
 
 @mcp.custom_route("/health", methods=["GET"])
-async def health_http(_: Request) -> JSONResponse:
+async def health_http(request: Request) -> JSONResponse:
+    failure = verify_http_request(request, AUTH_SETTINGS)
+    if failure:
+        return failure
     return JSONResponse({
         "status": "healthy",
         "timestamp": time.time(),
@@ -258,16 +278,34 @@ async def health_http(_: Request) -> JSONResponse:
 
 
 @mcp.custom_route("/plugin/sessions", methods=["GET"])
-async def plugin_sessions_route(_: Request) -> JSONResponse:
+async def plugin_sessions_route(request: Request) -> JSONResponse:
+    failure = verify_http_request(request, AUTH_SETTINGS)
+    if failure:
+        return failure
     data = await PluginHub.get_sessions()
     return JSONResponse(data.model_dump())
 
 
+# Explicitly answer OAuth discovery endpoints with a clear 401 so clients stop probing other flows
+@mcp.custom_route("/.well-known/oauth-authorization-server", methods=["GET"])
+@mcp.custom_route("/.well-known/openid-configuration", methods=["GET"])
+@mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])
+@mcp.custom_route("/.well-known/oauth-protected-resource/mcp", methods=["GET"])
+@mcp.custom_route("/register", methods=["GET", "POST"])
+async def oauth_discovery_blocker(request: Request) -> JSONResponse:
+    # Return the same unauthorized shape and WWW-Authenticate header used by our auth guard
+    headers = {
+        "WWW-Authenticate": 'Bearer error="invalid_token", error_description="Missing or invalid API key"'
+    }
+    return JSONResponse(
+        {"success": False, "error": "unauthorized", "message": "Missing or invalid API key"},
+        status_code=401,
+        headers=headers,
+    )
+
+
 # Initialize and register middleware for session-based Unity instance routing
 # Using the singleton getter ensures we use the same instance everywhere
-unity_middleware = get_unity_instance_middleware()
-mcp.add_middleware(unity_middleware)
-logger.info("Registered Unity instance middleware for session-based routing")
 
 # Mount plugin websocket hub at /hub/plugin when HTTP transport is active
 existing_routes = [
@@ -283,6 +321,15 @@ register_all_tools(mcp)
 
 # Register all resources
 register_all_resources(mcp)
+
+# HTTP middleware to enforce auth on /mcp endpoints (FastMCP HTTP transport)
+class HttpAuthGuard(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        if request.url.path.startswith("/mcp"):
+            failure = verify_http_request(request, AUTH_SETTINGS)
+            if failure is not None:
+                return failure
+        return await call_next(request)
 
 
 def main():
@@ -354,7 +401,43 @@ Examples:
              "Overrides UNITY_MCP_HTTP_PORT environment variable."
     )
 
+    parser.add_argument(
+        "--api-key",
+        dest="api_key",
+        type=str,
+        default=None,
+        help="API key for all MCP requests. Defaults to the shared key file if omitted."
+    )
+
     args = parser.parse_args()
+
+    global AUTH_SETTINGS
+    AUTH_SETTINGS = AuthSettings.build(
+        token=args.api_key,
+    )
+
+    # Ensure plugin hub and services see the final auth settings (configure() ran earlier with defaults)
+    PluginHub.set_auth_settings(AUTH_SETTINGS)
+
+    logger.info(
+        "Auth initialized: required API key loaded; allowed IPs=%s",
+        AUTH_SETTINGS.normalized_allowed_ips,
+    )
+    try:
+        logger.info("API key file location: %s", get_api_key_path())
+    except Exception:
+        logger.debug("Could not resolve API key file path", exc_info=True)
+
+    # Register auth middleware first so it short-circuits unauthorized requests
+    mcp.add_middleware(AuthMiddleware(AUTH_SETTINGS))
+    # FastMCP attaches HTTP middleware when launching; we inject our guard via run() kwargs
+    # Session-based Unity instance routing
+    unity_middleware = get_unity_instance_middleware()
+    mcp.add_middleware(unity_middleware)
+    logger.info("Registered middleware: auth -> unity instance routing")
+
+    if custom_tool_service:
+        custom_tool_service.set_auth_settings(AUTH_SETTINGS)
 
     # Set environment variables from command line args
     if args.default_instance:
@@ -372,8 +455,11 @@ Examples:
     parsed_url = urlparse(http_url)
 
     # Allow individual host/port to override URL components
-    http_host = args.http_host or os.environ.get(
-        "UNITY_MCP_HTTP_HOST") or parsed_url.hostname or "localhost"
+    http_host = resolve_http_host(
+        args.http_host,
+        os.environ.get("UNITY_MCP_HTTP_HOST"),
+        parsed_url.hostname,
+    )
     http_port = args.http_port or (int(os.environ.get("UNITY_MCP_HTTP_PORT")) if os.environ.get(
         "UNITY_MCP_HTTP_PORT") else None) or parsed_url.port or 8080
 
@@ -399,7 +485,8 @@ Examples:
         port = args.http_port or (int(os.environ.get("UNITY_MCP_HTTP_PORT")) if os.environ.get(
             "UNITY_MCP_HTTP_PORT") else None) or parsed_url.port or 8080
         logger.info(f"Starting FastMCP with HTTP transport on {host}:{port}")
-        mcp.run(transport=transport, host=host, port=port)
+        http_middleware = [Middleware(HttpAuthGuard)]
+        mcp.run(transport=transport, host=host, port=port, middleware=http_middleware)
     else:
         # Use stdio transport for traditional MCP
         logger.info("Starting FastMCP with stdio transport")

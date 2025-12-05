@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using MCPForUnity.Editor.Constants;
@@ -368,11 +369,24 @@ namespace MCPForUnity.Editor.Services
                 return false;
             }
 
-            string args = string.IsNullOrEmpty(fromUrl)
-                ? $"{packageName} --transport http --http-url {httpUrl}"
-                : $"--from {fromUrl} {packageName} --transport http --http-url {httpUrl}";
+            var args = new List<string>();
 
-            command = $"{uvxPath} {args}";
+            if (!string.IsNullOrEmpty(fromUrl))
+            {
+                args.Add("--from");
+                args.Add(fromUrl);
+            }
+
+            args.Add(packageName);
+            args.Add("--transport");
+            args.Add("http");
+            args.Add("--http-url");
+            args.Add(httpUrl);
+
+            // Ensure an API key exists on disk so the server and clients share it
+            AuthPreferencesUtility.GetApiKey();
+
+            command = $"{QuoteArgument(uvxPath)} {string.Join(" ", args.Select(QuoteArgument))}".Trim();
             return true;
         }
 
@@ -516,5 +530,17 @@ namespace MCPForUnity.Editor.Services
             };
 #endif
         }
+
+        private static string QuoteArgument(string arg)
+        {
+            if (string.IsNullOrEmpty(arg))
+            {
+                return "\"\"";
+            }
+
+            bool needsQuotes = arg.IndexOfAny(new[] { ' ', '\"' }) >= 0;
+            return needsQuotes ? $"\"{arg.Replace("\"", "\\\"")}\"" : arg;
+        }
+
     }
 }

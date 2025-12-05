@@ -15,6 +15,7 @@ namespace MCPForUnity.Editor.Helpers
 {
     public static class ConfigJsonBuilder
     {
+        private const string ApiKeyInputKey = "UnityMcpApiKey";
         public static string BuildManualConfigJson(string uvPath, McpClient client)
         {
             var root = new JObject();
@@ -22,7 +23,7 @@ namespace MCPForUnity.Editor.Helpers
             JObject container = isVSCode ? EnsureObject(root, "servers") : EnsureObject(root, "mcpServers");
 
             var unity = new JObject();
-            PopulateUnityNode(unity, uvPath, client, isVSCode);
+            PopulateUnityNode(root, unity, uvPath, client, isVSCode);
 
             container["unityMCP"] = unity;
 
@@ -35,7 +36,7 @@ namespace MCPForUnity.Editor.Helpers
             bool isVSCode = client?.IsVsCodeLayout == true;
             JObject container = isVSCode ? EnsureObject(root, "servers") : EnsureObject(root, "mcpServers");
             JObject unity = container["unityMCP"] as JObject ?? new JObject();
-            PopulateUnityNode(unity, uvPath, client, isVSCode);
+            PopulateUnityNode(root, unity, uvPath, client, isVSCode);
 
             container["unityMCP"] = unity;
             return root;
@@ -48,7 +49,7 @@ namespace MCPForUnity.Editor.Helpers
         /// - Adds transport configuration (HTTP or stdio)
         /// - Adds disabled:false for Windsurf/Kiro only when missing
         /// </summary>
-        private static void PopulateUnityNode(JObject unity, string uvPath, McpClient client, bool isVSCode)
+        private static void PopulateUnityNode(JObject root, JObject unity, string uvPath, McpClient client, bool isVSCode)
         {
             // Get transport preference (default to HTTP)
             bool useHttpTransport = client?.SupportsHttpTransport != false && EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
@@ -61,6 +62,42 @@ namespace MCPForUnity.Editor.Helpers
                 // HTTP mode: Use URL, no command
                 string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
                 unity[httpProperty] = httpUrl;
+
+                // Always require auth: add API key header with input binding and prompt definition
+                var headers = unity["headers"] as JObject ?? new JObject();
+                // Remove legacy auth header if present
+                if (headers["Authorization"] != null)
+                {
+                    headers.Remove("Authorization");
+                }
+                headers["X-API-Key"] = "${input:UnityMcpApiKey}";
+                unity["headers"] = headers;
+
+                var inputs = root["inputs"] as JArray ?? new JArray();
+                var existing = inputs
+                    .OfType<JObject>()
+                    .FirstOrDefault(o => string.Equals((string)o["id"], ApiKeyInputKey, StringComparison.Ordinal));
+                if (existing == null)
+                {
+                    existing = new JObject();
+                    inputs.Add(existing);
+                }
+
+                // Drop legacy Authorization input if it exists
+                foreach (var legacy in inputs
+                             .OfType<JObject>()
+                             .Where(o => string.Equals((string)o["id"], "Authorization", StringComparison.Ordinal))
+                             .ToList())
+                {
+                    inputs.Remove(legacy);
+                }
+
+                existing["id"] = ApiKeyInputKey;
+                existing["type"] = "promptString";
+                existing["description"] = "Unity MCP API Key";
+                existing["password"] = true;
+
+                root["inputs"] = inputs;
 
                 foreach (var prop in urlPropsToRemove)
                 {
