@@ -21,9 +21,7 @@ namespace MCPForUnity.Editor.Constants
         internal const string WebSocketUrlOverride = "MCPForUnity.WebSocketUrl";
         internal const string GitUrlOverride = "MCPForUnity.GitUrlOverride";
 
-        internal const string AuthEnabled = "MCPForUnity.AuthEnabled";
         internal const string AuthToken = "MCPForUnity.AuthToken";
-        internal const string AllowedIps = "MCPForUnity.AllowedIps";
 
         internal const string ServerSrc = "MCPForUnity.ServerSrc";
         internal const string UseEmbeddedServer = "MCPForUnity.UseEmbeddedServer";

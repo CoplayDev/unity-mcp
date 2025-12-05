@@ -9,8 +9,8 @@ class WelcomeMessage(BaseModel):
     type: str = "welcome"
     serverTimeout: int
     keepAliveInterval: int
-    authEnabled: bool = False
-    authTokenRequired: bool = False
+    authEnabled: bool = True
+    authTokenRequired: bool = True
 
 
 class RegisteredMessage(BaseModel):

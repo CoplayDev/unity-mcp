@@ -15,7 +15,7 @@ namespace MCPForUnity.Editor.Helpers
 {
     public static class ConfigJsonBuilder
     {
-        private const string AuthTokenInputKey = "Authorization";
+        private const string ApiKeyInputKey = "UnityMcpApiKey";
         public static string BuildManualConfigJson(string uvPath, McpClient client)
         {
             var root = new JObject();
@@ -63,24 +63,38 @@ namespace MCPForUnity.Editor.Helpers
                 string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
                 unity[httpProperty] = httpUrl;
 
-                // Always require auth: add Authorization header with input binding and prompt definition
+                // Always require auth: add API key header with input binding and prompt definition
                 var headers = unity["headers"] as JObject ?? new JObject();
-                headers["Authorization"] = "${input:Authorization}";
+                // Remove legacy auth header if present
+                if (headers["Authorization"] != null)
+                {
+                    headers.Remove("Authorization");
+                }
+                headers["X-API-Key"] = "${input:UnityMcpApiKey}";
                 unity["headers"] = headers;
 
                 var inputs = root["inputs"] as JArray ?? new JArray();
                 var existing = inputs
                     .OfType<JObject>()
-                    .FirstOrDefault(o => string.Equals((string)o["id"], AuthTokenInputKey, StringComparison.Ordinal));
+                    .FirstOrDefault(o => string.Equals((string)o["id"], ApiKeyInputKey, StringComparison.Ordinal));
                 if (existing == null)
                 {
                     existing = new JObject();
                     inputs.Add(existing);
                 }
 
-                existing["id"] = AuthTokenInputKey;
+                // Drop legacy Authorization input if it exists
+                foreach (var legacy in inputs
+                             .OfType<JObject>()
+                             .Where(o => string.Equals((string)o["id"], "Authorization", StringComparison.Ordinal))
+                             .ToList())
+                {
+                    inputs.Remove(legacy);
+                }
+
+                existing["id"] = ApiKeyInputKey;
                 existing["type"] = "promptString";
-                existing["description"] = "Authorization header (e.g., Bearer <token>)";
+                existing["description"] = "Unity MCP API Key";
                 existing["password"] = true;
 
                 root["inputs"] = inputs;

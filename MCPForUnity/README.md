@@ -78,10 +78,9 @@ Notes:
 ---
 
 ## Authentication
-- Open the Authentication panel to enable/disable server auth.
-- Allowed IPs: comma-separated list (CIDR ok). Leave empty for no IP restriction.
-- Token: Unity can generate one for you; copy it when your MCP client prompts (auto-config adds a VS Code prompt input). Use Regenerate if you need to rotate it.
-- When authentication is off, the server defaults to `localhost` unless you explicitly set a host, and prompts/headers are removed from auto-config.
+- Auth is always on. The API key lives in the **Connection** section (under the HTTP URL) with Copy and Regenerate buttons.
+- The same key is stored on disk for the server to read automatically; clients are prompted for it when auto-config runs.
+- Requests use `X-API-Key` (or `Authorization: Bearer <key>` for compatibility) on every call.
 
 ---
 

@@ -147,22 +147,12 @@ The server connects to Unity Editor automatically when both are running. No addi
 
 - `DISABLE_TELEMETRY=true` - Opt out of anonymous usage analytics
 - `LOG_LEVEL=DEBUG` - Enable detailed logging (default: INFO)
-- `UNITY_MCP_AUTH_ENABLED=1` - Enable optional IP/token auth for HTTP/WebSocket
-- `UNITY_MCP_ALLOWED_IPS=127.0.0.1,10.0.0.0/8` - Comma-separated allowlist (default `*`)
-- `UNITY_MCP_AUTH_TOKEN=supersecret` - Bearer token required when auth is enabled (omit to allow IP-only)
+- `UNITY_MCP_API_KEY=supersecret` - Override the API key used for every request. If unset, the server reads (or creates) `api_key` in:
+  - macOS: `~/Library/Application Support/UnityMCP/api_key`
+  - Windows: `%LOCALAPPDATA%\UnityMCP\api_key`
+  - Linux: `~/.local/share/UnityMCP/api_key`
 
-**CLI examples (HTTP auth):**
-
-```bash
-python -m src.main --transport http \
-  --auth-enabled \
-  --auth-token supersecret \
-  --allowed-ip 127.0.0.1 --allowed-ip 10.0.0.0/8
-```
-
-When auth is enabled, clients must send `Authorization: Bearer <token>` and connect from an allowed IP. If no token is configured, only the IP allowlist is enforced.
-
-Clients: the WebSocket welcome payload now includes `authEnabled` and `authTokenRequired` so MCP clients can prompt for a token when needed.
+Authentication is always on. Clients must send `X-API-Key: <key>` (or `Authorization: Bearer <key>` for compatibility) with every request.
 
 ---
 

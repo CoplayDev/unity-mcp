@@ -383,40 +383,10 @@ namespace MCPForUnity.Editor.Services
             args.Add("--http-url");
             args.Add(httpUrl);
 
-            // Always enforce auth: export token + allowlist envs before command
-            string token = EnsureAuthTokenExists();
-            string allowedCsv = string.Join(",", AuthPreferencesUtility.GetAllowedIps());
+            // Ensure an API key exists on disk so the server and clients share it
+            AuthPreferencesUtility.GetApiKey();
 
-            string prefix;
-            if (Application.platform == RuntimePlatform.WindowsEditor)
-            {
-                var env = new List<string>
-                {
-                    SetCmdEnv("UNITY_MCP_AUTH_TOKEN", token),
-                    SetCmdEnv("UNITY_MCP_ALLOWED_IPS", allowedCsv),
-                    SetCmdEnv("UNITY_MCP_AUTH_ENABLED", "1")
-                };
-                prefix = string.Join(" && ", env.Where(e => !string.IsNullOrEmpty(e)));
-                if (!string.IsNullOrEmpty(prefix))
-                {
-                    prefix += " && ";
-                }
-            }
-            else
-            {
-                prefix = string.Join(" ", new[]
-                {
-                    ExportEnv("UNITY_MCP_AUTH_TOKEN", token),
-                    ExportEnv("UNITY_MCP_ALLOWED_IPS", allowedCsv),
-                    ExportEnv("UNITY_MCP_AUTH_ENABLED", "1")
-                }.Where(e => !string.IsNullOrEmpty(e)));
-                if (!string.IsNullOrEmpty(prefix))
-                {
-                    prefix += " ";
-                }
-            }
-
-            command = $"{prefix}{QuoteArgument(uvxPath)} {string.Join(" ", args.Select(QuoteArgument))}".Trim();
+            command = $"{QuoteArgument(uvxPath)} {string.Join(" ", args.Select(QuoteArgument))}".Trim();
             return true;
         }
 
@@ -572,39 +542,5 @@ namespace MCPForUnity.Editor.Services
             return needsQuotes ? $"\"{arg.Replace("\"", "\\\"")}\"" : arg;
         }
 
-        private static string ExportEnv(string name, string value)
-        {
-            if (string.IsNullOrEmpty(name) || value == null)
-            {
-                return string.Empty;
-            }
-
-            string escaped = value.Replace("\\", "\\\\").Replace("\"", "\\\"");
-            return $"{name}=\"{escaped}\"";
-        }
-
-        private static string SetCmdEnv(string name, string value)
-        {
-            if (string.IsNullOrEmpty(name) || value == null)
-            {
-                return string.Empty;
-            }
-
-            string escaped = value.Replace("\"", "\"\"");
-            return $"set \"{name}={escaped}\"";
-        }
-
-        private static string EnsureAuthTokenExists()
-        {
-            string token = AuthPreferencesUtility.GetAuthToken();
-            if (!string.IsNullOrEmpty(token))
-            {
-                return token;
-            }
-
-            token = AuthPreferencesUtility.GenerateNewToken();
-            AuthPreferencesUtility.SetAuthToken(token);
-            return token;
-        }
     }
 }

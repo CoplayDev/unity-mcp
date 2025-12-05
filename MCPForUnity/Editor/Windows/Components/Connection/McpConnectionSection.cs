@@ -32,6 +32,9 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         private Button copyHttpServerCommandButton;
         private Label httpServerCommandHint;
         private TextField httpUrlField;
+        private TextField apiKeyField;
+        private Button copyApiKeyButton;
+        private Button regenerateApiKeyButton;
         private Button startHttpServerButton;
         private Button stopHttpServerButton;
         private VisualElement unitySocketPortRow;
@@ -75,6 +78,9 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             copyHttpServerCommandButton = Root.Q<Button>("copy-http-server-command-button");
             httpServerCommandHint = Root.Q<Label>("http-server-command-hint");
             httpUrlField = Root.Q<TextField>("http-url");
+            apiKeyField = Root.Q<TextField>("api-key-field");
+            copyApiKeyButton = Root.Q<Button>("copy-api-key-button");
+            regenerateApiKeyButton = Root.Q<Button>("regenerate-api-key-button");
             startHttpServerButton = Root.Q<Button>("start-http-server-button");
             stopHttpServerButton = Root.Q<Button>("stop-http-server-button");
             unitySocketPortRow = Root.Q<VisualElement>("unity-socket-port-row");
@@ -94,6 +100,14 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             transportDropdown.value = useHttpTransport ? TransportProtocol.HTTP : TransportProtocol.Stdio;
 
             httpUrlField.value = HttpEndpointUtility.GetBaseUrl();
+
+            if (apiKeyField != null)
+            {
+                apiKeyField.isPasswordField = true;
+                apiKeyField.isReadOnly = true;
+                EnsureApiKeyExists();
+                UpdateApiKeyField();
+            }
 
             int unityPort = EditorPrefs.GetInt(EditorPrefKeys.UnitySocketPort, 0);
             if (unityPort == 0)
@@ -160,6 +174,30 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
             connectionToggleButton.clicked += OnConnectionToggleClicked;
             testConnectionButton.clicked += OnTestConnectionClicked;
+
+            if (copyApiKeyButton != null)
+            {
+                copyApiKeyButton.clicked += () =>
+                {
+                    string apiKey = AuthPreferencesUtility.GetApiKey();
+                    if (!string.IsNullOrEmpty(apiKey))
+                    {
+                        EditorGUIUtility.systemCopyBuffer = apiKey;
+                        McpLog.Info("API key copied to clipboard.");
+                    }
+                };
+            }
+
+            if (regenerateApiKeyButton != null)
+            {
+                regenerateApiKeyButton.clicked += () =>
+                {
+                    string newKey = AuthPreferencesUtility.GenerateNewApiKey();
+                    AuthPreferencesUtility.SetApiKey(newKey);
+                    UpdateApiKeyField();
+                    OnManualConfigUpdateRequested?.Invoke();
+                };
+            }
         }
 
         public void UpdateConnectionStatus()
@@ -226,16 +264,16 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
             httpServerCommandSection.style.display = DisplayStyle.Flex;
 
+            EnsureApiKeyExists();
+            UpdateApiKeyField();
+
             if (MCPServiceLocator.Server.TryGetLocalHttpServerCommand(out var command, out var error))
             {
                 httpServerCommandField.value = command;
                 httpServerCommandField.tooltip = command;
-                bool authEnabled = AuthPreferencesUtility.GetAuthEnabled();
                 if (httpServerCommandHint != null)
                 {
-                    httpServerCommandHint.text = authEnabled
-                        ? "Run this command in your shell to start the server with auth (includes token and allowed IPs)."
-                        : "Run this command in your shell if you prefer to start the server manually.";
+                    httpServerCommandHint.text = "Run this command in your shell to start the server. Auth is always enforced.";
                 }
                 if (copyHttpServerCommandButton != null)
                 {
@@ -498,6 +536,23 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 {
                     McpLog.Error($"Connection verification failed: {result.Message}");
                     lastHealthStatus = newStatus;
+                }
+            }
+
+            private void EnsureApiKeyExists()
+            {
+                string current = AuthPreferencesUtility.GetApiKey();
+                if (string.IsNullOrEmpty(current))
+                {
+                    AuthPreferencesUtility.SetApiKey(AuthPreferencesUtility.GenerateNewApiKey());
+                }
+            }
+
+            private void UpdateApiKeyField()
+            {
+                if (apiKeyField != null)
+                {
+                    apiKeyField.value = AuthPreferencesUtility.GetApiKey();
                 }
             }
         }

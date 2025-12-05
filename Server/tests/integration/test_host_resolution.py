@@ -1,40 +1,27 @@
 import tests.integration.conftest  # noqa: F401  # ensure stubs are registered before imports
 
-from core.auth import AuthSettings
 from utils.network import resolve_http_host
 
 
-def test_resolve_host_coerces_wildcard_when_auth_disabled():
-    settings = AuthSettings(enabled=False)
-
-    host, coerced = resolve_http_host(settings, arg_host=None, env_host=None, parsed_host="0.0.0.0")
-
-    assert host == "localhost"
-    assert coerced is True
-
-
-def test_resolve_host_respects_explicit_arg_even_when_disabled():
-    settings = AuthSettings(enabled=False)
-
-    host, coerced = resolve_http_host(settings, arg_host="0.0.0.0", env_host=None, parsed_host=None)
+def test_resolve_host_prefers_explicit_arg():
+    host = resolve_http_host(arg_host="0.0.0.0", env_host="1.2.3.4", parsed_host="5.6.7.8")
 
     assert host == "0.0.0.0"
-    assert coerced is False
 
 
-def test_resolve_host_wildcard_kept_when_auth_enabled():
-    settings = AuthSettings(enabled=True)
+def test_resolve_host_prefers_env_when_arg_missing():
+    host = resolve_http_host(arg_host=None, env_host="1.2.3.4", parsed_host="5.6.7.8")
 
-    host, coerced = resolve_http_host(settings, arg_host=None, env_host=None, parsed_host="0.0.0.0")
-
-    assert host == "0.0.0.0"
-    assert coerced is False
+    assert host == "1.2.3.4"
 
 
-def test_resolve_host_defaults_to_localhost_when_missing():
-    settings = AuthSettings(enabled=False)
+def test_resolve_host_falls_back_to_parsed():
+    host = resolve_http_host(arg_host=None, env_host=None, parsed_host="5.6.7.8")
 
-    host, coerced = resolve_http_host(settings, arg_host=None, env_host=None, parsed_host=None)
+    assert host == "5.6.7.8"
+
+
+def test_resolve_host_defaults_to_localhost():
+    host = resolve_http_host(arg_host=None, env_host=None, parsed_host=None)
 
     assert host == "localhost"
-    assert coerced is False

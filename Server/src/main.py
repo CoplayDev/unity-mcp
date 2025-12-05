@@ -363,36 +363,19 @@ Examples:
     )
 
     parser.add_argument(
-        "--auth-enabled",
-        action="store_true",
-        help="Enable MCP HTTP/WebSocket auth (can also set UNITY_MCP_AUTH_ENABLED)."
-    )
-    parser.add_argument(
-        "--auth-token",
+        "--api-key",
+        dest="api_key",
         type=str,
         default=None,
-        help="Bearer token required when auth is enabled (UNITY_MCP_AUTH_TOKEN)."
-    )
-    parser.add_argument(
-        "--allowed-ip",
-        dest="allowed_ips",
-        action="append",
-        default=None,
-        help="Allowed IP/CIDR (repeatable). Defaults to '*'. Overrides UNITY_MCP_ALLOWED_IPS when set."
+        help="API key for all MCP requests. Defaults to the shared key file if omitted."
     )
 
     args = parser.parse_args()
 
     global AUTH_SETTINGS
-    AUTH_SETTINGS = AuthSettings.from_env_and_args(
-        args_enabled=args.auth_enabled,
-        args_allowed_ips=args.allowed_ips,
-        args_token=args.auth_token,
+    AUTH_SETTINGS = AuthSettings.build(
+        token=args.api_key,
     )
-
-    if not AUTH_SETTINGS.token:
-        logger.error("Auth is enforced but no UNITY_MCP_AUTH_TOKEN was provided. Set UNITY_MCP_AUTH_TOKEN before starting.")
-        raise SystemExit(1)
 
     logger.info(
         "Auth enabled; allowed IPs=%s; token configured",
@@ -425,8 +408,7 @@ Examples:
     parsed_url = urlparse(http_url)
 
     # Allow individual host/port to override URL components
-    http_host, host_coerced = resolve_http_host(
-        AUTH_SETTINGS,
+    http_host = resolve_http_host(
         args.http_host,
         os.environ.get("UNITY_MCP_HTTP_HOST"),
         parsed_url.hostname,
@@ -441,8 +423,6 @@ Examples:
         logger.info(f"HTTP URL set to: {http_url}")
     if args.http_host:
         logger.info(f"HTTP host override: {http_host}")
-    elif host_coerced:
-        logger.info("Auth disabled; coerced HTTP host to localhost to avoid 0.0.0.0 exposure")
     if args.http_port:
         logger.info(f"HTTP port override: {http_port}")
 

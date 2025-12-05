@@ -11,6 +11,12 @@
                 <ui:Label text="HTTP URL:" class="setting-label" />
                 <ui:TextField name="http-url" class="url-field" placeholder-text="http://localhost:8080" />
             </ui:VisualElement>
+            <ui:VisualElement class="setting-row" name="api-key-row">
+                <ui:Label text="API Key:" class="setting-label" />
+                <ui:TextField name="api-key-field" class="url-field" readonly="true" />
+                <ui:Button name="copy-api-key-button" text="Copy" class="icon-button" />
+                <ui:Button name="regenerate-api-key-button" text="Regenerate" class="icon-button" />
+            </ui:VisualElement>
             <ui:VisualElement name="http-server-command-section" class="manual-config-content">
                 <ui:Label text="Use this command to launch the server manually:" class="config-label" />
                 <ui:VisualElement class="config-json-row">

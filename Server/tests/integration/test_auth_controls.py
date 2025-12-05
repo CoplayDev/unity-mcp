@@ -19,8 +19,8 @@ class _DummyWebSocket:
 
 
 def test_http_allowlist_allows_any_ip_when_wildcard():
-    settings = AuthSettings(enabled=True, allowed_ips=["*"])
-    request = _DummyRequest("192.168.1.10")
+    settings = AuthSettings.build(token="secret", allowed_ips=["*"])
+    request = _DummyRequest("192.168.1.10", headers={"Authorization": "Bearer secret"})
 
     response = verify_http_request(request, settings)
 
@@ -28,8 +28,8 @@ def test_http_allowlist_allows_any_ip_when_wildcard():
 
 
 def test_http_allowlist_blocks_outside_cidr():
-    settings = AuthSettings(enabled=True, allowed_ips=["10.0.0.0/8"])
-    request = _DummyRequest("192.168.1.10")
+    settings = AuthSettings.build(token="secret", allowed_ips=["10.0.0.0/8"])
+    request = _DummyRequest("192.168.1.10", headers={"Authorization": "Bearer secret"})
 
     response = verify_http_request(request, settings)
 
@@ -38,7 +38,7 @@ def test_http_allowlist_blocks_outside_cidr():
 
 
 def test_http_requires_matching_token_when_set():
-    settings = AuthSettings(enabled=True, allowed_ips=["*"], token="secret")
+    settings = AuthSettings.build(token="secret", allowed_ips=["*"])
     request = _DummyRequest("127.0.0.1", headers={"Authorization": "Bearer secret"})
 
     response = verify_http_request(request, settings)
@@ -47,7 +47,7 @@ def test_http_requires_matching_token_when_set():
 
 
 def test_http_blocks_missing_token_when_required():
-    settings = AuthSettings(enabled=True, allowed_ips=["127.0.0.1"], token="secret")
+    settings = AuthSettings.build(token="secret", allowed_ips=["127.0.0.1"])
     request = _DummyRequest("127.0.0.1")
 
     response = verify_http_request(request, settings)
@@ -58,7 +58,7 @@ def test_http_blocks_missing_token_when_required():
 
 @pytest.mark.asyncio
 async def test_websocket_checks_token_and_allowlist():
-    settings = AuthSettings(enabled=True, allowed_ips=["10.0.0.0/8"], token="secret")
+    settings = AuthSettings.build(token="secret", allowed_ips=["10.0.0.0/8"])
     websocket = _DummyWebSocket("10.1.2.3", headers=[("Authorization", "Bearer secret")])
 
     response = await verify_websocket(websocket, settings)
@@ -68,7 +68,7 @@ async def test_websocket_checks_token_and_allowlist():
 
 @pytest.mark.asyncio
 async def test_websocket_blocks_invalid_token():
-    settings = AuthSettings(enabled=True, allowed_ips=["10.0.0.0/8"], token="secret")
+    settings = AuthSettings.build(token="secret", allowed_ips=["10.0.0.0/8"])
     websocket = _DummyWebSocket("10.1.2.3", headers=[("Authorization", "Bearer wrong")])
 
     response = await verify_websocket(websocket, settings)

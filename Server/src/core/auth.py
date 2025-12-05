@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import ipaddress
+import logging
 import os
-from dataclasses import dataclass
+import secrets
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Iterable, Sequence
 
 from fastmcp.server.middleware import Middleware, MiddlewareContext
@@ -13,53 +17,82 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.websockets import WebSocket
 
+logger = logging.getLogger("mcp-for-unity-server")
+
+
+def _default_allowed_ips() -> list[str]:
+    return ["*"]
+
 
 @dataclass
 class AuthSettings:
-    enabled: bool = False
-    allowed_ips: list[str] | None = None
+    enabled: bool = True
+    allowed_ips: list[str] = field(default_factory=_default_allowed_ips)
     token: str | None = None
 
     @property
     def normalized_allowed_ips(self) -> list[str]:
-        if self.allowed_ips:
-            return [ip.strip() for ip in self.allowed_ips if ip and ip.strip()]
-        return ["*"]
+        return [ip.strip() for ip in self.allowed_ips if ip and ip.strip()] or ["*"]
 
     @classmethod
-    def from_env_and_args(
+    def build(
         cls,
         *,
-        args_enabled: bool | None = None,
-        args_allowed_ips: Sequence[str] | None = None,
-        args_token: str | None = None,
+        token: str | None = None,
+        allowed_ips: Sequence[str] | None = None,
     ) -> "AuthSettings":
-        env_enabled = os.environ.get("UNITY_MCP_AUTH_ENABLED", "").lower() in (
-            "1",
-            "true",
-            "yes",
-            "on",
-        )
+        resolved_token = load_or_create_api_key(token)
+        resolved_allowed = list(allowed_ips) if allowed_ips else _default_allowed_ips()
+        return cls(enabled=True, allowed_ips=resolved_allowed, token=resolved_token)
 
 
-        env_allowed = os.environ.get("UNITY_MCP_ALLOWED_IPS")
-            # Auth is always enforced; flags remain for compatibility but do not disable auth.
-            env_allowed = os.environ.get("UNITY_MCP_ALLOWED_IPS")
-            allowed_ips: list[str] | None = None
-            if args_allowed_ips:
-                allowed_ips = list(args_allowed_ips)
-            elif env_allowed:
-                allowed_ips = [p.strip() for p in env_allowed.split(",") if p.strip()]
+def get_api_key_path() -> Path:
+    if home := os.environ.get("UNITY_MCP_HOME"):
+        return Path(home) / "api_key"
 
-            token = args_token or os.environ.get("UNITY_MCP_AUTH_TOKEN") or None
+    if sys.platform == "win32":
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData/Local"))
+        return base / "UnityMCP" / "api_key"
 
-            # Normalize allowlist
-            if not allowed_ips or len(allowed_ips) == 0:
-                allowed_ips = ["*"]
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "UnityMCP" / "api_key"
 
-            enabled = True
+    return Path.home() / ".local" / "share" / "UnityMCP" / "api_key"
 
-            return cls(enabled=enabled, allowed_ips=allowed_ips, token=token or None)
+
+def load_or_create_api_key(preferred: str | None = None) -> str:
+    if preferred:
+        return preferred
+
+    env_token = os.environ.get("UNITY_MCP_API_KEY") or os.environ.get("UNITY_MCP_AUTH_TOKEN")
+    if env_token:
+        return env_token
+
+    path = get_api_key_path()
+    try:
+        if path.exists():
+            existing = path.read_text(encoding="utf-8").strip()
+            if existing:
+                return existing
+    except Exception:
+        logger.debug("Failed to read API key file at %s", path, exc_info=True)
+
+    token = secrets.token_urlsafe(32)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(token, encoding="utf-8")
+    except Exception:
+        logger.warning("Failed to persist API key to %s", path, exc_info=True)
+
+    return token
+
+
+def _ip_in_allowlist(ip: str | None, allowed: Iterable[str]) -> bool:
+    if ip is None:
+        return False
+    try:
+        ip = ipaddress.ip_address(ip)
+    except ValueError:
         return False
 
     for pattern in allowed:
@@ -71,7 +104,6 @@ class AuthSettings:
             if ip in net:
                 return True
         except ValueError:
-            # Exact IP fall back
             try:
                 if ip == ipaddress.ip_address(pat):
                     return True
@@ -80,13 +112,17 @@ class AuthSettings:
     return False
 
 
-def _extract_bearer_token(headers: dict[str, str]) -> str | None:
+def _extract_api_key(headers: dict[str, str]) -> str | None:
     auth_header = headers.get("authorization") or headers.get("Authorization")
-    if not auth_header:
-        return None
-    if not auth_header.lower().startswith("bearer "):
-        return None
-    return auth_header[7:].strip() or None
+    if auth_header and auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
+        if token:
+            return token
+
+    api_key = headers.get("x-api-key") or headers.get("X-API-Key")
+    if api_key:
+        return api_key.strip()
+    return None
 
 
 def _unauthorized_response(message: str, status_code: int = 401) -> JSONResponse:
@@ -101,10 +137,9 @@ def verify_http_request(request: Request, settings: AuthSettings) -> JSONRespons
     if not _ip_in_allowlist(client_ip, settings.normalized_allowed_ips):
         return _unauthorized_response("IP not allowed", status_code=403)
 
-    if settings.token:
-        bearer = _extract_bearer_token(request.headers)
-        if bearer != settings.token:
-            return _unauthorized_response("Missing or invalid bearer token", status_code=401)
+    api_key = _extract_api_key(request.headers)
+    if api_key != settings.token:
+        return _unauthorized_response("Missing or invalid API key", status_code=401)
 
     return None
 
@@ -117,16 +152,15 @@ async def verify_websocket(websocket: WebSocket, settings: AuthSettings) -> JSON
     if not _ip_in_allowlist(client_ip, settings.normalized_allowed_ips):
         return _unauthorized_response("IP not allowed", status_code=403)
 
-    if settings.token:
-        bearer = _extract_bearer_token(dict(websocket.headers))
-        if bearer != settings.token:
-            return _unauthorized_response("Missing or invalid bearer token", status_code=401)
+    api_key = _extract_api_key(dict(websocket.headers))
+    if api_key != settings.token:
+        return _unauthorized_response("Missing or invalid API key", status_code=401)
 
     return None
 
 
 class AuthMiddleware(Middleware):
-    """Enforces optional IP allowlist and bearer token on MCP requests."""
+    """Enforces IP allowlist and API key on MCP requests."""
 
     def __init__(self, settings: AuthSettings):
         super().__init__()
@@ -148,16 +182,13 @@ class AuthMiddleware(Middleware):
         return await call_next(context)
 
     async def on_call_tool(self, context: MiddlewareContext, call_next):
-        # Defense-in-depth: enforce token again at tool dispatch
-        if self.settings.enabled and self.settings.token:
-            failure = self._check_request_if_present()
-            if failure is not None:
-                return failure
+        failure = self._check_request_if_present()
+        if failure is not None:
+            return failure
         return await call_next(context)
 
     async def on_read_resource(self, context: MiddlewareContext, call_next):
-        if self.settings.enabled and self.settings.token:
-            failure = self._check_request_if_present()
-            if failure is not None:
-                return failure
+        failure = self._check_request_if_present()
+        if failure is not None:
+            return failure
         return await call_next(context)
