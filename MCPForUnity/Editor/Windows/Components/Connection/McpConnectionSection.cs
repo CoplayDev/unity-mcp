@@ -539,21 +539,22 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 }
             }
 
-            private void EnsureApiKeyExists()
-            {
-                string current = AuthPreferencesUtility.GetApiKey();
-                if (string.IsNullOrEmpty(current))
-                {
-                    AuthPreferencesUtility.SetApiKey(AuthPreferencesUtility.GenerateNewApiKey());
-                }
-            }
+        }
 
-            private void UpdateApiKeyField()
+        private void EnsureApiKeyExists()
+        {
+            string current = AuthPreferencesUtility.GetApiKey();
+            if (string.IsNullOrEmpty(current))
             {
-                if (apiKeyField != null)
-                {
-                    apiKeyField.value = AuthPreferencesUtility.GetApiKey();
-                }
+                AuthPreferencesUtility.SetApiKey(AuthPreferencesUtility.GenerateNewApiKey());
+            }
+        }
+
+        private void UpdateApiKeyField()
+        {
+            if (apiKeyField != null)
+            {
+                apiKeyField.value = AuthPreferencesUtility.GetApiKey();
             }
         }
     }
