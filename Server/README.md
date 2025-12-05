@@ -11,7 +11,7 @@ Model Context Protocol server for Unity Editor integration. Control Unity throug
 
 💬 **Join our community:** [Discord Server](https://discord.gg/y4p8KfzrN4)
 
-**Required:** Install the [Unity MCP Plugin](https://github.com/CoplayDev/unity-mcp?tab=readme-ov-file#-step-1-install-the-unity-package) to connect Unity Editor with this MCP server.
+**Required:** Install the [Unity MCP Plugin](https://github.com/prophecygamestudio/unity-mcp?tab=readme-ov-file#-step-1-install-the-unity-package) to connect Unity Editor with this MCP server.
 
 ---
 
@@ -23,11 +23,11 @@ Run directly from GitHub without installation:
 
 ```bash
 # HTTP (default)
-uvx --from git+https://github.com/CoplayDev/unity-mcp@v8.1.6#subdirectory=Server \
+uvx --from git+https://github.com/prophecygamestudio/unity-mcp@v8.1.6#subdirectory=Server \
     mcp-for-unity --transport http --http-url http://localhost:8080
 
 # Stdio
-uvx --from git+https://github.com/CoplayDev/unity-mcp@v8.1.6#subdirectory=Server \
+uvx --from git+https://github.com/prophecygamestudio/unity-mcp@v8.1.6#subdirectory=Server \
     mcp-for-unity --transport stdio
 ```
 
@@ -52,7 +52,7 @@ uvx --from git+https://github.com/CoplayDev/unity-mcp@v8.1.6#subdirectory=Server
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/CoplayDev/unity-mcp@v8.1.6#subdirectory=Server",
+        "git+https://github.com/prophecygamestudio/unity-mcp@v8.1.6#subdirectory=Server",
         "mcp-for-unity",
         "--transport",
         "stdio"
@@ -69,7 +69,7 @@ For local development or custom installations:
 
 ```bash
 # Clone the repository
-git clone https://github.com/CoplayDev/unity-mcp.git
+git clone https://github.com/prophecygamestudio/unity-mcp.git
 cd unity-mcp/Server
 
 # Run with uv (HTTP)
@@ -168,7 +168,7 @@ Once connected, try these commands in your AI assistant:
 
 For complete documentation, troubleshooting, and advanced usage:
 
-📖 **[Full Documentation](https://github.com/CoplayDev/unity-mcp#readme)**
+📖 **[Full Documentation](https://github.com/prophecygamestudio/unity-mcp#readme)**
 
 ---
 
@@ -182,4 +182,4 @@ For complete documentation, troubleshooting, and advanced usage:
 
 ## License
 
-MIT License - See [LICENSE](https://github.com/CoplayDev/unity-mcp/blob/main/LICENSE)
+MIT License - See [LICENSE](https://github.com/prophecygamestudio/unity-mcp/blob/main/LICENSE)
