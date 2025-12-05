@@ -42,19 +42,6 @@
                     <ui:Label text="• Remote: git+https://github.com/CoplayDev/unity-mcp@v6.3.0#subdirectory=Server" class="help-text" />
                 </ui:VisualElement>
             </ui:Foldout>
-            <ui:Foldout name="auth-settings-foldout" text="Auth (optional)" class="advanced-settings-foldout">
-                <ui:VisualElement class="advanced-settings-content">
-                    <ui:Label text="Configure MCP server auth. Leave disabled for local, isolated setups." class="advanced-label" />
-                    <ui:VisualElement class="setting-row">
-                        <ui:Label text="Enable Auth:" class="setting-label" />
-                        <ui:Toggle name="auth-enabled-toggle" class="setting-toggle" />
-                    </ui:VisualElement>
-                    <ui:Label text="Allowed IPs (comma-separated). Empty = no IP restriction." class="help-text" />
-                    <ui:TextField name="allowed-ips-field" placeholder-text="127.0.0.1,10.0.0.0/8" class="override-field" />
-                    <ui:Label text="Bearer token sent with requests/websockets." class="help-text" style="margin-top: 8px;" />
-                    <ui:TextField name="auth-token-field" placeholder-text="enter a strong token" class="override-field" />
-                </ui:VisualElement>
-            </ui:Foldout>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

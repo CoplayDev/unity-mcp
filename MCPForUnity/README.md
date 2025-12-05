@@ -77,11 +77,11 @@ Notes:
 
 ---
 
-## Auth (optional)
-- Open the “Auth (optional)” foldout in Settings to enable/disable server auth.
+## Authentication (optional)
+- Open the Authentication panel to enable/disable server auth.
 - Allowed IPs: comma-separated list (CIDR ok). Leave empty for no IP restriction.
-- Bearer token: set a strong token; the Unity client will send it on HTTP and WS calls.
-- When auth is off, the server defaults to `localhost` unless you explicitly set a host.
+- Token: Unity can generate one for you; copy it when your MCP client prompts (auto-config adds a VS Code prompt input). Use Regenerate if you need to rotate it.
+- When authentication is off, the server defaults to `localhost` unless you explicitly set a host, and prompts/headers are removed from auto-config.
 
 ---
 

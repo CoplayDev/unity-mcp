@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
+using MCPForUnity.Editor.Windows.Components.Auth;
 using MCPForUnity.Editor.Windows.Components.ClientConfig;
 using MCPForUnity.Editor.Windows.Components.Connection;
 using MCPForUnity.Editor.Windows.Components.Settings;
@@ -18,6 +19,7 @@ namespace MCPForUnity.Editor.Windows
         private McpSettingsSection settingsSection;
         private McpConnectionSection connectionSection;
         private McpClientConfigSection clientConfigSection;
+        private McpAuthSection authSection;
 
         private static readonly HashSet<MCPForUnityEditorWindow> OpenWindows = new();
         private bool guiCreated = false;
@@ -121,6 +123,22 @@ namespace MCPForUnity.Editor.Windows
                     connectionSection?.UpdateHttpServerCommandDisplay();
             }
 
+            // Load and initialize Auth section
+            var authTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
+                $"{basePath}/Editor/Windows/Components/Auth/McpAuthSection.uxml"
+            );
+            if (authTree != null)
+            {
+                var authRoot = authTree.Instantiate();
+                sectionsContainer.Add(authRoot);
+                authSection = new McpAuthSection(authRoot);
+                authSection.OnAuthChanged += () =>
+                {
+                    connectionSection?.UpdateHttpServerCommandDisplay();
+                    clientConfigSection?.UpdateManualConfiguration();
+                };
+            }
+
             // Load and initialize Connection section
             var connectionTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
                 $"{basePath}/Editor/Windows/Components/Connection/McpConnectionSection.uxml"
@@ -198,6 +216,7 @@ namespace MCPForUnity.Editor.Windows
                 _ = connectionSection?.VerifyBridgeConnectionAsync();
             }
 
+            authSection?.Refresh();
             settingsSection?.UpdatePathOverrides();
             clientConfigSection?.RefreshSelectedClient();
         }

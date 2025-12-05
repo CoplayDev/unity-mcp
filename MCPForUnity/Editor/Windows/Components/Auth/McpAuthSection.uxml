@@ -1,0 +1,24 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+    <Style src="../Common.uss" />
+    <ui:VisualElement name="auth-section" class="section">
+        <ui:Label text="Authentication" class="section-title" />
+        <ui:VisualElement class="section-content">
+            <ui:Label text="Protect the MCP server when using HTTP/WebSocket." class="help-text" />
+            <ui:VisualElement class="setting-row">
+                <ui:Label text="Enable Authentication:" class="setting-label" />
+                <ui:Toggle name="auth-enabled-toggle" class="setting-toggle" />
+            </ui:VisualElement>
+            <ui:Label text="Allowed IPs (comma-separated, CIDR supported). Empty = no IP restriction." class="help-text" />
+            <ui:TextField name="allowed-ips-field" placeholder-text="127.0.0.1,10.0.0.0/8" class="override-field" />
+
+            <ui:VisualElement class="setting-row" style="margin-top: 10px; align-items: center;">
+                <ui:Label text="Authentication Token:" class="setting-label" style="min-width: 140px;" />
+                <ui:TextField name="auth-token-field" readonly="true" class="override-field" style="flex-grow:1;" />
+                <ui:Button name="copy-token-button" text="Copy" class="icon-button" />
+                <ui:Button name="regenerate-token-button" text="Regenerate" class="icon-button" />
+            </ui:VisualElement>
+            <ui:Label text="Use Auto-Configure or paste this token when your MCP client prompts for it." class="help-text" />
+            <ui:Label text="When authentication is disabled, prompts/headers are removed from client configs." class="help-text" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

@@ -60,5 +60,16 @@ namespace MCPForUnity.Editor.Helpers
                 EditorPrefs.SetString(EditorPrefKeys.AuthToken, token);
             }
         }
+
+        internal static string GenerateNewToken()
+        {
+            // 32 bytes -> 43 base64 chars without padding; safe for headers
+            var bytes = new byte[32];
+            using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(bytes);
+            }
+            return Convert.ToBase64String(bytes).TrimEnd('=');
+        }
     }
 }

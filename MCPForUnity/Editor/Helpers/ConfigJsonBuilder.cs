@@ -15,6 +15,8 @@ namespace MCPForUnity.Editor.Helpers
 {
     public static class ConfigJsonBuilder
     {
+        private const string AuthTokenInputKey = "UNITY_MCP_AUTH_TOKEN";
+
         public static string BuildManualConfigJson(string uvPath, McpClient client)
         {
             var root = new JObject();
@@ -22,7 +24,7 @@ namespace MCPForUnity.Editor.Helpers
             JObject container = isVSCode ? EnsureObject(root, "servers") : EnsureObject(root, "mcpServers");
 
             var unity = new JObject();
-            PopulateUnityNode(unity, uvPath, client, isVSCode);
+            PopulateUnityNode(root, unity, uvPath, client, isVSCode);
 
             container["unityMCP"] = unity;
 
@@ -35,7 +37,7 @@ namespace MCPForUnity.Editor.Helpers
             bool isVSCode = client?.IsVsCodeLayout == true;
             JObject container = isVSCode ? EnsureObject(root, "servers") : EnsureObject(root, "mcpServers");
             JObject unity = container["unityMCP"] as JObject ?? new JObject();
-            PopulateUnityNode(unity, uvPath, client, isVSCode);
+            PopulateUnityNode(root, unity, uvPath, client, isVSCode);
 
             container["unityMCP"] = unity;
             return root;
@@ -48,7 +50,7 @@ namespace MCPForUnity.Editor.Helpers
         /// - Adds transport configuration (HTTP or stdio)
         /// - Adds disabled:false for Windsurf/Kiro only when missing
         /// </summary>
-        private static void PopulateUnityNode(JObject unity, string uvPath, McpClient client, bool isVSCode)
+        private static void PopulateUnityNode(JObject root, JObject unity, string uvPath, McpClient client, bool isVSCode)
         {
             // Get transport preference (default to HTTP)
             bool useHttpTransport = client?.SupportsHttpTransport != false && EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
@@ -63,12 +65,30 @@ namespace MCPForUnity.Editor.Helpers
                 unity[httpProperty] = httpUrl;
 
                 bool authEnabled = AuthPreferencesUtility.GetAuthEnabled();
-                string authToken = AuthPreferencesUtility.GetAuthToken();
-                if (authEnabled && !string.IsNullOrEmpty(authToken))
+                if (authEnabled)
                 {
+                    // Prompt the user for a token via VS Code input binding; avoid storing the token in config
                     var headers = unity["headers"] as JObject ?? new JObject();
-                    headers["Authorization"] = $"Bearer {authToken}";
+                    headers["Authorization"] = "Bearer ${env:UNITY_MCP_AUTH_TOKEN}";
                     unity["headers"] = headers;
+
+                    // Ensure env is present with input placeholder
+                    var env = unity["env"] as JObject ?? new JObject();
+                    env["UNITY_MCP_AUTH_TOKEN"] = "${input:UNITY_MCP_AUTH_TOKEN}";
+                    unity["env"] = env;
+
+                    // Add inputs block at the root to trigger VS Code prompt
+                    var inputs = root["inputs"] as JObject ?? new JObject();
+                    if (inputs[AuthTokenInputKey] == null)
+                    {
+                        inputs[AuthTokenInputKey] = new JObject
+                        {
+                            ["type"] = "promptString",
+                            ["description"] = "Unity MCP auth token (copy from Unity MCP Auth panel)",
+                            ["password"] = true
+                        };
+                    }
+                    root["inputs"] = inputs;
                 }
                 else
                 {
@@ -82,6 +102,32 @@ namespace MCPForUnity.Editor.Helpers
                         else
                         {
                             unity["headers"] = headers;
+                        }
+                    }
+
+                    if (unity["env"] is JObject env && env.ContainsKey("UNITY_MCP_AUTH_TOKEN"))
+                    {
+                        env.Remove("UNITY_MCP_AUTH_TOKEN");
+                        if (!env.Properties().Any())
+                        {
+                            unity.Remove("env");
+                        }
+                        else
+                        {
+                            unity["env"] = env;
+                        }
+                    }
+
+                    if (root["inputs"] is JObject inputs && inputs.ContainsKey(AuthTokenInputKey))
+                    {
+                        inputs.Remove(AuthTokenInputKey);
+                        if (!inputs.Properties().Any())
+                        {
+                            root.Remove("inputs");
+                        }
+                        else
+                        {
+                            root["inputs"] = inputs;
                         }
                     }
                 }

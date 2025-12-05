@@ -29,10 +29,6 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
         private VisualElement uvxPathStatus;
         private TextField gitUrlOverride;
         private Button clearGitUrlButton;
-        private Foldout authSettingsFoldout;
-        private Toggle authEnabledToggle;
-        private TextField allowedIpsField;
-        private TextField authTokenField;
 
         // Data
         private ValidationLevel currentValidationLevel = ValidationLevel.Standard;
@@ -73,10 +69,6 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             uvxPathStatus = Root.Q<VisualElement>("uv-path-status");
             gitUrlOverride = Root.Q<TextField>("git-url-override");
             clearGitUrlButton = Root.Q<Button>("clear-git-url-button");
-            authSettingsFoldout = Root.Q<Foldout>("auth-settings-foldout");
-            authEnabledToggle = Root.Q<Toggle>("auth-enabled-toggle");
-            allowedIpsField = Root.Q<TextField>("allowed-ips-field");
-            authTokenField = Root.Q<TextField>("auth-token-field");
         }
 
         private void InitializeUI()
@@ -95,24 +87,6 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
 
             advancedSettingsFoldout.value = false;
             gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
-
-            if (authTokenField != null)
-            {
-                authTokenField.isPasswordField = true;
-            }
-            if (authEnabledToggle != null)
-            {
-                authEnabledToggle.value = AuthPreferencesUtility.GetAuthEnabled();
-            }
-            if (allowedIpsField != null)
-            {
-                allowedIpsField.value = AuthPreferencesUtility.GetAllowedIpsRaw();
-            }
-            if (authTokenField != null)
-            {
-                authTokenField.value = AuthPreferencesUtility.GetAuthToken();
-            }
-            UpdateAuthFieldState();
         }
 
         private void RegisterCallbacks()
@@ -155,44 +129,6 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
                 OnHttpServerCommandUpdateRequested?.Invoke();
             };
 
-            if (authEnabledToggle != null)
-            {
-                authEnabledToggle.RegisterValueChangedCallback(evt =>
-                {
-                    AuthPreferencesUtility.SetAuthEnabled(evt.newValue);
-                    UpdateAuthFieldState();
-                    OnHttpServerCommandUpdateRequested?.Invoke();
-                });
-            }
-            if (allowedIpsField != null)
-            {
-                allowedIpsField.RegisterValueChangedCallback(evt =>
-                {
-                    AuthPreferencesUtility.SetAllowedIps(evt.newValue);
-                    OnHttpServerCommandUpdateRequested?.Invoke();
-                });
-            }
-            if (authTokenField != null)
-            {
-                authTokenField.RegisterValueChangedCallback(evt =>
-                {
-                    AuthPreferencesUtility.SetAuthToken(evt.newValue);
-                    OnHttpServerCommandUpdateRequested?.Invoke();
-                });
-            }
-        }
-
-        private void UpdateAuthFieldState()
-        {
-            bool enabled = authEnabledToggle != null && authEnabledToggle.value;
-            if (allowedIpsField != null)
-            {
-                allowedIpsField.SetEnabled(enabled);
-            }
-            if (authTokenField != null)
-            {
-                authTokenField.SetEnabled(enabled);
-            }
         }
 
         public void UpdatePathOverrides()
@@ -225,19 +161,6 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
 
             gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
 
-            if (authEnabledToggle != null)
-            {
-                authEnabledToggle.value = AuthPreferencesUtility.GetAuthEnabled();
-            }
-            if (allowedIpsField != null)
-            {
-                allowedIpsField.value = AuthPreferencesUtility.GetAllowedIpsRaw();
-            }
-            if (authTokenField != null)
-            {
-                authTokenField.value = AuthPreferencesUtility.GetAuthToken();
-            }
-            UpdateAuthFieldState();
         }
 
         private void UpdateVersionLabel()
