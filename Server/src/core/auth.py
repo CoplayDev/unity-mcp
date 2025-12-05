@@ -62,17 +62,15 @@ def get_api_key_path() -> Path:
 
 def load_or_create_api_key(preferred: str | None = None) -> str:
     if preferred:
+        logger.info("Using API key provided via CLI flag --api-key")
         return preferred
-
-    env_token = os.environ.get("UNITY_MCP_API_KEY") or os.environ.get("UNITY_MCP_AUTH_TOKEN")
-    if env_token:
-        return env_token
 
     path = get_api_key_path()
     try:
         if path.exists():
             existing = path.read_text(encoding="utf-8").strip()
             if existing:
+                logger.info("Loaded API key from %s", path)
                 return existing
     except Exception:
         logger.debug("Failed to read API key file at %s", path, exc_info=True)
@@ -81,6 +79,7 @@ def load_or_create_api_key(preferred: str | None = None) -> str:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(token, encoding="utf-8")
+        logger.info("Generated and persisted new API key to %s", path)
     except Exception:
         logger.warning("Failed to persist API key to %s", path, exc_info=True)
 
@@ -135,12 +134,15 @@ def verify_http_request(request: Request, settings: AuthSettings) -> JSONRespons
 
     client_ip = request.client.host if request.client else None
     if not _ip_in_allowlist(client_ip, settings.normalized_allowed_ips):
+        logger.warning("HTTP auth denied: IP not allowed (%s)", client_ip)
         return _unauthorized_response("IP not allowed", status_code=403)
 
     api_key = _extract_api_key(request.headers)
     if api_key != settings.token:
+        logger.warning("HTTP auth denied: missing or invalid API key from %s", client_ip)
         return _unauthorized_response("Missing or invalid API key", status_code=401)
 
+    logger.debug("HTTP auth accepted for %s", client_ip)
     return None
 
 
@@ -150,12 +152,15 @@ async def verify_websocket(websocket: WebSocket, settings: AuthSettings) -> JSON
 
     client_ip = websocket.client.host if websocket.client else None
     if not _ip_in_allowlist(client_ip, settings.normalized_allowed_ips):
+        logger.warning("WS auth denied: IP not allowed (%s)", client_ip)
         return _unauthorized_response("IP not allowed", status_code=403)
 
     api_key = _extract_api_key(dict(websocket.headers))
     if api_key != settings.token:
+        logger.warning("WS auth denied: missing or invalid API key from %s", client_ip)
         return _unauthorized_response("Missing or invalid API key", status_code=401)
 
+    logger.debug("WS auth accepted for %s", client_ip)
     return None
 
 

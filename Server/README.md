@@ -145,14 +145,22 @@ The server connects to Unity Editor automatically when both are running. No addi
 
 **Environment Variables:**
 
-- `DISABLE_TELEMETRY=true` - Opt out of anonymous usage analytics
-- `LOG_LEVEL=DEBUG` - Enable detailed logging (default: INFO)
-- `UNITY_MCP_API_KEY=supersecret` - Override the API key used for every request. If unset, the server reads (or creates) `api_key` in:
   - macOS: `~/Library/Application Support/UnityMCP/api_key`
   - Windows: `%LOCALAPPDATA%\UnityMCP\api_key`
   - Linux: `~/.local/share/UnityMCP/api_key`
 
 Authentication is always on. Clients must send `X-API-Key: <key>` (or `Authorization: Bearer <key>` for compatibility) with every request.
+**Configuration:**
+
+- `DISABLE_TELEMETRY=true` - Opt out of anonymous usage analytics
+- `LOG_LEVEL=DEBUG` - Enable detailed logging (default: INFO)
+
+Authentication is always on. The server reads (or creates) `api_key` at:
+- macOS: `~/Library/Application Support/UnityMCP/api_key`
+- Windows: `%LOCALAPPDATA%\UnityMCP/api_key`
+- Linux: `~/.local/share/UnityMCP/api_key`
+
+Clients must send `X-API-Key: <key>` (or `Authorization: Bearer <key>` for compatibility) on every call. To rotate the key, replace the file or pass `--api-key` when starting the server.
 
 ---
 
