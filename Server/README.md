@@ -162,6 +162,8 @@ python -m src.main --transport http \
 
 When auth is enabled, clients must send `Authorization: Bearer <token>` and connect from an allowed IP. If no token is configured, only the IP allowlist is enforced.
 
+Clients: the WebSocket welcome payload now includes `authEnabled` and `authTokenRequired` so MCP clients can prompt for a token when needed.
+
 ---
 
 ## Example Prompts

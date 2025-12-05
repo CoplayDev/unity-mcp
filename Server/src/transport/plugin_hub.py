@@ -66,7 +66,9 @@ class PluginHub(WebSocketEndpoint):
         return cls._registry is not None and cls._lock is not None
 
     async def on_connect(self, websocket: WebSocket) -> None:
-        failure = await verify_websocket(websocket, self._auth_settings or AuthSettings())
+        settings = self._auth_settings or AuthSettings()
+
+        failure = await verify_websocket(websocket, settings)
         if failure is not None:
             await websocket.close(code=4401)
             return
@@ -75,6 +77,8 @@ class PluginHub(WebSocketEndpoint):
         msg = WelcomeMessage(
             serverTimeout=self.SERVER_TIMEOUT,
             keepAliveInterval=self.KEEP_ALIVE_INTERVAL,
+            authEnabled=settings.enabled,
+            authTokenRequired=bool(settings.enabled and settings.token),
         )
         await websocket.send_json(msg.model_dump())
 

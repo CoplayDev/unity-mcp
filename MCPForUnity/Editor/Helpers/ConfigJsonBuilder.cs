@@ -62,6 +62,30 @@ namespace MCPForUnity.Editor.Helpers
                 string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
                 unity[httpProperty] = httpUrl;
 
+                bool authEnabled = AuthPreferencesUtility.GetAuthEnabled();
+                string authToken = AuthPreferencesUtility.GetAuthToken();
+                if (authEnabled && !string.IsNullOrEmpty(authToken))
+                {
+                    var headers = unity["headers"] as JObject ?? new JObject();
+                    headers["Authorization"] = $"Bearer {authToken}";
+                    unity["headers"] = headers;
+                }
+                else
+                {
+                    if (unity["headers"] is JObject headers && headers.ContainsKey("Authorization"))
+                    {
+                        headers.Remove("Authorization");
+                        if (!headers.Properties().Any())
+                        {
+                            unity.Remove("headers");
+                        }
+                        else
+                        {
+                            unity["headers"] = headers;
+                        }
+                    }
+                }
+
                 foreach (var prop in urlPropsToRemove)
                 {
                     if (unity[prop] != null) unity.Remove(prop);
