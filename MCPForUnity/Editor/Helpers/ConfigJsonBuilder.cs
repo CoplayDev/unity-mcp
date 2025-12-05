@@ -63,64 +63,27 @@ namespace MCPForUnity.Editor.Helpers
                 string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
                 unity[httpProperty] = httpUrl;
 
-                bool authEnabled = AuthPreferencesUtility.GetAuthEnabled();
-                if (authEnabled)
+                // Always require auth: add Authorization header with input binding and prompt definition
+                var headers = unity["headers"] as JObject ?? new JObject();
+                headers["Authorization"] = "${input:Authorization}";
+                unity["headers"] = headers;
+
+                var inputs = root["inputs"] as JArray ?? new JArray();
+                var existing = inputs
+                    .OfType<JObject>()
+                    .FirstOrDefault(o => string.Equals((string)o["id"], AuthTokenInputKey, StringComparison.Ordinal));
+                if (existing == null)
                 {
-                    // Align with GitHub-style input binding: Authorization header references an input
-                    var headers = unity["headers"] as JObject ?? new JObject();
-                    headers["Authorization"] = "${input:Authorization}";
-                    unity["headers"] = headers;
-
-                    // VS Code-style inputs array so ${input:Authorization} can be resolved
-                    var inputs = root["inputs"] as JArray ?? new JArray();
-                    var existing = inputs
-                        .OfType<JObject>()
-                        .FirstOrDefault(o => string.Equals((string)o["id"], AuthTokenInputKey, StringComparison.Ordinal));
-                    if (existing == null)
-                    {
-                        existing = new JObject();
-                        inputs.Add(existing);
-                    }
-
-                    existing["id"] = AuthTokenInputKey;
-                    existing["type"] = "promptString";
-                    existing["description"] = "Authorization header (e.g., Bearer <token>)";
-                    existing["password"] = true;
-
-                    root["inputs"] = inputs;
+                    existing = new JObject();
+                    inputs.Add(existing);
                 }
-                else
-                {
-                    if (unity["headers"] is JObject headers && headers.ContainsKey("Authorization"))
-                    {
-                        headers.Remove("Authorization");
-                        if (!headers.Properties().Any())
-                        {
-                            unity.Remove("headers");
-                        }
-                        else
-                        {
-                            unity["headers"] = headers;
-                        }
-                    }
 
-                    if (root["inputs"] is JArray inputs)
-                    {
-                        var remaining = new JArray(inputs
-                            .OfType<JObject>()
-                            .Where(o => !string.Equals((string)o["id"], AuthTokenInputKey, StringComparison.Ordinal))
-                            .Select(o => (JToken)o));
+                existing["id"] = AuthTokenInputKey;
+                existing["type"] = "promptString";
+                existing["description"] = "Authorization header (e.g., Bearer <token>)";
+                existing["password"] = true;
 
-                        if (!remaining.Any())
-                        {
-                            root.Remove("inputs");
-                        }
-                        else
-                        {
-                            root["inputs"] = remaining;
-                        }
-                    }
-                }
+                root["inputs"] = inputs;
 
                 foreach (var prop in urlPropsToRemove)
                 {

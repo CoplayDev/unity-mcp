@@ -390,14 +390,14 @@ Examples:
         args_token=args.auth_token,
     )
 
-    if AUTH_SETTINGS.enabled:
-        logger.info(
-            "Auth enabled; allowed IPs=%s; token %s",
-            AUTH_SETTINGS.normalized_allowed_ips,
-            "configured" if AUTH_SETTINGS.token else "not set (token not required)",
-        )
-    else:
-        logger.info("Auth disabled (HTTP exposed without token/IP restrictions)")
+    if not AUTH_SETTINGS.token:
+        logger.error("Auth is enforced but no UNITY_MCP_AUTH_TOKEN was provided. Set UNITY_MCP_AUTH_TOKEN before starting.")
+        raise SystemExit(1)
+
+    logger.info(
+        "Auth enabled; allowed IPs=%s; token configured",
+        AUTH_SETTINGS.normalized_allowed_ips,
+    )
 
     # Register auth middleware first so it short-circuits unauthorized requests
     mcp.add_middleware(AuthMiddleware(AUTH_SETTINGS))

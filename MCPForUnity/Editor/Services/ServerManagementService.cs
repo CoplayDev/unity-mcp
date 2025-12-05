@@ -383,25 +383,40 @@ namespace MCPForUnity.Editor.Services
             args.Add("--http-url");
             args.Add(httpUrl);
 
-            if (AuthPreferencesUtility.GetAuthEnabled())
+            // Always enforce auth: export token + allowlist envs before command
+            string token = EnsureAuthTokenExists();
+            string allowedCsv = string.Join(",", AuthPreferencesUtility.GetAllowedIps());
+
+            string prefix;
+            if (Application.platform == RuntimePlatform.WindowsEditor)
             {
-                string token = EnsureAuthTokenExists();
-                args.Add("--auth-enabled");
-
-                if (!string.IsNullOrEmpty(token))
+                var env = new List<string>
                 {
-                    args.Add("--auth-token");
-                    args.Add(token);
+                    SetCmdEnv("UNITY_MCP_AUTH_TOKEN", token),
+                    SetCmdEnv("UNITY_MCP_ALLOWED_IPS", allowedCsv),
+                    SetCmdEnv("UNITY_MCP_AUTH_ENABLED", "1")
+                };
+                prefix = string.Join(" && ", env.Where(e => !string.IsNullOrEmpty(e)));
+                if (!string.IsNullOrEmpty(prefix))
+                {
+                    prefix += " && ";
                 }
-
-                foreach (string allowed in AuthPreferencesUtility.GetAllowedIps())
+            }
+            else
+            {
+                prefix = string.Join(" ", new[]
                 {
-                    args.Add("--allowed-ip");
-                    args.Add(allowed);
+                    ExportEnv("UNITY_MCP_AUTH_TOKEN", token),
+                    ExportEnv("UNITY_MCP_ALLOWED_IPS", allowedCsv),
+                    ExportEnv("UNITY_MCP_AUTH_ENABLED", "1")
+                }.Where(e => !string.IsNullOrEmpty(e)));
+                if (!string.IsNullOrEmpty(prefix))
+                {
+                    prefix += " ";
                 }
             }
 
-            command = $"{QuoteArgument(uvxPath)} {string.Join(" ", args.Select(QuoteArgument))}";
+            command = $"{prefix}{QuoteArgument(uvxPath)} {string.Join(" ", args.Select(QuoteArgument))}".Trim();
             return true;
         }
 
@@ -557,7 +572,27 @@ namespace MCPForUnity.Editor.Services
             return needsQuotes ? $"\"{arg.Replace("\"", "\\\"")}\"" : arg;
         }
 
-        // Environment helpers no longer required; flags are passed directly to the server binary.
+        private static string ExportEnv(string name, string value)
+        {
+            if (string.IsNullOrEmpty(name) || value == null)
+            {
+                return string.Empty;
+            }
+
+            string escaped = value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+            return $"{name}=\"{escaped}\"";
+        }
+
+        private static string SetCmdEnv(string name, string value)
+        {
+            if (string.IsNullOrEmpty(name) || value == null)
+            {
+                return string.Empty;
+            }
+
+            string escaped = value.Replace("\"", "\"\"");
+            return $"set \"{name}={escaped}\"";
+        }
 
         private static string EnsureAuthTokenExists()
         {

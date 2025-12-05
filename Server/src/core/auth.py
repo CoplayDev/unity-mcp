@@ -40,25 +40,26 @@ class AuthSettings:
             "yes",
             "on",
         )
-        enabled = bool(args_enabled) or env_enabled
+
 
         env_allowed = os.environ.get("UNITY_MCP_ALLOWED_IPS")
-        allowed_ips: list[str] | None = None
-        if args_allowed_ips:
-            allowed_ips = list(args_allowed_ips)
-        elif env_allowed:
-            allowed_ips = [p.strip() for p in env_allowed.split(",") if p.strip()]
+            # Auth is always enforced; flags remain for compatibility but do not disable auth.
+            env_allowed = os.environ.get("UNITY_MCP_ALLOWED_IPS")
+            allowed_ips: list[str] | None = None
+            if args_allowed_ips:
+                allowed_ips = list(args_allowed_ips)
+            elif env_allowed:
+                allowed_ips = [p.strip() for p in env_allowed.split(",") if p.strip()]
 
-        token = args_token or os.environ.get("UNITY_MCP_AUTH_TOKEN") or None
-        return cls(enabled=enabled, allowed_ips=allowed_ips, token=token or None)
+            token = args_token or os.environ.get("UNITY_MCP_AUTH_TOKEN") or None
 
+            # Normalize allowlist
+            if not allowed_ips or len(allowed_ips) == 0:
+                allowed_ips = ["*"]
 
-def _ip_in_allowlist(client_ip: str | None, allowed: Iterable[str]) -> bool:
-    if client_ip is None:
-        return False
-    try:
-        ip = ipaddress.ip_address(client_ip)
-    except ValueError:
+            enabled = True
+
+            return cls(enabled=enabled, allowed_ips=allowed_ips, token=token or None)
         return False
 
     for pattern in allowed:
