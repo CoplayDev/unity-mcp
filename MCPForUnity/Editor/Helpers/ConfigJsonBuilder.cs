@@ -142,41 +142,63 @@ namespace MCPForUnity.Editor.Helpers
             bool requiresEnv = client?.EnsureEnvObject == true;
             bool stripEnv = client?.StripEnvWhenNotRequired == true;
 
-            if (requiresEnv)
-            {
-                if (unity["env"] == null)
+                if (authEnabled)
                 {
-                    unity["env"] = new JObject();
-                }
-            }
-            else if (stripEnv && unity["env"] != null)
-            {
-                unity.Remove("env");
-            }
+                    // Align with GitHub-style input binding: Authorization header references an input
+                    var headers = unity["headers"] as JObject ?? new JObject();
+                    headers["Authorization"] = "${input:Authorization}";
+                    unity["headers"] = headers;
 
-            if (client?.DefaultUnityFields != null)
-            {
-                foreach (var kvp in client.DefaultUnityFields)
-                {
-                    if (unity[kvp.Key] == null)
+                    // VS Code-style inputs array so ${input:Authorization} can be resolved
+                    var inputs = root["inputs"] as JArray ?? new JArray();
+                    var existing = inputs
+                        .OfType<JObject>()
+                        .FirstOrDefault(o => string.Equals((string)o["id"], AuthTokenInputKey, StringComparison.Ordinal));
+                    if (existing == null)
                     {
-                        unity[kvp.Key] = kvp.Value != null ? JToken.FromObject(kvp.Value) : JValue.CreateNull();
+                        existing = new JObject();
+                        inputs.Add(existing);
+                    }
+
+                    existing["id"] = AuthTokenInputKey;
+                    existing["type"] = "promptString";
+                    existing["description"] = "Authorization header (e.g., Bearer <token>)";
+                    existing["password"] = true;
+
+                    root["inputs"] = inputs;
+                }
+                else
+                {
+                    if (unity["headers"] is JObject headers && headers.ContainsKey("Authorization"))
+                    {
+                        headers.Remove("Authorization");
+                        if (!headers.Properties().Any())
+                        {
+                            unity.Remove("headers");
+                        }
+                        else
+                        {
+                            unity["headers"] = headers;
+                        }
+                    }
+
+                    if (root["inputs"] is JArray inputs)
+                    {
+                        var remaining = new JArray(inputs
+                            .OfType<JObject>()
+                            .Where(o => !string.Equals((string)o["id"], AuthTokenInputKey, StringComparison.Ordinal))
+                            .Select(o => (JToken)o));
+
+                        if (!remaining.Any())
+                        {
+                            root.Remove("inputs");
+                        }
+                        else
+                        {
+                            root["inputs"] = remaining;
+                        }
                     }
                 }
-            }
-        }
-
-        private static JObject EnsureObject(JObject parent, string name)
-        {
-            if (parent[name] is JObject o) return o;
-            var created = new JObject();
-            parent[name] = created;
-            return created;
-        }
-
-        private static IList<string> BuildUvxArgs(string fromUrl, string packageName)
-        {
-            var args = new List<string> { packageName };
 
             if (!string.IsNullOrEmpty(fromUrl))
             {
