@@ -3,29 +3,6 @@
     <ui:VisualElement name="connection-section" class="section">
         <ui:Label text="Connection" class="section-title" />
         <ui:VisualElement class="section-content">
-            <ui:VisualElement name="http-server-command-section" class="manual-config-content">
-                <ui:Label text="Use this command to launch the server manually:" class="config-label" />
-                <ui:VisualElement class="config-json-row">
-                    <ui:TextField name="http-server-command" readonly="true" multiline="true" class="config-json-field" />
-                    <ui:Button name="copy-http-server-command-button" text="Copy" class="icon-button-vertical" />
-                </ui:VisualElement>
-                <ui:Label name="http-server-command-hint" class="help-text" />
-                <ui:VisualElement style="flex-direction: row; justify-content: flex-start; margin-bottom: 6px;">
-                    <ui:Button name="start-http-server-button" text="Start Server" class="secondary-button" style="width: auto; flex-grow: 1; margin-right: 5px;" />
-                    <ui:Button name="stop-http-server-button" text="Stop Server" class="secondary-button" style="width: auto; flex-grow: 1;" />
-                </ui:VisualElement>
-            </ui:VisualElement>
-            <ui:VisualElement class="setting-row" name="unity-socket-port-row">
-                <ui:Label text="Unity Socket Port:" class="setting-label" />
-                <ui:TextField name="unity-port" class="port-field" />
-            </ui:VisualElement>
-            <ui:VisualElement class="setting-row">
-                <ui:VisualElement class="status-container">
-                    <ui:VisualElement name="status-indicator" class="status-dot" />
-                    <ui:Label name="connection-status" text="Disconnected" class="status-text" />
-                </ui:VisualElement>
-                <ui:Button name="connection-toggle" text="Start" class="action-button" />
-            </ui:VisualElement>
             <ui:VisualElement class="setting-row">
                 <ui:Label text="Health:" class="setting-label" />
                 <ui:VisualElement class="status-container">
