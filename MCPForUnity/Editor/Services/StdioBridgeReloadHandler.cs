@@ -88,8 +88,6 @@ namespace MCPForUnity.Editor.Services
                     McpLog.Warn("Failed to resume stdio bridge after domain reload");
                     return;
                 }
-
-                MCPForUnity.Editor.Windows.MCPForUnityEditorWindow.RequestHealthVerification();
             }, System.Threading.Tasks.TaskScheduler.Default);
         }
     }
