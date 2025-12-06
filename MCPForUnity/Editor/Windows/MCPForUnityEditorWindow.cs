@@ -179,8 +179,6 @@ namespace MCPForUnity.Editor.Windows
             {
                 _ = connectionSection?.VerifyBridgeConnectionAsync();
             }
-
-            settingsSection?.UpdatePathOverrides();
         }
 
         internal static void RequestHealthVerification()

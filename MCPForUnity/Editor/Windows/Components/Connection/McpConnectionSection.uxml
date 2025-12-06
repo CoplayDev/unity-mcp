@@ -3,14 +3,6 @@
     <ui:VisualElement name="connection-section" class="section">
         <ui:Label text="Connection" class="section-title" />
         <ui:VisualElement class="section-content">
-            <ui:VisualElement class="setting-row">
-                <ui:Label text="Transport:" class="setting-label" />
-                <uie:EnumField name="transport-dropdown" class="setting-dropdown-inline" />
-            </ui:VisualElement>
-            <ui:VisualElement class="setting-row" name="http-url-row">
-                <ui:Label text="HTTP URL:" class="setting-label" />
-                <ui:TextField name="http-url" class="url-field" placeholder-text="http://localhost:8080" />
-            </ui:VisualElement>
             <ui:VisualElement name="http-server-command-section" class="manual-config-content">
                 <ui:Label text="Use this command to launch the server manually:" class="config-label" />
                 <ui:VisualElement class="config-json-row">
