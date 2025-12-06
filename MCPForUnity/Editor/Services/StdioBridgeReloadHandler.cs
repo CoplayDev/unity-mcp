@@ -1,14 +1,12 @@
 using System;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
-using MCPForUnity.Editor.Services.Transport;
-using MCPForUnity.Editor.Services.Transport.Transports;
 using UnityEditor;
 
 namespace MCPForUnity.Editor.Services
 {
     /// <summary>
-    /// Ensures the legacy stdio bridge resumes after domain reloads, mirroring the HTTP handler.
+    /// Ensures the stdio bridge resumes after domain reloads.
     /// </summary>
     [InitializeOnLoad]
     internal static class StdioBridgeReloadHandler
@@ -23,17 +21,13 @@ namespace MCPForUnity.Editor.Services
         {
             try
             {
-                // Only persist resume intent when stdio is the active transport and the bridge is running.
-                bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
-                bool isRunning = MCPServiceLocator.TransportManager.IsRunning(TransportMode.Stdio);
-                bool shouldResume = !useHttp && isRunning;
-
-                if (shouldResume)
+                // Persist resume intent when the bridge is running
+                bool isRunning = MCPServiceLocator.TransportManager.IsRunning();
+                if (isRunning)
                 {
                     EditorPrefs.SetBool(EditorPrefKeys.ResumeStdioAfterReload, true);
 
-                    // Stop only the stdio bridge; leave HTTP untouched if it is running concurrently.
-                    var stopTask = MCPServiceLocator.TransportManager.StopAsync(TransportMode.Stdio);
+                    var stopTask = MCPServiceLocator.TransportManager.StopAsync();
                     stopTask.ContinueWith(t =>
                     {
                         if (t.IsFaulted && t.Exception != null)
@@ -59,8 +53,6 @@ namespace MCPForUnity.Editor.Services
             try
             {
                 resume = EditorPrefs.GetBool(EditorPrefKeys.ResumeStdioAfterReload, false);
-                bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
-                resume = resume && !useHttp;
                 if (resume)
                 {
                     EditorPrefs.DeleteKey(EditorPrefKeys.ResumeStdioAfterReload);
@@ -82,7 +74,7 @@ namespace MCPForUnity.Editor.Services
 
         private static void TryStartBridgeImmediate()
         {
-            var startTask = MCPServiceLocator.TransportManager.StartAsync(TransportMode.Stdio);
+            var startTask = MCPServiceLocator.TransportManager.StartAsync();
             startTask.ContinueWith(t =>
             {
                 if (t.IsFaulted)

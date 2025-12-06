@@ -43,53 +43,17 @@ namespace MCPForUnity.Editor.Migrations
 
             if (string.Equals(lastUpgradeVersion, currentVersion, StringComparison.OrdinalIgnoreCase))
             {
-                return; // Already refreshed for this package version
+                return; // Already processed for this package version
             }
 
-            bool hadFailures = false;
-            bool touchedAny = false;
-
-            var configurators = McpClientRegistry.All.OfType<McpClientConfiguratorBase>().ToList();
-            foreach (var configurator in configurators)
-            {
-                try
-                {
-                    if (!ConfigUsesStdIo(configurator.Client))
-                        continue;
-
-                    if (!configurator.SupportsAutoConfigure)
-                        continue;
-
-                    MCPServiceLocator.Client.ConfigureClient(configurator);
-                    touchedAny = true;
-                }
-                catch (Exception ex)
-                {
-                    hadFailures = true;
-                    McpLog.Warn($"Failed to refresh stdio config for {configurator.DisplayName}: {ex.Message}");
-                }
-            }
-
-            if (!touchedAny)
-            {
-                // Nothing needed refreshing; still record version so we don't rerun every launch
-                try { EditorPrefs.SetString(LastUpgradeKey, currentVersion); } catch { }
-                return;
-            }
-
-            if (hadFailures)
-            {
-                McpLog.Warn("Stdio MCP upgrade encountered errors; will retry next session.");
-                return;
-            }
-
+            // Client configuration is no longer supported - just record the version
             try
             {
                 EditorPrefs.SetString(LastUpgradeKey, currentVersion);
             }
             catch { }
 
-            McpLog.Info($"Updated stdio MCP configs to package version {currentVersion}.");
+            McpLog.Info($"Package version {currentVersion} detected. Note: Client configuration is now handled by the MCP client (e.g., Cursor's mcp.json).");
         }
 
         private static bool ConfigUsesStdIo(McpClient client)

@@ -208,15 +208,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
         private static bool ShouldAutoStartBridge()
         {
-            try
-            {
-                bool useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
-                return !useHttpTransport;
-            }
-            catch
-            {
-                return true;
-            }
+            // Always auto-start stdio bridge when editor starts
+            return true;
         }
 
         private static void EnsureStartedOnEditorIdle()

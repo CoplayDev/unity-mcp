@@ -1,39 +1,29 @@
 
 using System;
 using System.Threading.Tasks;
-using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services.Transport;
 using MCPForUnity.Editor.Services.Transport.Transports;
-using UnityEditor;
 
 namespace MCPForUnity.Editor.Services
 {
     /// <summary>
-    /// Bridges the editor UI to the active transport (HTTP with WebSocket push, or stdio).
+    /// Bridges the editor UI to the stdio transport.
     /// </summary>
     public class BridgeControlService : IBridgeControlService
     {
         private readonly TransportManager _transportManager;
-        private TransportMode _preferredMode = TransportMode.Http;
 
         public BridgeControlService()
         {
             _transportManager = MCPServiceLocator.TransportManager;
         }
 
-        private TransportMode ResolvePreferredMode()
+        private static BridgeVerificationResult BuildVerificationResult(TransportState state, bool pingSucceeded, string messageOverride = null, bool? handshakeOverride = null)
         {
-            bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
-            _preferredMode = useHttp ? TransportMode.Http : TransportMode.Stdio;
-            return _preferredMode;
-        }
-
-        private static BridgeVerificationResult BuildVerificationResult(TransportState state, TransportMode mode, bool pingSucceeded, string messageOverride = null, bool? handshakeOverride = null)
-        {
-            bool handshakeValid = handshakeOverride ?? (mode == TransportMode.Stdio ? state.IsConnected : true);
+            bool handshakeValid = handshakeOverride ?? state.IsConnected;
             string transportLabel = string.IsNullOrWhiteSpace(state.TransportName)
-                ? mode.ToString().ToLowerInvariant()
+                ? "stdio"
                 : state.TransportName;
             string detailSuffix = string.IsNullOrWhiteSpace(state.Details) ? string.Empty : $" [{state.Details}]";
             string message = messageOverride
@@ -53,8 +43,7 @@ namespace MCPForUnity.Editor.Services
         {
             get
             {
-                var mode = ResolvePreferredMode();
-                return _transportManager.IsRunning(mode);
+                return _transportManager.IsRunning();
             }
         }
 
@@ -62,36 +51,32 @@ namespace MCPForUnity.Editor.Services
         {
             get
             {
-                var mode = ResolvePreferredMode();
-                var state = _transportManager.GetState(mode);
+                var state = _transportManager.GetState();
                 if (state.Port.HasValue)
                 {
                     return state.Port.Value;
                 }
 
-                // Legacy fallback while the stdio bridge is still in play
                 return StdioBridgeHost.GetCurrentPort();
             }
         }
 
         public bool IsAutoConnectMode => StdioBridgeHost.IsAutoConnectMode();
-        public TransportMode? ActiveMode => ResolvePreferredMode();
 
         public async Task<bool> StartAsync()
         {
-            var mode = ResolvePreferredMode();
             try
             {
-                bool started = await _transportManager.StartAsync(mode);
+                bool started = await _transportManager.StartAsync();
                 if (!started)
                 {
-                    McpLog.Warn($"Failed to start MCP transport: {mode}");
+                    McpLog.Warn("Failed to start MCP stdio transport");
                 }
                 return started;
             }
             catch (Exception ex)
             {
-                McpLog.Error($"Error starting MCP transport {mode}: {ex.Message}");
+                McpLog.Error($"Error starting MCP stdio transport: {ex.Message}");
                 return false;
             }
         }
@@ -100,8 +85,7 @@ namespace MCPForUnity.Editor.Services
         {
             try
             {
-                var mode = ResolvePreferredMode();
-                await _transportManager.StopAsync(mode);
+                await _transportManager.StopAsync();
             }
             catch (Exception ex)
             {
@@ -111,28 +95,21 @@ namespace MCPForUnity.Editor.Services
 
         public async Task<BridgeVerificationResult> VerifyAsync()
         {
-            var mode = ResolvePreferredMode();
-            bool pingSucceeded = await _transportManager.VerifyAsync(mode);
-            var state = _transportManager.GetState(mode);
-            return BuildVerificationResult(state, mode, pingSucceeded);
+            bool pingSucceeded = await _transportManager.VerifyAsync();
+            var state = _transportManager.GetState();
+            return BuildVerificationResult(state, pingSucceeded);
         }
 
         public BridgeVerificationResult Verify(int port)
         {
-            var mode = ResolvePreferredMode();
-            bool pingSucceeded = _transportManager.VerifyAsync(mode).GetAwaiter().GetResult();
-            var state = _transportManager.GetState(mode);
+            bool pingSucceeded = _transportManager.VerifyAsync().GetAwaiter().GetResult();
+            var state = _transportManager.GetState();
 
-            if (mode == TransportMode.Stdio)
-            {
-                bool handshakeValid = state.IsConnected && port == CurrentPort;
-                string message = handshakeValid
-                    ? $"STDIO transport listening on port {CurrentPort}"
-                    : $"STDIO transport port mismatch (expected {CurrentPort}, got {port})";
-                return BuildVerificationResult(state, mode, pingSucceeded && handshakeValid, message, handshakeValid);
-            }
-
-            return BuildVerificationResult(state, mode, pingSucceeded);
+            bool handshakeValid = state.IsConnected && port == CurrentPort;
+            string message = handshakeValid
+                ? $"STDIO transport listening on port {CurrentPort}"
+                : $"STDIO transport port mismatch (expected {CurrentPort}, got {port})";
+            return BuildVerificationResult(state, pingSucceeded && handshakeValid, message, handshakeValid);
         }
 
     }

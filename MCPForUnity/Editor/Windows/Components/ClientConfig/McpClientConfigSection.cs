@@ -49,7 +49,9 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
         public McpClientConfigSection(VisualElement root)
         {
             Root = root;
-            configurators = MCPServiceLocator.Client.GetAllClients().ToList();
+            // Client configuration service is no longer available
+            // This section should not be loaded, but handle gracefully if it is
+            configurators = new List<IMcpClientConfigurator>();
             CacheUIElements();
             InitializeUI();
             RegisterCallbacks();
@@ -184,51 +186,18 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 
         private void OnConfigureAllClientsClicked()
         {
-            try
-            {
-                var summary = MCPServiceLocator.Client.ConfigureAllDetectedClients();
-
-                string message = summary.GetSummaryMessage() + "\n\n";
-                foreach (var msg in summary.Messages)
-                {
-                    message += msg + "\n";
-                }
-
-                EditorUtility.DisplayDialog("Configure All Clients", message, "OK");
-
-                if (selectedClientIndex >= 0 && selectedClientIndex < configurators.Count)
-                {
-                    UpdateClientStatus();
-                    UpdateManualConfiguration();
-                }
-            }
-            catch (Exception ex)
-            {
-                EditorUtility.DisplayDialog("Configuration Failed", ex.Message, "OK");
-            }
+            EditorUtility.DisplayDialog("Client Configuration", 
+                "Client configuration is no longer supported by this plugin.\n\n" +
+                "Please configure your MCP client (e.g., Cursor) directly using its configuration file (e.g., mcp.json).", 
+                "OK");
         }
 
         private void OnConfigureClicked()
         {
-            if (selectedClientIndex < 0 || selectedClientIndex >= configurators.Count)
-                return;
-
-            var client = configurators[selectedClientIndex];
-
-            try
-            {
-                MCPServiceLocator.Client.ConfigureClient(client);
-                lastStatusChecks.Remove(client);
-                RefreshClientStatus(client, forceImmediate: true);
-                UpdateManualConfiguration();
-            }
-            catch (Exception ex)
-            {
-                clientStatusLabel.text = "Error";
-                clientStatusLabel.style.color = Color.red;
-                McpLog.Error($"Configuration failed: {ex.Message}");
-                EditorUtility.DisplayDialog("Configuration Failed", ex.Message, "OK");
-            }
+            EditorUtility.DisplayDialog("Client Configuration", 
+                "Client configuration is no longer supported by this plugin.\n\n" +
+                "Please configure your MCP client (e.g., Cursor) directly using its configuration file (e.g., mcp.json).", 
+                "OK");
         }
 
         private void OnBrowseClaudeClicked()
@@ -301,78 +270,24 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 
         private void RefreshClientStatus(IMcpClientConfigurator client, bool forceImmediate = false)
         {
-            if (client is ClaudeCliMcpConfigurator)
+            // Client configuration service is no longer available
+            // Just show not configured status
+            if (client is McpClientConfiguratorBase baseConfigurator)
             {
-                RefreshClaudeCliStatus(client, forceImmediate);
-                return;
+                baseConfigurator.Client.SetStatus(McpStatus.NotConfigured, "Client configuration not supported");
             }
-
-            if (forceImmediate || ShouldRefreshClient(client))
-            {
-                MCPServiceLocator.Client.CheckClientStatus(client);
-                lastStatusChecks[client] = DateTime.UtcNow;
-            }
-
             ApplyStatusToUi(client);
         }
 
         private void RefreshClaudeCliStatus(IMcpClientConfigurator client, bool forceImmediate)
         {
-            if (forceImmediate)
+            // Client configuration service is no longer available
+            // Just show not configured status
+            if (client is McpClientConfiguratorBase baseConfigurator)
             {
-                MCPServiceLocator.Client.CheckClientStatus(client, attemptAutoRewrite: false);
-                lastStatusChecks[client] = DateTime.UtcNow;
-                ApplyStatusToUi(client);
-                return;
+                baseConfigurator.Client.SetStatus(McpStatus.NotConfigured, "Client configuration not supported");
             }
-
-            bool hasStatus = lastStatusChecks.ContainsKey(client);
-            bool needsRefresh = !hasStatus || ShouldRefreshClient(client);
-
-            if (!hasStatus)
-            {
-                ApplyStatusToUi(client, showChecking: true);
-            }
-            else
-            {
-                ApplyStatusToUi(client);
-            }
-
-            if (needsRefresh && !statusRefreshInFlight.Contains(client))
-            {
-                statusRefreshInFlight.Add(client);
-                ApplyStatusToUi(client, showChecking: true);
-
-                Task.Run(() =>
-                {
-                    MCPServiceLocator.Client.CheckClientStatus(client, attemptAutoRewrite: false);
-                }).ContinueWith(t =>
-                {
-                    bool faulted = false;
-                    string errorMessage = null;
-                    if (t.IsFaulted && t.Exception != null)
-                    {
-                        var baseException = t.Exception.GetBaseException();
-                        errorMessage = baseException?.Message ?? "Status check failed";
-                        McpLog.Error($"Failed to refresh Claude CLI status: {errorMessage}");
-                        faulted = true;
-                    }
-
-                    EditorApplication.delayCall += () =>
-                    {
-                        statusRefreshInFlight.Remove(client);
-                        lastStatusChecks[client] = DateTime.UtcNow;
-                        if (faulted)
-                        {
-                            if (client is McpClientConfiguratorBase baseConfigurator)
-                            {
-                                baseConfigurator.Client.SetStatus(McpStatus.Error, errorMessage ?? "Status check failed");
-                            }
-                        }
-                        ApplyStatusToUi(client);
-                    };
-                });
-            }
+            ApplyStatusToUi(client);
         }
 
         private bool ShouldRefreshClient(IMcpClientConfigurator client)

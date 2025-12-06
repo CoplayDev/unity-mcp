@@ -17,7 +17,6 @@ namespace MCPForUnity.Editor.Windows
         // Section controllers
         private McpSettingsSection settingsSection;
         private McpConnectionSection connectionSection;
-        private McpClientConfigSection clientConfigSection;
 
         private static readonly HashSet<MCPForUnityEditorWindow> OpenWindows = new();
         private bool guiCreated = false;
@@ -115,10 +114,6 @@ namespace MCPForUnity.Editor.Windows
                 var settingsRoot = settingsTree.Instantiate();
                 sectionsContainer.Add(settingsRoot);
                 settingsSection = new McpSettingsSection(settingsRoot);
-                settingsSection.OnGitUrlChanged += () =>
-                    clientConfigSection?.UpdateManualConfiguration();
-                settingsSection.OnHttpServerCommandUpdateRequested += () =>
-                    connectionSection?.UpdateHttpServerCommandDisplay();
             }
 
             // Load and initialize Connection section
@@ -130,19 +125,6 @@ namespace MCPForUnity.Editor.Windows
                 var connectionRoot = connectionTree.Instantiate();
                 sectionsContainer.Add(connectionRoot);
                 connectionSection = new McpConnectionSection(connectionRoot);
-                connectionSection.OnManualConfigUpdateRequested += () =>
-                    clientConfigSection?.UpdateManualConfiguration();
-            }
-
-            // Load and initialize Client Configuration section
-            var clientConfigTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
-                $"{basePath}/Editor/Windows/Components/ClientConfig/McpClientConfigSection.uxml"
-            );
-            if (clientConfigTree != null)
-            {
-                var clientConfigRoot = clientConfigTree.Instantiate();
-                sectionsContainer.Add(clientConfigRoot);
-                clientConfigSection = new McpClientConfigSection(clientConfigRoot);
             }
 
             guiCreated = true;
@@ -199,7 +181,6 @@ namespace MCPForUnity.Editor.Windows
             }
 
             settingsSection?.UpdatePathOverrides();
-            clientConfigSection?.RefreshSelectedClient();
         }
 
         internal static void RequestHealthVerification()

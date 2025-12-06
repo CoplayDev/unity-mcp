@@ -1,5 +1,4 @@
 using System.Threading.Tasks;
-using MCPForUnity.Editor.Services.Transport;
 
 namespace MCPForUnity.Editor.Services
 {
@@ -24,11 +23,6 @@ namespace MCPForUnity.Editor.Services
         bool IsAutoConnectMode { get; }
 
         /// <summary>
-        /// Gets the currently active transport mode, if any
-        /// </summary>
-        TransportMode? ActiveMode { get; }
-
-        /// <summary>
         /// Starts the MCP for Unity Bridge asynchronously
         /// </summary>
         /// <returns>True if the bridge started successfully</returns>
@@ -47,7 +41,7 @@ namespace MCPForUnity.Editor.Services
         BridgeVerificationResult Verify(int port);
 
         /// <summary>
-        /// Verifies the connection asynchronously (works for both HTTP and stdio transports)
+        /// Verifies the connection asynchronously
         /// </summary>
         /// <returns>Verification result with detailed status</returns>
         Task<BridgeVerificationResult> VerifyAsync();

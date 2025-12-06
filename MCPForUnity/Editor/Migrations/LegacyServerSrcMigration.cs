@@ -38,15 +38,8 @@ namespace MCPForUnity.Editor.Migrations
 
             try
             {
-                McpLog.Info("Detected legacy embedded MCP server configuration. Updating all client configs...");
-
-                var summary = MCPServiceLocator.Client.ConfigureAllDetectedClients();
-
-                if (summary.FailureCount > 0 || summary.SuccessCount == 0)
-                {
-                    McpLog.Warn($"Legacy configuration migration incomplete ({summary.GetSummaryMessage()}). Will retry next session.");
-                    return;
-                }
+                // Client configuration is no longer supported - just clean up legacy keys
+                McpLog.Info("Detected legacy embedded MCP server configuration. Cleaning up legacy preferences...");
 
                 if (hasServerSrc)
                 {
@@ -60,7 +53,7 @@ namespace MCPForUnity.Editor.Migrations
                     McpLog.Info("  ✓ Removed legacy key: MCPForUnity.UseEmbeddedServer");
                 }
 
-                McpLog.Info($"Legacy configuration migration complete ({summary.GetSummaryMessage()})");
+                McpLog.Info("Legacy configuration migration complete. Note: Client configuration is now handled by the MCP client (e.g., Cursor's mcp.json).");
             }
             catch (Exception ex)
             {
