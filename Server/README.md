@@ -23,11 +23,11 @@ Run directly from GitHub without installation:
 
 ```bash
 # HTTP (default)
-uvx --from git+https://github.com/prophecygamestudio/unity-mcp@v8.1.6#subdirectory=Server \
+uvx --from git+https://github.com/prophecygamestudio/unity-mcp@v8.1.6.2#subdirectory=Server \
     mcp-for-unity --transport http --http-url http://localhost:8080
 
 # Stdio
-uvx --from git+https://github.com/prophecygamestudio/unity-mcp@v8.1.6#subdirectory=Server \
+uvx --from git+https://github.com/prophecygamestudio/unity-mcp@v8.1.6.2#subdirectory=Server \
     mcp-for-unity --transport stdio
 ```
 
@@ -52,7 +52,7 @@ uvx --from git+https://github.com/prophecygamestudio/unity-mcp@v8.1.6#subdirecto
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/prophecygamestudio/unity-mcp@v8.1.6#subdirectory=Server",
+        "git+https://github.com/prophecygamestudio/unity-mcp@v8.1.6.2#subdirectory=Server",
         "mcp-for-unity",
         "--transport",
         "stdio"
