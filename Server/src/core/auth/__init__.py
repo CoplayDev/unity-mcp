@@ -16,7 +16,6 @@ from .guard import AuthGuard, verify_http_request, verify_websocket, unauthorize
 from .middleware import AuthMiddleware, build_http_auth_guard
 
 
-# Snake-case convenience wrappers to keep public API naming consistent with the rest of the codebase.
 def auth_settings(*, enabled: bool = False, token: str | None = None, allowed_ips=None) -> AuthSettings:
     return build_auth_settings(enabled=enabled, token=token, allowed_ips=allowed_ips)
 
@@ -34,7 +33,6 @@ def http_auth_guard(settings: AuthSettings, path_prefix: str = "/mcp"):
 
 
 __all__ = [
-    # Snake-case helpers used throughout the server
     "auth_settings",
     "auth_guard",
     "auth_middleware",
@@ -45,7 +43,6 @@ __all__ = [
     "get_api_key_path",
     "load_or_create_api_key",
     "DEFAULT_ALLOWED_IPS",
-    # Class exports for typing/advanced use
     "AuthSettings",
     "AuthGuard",
     "AuthMiddleware",
