@@ -41,12 +41,6 @@ def _ip_in_allowlist(ip: str | None, allowed: Iterable[str]) -> bool:
 
 
 def _extract_token(headers: Mapping[str, str]) -> str | None:
-    auth_header = headers.get("authorization") or headers.get("Authorization")
-    if auth_header and auth_header.lower().startswith("bearer "):
-        token = auth_header[7:].strip()
-        if token:
-            return token
-
     api_key = headers.get("x-api-key") or headers.get("X-API-Key")
     if api_key:
         return api_key.strip()
@@ -54,13 +48,9 @@ def _extract_token(headers: Mapping[str, str]) -> str | None:
 
 
 def unauthorized_response(message: str, status_code: int = 401, error: str = "invalid_token") -> JSONResponse:
-    headers = {}
-    if status_code == 401:
-        headers["WWW-Authenticate"] = f'Bearer error="{error}", error_description="{message}"'
     return JSONResponse(
         {"success": False, "error": "unauthorized", "message": message},
         status_code=status_code,
-        headers=headers,
     )
 
 
@@ -83,9 +73,8 @@ class AuthGuard:
 
     def _evaluate(self, client_ip: str | None, headers: Mapping[str, str]) -> JSONResponse | None:
         logger.debug(
-            "Auth context: ip=%s auth_header=%s api_key_header=%s",
+            "Auth context: ip=%s api_key_header=%s",
             client_ip or "unknown",
-            "present" if headers.get("authorization") or headers.get("Authorization") else "absent",
             "present" if headers.get("x-api-key") or headers.get("X-API-Key") else "absent",
         )
 

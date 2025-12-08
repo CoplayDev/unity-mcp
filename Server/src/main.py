@@ -291,24 +291,6 @@ async def plugin_sessions_route(request: Request) -> JSONResponse:
     return JSONResponse(data.model_dump())
 
 
-# Explicitly answer OAuth discovery endpoints with a clear 401 so clients stop probing other flows
-@mcp.custom_route("/.well-known/oauth-authorization-server", methods=["GET"])
-@mcp.custom_route("/.well-known/openid-configuration", methods=["GET"])
-@mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])
-@mcp.custom_route("/.well-known/oauth-protected-resource/mcp", methods=["GET"])
-@mcp.custom_route("/register", methods=["GET", "POST"])
-async def oauth_discovery_blocker(request: Request) -> JSONResponse:
-    # Return the same unauthorized shape and WWW-Authenticate header used by our auth guard
-    headers = {
-        "WWW-Authenticate": 'Bearer error="invalid_token", error_description="Missing or invalid API key"'
-    }
-    return JSONResponse(
-        {"success": False, "error": "unauthorized", "message": "Missing or invalid API key"},
-        status_code=401,
-        headers=headers,
-    )
-
-
 # Initialize and register middleware for session-based Unity instance routing
 # Using the singleton getter ensures we use the same instance everywhere
 
@@ -466,13 +448,15 @@ Examples:
         except Exception:
             logger.debug("Could not resolve API key file path", exc_info=True)
 
-    # Register auth middleware first so it short-circuits unauthorized requests
-    mcp.add_middleware(auth_middleware(auth_settings_state))
-    # FastMCP attaches HTTP middleware when launching; we inject our guard via run() kwargs
+    # Register auth middleware only when enabled so we skip auth checks entirely when disabled
+    if auth_settings_state.enabled:
+        mcp.add_middleware(auth_middleware(auth_settings_state))
+        logger.info("Registered middleware: auth enabled")
     # Session-based Unity instance routing
     unity_middleware = get_unity_instance_middleware()
     mcp.add_middleware(unity_middleware)
-    logger.info("Registered middleware: auth -> unity instance routing")
+    logger.info("Registered middleware: unity instance routing%s",
+                " + auth" if auth_settings_state.enabled else " (auth disabled)")
 
     if custom_tool_service:
         custom_tool_service.set_auth_settings(auth_settings_state)
@@ -523,8 +507,10 @@ Examples:
         port = args.http_port or (int(os.environ.get("UNITY_MCP_HTTP_PORT")) if os.environ.get(
             "UNITY_MCP_HTTP_PORT") else None) or parsed_url.port or 8080
         logger.info(f"Starting FastMCP with HTTP transport on {host}:{port}")
-        http_guard = http_auth_guard(auth_settings_state)
-        http_middleware = [Middleware(http_guard)]
+        http_middleware = []
+        if auth_settings_state.enabled:
+            http_guard = http_auth_guard(auth_settings_state)
+            http_middleware.append(Middleware(http_guard))
         mcp.run(transport=transport, host=host, port=port, middleware=http_middleware)
     else:
         # Use stdio transport for traditional MCP

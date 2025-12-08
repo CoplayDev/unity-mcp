@@ -20,7 +20,7 @@ class _DummyWebSocket:
 
 def test_http_allowlist_allows_any_ip_when_wildcard():
     settings = auth_settings(token="secret", allowed_ips=["*"])
-    request = _DummyRequest("192.168.1.10", headers={"Authorization": "Bearer secret"})
+    request = _DummyRequest("192.168.1.10", headers={"X-API-Key": "secret"})
 
     response = verify_http_request(request, settings)
 
@@ -29,7 +29,7 @@ def test_http_allowlist_allows_any_ip_when_wildcard():
 
 def test_http_allowlist_blocks_outside_cidr():
     settings = auth_settings(token="secret", allowed_ips=["10.0.0.0/8"])
-    request = _DummyRequest("192.168.1.10", headers={"Authorization": "Bearer secret"})
+    request = _DummyRequest("192.168.1.10", headers={"X-API-Key": "secret"})
 
     response = verify_http_request(request, settings)
 
@@ -39,7 +39,7 @@ def test_http_allowlist_blocks_outside_cidr():
 
 def test_http_requires_matching_token_when_set():
     settings = auth_settings(token="secret", allowed_ips=["*"])
-    request = _DummyRequest("127.0.0.1", headers={"Authorization": "Bearer secret"})
+    request = _DummyRequest("127.0.0.1", headers={"X-API-Key": "secret"})
 
     response = verify_http_request(request, settings)
 
@@ -59,7 +59,7 @@ def test_http_blocks_missing_token_when_required():
 @pytest.mark.asyncio
 async def test_websocket_checks_token_and_allowlist():
     settings = auth_settings(token="secret", allowed_ips=["10.0.0.0/8"])
-    websocket = _DummyWebSocket("10.1.2.3", headers=[("Authorization", "Bearer secret")])
+    websocket = _DummyWebSocket("10.1.2.3", headers=[("x-api-key", "secret")])
 
     response = await verify_websocket(websocket, settings)
 
@@ -69,7 +69,7 @@ async def test_websocket_checks_token_and_allowlist():
 @pytest.mark.asyncio
 async def test_websocket_blocks_invalid_token():
     settings = auth_settings(token="secret", allowed_ips=["10.0.0.0/8"])
-    websocket = _DummyWebSocket("10.1.2.3", headers=[("Authorization", "Bearer wrong")])
+    websocket = _DummyWebSocket("10.1.2.3", headers=[("x-api-key", "wrong")])
 
     response = await verify_websocket(websocket, settings)
 
