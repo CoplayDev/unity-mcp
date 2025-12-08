@@ -67,14 +67,25 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         public string TransportName => TransportDisplayName;
         public TransportState State => _state;
 
-        private Task<List<ToolMetadata>> GetEnabledToolsOnMainThreadAsync()
+        private Task<List<ToolMetadata>> GetEnabledToolsOnMainThreadAsync(CancellationToken token)
         {
             var tcs = new TaskCompletionSource<List<ToolMetadata>>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            // Register cancellation to break the deadlock if StopAsync is called while waiting for main thread
+            var registration = token.Register(() => tcs.TrySetCanceled());
 
             EditorApplication.delayCall += () =>
             {
                 try
                 {
+                    // Clean up the registration once we're running
+                    registration.Dispose();
+
+                    if (tcs.Task.IsCompleted)
+                    {
+                        return;
+                    }
+
                     var tools = _toolDiscoveryService?.GetEnabledTools() ?? new List<ToolMetadata>();
                     tcs.TrySetResult(tools);
                 }
@@ -444,7 +455,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             if (_toolDiscoveryService == null) return;
 
             token.ThrowIfCancellationRequested();
-            var tools = await GetEnabledToolsOnMainThreadAsync().ConfigureAwait(false);
+            var tools = await GetEnabledToolsOnMainThreadAsync(token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
             McpLog.Info($"[WebSocket] Preparing to register {tools.Count} tool(s) with the bridge.");
             var toolsArray = new JArray();
