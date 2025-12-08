@@ -8,9 +8,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Config;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Services.Transport;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using UnityEditor;
 using UnityEngine;
 
 namespace MCPForUnity.Editor.Services.Transport.Transports
@@ -64,6 +66,26 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         public bool IsConnected => _isConnected;
         public string TransportName => TransportDisplayName;
         public TransportState State => _state;
+
+        private Task<List<ToolMetadata>> GetEnabledToolsOnMainThreadAsync()
+        {
+            var tcs = new TaskCompletionSource<List<ToolMetadata>>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            EditorApplication.delayCall += () =>
+            {
+                try
+                {
+                    var tools = _toolDiscoveryService?.GetEnabledTools() ?? new List<ToolMetadata>();
+                    tcs.TrySetResult(tools);
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+            };
+
+            return tcs.Task;
+        }
 
         public async Task<bool> StartAsync()
         {
@@ -421,7 +443,9 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         {
             if (_toolDiscoveryService == null) return;
 
-            var tools = _toolDiscoveryService.GetEnabledTools();
+            token.ThrowIfCancellationRequested();
+            var tools = await GetEnabledToolsOnMainThreadAsync().ConfigureAwait(false);
+            token.ThrowIfCancellationRequested();
             McpLog.Info($"[WebSocket] Preparing to register {tools.Count} tool(s) with the bridge.");
             var toolsArray = new JArray();
 
