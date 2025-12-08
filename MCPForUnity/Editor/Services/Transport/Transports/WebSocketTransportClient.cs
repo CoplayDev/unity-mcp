@@ -78,9 +78,6 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             {
                 try
                 {
-                    // Clean up the registration once we're running
-                    registration.Dispose();
-
                     if (tcs.Task.IsCompleted)
                     {
                         return;
@@ -92,6 +89,11 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 catch (Exception ex)
                 {
                     tcs.TrySetException(ex);
+                }
+                finally
+                {
+                    // Ensure registration is disposed even if discovery throws
+                    registration.Dispose();
                 }
             };
 
