@@ -26,12 +26,17 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
         // UI Elements
         private EnumField transportDropdown;
+        private Toggle authEnabledToggle;
+        private VisualElement authToggleRow;
+        private VisualElement allowedIpsRow;
+        private TextField allowedIpsField;
         private VisualElement httpUrlRow;
         private VisualElement httpServerCommandSection;
         private TextField httpServerCommandField;
         private Button copyHttpServerCommandButton;
         private Label httpServerCommandHint;
         private TextField httpUrlField;
+        private VisualElement apiKeyRow;
         private TextField apiKeyField;
         private Button copyApiKeyButton;
         private Button regenerateApiKeyButton;
@@ -72,12 +77,17 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         private void CacheUIElements()
         {
             transportDropdown = Root.Q<EnumField>("transport-dropdown");
+            authEnabledToggle = Root.Q<Toggle>("auth-enabled-toggle");
+            authToggleRow = Root.Q<VisualElement>("auth-toggle-row");
+            allowedIpsRow = Root.Q<VisualElement>("allowed-ips-row");
+            allowedIpsField = Root.Q<TextField>("allowed-ips-field");
             httpUrlRow = Root.Q<VisualElement>("http-url-row");
             httpServerCommandSection = Root.Q<VisualElement>("http-server-command-section");
             httpServerCommandField = Root.Q<TextField>("http-server-command");
             copyHttpServerCommandButton = Root.Q<Button>("copy-http-server-command-button");
             httpServerCommandHint = Root.Q<Label>("http-server-command-hint");
             httpUrlField = Root.Q<TextField>("http-url");
+            apiKeyRow = Root.Q<VisualElement>("api-key-row");
             apiKeyField = Root.Q<TextField>("api-key-field");
             copyApiKeyButton = Root.Q<Button>("copy-api-key-button");
             regenerateApiKeyButton = Root.Q<Button>("regenerate-api-key-button");
@@ -101,12 +111,21 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
             httpUrlField.value = HttpEndpointUtility.GetBaseUrl();
 
+            bool authEnabled = AuthPreferencesUtility.IsAuthEnabled();
+            if (authEnabledToggle != null)
+            {
+                authEnabledToggle.value = authEnabled;
+            }
+            if (allowedIpsField != null)
+            {
+                allowedIpsField.value = AuthPreferencesUtility.GetAllowedIps();
+            }
+
             if (apiKeyField != null)
             {
                 apiKeyField.isPasswordField = true;
                 apiKeyField.isReadOnly = true;
-                EnsureApiKeyExists();
-                UpdateApiKeyField();
+                RefreshAuthUi();
             }
 
             int unityPort = EditorPrefs.GetInt(EditorPrefKeys.UnitySocketPort, 0);
@@ -139,6 +158,26 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 OnManualConfigUpdateRequested?.Invoke();
                 RefreshHttpUi();
             });
+
+            if (authEnabledToggle != null)
+            {
+                authEnabledToggle.RegisterValueChangedCallback(evt =>
+                {
+                    bool enabled = evt.newValue;
+                    AuthPreferencesUtility.SetAuthEnabled(enabled);
+                    RefreshAuthUi();
+                    OnManualConfigUpdateRequested?.Invoke();
+                });
+            }
+
+            if (allowedIpsField != null)
+            {
+                allowedIpsField.RegisterValueChangedCallback(evt =>
+                {
+                    AuthPreferencesUtility.SetAllowedIps(evt.newValue);
+                    OnManualConfigUpdateRequested?.Invoke();
+                });
+            }
 
             if (startHttpServerButton != null)
             {
@@ -179,6 +218,10 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             {
                 copyApiKeyButton.clicked += () =>
                 {
+                    if (!AuthPreferencesUtility.IsAuthEnabled())
+                    {
+                        return;
+                    }
                     string apiKey = AuthPreferencesUtility.GetApiKey();
                     if (!string.IsNullOrEmpty(apiKey))
                     {
@@ -192,6 +235,10 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             {
                 regenerateApiKeyButton.clicked += () =>
                 {
+                    if (!AuthPreferencesUtility.IsAuthEnabled())
+                    {
+                        return;
+                    }
                     string newKey = AuthPreferencesUtility.GenerateNewApiKey();
                     AuthPreferencesUtility.SetApiKey(newKey);
                     UpdateApiKeyField();
@@ -263,9 +310,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             }
 
             httpServerCommandSection.style.display = DisplayStyle.Flex;
-
-            EnsureApiKeyExists();
-            UpdateApiKeyField();
+            RefreshAuthUi();
 
             if (MCPServiceLocator.Server.TryGetLocalHttpServerCommand(out var command, out var error))
             {
@@ -295,12 +340,62 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             }
         }
 
+        private void RefreshAuthUi()
+        {
+            bool enabled = AuthPreferencesUtility.IsAuthEnabled();
+            bool useHttp = transportDropdown != null && (TransportProtocol)transportDropdown.value == TransportProtocol.HTTP;
+            bool active = enabled && useHttp;
+
+            UpdateAuthVisibility(active);
+            UpdateAuthControlState(active);
+
+            if (active)
+            {
+                EnsureApiKeyExists();
+                UpdateApiKeyField();
+            }
+            else if (apiKeyField != null)
+            {
+                apiKeyField.value = string.Empty;
+            }
+        }
+
+        private void UpdateAuthVisibility(bool enabled)
+        {
+            if (allowedIpsRow != null)
+            {
+                allowedIpsRow.style.display = enabled ? DisplayStyle.Flex : DisplayStyle.None;
+            }
+
+            if (apiKeyRow != null)
+            {
+                apiKeyRow.style.display = enabled ? DisplayStyle.Flex : DisplayStyle.None;
+            }
+        }
+
+        private void UpdateAuthControlState(bool enabled)
+        {
+            allowedIpsField?.SetEnabled(enabled);
+            apiKeyField?.SetEnabled(enabled);
+            copyApiKeyButton?.SetEnabled(enabled);
+            regenerateApiKeyButton?.SetEnabled(enabled);
+        }
+
         private void UpdateHttpFieldVisibility()
         {
             bool useHttp = (TransportProtocol)transportDropdown.value == TransportProtocol.HTTP;
 
             httpUrlRow.style.display = useHttp ? DisplayStyle.Flex : DisplayStyle.None;
             unitySocketPortRow.style.display = useHttp ? DisplayStyle.None : DisplayStyle.Flex;
+
+            if (authToggleRow != null)
+            {
+                authToggleRow.style.display = useHttp ? DisplayStyle.Flex : DisplayStyle.None;
+            }
+            if (!useHttp)
+            {
+                UpdateAuthVisibility(false);
+            }
         }
 
         private void UpdateStartHttpButtonState()
@@ -333,6 +428,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
         private void RefreshHttpUi()
         {
+            RefreshAuthUi();
             UpdateStartHttpButtonState();
             UpdateHttpServerCommandDisplay();
         }
@@ -543,7 +639,12 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
         private void EnsureApiKeyExists()
         {
-            string current = AuthPreferencesUtility.GetApiKey();
+            if (!AuthPreferencesUtility.IsAuthEnabled())
+            {
+                return;
+            }
+
+            string current = AuthPreferencesUtility.GetApiKey(ensureExists: false);
             if (string.IsNullOrEmpty(current))
             {
                 AuthPreferencesUtility.SetApiKey(AuthPreferencesUtility.GenerateNewApiKey());
@@ -554,7 +655,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         {
             if (apiKeyField != null)
             {
-                apiKeyField.value = AuthPreferencesUtility.GetApiKey();
+                apiKeyField.value = AuthPreferencesUtility.GetApiKey(ensureExists: false);
             }
         }
     }

@@ -402,31 +402,72 @@ Examples:
     )
 
     parser.add_argument(
-        "--api-key",
-        dest="api_key",
+        "--auth-enabled",
+        action="store_true",
+        default=False,
+        help="Enable authentication (IP allowlist always applies; token optional)."
+    )
+    parser.add_argument(
+        "--auth-token",
+        dest="auth_token",
         type=str,
         default=None,
-        help="API key for all MCP requests. Defaults to the shared key file if omitted."
+        help="Authentication token. If omitted while auth is enabled, a token is generated. Empty string disables token checks."
+    )
+    # Back-compat alias
+    parser.add_argument(
+        "--api-key",
+        dest="auth_token",
+        type=str,
+        default=None,
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--allowed-ips",
+        dest="allowed_ips",
+        type=str,
+        default=None,
+        help="Comma-separated IP allowlist (supports *, CIDR, single IP)."
     )
 
     args = parser.parse_args()
 
     global AUTH_SETTINGS
+    env_auth_enabled = os.environ.get("UNITY_MCP_AUTH_ENABLED", "").lower() in ("1", "true", "yes", "on")
+    auth_enabled = args.auth_enabled or env_auth_enabled
+
+    env_allowed_ips = os.environ.get("UNITY_MCP_ALLOWED_IPS")
+    allowed_ips = None
+    if args.allowed_ips:
+        allowed_ips = [ip.strip() for ip in args.allowed_ips.split(",") if ip.strip()]
+    elif env_allowed_ips:
+        allowed_ips = [ip.strip() for ip in env_allowed_ips.split(",") if ip.strip()]
+
+    env_auth_token = os.environ.get("UNITY_MCP_AUTH_TOKEN")
+    token_arg = args.auth_token if args.auth_token is not None else env_auth_token
+
     AUTH_SETTINGS = AuthSettings.build(
-        token=args.api_key,
+        token=token_arg,
+        allowed_ips=allowed_ips,
+        enabled=auth_enabled,
     )
 
     # Ensure plugin hub and services see the final auth settings (configure() ran earlier with defaults)
     PluginHub.set_auth_settings(AUTH_SETTINGS)
 
     logger.info(
-        "Auth initialized: required API key loaded; allowed IPs=%s",
+        "Auth state: enabled=%s token_required=%s allowed_ips=%s",
+        AUTH_SETTINGS.enabled,
+        bool(AUTH_SETTINGS.token) if AUTH_SETTINGS.enabled else False,
         AUTH_SETTINGS.normalized_allowed_ips,
     )
-    try:
-        logger.info("API key file location: %s", get_api_key_path())
-    except Exception:
-        logger.debug("Could not resolve API key file path", exc_info=True)
+    if AUTH_SETTINGS.enabled and not AUTH_SETTINGS.token:
+        logger.warning("Auth enabled with no token: only IP allowlist enforced")
+    if AUTH_SETTINGS.enabled:
+        try:
+            logger.info("API key file location: %s", get_api_key_path())
+        except Exception:
+            logger.debug("Could not resolve API key file path", exc_info=True)
 
     # Register auth middleware first so it short-circuits unauthorized requests
     mcp.add_middleware(AuthMiddleware(AUTH_SETTINGS))

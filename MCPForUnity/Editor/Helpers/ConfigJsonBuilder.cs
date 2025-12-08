@@ -53,6 +53,7 @@ namespace MCPForUnity.Editor.Helpers
         {
             // Get transport preference (default to HTTP)
             bool useHttpTransport = client?.SupportsHttpTransport != false && EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool authEnabled = AuthPreferencesUtility.IsAuthEnabled();
             string httpProperty = string.IsNullOrEmpty(client?.HttpUrlProperty) ? "url" : client.HttpUrlProperty;
             var urlPropsToRemove = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "url", "serverUrl" };
             urlPropsToRemove.Remove(httpProperty);
@@ -63,41 +64,71 @@ namespace MCPForUnity.Editor.Helpers
                 string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
                 unity[httpProperty] = httpUrl;
 
-                // Always require auth: add API key header with input binding and prompt definition
-                var headers = unity["headers"] as JObject ?? new JObject();
-                // Remove legacy auth header if present
-                if (headers["Authorization"] != null)
-                {
-                    headers.Remove("Authorization");
-                }
-                headers["X-API-Key"] = "${input:UnityMcpApiKey}";
-                unity["headers"] = headers;
-
                 var inputs = root["inputs"] as JArray ?? new JArray();
-                var existing = inputs
-                    .OfType<JObject>()
-                    .FirstOrDefault(o => string.Equals((string)o["id"], ApiKeyInputKey, StringComparison.Ordinal));
-                if (existing == null)
+
+                if (authEnabled)
                 {
-                    existing = new JObject();
-                    inputs.Add(existing);
-                }
+                    // Add API key header with input binding and prompt definition
+                    var headers = unity["headers"] as JObject ?? new JObject();
+                    // Remove legacy auth header if present
+                    if (headers["Authorization"] != null)
+                    {
+                        headers.Remove("Authorization");
+                    }
+                    headers["X-API-Key"] = "${input:UnityMcpApiKey}";
+                    unity["headers"] = headers;
 
-                // Drop legacy Authorization input if it exists
-                foreach (var legacy in inputs
-                             .OfType<JObject>()
-                             .Where(o => string.Equals((string)o["id"], "Authorization", StringComparison.Ordinal))
-                             .ToList())
+                    var existing = inputs
+                        .OfType<JObject>()
+                        .FirstOrDefault(o => string.Equals((string)o["id"], ApiKeyInputKey, StringComparison.Ordinal));
+                    if (existing == null)
+                    {
+                        existing = new JObject();
+                        inputs.Add(existing);
+                    }
+
+                    // Drop legacy Authorization input if it exists
+                    foreach (var legacy in inputs
+                                 .OfType<JObject>()
+                                 .Where(o => string.Equals((string)o["id"], "Authorization", StringComparison.Ordinal))
+                                 .ToList())
+                    {
+                        inputs.Remove(legacy);
+                    }
+
+                    existing["id"] = ApiKeyInputKey;
+                    existing["type"] = "promptString";
+                    existing["description"] = "Unity MCP API Key";
+                    existing["password"] = true;
+
+                    root["inputs"] = inputs;
+                }
+                else
                 {
-                    inputs.Remove(legacy);
+                    // Remove auth inputs and headers when disabled
+                    foreach (var legacy in inputs
+                                 .OfType<JObject>()
+                                 .Where(o => string.Equals((string)o["id"], ApiKeyInputKey, StringComparison.Ordinal) ||
+                                             string.Equals((string)o["id"], "Authorization", StringComparison.Ordinal))
+                                 .ToList())
+                    {
+                        inputs.Remove(legacy);
+                    }
+
+                    if (inputs.Count > 0)
+                    {
+                        root["inputs"] = inputs;
+                    }
+                    else if (root["inputs"] != null)
+                    {
+                        root.Remove("inputs");
+                    }
+
+                    if (unity["headers"] != null)
+                    {
+                        unity.Remove("headers");
+                    }
                 }
-
-                existing["id"] = ApiKeyInputKey;
-                existing["type"] = "promptString";
-                existing["description"] = "Unity MCP API Key";
-                existing["password"] = true;
-
-                root["inputs"] = inputs;
 
                 foreach (var prop in urlPropsToRemove)
                 {

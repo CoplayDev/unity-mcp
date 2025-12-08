@@ -383,8 +383,25 @@ namespace MCPForUnity.Editor.Services
             args.Add("--http-url");
             args.Add(httpUrl);
 
-            // Ensure an API key exists on disk so the server and clients share it
-            AuthPreferencesUtility.GetApiKey();
+            bool authEnabled = AuthPreferencesUtility.IsAuthEnabled();
+            if (authEnabled)
+            {
+                args.Add("--auth-enabled");
+
+                string allowedIps = AuthPreferencesUtility.GetAllowedIps();
+                if (!string.IsNullOrWhiteSpace(allowedIps))
+                {
+                    args.Add("--allowed-ips");
+                    args.Add(allowedIps);
+                }
+
+                string apiKey = AuthPreferencesUtility.GetApiKey();
+                if (!string.IsNullOrEmpty(apiKey))
+                {
+                    args.Add("--auth-token");
+                    args.Add(apiKey);
+                }
+            }
 
             command = $"{QuoteArgument(uvxPath)} {string.Join(" ", args.Select(QuoteArgument))}".Trim();
             return true;

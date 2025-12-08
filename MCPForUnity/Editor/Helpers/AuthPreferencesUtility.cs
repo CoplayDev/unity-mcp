@@ -8,13 +8,37 @@ namespace MCPForUnity.Editor.Helpers
     internal static class AuthPreferencesUtility
     {
         private static string ApiKeyPrefKey => EditorPrefKeys.AuthToken;
+        private static string AuthEnabledPrefKey => EditorPrefKeys.AuthEnabled;
+        private static string AllowedIpsPrefKey => EditorPrefKeys.AuthAllowedIps;
 
-        internal static string GetApiKey()
+        internal static bool IsAuthEnabled()
+        {
+            return EditorPrefs.GetBool(AuthEnabledPrefKey, false);
+        }
+
+        internal static void SetAuthEnabled(bool enabled)
+        {
+            EditorPrefs.SetBool(AuthEnabledPrefKey, enabled);
+        }
+
+        internal static string GetAllowedIps()
+        {
+            string stored = EditorPrefs.GetString(AllowedIpsPrefKey, string.Empty);
+            return string.IsNullOrWhiteSpace(stored) ? "*" : stored;
+        }
+
+        internal static void SetAllowedIps(string allowedIps)
+        {
+            string value = string.IsNullOrWhiteSpace(allowedIps) ? "*" : allowedIps;
+            EditorPrefs.SetString(AllowedIpsPrefKey, value);
+        }
+
+        internal static string GetApiKey(bool ensureExists = true)
         {
             // Prefer EditorPrefs for quick access
             string apiKey = EditorPrefs.GetString(ApiKeyPrefKey, string.Empty);
 
-            if (string.IsNullOrEmpty(apiKey))
+            if (string.IsNullOrEmpty(apiKey) && ensureExists)
             {
                 apiKey = TryReadApiKeyFromDisk();
                 if (string.IsNullOrEmpty(apiKey))

@@ -75,3 +75,21 @@ async def test_websocket_blocks_invalid_token():
 
     assert response is not None
     assert response.status_code == 401
+
+
+def test_http_no_auth_when_disabled():
+    settings = AuthSettings.build(enabled=False, allowed_ips=["127.0.0.1"])
+    request = _DummyRequest("192.168.1.10")
+
+    response = verify_http_request(request, settings)
+
+    assert response is None
+
+
+def test_http_no_token_required_when_empty():
+    settings = AuthSettings.build(token="", allowed_ips=["*"], enabled=True)
+    request = _DummyRequest("127.0.0.1")
+
+    response = verify_http_request(request, settings)
+
+    assert response is None

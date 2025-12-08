@@ -11,6 +11,14 @@
                 <ui:Label text="HTTP URL:" class="setting-label" />
                 <ui:TextField name="http-url" class="url-field" placeholder-text="http://localhost:8080" />
             </ui:VisualElement>
+            <ui:VisualElement class="setting-row" name="auth-toggle-row">
+                <ui:Label text="Authentication (recommended):" class="setting-label" />
+                <uie:Toggle name="auth-enabled-toggle" class="setting-toggle" />
+            </ui:VisualElement>
+            <ui:VisualElement class="setting-row" name="allowed-ips-row">
+                <ui:Label text="Allowed IPs:" class="setting-label" />
+                <ui:TextField name="allowed-ips-field" class="url-field" placeholder-text="* or 127.0.0.1,10.0.0.0/8" />
+            </ui:VisualElement>
             <ui:VisualElement class="setting-row" name="api-key-row">
                 <ui:Label text="API Key:" class="setting-label" />
                 <ui:TextField name="api-key-field" class="url-field" readonly="true" />

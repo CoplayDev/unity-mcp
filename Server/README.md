@@ -109,12 +109,15 @@ Configure your MCP client with `"url": "http://localhost:8080/mcp"` and include 
 ## Configuration
 The server connects to Unity Editor automatically when both are running.
 
-**API key**
-- Stored at `api_key` (auto-created if missing):
+**Authentication (optional; disabled by default)**
+- Toggle with `--auth-enabled` (or `UNITY_MCP_AUTH_ENABLED=1`).
+- Allowlist with `--allowed-ips "127.0.0.1,10.0.0.0/8"` (or `UNITY_MCP_ALLOWED_IPS`). Default `*`.
+- Token with `--auth-token <value>` (or `UNITY_MCP_AUTH_TOKEN`). If omitted while enabled, the server generates one; empty string skips token checks.
+- Token file lives at `api_key` (auto-created when needed):
   - macOS: `~/Library/Application Support/UnityMCP/api_key`
   - Windows: `%LOCALAPPDATA%\UnityMCP/api_key`
   - Linux: `~/.local/share/UnityMCP/api_key`
-- HTTP clients send `X-API-Key: <key>` (or `Authorization: Bearer <key>`). To rotate the key, replace the file or pass `--api-key` when starting the server.
+- HTTP clients send `X-API-Key: <key>` (or `Authorization: Bearer <key>`). When auth is disabled, no auth headers are required.
 
 **Environment/flags**
 - `DISABLE_TELEMETRY=true` - Opt out of anonymous usage analytics

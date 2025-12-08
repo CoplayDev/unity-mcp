@@ -77,8 +77,8 @@ class PluginHub(WebSocketEndpoint):
         msg = WelcomeMessage(
             serverTimeout=self.SERVER_TIMEOUT,
             keepAliveInterval=self.KEEP_ALIVE_INTERVAL,
-            authEnabled=True,
-            authTokenRequired=bool(settings.token),
+            authEnabled=settings.enabled,
+            authTokenRequired=settings.enabled and bool(settings.token),
         )
         await websocket.send_json(msg.model_dump())
 

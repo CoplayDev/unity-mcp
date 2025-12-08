@@ -37,13 +37,17 @@ def _default_allowed_ips() -> list[str]:
 
 @dataclass
 class AuthSettings:
+    enabled: bool = False
     allowed_ips: list[str] = field(default_factory=_default_allowed_ips)
     token: str | None = None
 
     def __post_init__(self) -> None:
-        # Always ensure a non-empty token is present so auth cannot be disabled
-        if not self.token:
+        # Only materialize a token when auth is enabled
+        if self.enabled and self.token is None:
             self.token = load_or_create_api_key()
+        if not self.enabled:
+            # Normalize disabled state so downstream checks can rely on None
+            self.token = None
 
     @property
     def normalized_allowed_ips(self) -> list[str]:
@@ -55,10 +59,11 @@ class AuthSettings:
         *,
         token: str | None = None,
         allowed_ips: Sequence[str] | None = None,
+        enabled: bool = False,
     ) -> "AuthSettings":
-        resolved_token = load_or_create_api_key(token)
+        resolved_token = token if token is not None else (load_or_create_api_key() if enabled else None)
         resolved_allowed = list(allowed_ips) if allowed_ips else _default_allowed_ips()
-        return cls(allowed_ips=resolved_allowed, token=resolved_token)
+        return cls(allowed_ips=resolved_allowed, token=resolved_token, enabled=enabled)
 
 
 def get_api_key_path() -> Path:
@@ -77,7 +82,7 @@ def get_api_key_path() -> Path:
 
 def load_or_create_api_key(preferred: str | None = None) -> str:
     if preferred:
-        logger.info("Using API key provided via CLI flag --api-key")
+        logger.info("Using API key provided via CLI flag")
         return preferred
 
     path = get_api_key_path()
@@ -152,6 +157,9 @@ def _unauthorized_response(message: str, status_code: int = 401, error: str = "i
 
 
 def verify_http_request(request: Request, settings: AuthSettings) -> JSONResponse | None:
+    if not settings.enabled:
+        return None
+
     client_ip = request.client.host if request.client else None
     _log_auth_context(
         "HTTP",
@@ -164,7 +172,9 @@ def verify_http_request(request: Request, settings: AuthSettings) -> JSONRespons
         return _unauthorized_response("IP not allowed", status_code=403)
 
     api_key = _extract_api_key(request.headers)
-    if api_key != settings.token:
+    if settings.token:
+        api_key = _extract_api_key(request.headers)
+        if api_key != settings.token:
         provided = (api_key or "").strip()
         logger.warning(
             "HTTP auth denied: missing or invalid API key from %s (provided=%s expected=%s)",
@@ -185,6 +195,9 @@ def verify_http_request(request: Request, settings: AuthSettings) -> JSONRespons
 
 
 async def verify_websocket(websocket: WebSocket, settings: AuthSettings) -> JSONResponse | None:
+    if not settings.enabled:
+        return None
+
     client_ip = websocket.client.host if websocket.client else None
     headers = dict(websocket.headers)
     _log_auth_context(
@@ -198,7 +211,9 @@ async def verify_websocket(websocket: WebSocket, settings: AuthSettings) -> JSON
         return _unauthorized_response("IP not allowed", status_code=403)
 
     api_key = _extract_api_key(headers)
-    if api_key != settings.token:
+    if settings.token:
+        api_key = _extract_api_key(headers)
+        if api_key != settings.token:
         provided = (api_key or "").strip()
         logger.warning(
             "WS auth denied: missing or invalid API key from %s (provided=%s expected=%s)",
@@ -220,6 +235,8 @@ class AuthMiddleware(Middleware):
         self.settings = settings
 
     def _check_request_if_present(self) -> JSONResponse | None:
+        if not self.settings.enabled:
+            return None
         try:
             request = get_http_request()
         except Exception:
