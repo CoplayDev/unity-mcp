@@ -143,6 +143,9 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     unity["type"] = "http";
                 }
+
+                // Set version field
+                unity["version"] = AssetPathUtility.GetPackageVersion();
             }
             else
             {
@@ -174,6 +177,9 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     unity["type"] = "stdio";
                 }
+
+                // Set version field
+                unity["version"] = AssetPathUtility.GetPackageVersion();
             }
 
             // Remove type for non-VSCode clients

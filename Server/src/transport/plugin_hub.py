@@ -74,7 +74,9 @@ class PluginHub(WebSocketEndpoint):
             return
 
         await websocket.accept()
+        from core.telemetry import get_package_version
         msg = WelcomeMessage(
+            serverVersion=get_package_version(),
             serverTimeout=self.SERVER_TIMEOUT,
             keepAliveInterval=self.KEEP_ALIVE_INTERVAL,
             authEnabled=settings.enabled,
