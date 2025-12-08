@@ -16,7 +16,7 @@ from transport.legacy.unity_connection import (
     get_unity_connection_pool,
 )
 from transport.plugin_hub import PluginHub
-from core.auth import AuthSettings, verify_http_request
+from core.auth import AuthSettings, auth_settings, verify_http_request
 
 logger = logging.getLogger("mcp-for-unity-server")
 
@@ -40,16 +40,16 @@ class ToolRegistrationResponse(BaseModel):
 class CustomToolService:
     _instance: "CustomToolService | None" = None
 
-    def __init__(self, mcp: FastMCP, auth_settings: AuthSettings | None = None):
+    def __init__(self, mcp: FastMCP, auth_settings_value: AuthSettings | None = None):
         CustomToolService._instance = self
         self._mcp = mcp
         self._project_tools: dict[str, dict[str, ToolDefinitionModel]] = {}
         self._hash_to_project: dict[str, str] = {}
-        self._auth_settings: AuthSettings = auth_settings or AuthSettings()
+        self._auth_settings: AuthSettings = auth_settings_value or auth_settings()
         self._register_http_routes()
 
-    def set_auth_settings(self, auth_settings: AuthSettings) -> None:
-        self._auth_settings = auth_settings
+    def set_auth_settings(self, auth_settings_value: AuthSettings) -> None:
+        self._auth_settings = auth_settings_value
 
     @classmethod
     def get_instance(cls) -> "CustomToolService":

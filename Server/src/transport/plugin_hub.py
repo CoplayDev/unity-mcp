@@ -12,7 +12,7 @@ from starlette.endpoints import WebSocketEndpoint
 from starlette.websockets import WebSocket
 
 from core.config import config
-from core.auth import AuthSettings, verify_websocket
+from core.auth import AuthSettings, auth_settings, verify_websocket
 from transport.plugin_registry import PluginRegistry
 from transport.models import (
     WelcomeMessage,
@@ -66,7 +66,7 @@ class PluginHub(WebSocketEndpoint):
         return cls._registry is not None and cls._lock is not None
 
     async def on_connect(self, websocket: WebSocket) -> None:
-        settings = self._auth_settings or AuthSettings()
+        settings = self._auth_settings or auth_settings()
 
         failure = await verify_websocket(websocket, settings)
         if failure is not None:

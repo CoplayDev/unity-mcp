@@ -3,7 +3,7 @@ import types
 import pytest
 import tests.integration.conftest  # noqa: F401  # ensure stubs are registered before imports
 
-from core.auth import AuthSettings, verify_http_request, verify_websocket
+from core.auth import auth_settings, verify_http_request, verify_websocket
 
 
 class _DummyRequest:
@@ -19,7 +19,7 @@ class _DummyWebSocket:
 
 
 def test_http_allowlist_allows_any_ip_when_wildcard():
-    settings = AuthSettings.build(token="secret", allowed_ips=["*"])
+    settings = auth_settings(token="secret", allowed_ips=["*"])
     request = _DummyRequest("192.168.1.10", headers={"Authorization": "Bearer secret"})
 
     response = verify_http_request(request, settings)
@@ -28,7 +28,7 @@ def test_http_allowlist_allows_any_ip_when_wildcard():
 
 
 def test_http_allowlist_blocks_outside_cidr():
-    settings = AuthSettings.build(token="secret", allowed_ips=["10.0.0.0/8"])
+    settings = auth_settings(token="secret", allowed_ips=["10.0.0.0/8"])
     request = _DummyRequest("192.168.1.10", headers={"Authorization": "Bearer secret"})
 
     response = verify_http_request(request, settings)
@@ -38,7 +38,7 @@ def test_http_allowlist_blocks_outside_cidr():
 
 
 def test_http_requires_matching_token_when_set():
-    settings = AuthSettings.build(token="secret", allowed_ips=["*"])
+    settings = auth_settings(token="secret", allowed_ips=["*"])
     request = _DummyRequest("127.0.0.1", headers={"Authorization": "Bearer secret"})
 
     response = verify_http_request(request, settings)
@@ -47,7 +47,7 @@ def test_http_requires_matching_token_when_set():
 
 
 def test_http_blocks_missing_token_when_required():
-    settings = AuthSettings.build(token="secret", allowed_ips=["127.0.0.1"])
+    settings = auth_settings(token="secret", allowed_ips=["127.0.0.1"])
     request = _DummyRequest("127.0.0.1")
 
     response = verify_http_request(request, settings)
@@ -58,7 +58,7 @@ def test_http_blocks_missing_token_when_required():
 
 @pytest.mark.asyncio
 async def test_websocket_checks_token_and_allowlist():
-    settings = AuthSettings.build(token="secret", allowed_ips=["10.0.0.0/8"])
+    settings = auth_settings(token="secret", allowed_ips=["10.0.0.0/8"])
     websocket = _DummyWebSocket("10.1.2.3", headers=[("Authorization", "Bearer secret")])
 
     response = await verify_websocket(websocket, settings)
@@ -68,7 +68,7 @@ async def test_websocket_checks_token_and_allowlist():
 
 @pytest.mark.asyncio
 async def test_websocket_blocks_invalid_token():
-    settings = AuthSettings.build(token="secret", allowed_ips=["10.0.0.0/8"])
+    settings = auth_settings(token="secret", allowed_ips=["10.0.0.0/8"])
     websocket = _DummyWebSocket("10.1.2.3", headers=[("Authorization", "Bearer wrong")])
 
     response = await verify_websocket(websocket, settings)
@@ -78,7 +78,7 @@ async def test_websocket_blocks_invalid_token():
 
 
 def test_http_no_auth_when_disabled():
-    settings = AuthSettings.build(enabled=False, allowed_ips=["127.0.0.1"])
+    settings = auth_settings(enabled=False, allowed_ips=["127.0.0.1"])
     request = _DummyRequest("192.168.1.10")
 
     response = verify_http_request(request, settings)
@@ -87,7 +87,7 @@ def test_http_no_auth_when_disabled():
 
 
 def test_http_no_token_required_when_empty():
-    settings = AuthSettings.build(token="", allowed_ips=["*"], enabled=True)
+    settings = auth_settings(token="", allowed_ips=["*"], enabled=True)
     request = _DummyRequest("127.0.0.1")
 
     response = verify_http_request(request, settings)

@@ -26,11 +26,16 @@ from transport.unity_instance_middleware import (
     UnityInstanceMiddleware,
     get_unity_instance_middleware
 )
-from core.auth import AuthSettings, AuthMiddleware, verify_http_request, get_api_key_path
-from starlette.middleware.base import BaseHTTPMiddleware
+from core.auth import (
+    AuthSettings,
+    auth_middleware,
+    auth_settings,
+    get_api_key_path,
+    http_auth_guard,
+    verify_http_request,
+)
 from starlette.middleware import Middleware
 from utils.network import resolve_http_host
-from starlette.responses import JSONResponse
 
 # Configure logging using settings from config
 # Reduce default verbosity: cap at WARNING unless explicitly overridden by env/config
@@ -98,7 +103,7 @@ _unity_connection_pool: UnityConnectionPool | None = None
 _plugin_registry: PluginRegistry | None = None
 
 # Authentication settings (populated during argument parsing)
-AUTH_SETTINGS: AuthSettings = AuthSettings()
+auth_settings_state: AuthSettings = auth_settings()
 
 # In-memory custom tool service initialized after MCP construction
 custom_tool_service: CustomToolService | None = None
@@ -127,7 +132,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     if _plugin_registry is None:
         _plugin_registry = PluginRegistry()
         loop = asyncio.get_running_loop()
-        PluginHub.configure(_plugin_registry, loop, auth_settings=AUTH_SETTINGS)
+        PluginHub.configure(_plugin_registry, loop, auth_settings=auth_settings_state)
 
     # Record server startup telemetry
     start_time = time.time()
@@ -267,7 +272,7 @@ custom_tool_service = CustomToolService(mcp)
 
 @mcp.custom_route("/health", methods=["GET"])
 async def health_http(request: Request) -> JSONResponse:
-    failure = verify_http_request(request, AUTH_SETTINGS)
+    failure = verify_http_request(request, auth_settings_state)
     if failure:
         return failure
     return JSONResponse({
@@ -279,7 +284,7 @@ async def health_http(request: Request) -> JSONResponse:
 
 @mcp.custom_route("/plugin/sessions", methods=["GET"])
 async def plugin_sessions_route(request: Request) -> JSONResponse:
-    failure = verify_http_request(request, AUTH_SETTINGS)
+    failure = verify_http_request(request, auth_settings_state)
     if failure:
         return failure
     data = await PluginHub.get_sessions()
@@ -322,18 +327,10 @@ register_all_tools(mcp)
 # Register all resources
 register_all_resources(mcp)
 
-# HTTP middleware to enforce auth on /mcp endpoints (FastMCP HTTP transport)
-class HttpAuthGuard(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        if request.url.path.startswith("/mcp"):
-            failure = verify_http_request(request, AUTH_SETTINGS)
-            if failure is not None:
-                return failure
-        return await call_next(request)
-
 
 def main():
     """Entry point for uvx and console scripts."""
+    global auth_settings_state
     parser = argparse.ArgumentParser(
         description="MCP for Unity Server",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -446,31 +443,31 @@ Examples:
     env_auth_token = os.environ.get("UNITY_MCP_AUTH_TOKEN")
     token_arg = args.auth_token if args.auth_token is not None else env_auth_token
 
-    AUTH_SETTINGS = AuthSettings.build(
+    auth_settings_state = auth_settings(
         token=token_arg,
         allowed_ips=allowed_ips,
         enabled=auth_enabled,
     )
 
     # Ensure plugin hub and services see the final auth settings (configure() ran earlier with defaults)
-    PluginHub.set_auth_settings(AUTH_SETTINGS)
+    PluginHub.set_auth_settings(auth_settings_state)
 
     logger.info(
         "Auth state: enabled=%s token_required=%s allowed_ips=%s",
-        AUTH_SETTINGS.enabled,
-        bool(AUTH_SETTINGS.token) if AUTH_SETTINGS.enabled else False,
-        AUTH_SETTINGS.normalized_allowed_ips,
+        auth_settings_state.enabled,
+        bool(auth_settings_state.token) if auth_settings_state.enabled else False,
+        auth_settings_state.normalized_allowed_ips,
     )
-    if AUTH_SETTINGS.enabled and not AUTH_SETTINGS.token:
+    if auth_settings_state.enabled and not auth_settings_state.token:
         logger.warning("Auth enabled with no token: only IP allowlist enforced")
-    if AUTH_SETTINGS.enabled:
+    if auth_settings_state.enabled:
         try:
             logger.info("API key file location: %s", get_api_key_path())
         except Exception:
             logger.debug("Could not resolve API key file path", exc_info=True)
 
     # Register auth middleware first so it short-circuits unauthorized requests
-    mcp.add_middleware(AuthMiddleware(AUTH_SETTINGS))
+    mcp.add_middleware(auth_middleware(auth_settings_state))
     # FastMCP attaches HTTP middleware when launching; we inject our guard via run() kwargs
     # Session-based Unity instance routing
     unity_middleware = get_unity_instance_middleware()
@@ -478,7 +475,7 @@ Examples:
     logger.info("Registered middleware: auth -> unity instance routing")
 
     if custom_tool_service:
-        custom_tool_service.set_auth_settings(AUTH_SETTINGS)
+        custom_tool_service.set_auth_settings(auth_settings_state)
 
     # Set environment variables from command line args
     if args.default_instance:
@@ -526,7 +523,8 @@ Examples:
         port = args.http_port or (int(os.environ.get("UNITY_MCP_HTTP_PORT")) if os.environ.get(
             "UNITY_MCP_HTTP_PORT") else None) or parsed_url.port or 8080
         logger.info(f"Starting FastMCP with HTTP transport on {host}:{port}")
-        http_middleware = [Middleware(HttpAuthGuard)]
+        http_guard = http_auth_guard(auth_settings_state)
+        http_middleware = [Middleware(http_guard)]
         mcp.run(transport=transport, host=host, port=port, middleware=http_middleware)
     else:
         # Use stdio transport for traditional MCP
