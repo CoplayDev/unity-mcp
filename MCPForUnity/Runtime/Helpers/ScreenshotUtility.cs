@@ -41,8 +41,9 @@ namespace MCPForUnity.Runtime.Helpers
 
             // Use only the file name to let Unity decide the final location (per CaptureScreenshot docs).
             string captureName = Path.GetFileName(normalizedFullPath);
-
+#if UNITY_2022_1_OR_NEWER
             ScreenCapture.CaptureScreenshot(captureName, size);
+#endif
 
             Debug.Log($"Screenshot requested: file='{captureName}' intendedFullPath='{normalizedFullPath}' persistentDataPath='{Application.persistentDataPath}'");
 
