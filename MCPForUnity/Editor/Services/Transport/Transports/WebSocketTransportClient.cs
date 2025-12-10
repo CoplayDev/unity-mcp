@@ -345,7 +345,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 return null;
             }
 
-            byte[] rentedBuffer = ArrayPool<byte>.Shared.Rent(8192);
+            byte[] rentedBuffer = System.Buffers.ArrayPool<byte>.Shared.Rent(8192);
             var buffer = new ArraySegment<byte>(rentedBuffer);
             using var ms = new MemoryStream(8192);
 
@@ -381,7 +381,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             }
             finally
             {
-                ArrayPool<byte>.Shared.Return(rentedBuffer);
+                System.Buffers.ArrayPool<byte>.Shared.Return(rentedBuffer);
             }
         }
 
