@@ -163,7 +163,9 @@ namespace MCPForUnity.Editor.Tools
         private static object CreateAsset(JObject @params)
         {
             string path = @params["path"]?.ToString();
-            string assetType = @params["assetType"]?.ToString();
+            string assetType =
+                @params["assetType"]?.ToString()
+                ?? @params["asset_type"]?.ToString(); // tolerate snake_case payloads from batched commands
             JObject properties = @params["properties"] as JObject;
 
             if (string.IsNullOrEmpty(path))
@@ -213,7 +215,7 @@ namespace MCPForUnity.Editor.Tools
 
                         if (propertiesForApply.HasValues)
                         {
-                            ApplyMaterialProperties(mat, propertiesForApply);
+                            MaterialOps.ApplyProperties(mat, propertiesForApply, ManageGameObject.InputSerializer);
                         }
                     }
                     AssetDatabase.CreateAsset(mat, fullPath);
@@ -441,7 +443,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     // Apply properties directly to the material. If this modifies, it sets modified=true.
                     // Use |= in case the asset was already marked modified by previous logic (though unlikely here)
-                    modified |= ApplyMaterialProperties(material, properties);
+                    modified |= MaterialOps.ApplyProperties(material, properties, ManageGameObject.InputSerializer);
                 }
                 // Example: Modifying a ScriptableObject
                 else if (asset is ScriptableObject so)
@@ -895,299 +897,7 @@ namespace MCPForUnity.Editor.Tools
             }
         }
 
-        /// <summary>
-        /// Applies properties from JObject to a Material.
-        /// </summary>
-        private static bool ApplyMaterialProperties(Material mat, JObject properties)
-        {
-            if (mat == null || properties == null)
-                return false;
-            bool modified = false;
 
-            // Example: Set shader
-            if (properties["shader"]?.Type == JTokenType.String)
-            {
-                string shaderRequest = properties["shader"].ToString();
-                Shader newShader = RenderPipelineUtility.ResolveShader(shaderRequest);
-                if (newShader != null && mat.shader != newShader)
-                {
-                    mat.shader = newShader;
-                    modified = true;
-                }
-            }
-            // Example: Set color property
-            if (properties["color"] is JObject colorProps)
-            {
-                string propName = colorProps["name"]?.ToString() ?? GetMainColorPropertyName(mat); // Auto-detect if not specified
-                if (colorProps["value"] is JArray colArr && colArr.Count >= 3)
-                {
-                    try
-                    {
-                        Color newColor = new Color(
-                            colArr[0].ToObject<float>(),
-                            colArr[1].ToObject<float>(),
-                            colArr[2].ToObject<float>(),
-                            colArr.Count > 3 ? colArr[3].ToObject<float>() : 1.0f
-                        );
-                        if (mat.HasProperty(propName))
-                        {
-                            if (mat.GetColor(propName) != newColor)
-                            {
-                                mat.SetColor(propName, newColor);
-                                modified = true;
-                            }
-                        }
-                        else
-                        {
-                            Debug.LogWarning(
-                                $"Material '{mat.name}' with shader '{mat.shader.name}' does not have color property '{propName}'. " +
-                                $"Color not applied. Common color properties: _BaseColor (URP), _Color (Standard)"
-                            );
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogWarning(
-                            $"Error parsing color property '{propName}': {ex.Message}"
-                        );
-                    }
-                }
-            }
-            else if (properties["color"] is JArray colorArr) //Use color now with examples set in manage_asset.py
-            {
-                // Auto-detect the main color property for the shader
-                string propName = GetMainColorPropertyName(mat);
-                try
-                {
-                    if (colorArr.Count >= 3)
-                    {
-                        Color newColor = new Color(
-                            colorArr[0].ToObject<float>(),
-                            colorArr[1].ToObject<float>(),
-                            colorArr[2].ToObject<float>(),
-                            colorArr.Count > 3 ? colorArr[3].ToObject<float>() : 1.0f
-                        );
-                        if (mat.HasProperty(propName))
-                        {
-                            if (mat.GetColor(propName) != newColor)
-                            {
-                                mat.SetColor(propName, newColor);
-                                modified = true;
-                            }
-                        }
-                        else
-                        {
-                            Debug.LogWarning(
-                                $"Material '{mat.name}' with shader '{mat.shader.name}' does not have color property '{propName}'. " +
-                                $"Color not applied. Common color properties: _BaseColor (URP), _Color (Standard)"
-                            );
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogWarning(
-                        $"Error parsing color property '{propName}': {ex.Message}"
-                    );
-                }
-            }
-            // Example: Set float property
-            if (properties["float"] is JObject floatProps)
-            {
-                string propName = floatProps["name"]?.ToString();
-                if (
-                    !string.IsNullOrEmpty(propName) &&
-                    (floatProps["value"]?.Type == JTokenType.Float || floatProps["value"]?.Type == JTokenType.Integer)
-                )
-                {
-                    try
-                    {
-                        float newVal = floatProps["value"].ToObject<float>();
-                        if (mat.HasProperty(propName) && mat.GetFloat(propName) != newVal)
-                        {
-                            mat.SetFloat(propName, newVal);
-                            modified = true;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogWarning(
-                            $"Error parsing float property '{propName}': {ex.Message}"
-                        );
-                    }
-                }
-            }
-            // Example: Set texture property (case-insensitive key and subkeys)
-            {
-                JObject texProps = null;
-                var direct = properties.Property("texture");
-                if (direct != null && direct.Value is JObject t0) texProps = t0;
-                if (texProps == null)
-                {
-                    var ci = properties.Properties().FirstOrDefault(
-                        p => string.Equals(p.Name, "texture", StringComparison.OrdinalIgnoreCase));
-                    if (ci != null && ci.Value is JObject t1) texProps = t1;
-                }
-                if (texProps != null)
-                {
-                    string rawName = (texProps["name"] ?? texProps["Name"])?.ToString();
-                    string texPath = (texProps["path"] ?? texProps["Path"])?.ToString();
-                    if (!string.IsNullOrEmpty(texPath))
-                    {
-                        var newTex = AssetDatabase.LoadAssetAtPath<Texture>(
-                            AssetPathUtility.SanitizeAssetPath(texPath));
-                        if (newTex == null)
-                        {
-                            Debug.LogWarning($"Texture not found at path: {texPath}");
-                        }
-                        else
-                        {
-                            // Reuse alias resolver so friendly names like 'albedo' work here too
-                            string candidateName = string.IsNullOrEmpty(rawName) ? "_BaseMap" : rawName;
-                            string targetProp = ResolvePropertyName(candidateName);
-                            if (!string.IsNullOrEmpty(targetProp) && mat.HasProperty(targetProp))
-                            {
-                                if (mat.GetTexture(targetProp) != newTex)
-                                {
-                                    mat.SetTexture(targetProp, newTex);
-                                    modified = true;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // --- Flexible direct property assignment ---
-            // Allow payloads like: { "_Color": [r,g,b,a] }, { "_Glossiness": 0.5 }, { "_MainTex": "Assets/.." }
-            // while retaining backward compatibility with the structured keys above.
-            // This iterates all top-level keys except the reserved structured ones and applies them
-            // if they match known shader properties.
-            var reservedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "shader", "color", "float", "texture" };
-
-            // Helper resolves common URP/Standard aliasing (e.g., _Color <-> _BaseColor, _MainTex <-> _BaseMap, _Glossiness <-> _Smoothness)
-            string ResolvePropertyName(string name)
-            {
-                if (string.IsNullOrEmpty(name)) return name;
-                string[] candidates;
-                var lower = name.ToLowerInvariant();
-                switch (lower)
-                {
-                    case "_color": candidates = new[] { "_Color", "_BaseColor" }; break;
-                    case "_basecolor": candidates = new[] { "_BaseColor", "_Color" }; break;
-                    case "_maintex": candidates = new[] { "_MainTex", "_BaseMap" }; break;
-                    case "_basemap": candidates = new[] { "_BaseMap", "_MainTex" }; break;
-                    case "_glossiness": candidates = new[] { "_Glossiness", "_Smoothness" }; break;
-                    case "_smoothness": candidates = new[] { "_Smoothness", "_Glossiness" }; break;
-                    // Friendly names → shader property names
-                    case "metallic": candidates = new[] { "_Metallic" }; break;
-                    case "smoothness": candidates = new[] { "_Smoothness", "_Glossiness" }; break;
-                    case "albedo": candidates = new[] { "_BaseMap", "_MainTex" }; break;
-                    default: candidates = new[] { name }; break; // keep original as-is
-                }
-                foreach (var candidate in candidates)
-                {
-                    if (mat.HasProperty(candidate)) return candidate;
-                }
-                return name; // fall back to original
-            }
-
-            foreach (var prop in properties.Properties())
-            {
-                if (reservedKeys.Contains(prop.Name)) continue;
-                string shaderProp = ResolvePropertyName(prop.Name);
-                JToken v = prop.Value;
-
-                // Color: numeric array [r,g,b,(a)]
-                if (v is JArray arr && arr.Count >= 3 && arr.All(t => t.Type == JTokenType.Float || t.Type == JTokenType.Integer))
-                {
-                    if (mat.HasProperty(shaderProp))
-                    {
-                        try
-                        {
-                            var c = new Color(
-                                arr[0].ToObject<float>(),
-                                arr[1].ToObject<float>(),
-                                arr[2].ToObject<float>(),
-                                arr.Count > 3 ? arr[3].ToObject<float>() : 1f
-                            );
-                            if (mat.GetColor(shaderProp) != c)
-                            {
-                                mat.SetColor(shaderProp, c);
-                                modified = true;
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.LogWarning($"Error setting color '{shaderProp}': {ex.Message}");
-                        }
-                    }
-                    continue;
-                }
-
-                // Float: single number
-                if (v.Type == JTokenType.Float || v.Type == JTokenType.Integer)
-                {
-                    if (mat.HasProperty(shaderProp))
-                    {
-                        try
-                        {
-                            float f = v.ToObject<float>();
-                            if (!Mathf.Approximately(mat.GetFloat(shaderProp), f))
-                            {
-                                mat.SetFloat(shaderProp, f);
-                                modified = true;
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.LogWarning($"Error setting float '{shaderProp}': {ex.Message}");
-                        }
-                    }
-                    continue;
-                }
-
-                // Texture: string path
-                if (v.Type == JTokenType.String)
-                {
-                    string texPath = v.ToString();
-                    if (!string.IsNullOrEmpty(texPath) && mat.HasProperty(shaderProp))
-                    {
-                        var tex = AssetDatabase.LoadAssetAtPath<Texture>(AssetPathUtility.SanitizeAssetPath(texPath));
-                        if (tex != null && mat.GetTexture(shaderProp) != tex)
-                        {
-                            mat.SetTexture(shaderProp, tex);
-                            modified = true;
-                        }
-                    }
-                    continue;
-                }
-            }
-
-            // TODO: Add handlers for other property types (Vectors, Ints, Keywords, RenderQueue, etc.)
-            return modified;
-        }
-
-        /// <summary>
-        /// Auto-detects the main color property name for a material's shader.
-        /// Tries common color property names in order: _BaseColor (URP), _Color (Standard), etc.
-        /// </summary>
-        private static string GetMainColorPropertyName(Material mat)
-        {
-            if (mat == null || mat.shader == null)
-                return "_Color";
-
-            // Try common color property names in order of likelihood
-            string[] commonColorProps = { "_BaseColor", "_Color", "_MainColor", "_Tint", "_TintColor" };
-            foreach (var prop in commonColorProps)
-            {
-                if (mat.HasProperty(prop))
-                    return prop;
-            }
-
-            // Fallback to _Color if none found
-            return "_Color";
-        }
 
         /// <summary>
         ///  Applies properties from JObject to a PhysicsMaterial.

@@ -34,10 +34,13 @@ class PortDiscovery:
     @staticmethod
     def get_registry_path() -> Path:
         """Get the path to the port registry file"""
-        return Path.home() / ".unity-mcp" / PortDiscovery.REGISTRY_FILE
+        return PortDiscovery.get_registry_dir() / PortDiscovery.REGISTRY_FILE
 
     @staticmethod
     def get_registry_dir() -> Path:
+        env_dir = os.environ.get("UNITY_MCP_STATUS_DIR")
+        if env_dir:
+            return Path(env_dir)
         return Path.home() / ".unity-mcp"
 
     @staticmethod
@@ -270,9 +273,21 @@ class PortDiscovery:
                     port) if isinstance(port, int) else False
 
                 if not is_alive:
-                    logger.debug(
-                        f"Instance {project_name}@{hash_value} has heartbeat but port {port} not responding")
-                    continue
+                    # If Unity says it's reloading and the status is fresh, don't drop the instance.
+                    freshness = last_heartbeat or file_mtime
+                    now = datetime.now()
+                    if freshness.tzinfo:
+                        from datetime import timezone
+                        now = datetime.now(timezone.utc)
+                    
+                    age_s = (now - freshness).total_seconds()
+                    
+                    if is_reloading and age_s < 60:
+                        pass  # keep it, status="reloading"
+                    else:
+                        logger.debug(
+                            f"Instance {project_name}@{hash_value} has heartbeat but port {port} not responding")
+                        continue
 
                 freshness = last_heartbeat or file_mtime
 

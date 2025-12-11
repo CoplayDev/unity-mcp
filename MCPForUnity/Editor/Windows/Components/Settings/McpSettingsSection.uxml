@@ -31,7 +31,7 @@
                     <ui:Label text="Server Source Override:" class="advanced-label" style="margin-top: 10px;" />
                     <ui:Label text="Override the source used for uvx --from. Leave empty to use default package." class="help-text" />
                     <ui:VisualElement class="override-row">
-                        <ui:Label text="Source Path/URL:" class="override-label" />
+                        <ui:Label text="Server Path/URL:" class="override-label" />
                     </ui:VisualElement>
                     <ui:VisualElement class="path-override-controls">
                         <ui:TextField name="git-url-override" placeholder-text="/path/to/Server or git+https://..." class="override-field" />
@@ -40,6 +40,24 @@
                     <ui:Label text="Examples:" class="help-text" style="margin-top: 5px;" />
                     <ui:Label text="• Local: /Users/you/Projects/unity-mcp/Server" class="help-text" />
                     <ui:Label text="• Remote: git+https://github.com/CoplayDev/unity-mcp@v6.3.0#subdirectory=Server" class="help-text" />
+
+                    <ui:Label text="Local Package Deployment:" class="advanced-label" style="margin-top: 12px;" />
+                    <ui:Label text="Copy a MCPForUnity folder into this project's package location." class="help-text" />
+                    <ui:VisualElement class="override-row">
+                        <ui:Label text="MCP For Unity Source Folder:" class="override-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="path-override-controls">
+                        <ui:TextField name="deploy-source-path" readonly="true" class="override-field" />
+                        <ui:Button name="browse-deploy-source-button" text="Select" class="icon-button" />
+                        <ui:Button name="clear-deploy-source-button" text="Clear" class="icon-button" />
+                    </ui:VisualElement>
+                    <ui:Label name="deploy-target-label" class="help-text" />
+                    <ui:Label name="deploy-backup-label" class="help-text" />
+                    <ui:VisualElement class="path-override-controls" style="margin-top: 4px;">
+                        <ui:Button name="deploy-button" text="Deploy to Project" class="icon-button" />
+                        <ui:Button name="deploy-restore-button" text="Restore Last Backup" class="icon-button" />
+                    </ui:VisualElement>
+                    <ui:Label name="deploy-status-label" class="help-text" />
                 </ui:VisualElement>
             </ui:Foldout>
         </ui:VisualElement>

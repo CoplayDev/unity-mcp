@@ -44,6 +44,7 @@ MCP for Unity 作为桥梁，允许 AI 助手（如 Claude、Cursor）通过本�
 * `manage_asset`: 执行资源操作（导入、创建、修改、删除等）。
 * `manage_editor`: 控制和查询编辑器的状态和设置。
 * `manage_gameobject`: 管理游戏对象：创建、修改、删除、查找和组件操作。
+* `manage_material`: 管理材质：创建、设置属性、分配给渲染器以及查询材质信息。
 * `manage_prefabs`: 执行预制件操作（创建、修改、删除等）。
 * `manage_scene`: 管理场景（加载、保存、创建、获取层次结构等）。
 * `manage_script`: 传统脚本操作的兼容性路由器（创建、读取、删除）。建议使用 `apply_text_edits` 或 `script_apply_edits` 进行编辑。

@@ -21,6 +21,10 @@ namespace MCPForUnity.Editor.Constants
         internal const string WebSocketUrlOverride = "MCPForUnity.WebSocketUrl";
         internal const string GitUrlOverride = "MCPForUnity.GitUrlOverride";
 
+        internal const string PackageDeploySourcePath = "MCPForUnity.PackageDeploy.SourcePath";
+        internal const string PackageDeployLastBackupPath = "MCPForUnity.PackageDeploy.LastBackupPath";
+        internal const string PackageDeployLastTargetPath = "MCPForUnity.PackageDeploy.LastTargetPath";
+        internal const string PackageDeployLastSourcePath = "MCPForUnity.PackageDeploy.LastSourcePath";
         internal const string AuthToken = "MCPForUnity.AuthToken";
         internal const string AuthEnabled = "MCPForUnity.AuthEnabled";
         internal const string AuthAllowedIps = "MCPForUnity.AuthAllowedIps";
@@ -29,6 +33,9 @@ namespace MCPForUnity.Editor.Constants
         internal const string UseEmbeddedServer = "MCPForUnity.UseEmbeddedServer";
         internal const string LockCursorConfig = "MCPForUnity.LockCursorConfig";
         internal const string AutoRegisterEnabled = "MCPForUnity.AutoRegisterEnabled";
+        internal const string ToolEnabledPrefix = "MCPForUnity.ToolEnabled.";
+        internal const string ToolFoldoutStatePrefix = "MCPForUnity.ToolFoldout.";
+        internal const string EditorWindowActivePanel = "MCPForUnity.EditorWindow.ActivePanel";
 
         internal const string SetupCompleted = "MCPForUnity.SetupCompleted";
         internal const string SetupDismissed = "MCPForUnity.SetupDismissed";

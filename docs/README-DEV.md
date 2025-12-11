@@ -54,16 +54,31 @@ uv run pytest tests/ -v -m unit
 ### ✅ Development Deployment Scripts
 
 Quick deployment and testing tools for MCP for Unity core changes.
+**Development Mode Toggle**: Built-in Unity editor development features -> Now operating as Advanced Setting
+**Hot Reload System**: Real-time code updates without Unity restarts  -> Roslyn Runtime_Compilation Custom Tools
+**Plugin Development Kit**: Tools for creating custom MCP for Unity extensions -> Custom Tools
 
 ### 🔄 Coming Soon
-
-- **Development Mode Toggle**: Built-in Unity editor development features
-- **Hot Reload System**: Real-time code updates without Unity restarts  
-- **Plugin Development Kit**: Tools for creating custom MCP for Unity extensions
 - **Automated Testing Suite**: Comprehensive testing framework for contributions
 - **Debug Dashboard**: Advanced debugging and monitoring tools
 
 ---
+
+## Advanced Settings (Editor Window)
+
+Use the MCP for Unity Editor window (Window > MCP for Unity) and open **Advanced Settings** inside the Settings tab to override tooling and deploy local code during development.
+
+![Advanced Settings](./images/advanced-setting.png)
+
+
+- **UV/UVX Path Override**: Point the UI to a specific `uv`/`uvx` executable (e.g., from a custom install) when PATH resolution is wrong. Clear to fall back to auto-discovery.
+- **Server Source Override**: Set a local folder or git URL for the Python server (`uvx --from <url> mcp-for-unity`). Clear to use the packaged default.
+- **Local Package Deployment**: Pick a local `MCPForUnity` folder (must contain `Editor/` and `Runtime/`) and click **Deploy to Project** to copy it over the currently installed package path (from `Packages/manifest.json` / Package Manager). A timestamped backup is stored under `Library/MCPForUnityDeployBackups`, and **Restore Last Backup** reverts the last deploy.
+
+Tips:
+- After deploy/restore, Unity will refresh scripts automatically; if in doubt, re-open the MCP window and confirm the target path label in Advanced Settings.
+- Keep the source and target distinct (don’t point the source at the already-installed `PackageCache` folder).
+- Use git ignored working folders for rapid iteration; the deploy flow copies only `Editor` and `Runtime`.
 
 ## Switching MCP package sources quickly
 

@@ -23,7 +23,7 @@ namespace MCPForUnity.Editor.Tools
     public static class ManageGameObject
     {
         // Shared JsonSerializer to avoid per-call allocation overhead
-        private static readonly JsonSerializer InputSerializer = JsonSerializer.Create(new JsonSerializerSettings
+        internal static readonly JsonSerializer InputSerializer = JsonSerializer.Create(new JsonSerializerSettings
         {
             Converters = new List<JsonConverter>
             {
@@ -54,10 +54,21 @@ namespace MCPForUnity.Editor.Tools
 
             // Parameters used by various actions
             JToken targetToken = @params["target"]; // Can be string (name/path) or int (instanceID)
-            string searchMethod = @params["searchMethod"]?.ToString().ToLower();
-
-            // Get common parameters (consolidated)
             string name = @params["name"]?.ToString();
+
+            // --- Usability Improvement: Alias 'name' to 'target' for modification actions ---
+            // If 'target' is missing but 'name' is provided, and we aren't creating a new object,
+            // assume the user meant "find object by name".
+            if (targetToken == null && !string.IsNullOrEmpty(name) && action != "create")
+            {
+                targetToken = name;
+                // We don't update @params["target"] because we use targetToken locally mostly,
+                // but some downstream methods might parse @params directly. Let's update @params too for safety.
+                @params["target"] = name;
+            }
+            // -------------------------------------------------------------------------------
+
+            string searchMethod = @params["searchMethod"]?.ToString().ToLower();
             string tag = @params["tag"]?.ToString();
             string layer = @params["layer"]?.ToString();
             JToken parentToken = @params["parent"];
@@ -2112,51 +2123,7 @@ namespace MCPForUnity.Editor.Tools
                 // Special handling for Material properties (shader properties)
                 if (currentObject is Material material && finalPart.StartsWith("_"))
                 {
-                    // Use the serializer to convert the JToken value first
-                    if (value is JArray jArray)
-                    {
-                        // Try converting to known types that SetColor/SetVector accept
-                        if (jArray.Count == 4)
-                        {
-                            try { Color color = value.ToObject<Color>(inputSerializer); material.SetColor(finalPart, color); return true; } catch { }
-                            try { Vector4 vec = value.ToObject<Vector4>(inputSerializer); material.SetVector(finalPart, vec); return true; } catch { }
-                        }
-                        else if (jArray.Count == 3)
-                        {
-                            try { Color color = value.ToObject<Color>(inputSerializer); material.SetColor(finalPart, color); return true; } catch { } // ToObject handles conversion to Color
-                        }
-                        else if (jArray.Count == 2)
-                        {
-                            try { Vector2 vec = value.ToObject<Vector2>(inputSerializer); material.SetVector(finalPart, vec); return true; } catch { }
-                        }
-                    }
-                    else if (value.Type == JTokenType.Float || value.Type == JTokenType.Integer)
-                    {
-                        try { material.SetFloat(finalPart, value.ToObject<float>(inputSerializer)); return true; } catch { }
-                    }
-                    else if (value.Type == JTokenType.Boolean)
-                    {
-                        try { material.SetFloat(finalPart, value.ToObject<bool>(inputSerializer) ? 1f : 0f); return true; } catch { }
-                    }
-                    else if (value.Type == JTokenType.String)
-                    {
-                        // Try converting to Texture using the serializer/converter
-                        try
-                        {
-                            Texture texture = value.ToObject<Texture>(inputSerializer);
-                            if (texture != null)
-                            {
-                                material.SetTexture(finalPart, texture);
-                                return true;
-                            }
-                        }
-                        catch { }
-                    }
-
-                    Debug.LogWarning(
-                        $"[SetNestedProperty] Unsupported or failed conversion for material property '{finalPart}' from value: {value.ToString(Formatting.None)}"
-                    );
-                    return false;
+                    return MaterialOps.TrySetShaderProperty(material, finalPart, value, inputSerializer);
                 }
 
                 // For standard properties (not shader specific)

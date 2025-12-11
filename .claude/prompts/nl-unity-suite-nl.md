@@ -103,25 +103,27 @@ STRICT OP GUARDRAILS
 **Goal**: Demonstrate method replacement operations
 **Actions**: 
 - Replace `HasTarget()` method body: `public bool HasTarget() { return currentTarget != null; }`
-- Insert `PrintSeries()` method after `GetCurrentTarget()`: `public void PrintSeries() { Debug.Log("1,2,3"); }`
-- Verify both methods exist and are properly formatted
+- Validate.
+- Insert `PrintSeries()` method after a unique anchor method. Prefer `GetCurrentTarget()` if unique; otherwise use another unique method such as `ApplyBlend`. Insert: `public void PrintSeries() { Debug.Log("1,2,3"); }`
+- Validate that both methods exist and are properly formatted.
 - Delete `PrintSeries()` method (cleanup for next test)
 - **Expected final state**: `HasTarget()` modified, file structure intact, no temporary methods
 
 ### NL-2. Anchor Comment Insertion (Additive State B) 
 **Goal**: Demonstrate anchor-based insertions above methods
 **Actions**:
-- Use `find_in_file` to locate current position of `Update()` method
+- Use `find_in_file` with a tolerant anchor to locate the `Update()` method, e.g. `(?m)^\\s*(?:public|private|protected|internal)?\\s*void\\s+Update\\s*\\(\\s*\\)`
+- Expect exactly one match; if multiple, fail clearly rather than guessing.
 - Insert `// Build marker OK` comment line above `Update()` method
 - Verify comment exists and `Update()` still functions
 - **Expected final state**: State A + build marker comment above `Update()`
 
 ### NL-3. End-of-Class Content (Additive State C)
-**Goal**: Demonstrate end-of-class insertions with smart brace matching
+**Goal**: Demonstrate end-of-class insertions without ambiguous anchors
 **Actions**:
-- Match the final class-closing brace by scanning from EOF (e.g., last `^\s*}\s*$`)
-  or compute via `find_in_file` + ranges; insert immediately before it.
-- Insert three comment lines before final class brace:
+- Use `find_in_file` to locate brace-only lines (e.g., `(?m)^\\s*}\\s*$`). Select the **last** such line (preferably indentation 0 if multiples).
+- Compute an exact insertion point immediately before that last brace using `apply_text_edits` (do not use `anchor_insert` for this step).
+- Insert three comment lines before the final class brace:
   ```
   // Tail test A
   // Tail test B  
@@ -159,7 +161,7 @@ find_in_file(pattern: "public bool HasTarget\\(\\)")
 
 **Anchor-based insertions:**
 ```json  
-{"op": "anchor_insert", "anchor": "private void Update\\(\\)", "position": "before", "text": "// comment"}
+{"op": "anchor_insert", "anchor": "(?m)^\\s*(?:public|private|protected|internal)?\\s*void\\s+Update\\s*\\(\\s*\\)", "position": "before", "text": "// comment"}
 ```
 
 ---

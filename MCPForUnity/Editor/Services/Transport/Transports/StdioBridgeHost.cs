@@ -463,8 +463,12 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
             try
             {
-                string statusDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".unity-mcp");
-                string statusFile = Path.Combine(statusDir, $"unity-mcp-status-{ComputeProjectHash(Application.dataPath)}.json");
+                string dir = Environment.GetEnvironmentVariable("UNITY_MCP_STATUS_DIR");
+                if (string.IsNullOrWhiteSpace(dir))
+                {
+                    dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".unity-mcp");
+                }
+                string statusFile = Path.Combine(dir, $"unity-mcp-status-{ComputeProjectHash(Application.dataPath)}.json");
                 if (File.Exists(statusFile))
                 {
                     File.Delete(statusFile);
@@ -1011,7 +1015,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         }
 
 
-        private static void WriteHeartbeat(bool reloading, string reason = null)
+        public static void WriteHeartbeat(bool reloading, string reason = null)
         {
             try
             {

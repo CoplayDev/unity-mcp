@@ -28,12 +28,8 @@ if "%PACKAGE_CACHE_PATH%"=="" (
     exit /b 1
 )
 
-:: Server installation path (with default)
-echo.
-echo Server Installation Path:
-echo Default: %DEFAULT_SERVER_PATH%
-set /p "SERVER_PATH=Enter server path (or press Enter for default): "
-if "%SERVER_PATH%"=="" set "SERVER_PATH=%DEFAULT_SERVER_PATH%"
+rem Server installation path prompt disabled (server deploy skipped)
+set "SERVER_PATH="
 
 :: Backup location (with default)
 echo.
@@ -54,20 +50,8 @@ if not exist "%BRIDGE_SOURCE%" (
     exit /b 1
 )
 
-if not exist "%SERVER_SOURCE%" (
-    echo Error: Server source not found: %SERVER_SOURCE%
-    pause
-    exit /b 1
-)
-
 if not exist "%PACKAGE_CACHE_PATH%" (
     echo Error: Package cache path not found: %PACKAGE_CACHE_PATH%
-    pause
-    exit /b 1
-)
-
-if not exist "%SERVER_PATH%" (
-    echo Error: Server installation path not found: %SERVER_PATH%
     pause
     exit /b 1
 )
@@ -103,15 +87,26 @@ if exist "%PACKAGE_CACHE_PATH%\Editor" (
     )
 )
 
-if exist "%SERVER_PATH%" (
-    echo Backing up Python Server files...
-    xcopy "%SERVER_PATH%\*" "%BACKUP_SUBDIR%\PythonServer\" /E /I /Y > nul
+if exist "%PACKAGE_CACHE_PATH%\Runtime" (
+    echo Backing up Unity Runtime files...
+    xcopy "%PACKAGE_CACHE_PATH%\Runtime" "%BACKUP_SUBDIR%\UnityBridge\Runtime\" /E /I /Y > nul
     if !errorlevel! neq 0 (
-        echo Error: Failed to backup Python Server files
+        echo Error: Failed to backup Unity Runtime files
         pause
         exit /b 1
     )
 )
+
+rem Server backup skipped (deprecated legacy deploy)
+rem if exist "%SERVER_PATH%" (
+rem     echo Backing up Python Server files...
+rem     xcopy "%SERVER_PATH%\*" "%BACKUP_SUBDIR%\PythonServer\" /E /I /Y > nul
+rem     if !errorlevel! neq 0 (
+rem         echo Error: Failed to backup Python Server files
+rem         pause
+rem         exit /b 1
+rem     )
+rem )
 
 :: Deploy Unity Bridge
 echo.
@@ -123,14 +118,22 @@ if !errorlevel! neq 0 (
     exit /b 1
 )
 
-:: Deploy Python Server
-echo Deploying Python Server code...
-xcopy "%SERVER_SOURCE%\*" "%SERVER_PATH%\" /E /Y > nul
+echo Deploying Unity Runtime code...
+xcopy "%BRIDGE_SOURCE%\Runtime\*" "%PACKAGE_CACHE_PATH%\Runtime\" /E /Y > nul
 if !errorlevel! neq 0 (
-    echo Error: Failed to deploy Python Server code
+    echo Error: Failed to deploy Unity Runtime code
     pause
     exit /b 1
 )
+
+rem Deploy Python Server (disabled; server no longer deployed this way)
+rem echo Deploying Python Server code...
+rem xcopy "%SERVER_SOURCE%\*" "%SERVER_PATH%\" /E /Y > nul
+rem if !errorlevel! neq 0 (
+rem     echo Error: Failed to deploy Python Server code
+rem     pause
+rem     exit /b 1
+rem )
 
 :: Success
 echo.

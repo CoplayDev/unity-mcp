@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using MCPForUnity.Editor.Helpers; // For Response class
+using MCPForUnity.Runtime.Helpers; // For ScreenshotUtility
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -23,6 +24,8 @@ namespace MCPForUnity.Editor.Tools
             public string name { get; set; } = string.Empty;
             public string path { get; set; } = string.Empty;
             public int? buildIndex { get; set; }
+            public string fileName { get; set; } = string.Empty;
+            public int? superSize { get; set; }
         }
 
         private static SceneCommand ToSceneCommand(JObject p)
@@ -42,7 +45,9 @@ namespace MCPForUnity.Editor.Tools
                 action = (p["action"]?.ToString() ?? string.Empty).Trim().ToLowerInvariant(),
                 name = p["name"]?.ToString() ?? string.Empty,
                 path = p["path"]?.ToString() ?? string.Empty,
-                buildIndex = BI(p["buildIndex"] ?? p["build_index"])
+                buildIndex = BI(p["buildIndex"] ?? p["build_index"]),
+                fileName = (p["fileName"] ?? p["filename"])?.ToString() ?? string.Empty,
+                superSize = BI(p["superSize"] ?? p["super_size"] ?? p["supersize"])
             };
         }
 
@@ -142,12 +147,24 @@ namespace MCPForUnity.Editor.Tools
                     return ga;
                 case "get_build_settings":
                     return GetBuildSettingsScenes();
+                case "screenshot":
+                    return CaptureScreenshot(cmd.fileName, cmd.superSize);
                 // Add cases for modifying build settings, additive loading, unloading etc.
                 default:
                     return new ErrorResponse(
-                        $"Unknown action: '{action}'. Valid actions: create, load, save, get_hierarchy, get_active, get_build_settings."
+                        $"Unknown action: '{action}'. Valid actions: create, load, save, get_hierarchy, get_active, get_build_settings, screenshot."
                     );
             }
+        }
+
+        /// <summary>
+        /// Captures a screenshot to Assets/Screenshots and returns a response payload.
+        /// Public so the tools UI can reuse the same logic without duplicating parameters.
+        /// Available in both Edit Mode and Play Mode.
+        /// </summary>
+        public static object ExecuteScreenshot(string fileName = null, int? superSize = null)
+        {
+            return CaptureScreenshot(fileName, superSize);
         }
 
         private static object CreateScene(string fullPath, string relativePath)
@@ -326,6 +343,55 @@ namespace MCPForUnity.Editor.Tools
             catch (Exception e)
             {
                 return new ErrorResponse($"Error saving scene: {e.Message}");
+            }
+        }
+
+        private static object CaptureScreenshot(string fileName, int? superSize)
+        {
+            try
+            {
+                int resolvedSuperSize = (superSize.HasValue && superSize.Value > 0) ? superSize.Value : 1;
+                ScreenshotCaptureResult result;
+
+                if (Application.isPlaying)
+                {
+                    result = ScreenshotUtility.CaptureToAssetsFolder(fileName, resolvedSuperSize, ensureUniqueFileName: true);
+                }
+                else
+                {
+                    // Edit Mode path: render from the best-guess camera using RenderTexture.
+                    Camera cam = Camera.main;
+                    if (cam == null)
+                    {
+                        var cams = UnityEngine.Object.FindObjectsOfType<Camera>();
+                        cam = cams.FirstOrDefault();
+                    }
+
+                    if (cam == null)
+                    {
+                        return new ErrorResponse("No camera found to capture screenshot in Edit Mode.");
+                    }
+
+                    result = ScreenshotUtility.CaptureFromCameraToAssetsFolder(cam, fileName, resolvedSuperSize, ensureUniqueFileName: true);
+                }
+
+                AssetDatabase.Refresh();
+
+                string message = $"Screenshot captured to '{result.AssetsRelativePath}' (full: {result.FullPath}).";
+
+                return new SuccessResponse(
+                    message,
+                    new
+                    {
+                        path = result.AssetsRelativePath,
+                        fullPath = result.FullPath,
+                        superSize = result.SuperSize,
+                    }
+                );
+            }
+            catch (Exception e)
+            {
+                return new ErrorResponse($"Error capturing screenshot: {e.Message}");
             }
         }
 

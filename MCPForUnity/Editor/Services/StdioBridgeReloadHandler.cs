@@ -25,7 +25,10 @@ namespace MCPForUnity.Editor.Services
             {
                 // Only persist resume intent when stdio is the active transport and the bridge is running.
                 bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
-                bool isRunning = MCPServiceLocator.TransportManager.IsRunning(TransportMode.Stdio);
+                // Check both TransportManager AND StdioBridgeHost directly, because CI starts via StdioBridgeHost
+                // bypassing TransportManager state.
+                bool isRunning = MCPServiceLocator.TransportManager.IsRunning(TransportMode.Stdio)
+                                 || StdioBridgeHost.IsRunning;
                 bool shouldResume = !useHttp && isRunning;
 
                 if (shouldResume)
@@ -34,13 +37,12 @@ namespace MCPForUnity.Editor.Services
 
                     // Stop only the stdio bridge; leave HTTP untouched if it is running concurrently.
                     var stopTask = MCPServiceLocator.TransportManager.StopAsync(TransportMode.Stdio);
-                    stopTask.ContinueWith(t =>
-                    {
-                        if (t.IsFaulted && t.Exception != null)
-                        {
-                            McpLog.Warn($"Error stopping stdio bridge before reload: {t.Exception.GetBaseException()?.Message}");
-                        }
-                    }, System.Threading.Tasks.TaskScheduler.Default);
+                    
+                    // Wait for stop to complete (which deletes the status file)
+                    try { stopTask.Wait(500); } catch { }
+
+                    // Write reloading status so clients don't think we vanished
+                    StdioBridgeHost.WriteHeartbeat(true, "reloading");
                 }
                 else
                 {

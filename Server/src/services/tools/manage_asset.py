@@ -9,6 +9,7 @@ from typing import Annotated, Any, Literal
 from fastmcp import Context
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
+from services.tools.utils import parse_json_payload
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 
@@ -63,6 +64,13 @@ async def manage_asset(
             return raw, None
         if isinstance(raw, str):
             await ctx.info(f"manage_asset: received properties as string (first 100 chars): {raw[:100]}")
+            # Try our robust centralized parser first, then fallback to ast.literal_eval specific to manage_asset if needed
+            parsed = parse_json_payload(raw)
+            if isinstance(parsed, dict):
+                 await ctx.info("manage_asset: coerced properties using centralized parser")
+                 return parsed, None
+
+            # Fallback to original logic for ast.literal_eval which parse_json_payload avoids for safety/simplicity
             parsed, source = _parse_properties_string(raw)
             if parsed is None:
                 return None, source
@@ -72,7 +80,7 @@ async def manage_asset(
 
     properties, parse_error = await _normalize_properties(properties)
     if parse_error:
-        await ctx.warn(parse_error)
+        await ctx.error(parse_error)
         return {"success": False, "message": parse_error}
 
     # Coerce numeric inputs defensively

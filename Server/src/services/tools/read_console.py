@@ -16,7 +16,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 async def read_console(
     ctx: Context,
     action: Annotated[Literal['get', 'clear'],
-                      "Get or clear the Unity Editor console."] | None = None,
+                      "Get or clear the Unity Editor console. Defaults to 'get' if omitted."] | None = None,
     types: Annotated[list[Literal['error', 'warning',
                                   'log', 'all']], "Message types to get"] | None = None,
     count: Annotated[int | str,
@@ -99,10 +99,17 @@ async def read_console(
     if isinstance(resp, dict) and resp.get("success") and not include_stacktrace:
         # Strip stacktrace fields from returned lines if present
         try:
-            lines = resp.get("data", {}).get("lines", [])
-            for line in lines:
-                if isinstance(line, dict) and "stacktrace" in line:
-                    line.pop("stacktrace", None)
+            data = resp.get("data")
+            # Handle standard format: {"data": {"lines": [...]}}
+            if isinstance(data, dict) and "lines" in data and isinstance(data["lines"], list):
+                for line in data["lines"]:
+                    if isinstance(line, dict) and "stacktrace" in line:
+                        line.pop("stacktrace", None)
+            # Handle legacy/direct list format if any
+            elif isinstance(data, list):
+                for line in data:
+                    if isinstance(line, dict) and "stacktrace" in line:
+                        line.pop("stacktrace", None)
         except Exception:
             pass
     return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}

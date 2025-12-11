@@ -1,0 +1,55 @@
+name: Claude MCP Preflight (no Unity)
+
+on: [workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  mcp-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install MCP server deps
+        run: |
+          set -eux
+          uv venv
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+          if [ -f Server/pyproject.toml ]; then
+            uv pip install -e Server
+          elif [ -f Server/requirements.txt ]; then
+            uv pip install -r Server/requirements.txt
+          else
+            echo "No MCP Python deps found" >&2
+            exit 1
+          fi
+
+      - name: Preflight MCP server (stdio)
+        env:
+          PYTHONUNBUFFERED: "1"
+          MCP_LOG_LEVEL: debug
+          UNITY_PROJECT_ROOT: ${{ github.workspace }}/TestProjects/UnityMCPTests
+          UNITY_MCP_STATUS_DIR: ${{ github.workspace }}/.unity-mcp-dummy
+          UNITY_MCP_HOST: 127.0.0.1
+        run: |
+          set -euxo pipefail
+          mkdir -p "$UNITY_MCP_STATUS_DIR"
+          # Create a dummy status file with an unreachable port; help should not require it
+          cat > "$UNITY_MCP_STATUS_DIR/unity-mcp-status-dummy.json" <<JSON
+          { "unity_port": 0, "reason": "dummy", "reloading": false, "project_path": "$UNITY_PROJECT_ROOT/Assets" }
+          JSON
+          uv run --active --directory Server mcp-for-unity --transport stdio --help \
+            > /tmp/mcp-preflight.log 2>&1 || { cat /tmp/mcp-preflight.log; exit 1; }
+          cat /tmp/mcp-preflight.log
+
+

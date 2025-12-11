@@ -29,6 +29,14 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
         private VisualElement uvxPathStatus;
         private TextField gitUrlOverride;
         private Button clearGitUrlButton;
+        private TextField deploySourcePath;
+        private Button browseDeploySourceButton;
+        private Button clearDeploySourceButton;
+        private Button deployButton;
+        private Button deployRestoreButton;
+        private Label deployTargetLabel;
+        private Label deployBackupLabel;
+        private Label deployStatusLabel;
 
         // Data
         private ValidationLevel currentValidationLevel = ValidationLevel.Standard;
@@ -69,6 +77,14 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             uvxPathStatus = Root.Q<VisualElement>("uv-path-status");
             gitUrlOverride = Root.Q<TextField>("git-url-override");
             clearGitUrlButton = Root.Q<Button>("clear-git-url-button");
+            deploySourcePath = Root.Q<TextField>("deploy-source-path");
+            browseDeploySourceButton = Root.Q<Button>("browse-deploy-source-button");
+            clearDeploySourceButton = Root.Q<Button>("clear-deploy-source-button");
+            deployButton = Root.Q<Button>("deploy-button");
+            deployRestoreButton = Root.Q<Button>("deploy-restore-button");
+            deployTargetLabel = Root.Q<Label>("deploy-target-label");
+            deployBackupLabel = Root.Q<Label>("deploy-backup-label");
+            deployStatusLabel = Root.Q<Label>("deploy-status-label");
         }
 
         private void InitializeUI()
@@ -87,6 +103,8 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
 
             advancedSettingsFoldout.value = false;
             gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
+
+            UpdateDeploymentSection();
         }
 
         private void RegisterCallbacks()
@@ -129,6 +147,10 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
                 OnHttpServerCommandUpdateRequested?.Invoke();
             };
 
+            browseDeploySourceButton.clicked += OnBrowseDeploySourceClicked;
+            clearDeploySourceButton.clicked += OnClearDeploySourceClicked;
+            deployButton.clicked += OnDeployClicked;
+            deployRestoreButton.clicked += OnRestoreBackupClicked;
         }
 
         public void UpdatePathOverrides()
@@ -160,6 +182,7 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             }
 
             gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
+            UpdateDeploymentSection();
 
         }
 
@@ -226,6 +249,104 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             MCPServiceLocator.Paths.ClearUvxPathOverride();
             UpdatePathOverrides();
             McpLog.Info("uv path override cleared");
+        }
+
+        private void UpdateDeploymentSection()
+        {
+            var deployService = MCPServiceLocator.Deployment;
+
+            string sourcePath = deployService.GetStoredSourcePath();
+            deploySourcePath.value = string.IsNullOrEmpty(sourcePath) ? "Not set" : sourcePath;
+
+            deployTargetLabel.text = $"Target: {deployService.GetTargetDisplayPath()}";
+
+            string backupPath = deployService.GetLastBackupPath();
+            if (deployService.HasBackup())
+            {
+                deployBackupLabel.text = $"Last backup: {backupPath}";
+            }
+            else
+            {
+                deployBackupLabel.text = "Last backup: none";
+            }
+
+            deployRestoreButton?.SetEnabled(deployService.HasBackup());
+        }
+
+        private void OnBrowseDeploySourceClicked()
+        {
+            string picked = EditorUtility.OpenFolderPanel("Select MCPForUnity folder", string.Empty, string.Empty);
+            if (string.IsNullOrEmpty(picked))
+            {
+                return;
+            }
+
+            try
+            {
+                MCPServiceLocator.Deployment.SetStoredSourcePath(picked);
+                SetDeployStatus($"Source set: {picked}");
+            }
+            catch (Exception ex)
+            {
+                EditorUtility.DisplayDialog("Invalid Source", ex.Message, "OK");
+                SetDeployStatus("Source selection failed");
+            }
+
+            UpdateDeploymentSection();
+        }
+
+        private void OnClearDeploySourceClicked()
+        {
+            MCPServiceLocator.Deployment.ClearStoredSourcePath();
+            UpdateDeploymentSection();
+            SetDeployStatus("Source cleared");
+        }
+
+        private void OnDeployClicked()
+        {
+            var result = MCPServiceLocator.Deployment.DeployFromStoredSource();
+            SetDeployStatus(result.Message, !result.Success);
+
+            if (!result.Success)
+            {
+                EditorUtility.DisplayDialog("Deployment Failed", result.Message, "OK");
+            }
+            else
+            {
+                EditorUtility.DisplayDialog("Deployment Complete", result.Message + (string.IsNullOrEmpty(result.BackupPath) ? string.Empty : $"\nBackup: {result.BackupPath}"), "OK");
+            }
+
+            UpdateDeploymentSection();
+        }
+
+        private void OnRestoreBackupClicked()
+        {
+            var result = MCPServiceLocator.Deployment.RestoreLastBackup();
+            SetDeployStatus(result.Message, !result.Success);
+
+            if (!result.Success)
+            {
+                EditorUtility.DisplayDialog("Restore Failed", result.Message, "OK");
+            }
+            else
+            {
+                EditorUtility.DisplayDialog("Restore Complete", result.Message, "OK");
+            }
+
+            UpdateDeploymentSection();
+        }
+
+        private void SetDeployStatus(string message, bool isError = false)
+        {
+            if (deployStatusLabel == null)
+            {
+                return;
+            }
+
+            deployStatusLabel.text = message;
+            deployStatusLabel.style.color = isError
+                ? new StyleColor(new Color(0.85f, 0.2f, 0.2f))
+                : StyleKeyword.Null;
         }
     }
 }

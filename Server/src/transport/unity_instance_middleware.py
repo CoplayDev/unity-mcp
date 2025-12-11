@@ -42,7 +42,7 @@ class UnityInstanceMiddleware(Middleware):
     Middleware that manages per-session Unity instance selection.
 
     Stores active instance per session_id and injects it into request state
-    for all tool calls.
+    for all tool and resource calls.
     """
 
     def __init__(self):
@@ -83,8 +83,8 @@ class UnityInstanceMiddleware(Middleware):
         with self._lock:
             self._active_by_key.pop(key, None)
 
-    async def on_call_tool(self, context: MiddlewareContext, call_next):
-        """Inject active Unity instance into tool context if available."""
+    async def _inject_unity_instance(self, context: MiddlewareContext) -> None:
+        """Inject active Unity instance into context if available."""
         ctx = context.fastmcp_context
 
         active_instance = self.get_active_instance(ctx)
@@ -129,4 +129,13 @@ class UnityInstanceMiddleware(Middleware):
             ctx.set_state("unity_instance", active_instance)
             if session_id is not None:
                 ctx.set_state("unity_session_id", session_id)
+
+    async def on_call_tool(self, context: MiddlewareContext, call_next):
+        """Inject active Unity instance into tool context if available."""
+        await self._inject_unity_instance(context)
+        return await call_next(context)
+
+    async def on_read_resource(self, context: MiddlewareContext, call_next):
+        """Inject active Unity instance into resource context if available."""
+        await self._inject_unity_instance(context)
         return await call_next(context)

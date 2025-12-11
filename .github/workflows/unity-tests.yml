@@ -11,6 +11,8 @@ on:
 
 jobs:
   testAllModes:
+    # Guard: only run on upstream repo; skip on forks
+    if: github.repository_owner == 'CoplayDev'
     name: Test in ${{ matrix.testMode }}
     runs-on: ubuntu-latest
     strategy:

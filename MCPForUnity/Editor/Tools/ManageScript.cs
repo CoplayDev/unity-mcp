@@ -26,7 +26,8 @@ namespace MCPForUnity.Editor.Tools
 {
     /// <summary>
     /// Handles CRUD operations for C# scripts within the Unity project.
-    /// 
+    /// </summary>
+    /// <remarks>
     /// ROSLYN INSTALLATION GUIDE:
     /// To enable advanced syntax validation with Roslyn compiler services:
     /// 
@@ -49,7 +50,7 @@ namespace MCPForUnity.Editor.Tools
     /// 
     /// Note: Without Roslyn, the system falls back to basic structural validation.
     /// Roslyn provides full C# compiler diagnostics with line numbers and detailed error messages.
-    /// </summary>
+    /// </remarks>
     [McpForUnityTool("manage_script", AutoRegister = false)]
     public static class ManageScript
     {
@@ -64,7 +65,17 @@ namespace MCPForUnity.Editor.Tools
             // Normalize caller path: allow both "Scripts/..." and "Assets/Scripts/..."
             string rel = (relDir ?? "Scripts").Replace('\\', '/').Trim();
             if (string.IsNullOrEmpty(rel)) rel = "Scripts";
-            if (rel.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase)) rel = rel.Substring(7);
+
+            // Handle both "Assets" and "Assets/" prefixes
+            if (rel.Equals("Assets", StringComparison.OrdinalIgnoreCase))
+            {
+                rel = string.Empty;
+            }
+            else if (rel.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
+            {
+                rel = rel.Substring(7);
+            }
+
             rel = rel.TrimStart('/');
 
             string targetDir = Path.Combine(assets, rel).Replace('\\', '/');

@@ -12,11 +12,21 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 )
 async def manage_scene(
     ctx: Context,
-    action: Annotated[Literal["create", "load", "save", "get_hierarchy", "get_active", "get_build_settings"], "Perform CRUD operations on Unity scenes."],
+    action: Annotated[Literal[
+        "create",
+        "load",
+        "save",
+        "get_hierarchy",
+        "get_active",
+        "get_build_settings",
+        "screenshot",
+    ], "Perform CRUD operations on Unity scenes, and capture a screenshot."],
     name: Annotated[str, "Scene name."] | None = None,
     path: Annotated[str, "Scene path."] | None = None,
     build_index: Annotated[int | str,
                            "Unity build index (quote as string, e.g., '0')."] | None = None,
+    screenshot_file_name: Annotated[str, "Screenshot file name (optional). Defaults to timestamp when omitted."] | None = None,
+    screenshot_super_size: Annotated[int | str, "Screenshot supersize multiplier (integer ≥1). Optional." ] | None = None,
 ) -> dict[str, Any]:
     # Get active instance from session state
     # Removed session_state import
@@ -39,14 +49,19 @@ async def manage_scene(
                 return default
 
         coerced_build_index = _coerce_int(build_index, default=None)
+        coerced_super_size = _coerce_int(screenshot_super_size, default=None)
 
-        params = {"action": action}
+        params: dict[str, Any] = {"action": action}
         if name:
             params["name"] = name
         if path:
             params["path"] = path
         if coerced_build_index is not None:
             params["buildIndex"] = coerced_build_index
+        if screenshot_file_name:
+            params["fileName"] = screenshot_file_name
+        if coerced_super_size is not None:
+            params["superSize"] = coerced_super_size
 
         # Use centralized retry helper with instance routing
         response = await send_with_unity_instance(async_send_command_with_retry, unity_instance, "manage_scene", params)

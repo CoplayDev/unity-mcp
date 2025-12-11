@@ -33,7 +33,10 @@ class TestManageAssetJsonParsing:
         )
 
         # Verify JSON parsing was logged
-        assert "manage_asset: coerced properties from JSON string to dict" in ctx.log_info
+        assert any(
+            "manage_asset: coerced properties using centralized parser" in msg
+            for msg in ctx.log_info
+        )
 
         # Verify the result
         assert result["success"] is True
@@ -117,12 +120,12 @@ class TestManageGameObjectJsonParsing:
 
     @pytest.mark.asyncio
     async def test_component_properties_json_string_parsing(self, monkeypatch):
-        """Test that JSON string component_properties are correctly parsed."""
+        """Test that JSON string component_properties result in successful operation."""
         from services.tools.manage_gameobject import manage_gameobject
 
         ctx = DummyContext()
 
-        async def fake_send(cmd, params, **kwargs):
+        async def fake_send(_cmd, params, **_kwargs):
             return {"success": True, "message": "GameObject created successfully"}
         monkeypatch.setattr(
             "services.tools.manage_gameobject.async_send_command_with_retry",
@@ -137,8 +140,31 @@ class TestManageGameObjectJsonParsing:
             component_properties='{"MeshRenderer": {"material": "Assets/Materials/BlueMaterial.mat"}}'
         )
 
-        # Verify JSON parsing was logged
-        assert "manage_gameobject: coerced component_properties from JSON string to dict" in ctx.log_info
-
         # Verify the result
         assert result["success"] is True
+
+        
+    @pytest.mark.asyncio
+    async def test_component_properties_parsing_verification(self, monkeypatch):
+        """Test that component_properties are actually parsed to dict before sending."""
+        from services.tools.manage_gameobject import manage_gameobject
+        ctx = DummyContext()
+        
+        captured_params = {}
+        async def fake_send(_cmd, params, **_kwargs):
+            captured_params.update(params)
+            return {"success": True, "message": "GameObject created successfully"}
+            
+        monkeypatch.setattr(
+            "services.tools.manage_gameobject.async_send_command_with_retry",
+            fake_send,
+        )
+        
+        await manage_gameobject(
+            ctx=ctx,
+            action="create",
+            name="TestObject",
+            component_properties='{"MeshRenderer": {"material": "Assets/Materials/BlueMaterial.mat"}}'
+        )
+        
+        assert isinstance(captured_params.get("componentProperties"), dict)

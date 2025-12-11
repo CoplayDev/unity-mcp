@@ -1,12 +1,13 @@
 import base64
 import hashlib
 import re
-from typing import Annotated, Any
+from typing import Annotated, Any, Union
 
 from fastmcp import Context
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
+from services.tools.utils import parse_json_payload
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 
@@ -360,7 +361,7 @@ async def script_apply_edits(
     ctx: Context,
     name: Annotated[str, "Name of the script to edit"],
     path: Annotated[str, "Path to the script to edit under Assets/ directory"],
-    edits: Annotated[list[dict[str, Any]], "List of edits to apply to the script"],
+    edits: Annotated[Union[list[dict[str, Any]], str], "List of edits to apply to the script (JSON list or stringified JSON)"],
     options: Annotated[dict[str, Any],
                        "Options for the script edit"] | None = None,
     script_type: Annotated[str,
@@ -371,6 +372,12 @@ async def script_apply_edits(
     unity_instance = get_unity_instance_from_context(ctx)
     await ctx.info(
         f"Processing script_apply_edits: {name} (unity_instance={unity_instance or 'default'})")
+        
+    # Parse edits if they came as a stringified JSON
+    edits = parse_json_payload(edits)
+    if not isinstance(edits, list):
+        return {"success": False, "message": f"Edits must be a list or JSON string of a list, got {type(edits)}"}
+
     # Normalize locator first so downstream calls target the correct script file.
     name, path = _normalize_script_locator(name, path)
     # Normalize unsupported or aliased ops to known structured/text paths
@@ -895,10 +902,10 @@ async def script_apply_edits(
             if isinstance(resp, dict) and resp.get("success"):
                 pass  # Optional sentinel reload removed (deprecated)
             return _with_norm(
-                resp if isinstance(resp, dict) else {
-                    "success": False, "message": str(resp)},
+                resp if isinstance(resp, dict)
+                else {"success": False, "message": str(resp)},
                 normalized_for_echo,
-                routing="text"
+                routing="text",
             )
         except Exception as e:
             return _with_norm({"success": False, "code": "conversion_failed", "message": f"Edit conversion failed: {e}"}, normalized_for_echo, routing="text")

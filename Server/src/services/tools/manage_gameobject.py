@@ -1,12 +1,13 @@
 import json
-from typing import Annotated, Any, Literal
+import math
+from typing import Annotated, Any, Literal, Union
 
 from fastmcp import Context
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
-from services.tools.utils import coerce_bool
+from services.tools.utils import coerce_bool, parse_json_payload
 
 
 @mcp_for_unity_tool(
@@ -14,7 +15,7 @@ from services.tools.utils import coerce_bool
 )
 async def manage_gameobject(
     ctx: Context,
-    action: Annotated[Literal["create", "modify", "delete", "find", "add_component", "remove_component", "set_component_property", "get_components", "get_component", "duplicate", "move_relative"], "Perform CRUD operations on GameObjects and components."],
+    action: Annotated[Literal["create", "modify", "delete", "find", "add_component", "remove_component", "set_component_property", "get_components", "get_component", "duplicate", "move_relative"], "Perform CRUD operations on GameObjects and components."] | None = None,
     target: Annotated[str,
                       "GameObject identifier by name or path for modify/delete/component actions"] | None = None,
     search_method: Annotated[Literal["by_id", "by_name", "by_path", "by_tag", "by_layer", "by_component"],
@@ -25,11 +26,11 @@ async def manage_gameobject(
                    "Tag name - used for both 'create' (initial tag) and 'modify' (change tag)"] | None = None,
     parent: Annotated[str,
                       "Parent GameObject reference - used for both 'create' (initial parent) and 'modify' (change parent)"] | None = None,
-    position: Annotated[list[float] | str,
+    position: Annotated[Union[list[float], str],
                         "Position - [x,y,z] or string '[x,y,z]' for client compatibility"] | None = None,
-    rotation: Annotated[list[float] | str,
+    rotation: Annotated[Union[list[float], str],
                         "Rotation - [x,y,z] or string '[x,y,z]' for client compatibility"] | None = None,
-    scale: Annotated[list[float] | str,
+    scale: Annotated[Union[list[float], str],
                      "Scale - [x,y,z] or string '[x,y,z]' for client compatibility"] | None = None,
     components_to_add: Annotated[list[str],
                                  "List of component names to add"] | None = None,
@@ -46,7 +47,7 @@ async def manage_gameobject(
     layer: Annotated[str, "Layer name"] | None = None,
     components_to_remove: Annotated[list[str],
                                     "List of component names to remove"] | None = None,
-    component_properties: Annotated[dict[str, dict[str, Any]] | str,
+    component_properties: Annotated[Union[dict[str, dict[str, Any]], str],
                                     """Dictionary of component names to their properties to set. For example:
                                     `{"MyScript": {"otherObject": {"find": "Player", "method": "by_name"}}}` assigns GameObject
                                     `{"MyScript": {"playerHealth": {"find": "Player", "component": "HealthComponent"}}}` assigns Component
@@ -70,7 +71,7 @@ async def manage_gameobject(
     # --- Parameters for 'duplicate' ---
     new_name: Annotated[str,
                         "New name for the duplicated object (default: SourceName_Copy)"] | None = None,
-    offset: Annotated[list[float] | str,
+    offset: Annotated[Union[list[float], str],
                       "Offset from original/reference position - [x,y,z] or string '[x,y,z]'"] | None = None,
     # --- Parameters for 'move_relative' ---
     reference_object: Annotated[str,
@@ -86,22 +87,33 @@ async def manage_gameobject(
     # Removed session_state import
     unity_instance = get_unity_instance_from_context(ctx)
 
+    if action is None:
+        return {
+            "success": False,
+            "message": "Missing required parameter 'action'. Valid actions: create, modify, delete, find, add_component, remove_component, set_component_property, get_components, get_component, duplicate, move_relative"
+        }
+
     # Coercers to tolerate stringified booleans and vectors
     def _coerce_vec(value, default=None):
         if value is None:
             return default
-        import math
-
+        
+        # First try to parse if it's a string
+        val = parse_json_payload(value)
+        
         def _to_vec3(parts):
             try:
                 vec = [float(parts[0]), float(parts[1]), float(parts[2])]
             except (ValueError, TypeError):
                 return default
             return vec if all(math.isfinite(n) for n in vec) else default
-        if isinstance(value, list) and len(value) == 3:
-            return _to_vec3(value)
-        if isinstance(value, str):
-            s = value.strip()
+            
+        if isinstance(val, list) and len(val) == 3:
+            return _to_vec3(val)
+            
+        # Handle legacy comma-separated strings "1,2,3" that parse_json_payload doesn't handle (since they aren't JSON arrays)
+        if isinstance(val, str):
+            s = val.strip()
             # minimal tolerant parse for "[x,y,z]" or "x,y,z"
             if s.startswith("[") and s.endswith("]"):
                 s = s[1:-1]
@@ -125,16 +137,12 @@ async def manage_gameobject(
     world_space = coerce_bool(world_space, default=True)
 
     # Coerce 'component_properties' from JSON string to dict for client compatibility
-    if isinstance(component_properties, str):
-        try:
-            component_properties = json.loads(component_properties)
-            await ctx.info(
-                "manage_gameobject: coerced component_properties from JSON string to dict")
-        except json.JSONDecodeError as e:
-            return {"success": False, "message": f"Invalid JSON in component_properties: {e}"}
+    component_properties = parse_json_payload(component_properties)
+    
     # Ensure final type is a dict (object) if provided
     if component_properties is not None and not isinstance(component_properties, dict):
         return {"success": False, "message": "component_properties must be a JSON object (dict)."}
+        
     try:
         # Map tag to search_term when search_method is by_tag for backward compatibility
         if action == "find" and search_method == "by_tag" and tag is not None and search_term is None:
@@ -229,4 +237,4 @@ async def manage_gameobject(
         return response if isinstance(response, dict) else {"success": False, "message": str(response)}
 
     except Exception as e:
-        return {"success": False, "message": f"Python error managing GameObject: {str(e)}"}
+        return {"success": False, "message": f"Python error managing GameObject: {e!s}"}

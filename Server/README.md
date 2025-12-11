@@ -23,9 +23,45 @@ Run directly from GitHub without installation:
 
 ```bash
 # HTTP (default)
-uvx --from git+https://github.com/CoplayDev/unity-mcp@v8.1.6#subdirectory=Server \
+uvx --from git+https://github.com/CoplayDev/unity-mcp@v8.2.3#subdirectory=Server \
     mcp-for-unity --transport http --http-url http://localhost:8080
 
+# Stdio
+uvx --from git+https://github.com/CoplayDev/unity-mcp@v8.2.3#subdirectory=Server \
+    mcp-for-unity --transport stdio
+```
+
+**MCP Client Configuration (HTTP):**
+
+```json
+{
+  "mcpServers": {
+    "UnityMCP": {
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
+```
+
+**MCP Client Configuration (stdio):**
+
+```json
+{
+  "mcpServers": {
+    "UnityMCP": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/CoplayDev/unity-mcp@v8.2.3#subdirectory=Server",
+        "mcp-for-unity",
+        "--transport",
+        "stdio"
+      ],
+      "type": "stdio"
+    }
+  }
+}
+```
 ```
 
 

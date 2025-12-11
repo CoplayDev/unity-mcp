@@ -19,9 +19,11 @@ namespace MCPForUnity.Editor.Tools
 {
     /// <summary>
     /// Runtime compilation tool for MCP Unity.
-    /// Compiles and loads C# code at runtime without triggering domain reload.
+    /// Compiles and loads C# code at runtime without triggering domain reload via Roslyn Runtime Compilation, where in traditional Unity workflow it would take seconds to reload assets and reset script states for each script change. 
     /// </summary>
-    [McpForUnityTool("runtime_compilation")]
+    [McpForUnityTool(
+        name:"runtime_compilation",
+        Description = "Enable runtime compilation of C# code within Unity without domain reload via Roslyn.")]
     public static class ManageRuntimeCompilation
     {
         private static readonly Dictionary<string, LoadedAssemblyInfo> LoadedAssemblies = new Dictionary<string, LoadedAssemblyInfo>();
@@ -42,7 +44,7 @@ namespace MCPForUnity.Editor.Tools
             
             if (string.IsNullOrEmpty(action))
             {
-                return Response.Error("Action parameter is required. Valid actions: compile_and_load, list_loaded, get_types, execute_with_roslyn, get_history, save_history, clear_history");
+                return new ErrorResponse("Action parameter is required. Valid actions: compile_and_load, list_loaded, get_types, execute_with_roslyn, get_history, save_history, clear_history");
             }
             
             switch (action)
@@ -69,14 +71,14 @@ namespace MCPForUnity.Editor.Tools
                     return ClearCompilationHistory();
                 
                 default:
-                    return Response.Error($"Unknown action '{action}'. Valid actions: compile_and_load, list_loaded, get_types, execute_with_roslyn, get_history, save_history, clear_history");
+                    return new ErrorResponse($"Unknown action '{action}'. Valid actions: compile_and_load, list_loaded, get_types, execute_with_roslyn, get_history, save_history, clear_history");
             }
         }
         
         private static object CompileAndLoad(JObject @params)
         {
 #if !USE_ROSLYN
-            return Response.Error(
+            return new ErrorResponse(
                 "Runtime compilation requires Roslyn. Please install Microsoft.CodeAnalysis.CSharp NuGet package and add USE_ROSLYN to Scripting Define Symbols. " +
                 "See ManageScript.cs header for installation instructions."
             );
@@ -84,16 +86,13 @@ namespace MCPForUnity.Editor.Tools
             try
             {
                 string code = @params["code"]?.ToString();
-                var assemblyToken = @params["assembly_name"];
-                string assemblyName = assemblyToken == null || string.IsNullOrWhiteSpace(assemblyToken.ToString())
-                    ? $"DynamicAssembly_{DateTime.Now.Ticks}"
-                    : assemblyToken.ToString().Trim();
+                string assemblyName = @params["assembly_name"]?.ToString() ?? $"DynamicAssembly_{DateTime.Now.Ticks}";
                 string attachTo = @params["attach_to"]?.ToString();
                 bool loadImmediately = @params["load_immediately"]?.ToObject<bool>() ?? true;
                 
                 if (string.IsNullOrEmpty(code))
                 {
-                    return Response.Error("'code' parameter is required");
+                    return new ErrorResponse("'code' parameter is required");
                 }
                 
                 // Ensure unique assembly name
@@ -104,21 +103,8 @@ namespace MCPForUnity.Editor.Tools
                 
                 // Create output directory
                 Directory.CreateDirectory(DynamicAssembliesPath);
-                string basePath = Path.GetFullPath(DynamicAssembliesPath);
-                Directory.CreateDirectory(basePath);
-                string safeFileName = SanitizeAssemblyFileName(assemblyName);
-                string dllPath = Path.GetFullPath(Path.Combine(basePath, $"{safeFileName}.dll"));
-
-                if (!dllPath.StartsWith(basePath, StringComparison.Ordinal))
-                {
-                    return Response.Error("Assembly name must resolve inside the dynamic assemblies directory.");
-                }
-
-                if (File.Exists(dllPath))
-                {
-                    dllPath = Path.GetFullPath(Path.Combine(basePath, $"{safeFileName}_{DateTime.Now.Ticks}.dll"));
-                }
-
+                string dllPath = Path.Combine(DynamicAssembliesPath, $"{assemblyName}.dll");
+                
                 // Parse code
                 var syntaxTree = CSharpSyntaxTree.ParseText(code);
                 
@@ -137,7 +123,7 @@ namespace MCPForUnity.Editor.Tools
                 
                 // Emit to file
                 EmitResult emitResult;
-                using (var stream = new FileStream(dllPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                using (var stream = new FileStream(dllPath, FileMode.Create))
                 {
                     emitResult = compilation.Emit(stream);
                 }
@@ -156,7 +142,7 @@ namespace MCPForUnity.Editor.Tools
                         })
                         .ToList();
                     
-                    return Response.Error("Compilation failed", new
+                    return new ErrorResponse("Compilation failed", new
                     {
                         errors = errors,
                         error_count = errors.Count
@@ -222,7 +208,7 @@ namespace MCPForUnity.Editor.Tools
                     }
                 }
                 
-                return Response.Success("Runtime compilation completed successfully", new
+                return new SuccessResponse("Runtime compilation completed successfully", new
                 {
                     assembly_name = assemblyName,
                     dll_path = dllPath,
@@ -235,7 +221,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception ex)
             {
-                return Response.Error($"Runtime compilation failed: {ex.Message}", new
+                return new ErrorResponse($"Runtime compilation failed: {ex.Message}", new
                 {
                     exception = ex.GetType().Name,
                     stack_trace = ex.StackTrace
@@ -243,7 +229,7 @@ namespace MCPForUnity.Editor.Tools
             }
 #endif
         }
-
+        
         private static object ListLoadedAssemblies()
         {
             var assemblies = LoadedAssemblies.Values.Select(info => new
@@ -254,33 +240,26 @@ namespace MCPForUnity.Editor.Tools
                 type_count = info.TypeNames.Count,
                 types = info.TypeNames
             }).ToList();
-
-            return Response.Success($"Found {assemblies.Count} loaded dynamic assemblies", new
+            
+            return new SuccessResponse($"Found {assemblies.Count} loaded dynamic assemblies", new
             {
                 count = assemblies.Count,
                 assemblies = assemblies
             });
         }
         
-        private static string SanitizeAssemblyFileName(string assemblyName)
-        {
-            var invalidChars = Path.GetInvalidFileNameChars();
-            var sanitized = new string(assemblyName.Where(c => !invalidChars.Contains(c)).ToArray());
-            return string.IsNullOrWhiteSpace(sanitized) ? $"DynamicAssembly_{DateTime.Now.Ticks}" : sanitized;
-        }
-
         private static object GetAssemblyTypes(JObject @params)
         {
             string assemblyName = @params["assembly_name"]?.ToString();
             
             if (string.IsNullOrEmpty(assemblyName))
             {
-                return Response.Error("'assembly_name' parameter is required");
+                return new ErrorResponse("'assembly_name' parameter is required");
             }
             
             if (!LoadedAssemblies.TryGetValue(assemblyName, out var info))
             {
-                return Response.Error($"Assembly '{assemblyName}' not found in loaded assemblies");
+                return new ErrorResponse($"Assembly '{assemblyName}' not found in loaded assemblies");
             }
             
             var types = info.Assembly.GetTypes().Select(t => new
@@ -294,7 +273,7 @@ namespace MCPForUnity.Editor.Tools
                 base_type = t.BaseType?.FullName
             }).ToList();
             
-            return Response.Success($"Retrieved {types.Count} types from {assemblyName}", new
+            return new SuccessResponse($"Retrieved {types.Count} types from {assemblyName}", new
             {
                 assembly_name = assemblyName,
                 type_count = types.Count,
@@ -318,7 +297,7 @@ namespace MCPForUnity.Editor.Tools
                 
                 if (string.IsNullOrEmpty(code))
                 {
-                    return Response.Error("'code' parameter is required");
+                    return new ErrorResponse("'code' parameter is required");
                 }
                 
                 // Get or create the RoslynRuntimeCompiler instance
@@ -336,7 +315,7 @@ namespace MCPForUnity.Editor.Tools
                     
                     if (targetObject == null)
                     {
-                        return Response.Error($"Target GameObject '{targetObjectName}' not found");
+                        return new ErrorResponse($"Target GameObject '{targetObjectName}' not found");
                     }
                 }
                 
@@ -352,7 +331,7 @@ namespace MCPForUnity.Editor.Tools
                 
                 if (success)
                 {
-                    return Response.Success($"Code compiled and executed successfully", new
+                    return new SuccessResponse($"Code compiled and executed successfully", new
                     {
                         class_name = className,
                         method_name = methodName,
@@ -363,7 +342,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 else
                 {
-                    return Response.Error($"Execution failed: {errorMessage}", new
+                    return new ErrorResponse($"Execution failed: {errorMessage}", new
                     {
                         diagnostics = compiler.lastCompileDiagnostics
                     });
@@ -371,7 +350,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception ex)
             {
-                return Response.Error($"Failed to execute with Roslyn: {ex.Message}", new
+                return new ErrorResponse($"Failed to execute with Roslyn: {ex.Message}", new
                 {
                     exception = ex.GetType().Name,
                     stack_trace = ex.StackTrace
@@ -402,7 +381,7 @@ namespace MCPForUnity.Editor.Tools
                         : entry.sourceCode
                 }).ToList();
                 
-                return Response.Success($"Retrieved {historyData.Count} history entries", new
+                return new SuccessResponse($"Retrieved {historyData.Count} history entries", new
                 {
                     count = historyData.Count,
                     history = historyData
@@ -410,7 +389,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception ex)
             {
-                return Response.Error($"Failed to get history: {ex.Message}");
+                return new ErrorResponse($"Failed to get history: {ex.Message}");
             }
         }
         
@@ -425,7 +404,7 @@ namespace MCPForUnity.Editor.Tools
                 
                 if (compiler.SaveHistoryToFile(out string savedPath, out string error))
                 {
-                    return Response.Success($"History saved successfully", new
+                    return new SuccessResponse($"History saved successfully", new
                     {
                         path = savedPath,
                         entry_count = compiler.CompilationHistory.Count
@@ -433,12 +412,12 @@ namespace MCPForUnity.Editor.Tools
                 }
                 else
                 {
-                    return Response.Error($"Failed to save history: {error}");
+                    return new ErrorResponse($"Failed to save history: {error}");
                 }
             }
             catch (Exception ex)
             {
-                return Response.Error($"Failed to save history: {ex.Message}");
+                return new ErrorResponse($"Failed to save history: {ex.Message}");
             }
         }
         
@@ -453,11 +432,11 @@ namespace MCPForUnity.Editor.Tools
                 int count = compiler.CompilationHistory.Count;
                 compiler.ClearHistory();
                 
-                return Response.Success($"Cleared {count} history entries");
+                return new SuccessResponse($"Cleared {count} history entries");
             }
             catch (Exception ex)
             {
-                return Response.Error($"Failed to clear history: {ex.Message}");
+                return new ErrorResponse($"Failed to clear history: {ex.Message}");
             }
         }
         

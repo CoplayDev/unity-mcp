@@ -1,0 +1,199 @@
+name: Unity Tests (fork)
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  checks: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UNITY_IMAGE: unityci/editor:ubuntu-2021.3.45f2-linux-il2cpp-3
+
+jobs:
+  test-editmode:
+    # Guard: run only on the fork owner's repo
+    if: github.repository_owner == 'dsarno'
+    name: Test in editmode (fork)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      # ---------- Secrets check ----------
+      - name: Detect Unity credentials (outputs)
+        id: detect
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        run: |
+          set -e
+          if [ -n "$UNITY_LICENSE" ]; then echo "unity_ok=true" >> "$GITHUB_OUTPUT"; else echo "unity_ok=false" >> "$GITHUB_OUTPUT"; fi
+          if [ -n "$UNITY_EMAIL" ] && [ -n "$UNITY_PASSWORD" ]; then echo "ebl_ok=true" >> "$GITHUB_OUTPUT"; else echo "ebl_ok=false" >> "$GITHUB_OUTPUT"; fi
+          if [ -n "$UNITY_SERIAL" ]; then echo "has_serial=true" >> "$GITHUB_OUTPUT"; else echo "has_serial=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare reports
+        run: |
+          set -eux
+          rm -f reports/*.xml || true
+          mkdir -p reports
+
+      # ---------- Licensing: allow both ULF and EBL ----------
+      - name: Decide license sources
+        id: lic
+        shell: bash
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        run: |
+          set -eu
+          use_ulf=false; use_ebl=false
+          [[ -n "${UNITY_LICENSE:-}" ]] && use_ulf=true
+          [[ -n "${UNITY_EMAIL:-}" && -n "${UNITY_PASSWORD:-}" ]] && use_ebl=true
+          echo "use_ulf=$use_ulf" >> "$GITHUB_OUTPUT"
+          echo "use_ebl=$use_ebl" >> "$GITHUB_OUTPUT"
+          echo "has_serial=$([[ -n "${UNITY_SERIAL:-}" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Stage Unity .ulf license (from secret)
+        if: steps.lic.outputs.use_ulf == 'true'
+        id: ulf
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        shell: bash
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/unity-license-ulf" "$RUNNER_TEMP/unity-local/Unity"
+          f="$RUNNER_TEMP/unity-license-ulf/Unity_lic.ulf"
+          if printf "%s" "$UNITY_LICENSE" | base64 -d - >/dev/null 2>&1; then
+            printf "%s" "$UNITY_LICENSE" | base64 -d - > "$f"
+          else
+            printf "%s" "$UNITY_LICENSE" > "$f"
+          fi
+          chmod 600 "$f" || true
+          # If someone pasted an entitlement XML into UNITY_LICENSE by mistake, re-home it:
+          if head -c 100 "$f" | grep -qi '<\?xml'; then
+            mkdir -p "$RUNNER_TEMP/unity-config/Unity/licenses"
+            mv "$f" "$RUNNER_TEMP/unity-config/Unity/licenses/UnityEntitlementLicense.xml"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          elif grep -qi '<Signature>' "$f"; then
+            # provide it in the standard local-share path too
+            cp -f "$f" "$RUNNER_TEMP/unity-local/Unity/Unity_lic.ulf"
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Activate Unity (EBL via container - host-mount)
+        if: steps.lic.outputs.use_ebl == 'true'
+        shell: bash
+        env:
+          UNITY_IMAGE: ${{ env.UNITY_IMAGE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        run: |
+          set -euxo pipefail
+          mkdir -p "$RUNNER_TEMP/unity-config" "$RUNNER_TEMP/unity-local"
+
+          # Try Pro first if serial is present, otherwise named-user EBL.
+          docker run --rm --network host \
+            -e HOME=/root \
+            -e UNITY_EMAIL -e UNITY_PASSWORD -e UNITY_SERIAL \
+            -v "$RUNNER_TEMP/unity-config:/root/.config/unity3d" \
+            -v "$RUNNER_TEMP/unity-local:/root/.local/share/unity3d" \
+            "$UNITY_IMAGE" bash -lc '
+              set -euxo pipefail
+              if [[ -n "${UNITY_SERIAL:-}" ]]; then
+                /opt/unity/Editor/Unity -batchmode -nographics -logFile - \
+                  -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD" -serial "$UNITY_SERIAL" -quit || true
+              else
+                /opt/unity/Editor/Unity -batchmode -nographics -logFile - \
+                  -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD" -quit || true
+              fi
+              ls -la /root/.config/unity3d/Unity/licenses || true
+            '
+
+          # Verify entitlement written to host mount; allow ULF-only runs to proceed
+          if ! find "$RUNNER_TEMP/unity-config" -type f -iname "*.xml" | grep -q .; then
+            if [[ "${{ steps.ulf.outputs.ok }}" == "true" ]]; then
+              echo "EBL entitlement not found; proceeding with ULF-only (ok=true)."
+            else
+              echo "No entitlement produced and no valid ULF; cannot continue." >&2
+              exit 1
+            fi
+          fi
+
+      # ---------- Warm up project (import Library once) ----------
+      - name: Warm up project (import Library once)
+        if: steps.lic.outputs.use_ulf == 'true' || steps.lic.outputs.use_ebl == 'true'
+        shell: bash
+        env:
+          UNITY_IMAGE: ${{ env.UNITY_IMAGE }}
+          ULF_OK: ${{ steps.ulf.outputs.ok }}
+        run: |
+          set -euxo pipefail
+          manual_args=()
+          if [[ "${ULF_OK:-false}" == "true" ]]; then
+            manual_args=(-manualLicenseFile "/root/.local/share/unity3d/Unity/Unity_lic.ulf")
+          fi
+          docker run --rm --network host \
+            -e HOME=/root \
+            -v "${{ github.workspace }}:/workspace" -w /workspace \
+            -v "$RUNNER_TEMP/unity-config:/root/.config/unity3d" \
+            -v "$RUNNER_TEMP/unity-local:/root/.local/share/unity3d" \
+            "$UNITY_IMAGE" /opt/unity/Editor/Unity -batchmode -nographics -logFile - \
+              -projectPath /workspace/TestProjects/UnityMCPTests \
+              "${manual_args[@]}" \
+              -quit
+
+      # ---------- Run editmode tests ----------
+      - name: Run editmode tests (Unity CLI)
+        if: steps.lic.outputs.use_ulf == 'true' || steps.lic.outputs.use_ebl == 'true'
+        shell: bash
+        env:
+          UNITY_IMAGE: ${{ env.UNITY_IMAGE }}
+          ULF_OK: ${{ steps.ulf.outputs.ok }}
+        run: |
+          set -euxo pipefail
+          manual_args=()
+          if [[ "${ULF_OK:-false}" == "true" ]]; then
+            manual_args=(-manualLicenseFile "/root/.local/share/unity3d/Unity/Unity_lic.ulf")
+          fi
+          docker run --rm --network host \
+            -e HOME=/root \
+            -v "${{ github.workspace }}:/workspace" -w /workspace \
+            -v "$RUNNER_TEMP/unity-config:/root/.config/unity3d" \
+            -v "$RUNNER_TEMP/unity-local:/root/.local/share/unity3d" \
+            "$UNITY_IMAGE" /opt/unity/Editor/Unity -batchmode -nographics -logFile - \
+              -projectPath /workspace/TestProjects/UnityMCPTests \
+              -runTests \
+              -testPlatform editmode \
+              -testResults /workspace/reports/editmode-results.xml \
+              -testResultsFormatter NUnit \
+              "${manual_args[@]}" \
+              -quit
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-editmode-results
+          path: reports
+
+      - name: License diagnostics when missing
+        if: steps.lic.outputs.use_ulf != 'true' && steps.lic.outputs.use_ebl != 'true'
+        run: |
+          echo "::error::No Unity credentials were supplied. Set UNITY_LICENSE or UNITY_EMAIL/UNITY_PASSWORD (and optionally UNITY_SERIAL) secrets in this fork."
+

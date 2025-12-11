@@ -115,7 +115,7 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
-        public void AssignMaterial_ToSphere_UsingComponentPropertiesObject_Succeeds()
+        public void AssignMaterial_ToSphere_UsingManageMaterial_Succeeds()
         {
             // Ensure material exists first
             CreateMaterial_WithObjectProperties_SucceedsAndSetsColor();
@@ -133,23 +133,18 @@ namespace MCPForUnityTests.Editor.Tools
             _sphere = GameObject.Find("ToolTestSphere");
             Assert.IsNotNull(_sphere, "Sphere should be created.");
 
-            // Assign material via object-typed componentProperties
-            var modifyParams = new JObject
+            // Assign material via ManageMaterial tool
+            var assignParams = new JObject
             {
-                ["action"] = "modify",
+                ["action"] = "assign_material_to_renderer",
                 ["target"] = "ToolTestSphere",
                 ["searchMethod"] = "by_name",
-                ["componentProperties"] = new JObject
-                {
-                    ["MeshRenderer"] = new JObject
-                    {
-                        ["sharedMaterial"] = _matPath
-                    }
-                }
+                ["materialPath"] = _matPath,
+                ["slot"] = 0
             };
 
-            var modifyResult = ToJObject(ManageGameObject.HandleCommand(modifyParams));
-            Assert.IsTrue(modifyResult.Value<bool>("success"), modifyResult.Value<string>("error"));
+            var assignResult = ToJObject(ManageMaterial.HandleCommand(assignParams));
+            Assert.AreEqual("success", assignResult.Value<string>("status"), assignResult.ToString());
 
             var renderer = _sphere.GetComponent<MeshRenderer>();
             Assert.IsNotNull(renderer, "Sphere should have MeshRenderer.");
@@ -161,7 +156,7 @@ namespace MCPForUnityTests.Editor.Tools
         public void ReadRendererData_DoesNotInstantiateMaterial_AndIncludesSharedMaterial()
         {
             // Prepare object and assignment
-            AssignMaterial_ToSphere_UsingComponentPropertiesObject_Succeeds();
+            AssignMaterial_ToSphere_UsingManageMaterial_Succeeds();
 
             var renderer = _sphere.GetComponent<MeshRenderer>();
             int beforeId = renderer.sharedMaterial != null ? renderer.sharedMaterial.GetInstanceID() : 0;

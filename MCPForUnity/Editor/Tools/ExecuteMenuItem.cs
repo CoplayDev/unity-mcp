@@ -7,6 +7,9 @@ using UnityEditor;
 namespace MCPForUnity.Editor.Tools
 {
     [McpForUnityTool("execute_menu_item", AutoRegister = false)]
+    /// <summary>
+    /// Tool to execute a Unity Editor menu item by its path.
+    /// </summary>
     public static class ExecuteMenuItem
     {
         // Basic blacklist to prevent execution of disruptive menu items.

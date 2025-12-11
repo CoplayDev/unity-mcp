@@ -121,7 +121,7 @@ async def apply_text_edits(
             return read_resp if isinstance(read_resp, dict) else {"success": False, "message": str(read_resp)}
         data = read_resp.get("data", {})
         contents = data.get("contents")
-        if not contents and data.get("contentsEncoded"):
+        if not contents and data.get("contentsEncoded") and data.get("encodedContents"):
             try:
                 contents = base64.b64decode(data.get("encodedContents", "").encode(
                     "utf-8")).decode("utf-8", "replace")
