@@ -77,6 +77,13 @@ Notes:
 
 ---
 
+## Authentication
+- Auth is always on. The API key lives in the **Connection** section (under the HTTP URL) with Copy and Regenerate buttons.
+- The same key is stored on disk for the server to read automatically; clients are prompted for it when auto-config runs.
+- Requests use `X-API-Key` (or `Authorization: Bearer <key>` for compatibility) on every call.
+
+---
+
 ## Troubleshooting
 - Python or `uv` not found:
   - Help: [Fix MCP for Unity with Cursor, VS Code & Windsurf](https://github.com/CoplayDev/unity-mcp/wiki/1.-Fix-Unity-MCP-and-Cursor,-VSCode-&-Windsurf)

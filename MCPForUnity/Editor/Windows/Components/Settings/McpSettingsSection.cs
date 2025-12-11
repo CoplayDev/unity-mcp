@@ -183,6 +183,7 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
 
             gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
             UpdateDeploymentSection();
+
         }
 
         private void UpdateVersionLabel()

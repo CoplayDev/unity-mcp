@@ -62,6 +62,8 @@ uvx --from git+https://github.com/CoplayDev/unity-mcp@v8.2.3#subdirectory=Server
   }
 }
 ```
+```
+
 
 ### Option 2: Using uv (Local Installation)
 
@@ -84,7 +86,8 @@ uv run server.py --transport stdio
 {
   "mcpServers": {
     "UnityMCP": {
-      "url": "http://localhost:8080/mcp"
+      "url": "http://localhost:8080/mcp",
+      "headers": { "X-API-Key": "<your key>" }
     }
   }
 }
@@ -135,49 +138,25 @@ docker build -t unity-mcp-server .
 docker run -p 8080:8080 unity-mcp-server --transport http --http-url http://0.0.0.0:8080
 ```
 
-Configure your MCP client with `"url": "http://localhost:8080/mcp"`. For stdio-in-docker (rare), run the container with `--transport stdio` and use the same `command`/`args` pattern as the uv examples, wrapping it in `docker run -i ...` if needed.
+Configure your MCP client with `"url": "http://localhost:8080/mcp"` and include the `X-API-Key` header. For stdio-in-docker (rare), run the container with `--transport stdio` and use the same `command`/`args` pattern as the uv examples, wrapping it in `docker run -i ...` if needed.
 
 ---
 
 ## Configuration
+The server connects to Unity Editor automatically when both are running.
 
-The server connects to Unity Editor automatically when both are running. No additional configuration needed.
+**Authentication (optional; disabled by default)**
+- Toggle with `--auth-enabled` (or `UNITY_MCP_AUTH_ENABLED=1`).
+- Allowlist with `--allowed-ips "127.0.0.1,10.0.0.0/8"` (or `UNITY_MCP_ALLOWED_IPS`). Default `*`.
+- Token with `--auth-token <value>` (or `UNITY_MCP_AUTH_TOKEN`). If omitted while enabled, the server generates one; empty string skips token checks.
+- Token file lives at `api_key` (auto-created when needed):
+  - macOS: `~/Library/Application Support/UnityMCP/api_key`
+  - Windows: `%LOCALAPPDATA%\UnityMCP/api_key`
+  - Linux: `~/.local/share/UnityMCP/api_key`
+- HTTP clients send `X-API-Key: <key>`. When auth is disabled, no auth headers are required.
 
-**Environment Variables:**
-
+**Environment/flags**
 - `DISABLE_TELEMETRY=true` - Opt out of anonymous usage analytics
 - `LOG_LEVEL=DEBUG` - Enable detailed logging (default: INFO)
 
 ---
-
-## Example Prompts
-
-Once connected, try these commands in your AI assistant:
-
-- "Create a 3D player controller with WASD movement"
-- "Add a rotating cube to the scene with a red material"
-- "Create a simple platformer level with obstacles"
-- "Generate a shader that creates a holographic effect"
-- "List all GameObjects in the current scene"
-
----
-
-## Documentation
-
-For complete documentation, troubleshooting, and advanced usage:
-
-📖 **[Full Documentation](https://github.com/CoplayDev/unity-mcp#readme)**
-
----
-
-## Requirements
-
-- **Python:** 3.10 or newer
-- **Unity Editor:** 2021.3 LTS or newer
-- **uv:** Python package manager ([Installation Guide](https://docs.astral.sh/uv/getting-started/installation/))
-
----
-
-## License
-
-MIT License - See [LICENSE](https://github.com/CoplayDev/unity-mcp/blob/main/LICENSE)
