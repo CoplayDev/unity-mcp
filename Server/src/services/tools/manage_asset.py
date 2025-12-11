@@ -80,7 +80,7 @@ async def manage_asset(
 
     properties, parse_error = await _normalize_properties(properties)
     if parse_error:
-        await ctx.warn(parse_error)
+        await ctx.warning(parse_error)
         return {"success": False, "message": parse_error}
 
     # Coerce numeric inputs defensively

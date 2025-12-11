@@ -65,7 +65,17 @@ namespace MCPForUnity.Editor.Tools
             // Normalize caller path: allow both "Scripts/..." and "Assets/Scripts/..."
             string rel = (relDir ?? "Scripts").Replace('\\', '/').Trim();
             if (string.IsNullOrEmpty(rel)) rel = "Scripts";
-            if (rel.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase)) rel = rel.Substring(7);
+
+            // Handle both "Assets" and "Assets/" prefixes
+            if (rel.Equals("Assets", StringComparison.OrdinalIgnoreCase))
+            {
+                rel = string.Empty;
+            }
+            else if (rel.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
+            {
+                rel = rel.Substring(7);
+            }
+
             rel = rel.TrimStart('/');
 
             string targetDir = Path.Combine(assets, rel).Replace('\\', '/');
