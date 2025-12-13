@@ -410,17 +410,21 @@ Examples:
         logger.info("Starting FastMCP with stdio transport")
         # 🚨 [핵심] STDIO 모드일 때만 관련 로거를 CRITICAL로 낮춥니다.
         # Uvicorn 및 관련 로거들의 입을 막아 stdout 오염을 방지합니다.
-        logging.getLogger("uvicorn").setLevel(logging.CRITICAL)
-        logging.getLogger("uvicorn.error").setLevel(logging.CRITICAL)
-        logging.getLogger("uvicorn.access").setLevel(logging.CRITICAL)
-        logging.getLogger("starlette").setLevel(logging.CRITICAL)
-        logging.getLogger("docket").setLevel(logging.CRITICAL)
-        logging.getLogger("docket.worker").setLevel(logging.CRITICAL)
-        
-        # FastMCP 본체도 CRITICAL로 낮춰줍니다.
-        logging.getLogger("fastmcp").setLevel(logging.CRITICAL)
+        # 🚨 [핵심] STDIO 모드일 때 stdout 오염 방지
+        for name in (
+            "uvicorn", "uvicorn.error", "uvicorn.access",
+            "starlette",
+            "docket", "docket.worker",
+            "fastmcp",
+        ):
+            lg = logging.getLogger(name)
+            lg.setLevel(logging.WARNING) # ERROR if still too chatty
+            lg.propagate = False # prevent duplicate root logs
+            # If the rotating file handler was successfully created, attach it
+            if '_fh' in globals() and _fh not in lg.handlers:
+                lg.addHandler(_fh)
 
-        mcp.run(transport='stdio', show_banner=False)
+        mcp.run(transport='stdio')
 
 
 # Run the server

@@ -192,6 +192,13 @@ namespace MCPForUnity.Editor.Services
                 ClearPythonPathOverride();
                 return;
             }
+
+            // Allow commands on PATH, but validate explicit paths
+            if ((Path.IsPathRooted(path) || path.Contains("/") || path.Contains("\\")) && !File.Exists(path))
+            {
+                throw new ArgumentException("The selected Python executable does not exist");
+            }
+
             EditorPrefs.SetString(EditorPrefKeys.PythonPathOverride, path);
         }
 
@@ -207,6 +214,13 @@ namespace MCPForUnity.Editor.Services
                 ClearNodePathOverride();
                 return;
             }
+
+            // Allow commands on PATH, but validate explicit paths
+            if ((Path.IsPathRooted(path) || path.Contains("/") || path.Contains("\\")) && !File.Exists(path))
+            {
+                throw new ArgumentException("The selected Node executable does not exist");
+            }
+
             EditorPrefs.SetString(EditorPrefKeys.NodePathOverride, path);
         }
 

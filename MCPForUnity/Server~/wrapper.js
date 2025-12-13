@@ -20,12 +20,22 @@ const serverDir = __dirname;
 // Construct updated PATH with common uv locations
 const localAppData = process.env.LOCALAPPDATA || "";
 const userProfile = process.env.USERPROFILE || "";
-const extraPaths = [
-  path.join(localAppData, "Programs", "uv"), // uv standalone
-  path.join(localAppData, "uv"), // Alternative
-  path.join(userProfile, ".cargo", "bin"), // Cargo install
-  path.join(localAppData, "bin"),
-];
+const homeDir = process.env.HOME || process.env.USERPROFILE || "";
+
+const extraPaths =
+  process.platform === "win32"
+    ? [
+        path.join(localAppData, "Programs", "uv"), // uv standalone
+        path.join(localAppData, "uv"), // Alternative
+        path.join(userProfile, ".cargo", "bin"), // Cargo install
+        path.join(localAppData, "bin"),
+      ]
+    : [
+        path.join(homeDir, ".cargo", "bin"),
+        path.join(homeDir, ".local", "bin"),
+        "/usr/local/bin",
+        "/opt/homebrew/bin", // macOS Homebrew
+      ];
 
 const newPath =
   extraPaths.join(path.delimiter) + path.delimiter + (process.env.PATH || "");
@@ -43,7 +53,9 @@ const pythonProcess = spawn(
       PATH: newPath, // Inject updated PATH
       PYTHONUNBUFFERED: "1",
       PYTHONIOENCODING: "utf-8",
-      HOME: userProfile,
+      ...(process.platform === "win32" && userProfile
+        ? { HOME: userProfile }
+        : {}),
     },
   }
 );
