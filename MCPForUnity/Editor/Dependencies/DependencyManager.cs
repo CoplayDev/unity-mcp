@@ -5,11 +5,24 @@ using System.Runtime.InteropServices;
 using MCPForUnity.Editor.Dependencies.Models;
 using MCPForUnity.Editor.Dependencies.PlatformDetectors;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Services;
 using UnityEditor;
 using UnityEngine;
 
 namespace MCPForUnity.Editor.Dependencies
 {
+    /// <summary>
+    /// Context object containing all necessary paths and settings for dependency checking.
+    /// This allows the check to run on a background thread without accessing Unity APIs.
+    /// </summary>
+    public class DependencyContext
+    {
+        public string PackageRootPath { get; set; }
+        public string PythonOverridePath { get; set; }
+        public string NodeOverridePath { get; set; }
+        public string UvOverridePath { get; set; }
+    }
+
     /// <summary>
     /// Main orchestrator for dependency validation and management
     /// </summary>
@@ -41,9 +54,31 @@ namespace MCPForUnity.Editor.Dependencies
         }
 
         /// <summary>
-        /// Perform a comprehensive dependency check
+        /// Perform a comprehensive dependency check (Synchronous - Main Thread Only)
         /// </summary>
         public static DependencyCheckResult CheckAllDependencies()
+        {
+            // Gather context on main thread
+            var context = new DependencyContext
+            {
+                PackageRootPath = AssetPathUtility.GetMcpPackageRootPath(), // Changed to match local API
+                PythonOverridePath = MCPServiceLocator.Paths.GetPythonPath(),
+                NodeOverridePath = MCPServiceLocator.Paths.GetNodePath(),
+                UvOverridePath = MCPServiceLocator.Paths.GetUvxPath()
+            };
+
+            return CheckAllDependenciesInternal(context);
+        }
+
+        /// <summary>
+        /// Perform a comprehensive dependency check (Thread-Safe)
+        /// </summary>
+        public static DependencyCheckResult CheckAllDependenciesAsync(DependencyContext context)
+        {
+            return CheckAllDependenciesInternal(context);
+        }
+
+        private static DependencyCheckResult CheckAllDependenciesInternal(DependencyContext context)
         {
             var result = new DependencyCheckResult();
 
@@ -53,12 +88,51 @@ namespace MCPForUnity.Editor.Dependencies
                 McpLog.Info($"Checking dependencies on {detector.PlatformName}...", always: false);
 
                 // Check Python
-                var pythonStatus = detector.DetectPython();
+                var pythonStatus = detector.DetectPython(context.PythonOverridePath);
                 result.Dependencies.Add(pythonStatus);
 
                 // Check uv
-                var uvStatus = detector.DetectUv();
+                var uvStatus = detector.DetectUv(context.UvOverridePath);
                 result.Dependencies.Add(uvStatus);
+
+                // Check Node.js
+                // Note: If detector doesn't support DetectNode yet, we might need to update detectors too.
+                // Assuming detectors are being updated or have default interface implementation.
+                var nodeStatus = detector.DetectNode(context.NodeOverridePath);
+                result.Dependencies.Add(nodeStatus);
+
+                // Check Server Environment
+                // We assume ServerEnvironmentSetup.IsEnvironmentReady exists.
+                // If not, we'll need to update that too.
+                // Note: IsEnvironmentReady might access Unity API. If so, this "Async" flavor is risky.
+                // But CheckAllDependencies() is called on main thread in our UI usage.
+                
+                // For now, we use a try-catch block specifically for server check to avoid blocking the whole result
+                try 
+                {
+                     // We use the path gathered on the main thread to ensure thread safety
+                     bool isServerReady = MCPForUnity.Editor.Setup.ServerEnvironmentSetup.IsEnvironmentReady(context.PackageRootPath); 
+                     
+                     result.Dependencies.Add(new DependencyStatus("Server Environment", true)
+                     {
+                         Version = isServerReady ? "Installed" : "Missing",
+                         IsAvailable = isServerReady,
+                         Details = isServerReady ? "Virtual Environment Ready" : "Run 'Install Server Environment'",
+                         ErrorMessage = isServerReady ? null : "Virtual environment not set up"
+                     });
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Warn($"Server environment check failed: {ex.Message}");
+                     result.Dependencies.Add(new DependencyStatus("Server Environment", true)
+                     {
+                         Version = "Error",
+                         IsAvailable = false,
+                         Details = "Check failed",
+                         ErrorMessage = ex.Message
+                     });
+                }
+
 
                 // Generate summary and recommendations
                 result.GenerateSummary();
@@ -122,11 +196,15 @@ namespace MCPForUnity.Editor.Dependencies
             {
                 if (dep.Name == "Python")
                 {
-                    result.RecommendedActions.Add($"Install Python 3.10+ from: {detector.GetPythonInstallUrl()}");
+                    result.RecommendedActions.Add($"Install python 3.11+ from: {detector.GetPythonInstallUrl()}");
                 }
                 else if (dep.Name == "uv Package Manager")
                 {
                     result.RecommendedActions.Add($"Install uv package manager from: {detector.GetUvInstallUrl()}");
+                }
+                else if (dep.Name == "Node.js")
+                {
+                    result.RecommendedActions.Add("Install Node.js (LTS) from: https://nodejs.org/");
                 }
                 else if (dep.Name == "MCP Server")
                 {

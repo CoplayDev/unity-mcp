@@ -131,7 +131,7 @@ namespace MCPForUnity.Editor.Services
                     ClassName = type.Name,
                     Namespace = type.Namespace ?? "",
                     AssemblyName = type.Assembly.GetName().Name,
-                    AssetPath = ResolveScriptAssetPath(type),
+                    AssetPath = null, // Skip expensive resolution during discovery - resolve lazily if needed
                     AutoRegister = toolAttr.AutoRegister,
                     RequiresPolling = toolAttr.RequiresPolling,
                     PollAction = string.IsNullOrEmpty(toolAttr.PollAction) ? "status" : toolAttr.PollAction
@@ -140,11 +140,12 @@ namespace MCPForUnity.Editor.Services
                 metadata.IsBuiltIn = DetermineIsBuiltIn(type, metadata);
                 if (metadata.IsBuiltIn)
                 {
-                    string summaryDescription = ExtractSummaryDescription(type, metadata);
-                    if (!string.IsNullOrWhiteSpace(summaryDescription))
-                    {
-                        metadata.Description = summaryDescription;
-                    }
+                    // Skip summary extraction during discovery for performance
+                    // string summaryDescription = ExtractSummaryDescription(type, metadata);
+                    // if (!string.IsNullOrWhiteSpace(summaryDescription))
+                    // {
+                    //     metadata.Description = summaryDescription;
+                    // }
                 }
                 return metadata;
                 

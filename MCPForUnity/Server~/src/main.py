@@ -61,7 +61,11 @@ except Exception as exc:
     # Never let logging setup break startup
     logger.debug("Failed to configure main logger file handler", exc_info=exc)
 # Quieten noisy third-party loggers to avoid clutter during stdio handshake
-for noisy in ("httpx", "urllib3", "mcp.server.lowlevel.server"):
+for noisy in (
+    "httpx", 
+    "urllib3", 
+    "mcp.server.lowlevel.server", 
+):
     try:
         logging.getLogger(noisy).setLevel(
             max(logging.WARNING, getattr(logging, config.log_level)))
@@ -401,8 +405,25 @@ Examples:
         logger.info(f"Starting FastMCP with HTTP transport on {host}:{port}")
         mcp.run(transport=transport, host=host, port=port)
     else:
+        
         # Use stdio transport for traditional MCP
         logger.info("Starting FastMCP with stdio transport")
+        # 🚨 [핵심] STDIO 모드일 때만 관련 로거를 CRITICAL로 낮춥니다.
+        # Uvicorn 및 관련 로거들의 입을 막아 stdout 오염을 방지합니다.
+        # 🚨 [핵심] STDIO 모드일 때 stdout 오염 방지
+        for name in (
+            "uvicorn", "uvicorn.error", "uvicorn.access",
+            "starlette",
+            "docket", "docket.worker",
+            "fastmcp",
+        ):
+            lg = logging.getLogger(name)
+            lg.setLevel(logging.WARNING) # ERROR if still too chatty
+            lg.propagate = False # prevent duplicate root logs
+            # If the rotating file handler was successfully created, attach it
+            if '_fh' in globals() and _fh not in lg.handlers:
+                lg.addHandler(_fh)
+
         mcp.run(transport='stdio')
 
 

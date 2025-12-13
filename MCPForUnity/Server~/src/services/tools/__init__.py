@@ -3,7 +3,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import TypeVar
+from typing import TypeVar, Any
 
 from fastmcp import Context, FastMCP
 from core.telemetry_decorator import telemetry_tool
@@ -45,6 +45,12 @@ def register_all_tools(mcp: FastMCP):
         tool_name = tool_info['name']
         description = tool_info['description']
         kwargs = tool_info['kwargs']
+
+        # [FIX] Pydantic KeyError solution
+        # Force 'ctx' annotation to Any so Pydantic doesn't validate it
+        if 'ctx' in func.__annotations__:
+            func.__annotations__['ctx'] = Any
+
 
         # Apply the @mcp.tool decorator, telemetry, and logging
         wrapped = log_execution(tool_name, "Tool")(func)

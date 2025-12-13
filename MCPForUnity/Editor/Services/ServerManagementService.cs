@@ -13,6 +13,31 @@ namespace MCPForUnity.Editor.Services
     /// </summary>
     public class ServerManagementService : IServerManagementService
     {
+        private static bool _cleanupRegistered = false;
+        
+        /// <summary>
+        /// Register cleanup handler for Unity exit
+        /// </summary>
+        private static void EnsureCleanupRegistered()
+        {
+            if (_cleanupRegistered) return;
+            
+            EditorApplication.quitting += () =>
+            {
+                // Try to stop the HTTP server when Unity exits
+                try
+                {
+                    var service = new ServerManagementService();
+                    service.StopLocalHttpServer();
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Debug($"Cleanup on exit: {ex.Message}");
+                }
+            };
+            
+            _cleanupRegistered = true;
+        }
         /// <summary>
         /// Clear the local uvx cache for the MCP server package
         /// </summary>
@@ -55,15 +80,17 @@ namespace MCPForUnity.Editor.Services
                     combinedOutput = "Command failed with no output. Ensure uv is installed, on PATH, or set an override in Advanced Settings.";
                 }
 
-                McpLog.Error(
+                McpLog.Warn(
                     $"Failed to clear uv cache using '{uvCommand} {args}'. " +
                     $"Details: {combinedOutput}{(string.IsNullOrEmpty(lockHint) ? string.Empty : " Hint: " + lockHint)}");
-                return false;
+                
+                // Cache clearing failure is not critical, so we can return true to proceed
+                return true; 
             }
             catch (Exception ex)
             {
-                McpLog.Error($"Error clearing uv cache: {ex.Message}");
-                return false;
+                McpLog.Warn($"Error clearing uv cache: {ex.Message}");
+                return true; // Proceed anyway
             }
         }
 
@@ -75,17 +102,19 @@ namespace MCPForUnity.Editor.Services
             string uvxPath = MCPServiceLocator.Paths.GetUvxPath();
             string uvPath = BuildUvPathFromUvx(uvxPath);
 
+            string extraPathPrepend = GetPlatformSpecificPathPrepend();
+
             if (!string.Equals(uvCommand, uvPath, StringComparison.OrdinalIgnoreCase))
             {
-                return ExecPath.TryRun(uvCommand, args, Application.dataPath, out stdout, out stderr, 30000);
+                // Timeout reduced to 3 seconds to prevent UI freezing
+                return ExecPath.TryRun(uvCommand, args, Application.dataPath, out stdout, out stderr, 3000, extraPathPrepend);
             }
 
             string command = $"{uvPath} {args}";
-            string extraPathPrepend = GetPlatformSpecificPathPrepend();
 
             if (Application.platform == RuntimePlatform.WindowsEditor)
             {
-                return ExecPath.TryRun("cmd.exe", $"/c {command}", Application.dataPath, out stdout, out stderr, 30000, extraPathPrepend);
+                return ExecPath.TryRun("cmd.exe", $"/c {command}", Application.dataPath, out stdout, out stderr, 3000, extraPathPrepend);
             }
 
             string shell = File.Exists("/bin/bash") ? "/bin/bash" : "/bin/sh";
@@ -93,10 +122,10 @@ namespace MCPForUnity.Editor.Services
             if (!string.IsNullOrEmpty(shell) && File.Exists(shell))
             {
                 string escaped = command.Replace("\"", "\\\"");
-                return ExecPath.TryRun(shell, $"-lc \"{escaped}\"", Application.dataPath, out stdout, out stderr, 30000, extraPathPrepend);
+                return ExecPath.TryRun(shell, $"-lc \"{escaped}\"", Application.dataPath, out stdout, out stderr, 3000, extraPathPrepend);
             }
 
-            return ExecPath.TryRun(uvPath, args, Application.dataPath, out stdout, out stderr, 30000, extraPathPrepend);
+            return ExecPath.TryRun(uvPath, args, Application.dataPath, out stdout, out stderr, 3000, extraPathPrepend);
         }
 
         private static string BuildUvPathFromUvx(string uvxPath)
@@ -185,13 +214,16 @@ namespace MCPForUnity.Editor.Services
                 "Start Local HTTP Server",
                 $"This will start the MCP server in HTTP mode:\n\n{command}\n\n" +
                 "The server will run in a separate terminal window. " +
-                "Close the terminal to stop the server.\n\n" +
+                "Use 'Stop Server' button or close Unity to stop the server.\n\n" +
                 "Continue?",
                 "Start Server",
                 "Cancel"))
             {
                 try
                 {
+                    // Register cleanup handler for Unity exit
+                    EnsureCleanupRegistered();
+                    
                     // Start the server in a new terminal window (cross-platform)
                     var startInfo = CreateTerminalProcessStartInfo(command);
 
@@ -372,6 +404,7 @@ namespace MCPForUnity.Editor.Services
                 ? $"{packageName} --transport http --http-url {httpUrl}"
                 : $"--from {fromUrl} {packageName} --transport http --http-url {httpUrl}";
 
+            // Removed quotes around uvxPath as it caused issues with cmd execution when just "uvx" is returned
             command = $"{uvxPath} {args}";
             return true;
         }
@@ -439,13 +472,25 @@ namespace MCPForUnity.Editor.Services
             // Windows: Use cmd.exe with start command to open new window
             // Wrap in quotes for /k and escape internal quotes
             string escapedCommandWin = command.Replace("\"", "\\\"");
-            return new System.Diagnostics.ProcessStartInfo
+            var psi = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "cmd.exe",
+                // We need to inject PATH into the new cmd window.
+                // Since 'start' launches a separate process, we'll try to set PATH before running the command.
+                // Note: 'start' inherits environment variables, so setting them on this ProcessStartInfo should work.
                 Arguments = $"/c start \"MCP Server\" cmd.exe /k \"{escapedCommandWin}\"",
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
+
+            // Inject PATH
+            string pathPrepend = GetPlatformSpecificPathPrepend();
+            if (!string.IsNullOrEmpty(pathPrepend))
+            {
+                string currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
+                psi.EnvironmentVariables["PATH"] = pathPrepend + Path.PathSeparator + currentPath;
+            }
+            return psi;
 #else
             // Linux: Try common terminal emulators
             // We use bash -c to execute the command, so we must properly quote/escape for bash
@@ -464,7 +509,7 @@ namespace MCPForUnity.Editor.Services
             {
                 try
                 {
-                    var which = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    using var which = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                     {
                         FileName = "which",
                         Arguments = term,
@@ -472,14 +517,32 @@ namespace MCPForUnity.Editor.Services
                         RedirectStandardOutput = true,
                         CreateNoWindow = true
                     });
-                    which.WaitForExit(5000); // Wait for up to 5 seconds, the command is typically instantaneous
-                    if (which.ExitCode == 0)
+                    
+                    if (which != null)
                     {
-                        terminalCmd = term;
-                        break;
+                        if (!which.WaitForExit(5000))
+                        {
+                            // Timeout - kill the process
+                            try 
+                            { 
+                                if (!which.HasExited)
+                                {
+                                    which.Kill();
+                                }
+                            } 
+                            catch { }
+                        }
+                        else if (which.ExitCode == 0)
+                        {
+                            terminalCmd = term;
+                            break;
+                        }
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    McpLog.Debug($"Terminal check failed for {term}: {ex.Message}");
+                }
             }
             
             if (terminalCmd == null)

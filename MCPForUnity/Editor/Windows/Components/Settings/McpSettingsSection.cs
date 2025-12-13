@@ -102,11 +102,6 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             currentValidationLevel = (ValidationLevel)Mathf.Clamp(savedLevel, 0, 3);
             validationLevelField.value = currentValidationLevel;
             UpdateValidationDescription();
-
-            advancedSettingsFoldout.value = false;
-            gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
-
-            UpdateDeploymentSection();
         }
 
         private void RegisterCallbacks()
@@ -178,34 +173,10 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
 
         public void UpdatePathOverrides()
         {
-            var pathService = MCPServiceLocator.Paths;
-
-            bool hasOverride = pathService.HasUvxPathOverride;
-            string uvxPath = hasOverride ? pathService.GetUvxPath() : null;
-            uvxPathOverride.value = hasOverride
-                ? (uvxPath ?? "(override set but invalid)")
-                : "uvx (uses PATH)";
-
-            uvxPathStatus.RemoveFromClassList("valid");
-            uvxPathStatus.RemoveFromClassList("invalid");
-            if (hasOverride)
-            {
-                if (!string.IsNullOrEmpty(uvxPath) && File.Exists(uvxPath))
-                {
-                    uvxPathStatus.AddToClassList("valid");
-                }
-                else
-                {
-                    uvxPathStatus.AddToClassList("invalid");
-                }
-            }
-            else
-            {
-                uvxPathStatus.AddToClassList("valid");
-            }
-
-            gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
-            UpdateDeploymentSection();
+            // Now handled in Setup Section, but kept empty method if called externally to prevent crashes momentarily,
+            // or we can remove it if we are sure no one calls it.
+            // Based on previous search, it seemed to be called by EditorWindow.RefreshAllData.
+            // Let's keep it empty for safety or remove the call in EditorWindow.
         }
 
         private void UpdateVersionLabel()

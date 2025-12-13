@@ -25,10 +25,10 @@ jobs:
           uv venv
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> "$GITHUB_ENV"
           echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
-          if [ -f Server/pyproject.toml ]; then
-            uv pip install -e Server
-          elif [ -f Server/requirements.txt ]; then
-            uv pip install -r Server/requirements.txt
+          if [ -f MCPForUnity/Server~/pyproject.toml ]; then
+            uv pip install -e "MCPForUnity/Server~"
+          elif [ -f MCPForUnity/Server~/requirements.txt ]; then
+            uv pip install -r MCPForUnity/Server~/requirements.txt
           else
             echo "No MCP Python deps found" >&2
             exit 1
@@ -48,8 +48,6 @@ jobs:
           cat > "$UNITY_MCP_STATUS_DIR/unity-mcp-status-dummy.json" <<JSON
           { "unity_port": 0, "reason": "dummy", "reloading": false, "project_path": "$UNITY_PROJECT_ROOT/Assets" }
           JSON
-          uv run --active --directory Server mcp-for-unity --transport stdio --help \
+          uv run --active --directory "MCPForUnity/Server~" mcp-for-unity --transport stdio --help \
             > /tmp/mcp-preflight.log 2>&1 || { cat /tmp/mcp-preflight.log; exit 1; }
           cat /tmp/mcp-preflight.log
-
-

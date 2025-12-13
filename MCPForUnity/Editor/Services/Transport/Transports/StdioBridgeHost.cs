@@ -43,6 +43,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private static readonly object startStopLock = new();
         private static readonly object clientsLock = new();
         private static readonly HashSet<TcpClient> activeClients = new();
+        private static readonly ConcurrentDictionary<TcpClient, Task> activeClientTasks = new();
         private static readonly BlockingCollection<Outbound> _outbox = new(new ConcurrentQueue<Outbound>());
         private static CancellationTokenSource cts;
         private static Task listenerTask;
@@ -415,6 +416,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         public static void Stop()
         {
             Task toWait = null;
+            Task[] clientTasksToWait = null;
+            
             lock (startStopLock)
             {
                 if (!isRunning)
@@ -438,24 +441,44 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 }
                 catch (Exception ex)
                 {
-                    McpLog.Error($"Error stopping StdioBridgeHost: {ex.Message}");
+                    McpLog.Error($"[StdioBridge] Error during stop: {ex.Message}");
                 }
             }
 
+            // Close all active clients
             TcpClient[] toClose;
             lock (clientsLock)
             {
                 toClose = activeClients.ToArray();
                 activeClients.Clear();
             }
+            
             foreach (var c in toClose)
             {
                 try { c.Close(); } catch { }
             }
 
+            // Collect all active client tasks
+            clientTasksToWait = activeClientTasks.Values.ToArray();
+            activeClientTasks.Clear();
+
+            // Wait for listener task
             if (toWait != null)
             {
                 try { toWait.Wait(100); } catch { }
+            }
+
+            // Wait for all client tasks to complete
+            if (clientTasksToWait != null && clientTasksToWait.Length > 0)
+            {
+                try 
+                { 
+                    Task.WaitAll(clientTasksToWait, TimeSpan.FromSeconds(2)); 
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Debug($"[StdioBridge] Some client tasks did not complete: {ex.Message}");
+                }
             }
 
             try { EditorApplication.update -= ProcessCommands; } catch { }
@@ -498,7 +521,9 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
                     client.ReceiveTimeout = 60000;
 
-                    _ = Task.Run(() => HandleClientAsync(client, token), token);
+                    // Create and track the client handler task
+                    var clientTask = Task.Run(() => HandleClientAsync(client, token), token);
+                    activeClientTasks.TryAdd(client, clientTask);
                 }
                 catch (ObjectDisposedException)
                 {
@@ -515,7 +540,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 {
                     if (isRunning && !token.IsCancellationRequested)
                     {
-                        if (IsDebugEnabled()) McpLog.Error($"Listener error: {ex.Message}");
+                        McpLog.Error($"[StdioBridge] Error accepting client: {ex.Message}");
                     }
                 }
             }
@@ -680,6 +705,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 finally
                 {
                     lock (clientsLock) { activeClients.Remove(client); }
+                    activeClientTasks.TryRemove(client, out _);
                 }
             }
         }
