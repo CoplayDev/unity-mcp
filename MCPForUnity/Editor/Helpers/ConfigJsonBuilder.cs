@@ -78,24 +78,52 @@ namespace MCPForUnity.Editor.Helpers
             }
             else
             {
-                // Stdio mode: Use uvx command
+                // Stdio mode: Use node wrapper.js
+                // This ensures we use the python fallback logic inside wrapper.js
+                
+                // Stdio mode: Force use of 'uvx' with Git URL directly.
                 var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
-
                 var toolArgs = BuildUvxArgs(fromUrl, packageName);
 
-                if (ShouldUseWindowsCmdShim(client))
+                if (true)
                 {
-                    unity["command"] = ResolveCmdPath();
+                    // Use uvx directly (Git URL override or no wrapper found)
 
-                    var cmdArgs = new List<string> { "/c", uvxPath };
-                    cmdArgs.AddRange(toolArgs);
-
-                    unity["args"] = JArray.FromObject(cmdArgs.ToArray());
+    
+                    if (ShouldUseWindowsCmdShim(client))
+                    {
+                        unity["command"] = ResolveCmdPath();
+    
+                        var cmdArgs = new List<string> { "/c", uvxPath };
+                        cmdArgs.AddRange(toolArgs);
+    
+                        unity["args"] = JArray.FromObject(cmdArgs.ToArray());
+                    }
+                    else
+                    {
+                        unity["command"] = uvxPath;
+                        unity["args"] = JArray.FromObject(toolArgs.ToArray());
+                    }
                 }
                 else
                 {
-                    unity["command"] = uvxPath;
-                    unity["args"] = JArray.FromObject(toolArgs.ToArray());
+                    // Use node to run wrapper.js
+                    // We assume 'node' is in PATH unless overridden.
+                    string nodeCommand = "node";
+                    string nodeOverride = EditorPrefs.GetString(EditorPrefKeys.NodePathOverride, "");
+                    if (!string.IsNullOrEmpty(nodeOverride) && File.Exists(nodeOverride))
+                    {
+                        nodeCommand = nodeOverride;
+                    }
+
+                    unity["command"] = nodeCommand;
+                    
+                    var args = new List<string> 
+                    { 
+                        wrapperPath 
+                    };
+                    
+                    unity["args"] = JArray.FromObject(args.ToArray());
                 }
 
                 // Remove url/serverUrl if they exist from previous config
