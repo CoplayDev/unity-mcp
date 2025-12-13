@@ -209,7 +209,37 @@ namespace MCPForUnity.Editor.Helpers
 
                 if (!process.WaitForExit(timeoutMs))
                 {
-                    try { process.Kill(); } catch { }
+                    // Timeout occurred - kill the process and its children
+                    try 
+                    { 
+                        if (!process.HasExited)
+                        {
+                            int pid = process.Id;
+                            try
+                            {
+                                // Kill process (entireProcessTree not supported in Unity .NET profile)
+                                process.Kill();
+                                
+                                // Wait a bit to ensure the process actually terminates
+                                if (!process.WaitForExit(1000))
+                                {
+                                    McpLog.Warn($"Process {pid} did not exit after Kill command");
+                                }
+                            }
+                            catch (InvalidOperationException)
+                            {
+                                // Process already exited - that's fine
+                            }
+                            catch (Exception killEx)
+                            {
+                                McpLog.Warn($"Failed to kill process {pid}: {killEx.Message}");
+                            }
+                        }
+                    } 
+                    catch (Exception ex) 
+                    { 
+                        McpLog.Debug($"Error during process cleanup: {ex.Message}");
+                    }
                     return false;
                 }
 

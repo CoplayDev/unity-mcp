@@ -78,17 +78,16 @@ namespace MCPForUnity.Editor.Helpers
             }
             else
             {
-                // Stdio mode: Use node wrapper.js
-                // This ensures we use the python fallback logic inside wrapper.js
+                // Stdio mode: Use node wrapper.js (Recommended for Windows stability)
+                // This ensures we use the python fallback logic inside wrapper.js to prevent "invalid trailing data"
                 
-                // Stdio mode: Force use of 'uvx' with Git URL directly.
-                var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
-                var toolArgs = BuildUvxArgs(fromUrl, packageName);
+                string wrapperPath = AssetPathUtility.GetWrapperJsPath();
 
-                if (true)
+                if (string.IsNullOrEmpty(wrapperPath))
                 {
-                    // Use uvx directly (Git URL override or no wrapper found)
-
+                    // Fallback to uvx if wrapper not found
+                    var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
+                    var toolArgs = BuildUvxArgs(fromUrl, packageName);
     
                     if (ShouldUseWindowsCmdShim(client))
                     {
@@ -115,13 +114,10 @@ namespace MCPForUnity.Editor.Helpers
                     {
                         nodeCommand = nodeOverride;
                     }
-
+    
                     unity["command"] = nodeCommand;
                     
-                    var args = new List<string> 
-                    { 
-                        wrapperPath 
-                    };
+                    var args = new List<string> { wrapperPath };
                     
                     unity["args"] = JArray.FromObject(args.ToArray());
                 }
@@ -141,6 +137,13 @@ namespace MCPForUnity.Editor.Helpers
             {
                 unity.Remove("type");
             }
+
+            // Force UTF-8 environment variables for Python Stdio stability
+            // This is crucial when running via uvx without a wrapper to prevent "invalid trailing data" errors
+            var env = EnsureObject(unity, "env");
+            env["PYTHONUTF8"] = "1";
+            env["PYTHONIOENCODING"] = "utf-8";
+            env["PYTHONUNBUFFERED"] = "1";
 
             bool requiresEnv = client?.EnsureEnvObject == true;
             bool stripEnv = client?.StripEnvWhenNotRequired == true;

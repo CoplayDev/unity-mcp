@@ -65,13 +65,6 @@ for noisy in (
     "httpx", 
     "urllib3", 
     "mcp.server.lowlevel.server", 
-    "uvicorn", 
-    "uvicorn.access", 
-    "uvicorn.error", 
-    "docket", 
-    "docket.worker", 
-    "fastmcp",   # <--- 🚨 범인 검거
-    "starlette"  # <--- 혹시 모를 공범
 ):
     try:
         logging.getLogger(noisy).setLevel(
@@ -412,8 +405,21 @@ Examples:
         logger.info(f"Starting FastMCP with HTTP transport on {host}:{port}")
         mcp.run(transport=transport, host=host, port=port)
     else:
+        
         # Use stdio transport for traditional MCP
         logger.info("Starting FastMCP with stdio transport")
+        # 🚨 [핵심] STDIO 모드일 때만 관련 로거를 CRITICAL로 낮춥니다.
+        # Uvicorn 및 관련 로거들의 입을 막아 stdout 오염을 방지합니다.
+        logging.getLogger("uvicorn").setLevel(logging.CRITICAL)
+        logging.getLogger("uvicorn.error").setLevel(logging.CRITICAL)
+        logging.getLogger("uvicorn.access").setLevel(logging.CRITICAL)
+        logging.getLogger("starlette").setLevel(logging.CRITICAL)
+        logging.getLogger("docket").setLevel(logging.CRITICAL)
+        logging.getLogger("docket.worker").setLevel(logging.CRITICAL)
+        
+        # FastMCP 본체도 CRITICAL로 낮춰줍니다.
+        logging.getLogger("fastmcp").setLevel(logging.CRITICAL)
+
         mcp.run(transport='stdio', show_banner=False)
 
 

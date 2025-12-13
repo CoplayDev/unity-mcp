@@ -16,7 +16,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
         public override bool CanDetect => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
 
-        public override DependencyStatus DetectPython()
+        public override DependencyStatus DetectPython(string overridePath = null)
         {
             var status = new DependencyStatus("Python", isRequired: true)
             {
@@ -25,6 +25,23 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
             try
             {
+                // 1. Check Override
+                if (overridePath == null)
+                {
+                    try { overridePath = UnityEditor.EditorPrefs.GetString(MCPForUnity.Editor.Constants.EditorPrefKeys.PythonPathOverride, ""); } catch {}
+                }
+
+                if (!string.IsNullOrEmpty(overridePath) && File.Exists(overridePath))
+                {
+                    if (TryValidatePython(overridePath, out string ovVersion, out string ovPath))
+                    {
+                        status.IsAvailable = true;
+                        status.Version = ovVersion;
+                        status.Path = ovPath;
+                        status.Details = $"Using custom Python path: {ovPath}";
+                        return status;
+                    }
+                }
                 // Try running python directly first
                 if (TryValidatePython("python3", out string version, out string fullPath) ||
                     TryValidatePython("python", out version, out fullPath))
@@ -90,7 +107,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
         }
 
-        public override DependencyStatus DetectUv()
+        public override DependencyStatus DetectUv(string overridePath = null)
         {
             var status = new DependencyStatus("uv Package Manager", isRequired: true)
             {
@@ -99,6 +116,24 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
 
             try
             {
+                // 0. Check Override
+                if (overridePath == null)
+                {
+                    try { overridePath = UnityEditor.EditorPrefs.GetString(MCPForUnity.Editor.Constants.EditorPrefKeys.UvPathOverride, ""); } catch {}
+                }
+
+                if (!string.IsNullOrEmpty(overridePath) && File.Exists(overridePath))
+                {
+                    if (TryValidateUv(overridePath, out string ovVersion, out string ovPath))
+                    {
+                        status.IsAvailable = true;
+                        status.Version = ovVersion;
+                        status.Path = ovPath;
+                        status.Details = $"Using custom uv path: {ovPath}";
+                        return status;
+                    }
+                }
+
                 // Try running uv/uvx directly with augmented PATH
                 if (TryValidateUv("uv", out string version, out string fullPath) ||
                     TryValidateUv("uvx", out version, out fullPath))

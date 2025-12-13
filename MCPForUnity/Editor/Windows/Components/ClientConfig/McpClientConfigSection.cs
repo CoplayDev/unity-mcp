@@ -41,7 +41,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
         private readonly List<IMcpClientConfigurator> configurators;
         private readonly Dictionary<IMcpClientConfigurator, DateTime> lastStatusChecks = new();
         private readonly HashSet<IMcpClientConfigurator> statusRefreshInFlight = new();
-        private static readonly TimeSpan StatusRefreshInterval = TimeSpan.FromSeconds(45);
+
         private int selectedClientIndex = 0;
 
         public VisualElement Root { get; private set; }
@@ -90,9 +90,10 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
             clientDropdown.RegisterValueChangedCallback(evt =>
             {
                 selectedClientIndex = clientDropdown.index;
-                UpdateClientStatus();
+                // Only update UI, don't check status automatically
                 UpdateManualConfiguration();
                 UpdateClaudeCliPathVisibility();
+                ApplyStatusToUi(configurators[selectedClientIndex]);
             });
 
             configureAllButton.clicked += OnConfigureAllClientsClicked;
@@ -103,14 +104,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
             copyJsonButton.clicked += OnCopyJsonClicked;
         }
 
-        public void UpdateClientStatus()
-        {
-            if (selectedClientIndex < 0 || selectedClientIndex >= configurators.Count)
-                return;
 
-            var client = configurators[selectedClientIndex];
-            RefreshClientStatus(client);
-        }
 
         private string GetStatusDisplayString(McpStatus status)
         {
@@ -198,8 +192,9 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 
                 if (selectedClientIndex >= 0 && selectedClientIndex < configurators.Count)
                 {
-                    UpdateClientStatus();
+                    // Just update UI, don't check status
                     UpdateManualConfiguration();
+                    ApplyStatusToUi(configurators[selectedClientIndex]);
                 }
             }
             catch (Exception ex)
@@ -243,7 +238,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                 {
                     MCPServiceLocator.Paths.SetClaudeCliPathOverride(picked);
                     UpdateClaudeCliPathVisibility();
-                    UpdateClientStatus();
+                    // Status will be checked when user clicks Configure button
                     McpLog.Info($"Claude CLI path override set to: {picked}");
                 }
                 catch (Exception ex)
@@ -307,9 +302,16 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                 return;
             }
 
-            if (forceImmediate || ShouldRefreshClient(client))
+            // Only check status when explicitly requested (forceImmediate = true)
+            // This happens when:
+            // - User clicks Configure button
+            // - User changes client dropdown
+            // - User manually refreshes
+            if (forceImmediate)
             {
-                MCPServiceLocator.Client.CheckClientStatus(client);
+                // Only check status, don't auto-rewrite config files
+                // Config files should only be written when user explicitly clicks Configure
+                MCPServiceLocator.Client.CheckClientStatus(client, attemptAutoRewrite: false);
                 lastStatusChecks[client] = DateTime.UtcNow;
             }
 
@@ -318,72 +320,17 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 
         private void RefreshClaudeCliStatus(IMcpClientConfigurator client, bool forceImmediate)
         {
+            // For Claude CLI, only check status when explicitly requested (forceImmediate)
             if (forceImmediate)
             {
                 MCPServiceLocator.Client.CheckClientStatus(client, attemptAutoRewrite: false);
                 lastStatusChecks[client] = DateTime.UtcNow;
-                ApplyStatusToUi(client);
-                return;
             }
 
-            bool hasStatus = lastStatusChecks.ContainsKey(client);
-            bool needsRefresh = !hasStatus || ShouldRefreshClient(client);
-
-            if (!hasStatus)
-            {
-                ApplyStatusToUi(client, showChecking: true);
-            }
-            else
-            {
-                ApplyStatusToUi(client);
-            }
-
-            if (needsRefresh && !statusRefreshInFlight.Contains(client))
-            {
-                statusRefreshInFlight.Add(client);
-                ApplyStatusToUi(client, showChecking: true);
-
-                Task.Run(() =>
-                {
-                    MCPServiceLocator.Client.CheckClientStatus(client, attemptAutoRewrite: false);
-                }).ContinueWith(t =>
-                {
-                    bool faulted = false;
-                    string errorMessage = null;
-                    if (t.IsFaulted && t.Exception != null)
-                    {
-                        var baseException = t.Exception.GetBaseException();
-                        errorMessage = baseException?.Message ?? "Status check failed";
-                        McpLog.Error($"Failed to refresh Claude CLI status: {errorMessage}");
-                        faulted = true;
-                    }
-
-                    EditorApplication.delayCall += () =>
-                    {
-                        statusRefreshInFlight.Remove(client);
-                        lastStatusChecks[client] = DateTime.UtcNow;
-                        if (faulted)
-                        {
-                            if (client is McpClientConfiguratorBase baseConfigurator)
-                            {
-                                baseConfigurator.Client.SetStatus(McpStatus.Error, errorMessage ?? "Status check failed");
-                            }
-                        }
-                        ApplyStatusToUi(client);
-                    };
-                });
-            }
+            ApplyStatusToUi(client);
         }
 
-        private bool ShouldRefreshClient(IMcpClientConfigurator client)
-        {
-            if (!lastStatusChecks.TryGetValue(client, out var last))
-            {
-                return true;
-            }
 
-            return (DateTime.UtcNow - last) > StatusRefreshInterval;
-        }
 
         private void ApplyStatusToUi(IMcpClientConfigurator client, bool showChecking = false)
         {

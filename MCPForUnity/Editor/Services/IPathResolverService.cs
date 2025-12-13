@@ -18,6 +18,18 @@ namespace MCPForUnity.Editor.Services
         string GetClaudeCliPath();
 
         /// <summary>
+        /// Gets the Python path (respects override if set)
+        /// </summary>
+        /// <returns>Path to the python executable</returns>
+        string GetPythonPath();
+
+        /// <summary>
+        /// Gets the Node.js path (respects override if set)
+        /// </summary>
+        /// <returns>Path to the node executable</returns>
+        string GetNodePath();
+
+        /// <summary>
         /// Checks if Python is detected on the system
         /// </summary>
         /// <returns>True if Python is found</returns>
@@ -52,6 +64,28 @@ namespace MCPForUnity.Editor.Services
         void ClearClaudeCliPathOverride();
 
         /// <summary>
+        /// Sets an override for the Python path
+        /// </summary>
+        /// <param name="path">Path to override with</param>
+        void SetPythonPathOverride(string path);
+
+        /// <summary>
+        /// Clears the Python path override
+        /// </summary>
+        void ClearPythonPathOverride();
+
+        /// <summary>
+        /// Sets an override for the Node.js path
+        /// </summary>
+        /// <param name="path">Path to override with</param>
+        void SetNodePathOverride(string path);
+
+        /// <summary>
+        /// Clears the Node.js path override
+        /// </summary>
+        void ClearNodePathOverride();
+
+        /// <summary>
         /// Gets whether a uvx path override is active
         /// </summary>
         bool HasUvxPathOverride { get; }
@@ -60,5 +94,15 @@ namespace MCPForUnity.Editor.Services
         /// Gets whether a Claude CLI path override is active
         /// </summary>
         bool HasClaudeCliPathOverride { get; }
+
+        /// <summary>
+        /// Gets whether a Python path override is active
+        /// </summary>
+        bool HasPythonPathOverride { get; }
+
+        /// <summary>
+        /// Gets whether a Node.js path override is active
+        /// </summary>
+        bool HasNodePathOverride { get; }
     }
 }
