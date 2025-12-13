@@ -139,11 +139,14 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             // Force UTF-8 environment variables for Python Stdio stability
-            // This is crucial when running via uvx without a wrapper to prevent "invalid trailing data" errors
-            var env = EnsureObject(unity, "env");
-            env["PYTHONUTF8"] = "1";
-            env["PYTHONIOENCODING"] = "utf-8";
-            env["PYTHONUNBUFFERED"] = "1";
+            // (only meaningful when we're launching a process, i.e., stdio mode)
+            if (!useHttpTransport)
+            {
+                var env = EnsureObject(unity, "env");
+                env["PYTHONUTF8"] = "1";
+                env["PYTHONIOENCODING"] = "utf-8";
+                env["PYTHONUNBUFFERED"] = "1";
+            }
 
             bool requiresEnv = client?.EnsureEnvObject == true;
             bool stripEnv = client?.StripEnvWhenNotRequired == true;

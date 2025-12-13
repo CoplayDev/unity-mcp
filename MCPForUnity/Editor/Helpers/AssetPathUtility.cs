@@ -140,10 +140,11 @@ namespace MCPForUnity.Editor.Helpers
             }
             
             // Also check without the ~ just in case
-            string wrapperPathNoTilde = Path.Combine(Path.GetDirectoryName(wrapperPath), "Server", "wrapper.js");
+            // Also check without the ~ just in case
+            string wrapperPathNoTilde = Path.Combine(Path.GetDirectoryName(wrapperPath), "..", "Server", "wrapper.js");
             if (File.Exists(wrapperPathNoTilde))
             {
-                return wrapperPathNoTilde;
+                return Path.GetFullPath(wrapperPathNoTilde);
             }
 
             return null;

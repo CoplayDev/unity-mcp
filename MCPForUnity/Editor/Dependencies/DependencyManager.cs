@@ -118,7 +118,7 @@ namespace MCPForUnity.Editor.Dependencies
                          Version = isServerReady ? "Installed" : "Missing",
                          IsAvailable = isServerReady,
                          Details = isServerReady ? "Virtual Environment Ready" : "Run 'Install Server Environment'",
-                         ErrorMessage = "Virtual environment not set up"
+                         ErrorMessage = isServerReady ? null : "Virtual environment not set up"
                      });
                 }
                 catch (Exception ex)
