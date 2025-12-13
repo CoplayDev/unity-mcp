@@ -7,7 +7,7 @@
             <!-- Python Check -->
             <ui:VisualElement name="python-check-container" class="dependency-row">
                 <ui:VisualElement class="dependency-info">
-                    <ui:Label text="Python 3.10+" class="dependency-label" />
+                    <ui:Label text="python 3.11+" class="dependency-label" />
                     <ui:Label name="python-status" text="Checking..." class="dependency-status" />
                 </ui:VisualElement>
                 <ui:VisualElement class="dependency-actions">

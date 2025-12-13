@@ -67,7 +67,7 @@ namespace MCPForUnity.Editor.Setup
                 if (!CheckPython())
                 {
                     EditorUtility.ClearProgressBar();
-                    EditorUtility.DisplayDialog("Error", "Python 3.10+ not found in PATH.\nPlease install Python first.", "OK");
+                    EditorUtility.DisplayDialog("Error", "python 3.11+ not found in PATH.\nPlease install Python first.", "OK");
                     return;
                 }
 

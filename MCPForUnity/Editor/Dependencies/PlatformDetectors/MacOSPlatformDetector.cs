@@ -68,7 +68,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                 }
 
                 status.ErrorMessage = "Python not found in PATH";
-                status.Details = "Install Python 3.10+ and ensure it's added to PATH.";
+                status.Details = "Install python 3.11+ and ensure it's added to PATH.";
             }
             catch (Exception ex)
             {
@@ -208,7 +208,7 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
                     version = output.Substring(7); // Remove "Python " prefix
                     fullPath = pythonPath;
 
-                    // Validate minimum version (Python 4+ or Python 3.10+)
+                    // Validate minimum version (Python 4+ or python 3.11+)
                     if (TryParseVersion(version, out var major, out var minor))
                     {
                         return major > 3 || (major >= 3 && minor >= 10);

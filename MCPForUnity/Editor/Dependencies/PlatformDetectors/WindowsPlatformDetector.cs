@@ -69,7 +69,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                 }
 
                 status.ErrorMessage = "Python not found in PATH";
-                status.Details = "Install Python 3.10+ and ensure it's added to PATH.";
+                status.Details = "Install python 3.11+ and ensure it's added to PATH.";
             }
             catch (Exception ex)
             {
@@ -215,7 +215,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             return @"Windows Installation Recommendations:
 
 1. Python: Install from Microsoft Store or python.org
-   - Microsoft Store: Search for 'Python 3.10' or higher
+   - Microsoft Store: Search for 'python 3.11' or higher
    - Direct download: https://python.org/downloads/windows/
 
 2. uv Package Manager: Install via PowerShell
@@ -253,7 +253,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                     version = output.Substring(7); // Remove "Python " prefix
                     fullPath = pythonPath;
 
-                    // Validate minimum version (Python 4+ or Python 3.10+)
+                    // Validate minimum version (Python 4+ or python 3.11+)
                     if (TryParseVersion(version, out var major, out var minor))
                     {
                         return major > 3 || (major >= 3 && minor >= 10);
