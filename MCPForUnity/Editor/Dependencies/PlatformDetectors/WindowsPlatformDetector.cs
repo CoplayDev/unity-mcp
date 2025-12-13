@@ -256,7 +256,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                     // Validate minimum version (Python 4+ or python 3.11+)
                     if (TryParseVersion(version, out var major, out var minor))
                     {
-                        return major > 3 || (major >= 3 && minor >= 10);
+                        return major > 3 || (major >= 3 && minor >= 11);
                     }
                 }
             }
