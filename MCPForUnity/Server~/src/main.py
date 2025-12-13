@@ -61,7 +61,18 @@ except Exception as exc:
     # Never let logging setup break startup
     logger.debug("Failed to configure main logger file handler", exc_info=exc)
 # Quieten noisy third-party loggers to avoid clutter during stdio handshake
-for noisy in ("httpx", "urllib3", "mcp.server.lowlevel.server"):
+for noisy in (
+    "httpx", 
+    "urllib3", 
+    "mcp.server.lowlevel.server", 
+    "uvicorn", 
+    "uvicorn.access", 
+    "uvicorn.error", 
+    "docket", 
+    "docket.worker", 
+    "fastmcp",   # <--- 🚨 범인 검거
+    "starlette"  # <--- 혹시 모를 공범
+):
     try:
         logging.getLogger(noisy).setLevel(
             max(logging.WARNING, getattr(logging, config.log_level)))
@@ -403,7 +414,7 @@ Examples:
     else:
         # Use stdio transport for traditional MCP
         logger.info("Starting FastMCP with stdio transport")
-        mcp.run(transport='stdio')
+        mcp.run(transport='stdio', show_banner=False)
 
 
 # Run the server

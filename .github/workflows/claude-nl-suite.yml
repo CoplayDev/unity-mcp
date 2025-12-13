@@ -55,10 +55,10 @@ jobs:
           uv venv
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> "$GITHUB_ENV"
           echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
-          if [ -f Server/pyproject.toml ]; then
-            uv pip install -e Server
-          elif [ -f Server/requirements.txt ]; then
-            uv pip install -r Server/requirements.txt
+          if [ -f MCPForUnity/Server~/pyproject.toml ]; then
+            uv pip install -e "MCPForUnity/Server~"
+          elif [ -f MCPForUnity/Server~/requirements.txt ]; then
+            uv pip install -r MCPForUnity/Server~/requirements.txt
           else
             echo "No MCP Python deps found (skipping)"
           fi
@@ -409,7 +409,7 @@ jobs:
                           "run",
                           "--active",
                           "--directory",
-                          "Server",
+                          "MCPForUnity/Server~",
                           "mcp-for-unity",
                           "--transport",
                           "stdio",
@@ -512,7 +512,7 @@ jobs:
           attempt=0
           while true; do
             attempt=$((attempt+1))
-            if uv run --active --directory Server mcp-for-unity --transport stdio --help > /tmp/mcp-preflight.log 2>&1; then
+            if uv run --active --directory "MCPForUnity/Server~" mcp-for-unity --transport stdio --help > /tmp/mcp-preflight.log 2>&1; then
               cat /tmp/mcp-preflight.log
               break
             fi
@@ -541,7 +541,7 @@ jobs:
           echo "--- PortDiscovery debug ---"
           python3 - <<'PY'
           import sys
-          sys.path.insert(0, "Server/src")
+          sys.path.insert(0, "MCPForUnity/Server~/src")
           from transport.legacy.port_discovery import PortDiscovery
           import json
 
@@ -556,7 +556,7 @@ jobs:
           import json
           import subprocess
           cmd = [
-              "uv", "run", "--active", "--directory", "Server", "python", "-c",
+              "uv", "run", "--active", "--directory", "MCPForUnity/Server~", "python", "-c",
               "from transport.legacy.stdio_port_registry import stdio_port_registry; "
               "inst = stdio_port_registry.get_instances(force_refresh=True); "
               "import json; print(json.dumps([{'id':i.id,'port':i.port} for i in inst]))"
@@ -577,7 +577,7 @@ jobs:
           PY
 
           echo "=== Testing MCP server startup with --status-dir flag ==="
-          uv run --active --directory Server python <<'PYTEST'
+          uv run --active --directory "MCPForUnity/Server~" python <<'PYTEST'
           import os
           import sys
           import glob
@@ -602,7 +602,7 @@ jobs:
           set -euxo pipefail
           echo "=== Unity container status ==="
           docker inspect -f '{{.State.Status}} {{.State.Running}}' unity-mcp || echo "Container not found!"
-          
+
           echo "=== Raw socket probe to Unity ==="
           # Try raw TCP connect without Python overhead
           for host in 127.0.0.1 localhost; do
@@ -613,10 +613,10 @@ jobs:
               echo "$host:6400 - FAILED"
             fi
           done
-          
+
           echo "=== Netstat for port 6400 ==="
           docker exec unity-mcp netstat -tlnp 2>/dev/null | grep 6400 || ss -tlnp | grep 6400 || echo "No listener found on 6400"
-          
+
           echo "=== Python probe with timing ==="
           python3 <<'PY'
           import socket, time

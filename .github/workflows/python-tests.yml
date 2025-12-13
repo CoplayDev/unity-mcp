@@ -4,7 +4,7 @@ on:
   push:
     branches: ["**"]
     paths:
-      - Server/**
+      - MCPForUnity/Server~/**
       - .github/workflows/python-tests.yml
   workflow_dispatch: {}
 
@@ -26,13 +26,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd Server
+          cd MCPForUnity/Server~
           uv sync
           uv pip install -e ".[dev]"
 
       - name: Run tests
         run: |
-          cd Server
+          cd MCPForUnity/Server~
           uv run pytest tests/ -v --tb=short
 
       - name: Upload test results
@@ -41,5 +41,5 @@ jobs:
         with:
           name: pytest-results
           path: |
-            Server/.pytest_cache/
-            Server/tests/
+            MCPForUnity/Server~/.pytest_cache/
+            MCPForUnity/Server~/tests/
