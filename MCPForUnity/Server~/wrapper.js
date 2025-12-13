@@ -17,20 +17,33 @@ log("Wrapper started");
 
 const serverDir = __dirname;
 
+// Construct updated PATH with common uv locations
+const localAppData = process.env.LOCALAPPDATA || "";
+const userProfile = process.env.USERPROFILE || "";
+const extraPaths = [
+  path.join(localAppData, "Programs", "uv"), // uv standalone
+  path.join(localAppData, "uv"), // Alternative
+  path.join(userProfile, ".cargo", "bin"), // Cargo install
+  path.join(localAppData, "bin"),
+];
+
+const newPath =
+  extraPaths.join(path.delimiter) + path.delimiter + (process.env.PATH || "");
+
 // Use uv run with --quiet to minimize noise
-// Add --quiet to uv run commands to suppress "resolved ..." messages
 const pythonProcess = spawn(
   "uv",
   ["run", "--quiet", "src/main.py", "--transport", "stdio"],
   {
     cwd: serverDir,
     stdio: ["pipe", "pipe", "pipe"],
-    shell: true, // Needed for windows command resolution sometimes
+    shell: true,
     env: {
       ...process.env,
+      PATH: newPath, // Inject updated PATH
       PYTHONUNBUFFERED: "1",
       PYTHONIOENCODING: "utf-8",
-      HOME: process.env.USERPROFILE, // Ensure uv finds home on Windows
+      HOME: userProfile,
     },
   }
 );

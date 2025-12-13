@@ -22,6 +22,8 @@ namespace MCPForUnity.Editor.Services
 
         public void ConfigureClient(IMcpClientConfigurator configurator)
         {
+            // Ensure status/state is checked before configuring, similar to ConfigureAllDetectedClients
+            configurator.CheckStatus(attemptAutoRewrite: false);
             configurator.Configure();
         }
 
