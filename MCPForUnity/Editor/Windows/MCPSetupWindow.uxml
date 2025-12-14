@@ -7,7 +7,7 @@
         <ui:VisualElement class="section">
             <ui:Label text="System Requirements" class="section-title" />
             <ui:VisualElement class="section-content">
-                <ui:Label text="MCP for Unity requires Python 3.10+ and UV package manager to function." class="help-text description-text" />
+                <ui:Label text="MCP for Unity requires Python 3.11+ and UV package manager to function." class="help-text description-text" />
                 
                 <!-- Dependency Status -->
                 <ui:VisualElement name="dependency-list">

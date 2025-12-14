@@ -78,24 +78,55 @@ namespace MCPForUnity.Editor.Helpers
             }
             else
             {
-                // Stdio mode: Use uvx command
-                var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
+                // Stdio mode: Use node wrapper.js (Recommended for Windows stability)
+                // This ensures we use the python fallback logic inside wrapper.js to prevent "invalid trailing data"
+                
+                string wrapperPath = AssetPathUtility.GetWrapperJsPath();
 
-                var toolArgs = BuildUvxArgs(fromUrl, packageName);
-
-                if (ShouldUseWindowsCmdShim(client))
+                if (string.IsNullOrEmpty(wrapperPath))
                 {
-                    unity["command"] = ResolveCmdPath();
-
-                    var cmdArgs = new List<string> { "/c", uvxPath };
-                    cmdArgs.AddRange(toolArgs);
-
-                    unity["args"] = JArray.FromObject(cmdArgs.ToArray());
+                    // Fallback to uvx if wrapper not found
+                    var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
+                    var toolArgs = BuildUvxArgs(fromUrl, packageName);
+    
+                    if (ShouldUseWindowsCmdShim(client))
+                    {
+                        unity["command"] = ResolveCmdPath();
+    
+                        var cmdArgs = new List<string> { "/c", uvxPath };
+                        cmdArgs.AddRange(toolArgs);
+    
+                        unity["args"] = JArray.FromObject(cmdArgs.ToArray());
+                    }
+                    else
+                    {
+                        unity["command"] = uvxPath;
+                        unity["args"] = JArray.FromObject(toolArgs.ToArray());
+                    }
                 }
                 else
                 {
-                    unity["command"] = uvxPath;
-                    unity["args"] = JArray.FromObject(toolArgs.ToArray());
+                    // Use node to run wrapper.js
+                    // We assume 'node' is in PATH unless overridden.
+                    string nodeCommand = "node";
+                    string nodeOverride = EditorPrefs.GetString(EditorPrefKeys.NodePathOverride, "");
+                    if (!string.IsNullOrEmpty(nodeOverride))
+                    {
+                        if (File.Exists(nodeOverride))
+                        {
+                            nodeCommand = nodeOverride;
+                        }
+                        else
+                        {
+                            McpLog.Warn($"Node override path not found: {nodeOverride}, falling back to 'node'");
+                        }
+                    }
+    
+                    unity["command"] = nodeCommand;
+                    
+                    var args = new List<string> { wrapperPath };
+                    
+                    unity["args"] = JArray.FromObject(args.ToArray());
                 }
 
                 // Remove url/serverUrl if they exist from previous config
@@ -112,6 +143,16 @@ namespace MCPForUnity.Editor.Helpers
             if (!isVSCode && unity["type"] != null)
             {
                 unity.Remove("type");
+            }
+
+            // Force UTF-8 environment variables for Python Stdio stability
+            // (only meaningful when we're launching a process, i.e., stdio mode)
+            if (!useHttpTransport)
+            {
+                var env = EnsureObject(unity, "env");
+                env["PYTHONUTF8"] = "1";
+                env["PYTHONIOENCODING"] = "utf-8";
+                env["PYTHONUNBUFFERED"] = "1";
             }
 
             bool requiresEnv = client?.EnsureEnvObject == true;

@@ -1,0 +1,117 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+    <Style src="../Common.uss" />
+    <ui:VisualElement name="setup-section" class="section">
+        <ui:VisualElement class="section-content">
+            <ui:Label text="Environment Setup" class="section-subtitle" style="margin-bottom: 10px; -unity-font-style: bold;" />
+            
+            <!-- Python Check -->
+            <ui:VisualElement name="python-check-container" class="dependency-row">
+                <ui:VisualElement class="dependency-info">
+                    <ui:Label text="python 3.11+" class="dependency-label" />
+                    <ui:Label name="python-status" text="Checking..." class="dependency-status" />
+                </ui:VisualElement>
+                <ui:VisualElement class="dependency-actions">
+                    <ui:Button name="python-install-btn" text="Install" class="mini-button" />
+                    <ui:Button name="python-locate-btn" text="Path" class="mini-button secondary" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="python-path-row" class="path-row" style="display: none;">
+                 <ui:Label name="python-path-label" text="..." class="path-label-text" style="flex-grow: 1; -unity-text-align: middle-right; margin-right: 5px; font-size: 10px; color: #888;" />
+                 <ui:Button name="python-clear-btn" text="x" class="mini-button-icon" style="width: 20px; height: 18px;" tooltip="Reset to default" />
+            </ui:VisualElement>
+
+            <!-- Node.js Check -->
+            <ui:VisualElement name="node-check-container" class="dependency-row">
+                <ui:VisualElement class="dependency-info">
+                    <ui:Label text="Node.js (LTS)" class="dependency-label" />
+                    <ui:Label name="node-status" text="Checking..." class="dependency-status" />
+                </ui:VisualElement>
+                <ui:VisualElement class="dependency-actions">
+                    <ui:Button name="node-install-btn" text="Install" class="mini-button" />
+                    <ui:Button name="node-locate-btn" text="Path" class="mini-button secondary" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="node-path-row" class="path-row" style="display: none;">
+                 <ui:Label name="node-path-label" text="..." class="path-label-text" style="flex-grow: 1; -unity-text-align: middle-right; margin-right: 5px; font-size: 10px; color: #888;" />
+                 <ui:Button name="node-clear-btn" text="x" class="mini-button-icon" style="width: 20px; height: 18px;" tooltip="Reset to default" />
+            </ui:VisualElement>
+
+            <!-- uv Check -->
+            <ui:VisualElement name="uv-check-container" class="dependency-row">
+                <ui:VisualElement class="dependency-info">
+                    <ui:Label text="uv (Pkg Mgr)" class="dependency-label" />
+                    <ui:Label name="uv-status" text="Checking..." class="dependency-status" />
+                </ui:VisualElement>
+                <ui:VisualElement class="dependency-actions">
+                    <ui:Button name="uv-install-btn" text="Install" class="mini-button" />
+                    <ui:Button name="uv-locate-btn" text="Path" class="mini-button secondary" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="uv-path-row" class="path-row" style="display: none;">
+                 <ui:Label name="uv-path-label" text="..." class="path-label-text" style="flex-grow: 1; -unity-text-align: middle-right; margin-right: 5px; font-size: 10px; color: #888;" />
+                 <ui:Button name="uv-clear-btn" text="x" class="mini-button-icon" style="width: 20px; height: 18px;" tooltip="Reset to default" />
+            </ui:VisualElement>
+
+            <!-- Server Environment -->
+            <ui:VisualElement name="step-2-container" class="dependency-row" style="margin-top: 10px; border-top-width: 1px; border-top-color: #444; padding-top: 10px;">
+                <ui:VisualElement class="dependency-info">
+                    <ui:Label text="MCP Server" class="dependency-label" />
+                    <ui:Label name="server-status-text" text="Checking..." class="dependency-status" />
+                </ui:VisualElement>
+                <ui:VisualElement class="dependency-actions">
+                    <ui:Button name="install-server-btn" text="Install Server" class="mini-button primary" style="width: 100px;" />
+                    <ui:Button name="server-config-btn" text="Source" class="mini-button secondary" tooltip="Configure Server Source" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- Server Config Row (Hidden Toggled) -->
+            <ui:VisualElement name="server-config-row" class="path-row" style="display: none; flex-direction: column;">
+                <ui:Label text="Server Source Override (Git URL or Local Path):" class="path-label-text" style="margin-bottom: 2px; color: #aaa;" />
+                <ui:VisualElement style="flex-direction: row; align-items: center; width: 100%;">
+                    <ui:TextField name="git-url-override" placeholder-text="Default (leaving empty)" class="override-field" style="flex-grow: 1; margin-right: 5px;" />
+                    <ui:Button name="clear-git-url-button" text="x" class="mini-button-icon" style="width: 20px; height: 18px;" tooltip="Clear Override" />
+                </ui:VisualElement>
+                <ui:Label text="e.g. git+https://github.com/Start/Repo@v1.0#subdirectory=Server" class="help-text" style="font-size: 9px; color: #666; margin-top: 2px;" />
+            </ui:VisualElement>
+
+            <!-- Local Package Section (Collapsible) -->
+            <ui:VisualElement name="deploy-container" style="margin-top: 10px; border-top-width: 1px; border-top-color: #444; padding-top: 10px;">
+                <!-- Header Row (Always Visible) -->
+                <ui:VisualElement class="dependency-row">
+                    <ui:VisualElement class="dependency-info">
+                        <ui:Label text="Local Package" class="dependency-label" />
+                        <ui:Label name="deploy-status-label" text="Optional" class="dependency-status" style="color: #888;" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="dependency-actions">
+                        <ui:Button name="deploy-toggle-btn" text="▼" class="setup-toggle-arrow" tooltip="Show/Hide deployment options" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                
+                <!-- Deployment Panel (Collapsible) -->
+                <ui:VisualElement name="deploy-panel" style="display: none; flex-direction: column; margin-top: 8px; padding: 12px; background-color: rgba(30, 30, 30, 0.5); border-radius: 4px; border-left-width: 2px; border-left-color: #4a9eff;">
+                    <!-- Help Text -->
+                    <ui:Label text="Deploy a local copy of MCPForUnity to this project for development and testing." style="font-size: 11px; color: #999; margin-bottom: 10px; white-space: normal;" />
+                    
+                    <!-- Source Path Row -->
+                    <ui:VisualElement style="flex-direction: row; align-items: center; margin-bottom: 10px;">
+                        <ui:Label text="Source:" style="min-width: 60px; font-size: 12px; color: #bbb; flex-shrink: 0;" />
+                        <ui:TextField name="deploy-source-path" readonly="true" placeholder-text="Not set" style="flex-grow: 1; flex-shrink: 1; min-width: 0; margin-right: 5px; font-size: 12px; background-color: rgba(0,0,0,0.3);" />
+                        <ui:Button name="browse-deploy-source-button" text="..." class="mini-button-icon" style="width: 26px; height: 20px; flex-shrink: 0; font-size: 11px;" tooltip="Select Source Folder" />
+                        <ui:Button name="clear-deploy-source-button" text="×" class="mini-button-icon" style="width: 22px; height: 20px; font-size: 15px; flex-shrink: 0;" tooltip="Clear" />
+                    </ui:VisualElement>
+                    
+                    <!-- Action Row -->
+                    <ui:VisualElement style="flex-direction: row; justify-content: space-between; align-items: center;">
+                        <ui:Label name="deploy-backup-label" text="" style="font-size: 11px; color: #999; flex-grow: 1;" />
+                        <ui:VisualElement style="flex-direction: row;">
+                            <ui:Button name="deploy-button" text="Deploy" class="mini-button" style="font-size: 10px; padding-left: 10px; padding-right: 10px; margin-right: 4px;" />
+                            <ui:Button name="deploy-restore-button" text="Restore" class="mini-button" style="font-size: 10px; padding-left: 10px; padding-right: 10px;" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+            
+            <ui:Button name="refresh-dependencies-btn" text="Refresh Status" class="refresh-button" style="display: none;" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

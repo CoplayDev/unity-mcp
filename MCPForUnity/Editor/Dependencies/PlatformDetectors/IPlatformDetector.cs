@@ -20,12 +20,17 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
         /// <summary>
         /// Detect Python installation on this platform
         /// </summary>
-        DependencyStatus DetectPython();
+        DependencyStatus DetectPython(string overridePath = null);
 
         /// <summary>
         /// Detect uv package manager on this platform
         /// </summary>
-        DependencyStatus DetectUv();
+        DependencyStatus DetectUv(string overridePath = null);
+
+        /// <summary>
+        /// Detect Node.js on this platform
+        /// </summary>
+        DependencyStatus DetectNode(string overridePath = null);
 
         /// <summary>
         /// Get platform-specific installation recommendations

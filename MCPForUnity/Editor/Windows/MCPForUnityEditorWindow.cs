@@ -1,38 +1,44 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
-using MCPForUnity.Editor.Helpers;
-using MCPForUnity.Editor.Services;
-using MCPForUnity.Editor.Windows.Components.ClientConfig;
-using MCPForUnity.Editor.Windows.Components.Connection;
-using MCPForUnity.Editor.Windows.Components.Settings;
 using UnityEditor;
-using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
+using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Services;
+using MCPForUnity.Editor.Windows.Components.Settings;
+using MCPForUnity.Editor.Windows.Components.Connection;
+using MCPForUnity.Editor.Windows.Components.ClientConfig;
+using MCPForUnity.Editor.Windows.Components.Setup;
+using MCPForUnity.Editor.Dependencies;
 using MCPForUnity.Editor.Constants;
-using MCPForUnity.Editor.Windows.Components.Tools;
 
 namespace MCPForUnity.Editor.Windows
 {
     public class MCPForUnityEditorWindow : EditorWindow
     {
         // Section controllers
+        private McpSetupSection setupSection;
         private McpSettingsSection settingsSection;
         private McpConnectionSection connectionSection;
         private McpClientConfigSection clientConfigSection;
-        private McpToolsSection toolsSection;
+        private MCPForUnity.Editor.Windows.Components.Tools.McpToolsSection toolsSection;
 
-        private ToolbarToggle settingsTabToggle;
-        private ToolbarToggle toolsTabToggle;
+        // UI Elements
+        private VisualElement statusHeader;
+        private VisualElement statusIndicator;
+        private Label statusText;
+        private Label setupHint;
+        private Button toggleSetupBtn;
+        private Button refreshStatusBtn;
+        private VisualElement setupContainer;
+        private VisualElement mainWorkspace;
+
+        // Tab Elements
+        private UnityEditor.UIElements.ToolbarToggle settingsTabToggle;
+        private UnityEditor.UIElements.ToolbarToggle toolsTabToggle;
         private VisualElement settingsPanel;
         private VisualElement toolsPanel;
-
-        private static readonly HashSet<MCPForUnityEditorWindow> OpenWindows = new();
-        private bool guiCreated = false;
-        private double lastRefreshTime = 0;
-        private const double RefreshDebounceSeconds = 0.5;
 
         private enum ActivePanel
         {
@@ -40,54 +46,19 @@ namespace MCPForUnity.Editor.Windows
             Tools
         }
 
-        internal static void CloseAllWindows()
-        {
-            var windows = OpenWindows.Where(window => window != null).ToArray();
-            foreach (var window in windows)
-            {
-                window.Close();
-            }
-        }
+        private static readonly HashSet<MCPForUnityEditorWindow> OpenWindows = new();
+        private bool isSetupOpen = false;
+        private double _lastFocusRefreshTime = 0;
+        private bool _toolsLoaded = false;
 
         public static void ShowWindow()
         {
             var window = GetWindow<MCPForUnityEditorWindow>("MCP For Unity");
-            window.minSize = new Vector2(500, 600);
-        }
-
-        // Helper to check and manage open windows from other classes
-        public static bool HasAnyOpenWindow()
-        {
-            return OpenWindows.Count > 0;
-        }
-
-        public static void CloseAllOpenWindows()
-        {
-            if (OpenWindows.Count == 0)
-                return;
-
-            // Copy to array to avoid modifying the collection while iterating
-            var arr = new MCPForUnityEditorWindow[OpenWindows.Count];
-            OpenWindows.CopyTo(arr);
-            foreach (var window in arr)
-            {
-                try
-                {
-                    window?.Close();
-                }
-                catch (Exception ex)
-                {
-                    McpLog.Warn($"Error closing MCP window: {ex.Message}");
-                }
-            }
+            window.minSize = new Vector2(500, 700);
         }
 
         public void CreateGUI()
         {
-            // Guard against repeated CreateGUI calls (e.g., domain reloads)
-            if (guiCreated)
-                return;
-
             string basePath = AssetPathUtility.GetMcpPackageRootPath();
 
             // Load main window UXML
@@ -97,9 +68,7 @@ namespace MCPForUnity.Editor.Windows
 
             if (visualTree == null)
             {
-                McpLog.Error(
-                    $"Failed to load UXML at: {basePath}/Editor/Windows/MCPForUnityEditorWindow.uxml"
-                );
+                McpLog.Error($"Failed to load UXML at: {basePath}/Editor/Windows/MCPForUnityEditorWindow.uxml");
                 return;
             }
 
@@ -123,149 +92,107 @@ namespace MCPForUnity.Editor.Windows
                 rootVisualElement.styleSheets.Add(commonStyleSheet);
             }
 
+            // --- Query Main Elements ---
+            statusHeader = rootVisualElement.Q<VisualElement>("status-header");
+            statusIndicator = rootVisualElement.Q<VisualElement>("status-indicator");
+            statusText = rootVisualElement.Q<Label>("status-text");
+            setupHint = rootVisualElement.Q<Label>("setup-hint");
+            toggleSetupBtn = rootVisualElement.Q<Button>("toggle-setup-btn");
+            refreshStatusBtn = rootVisualElement.Q<Button>("refresh-status-btn");
+            setupContainer = rootVisualElement.Q<VisualElement>("setup-container");
+            mainWorkspace = rootVisualElement.Q<VisualElement>("main-workspace");
+
             settingsPanel = rootVisualElement.Q<VisualElement>("settings-panel");
             toolsPanel = rootVisualElement.Q<VisualElement>("tools-panel");
-            var settingsContainer = rootVisualElement.Q<VisualElement>("settings-container");
-            var toolsContainer = rootVisualElement.Q<VisualElement>("tools-container");
 
-            if (settingsPanel == null || toolsPanel == null)
-            {
-                McpLog.Error("Failed to find tab panels in UXML");
-                return;
-            }
-
-            if (settingsContainer == null)
-            {
-                McpLog.Error("Failed to find settings-container in UXML");
-                return;
-            }
-
-            if (toolsContainer == null)
-            {
-                McpLog.Error("Failed to find tools-container in UXML");
-                return;
-            }
-
+            // --- Initialize Tabs ---
             SetupTabs();
 
-            // Load and initialize Settings section
+            // --- Initialize Sections ---
+
+            // 1. Setup Section
+            var setupPlaceholder = rootVisualElement.Q<VisualElement>("setup-section-placeholder");
+            var setupTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
+                $"{basePath}/Editor/Windows/Components/Setup/McpSetupSection.uxml"
+            );
+            if (setupTree != null && setupPlaceholder != null)
+            {
+                var setupRoot = setupTree.Instantiate();
+                setupPlaceholder.Add(setupRoot);
+                setupSection = new McpSetupSection(setupRoot);
+                setupSection.OnSetupComplete += CheckSystemStatus; // Re-check when setup changes
+            }
+
+            // 2. Settings Section
+            var settingsPlaceholder = rootVisualElement.Q<VisualElement>("settings-section-placeholder");
             var settingsTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
                 $"{basePath}/Editor/Windows/Components/Settings/McpSettingsSection.uxml"
             );
-            if (settingsTree != null)
+            if (settingsTree != null && settingsPlaceholder != null)
             {
                 var settingsRoot = settingsTree.Instantiate();
-                settingsContainer.Add(settingsRoot);
+                settingsPlaceholder.Add(settingsRoot);
                 settingsSection = new McpSettingsSection(settingsRoot);
-                settingsSection.OnGitUrlChanged += () =>
-                    clientConfigSection?.UpdateManualConfiguration();
-                settingsSection.OnHttpServerCommandUpdateRequested += () =>
-                    connectionSection?.UpdateHttpServerCommandDisplay();
             }
 
-            // Load and initialize Connection section
+            // 3. Connection Section
+            var connectionPlaceholder = rootVisualElement.Q<VisualElement>("connection-section-placeholder");
             var connectionTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
                 $"{basePath}/Editor/Windows/Components/Connection/McpConnectionSection.uxml"
             );
-            if (connectionTree != null)
+            if (connectionTree != null && connectionPlaceholder != null)
             {
                 var connectionRoot = connectionTree.Instantiate();
-                settingsContainer.Add(connectionRoot);
+                connectionPlaceholder.Add(connectionRoot);
                 connectionSection = new McpConnectionSection(connectionRoot);
-                connectionSection.OnManualConfigUpdateRequested += () =>
-                    clientConfigSection?.UpdateManualConfiguration();
+                connectionSection.OnManualConfigUpdateRequested += () => clientConfigSection?.UpdateManualConfiguration();
             }
 
-            // Load and initialize Client Configuration section
+            // 4. Client Config Section
+            var clientConfigPlaceholder = rootVisualElement.Q<VisualElement>("client-config-section-placeholder");
             var clientConfigTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
                 $"{basePath}/Editor/Windows/Components/ClientConfig/McpClientConfigSection.uxml"
             );
-            if (clientConfigTree != null)
+            if (clientConfigTree != null && clientConfigPlaceholder != null)
             {
                 var clientConfigRoot = clientConfigTree.Instantiate();
-                settingsContainer.Add(clientConfigRoot);
+                clientConfigPlaceholder.Add(clientConfigRoot);
                 clientConfigSection = new McpClientConfigSection(clientConfigRoot);
             }
 
-            // Load and initialize Tools section
+            // 5. Tools Section
+            var toolsPlaceholder = rootVisualElement.Q<VisualElement>("tools-section-placeholder");
             var toolsTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
                 $"{basePath}/Editor/Windows/Components/Tools/McpToolsSection.uxml"
             );
-            if (toolsTree != null)
+            if (toolsTree != null && toolsPlaceholder != null)
             {
                 var toolsRoot = toolsTree.Instantiate();
-                toolsContainer.Add(toolsRoot);
-                toolsSection = new McpToolsSection(toolsRoot);
-                toolsSection.Refresh();
+                toolsPlaceholder.Add(toolsRoot);
+                toolsSection = new MCPForUnity.Editor.Windows.Components.Tools.McpToolsSection(toolsRoot);
+                
+                // Add separator or spacing if needed
+                toolsRoot.style.marginBottom = 20;
             }
-            else
+
+            // --- Bind Events ---
+            toggleSetupBtn.clicked += ToggleSetup;
+            if (refreshStatusBtn != null)
             {
-                McpLog.Warn("Failed to load tools section UXML. Tool configuration will be unavailable.");
+                refreshStatusBtn.clicked += () => CheckSystemStatus();
             }
-            guiCreated = true;
 
-            // Initial updates
-            RefreshAllData();
-        }
-
-        private void OnEnable()
-        {
-            EditorApplication.update += OnEditorUpdate;
-            OpenWindows.Add(this);
-        }
-
-        private void OnDisable()
-        {
-            EditorApplication.update -= OnEditorUpdate;
-            OpenWindows.Remove(this);
-            guiCreated = false;
-        }
-
-        private void OnFocus()
-        {
-            // Only refresh data if UI is built
-            if (rootVisualElement == null || rootVisualElement.childCount == 0)
-                return;
-
-            RefreshAllData();
-        }
-
-        private void OnEditorUpdate()
-        {
-            if (rootVisualElement == null || rootVisualElement.childCount == 0)
-                return;
-
-            connectionSection?.UpdateConnectionStatus();
-        }
-
-        private void RefreshAllData()
-        {
-            // Debounce rapid successive calls (e.g., from OnFocus being called multiple times)
-            double currentTime = EditorApplication.timeSinceStartup;
-            if (currentTime - lastRefreshTime < RefreshDebounceSeconds)
+            // Initial updates - Use delayCall to prevent freezing during window creation
+            EditorApplication.delayCall += () => 
             {
-                return;
-            }
-            lastRefreshTime = currentTime;
-
-            connectionSection?.UpdateConnectionStatus();
-
-            if (MCPServiceLocator.Bridge.IsRunning)
-            {
-                _ = connectionSection?.VerifyBridgeConnectionAsync();
-            }
-
-            settingsSection?.UpdatePathOverrides();
-            clientConfigSection?.RefreshSelectedClient();
+                CheckSystemStatus(); // Single initial check after window loads
+            };
         }
 
         private void SetupTabs()
         {
-            settingsTabToggle = rootVisualElement.Q<ToolbarToggle>("settings-tab");
-            toolsTabToggle = rootVisualElement.Q<ToolbarToggle>("tools-tab");
-
-            settingsPanel?.RemoveFromClassList("hidden");
-            toolsPanel?.RemoveFromClassList("hidden");
+            settingsTabToggle = rootVisualElement.Q<UnityEditor.UIElements.ToolbarToggle>("settings-tab");
+            toolsTabToggle = rootVisualElement.Q<UnityEditor.UIElements.ToolbarToggle>("tools-tab");
 
             if (settingsTabToggle != null)
             {
@@ -273,6 +200,7 @@ namespace MCPForUnity.Editor.Windows
                 {
                     if (!evt.newValue)
                     {
+                        // Prevent unchecking all tabs
                         if (toolsTabToggle != null && !toolsTabToggle.value)
                         {
                             settingsTabToggle.SetValueWithoutNotify(true);
@@ -290,6 +218,7 @@ namespace MCPForUnity.Editor.Windows
                 {
                     if (!evt.newValue)
                     {
+                         // Prevent unchecking all tabs
                         if (settingsTabToggle != null && !settingsTabToggle.value)
                         {
                             toolsTabToggle.SetValueWithoutNotify(true);
@@ -301,6 +230,7 @@ namespace MCPForUnity.Editor.Windows
                 });
             }
 
+            // Restore last active panel
             var savedPanel = EditorPrefs.GetString(EditorPrefKeys.EditorWindowActivePanel, ActivePanel.Settings.ToString());
             if (!Enum.TryParse(savedPanel, out ActivePanel initialPanel))
             {
@@ -322,12 +252,139 @@ namespace MCPForUnity.Editor.Windows
             if (toolsPanel != null)
             {
                 toolsPanel.style.display = showSettings ? DisplayStyle.None : DisplayStyle.Flex;
+                
+                // Lazy load tools when Tools tab is first opened
+                if (!showSettings && !_toolsLoaded)
+                {
+                    _toolsLoaded = true;
+                    EditorApplication.delayCall += () => toolsSection?.Refresh();
+                }
             }
 
+            // Sync toggles
             settingsTabToggle?.SetValueWithoutNotify(showSettings);
             toolsTabToggle?.SetValueWithoutNotify(!showSettings);
 
             EditorPrefs.SetString(EditorPrefKeys.EditorWindowActivePanel, panel.ToString());
+        }
+
+        private void OnEnable()
+        {
+            EditorApplication.update += OnEditorUpdate;
+            OpenWindows.Add(this);
+        }
+
+        private void OnDisable()
+        {
+            EditorApplication.update -= OnEditorUpdate;
+            OpenWindows.Remove(this);
+        }
+
+        private void OnFocus()
+        {
+            // Only refresh lightweight data if UI is built
+            if (rootVisualElement == null || rootVisualElement.childCount == 0)
+                return;
+
+            // Throttle RefreshAllData to prevent excessive calls
+            // Only refresh if more than 2 seconds have passed since last refresh
+            double currentTime = EditorApplication.timeSinceStartup;
+            if (currentTime - _lastFocusRefreshTime > 2.0)
+            {
+                _lastFocusRefreshTime = currentTime;
+                RefreshAllData();
+            }
+        }
+
+        private void OnEditorUpdate()
+        {
+            if (rootVisualElement == null || rootVisualElement.childCount == 0)
+                return;
+
+            connectionSection?.UpdateConnectionStatus();
+        }
+
+        private void ToggleSetup()
+        {
+            isSetupOpen = !isSetupOpen;
+            setupContainer.style.display = isSetupOpen ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        private int _isChecking = 0;
+
+        private void CheckSystemStatus()
+        {
+            if (System.Threading.Interlocked.CompareExchange(ref _isChecking, 1, 0) != 0) return;
+            
+            // Show checking state
+            statusText.text = "Checking...";
+            statusIndicator.RemoveFromClassList("ready");
+            statusIndicator.RemoveFromClassList("error");
+
+            try
+            {
+                // Synchronous check (Main Thread)
+                var dependencyResult = DependencyManager.CheckAllDependencies();
+                
+                // Safety check
+                if (rootVisualElement == null) return;
+
+                bool isReady = dependencyResult.IsSystemReady;
+
+                statusIndicator.RemoveFromClassList("ready");
+                statusIndicator.RemoveFromClassList("error");
+                statusIndicator.AddToClassList(isReady ? "ready" : "error");
+
+                if (isReady)
+                {
+                    statusText.text = "System Ready";
+                    statusText.style.color = new StyleColor(new Color(0.3f, 0.8f, 0.3f)); // Greenish
+                    setupHint.text = "Configure Settings";
+                    settingsPanel.RemoveFromClassList("disabled");
+                    settingsPanel.SetEnabled(true);
+                    toolsPanel?.RemoveFromClassList("disabled");
+                    toolsPanel?.SetEnabled(true);
+                }
+                else
+                {
+                    statusText.text = "Setup Required";
+                    statusText.style.color = new StyleColor(new Color(0.9f, 0.3f, 0.3f)); // Reddish
+                    setupHint.text = "Click arrow to configure environment";
+                    settingsPanel.AddToClassList("disabled");
+                    settingsPanel.SetEnabled(false);
+                    toolsPanel?.AddToClassList("disabled");
+                    toolsPanel?.SetEnabled(false);
+                }
+
+                // Update Setup Section UI with the result we already have
+                setupSection?.RefreshStatus(dependencyResult);
+            }
+            catch (Exception ex)
+            {
+                McpLog.Error($"System check failed: {ex.Message}");
+                statusText.text = "Error Checking";
+                statusText.style.color = new StyleColor(new Color(0.9f, 0.3f, 0.3f));
+            }
+            finally
+            {
+                System.Threading.Interlocked.Exchange(ref _isChecking, 0);
+            }
+        }
+
+        private void RefreshAllData()
+        {
+            connectionSection?.UpdateConnectionStatus();
+
+            if (MCPServiceLocator.Bridge.IsRunning)
+            {
+                connectionSection?.VerifyBridgeConnectionAsync().ContinueWith(t =>
+                {
+                    if (t.IsFaulted) McpLog.Warn($"Bridge verification failed: {t.Exception?.InnerException?.Message}");
+                }, TaskContinuationOptions.OnlyOnFaulted);
+            }
+
+            clientConfigSection?.RefreshSelectedClient();
+            // Removed toolsSection?.Refresh() - tools are now loaded lazily when tab is opened
         }
 
         internal static void RequestHealthVerification()
@@ -340,24 +397,33 @@ namespace MCPForUnity.Editor.Windows
 
         private void ScheduleHealthCheck()
         {
-            EditorApplication.delayCall += async () =>
+            EditorApplication.delayCall += () =>
             {
-                // Ensure window and components are still valid before execution
-                if (this == null || connectionSection == null)
+                var section = connectionSection;
+                if (this == null || section == null)
                 {
                     return;
                 }
-
-                try
+                section.VerifyBridgeConnectionAsync().ContinueWith(t =>
                 {
-                    await connectionSection.VerifyBridgeConnectionAsync();
-                }
-                catch (Exception ex)
-                {
-                    // Log but don't crash if verification fails during cleanup
-                    McpLog.Warn($"Health check verification failed: {ex.Message}");
-                }
+                    if (t.IsFaulted) McpLog.Warn($"Health check failed: {t.Exception?.InnerException?.Message}");
+                }, TaskContinuationOptions.OnlyOnFaulted);
             };
+        }
+
+        public static bool HasAnyOpenWindow()
+        {
+            return OpenWindows.Count > 0;
+        }
+
+        public static void CloseAllOpenWindows()
+        {
+            // Create a copy to modify collection while iterating
+            var windows = new List<MCPForUnityEditorWindow>(OpenWindows);
+            foreach (var win in windows)
+            {
+                if (win != null) win.Close();
+            }
         }
     }
 }

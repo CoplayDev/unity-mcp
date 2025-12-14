@@ -359,7 +359,12 @@
 }
 
 .tool-parameters {
-    font-style: italic;
+    -unity-font-style: italic;
+}
+
+.tool-item-actions {
+    flex-direction: row;
+    margin-top: 6px;
 }
 
 /* Advanced Settings */
@@ -469,22 +474,6 @@
     border-color: rgba(0, 0, 0, 0.15);
 }
 
-.unity-theme-dark .tool-tag {
-    color: rgba(220, 220, 220, 1);
-    background-color: rgba(80, 80, 80, 0.6);
-}
-
-.unity-theme-dark .tool-item {
-    background-color: rgba(255, 255, 255, 0.04);
-    border-color: rgba(255, 255, 255, 0.08);
-}
-
-.unity-theme-dark .tool-item-description,
-.unity-theme-dark .tool-parameters {
-    color: rgba(200, 200, 200, 0.8);
-}
-
-
 .unity-theme-light .validation-description {
     background-color: rgba(100, 150, 200, 0.1);
 }
@@ -519,4 +508,145 @@
 
 .unity-theme-light .path-display-field > .unity-text-field__input {
     background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Dependency Row Styles */
+.dependency-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    height: 30px;
+}
+
+.dependency-info {
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+}
+
+.dependency-label {
+    width: 120px;
+    -unity-font-style: bold;
+}
+
+.unity-theme-light .dependency-label {
+    color: #333333;
+}
+
+.unity-theme-dark .dependency-label {
+    color: #E0E0E0;
+}
+
+.dependency-status {
+    margin-left: 10px;
+}
+
+.unity-theme-dark .dependency-status {
+    color: #AAAAAA;
+}
+
+.unity-theme-dark .dependency-status.installed {
+    color: #4CAF50; /* Green */
+}
+
+.unity-theme-dark .dependency-status.missing {
+    color: #F44336; /* Red */
+}
+
+.unity-theme-light .dependency-status {
+    color: #666666;
+}
+
+.unity-theme-light .dependency-status.installed {
+    color: #2E7D32;
+}
+
+.unity-theme-light .dependency-status.missing {
+    color: #C62828;
+}
+
+.dependency-actions {
+    flex-direction: row;
+    align-items: center;
+}
+
+.mini-button {
+    height: 24px;
+    padding: 0 10px;
+    margin-left: 5px;
+    font-size: 11px;
+    border-width: 0;
+    border-radius: 3px;
+}
+
+.unity-theme-dark .mini-button {
+    background-color: #444;
+    color: #EEE;
+}
+
+.unity-theme-dark .mini-button:hover {
+    background-color: #555;
+}
+
+.unity-theme-dark .mini-button.secondary {
+    background-color: transparent;
+    border-width: 1px;
+    border-color: #555;
+}
+
+.unity-theme-dark .mini-button.secondary:hover {
+    background-color: #383838;
+}
+
+.unity-theme-dark .mini-button.primary {
+    background-color: #2196F3; /* Blue */
+}
+
+.unity-theme-dark .mini-button.primary:hover {
+    background-color: #1E88E5;
+}
+
+.unity-theme-light .mini-button {
+    background-color: #E0E0E0;
+    color: #333;
+}
+
+.unity-theme-light .mini-button:hover {
+    background-color: #CCCCCC;
+}
+
+.unity-theme-light .mini-button.secondary {
+    background-color: transparent;
+    border-width: 1px;
+    border-color: #AAAAAA;
+}
+
+.unity-theme-light .mini-button.secondary:hover {
+    background-color: #F5F5F5;
+}
+
+.unity-theme-light .mini-button.primary {
+    background-color: #2196F3;
+    color: #FFF;
+}
+
+.unity-theme-light .mini-button.primary:hover {
+    background-color: #1976D2;
+}
+
+/* Dark Theme Tool Overrides */
+.unity-theme-dark .tool-tag {
+    color: rgba(220, 220, 220, 1);
+    background-color: rgba(80, 80, 80, 0.6);
+}
+
+.unity-theme-dark .tool-item {
+    background-color: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.unity-theme-dark .tool-item-description,
+.unity-theme-dark .tool-parameters {
+    color: rgba(200, 200, 200, 0.8);
 }

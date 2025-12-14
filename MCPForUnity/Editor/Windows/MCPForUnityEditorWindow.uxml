@@ -1,15 +1,47 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
-    <ui:VisualElement name="root-container" class="root-layout">
-        <ui:Label text="MCP For Unity" name="title" class="title" />
-        <uie:Toolbar name="tab-toolbar" class="tab-toolbar">
-            <uie:ToolbarToggle name="settings-tab" text="Settings" value="true" />
+    <Style src="MCPForUnityEditorWindow.uss" />
+    <ui:ScrollView name="root-container" mode="Vertical">
+        
+        <!-- Status Header (Always Visible) -->
+        <ui:VisualElement name="status-header" class="status-header">
+            <ui:VisualElement class="status-left">
+                <ui:VisualElement name="status-indicator" class="status-indicator" />
+                <ui:Label name="status-text" text="Checking System..." class="status-text-header" />
+                <ui:Button name="refresh-status-btn" text="Check Again" class="status-refresh-btn" tooltip="Re-check system status" />
+            </ui:VisualElement>
+            <ui:VisualElement class="status-right">
+                <ui:Label name="setup-hint" text="Configure Settings" class="setup-hint" />
+                <ui:Button name="toggle-setup-btn" text="▼" class="setup-toggle-arrow" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Setup (Collapsible, independent of Tabs) -->
+        <ui:VisualElement name="setup-container" class="setup-container-root" style="display: none;">
+            <ui:VisualElement name="setup-section-placeholder" />
+        </ui:VisualElement>
+
+        <!-- Tabs -->
+        <uie:Toolbar name="tab-toolbar" class="tab-toolbar" style="margin-top: 10px; margin-bottom: 5px;">
+            <uie:ToolbarToggle name="settings-tab" text="Settings" />
             <uie:ToolbarToggle name="tools-tab" text="Tools" />
         </uie:Toolbar>
-        <ui:ScrollView name="settings-panel" class="panel-scroll" style="flex-grow: 1;">
-            <ui:VisualElement name="settings-container" class="section-stack" />
-        </ui:ScrollView>
-        <ui:ScrollView name="tools-panel" class="panel-scroll hidden" style="flex-grow: 1;">
-            <ui:VisualElement name="tools-container" class="section-stack" />
-        </ui:ScrollView>
-    </ui:VisualElement>
+
+        <!-- Main Workspace (Tabbed Content) -->
+        <ui:VisualElement name="main-workspace" class="main-workspace">
+            
+            <!-- Settings Panel -->
+            <ui:VisualElement name="settings-panel">
+                <ui:VisualElement name="settings-section-placeholder" />
+                <ui:VisualElement name="connection-section-placeholder" />
+                <ui:VisualElement name="client-config-section-placeholder" />
+            </ui:VisualElement>
+
+            <!-- Tools Panel -->
+            <ui:VisualElement name="tools-panel" style="display: none;">
+                <ui:VisualElement name="tools-section-placeholder" />
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+
+    </ui:ScrollView>
 </ui:UXML>

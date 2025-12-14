@@ -16,7 +16,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
         public override bool CanDetect => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
 
-        public override DependencyStatus DetectPython()
+        public override DependencyStatus DetectPython(string overridePath = null)
         {
             var status = new DependencyStatus("Python", isRequired: true)
             {
@@ -25,33 +25,50 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
             try
             {
-                // 1. Try 'which' command with augmented PATH (prioritizing Homebrew)
+                // 1. Check Override
+                if (overridePath == null)
+                {
+                    try { overridePath = UnityEditor.EditorPrefs.GetString(MCPForUnity.Editor.Constants.EditorPrefKeys.PythonPathOverride, ""); } catch {}
+                }
+
+                if (!string.IsNullOrEmpty(overridePath) && File.Exists(overridePath))
+                {
+                    if (TryValidatePython(overridePath, out string ovVersion, out string ovPath))
+                    {
+                        status.IsAvailable = true;
+                        status.Version = ovVersion;
+                        status.Path = ovPath;
+                        status.Details = $"Using custom Python path: {ovPath}";
+                        return status;
+                    }
+                }
+                // Try running python directly first
+                if (TryValidatePython("python3", out string version, out string fullPath) ||
+                    TryValidatePython("python", out version, out fullPath))
+                {
+                    status.IsAvailable = true;
+                    status.Version = version;
+                    status.Path = fullPath;
+                    status.Details = $"Found Python {version} in PATH";
+                    return status;
+                }
+
+                // Fallback: try 'which' command
                 if (TryFindInPath("python3", out string pathResult) ||
                     TryFindInPath("python", out pathResult))
                 {
-                    if (TryValidatePython(pathResult, out string version, out string fullPath))
+                    if (TryValidatePython(pathResult, out version, out fullPath))
                     {
                         status.IsAvailable = true;
                         status.Version = version;
                         status.Path = fullPath;
-                        status.Details = $"Found Python {version} at {fullPath}";
+                        status.Details = $"Found Python {version} in PATH";
                         return status;
                     }
                 }
 
-                // 2. Fallback: Try running python directly from PATH
-                if (TryValidatePython("python3", out string v, out string p) ||
-                    TryValidatePython("python", out v, out p))
-                {
-                    status.IsAvailable = true;
-                    status.Version = v;
-                    status.Path = p;
-                    status.Details = $"Found Python {v} in PATH";
-                    return status;
-                }
-
-                status.ErrorMessage = "Python not found in PATH or standard locations";
-                status.Details = "Install Python 3.10+ via Homebrew ('brew install python3') and ensure it's in your PATH.";
+                status.ErrorMessage = "Python not found in PATH";
+                status.Details = "Install python 3.11+ and ensure it's added to PATH.";
             }
             catch (Exception ex)
             {
@@ -88,7 +105,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
         }
 
-        public override DependencyStatus DetectUv()
+        public override DependencyStatus DetectUv(string overridePath = null)
         {
             var status = new DependencyStatus("uv Package Manager", isRequired: true)
             {
@@ -97,6 +114,23 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
 
             try
             {
+                // 0. Check Override
+                if (overridePath == null)
+                {
+                    try { overridePath = UnityEditor.EditorPrefs.GetString(MCPForUnity.Editor.Constants.EditorPrefKeys.UvPathOverride, ""); } catch {}
+                }
+
+                if (!string.IsNullOrEmpty(overridePath) && File.Exists(overridePath))
+                {
+                    if (TryValidateUv(overridePath, out string ovVersion, out string ovPath))
+                    {
+                        status.IsAvailable = true;
+                        status.Version = ovVersion;
+                        status.Path = ovPath;
+                        status.Details = $"Using custom uv path: {ovPath}";
+                        return status;
+                    }
+                }
                 // Try running uv/uvx directly with augmented PATH
                 if (TryValidateUv("uv", out string version, out string fullPath) ||
                     TryValidateUv("uvx", out version, out fullPath))
@@ -166,18 +200,18 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
                 using var process = Process.Start(psi);
                 if (process == null) return false;
 
-                string output = process.StandardOutput.ReadToEnd().Trim();
                 process.WaitForExit(5000);
+                string output = process.StandardOutput.ReadToEnd().Trim();
 
                 if (process.ExitCode == 0 && output.StartsWith("Python "))
                 {
                     version = output.Substring(7); // Remove "Python " prefix
                     fullPath = pythonPath;
 
-                    // Validate minimum version (Python 4+ or Python 3.10+)
+                    // Validate minimum version (Python 4+ or Python 3.11+)
                     if (TryParseVersion(version, out var major, out var minor))
                     {
-                        return major > 3 || (major >= 3 && minor >= 10);
+                        return major > 3 || (major == 3 && minor >= 11);
                     }
                 }
             }
@@ -212,8 +246,8 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
                 using var process = Process.Start(psi);
                 if (process == null) return false;
 
-                string output = process.StandardOutput.ReadToEnd().Trim();
                 process.WaitForExit(5000);
+                string output = process.StandardOutput.ReadToEnd().Trim();
 
                 if (process.ExitCode == 0 && output.StartsWith("uv "))
                 {
@@ -283,8 +317,8 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
                 using var process = Process.Start(psi);
                 if (process == null) return false;
 
-                string output = process.StandardOutput.ReadToEnd().Trim();
                 process.WaitForExit(3000);
+                string output = process.StandardOutput.ReadToEnd().Trim();
 
                 if (process.ExitCode == 0 && !string.IsNullOrEmpty(output) && File.Exists(output))
                 {

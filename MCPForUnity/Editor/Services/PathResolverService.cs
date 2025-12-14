@@ -1,13 +1,10 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using UnityEditor;
-using UnityEngine;
 
 namespace MCPForUnity.Editor.Services
 {
@@ -18,13 +15,15 @@ namespace MCPForUnity.Editor.Services
     {
         public bool HasUvxPathOverride => !string.IsNullOrEmpty(EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, null));
         public bool HasClaudeCliPathOverride => !string.IsNullOrEmpty(EditorPrefs.GetString(EditorPrefKeys.ClaudeCliPathOverride, null));
+        public bool HasPythonPathOverride => !string.IsNullOrEmpty(EditorPrefs.GetString(EditorPrefKeys.PythonPathOverride, null));
+        public bool HasNodePathOverride => !string.IsNullOrEmpty(EditorPrefs.GetString(EditorPrefKeys.NodePathOverride, null));
 
         public string GetUvxPath()
         {
             try
             {
                 string overridePath = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
-                if (!string.IsNullOrEmpty(overridePath))
+                if (!string.IsNullOrEmpty(overridePath) && File.Exists(overridePath))
                 {
                     return overridePath;
                 }
@@ -33,12 +32,6 @@ namespace MCPForUnity.Editor.Services
             {
                 // ignore EditorPrefs read errors and fall back to default command
                 McpLog.Debug("No uvx path override found, falling back to default command");
-            }
-
-            string discovered = ResolveUvxFromSystem();
-            if (!string.IsNullOrEmpty(discovered))
-            {
-                return discovered;
             }
 
             return "uvx";
@@ -102,13 +95,47 @@ namespace MCPForUnity.Editor.Services
             return null;
         }
 
+        public string GetPythonPath()
+        {
+            try
+            {
+                string overridePath = EditorPrefs.GetString(EditorPrefKeys.PythonPathOverride, string.Empty);
+                if (!string.IsNullOrEmpty(overridePath) && File.Exists(overridePath))
+                {
+                    return overridePath;
+                }
+            }
+            catch
+            {
+                McpLog.Debug("No Python path override found, falling back to default command");
+            }
+            return RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "python" : "python3";
+        }
+
+        public string GetNodePath()
+        {
+            try
+            {
+                string overridePath = EditorPrefs.GetString(EditorPrefKeys.NodePathOverride, string.Empty);
+                if (!string.IsNullOrEmpty(overridePath) && File.Exists(overridePath))
+                {
+                    return overridePath;
+                }
+            }
+            catch
+            {
+                McpLog.Debug("No Node path override found, falling back to default command");
+            }
+            return "node";
+        }
+
         public bool IsPythonDetected()
         {
             try
             {
                 var psi = new ProcessStartInfo
                 {
-                    FileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "python.exe" : "python3",
+                    FileName = GetPythonPath(),
                     Arguments = "--version",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
@@ -116,7 +143,11 @@ namespace MCPForUnity.Editor.Services
                     CreateNoWindow = true
                 };
                 using var p = Process.Start(psi);
-                p.WaitForExit(2000);
+                if (!p.WaitForExit(2000))
+                {
+                    try { p.Kill(); } catch { /* ignore */ }
+                    return false;
+                }
                 return p.ExitCode == 0;
             }
             catch
@@ -128,81 +159,6 @@ namespace MCPForUnity.Editor.Services
         public bool IsClaudeCliDetected()
         {
             return !string.IsNullOrEmpty(GetClaudeCliPath());
-        }
-
-        private static string ResolveUvxFromSystem()
-        {
-            try
-            {
-                foreach (string candidate in EnumerateUvxCandidates())
-                {
-                    if (!string.IsNullOrEmpty(candidate) && File.Exists(candidate))
-                    {
-                        return candidate;
-                    }
-                }
-            }
-            catch
-            {
-                // fall back to bare command
-            }
-
-            return null;
-        }
-
-        private static IEnumerable<string> EnumerateUvxCandidates()
-        {
-            string exeName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "uvx.exe" : "uvx";
-
-            string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            if (!string.IsNullOrEmpty(home))
-            {
-                yield return Path.Combine(home, ".local", "bin", exeName);
-                yield return Path.Combine(home, ".cargo", "bin", exeName);
-            }
-
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                yield return "/opt/homebrew/bin/" + exeName;
-                yield return "/usr/local/bin/" + exeName;
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                yield return "/usr/local/bin/" + exeName;
-                yield return "/usr/bin/" + exeName;
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-
-                if (!string.IsNullOrEmpty(localAppData))
-                {
-                    yield return Path.Combine(localAppData, "Programs", "uv", exeName);
-                }
-
-                if (!string.IsNullOrEmpty(programFiles))
-                {
-                    yield return Path.Combine(programFiles, "uv", exeName);
-                }
-            }
-
-            string pathEnv = Environment.GetEnvironmentVariable("PATH");
-            if (!string.IsNullOrEmpty(pathEnv))
-            {
-                foreach (string rawDir in pathEnv.Split(Path.PathSeparator))
-                {
-                    if (string.IsNullOrWhiteSpace(rawDir)) continue;
-                    string dir = rawDir.Trim();
-                    yield return Path.Combine(dir, exeName);
-
-                    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                    {
-                        // Some PATH entries may already contain the file without extension
-                        yield return Path.Combine(dir, "uvx");
-                    }
-                }
-            }
         }
 
         public void SetUvxPathOverride(string path)
@@ -245,6 +201,50 @@ namespace MCPForUnity.Editor.Services
         public void ClearClaudeCliPathOverride()
         {
             EditorPrefs.DeleteKey(EditorPrefKeys.ClaudeCliPathOverride);
+        }
+
+        public void SetPythonPathOverride(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                ClearPythonPathOverride();
+                return;
+            }
+
+            // Allow commands on PATH, but validate explicit paths
+            if ((Path.IsPathRooted(path) || path.Contains("/") || path.Contains("\\")) && !File.Exists(path))
+            {
+                throw new ArgumentException("The selected Python executable does not exist");
+            }
+
+            EditorPrefs.SetString(EditorPrefKeys.PythonPathOverride, path);
+        }
+
+        public void ClearPythonPathOverride()
+        {
+            EditorPrefs.DeleteKey(EditorPrefKeys.PythonPathOverride);
+        }
+
+        public void SetNodePathOverride(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                ClearNodePathOverride();
+                return;
+            }
+
+            // Allow commands on PATH, but validate explicit paths
+            if ((Path.IsPathRooted(path) || path.Contains("/") || path.Contains("\\")) && !File.Exists(path))
+            {
+                throw new ArgumentException("The selected Node executable does not exist");
+            }
+
+            EditorPrefs.SetString(EditorPrefKeys.NodePathOverride, path);
+        }
+
+        public void ClearNodePathOverride()
+        {
+            EditorPrefs.DeleteKey(EditorPrefKeys.NodePathOverride);
         }
     }
 }
