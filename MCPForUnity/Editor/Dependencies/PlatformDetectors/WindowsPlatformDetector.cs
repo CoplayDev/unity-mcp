@@ -171,35 +171,16 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
         {
             version = null;
             fullPath = null;
-            try
+            
+            if (TryExecuteProcess(uvPath, "--version", 3000, out string output) && output.StartsWith("uv"))
             {
-                var psi = new ProcessStartInfo
+                var parts = output.Split(' ');
+                if (parts.Length > 1) 
                 {
-                    FileName = uvPath,
-                    Arguments = "--version",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
-
-                using var process = Process.Start(psi);
-                if (process == null) return false;
-
-                process.WaitForExit(3000);
-                string output = process.StandardOutput.ReadToEnd().Trim();
-
-                if (process.ExitCode == 0 && output.StartsWith("uv"))
-                {
-                    version = output.Split(' ')[1];
+                    version = parts[1].Trim();
                     fullPath = uvPath;
                     return true;
                 }
-            }
-            catch (Exception ex)
-            {
-                // Debug logging would help diagnose issues
-                System.Diagnostics.Debug.WriteLine($"uv validation failed: {ex.Message}");
             }
             return false;
         }

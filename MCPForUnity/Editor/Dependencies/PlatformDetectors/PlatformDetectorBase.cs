@@ -221,7 +221,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             }
         }
 
-        protected bool TryExecuteProcess(string fileName, string arguments, int timeoutMs, out string output)
+        protected bool TryExecuteProcess(string fileName, string arguments, int timeoutMs, out string output, System.Collections.Generic.Dictionary<string, string> envVars = null)
         {
             output = string.Empty;
             try
@@ -236,6 +236,14 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                     CreateNoWindow = true
                 };
 
+                if (envVars != null)
+                {
+                    foreach (var kvp in envVars)
+                    {
+                        psi.EnvironmentVariables[kvp.Key] = kvp.Value;
+                    }
+                }
+
                 using var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
                 var outputBuilder = new StringBuilder();
                 
@@ -247,9 +255,13 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                     }
                 };
 
+                // Consume stderr to prevent deadlocks
+                process.ErrorDataReceived += (sender, e) => { };
+
                 if (!process.Start()) return false;
 
                 process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
 
                 if (!process.WaitForExit(timeoutMs))
                 {
@@ -260,8 +272,9 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                 output = outputBuilder.ToString().Trim();
                 return process.ExitCode == 0;
             }
-            catch
+            catch (Exception ex)
             {
+                UnityEngine.Debug.LogWarning($"TryExecuteProcess failed for {fileName}: {ex.Message}");
                 return false;
             }
         }
