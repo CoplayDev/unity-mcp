@@ -12,6 +12,7 @@ from starlette.endpoints import WebSocketEndpoint
 from starlette.websockets import WebSocket
 
 from core.config import config
+from core.auth import AuthSettings, auth_settings, verify_websocket
 from transport.plugin_registry import PluginRegistry
 from transport.models import (
     WelcomeMessage,
@@ -37,6 +38,7 @@ class PluginHub(WebSocketEndpoint):
     COMMAND_TIMEOUT = 30
 
     _registry: PluginRegistry | None = None
+    _auth_settings: AuthSettings | None = None
     _connections: dict[str, WebSocket] = {}
     _pending: dict[str, asyncio.Future] = {}
     _lock: asyncio.Lock | None = None
@@ -47,21 +49,38 @@ class PluginHub(WebSocketEndpoint):
         cls,
         registry: PluginRegistry,
         loop: asyncio.AbstractEventLoop | None = None,
+        auth_settings: AuthSettings | None = None,
     ) -> None:
         cls._registry = registry
         cls._loop = loop or asyncio.get_running_loop()
         # Ensure coordination primitives are bound to the configured loop
         cls._lock = asyncio.Lock()
+        cls._auth_settings = auth_settings
+
+    @classmethod
+    def set_auth_settings(cls, settings: AuthSettings | None) -> None:
+        cls._auth_settings = settings
 
     @classmethod
     def is_configured(cls) -> bool:
         return cls._registry is not None and cls._lock is not None
 
     async def on_connect(self, websocket: WebSocket) -> None:
+        settings = self._auth_settings or auth_settings()
+
+        failure = await verify_websocket(websocket, settings)
+        if failure is not None:
+            await websocket.close(code=4401)
+            return
+
         await websocket.accept()
+        from core.telemetry import get_package_version
         msg = WelcomeMessage(
+            serverVersion=get_package_version(),
             serverTimeout=self.SERVER_TIMEOUT,
             keepAliveInterval=self.KEEP_ALIVE_INTERVAL,
+            authEnabled=settings.enabled,
+            authTokenRequired=settings.enabled and bool(settings.token),
         )
         await websocket.send_json(msg.model_dump())
 
