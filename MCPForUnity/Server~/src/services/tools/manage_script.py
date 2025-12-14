@@ -1,7 +1,7 @@
 import base64
 import os
 from typing import Annotated, Any, Literal
-from urllib.parse import urlparse, unquote
+
 
 from fastmcp import FastMCP, Context
 
@@ -11,56 +11,7 @@ from transport.unity_transport import send_with_unity_instance
 import transport.legacy.unity_connection
 
 
-def _split_uri(uri: str) -> tuple[str, str]:
-    """Split an incoming URI or path into (name, directory) suitable for Unity.
-
-    Rules:
-    - unity://path/Assets/... → keep as Assets-relative (after decode/normalize)
-    - file://... → percent-decode, normalize, strip host and leading slashes,
-        then, if any 'Assets' segment exists, return path relative to that 'Assets' root.
-        Otherwise, fall back to original name/dir behavior.
-    - plain paths → decode/normalize separators; if they contain an 'Assets' segment,
-        return relative to 'Assets'.
-    """
-    raw_path: str
-    if uri.startswith("unity://path/"):
-        raw_path = uri[len("unity://path/"):]
-    elif uri.startswith("file://"):
-        parsed = urlparse(uri)
-        host = (parsed.netloc or "").strip()
-        p = parsed.path or ""
-        # UNC: file://server/share/... -> //server/share/...
-        if host and host.lower() != "localhost":
-            p = f"//{host}{p}"
-        # Use percent-decoded path, preserving leading slashes
-        raw_path = unquote(p)
-    else:
-        raw_path = uri
-
-    # Percent-decode any residual encodings and normalize separators
-    raw_path = unquote(raw_path).replace("\\", "/")
-    # Strip leading slash only for Windows drive-letter forms like "/C:/..."
-    if os.name == "nt" and len(raw_path) >= 3 and raw_path[0] == "/" and raw_path[2] == ":":
-        raw_path = raw_path[1:]
-
-    # Normalize path (collapse ../, ./)
-    norm = os.path.normpath(raw_path).replace("\\", "/")
-
-    # If an 'Assets' segment exists, compute path relative to it (case-insensitive)
-    parts = [p for p in norm.split("/") if p not in ("", ".")]
-    idx = next((i for i, seg in enumerate(parts)
-                if seg.lower() == "assets"), None)
-    assets_rel = "/".join(parts[idx:]) if idx is not None else None
-
-    effective_path = assets_rel if assets_rel else norm
-    # For POSIX absolute paths outside Assets, drop the leading '/'
-    # to return a clean relative-like directory (e.g., '/tmp' -> 'tmp').
-    if effective_path.startswith("/"):
-        effective_path = effective_path[1:]
-
-    name = os.path.splitext(os.path.basename(effective_path))[0]
-    directory = os.path.dirname(effective_path)
-    return name, directory
+from services.tools.utils import split_uri
 
 
 @mcp_for_unity_tool(description=(
@@ -91,7 +42,7 @@ async def apply_text_edits(
     unity_instance = get_unity_instance_from_context(ctx)
     await ctx.info(
         f"Processing apply_text_edits: {uri} (unity_instance={unity_instance or 'default'})")
-    name, directory = _split_uri(uri)
+    name, directory = split_uri(uri)
 
     # Normalize common aliases/misuses for resilience:
     # - Accept LSP-style range objects: {range:{start:{line,character}, end:{...}}, newText|text}
@@ -421,7 +372,7 @@ async def delete_script(
     unity_instance = get_unity_instance_from_context(ctx)
     await ctx.info(
         f"Processing delete_script: {uri} (unity_instance={unity_instance or 'default'})")
-    name, directory = _split_uri(uri)
+    name, directory = split_uri(uri)
     if not directory or directory.split("/")[0].lower() != "assets":
         return {"success": False, "code": "path_outside_assets", "message": "URI must resolve under 'Assets/'."}
     params = {"action": "delete", "name": name, "path": directory}
@@ -446,7 +397,7 @@ async def validate_script(
     unity_instance = get_unity_instance_from_context(ctx)
     await ctx.info(
         f"Processing validate_script: {uri} (unity_instance={unity_instance or 'default'})")
-    name, directory = _split_uri(uri)
+    name, directory = split_uri(uri)
     if not directory or directory.split("/")[0].lower() != "assets":
         return {"success": False, "code": "path_outside_assets", "message": "URI must resolve under 'Assets/'."}
     if level not in ("basic", "standard"):
@@ -584,7 +535,7 @@ async def get_sha(
     await ctx.info(
         f"Processing get_sha: {uri} (unity_instance={unity_instance or 'default'})")
     try:
-        name, directory = _split_uri(uri)
+        name, directory = split_uri(uri)
         params = {"action": "get_sha", "name": name, "path": directory}
         resp = await send_with_unity_instance(
             transport.legacy.unity_connection.async_send_command_with_retry,

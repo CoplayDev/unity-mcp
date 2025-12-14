@@ -3,11 +3,8 @@ Test the improved anchor matching logic.
 """
 
 import re
-
 import pytest
-
-import services.tools.script_apply_edits as script_apply_edits_module
-
+import services.tools.utils as utils_module
 
 def test_improved_anchor_matching():
     """Test that our improved anchor matching finds the right closing brace."""
@@ -32,7 +29,7 @@ public class TestClass : MonoBehaviour
     flags = re.MULTILINE
 
     # Test our improved function
-    best_match = script_apply_edits_module._find_best_anchor_match(
+    best_match = utils_module.find_best_anchor_match(
         anchor_pattern, test_code, flags, prefer_last=True
     )
 
@@ -81,7 +78,7 @@ public class TestClass : MonoBehaviour
         '\n') + 1 if old_match else None
 
     # New behavior (improved matching)
-    new_match = script_apply_edits_module._find_best_anchor_match(
+    new_match = utils_module.find_best_anchor_match(
         anchor_pattern, test_code, flags, prefer_last=True
     )
     new_line = test_code[:new_match.start()].count(
@@ -94,9 +91,8 @@ public class TestClass : MonoBehaviour
         2, f"expected class-end match near end (>= {total_lines-2}), got {new_line}"
 
 
-@pytest.mark.asyncio
-async def test_apply_edits_with_improved_matching():
-    """Test that _apply_edits_locally uses improved matching."""
+def test_apply_edits_with_improved_matching():
+    """Test that apply_edits_locally uses improved matching."""
 
     original_code = '''using UnityEngine;
 
@@ -118,8 +114,9 @@ public class TestClass : MonoBehaviour
         "text": "\n    public void NewMethod() { Debug.Log(\"Added at class end\"); }\n"
     }]
 
-    result = await script_apply_edits_module._apply_edits_locally(
-        original_code, edits)
+    # Now synchronous call
+    result = utils_module.apply_edits_locally(original_code, edits)
+    
     lines = result.split('\n')
     try:
         idx = next(i for i, line in enumerate(lines) if "NewMethod" in line)
@@ -134,15 +131,33 @@ if __name__ == "__main__":
     print("Testing improved anchor matching...")
     print("="*60)
 
-    success1 = test_improved_anchor_matching()
+    try:
+        test_improved_anchor_matching()
+        print("test_improved_anchor_matching passed")
+        success1 = True
+    except Exception as e:
+        print(f"test_improved_anchor_matching failed: {e}")
+        success1 = False
 
     print("\n" + "="*60)
     print("Comparing old vs new behavior...")
-    success2 = test_old_vs_new_matching()
+    try:
+        test_old_vs_new_matching()
+        print("test_old_vs_new_matching passed")
+        success2 = True
+    except Exception as e:
+        print(f"test_old_vs_new_matching failed: {e}")
+        success2 = False
 
     print("\n" + "="*60)
-    print("Testing _apply_edits_locally with improved matching...")
-    success3 = test_apply_edits_with_improved_matching()
+    print("Testing apply_edits_locally with improved matching...")
+    try:
+        test_apply_edits_with_improved_matching()
+        print("test_apply_edits_with_improved_matching passed")
+        success3 = True
+    except Exception as e:
+        print(f"test_apply_edits_with_improved_matching failed: {e}")
+        success3 = False
 
     print("\n" + "="*60)
     if success1 and success2 and success3:

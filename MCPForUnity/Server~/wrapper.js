@@ -17,20 +17,49 @@ log("Wrapper started");
 
 const serverDir = __dirname;
 
+// Construct updated PATH with common uv locations
+const localAppData = process.env.LOCALAPPDATA || "";
+const userProfile = process.env.USERPROFILE || "";
+const homeDir = process.env.HOME || process.env.USERPROFILE || "";
+
+const extraPaths =
+  process.platform === "win32"
+    ? [
+        path.join(localAppData, "Programs", "uv"), // uv standalone
+        path.join(localAppData, "uv"), // Alternative
+        path.join(userProfile, ".cargo", "bin"), // Cargo install
+        path.join(localAppData, "bin"),
+      ]
+    : [
+        path.join(homeDir, ".cargo", "bin"),
+        path.join(homeDir, ".local", "bin"),
+        "/usr/local/bin",
+        "/opt/homebrew/bin", // macOS Homebrew
+      ];
+
+const newPath =
+  extraPaths
+    .filter((p) => (p && !p.startsWith(path.sep)) || p.length > 1)
+    .join(path.delimiter) +
+  path.delimiter +
+  (process.env.PATH || "");
+
 // Use uv run with --quiet to minimize noise
-// Add --quiet to uv run commands to suppress "resolved ..." messages
 const pythonProcess = spawn(
   "uv",
   ["run", "--quiet", "src/main.py", "--transport", "stdio"],
   {
     cwd: serverDir,
     stdio: ["pipe", "pipe", "pipe"],
-    shell: true, // Needed for windows command resolution sometimes
+    shell: true,
     env: {
       ...process.env,
+      PATH: newPath, // Inject updated PATH
       PYTHONUNBUFFERED: "1",
       PYTHONIOENCODING: "utf-8",
-      HOME: process.env.USERPROFILE, // Ensure uv finds home on Windows
+      ...(process.platform === "win32" && userProfile
+        ? { HOME: userProfile }
+        : {}),
     },
   }
 );
@@ -51,8 +80,7 @@ pythonProcess.stdout.on("data", (data) => {
     if (!line) continue;
 
     try {
-      // Validate JSON. If strictly JSON-RPC, it must be an object.
-      // We don't parse fully to save perf, but JSON.parse ensures validity.
+      // Validate JSON by parsing. Result is discarded; we only need to verify it's valid JSON.
       JSON.parse(line);
 
       // If valid, pass to stdout with a clean newline
@@ -90,11 +118,14 @@ process.stdin.pipe(pythonProcess.stdin);
 function cleanup() {
   if (pythonProcess) {
     try {
-      pythonProcess.kill();
       if (process.platform === "win32") {
-        require("child_process").execSync(
-          `taskkill /pid ${pythonProcess.pid} /T /F`
-        );
+        if (pythonProcess.pid) {
+          require("child_process").execSync(
+            `taskkill /pid ${pythonProcess.pid} /T /F`
+          );
+        }
+      } else {
+        pythonProcess.kill();
       }
     } catch (e) {
       /* ignore */

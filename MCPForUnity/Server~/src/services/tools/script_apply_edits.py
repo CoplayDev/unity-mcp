@@ -7,203 +7,16 @@ from fastmcp import Context
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
-from services.tools.utils import parse_json_payload
+from services.tools.utils import (
+    parse_json_payload,
+    apply_edits_locally,
+    normalize_script_locator,
+    find_best_anchor_match
+)
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 
 
-async def _apply_edits_locally(original_text: str, edits: list[dict[str, Any]]) -> str:
-    text = original_text
-    for edit in edits or []:
-        op = (
-            (edit.get("op")
-             or edit.get("operation")
-             or edit.get("type")
-             or edit.get("mode")
-             or "")
-            .strip()
-            .lower()
-        )
-
-        if not op:
-            allowed = "anchor_insert, prepend, append, replace_range, regex_replace"
-            raise RuntimeError(
-                f"op is required; allowed: {allowed}. Use 'op' (aliases accepted: type/mode/operation)."
-            )
-
-        if op == "prepend":
-            prepend_text = edit.get("text", "")
-            text = (prepend_text if prepend_text.endswith(
-                "\n") else prepend_text + "\n") + text
-        elif op == "append":
-            append_text = edit.get("text", "")
-            if not text.endswith("\n"):
-                text += "\n"
-            text += append_text
-            if not text.endswith("\n"):
-                text += "\n"
-        elif op == "anchor_insert":
-            anchor = edit.get("anchor", "")
-            position = (edit.get("position") or "before").lower()
-            insert_text = edit.get("text", "")
-            flags = re.MULTILINE | (
-                re.IGNORECASE if edit.get("ignore_case") else 0)
-
-            # Find the best match using improved heuristics
-            match = _find_best_anchor_match(
-                anchor, text, flags, bool(edit.get("prefer_last", True)))
-            if not match:
-                if edit.get("allow_noop", True):
-                    continue
-                raise RuntimeError(f"anchor not found: {anchor}")
-            idx = match.start() if position == "before" else match.end()
-            text = text[:idx] + insert_text + text[idx:]
-        elif op == "replace_range":
-            start_line = int(edit.get("startLine", 1))
-            start_col = int(edit.get("startCol", 1))
-            end_line = int(edit.get("endLine", start_line))
-            end_col = int(edit.get("endCol", 1))
-            replacement = edit.get("text", "")
-            lines = text.splitlines(keepends=True)
-            max_line = len(lines) + 1  # 1-based, exclusive end
-            if (start_line < 1 or end_line < start_line or end_line > max_line
-                    or start_col < 1 or end_col < 1):
-                raise RuntimeError("replace_range out of bounds")
-
-            def index_of(line: int, col: int) -> int:
-                if line <= len(lines):
-                    return sum(len(l) for l in lines[: line - 1]) + (col - 1)
-                return sum(len(l) for l in lines)
-            a = index_of(start_line, start_col)
-            b = index_of(end_line, end_col)
-            text = text[:a] + replacement + text[b:]
-        elif op == "regex_replace":
-            pattern = edit.get("pattern", "")
-            repl = edit.get("replacement", "")
-            # Translate $n backrefs (our input) to Python \g<n>
-            repl_py = re.sub(r"\$(\d+)", r"\\g<\1>", repl)
-            count = int(edit.get("count", 0))  # 0 = replace all
-            flags = re.MULTILINE
-            if edit.get("ignore_case"):
-                flags |= re.IGNORECASE
-            text = re.sub(pattern, repl_py, text, count=count, flags=flags)
-        else:
-            allowed = "anchor_insert, prepend, append, replace_range, regex_replace"
-            raise RuntimeError(
-                f"unknown edit op: {op}; allowed: {allowed}. Use 'op' (aliases accepted: type/mode/operation).")
-    return text
-
-
-def _find_best_anchor_match(pattern: str, text: str, flags: int, prefer_last: bool = True):
-    """
-    Find the best anchor match using improved heuristics.
-
-    For patterns like \\s*}\\s*$ that are meant to find class-ending braces,
-    this function uses heuristics to choose the most semantically appropriate match:
-
-    1. If prefer_last=True, prefer the last match (common for class-end insertions)
-    2. Use indentation levels to distinguish class vs method braces
-    3. Consider context to avoid matches inside strings/comments
-
-    Args:
-        pattern: Regex pattern to search for
-        text: Text to search in  
-        flags: Regex flags
-        prefer_last: If True, prefer the last match over the first
-
-    Returns:
-        Match object of the best match, or None if no match found
-    """
-
-    # Find all matches
-    matches = list(re.finditer(pattern, text, flags))
-    if not matches:
-        return None
-
-    # If only one match, return it
-    if len(matches) == 1:
-        return matches[0]
-
-    # For patterns that look like they're trying to match closing braces at end of lines
-    is_closing_brace_pattern = '}' in pattern and (
-        '$' in pattern or pattern.endswith(r'\s*'))
-
-    if is_closing_brace_pattern and prefer_last:
-        # Use heuristics to find the best closing brace match
-        return _find_best_closing_brace_match(matches, text)
-
-    # Default behavior: use last match if prefer_last, otherwise first match
-    return matches[-1] if prefer_last else matches[0]
-
-
-def _find_best_closing_brace_match(matches, text: str):
-    """
-    Find the best closing brace match using C# structure heuristics.
-
-    Enhanced heuristics for scope-aware matching:
-    1. Prefer matches with lower indentation (likely class-level)
-    2. Prefer matches closer to end of file  
-    3. Avoid matches that seem to be inside method bodies
-    4. For #endregion patterns, ensure class-level context
-    5. Validate insertion point is at appropriate scope
-
-    Args:
-        matches: List of regex match objects
-        text: The full text being searched
-
-    Returns:
-        The best match object
-    """
-    if not matches:
-        return None
-
-    scored_matches = []
-    lines = text.splitlines()
-
-    for match in matches:
-        score = 0
-        start_pos = match.start()
-
-        # Find which line this match is on
-        lines_before = text[:start_pos].count('\n')
-        line_num = lines_before
-
-        if line_num < len(lines):
-            line_content = lines[line_num]
-
-            # Calculate indentation level (lower is better for class braces)
-            indentation = len(line_content) - len(line_content.lstrip())
-
-            # Prefer lower indentation (class braces are typically less indented than method braces)
-            # Max 20 points for indentation=0
-            score += max(0, 20 - indentation)
-
-            # Prefer matches closer to end of file (class closing braces are typically at the end)
-            distance_from_end = len(lines) - line_num
-            # More points for being closer to end
-            score += max(0, 10 - distance_from_end)
-
-            # Look at surrounding context to avoid method braces
-            context_start = max(0, line_num - 3)
-            context_end = min(len(lines), line_num + 2)
-            context_lines = lines[context_start:context_end]
-
-            # Penalize if this looks like it's inside a method (has method-like patterns above)
-            for context_line in context_lines:
-                if re.search(r'\b(void|public|private|protected)\s+\w+\s*\(', context_line):
-                    score -= 5  # Penalty for being near method signatures
-
-            # Bonus if this looks like a class-ending brace (very minimal indentation and near EOF)
-            if indentation <= 4 and distance_from_end <= 3:
-                score += 15  # Bonus for likely class-ending brace
-
-        scored_matches.append((score, match))
-
-    # Return the match with the highest score
-    scored_matches.sort(key=lambda x: x[0], reverse=True)
-    best_match = scored_matches[0][1]
-
-    return best_match
 
 
 def _infer_class_name(script_name: str) -> str:
@@ -220,61 +33,7 @@ def _extract_code_after(keyword: str, request: str) -> str:
 # Removed _is_structurally_balanced - validation now handled by C# side using Unity's compiler services
 
 
-def _normalize_script_locator(name: str, path: str) -> tuple[str, str]:
-    """Best-effort normalization of script "name" and "path".
 
-    Accepts any of:
-    - name = "SmartReach", path = "Assets/Scripts/Interaction"
-    - name = "SmartReach.cs", path = "Assets/Scripts/Interaction"
-    - name = "Assets/Scripts/Interaction/SmartReach.cs", path = ""
-    - path = "Assets/Scripts/Interaction/SmartReach.cs" (name empty)
-    - name or path using uri prefixes: unity://path/..., file://...
-    - accidental duplicates like "Assets/.../SmartReach.cs/SmartReach.cs"
-
-    Returns (name_without_extension, directory_path_under_Assets).
-    """
-    n = (name or "").strip()
-    p = (path or "").strip()
-
-    def strip_prefix(s: str) -> str:
-        if s.startswith("unity://path/"):
-            return s[len("unity://path/"):]
-        if s.startswith("file://"):
-            return s[len("file://"):]
-        return s
-
-    def collapse_duplicate_tail(s: str) -> str:
-        # Collapse trailing "/X.cs/X.cs" to "/X.cs"
-        parts = s.split("/")
-        if len(parts) >= 2 and parts[-1] == parts[-2]:
-            parts = parts[:-1]
-        return "/".join(parts)
-
-    # Prefer a full path if provided in either field
-    candidate = ""
-    for v in (n, p):
-        v2 = strip_prefix(v)
-        if v2.endswith(".cs") or v2.startswith("Assets/"):
-            candidate = v2
-            break
-
-    if candidate:
-        candidate = collapse_duplicate_tail(candidate)
-        # If a directory was passed in path and file in name, join them
-        if not candidate.endswith(".cs") and n.endswith(".cs"):
-            v2 = strip_prefix(n)
-            candidate = (candidate.rstrip("/") + "/" + v2.split("/")[-1])
-        if candidate.endswith(".cs"):
-            parts = candidate.split("/")
-            file_name = parts[-1]
-            dir_path = "/".join(parts[:-1]) if len(parts) > 1 else "Assets"
-            base = file_name[:-
-                             3] if file_name.lower().endswith(".cs") else file_name
-            return base, dir_path
-
-    # Fall back: remove extension from name if present and return given path
-    base_name = n[:-3] if n.lower().endswith(".cs") else n
-    return base_name, (p or "Assets")
 
 
 def _with_norm(resp: dict[str, Any] | Any, edits: list[dict[str, Any]], routing: str | None = None) -> dict[str, Any] | Any:
@@ -379,7 +138,7 @@ async def script_apply_edits(
         return {"success": False, "message": f"Edits must be a list or JSON string of a list, got {type(edits)}"}
 
     # Normalize locator first so downstream calls target the correct script file.
-    name, path = _normalize_script_locator(name, path)
+    name, path = normalize_script_locator(name, path)
     # Normalize unsupported or aliased ops to known structured/text paths
 
     def _unwrap_and_alias(edit: dict[str, Any]) -> dict[str, Any]:
@@ -658,7 +417,7 @@ async def script_apply_edits(
                         re.IGNORECASE if e.get("ignore_case") else 0)
                     try:
                         # Use improved anchor matching logic
-                        m = _find_best_anchor_match(
+                        m = find_best_anchor_match(
                             anchor, base_text, flags, prefer_last=True)
                     except Exception as ex:
                         return _with_norm(_err("bad_regex", f"Invalid anchor regex: {ex}", normalized=normalized_for_echo, routing="mixed/text-first", extra={"hint": "Escape parentheses/braces or use a simpler anchor."}), normalized_for_echo, routing="mixed/text-first")
@@ -807,7 +566,7 @@ async def script_apply_edits(
                     try:
                         flags = re.MULTILINE | (
                             re.IGNORECASE if e.get("ignore_case") else 0)
-                        m = _find_best_anchor_match(
+                        m = find_best_anchor_match(
                             anchor, base_text, flags, prefer_last=True)
                     except Exception as ex:
                         return _with_norm(_err("bad_regex", f"Invalid anchor regex: {ex}", normalized=normalized_for_echo, routing="text", extra={"hint": "Escape parentheses/braces or use a simpler anchor."}), normalized_for_echo, routing="text")
@@ -852,7 +611,7 @@ async def script_apply_edits(
                     except Exception as ex:
                         return _with_norm(_err("bad_regex", f"Invalid regex pattern: {ex}", normalized=normalized_for_echo, routing="text", extra={"hint": "Escape special chars or prefer structured delete for methods."}), normalized_for_echo, routing="text")
                     # Use smart anchor matching for consistent behavior with anchor_insert
-                    m = _find_best_anchor_match(
+                    m = find_best_anchor_match(
                         pattern, base_text, flags, prefer_last=True)
                     if not m:
                         continue
@@ -914,7 +673,7 @@ async def script_apply_edits(
     # If confirm=false (default) and preview not requested, return diff and instruct confirm=true to apply.
     if "regex_replace" in text_ops and (preview or not (options or {}).get("confirm")):
         try:
-            preview_text = _apply_edits_locally(contents, edits)
+            preview_text = apply_edits_locally(contents, edits)
             import difflib
             diff = list(difflib.unified_diff(contents.splitlines(
             ), preview_text.splitlines(), fromfile="before", tofile="after", n=2))
@@ -927,7 +686,7 @@ async def script_apply_edits(
             return _with_norm({"success": False, "code": "preview_failed", "message": f"Preview failed: {e}"}, normalized_for_echo, routing="text")
     # 2) apply edits locally (only if not text-ops)
     try:
-        new_contents = _apply_edits_locally(contents, edits)
+        new_contents = apply_edits_locally(contents, edits)
     except Exception as e:
         return {"success": False, "message": f"Edit application failed: {e}"}
 

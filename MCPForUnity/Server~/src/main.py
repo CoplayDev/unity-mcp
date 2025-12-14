@@ -65,13 +65,6 @@ for noisy in (
     "httpx", 
     "urllib3", 
     "mcp.server.lowlevel.server", 
-    "uvicorn", 
-    "uvicorn.access", 
-    "uvicorn.error", 
-    "docket", 
-    "docket.worker", 
-    "fastmcp",   # <--- 🚨 범인 검거
-    "starlette"  # <--- 혹시 모를 공범
 ):
     try:
         logging.getLogger(noisy).setLevel(
@@ -412,9 +405,26 @@ Examples:
         logger.info(f"Starting FastMCP with HTTP transport on {host}:{port}")
         mcp.run(transport=transport, host=host, port=port)
     else:
+        
         # Use stdio transport for traditional MCP
         logger.info("Starting FastMCP with stdio transport")
-        mcp.run(transport='stdio', show_banner=False)
+        # 🚨 [CRITICAL] In STDIO mode only, suppress related loggers.
+        # Silence Uvicorn and related loggers to prevent stdout pollution.
+        # 🚨 [CRITICAL] Prevent stdout pollution in STDIO mode
+        for name in (
+            "uvicorn", "uvicorn.error", "uvicorn.access",
+            "starlette",
+            "docket", "docket.worker",
+            "fastmcp",
+        ):
+            lg = logging.getLogger(name)
+            lg.setLevel(logging.WARNING) # ERROR if still too chatty
+            lg.propagate = False # prevent duplicate root logs
+            # If the rotating file handler was successfully created, attach it
+            if '_fh' in globals() and _fh not in lg.handlers:
+                lg.addHandler(_fh)
+
+        mcp.run(transport='stdio')
 
 
 # Run the server
