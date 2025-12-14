@@ -267,12 +267,7 @@ namespace MCPForUnity.Editor.Helpers
                 return gitUrlOverride;
             }
 
-            // Return official repository URL as default
-            // Users can override via EditorPrefs.GitUrlOverride for development/testing
-            return "git+https://github.com/CoplayDev/unity-mcp.git@main#subdirectory=MCPForUnity/Server~";
-            
-            /* 
-            // Local path logic disabled for clean config aesthetics
+            // 2. Check for local server code in the package (Priority for development & offline use)
             string packageRoot = GetPackageAbsolutePath();
             if (!string.IsNullOrEmpty(packageRoot))
             {
@@ -281,17 +276,19 @@ namespace MCPForUnity.Editor.Helpers
                 string serverPathTilde = Path.Combine(packageRoot, "Server~");
                 if (Directory.Exists(serverPathTilde))
                 {
+                    // Return absolute path for uv to use directly
                     return serverPathTilde;
                 }
 
                 string serverPath = Path.Combine(packageRoot, "Server");
-                return serverPath;
+                if (Directory.Exists(serverPath))
+                {
+                    return serverPath;
+                }
             }
 
-            // Fallback to git URL if local path cannot be determined
-            // Note: pip/uv uses '#subdirectory=' syntax, not '?path='
-            return "git+https://github.com/CoplayDev/unity-mcp.git@v{version}#subdirectory=MCPForUnity/Server~";
-            */
+            // 3. Fallback to official repository URL (For end-users without source access)
+            return "git+https://github.com/choej2303/unity-mcp-gg.git@main#subdirectory=MCPForUnity/Server~";
         }
 
         /// <summary>

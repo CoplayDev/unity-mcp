@@ -16,6 +16,12 @@ namespace MCPForUnity.Editor.Services.Transport
     /// Guarantees that MCP commands are executed on the Unity main thread while preserving
     /// the legacy response format expected by the server.
     /// </summary>
+    /// <summary>
+    /// Centralised command execution pipeline shared by all transport implementations.
+    /// Guarantees that MCP commands are executed on the Unity main thread while preserving
+    /// the legacy response format expected by the server.
+    /// </summary>
+    [InitializeOnLoad]
     internal static class TransportCommandDispatcher
     {
         private sealed class PendingCommand
@@ -56,11 +62,16 @@ namespace MCPForUnity.Editor.Services.Transport
 
         private static readonly Dictionary<string, PendingCommand> Pending = new();
         private static readonly object PendingLock = new();
-        private static bool updateHooked;
-        private static bool initialised;
+
+        static TransportCommandDispatcher()
+        {
+            // Hook safely on the main thread via InitializeOnLoad semantics
+            EditorApplication.update += ProcessQueue;
+        }
 
         /// <summary>
         /// Schedule a command for execution on the Unity main thread and await its JSON response.
+        /// Safe to call from any thread.
         /// </summary>
         public static Task<string> ExecuteCommandJsonAsync(string commandJson, CancellationToken cancellationToken)
         {
@@ -83,7 +94,6 @@ namespace MCPForUnity.Editor.Services.Transport
             lock (PendingLock)
             {
                 Pending[id] = pending;
-                HookUpdate();
             }
 
             return tcs.Task;
@@ -91,43 +101,18 @@ namespace MCPForUnity.Editor.Services.Transport
 
         private static void EnsureInitialised()
         {
-            if (initialised)
-            {
-                return;
-            }
-
+            // CommandRegistry is thread-safe or handles its own init checks
             CommandRegistry.Initialize();
-            initialised = true;
-        }
-
-        private static void HookUpdate()
-        {
-            if (updateHooked)
-            {
-                return;
-            }
-
-            updateHooked = true;
-            EditorApplication.update += ProcessQueue;
-        }
-
-        private static void UnhookUpdateIfIdle()
-        {
-            if (Pending.Count > 0 || !updateHooked)
-            {
-                return;
-            }
-
-            updateHooked = false;
-            EditorApplication.update -= ProcessQueue;
         }
 
         private static void ProcessQueue()
         {
-            List<(string id, PendingCommand pending)> ready;
+            List<(string id, PendingCommand pending)> ready = null;
 
             lock (PendingLock)
             {
+                if (Pending.Count == 0) return;
+
                 ready = new List<(string, PendingCommand)>(Pending.Count);
                 foreach (var kvp in Pending)
                 {
@@ -139,13 +124,9 @@ namespace MCPForUnity.Editor.Services.Transport
                     kvp.Value.IsExecuting = true;
                     ready.Add((kvp.Key, kvp.Value));
                 }
-
-                if (ready.Count == 0)
-                {
-                    UnhookUpdateIfIdle();
-                    return;
-                }
             }
+
+            if (ready == null || ready.Count == 0) return;
 
             foreach (var (id, pending) in ready)
             {
@@ -254,10 +235,7 @@ namespace MCPForUnity.Editor.Services.Transport
             PendingCommand pending = null;
             lock (PendingLock)
             {
-                if (Pending.Remove(id, out pending))
-                {
-                    UnhookUpdateIfIdle();
-                }
+                Pending.Remove(id, out pending);
             }
 
             pending?.TrySetCanceled();
@@ -269,7 +247,6 @@ namespace MCPForUnity.Editor.Services.Transport
             lock (PendingLock)
             {
                 Pending.Remove(id);
-                UnhookUpdateIfIdle();
             }
 
             pending.Dispose();

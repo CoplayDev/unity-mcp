@@ -106,15 +106,15 @@ namespace MCPForUnity.Editor.Services
 
             if (!string.Equals(uvCommand, uvPath, StringComparison.OrdinalIgnoreCase))
             {
-                // Timeout reduced to 3 seconds to prevent UI freezing
-                return ExecPath.TryRun(uvCommand, args, Application.dataPath, out stdout, out stderr, 3000, extraPathPrepend);
+                // Timeout reduced to 2 seconds to prevent UI freezing
+                return ExecPath.TryRun(uvCommand, args, Application.dataPath, out stdout, out stderr, 2000, extraPathPrepend);
             }
 
             string command = $"{uvPath} {args}";
 
             if (Application.platform == RuntimePlatform.WindowsEditor)
             {
-                return ExecPath.TryRun("cmd.exe", $"/c {command}", Application.dataPath, out stdout, out stderr, 3000, extraPathPrepend);
+                return ExecPath.TryRun("cmd.exe", $"/c {command}", Application.dataPath, out stdout, out stderr, 2000, extraPathPrepend);
             }
 
             string shell = File.Exists("/bin/bash") ? "/bin/bash" : "/bin/sh";
@@ -122,10 +122,10 @@ namespace MCPForUnity.Editor.Services
             if (!string.IsNullOrEmpty(shell) && File.Exists(shell))
             {
                 string escaped = command.Replace("\"", "\\\"");
-                return ExecPath.TryRun(shell, $"-lc \"{escaped}\"", Application.dataPath, out stdout, out stderr, 3000, extraPathPrepend);
+                return ExecPath.TryRun(shell, $"-lc \"{escaped}\"", Application.dataPath, out stdout, out stderr, 2000, extraPathPrepend);
             }
 
-            return ExecPath.TryRun(uvPath, args, Application.dataPath, out stdout, out stderr, 3000, extraPathPrepend);
+            return ExecPath.TryRun(uvPath, args, Application.dataPath, out stdout, out stderr, 2000, extraPathPrepend);
         }
 
         private static string BuildUvPathFromUvx(string uvxPath)
@@ -223,9 +223,39 @@ namespace MCPForUnity.Editor.Services
                 {
                     // Register cleanup handler for Unity exit
                     EnsureCleanupRegistered();
-                    
-                    // Start the server in a new terminal window (cross-platform)
-                    var startInfo = CreateTerminalProcessStartInfo(command);
+
+                    System.Diagnostics.ProcessStartInfo startInfo;
+
+                    if (Application.platform == RuntimePlatform.WindowsEditor)
+                    {
+                        // Use a batch file to avoid complex escaping issues on Windows (OS error 123)
+                        string tempBatPath = Path.Combine(Path.GetTempPath(), "start_mcp_server.bat");
+                        
+                        // Add title and pause for better UX
+                        string batContent = "@echo off\r\n";
+                        batContent += "set PYTHONUNBUFFERED=1\r\n"; // Fix: Prevent stdout buffering which can block SSE/logging
+                        batContent += $"title MCP Server (Port {HttpEndpointUtility.GetBaseUrl()})\r\n";
+                        batContent += "echo Starting MCP Server...\r\n";
+                        batContent += command + "\r\n";
+                        batContent += "if %errorlevel% neq 0 pause\r\n"; // Pause only on error
+                        
+                        File.WriteAllText(tempBatPath, batContent);
+                        McpLog.Debug($"Created batch file at: {tempBatPath}");
+
+                        // Execute the batch file in a new window
+                        startInfo = new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = "cmd.exe",
+                            Arguments = $"/c start \"MCP Server\" \"{tempBatPath}\"",
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        };
+                    }
+                    else
+                    {
+                        // Start the server in a new terminal window (cross-platform for Mac/Linux)
+                         startInfo = CreateTerminalProcessStartInfo(command);
+                    }
 
                     System.Diagnostics.Process.Start(startInfo);
 
@@ -394,18 +424,75 @@ namespace MCPForUnity.Editor.Services
             }
 
             var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
+            
+            // NOTE: When running from local source (Server~), we should execute via python directly
+            // rather than uvx, because 'mcp-for-unity' package name won't be valid for uvx
+            // unless we install it. So we detect if we are running from a local path.
+            
+            string localServerPath = AssetPathUtility.GetWrapperJsPath(); // Wrapper implies local path? No, dedicated method better.
+            string packageRoot = AssetPathUtility.GetPackageAbsolutePath();
+            bool isLocalSource = false;
+            string serverSrcPath = null;
+            
+            if (!string.IsNullOrEmpty(packageRoot))
+            {
+                string checkPath = Path.Combine(packageRoot, "Server~");
+                if (Directory.Exists(checkPath))
+                {
+                     isLocalSource = true;
+                     serverSrcPath = checkPath;
+                }
+                else
+                {
+                    checkPath = Path.Combine(packageRoot, "Server");
+                     if (Directory.Exists(checkPath))
+                    {
+                         isLocalSource = true;
+                         serverSrcPath = checkPath;
+                    }
+                }
+            }
+
+            if (isLocalSource && !string.IsNullOrEmpty(serverSrcPath))
+            {
+                 // Local execution mode:
+                 // uv run --directory "{serverSrcPath}" python -m src.server --transport http --http-url {httpUrl}
+                 // This ensures dependencies in pyproject.toml are respected and src module is found.
+                 
+                 string uvPath = BuildUvPathFromUvx(uvxPath);
+                 if (string.IsNullOrEmpty(uvPath)) uvPath = "uv"; // Fallback to PATH if empty
+
+                 // Fix: Ensure proper quoting for executable path if it has spaces
+                 string safeUvPath = uvPath.Contains(" ") && !uvPath.StartsWith("\"") ? $"\"{uvPath}\"" : uvPath;
+                 
+                 // Fix: Ensure directory path is clean and safe for quoting
+                 // Trim trailing directory separators to prevent escaping the closing quote
+                 string safeSrcPath = serverSrcPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                 
+                 // Add -u flag to force unbuffered stdout/stderr, critical for SSE stability on Windows
+                 command = $"{safeUvPath} run --directory \"{safeSrcPath}\" python -u -m src.main --transport http --http-url {httpUrl}";
+                 return true;
+            }
+
+            // Fallback to uvx (remote execution)
             if (string.IsNullOrEmpty(uvxPath))
             {
                 error = "uv is not installed or found in PATH. Install it or set an override in Advanced Settings.";
                 return false;
             }
 
+            // Quote the path if it contains spaces and isn't already quoted
+            string finalUvxPath = uvxPath;
+            if (uvxPath.Contains(" ") && !uvxPath.StartsWith("\""))
+            {
+                finalUvxPath = $"\"{uvxPath}\"";
+            }
+
             string args = string.IsNullOrEmpty(fromUrl)
                 ? $"{packageName} --transport http --http-url {httpUrl}"
                 : $"--from {fromUrl} {packageName} --transport http --http-url {httpUrl}";
 
-            // Removed quotes around uvxPath as it caused issues with cmd execution when just "uvx" is returned
-            command = $"{uvxPath} {args}";
+            command = $"{finalUvxPath} {args}";
             return true;
         }
 
@@ -428,11 +515,13 @@ namespace MCPForUnity.Editor.Services
             try
             {
                 var uri = new Uri(url);
-                string host = uri.Host.ToLower();
+                string host = uri.Host.ToLowerInvariant();
                 return host == "localhost" || host == "127.0.0.1" || host == "0.0.0.0" || host == "::1";
             }
             catch
             {
+                // Fallback for simple localhost strings without scheme
+                if (url.StartsWith("localhost") || url.StartsWith("127.0.0.1")) return true;
                 return false;
             }
         }

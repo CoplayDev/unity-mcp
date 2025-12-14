@@ -113,16 +113,34 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             _endpointUri = BuildWebSocketUri(HttpEndpointUtility.GetBaseUrl());
             _sessionId = null;
 
-            if (!await EstablishConnectionAsync(_lifecycleCts.Token))
+            // Retry logic for initial connection (server might be starting up)
+            int maxRetries = 5;
+            for (int i = 0; i < maxRetries; i++)
             {
-                await StopAsync();
-                return false;
+                if (await EstablishConnectionAsync(_lifecycleCts.Token))
+                {
+                    // State is connected but session ID might be pending until 'registered' message
+                    _state = TransportState.Connected(TransportDisplayName, sessionId: "pending", details: _endpointUri.ToString());
+                    _isConnected = true;
+                    return true;
+                }
+
+                if (i < maxRetries - 1)
+                {
+                    McpLog.Info($"[WebSocket] Connection attempt {i + 1} failed, retrying in 2s...");
+                    try
+                    {
+                        await Task.Delay(2000, _lifecycleCts.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                }
             }
 
-            // State is connected but session ID might be pending until 'registered' message
-            _state = TransportState.Connected(TransportDisplayName, sessionId: "pending", details: _endpointUri.ToString());
-            _isConnected = true;
-            return true;
+            await StopAsync();
+            return false;
         }
 
         public async Task StopAsync()

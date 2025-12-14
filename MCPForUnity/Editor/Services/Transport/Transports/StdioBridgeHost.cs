@@ -20,19 +20,7 @@ using UnityEngine;
 
 namespace MCPForUnity.Editor.Services.Transport.Transports
 {
-    class Outbound
-    {
-        public byte[] Payload;
-        public string Tag;
-        public int? ReqId;
-    }
 
-    class QueuedCommand
-    {
-        public string CommandJson;
-        public TaskCompletionSource<string> Tcs;
-        public bool IsExecuting;
-    }
 
     [InitializeOnLoad]
     public static class StdioBridgeHost
@@ -44,17 +32,15 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private static readonly object clientsLock = new();
         private static readonly HashSet<TcpClient> activeClients = new();
         private static readonly ConcurrentDictionary<TcpClient, Task> activeClientTasks = new();
-        private static readonly BlockingCollection<Outbound> _outbox = new(new ConcurrentQueue<Outbound>());
+
         private static CancellationTokenSource cts;
         private static Task listenerTask;
-        private static int processingCommands = 0;
         private static bool initScheduled = false;
         private static bool ensureUpdateHooked = false;
         private static bool isStarting = false;
         private static double nextStartAt = 0.0f;
         private static double nextHeartbeatAt = 0.0f;
         private static int heartbeatSeq = 0;
-        private static Dictionary<string, QueuedCommand> commandQueue = new();
         private static int mainThreadId;
         private static int currentUnityPort = 6400;
         private static bool isAutoConnectMode = false;
@@ -123,30 +109,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         static StdioBridgeHost()
         {
             try { mainThreadId = Thread.CurrentThread.ManagedThreadId; } catch { mainThreadId = 0; }
-            try
-            {
-                var writerThread = new Thread(() =>
-                {
-                    foreach (var item in _outbox.GetConsumingEnumerable())
-                    {
-                        try
-                        {
-                            long seq = Interlocked.Increment(ref _ioSeq);
-                            IoInfo($"[IO] ➜ write start seq={seq} tag={item.Tag} len={(item.Payload?.Length ?? 0)} reqId={(item.ReqId?.ToString() ?? "?")}");
-                            var sw = System.Diagnostics.Stopwatch.StartNew();
-                            sw.Stop();
-                            IoInfo($"[IO] ✓ write end   tag={item.Tag} len={(item.Payload?.Length ?? 0)} reqId={(item.ReqId?.ToString() ?? "?")} durMs={sw.Elapsed.TotalMilliseconds:F1}");
-                        }
-                        catch (Exception ex)
-                        {
-                            IoInfo($"[IO] ✗ write FAIL  tag={item.Tag} reqId={(item.ReqId?.ToString() ?? "?")} {ex.GetType().Name}: {ex.Message}");
-                        }
-                    }
-                })
-                { IsBackground = true, Name = "MCP-Writer" };
-                writerThread.Start();
-            }
-            catch { }
+
 
             if (Application.isBatchMode && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("UNITY_MCP_ALLOW_BATCH")))
             {
@@ -372,7 +335,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     cts = new CancellationTokenSource();
                     listenerTask = Task.Run(() => ListenerLoopAsync(cts.Token));
                     CommandRegistry.Initialize();
-                    EditorApplication.update += ProcessCommands;
+                    EditorApplication.update += UpdateHeartbeat;
                     try { EditorApplication.quitting -= Stop; } catch { }
                     try { EditorApplication.quitting += Stop; } catch { }
                     heartbeatSeq++;
@@ -480,7 +443,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 }
             }
 
-            try { EditorApplication.update -= ProcessCommands; } catch { }
+            try { EditorApplication.update -= UpdateHeartbeat; } catch { }
             try { EditorApplication.quitting -= Stop; } catch { }
 
             try
@@ -627,35 +590,20 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                                 continue;
                             }
 
-                            lock (lockObj)
-                            {
-                                commandQueue[commandId] = new QueuedCommand
-                                {
-                                    CommandJson = commandText,
-                                    Tcs = tcs,
-                                    IsExecuting = false
-                                };
-                            }
-
                             string response;
                             try
                             {
                                 using var respCts = new CancellationTokenSource(FrameIOTimeoutMs);
-                                var completed = await Task.WhenAny(tcs.Task, Task.Delay(FrameIOTimeoutMs, respCts.Token)).ConfigureAwait(false);
-                                if (completed == tcs.Task)
+                                response = await TransportCommandDispatcher.ExecuteCommandJsonAsync(commandText, respCts.Token).ConfigureAwait(false);
+                            }
+                            catch (OperationCanceledException)
+                            {
+                                var timeoutResponse = new
                                 {
-                                    respCts.Cancel();
-                                    response = tcs.Task.Result;
-                                }
-                                else
-                                {
-                                    var timeoutResponse = new
-                                    {
-                                        status = "error",
-                                        error = $"Command processing timed out after {FrameIOTimeoutMs} ms",
-                                    };
-                                    response = JsonConvert.SerializeObject(timeoutResponse);
-                                }
+                                    status = "error",
+                                    error = $"Command processing timed out after {FrameIOTimeoutMs} ms",
+                                };
+                                response = JsonConvert.SerializeObject(timeoutResponse);
                             }
                             catch (Exception ex)
                             {
@@ -845,10 +793,11 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             dest[7] = (byte)(value);
         }
 
-        private static void ProcessCommands()
+
+
+        private static void UpdateHeartbeat()
         {
             if (!isRunning) return;
-            if (Interlocked.Exchange(ref processingCommands, 1) == 1) return;
             try
             {
                 double now = EditorApplication.timeSinceStartup;
@@ -857,118 +806,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     WriteHeartbeat(false);
                     nextHeartbeatAt = now + 0.5f;
                 }
-
-                List<(string id, QueuedCommand command)> work;
-                lock (lockObj)
-                {
-                    work = new List<(string, QueuedCommand)>(commandQueue.Count);
-                    foreach (var kvp in commandQueue)
-                    {
-                        var queued = kvp.Value;
-                        if (queued.IsExecuting) continue;
-                        queued.IsExecuting = true;
-                        work.Add((kvp.Key, queued));
-                    }
-                }
-
-                foreach (var item in work)
-                {
-                    string id = item.id;
-                    QueuedCommand queuedCommand = item.command;
-                    string commandText = queuedCommand.CommandJson;
-                    TaskCompletionSource<string> tcs = queuedCommand.Tcs;
-
-                    if (string.IsNullOrWhiteSpace(commandText))
-                    {
-                        var emptyResponse = new
-                        {
-                            status = "error",
-                            error = "Empty command received",
-                        };
-                        tcs.SetResult(JsonConvert.SerializeObject(emptyResponse));
-                        lock (lockObj) { commandQueue.Remove(id); }
-                        continue;
-                    }
-
-                    commandText = commandText.Trim();
-                    if (commandText == "ping")
-                    {
-                        var pingResponse = new
-                        {
-                            status = "success",
-                            result = new { message = "pong" },
-                        };
-                        tcs.SetResult(JsonConvert.SerializeObject(pingResponse));
-                        lock (lockObj) { commandQueue.Remove(id); }
-                        continue;
-                    }
-
-                    if (!IsValidJson(commandText))
-                    {
-                        var invalidJsonResponse = new
-                        {
-                            status = "error",
-                            error = "Invalid JSON format",
-                            receivedText = commandText.Length > 50
-                                ? commandText[..50] + "..."
-                                : commandText,
-                        };
-                        tcs.SetResult(JsonConvert.SerializeObject(invalidJsonResponse));
-                        lock (lockObj) { commandQueue.Remove(id); }
-                        continue;
-                    }
-
-                    ExecuteQueuedCommand(id, commandText, tcs);
-                }
             }
-            finally
-            {
-                Interlocked.Exchange(ref processingCommands, 0);
-            }
-        }
-
-        private static void ExecuteQueuedCommand(string commandId, string payload, TaskCompletionSource<string> completionSource)
-        {
-            async void Runner()
-            {
-                try
-                {
-                    using var cts = new CancellationTokenSource(FrameIOTimeoutMs);
-                    string response = await TransportCommandDispatcher.ExecuteCommandJsonAsync(payload, cts.Token).ConfigureAwait(true);
-                    completionSource.TrySetResult(response);
-                }
-                catch (OperationCanceledException)
-                {
-                    var timeoutResponse = new
-                    {
-                        status = "error",
-                        error = $"Command processing timed out after {FrameIOTimeoutMs} ms",
-                    };
-                    completionSource.TrySetResult(JsonConvert.SerializeObject(timeoutResponse));
-                }
-                catch (Exception ex)
-                {
-                    McpLog.Error($"Error processing command: {ex.Message}\n{ex.StackTrace}");
-                    var response = new
-                    {
-                        status = "error",
-                        error = ex.Message,
-                        receivedText = payload?.Length > 50
-                            ? payload[..50] + "..."
-                            : payload,
-                    };
-                    completionSource.TrySetResult(JsonConvert.SerializeObject(response));
-                }
-                finally
-                {
-                    lock (lockObj)
-                    {
-                        commandQueue.Remove(commandId);
-                    }
-                }
-            }
-
-            Runner();
+            catch { }
         }
 
         private static object InvokeOnMainThreadWithTimeout(Func<object> func, int timeoutMs)

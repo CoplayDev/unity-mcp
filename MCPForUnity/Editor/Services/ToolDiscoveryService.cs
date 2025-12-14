@@ -25,37 +25,31 @@ namespace MCPForUnity.Editor.Services
 
             _cachedTools = new Dictionary<string, ToolMetadata>();
 
-            // Scan all assemblies for [McpForUnityTool] attributes
-            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            // Use TypeCache for much faster attribute lookup
+            var types = TypeCache.GetTypesWithAttribute<McpForUnityToolAttribute>();
 
-            foreach (var assembly in assemblies)
+            foreach (var type in types)
             {
                 try
                 {
-                    var types = assembly.GetTypes();
+                    var toolAttr = type.GetCustomAttribute<McpForUnityToolAttribute>();
+                    if (toolAttr == null)
+                        continue;
 
-                    foreach (var type in types)
+                    var metadata = ExtractToolMetadata(type, toolAttr);
+                    if (metadata != null)
                     {
-                        var toolAttr = type.GetCustomAttribute<McpForUnityToolAttribute>();
-                        if (toolAttr == null)
-                            continue;
-
-                        var metadata = ExtractToolMetadata(type, toolAttr);
-                        if (metadata != null)
-                        {
-                            _cachedTools[metadata.Name] = metadata;
-                            EnsurePreferenceInitialized(metadata);
-                        }
+                        _cachedTools[metadata.Name] = metadata;
+                        EnsurePreferenceInitialized(metadata);
                     }
                 }
                 catch (Exception ex)
                 {
-                    // Skip assemblies that can't be reflected
-                    McpLog.Info($"Skipping assembly {assembly.FullName}: {ex.Message}");
+                    McpLog.Warn($"Failed to process tool {type.Name}: {ex.Message}");
                 }
             }
 
-            McpLog.Info($"Discovered {_cachedTools.Count} MCP tools via reflection");
+            McpLog.Info($"Discovered {_cachedTools.Count} MCP tools via TypeCache");
             return _cachedTools.Values.ToList();
         }
 

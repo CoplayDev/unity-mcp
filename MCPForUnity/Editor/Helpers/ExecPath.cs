@@ -265,14 +265,33 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
+                    RedirectStandardError = true, // Consume stderr
                     CreateNoWindow = true,
                 };
                 string path = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
                 psi.EnvironmentVariables["PATH"] = string.IsNullOrEmpty(path) ? prependPath : (prependPath + Path.PathSeparator + path);
-                using var p = Process.Start(psi);
-                p?.WaitForExit(1500);
-                string output = p?.StandardOutput.ReadToEnd().Trim();
-                return (!string.IsNullOrEmpty(output) && File.Exists(output)) ? output : null;
+                
+                using var p = new Process { StartInfo = psi };
+                var outputBuilder = new StringBuilder();
+                
+                p.OutputDataReceived += (sender, e) => { if (e.Data != null) outputBuilder.AppendLine(e.Data); };
+                p.ErrorDataReceived += (sender, e) => { }; // Drain stderr
+
+                if (!p.Start()) return null;
+
+                p.BeginOutputReadLine();
+                p.BeginErrorReadLine();
+
+                if (p.WaitForExit(2000))
+                {
+                    string output = outputBuilder.ToString().Trim();
+                    return (!string.IsNullOrEmpty(output) && File.Exists(output)) ? output : null;
+                }
+                else
+                {
+                    try { p.Kill(); } catch { }
+                    return null;
+                }
             }
             catch { return null; }
         }
@@ -287,14 +306,33 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
+                    RedirectStandardError = true, // Consume stderr
                     CreateNoWindow = true,
                 };
-                using var p = Process.Start(psi);
-                p?.WaitForExit(1500);
-                string first = p?.StandardOutput.ReadToEnd()
-                    .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                    .FirstOrDefault();
-                return (!string.IsNullOrEmpty(first) && File.Exists(first)) ? first : null;
+                
+                using var p = new Process { StartInfo = psi };
+                var outputBuilder = new StringBuilder();
+
+                p.OutputDataReceived += (sender, e) => { if (e.Data != null) outputBuilder.AppendLine(e.Data); };
+                p.ErrorDataReceived += (sender, e) => { }; // Drain stderr
+
+                if (!p.Start()) return null;
+
+                p.BeginOutputReadLine();
+                p.BeginErrorReadLine();
+
+                if (p.WaitForExit(2000))
+                {
+                    string first = outputBuilder.ToString()
+                        .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                        .FirstOrDefault();
+                    return (!string.IsNullOrEmpty(first) && File.Exists(first)) ? first : null;
+                }
+                else
+                {
+                    try { p.Kill(); } catch { }
+                    return null;
+                }
             }
             catch { return null; }
         }
