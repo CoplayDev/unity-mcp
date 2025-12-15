@@ -58,7 +58,7 @@ namespace MCPForUnity.Editor.Services
             }
         }
 
-        public async Task<TestRunResult> RunTestsAsync(TestMode mode)
+        public async Task<TestRunResult> RunTestsAsync(TestMode mode, TestFilterOptions filterOptions = null)
         {
             await _operationLock.WaitAsync().ConfigureAwait(true);
             Task<TestRunResult> runTask;
@@ -94,7 +94,14 @@ namespace MCPForUnity.Editor.Services
                 _leafResults.Clear();
                 _runCompletionSource = new TaskCompletionSource<TestRunResult>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-                var filter = new Filter { testMode = mode };
+                var filter = new Filter
+                {
+                    testMode = mode,
+                    testNames = filterOptions?.TestNames,
+                    groupNames = filterOptions?.GroupNames,
+                    categoryNames = filterOptions?.CategoryNames,
+                    assemblyNames = filterOptions?.AssemblyNames
+                };
                 var settings = new ExecutionSettings(filter);
 
                 if (mode == TestMode.PlayMode)
