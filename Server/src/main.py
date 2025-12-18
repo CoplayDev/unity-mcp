@@ -1,51 +1,21 @@
 import argparse
 import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, redirect_stdout
 import os
 import sys
 import threading
 import time
 from typing import AsyncIterator, Any
 from urllib.parse import urlparse
+import io
+from utils.cr_stripper import CRStripper
 
 if sys.platform == 'win32':
     import msvcrt
-    import io
-    
     # Set binary mode on stdin/stdout to prevent automatic translation at the FD level
-    msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
     msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
-    
-    # Define a proxy buffer that actively strips \r bytes from the output stream
-    class CRStripper:
-        def __init__(self, stream):
-            self._stream = stream
-        
-        def write(self, data):
-            if isinstance(data, bytes):
-                return self._stream.write(data.replace(b'\r', b''))
-            if isinstance(data, str):
-                return self._stream.write(data.replace('\r', ''))
-            return self._stream.write(data)
-            
-        def flush(self):
-            return self._stream.flush()
-            
-        def __getattr__(self, name):
-            return getattr(self._stream, name)
-    
-    # Detach the underlying buffer from the current sys.stdout
-    # and re-wrap it with our CRStripper and a new TextIOWrapper
-    _original_buffer = sys.stdout.detach()
-    sys.stdout = io.TextIOWrapper(
-        CRStripper(_original_buffer),
-        encoding=sys.stdout.encoding or 'utf-8',
-        errors=sys.stdout.errors or 'strict',
-        newline='\n',  # Enforce LF for text writing
-        line_buffering=True,
-        write_through=True
-    )
+
 
 from fastmcp import FastMCP
 from logging.handlers import RotatingFileHandler
@@ -441,8 +411,16 @@ Examples:
         mcp.run(transport=transport, host=host, port=port)
     else:
         # Use stdio transport for traditional MCP
-        logger.info("Starting FastMCP with stdio transport")
-        mcp.run(transport='stdio')
+        removed_crlf = io.TextIOWrapper(
+            CRStripper(sys.stdout.buffer),
+            encoding=sys.stdout.encoding or 'utf-8',
+            newline='\n',
+            line_buffering=True,
+        )
+
+        with redirect_stdout(removed_crlf):
+            logger.info("Starting FastMCP with stdio transport")
+            mcp.run(transport='stdio')
 
 
 # Run the server
