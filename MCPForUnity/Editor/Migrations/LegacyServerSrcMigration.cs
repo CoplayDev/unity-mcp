@@ -44,6 +44,14 @@ namespace MCPForUnity.Editor.Migrations
 
                 if (summary.FailureCount > 0 || summary.SuccessCount == 0)
                 {
+                    if (summary.Messages != null && summary.Messages.Count > 0)
+                    {
+                        McpLog.Debug("Legacy configuration migration details:");
+                        foreach (var message in summary.Messages)
+                        {
+                            McpLog.Debug($"  {message}");
+                        }
+                    }
                     McpLog.Warn($"Legacy configuration migration incomplete ({summary.GetSummaryMessage()}). Will retry next session.");
                     return;
                 }
