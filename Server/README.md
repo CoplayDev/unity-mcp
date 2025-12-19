@@ -69,7 +69,7 @@ Use this to run the latest unreleased changes from the repository.
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/CoplayDev/unity-mcp@main#subdirectory=Server",
+        "git+https://github.com/CoplayDev/unity-mcp@v8.2.3#subdirectory=Server",
         "mcp-for-unity",
         "--transport",
         "stdio"
