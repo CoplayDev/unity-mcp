@@ -60,7 +60,7 @@ uvx --from mcpforunityserver mcp-for-unity --transport http --http-url http://lo
 
 ### Option 2: From GitHub Source
 
-Use this to run the latest unreleased changes from the repository.
+Use this to run the latest released version from the repository. Change the version to `main` to run the latest unreleased changes from the repository.
 
 ```json
 {
