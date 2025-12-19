@@ -1,8 +1,10 @@
 name: Publish Docker image 🐳
 
 on:
+  push:
+    tags:
+      - '*'
   workflow_dispatch:
-
 jobs:
   push_to_registry:
     name: Push Docker image to Docker Hub
