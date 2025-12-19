@@ -3,7 +3,7 @@ name: Publish Docker image 🐳
 on:
   push:
     tags:
-      - '*'
+      - "*"
   workflow_dispatch:
 jobs:
   push_to_registry:
