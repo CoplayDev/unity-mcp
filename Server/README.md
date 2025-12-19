@@ -79,20 +79,7 @@ Use this to run the latest unreleased changes from the repository.
 }
 ```
 
-### Option 3: Local Development
-
-For contributing or modifying the server code:
-
-```bash
-# Clone the repository
-git clone https://github.com/CoplayDev/unity-mcp.git
-cd unity-mcp/Server
-
-# Run with uv
-uv run src/main.py --transport stdio
-```
-
-### Option 4: Docker
+### Option 3: Docker
 
 **Use Pre-built Image:**
 
@@ -108,6 +95,19 @@ docker run -p 8080:8080 unity-mcp-server --transport http --http-url http://0.0.
 ```
 
 Configure your MCP client with `"url": "http://localhost:8080/mcp"`.
+
+### Option 4: Local Development
+
+For contributing or modifying the server code:
+
+```bash
+# Clone the repository
+git clone https://github.com/CoplayDev/unity-mcp.git
+cd unity-mcp/Server
+
+# Run with uv
+uv run src/main.py --transport stdio
+```
 
 ---
 
