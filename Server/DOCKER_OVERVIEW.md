@@ -48,7 +48,7 @@ Add the following configuration to your MCP client (e.g., Claude Desktop config,
 
 ## Configuration
 
-The server connects to Unity Editor automatically when both are running. No additional configuration needed.
+The server connects to the Unity Editor automatically when both are running. No additional configuration is needed.
 
 **Environment Variables:**
 
