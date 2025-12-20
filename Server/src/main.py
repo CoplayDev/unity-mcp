@@ -13,7 +13,7 @@ from utils.cr_stripper import CRStripper
 
 if sys.platform == 'win32':
     import msvcrt
-    # Set binary mode on stdin/stdout to prevent automatic translation at the FD level
+    # Set binary mode on stdout to prevent automatic translation at the FD level
     msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
 
 
