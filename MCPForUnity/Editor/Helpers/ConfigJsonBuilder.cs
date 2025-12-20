@@ -68,11 +68,6 @@ namespace MCPForUnity.Editor.Helpers
                 if (authEnabled)
                 {
                     var headers = unity["headers"] as JObject ?? new JObject();
-                    if (headers["X-API-Key"] != null)
-                    {
-                        headers.Remove("X-API-Key");
-                    }
-
                     EnsureInput(root, AuthTokenKey, AuthTokenDescription);
                     headers["Authorization"] = $"Bearer ${{input:{AuthTokenKey}}}";
                     unity["headers"] = headers;
