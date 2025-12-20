@@ -42,10 +42,21 @@ namespace MCPForUnity.Editor.Migrations
 
                 var summary = MCPServiceLocator.Client.ConfigureAllDetectedClients();
 
-                if (summary.FailureCount > 0 || summary.SuccessCount == 0)
+                if (summary.FailureCount > 0)
                 {
-                    McpLog.Warn($"Legacy configuration migration incomplete ({summary.GetSummaryMessage()}). Will retry next session.");
-                    return;
+                    McpLog.Warn($"Legacy configuration migration finished with errors ({summary.GetSummaryMessage()}). details:");
+                    if (summary.Messages != null)
+                    {
+                        foreach (var message in summary.Messages)
+                        {
+                            McpLog.Warn($"  {message}");
+                        }
+                    }
+                    McpLog.Warn("Legacy keys will be removed to prevent migration loop. Please configure failing clients manually.");
+                }
+                else
+                {
+                    McpLog.Info($"Legacy configuration migration complete ({summary.GetSummaryMessage()})");
                 }
 
                 if (hasServerSrc)
@@ -59,8 +70,6 @@ namespace MCPForUnity.Editor.Migrations
                     EditorPrefs.DeleteKey(UseEmbeddedKey);
                     McpLog.Info("  ✓ Removed legacy key: MCPForUnity.UseEmbeddedServer");
                 }
-
-                McpLog.Info($"Legacy configuration migration complete ({summary.GetSummaryMessage()})");
             }
             catch (Exception ex)
             {

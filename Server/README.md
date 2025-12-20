@@ -11,24 +11,20 @@ Model Context Protocol server for Unity Editor integration. Control Unity throug
 
 💬 **Join our community:** [Discord Server](https://discord.gg/y4p8KfzrN4)
 
-**Required:** Install the [Unity MCP Plugin](https://github.com/CoplayDev/unity-mcp?tab=readme-ov-file#-step-1-install-the-unity-package) to connect Unity Editor with this MCP server.
+**Required:** Install the [Unity MCP Plugin](https://github.com/CoplayDev/unity-mcp?tab=readme-ov-file#-step-1-install-the-unity-package) to connect Unity Editor with this MCP server. You also need `uvx` (requires [uv](https://docs.astral.sh/uv/)) to run the server.
 
 ---
 
 ## Installation
 
-### Option 1: Using uvx (Recommended)
+### Option 1: PyPI
 
-Run directly from GitHub without installation:
+Install and run directly from PyPI using `uvx`.
+
+**Run Server (HTTP):**
 
 ```bash
-# HTTP (default)
-uvx --from git+https://github.com/CoplayDev/unity-mcp@v8.2.3#subdirectory=Server \
-    mcp-for-unity --transport http --http-url http://localhost:8080
-
-# Stdio
-uvx --from git+https://github.com/CoplayDev/unity-mcp@v8.2.3#subdirectory=Server \
-    mcp-for-unity --transport stdio
+uvx --from mcpforunityserver mcp-for-unity --transport http --http-url http://localhost:8080
 ```
 
 **MCP Client Configuration (HTTP):**
@@ -52,12 +48,11 @@ uvx --from git+https://github.com/CoplayDev/unity-mcp@v8.2.3#subdirectory=Server
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/CoplayDev/unity-mcp@v8.2.3#subdirectory=Server",
+        "mcpforunityserver",
         "mcp-for-unity",
         "--transport",
         "stdio"
-      ],
-      "type": "stdio"
+      ]
     }
   }
 }
@@ -65,22 +60,9 @@ uvx --from git+https://github.com/CoplayDev/unity-mcp@v8.2.3#subdirectory=Server
 ```
 
 
-### Option 2: Using uv (Local Installation)
+### Option 2: From GitHub Source
 
-For local development or custom installations:
-
-```bash
-# Clone the repository
-git clone https://github.com/CoplayDev/unity-mcp.git
-cd unity-mcp/Server
-
-# Run with uv (HTTP)
-uv run server.py --transport http --http-url http://localhost:8080
-
-# Run with uv (stdio)
-uv run server.py --transport stdio
-```
-
+Use this to run the latest released version from the repository. Change the version to `main` to run the latest unreleased changes from the repository.
 **MCP Client Configuration (HTTP):**
 ```json
 {
@@ -93,17 +75,15 @@ uv run server.py --transport stdio
 }
 ```
 
-**MCP Client Configuration (stdio – Windows):**
 ```json
 {
   "mcpServers": {
     "UnityMCP": {
-      "command": "uv",
+      "command": "uvx",
       "args": [
-        "run",
-        "--directory",
-        "C:\\path\\to\\unity-mcp\\Server",
-        "server.py",
+        "--from",
+        "git+https://github.com/CoplayDev/unity-mcp@v8.3.0#subdirectory=Server",
+        "mcp-for-unity",
         "--transport",
         "stdio"
       ]
@@ -112,32 +92,35 @@ uv run server.py --transport stdio
 }
 ```
 
-**MCP Client Configuration (stdio – macOS/Linux):**
-```json
-{
-  "mcpServers": {
-    "UnityMCP": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--directory",
-        "/path/to/unity-mcp/Server",
-        "server.py",
-        "--transport",
-        "stdio"
-      ]
-    }
-  }
-}
+### Option 3: Docker
+
+**Use Pre-built Image:**
+
+```bash
+docker run -p 8080:8080 msanatan/mcp-for-unity-server:latest --transport http --http-url http://0.0.0.0:8080
 ```
 
-### Option 3: Using Docker
+**Build Locally:**
 
 ```bash
 docker build -t unity-mcp-server .
 docker run -p 8080:8080 unity-mcp-server --transport http --http-url http://0.0.0.0:8080
 ```
 
+Configure your MCP client with `"url": "http://localhost:8080/mcp"`.
+
+### Option 4: Local Development
+
+For contributing or modifying the server code:
+
+```bash
+# Clone the repository
+git clone https://github.com/CoplayDev/unity-mcp.git
+cd unity-mcp/Server
+
+# Run with uv
+uv run src/main.py --transport stdio
+```
 Configure your MCP client with `"url": "http://localhost:8080/mcp"` and include the `X-API-Key` header. For stdio-in-docker (rare), run the container with `--transport stdio` and use the same `command`/`args` pattern as the uv examples, wrapping it in `docker run -i ...` if needed.
 
 ---

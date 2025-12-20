@@ -28,6 +28,7 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
         private Button clearUvxButton;
         private VisualElement uvxPathStatus;
         private TextField gitUrlOverride;
+        private Button browseGitUrlButton;
         private Button clearGitUrlButton;
         private TextField deploySourcePath;
         private Button browseDeploySourceButton;
@@ -76,6 +77,7 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             clearUvxButton = Root.Q<Button>("clear-uv-button");
             uvxPathStatus = Root.Q<VisualElement>("uv-path-status");
             gitUrlOverride = Root.Q<TextField>("git-url-override");
+            browseGitUrlButton = Root.Q<Button>("browse-git-url-button");
             clearGitUrlButton = Root.Q<Button>("clear-git-url-button");
             deploySourcePath = Root.Q<TextField>("deploy-source-path");
             browseDeploySourceButton = Root.Q<Button>("browse-deploy-source-button");
@@ -124,6 +126,8 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             browseUvxButton.clicked += OnBrowseUvxClicked;
             clearUvxButton.clicked += OnClearUvxClicked;
 
+            browseGitUrlButton.clicked += OnBrowseGitUrlClicked;
+
             gitUrlOverride.RegisterValueChangedCallback(evt =>
             {
                 string url = evt.newValue?.Trim();
@@ -146,6 +150,25 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
                 OnGitUrlChanged?.Invoke();
                 OnHttpServerCommandUpdateRequested?.Invoke();
             };
+
+            deploySourcePath.RegisterValueChangedCallback(evt =>
+            {
+                string path = evt.newValue?.Trim();
+                if (string.IsNullOrEmpty(path) || path == "Not set")
+                {
+                    return;
+                }
+                
+                try
+                {
+                    MCPServiceLocator.Deployment.SetStoredSourcePath(path);
+                }
+                catch (Exception ex)
+                {
+                    EditorUtility.DisplayDialog("Invalid Source", ex.Message, "OK");
+                    UpdateDeploymentSection();
+                }
+            });
 
             browseDeploySourceButton.clicked += OnBrowseDeploySourceClicked;
             clearDeploySourceButton.clicked += OnClearDeploySourceClicked;
@@ -251,12 +274,25 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             McpLog.Info("uv path override cleared");
         }
 
+        private void OnBrowseGitUrlClicked()
+        {
+            string picked = EditorUtility.OpenFolderPanel("Select Server folder", string.Empty, string.Empty);
+            if (!string.IsNullOrEmpty(picked))
+            {
+                gitUrlOverride.value = picked;
+                EditorPrefs.SetString(EditorPrefKeys.GitUrlOverride, picked);
+                OnGitUrlChanged?.Invoke();
+                OnHttpServerCommandUpdateRequested?.Invoke();
+                McpLog.Info($"Server source override set to: {picked}");
+            }
+        }
+
         private void UpdateDeploymentSection()
         {
             var deployService = MCPServiceLocator.Deployment;
 
             string sourcePath = deployService.GetStoredSourcePath();
-            deploySourcePath.value = string.IsNullOrEmpty(sourcePath) ? "Not set" : sourcePath;
+            deploySourcePath.value = sourcePath ?? string.Empty;
 
             deployTargetLabel.text = $"Target: {deployService.GetTargetDisplayPath()}";
 

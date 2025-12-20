@@ -1,5 +1,4 @@
 using System;
-using MCPForUnity.Editor.Config;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Dependencies;
 using MCPForUnity.Editor.Dependencies.Models;
@@ -51,21 +50,6 @@ namespace MCPForUnity.Editor.Setup
                 // Check if setup was already completed or dismissed in previous sessions
                 bool setupCompleted = EditorPrefs.GetBool(SETUP_COMPLETED_KEY, false);
                 bool setupDismissed = EditorPrefs.GetBool(SETUP_DISMISSED_KEY, false);
-                bool userOverrodeHttpUrl = EditorPrefs.HasKey(EditorPrefKeys.HttpBaseUrl);
-
-                // In Asset Store builds with a remote default URL (and no user override), skip the local setup wizard.
-                if (
-                    !userOverrodeHttpUrl
-                    && McpDistribution.Settings.skipSetupWindowWhenRemoteDefault
-                    && McpDistribution.Settings.IsRemoteDefault
-                )
-                {
-                    McpLog.Info(
-                        "Skipping Setup Window because this distribution ships with a hosted MCP URL. Open Window/MCP For Unity/Setup Window if you want to configure a local runtime.",
-                        always: false
-                    );
-                    return;
-                }
 
                 // Only show Setup Window if it hasn't been completed or dismissed before
                 if (!(setupCompleted || setupDismissed))
