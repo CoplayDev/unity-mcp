@@ -15,8 +15,8 @@ namespace MCPForUnity.Editor.Helpers
 {
     public static class ConfigJsonBuilder
     {
-        // Token-only value used for auth substitution.
         private const string AuthTokenKey = "UNITY_MCP_AUTH_TOKEN";
+        private const string AuthTokenDescription = "Unity MCP auth token";
         public static string BuildManualConfigJson(string uvPath, McpClient client)
         {
             var root = new JObject();
@@ -73,7 +73,7 @@ namespace MCPForUnity.Editor.Helpers
                         headers.Remove("X-API-Key");
                     }
 
-                    // Token-only input; we add the Bearer prefix.
+                    EnsureInput(root, AuthTokenKey, AuthTokenDescription);
                     headers["Authorization"] = $"Bearer ${{input:{AuthTokenKey}}}";
                     unity["headers"] = headers;
                 }
@@ -177,6 +177,45 @@ namespace MCPForUnity.Editor.Helpers
             var created = new JObject();
             parent[name] = created;
             return created;
+        }
+
+        private static void EnsureInput(JObject root, string id, string description)
+        {
+            if (root == null || string.IsNullOrWhiteSpace(id))
+            {
+                return;
+            }
+
+            if (root["inputs"] is not JArray inputs)
+            {
+                inputs = new JArray();
+                root["inputs"] = inputs;
+            }
+
+            foreach (var entry in inputs)
+            {
+                if (entry is JObject o)
+                {
+                    if (string.Equals(o.Value<string>("id"), id, StringComparison.Ordinal))
+                    {
+                        return;
+                    }
+                }
+                else if (entry != null && entry.Type == JTokenType.String)
+                {
+                    if (string.Equals(entry.Value<string>(), id, StringComparison.Ordinal))
+                    {
+                        return;
+                    }
+                }
+            }
+
+            inputs.Add(new JObject
+            {
+                ["id"] = id,
+                ["type"] = "promptString",
+                ["description"] = description ?? id,
+            });
         }
 
         private static IList<string> BuildUvxArgs(string fromUrl, string packageName)
