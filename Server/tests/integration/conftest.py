@@ -82,7 +82,11 @@ fastmcp_server = types.ModuleType("fastmcp.server")
 fastmcp_server_middleware = types.ModuleType("fastmcp.server.middleware")
 fastmcp_server_middleware.Middleware = _DummyMiddleware
 fastmcp_server_middleware.MiddlewareContext = _DummyMiddlewareContext
+fastmcp_server_dependencies = types.ModuleType("fastmcp.server.dependencies")
+fastmcp_server_dependencies.get_http_request = lambda: None
 fastmcp.server = fastmcp_server
 fastmcp_server.middleware = fastmcp_server_middleware
+fastmcp_server.dependencies = fastmcp_server_dependencies
 sys.modules.setdefault("fastmcp.server", fastmcp_server)
 sys.modules.setdefault("fastmcp.server.middleware", fastmcp_server_middleware)
+sys.modules.setdefault("fastmcp.server.dependencies", fastmcp_server_dependencies)

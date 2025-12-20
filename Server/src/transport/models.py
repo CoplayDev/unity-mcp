@@ -7,8 +7,11 @@ from models.models import ToolDefinitionModel
 
 class WelcomeMessage(BaseModel):
     type: str = "welcome"
+    serverVersion: str = ""
     serverTimeout: int
     keepAliveInterval: int
+    authEnabled: bool = False
+    authTokenRequired: bool = False
 
 
 class RegisteredMessage(BaseModel):

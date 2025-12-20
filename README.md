@@ -237,7 +237,8 @@ claude mcp add --scope user UnityMCP -- "C:/Users/USERNAME/AppData/Local/Microso
   "servers": {
     "unityMCP": {
       "type": "http",
-      "url": "http://localhost:8080/mcp"
+      "url": "http://localhost:8080/mcp",
+      "headers": { "X-API-Key": "<your key>" }
     }
   }
 }
@@ -250,7 +251,7 @@ claude mcp add --scope user UnityMCP -- "C:/Users/USERNAME/AppData/Local/Microso
   "mcpServers": {
     "unityMCP": {
       "url": "http://localhost:8080/mcp"
-    }
+      "headers": { "X-API-Key": "<your key>" }
   }
 }
 ```

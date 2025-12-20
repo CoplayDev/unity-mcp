@@ -170,6 +170,7 @@ namespace MCPForUnity.Editor.Helpers
         {
             string uvxPath = MCPServiceLocator.Paths.GetUvxPath();
             string fromUrl = GetMcpServerGitUrl();
+            // Default uvx package name
             string packageName = "mcp-for-unity";
 
             return (uvxPath, fromUrl, packageName);

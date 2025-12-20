@@ -15,5 +15,8 @@ namespace MCPForUnity.Editor.Models
         // VSCode expects a transport type; include only when explicitly set
         [JsonProperty("type", NullValueHandling = NullValueHandling.Ignore)]
         public string type;
+
+        [JsonProperty("version", NullValueHandling = NullValueHandling.Ignore)]
+        public string version;
     }
 }
