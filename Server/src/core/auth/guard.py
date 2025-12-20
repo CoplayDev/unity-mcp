@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import secrets
 from typing import Iterable, Mapping
 
 from starlette.requests import Request
@@ -41,16 +42,31 @@ def _ip_in_allowlist(ip: str | None, allowed: Iterable[str]) -> bool:
 
 
 def _extract_token(headers: Mapping[str, str]) -> str | None:
-    api_key = headers.get("x-api-key") or headers.get("X-API-Key")
-    if api_key:
-        return api_key.strip()
+    # Prefer standard Authorization header.
+    auth = headers.get("authorization") or headers.get("Authorization")
+    if auth:
+        value = auth.strip()
+        # Typical form: "Bearer <token>"
+        parts = value.split(None, 1)
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            token = parts[1].strip()
+            return token or None
+        # Back-compat: allow raw token value if no scheme provided.
+        return value or None
     return None
 
 
 def unauthorized_response(message: str, status_code: int = 401, error: str = "invalid_token") -> JSONResponse:
+    headers = None
+    # Industry-standard hint for clients.
+    if status_code == 401:
+        headers = {
+            "WWW-Authenticate": f'Bearer realm="mcp-for-unity", error="{error}"',
+        }
     return JSONResponse(
-        {"success": False, "error": "unauthorized", "message": message},
+        {"success": False, "error": "unauthorized", "code": error, "message": message},
         status_code=status_code,
+        headers=headers,
     )
 
 
@@ -73,9 +89,9 @@ class AuthGuard:
 
     def _evaluate(self, client_ip: str | None, headers: Mapping[str, str]) -> JSONResponse | None:
         logger.debug(
-            "Auth context: ip=%s api_key_header=%s",
+            "Auth context: ip=%s authorization_header=%s",
             client_ip or "unknown",
-            "present" if headers.get("x-api-key") or headers.get("X-API-Key") else "absent",
+            "present" if headers.get("authorization") or headers.get("Authorization") else "absent",
         )
 
         if not _ip_in_allowlist(client_ip, self.settings.normalized_allowed_ips):
@@ -86,7 +102,8 @@ class AuthGuard:
             return None
 
         provided = _extract_token(headers) or ""
-        if provided != (self.settings.token or ""):
+        expected = self.settings.token or ""
+        if not secrets.compare_digest(provided, expected):
             masked_expected = (self.settings.token or "")[:4] + "***"
             masked_provided = provided[:4] + "***" if provided else "none"
             logger.warning(

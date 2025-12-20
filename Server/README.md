@@ -69,7 +69,7 @@ Use this to run the latest released version from the repository. Change the vers
   "mcpServers": {
     "UnityMCP": {
       "url": "http://localhost:8080/mcp",
-      "headers": { "X-API-Key": "<your key>" }
+      "headers": { "Authorization": "Bearer ${input:UNITY_MCP_AUTH_TOKEN}" }
     }
   }
 }
@@ -121,7 +121,7 @@ cd unity-mcp/Server
 # Run with uv
 uv run src/main.py --transport stdio
 ```
-Configure your MCP client with `"url": "http://localhost:8080/mcp"` and include the `X-API-Key` header. For stdio-in-docker (rare), run the container with `--transport stdio` and use the same `command`/`args` pattern as the uv examples, wrapping it in `docker run -i ...` if needed.
+Configure your MCP client with `"url": "http://localhost:8080/mcp"` and include the `Authorization` header (`Bearer <token>`). If your client supports config interpolation, prefer `Bearer ${input:UNITY_MCP_AUTH_TOKEN}`.
 
 ---
 
@@ -129,14 +129,16 @@ Configure your MCP client with `"url": "http://localhost:8080/mcp"` and include 
 The server connects to Unity Editor automatically when both are running.
 
 **Authentication (optional; disabled by default)**
-- Toggle with `--auth-enabled` (or `UNITY_MCP_AUTH_ENABLED=1`).
-- Allowlist with `--allowed-ips "127.0.0.1,10.0.0.0/8"` (or `UNITY_MCP_ALLOWED_IPS`). Default `*`.
-- Token with `--auth-token <value>` (or `UNITY_MCP_AUTH_TOKEN`). If omitted while enabled, the server generates one; empty string skips token checks.
+- Toggle with `--auth` (default: off).
+- Allowlist with `UNITY_MCP_ALLOWED_IPS` (comma-separated). Default is loopback-only (`127.0.0.1/32, ::1/128`). Use `*` to allow any IP.
+- Token with `UNITY_MCP_AUTH_TOKEN` (optional). If omitted while enabled, the server generates one and persists it to the `api_key` file.
 - Token file lives at `api_key` (auto-created when needed):
   - macOS: `~/Library/Application Support/UnityMCP/api_key`
   - Windows: `%LOCALAPPDATA%\UnityMCP/api_key`
   - Linux: `~/.local/share/UnityMCP/api_key`
-- HTTP clients send `X-API-Key: <key>`. When auth is disabled, no auth headers are required.
+- HTTP clients send `Authorization: Bearer <token>`. When using auto-config, users enter only the token (the config adds the `Bearer ` prefix).
+- When auth is disabled, no auth headers are required.
+
 
 **Environment/flags**
 - `DISABLE_TELEMETRY=true` - Opt out of anonymous usage analytics

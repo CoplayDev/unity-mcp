@@ -242,6 +242,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                     string newKey = AuthPreferencesUtility.GenerateNewApiKey();
                     AuthPreferencesUtility.SetApiKey(newKey);
                     UpdateApiKeyField();
+                    UpdateHttpServerCommandDisplay();
                     OnManualConfigUpdateRequested?.Invoke();
                 };
             }

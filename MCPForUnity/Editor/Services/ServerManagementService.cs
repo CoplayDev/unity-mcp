@@ -386,7 +386,7 @@ namespace MCPForUnity.Editor.Services
             bool authEnabled = AuthPreferencesUtility.IsAuthEnabled();
             if (authEnabled)
             {
-                args.Add("--auth-enabled");
+                args.Add("--auth");
 
                 string allowedIps = AuthPreferencesUtility.GetAllowedIps();
                 if (!string.IsNullOrWhiteSpace(allowedIps))

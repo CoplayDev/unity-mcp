@@ -78,9 +78,12 @@ Notes:
 ---
 
 ## Authentication
-- Auth is always on. The API key lives in the **Connection** section (under the HTTP URL) with Copy and Regenerate buttons.
-- The same key is stored on disk for the server to read automatically; clients are prompted for it when auto-config runs.
-- Requests use `X-API-Key` (or `Authorization: Bearer <key>` for compatibility) on every call.
+- Authentication is optional (disabled by default). Enable it in the server settings, then copy the token shown in the UI.
+- Auto-config writes `Authorization: Bearer ...` and prompts for the token when the client supports `${input:...}`.
+
+Notes:
+- Enter/paste only the raw token (no `Bearer ` prefix).
+
 
 ---
 

@@ -70,7 +70,9 @@ class PluginHub(WebSocketEndpoint):
 
         failure = await verify_websocket(websocket, settings)
         if failure is not None:
-            await websocket.close(code=4401)
+            # 4401 Unauthorized, 4403 Forbidden (non-standard but widely used conventions)
+            code = 4403 if getattr(failure, "status_code", 401) == 403 else 4401
+            await websocket.close(code=code)
             return
 
         await websocket.accept()

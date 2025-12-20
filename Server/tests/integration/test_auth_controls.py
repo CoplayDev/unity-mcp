@@ -19,8 +19,8 @@ class _DummyWebSocket:
 
 
 def test_http_allowlist_allows_any_ip_when_wildcard():
-    settings = auth_settings(token="secret", allowed_ips=["*"])
-    request = _DummyRequest("192.168.1.10", headers={"X-API-Key": "secret"})
+    settings = auth_settings(enabled=True, token="secret", allowed_ips=["*"])
+    request = _DummyRequest("192.168.1.10", headers={"Authorization": "Bearer secret"})
 
     response = verify_http_request(request, settings)
 
@@ -28,8 +28,8 @@ def test_http_allowlist_allows_any_ip_when_wildcard():
 
 
 def test_http_allowlist_blocks_outside_cidr():
-    settings = auth_settings(token="secret", allowed_ips=["10.0.0.0/8"])
-    request = _DummyRequest("192.168.1.10", headers={"X-API-Key": "secret"})
+    settings = auth_settings(enabled=True, token="secret", allowed_ips=["10.0.0.0/8"])
+    request = _DummyRequest("192.168.1.10", headers={"Authorization": "Bearer secret"})
 
     response = verify_http_request(request, settings)
 
@@ -38,8 +38,17 @@ def test_http_allowlist_blocks_outside_cidr():
 
 
 def test_http_requires_matching_token_when_set():
-    settings = auth_settings(token="secret", allowed_ips=["*"])
-    request = _DummyRequest("127.0.0.1", headers={"X-API-Key": "secret"})
+    settings = auth_settings(enabled=True, token="secret", allowed_ips=["*"])
+    request = _DummyRequest("127.0.0.1", headers={"Authorization": "Bearer secret"})
+
+    response = verify_http_request(request, settings)
+
+    assert response is None
+
+
+def test_http_accepts_authorization_bearer_header():
+    settings = auth_settings(enabled=True, token="secret", allowed_ips=["*"])
+    request = _DummyRequest("127.0.0.1", headers={"Authorization": "Bearer secret"})
 
     response = verify_http_request(request, settings)
 
@@ -47,7 +56,7 @@ def test_http_requires_matching_token_when_set():
 
 
 def test_http_blocks_missing_token_when_required():
-    settings = auth_settings(token="secret", allowed_ips=["127.0.0.1"])
+    settings = auth_settings(enabled=True, token="secret", allowed_ips=["127.0.0.1"])
     request = _DummyRequest("127.0.0.1")
 
     response = verify_http_request(request, settings)
@@ -58,8 +67,18 @@ def test_http_blocks_missing_token_when_required():
 
 @pytest.mark.asyncio
 async def test_websocket_checks_token_and_allowlist():
-    settings = auth_settings(token="secret", allowed_ips=["10.0.0.0/8"])
-    websocket = _DummyWebSocket("10.1.2.3", headers=[("x-api-key", "secret")])
+    settings = auth_settings(enabled=True, token="secret", allowed_ips=["10.0.0.0/8"])
+    websocket = _DummyWebSocket("10.1.2.3", headers=[("authorization", "Bearer secret")])
+
+    response = await verify_websocket(websocket, settings)
+
+    assert response is None
+
+
+@pytest.mark.asyncio
+async def test_websocket_accepts_authorization_bearer_header():
+    settings = auth_settings(enabled=True, token="secret", allowed_ips=["10.0.0.0/8"])
+    websocket = _DummyWebSocket("10.1.2.3", headers=[("authorization", "Bearer secret")])
 
     response = await verify_websocket(websocket, settings)
 
@@ -68,8 +87,8 @@ async def test_websocket_checks_token_and_allowlist():
 
 @pytest.mark.asyncio
 async def test_websocket_blocks_invalid_token():
-    settings = auth_settings(token="secret", allowed_ips=["10.0.0.0/8"])
-    websocket = _DummyWebSocket("10.1.2.3", headers=[("x-api-key", "wrong")])
+    settings = auth_settings(enabled=True, token="secret", allowed_ips=["10.0.0.0/8"])
+    websocket = _DummyWebSocket("10.1.2.3", headers=[("authorization", "Bearer wrong")])
 
     response = await verify_websocket(websocket, settings)
 
@@ -92,4 +111,15 @@ def test_http_no_token_required_when_empty():
 
     response = verify_http_request(request, settings)
 
-    assert response is None
+    assert response is not None
+    assert response.status_code == 401
+
+
+def test_http_rejects_x_api_key_header():
+    settings = auth_settings(enabled=True, token="secret", allowed_ips=["*"])
+    request = _DummyRequest("127.0.0.1", headers={"X-API-Key": "secret"})
+
+    response = verify_http_request(request, settings)
+
+    assert response is not None
+    assert response.status_code in (401, 403)

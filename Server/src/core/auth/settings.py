@@ -12,7 +12,7 @@ from typing import Sequence
 
 logger = logging.getLogger("mcp-for-unity-server")
 
-DEFAULT_ALLOWED_IPS: list[str] = ["*"]
+DEFAULT_ALLOWED_IPS: list[str] = ["127.0.0.1/32", "::1/128"]
 
 
 @dataclass
@@ -37,7 +37,11 @@ def build_auth_settings(
     allowed_ips: Sequence[str] | None = None,
 ) -> AuthSettings:
     resolved_allowed = list(allowed_ips) if allowed_ips else list(DEFAULT_ALLOWED_IPS)
-    resolved_token = token if token is not None else (load_or_create_api_key() if enabled else None)
+    # When auth is enabled, always require a token. Treat empty string as unset.
+    normalized_token = None
+    if token is not None and str(token).strip() != "":
+        normalized_token = token
+    resolved_token = normalized_token if normalized_token is not None else (load_or_create_api_key() if enabled else None)
     return AuthSettings(enabled=enabled, allowed_ips=resolved_allowed, token=resolved_token)
 
 
@@ -55,11 +59,7 @@ def get_api_key_path() -> Path:
     return Path.home() / ".local" / "share" / "UnityMCP" / "api_key"
 
 
-def load_or_create_api_key(preferred: str | None = None) -> str:
-    if preferred:
-        logger.info("Using API key provided via CLI flag")
-        return preferred
-
+def load_or_create_api_key() -> str:
     path = get_api_key_path()
     try:
         if path.exists():
@@ -74,6 +74,12 @@ def load_or_create_api_key(preferred: str | None = None) -> str:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(token, encoding="utf-8")
+        # Best-effort hardening on POSIX systems.
+        try:
+            if os.name == "posix":
+                os.chmod(path, 0o600)
+        except Exception:
+            logger.debug("Failed to set API key file permissions", exc_info=True)
         logger.info("Generated and persisted new API key to %s", path)
     except Exception:
         logger.warning("Failed to persist API key to %s", path, exc_info=True)

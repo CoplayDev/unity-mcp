@@ -381,49 +381,44 @@ Examples:
     )
 
     parser.add_argument(
-        "--auth-enabled",
+        "--auth",
         action="store_true",
         default=False,
-        help="Enable authentication (IP allowlist always applies; token optional)."
+        help="Enable authentication (default: off). When enabled, the server requires Authorization: Bearer <token>."
     )
+
+    # Auth configuration. CLI flags take precedence over environment variables.
     parser.add_argument(
         "--auth-token",
-        dest="auth_token",
         type=str,
         default=None,
-        help="Authentication token. If omitted while auth is enabled, a token is generated. Empty string disables token checks."
-    )
-    # Back-compat alias
-    parser.add_argument(
-        "--api-key",
-        dest="auth_token",
-        type=str,
-        default=None,
-        help=argparse.SUPPRESS,
+        metavar="TOKEN",
+        help="Auth token to require (raw token only; do not include 'Bearer'). Overrides UNITY_MCP_AUTH_TOKEN."
     )
     parser.add_argument(
         "--allowed-ips",
-        dest="allowed_ips",
         type=str,
         default=None,
-        help="Comma-separated IP allowlist (supports *, CIDR, single IP)."
+        metavar="IPS",
+        help="Comma-separated IP allowlist patterns (e.g. '127.0.0.1/32,::1/128,*'). Overrides UNITY_MCP_ALLOWED_IPS."
     )
 
     args = parser.parse_args()
 
-    global AUTH_SETTINGS
-    env_auth_enabled = os.environ.get("UNITY_MCP_AUTH_ENABLED", "").lower() in ("1", "true", "yes", "on")
-    auth_enabled = args.auth_enabled or env_auth_enabled
+    auth_enabled = bool(args.auth)
 
-    env_allowed_ips = os.environ.get("UNITY_MCP_ALLOWED_IPS")
+    # Prefer CLI flag, fall back to env.
     allowed_ips = None
-    if args.allowed_ips:
-        allowed_ips = [ip.strip() for ip in args.allowed_ips.split(",") if ip.strip()]
-    elif env_allowed_ips:
-        allowed_ips = [ip.strip() for ip in env_allowed_ips.split(",") if ip.strip()]
+    allowed_ips_raw = args.allowed_ips or os.environ.get("UNITY_MCP_ALLOWED_IPS")
+    if allowed_ips_raw:
+        allowed_ips = [ip.strip() for ip in allowed_ips_raw.split(",") if ip.strip()]
 
-    env_auth_token = os.environ.get("UNITY_MCP_AUTH_TOKEN")
-    token_arg = args.auth_token if args.auth_token is not None else env_auth_token
+    # Prefer CLI token, fall back to env, else persisted api_key file (auto-generated when enabled).
+    token_arg = args.auth_token
+    if token_arg is None:
+        token_arg = os.environ.get("UNITY_MCP_AUTH_TOKEN")
+        if token_arg is not None and token_arg.strip() == "":
+            token_arg = None
 
     auth_settings_state = auth_settings(
         token=token_arg,
@@ -440,8 +435,6 @@ Examples:
         bool(auth_settings_state.token) if auth_settings_state.enabled else False,
         auth_settings_state.normalized_allowed_ips,
     )
-    if auth_settings_state.enabled and not auth_settings_state.token:
-        logger.warning("Auth enabled with no token: only IP allowlist enforced")
     if auth_settings_state.enabled:
         try:
             logger.info("API key file location: %s", get_api_key_path())

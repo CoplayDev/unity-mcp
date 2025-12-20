@@ -230,7 +230,6 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 string apiKey = AuthPreferencesUtility.GetApiKey();
                 if (!string.IsNullOrEmpty(apiKey))
                 {
-                    _socket.Options.SetRequestHeader("X-API-Key", apiKey);
                     _socket.Options.SetRequestHeader("Authorization", $"Bearer {apiKey}");
                 }
             }
