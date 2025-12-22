@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Resources.Tests;
@@ -42,11 +43,13 @@ namespace MCPForUnity.Editor.Tools
                 // Preserve default timeout if parsing fails
             }
 
+            var filterOptions = ParseFilterOptions(@params);
+
             var testService = MCPServiceLocator.Tests;
             Task<TestRunResult> runTask;
             try
             {
-                runTask = testService.RunTestsAsync(parsedMode.Value);
+                runTask = testService.RunTestsAsync(parsedMode.Value, filterOptions);
             }
             catch (Exception ex)
             {
@@ -68,6 +71,67 @@ namespace MCPForUnity.Editor.Tools
 
             var data = result.ToSerializable(parsedMode.Value.ToString());
             return new SuccessResponse(message, data);
+        }
+
+        private static TestFilterOptions ParseFilterOptions(JObject @params)
+        {
+            if (@params == null)
+            {
+                return null;
+            }
+
+            var testNames = ParseStringArray(@params, "testNames");
+            var groupNames = ParseStringArray(@params, "groupNames");
+            var categoryNames = ParseStringArray(@params, "categoryNames");
+            var assemblyNames = ParseStringArray(@params, "assemblyNames");
+
+            // Return null if no filters specified
+            if (testNames == null && groupNames == null && categoryNames == null && assemblyNames == null)
+            {
+                return null;
+            }
+
+            return new TestFilterOptions
+            {
+                TestNames = testNames,
+                GroupNames = groupNames,
+                CategoryNames = categoryNames,
+                AssemblyNames = assemblyNames
+            };
+        }
+
+        private static string[] ParseStringArray(JObject @params, string key)
+        {
+            var token = @params[key];
+            if (token == null)
+            {
+                return null;
+            }
+
+            if (token.Type == JTokenType.String)
+            {
+                var value = token.ToString();
+                return string.IsNullOrWhiteSpace(value) ? null : new[] { value };
+            }
+
+            if (token.Type == JTokenType.Array)
+            {
+                var array = token as JArray;
+                if (array == null || array.Count == 0)
+                {
+                    return null;
+                }
+
+                var values = array
+                    .Where(t => t.Type == JTokenType.String)
+                    .Select(t => t.ToString())
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .ToArray();
+
+                return values.Length > 0 ? values : null;
+            }
+
+            return null;
         }
     }
 }
