@@ -34,7 +34,7 @@ except ImportError:
     HAS_HTTPX = False
 
 logger = logging.getLogger("unity-mcp-telemetry")
-PACKAGE_NAME = "MCPForUnityServer"
+PACKAGE_NAME = "mcpforunityserver"
 
 
 def _version_from_local_pyproject() -> str:
@@ -60,7 +60,7 @@ def _version_from_local_pyproject() -> str:
         version = project_table.get("version") or poetry_table.get("version")
         if version:
             return version
-    raise FileNotFoundError("pyproject.toml not found for MCPForUnityServer")
+    raise FileNotFoundError("pyproject.toml not found for mcpforunityserver")
 
 
 def get_package_version() -> str:
