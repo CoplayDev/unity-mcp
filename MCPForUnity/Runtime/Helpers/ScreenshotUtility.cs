@@ -3,7 +3,7 @@ using System.IO;
 using System.Linq;
 using UnityEngine;
 
-namespace MCPForUnity.Runtime.Helpers 
+namespace MCPForUnity.Runtime.Helpers
 //The reason for having another Runtime Utilities in additional to Editor Utilities is to avoid Editor-only dependencies in this runtime code.
 {
     public readonly struct ScreenshotCaptureResult
@@ -42,16 +42,18 @@ namespace MCPForUnity.Runtime.Helpers
             // Use only the file name to let Unity decide the final location (per CaptureScreenshot docs).
             string captureName = Path.GetFileName(normalizedFullPath);
 
+            // Use Asset folder for ScreenCapture.CaptureScreenshot to ensure write to asset rather than project root
+            string projectRoot = GetProjectRootPath();
+            string assetsRelativePath = normalizedFullPath;
+
 
 #if UNITY_2022_1_OR_NEWER
-            ScreenCapture.CaptureScreenshot(captureName, size);
+            ScreenCapture.CaptureScreenshot(assetsRelativePath, size);
 #else
             Debug.LogWarning("ScreenCapture is supported after Unity 2022.1. Using main camera capture as fallback.");
             CaptureFromCameraToAssetsFolder(Camera.main, captureName, size, false);
 #endif
 
-            string projectRoot = GetProjectRootPath();
-            string assetsRelativePath = normalizedFullPath;
             if (assetsRelativePath.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
             {
                 assetsRelativePath = assetsRelativePath.Substring(projectRoot.Length).TrimStart('/');
