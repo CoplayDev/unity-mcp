@@ -45,19 +45,17 @@ namespace MCPForUnity.Runtime.Helpers
             // Use Asset folder for ScreenCapture.CaptureScreenshot to ensure write to asset rather than project root
             string projectRoot = GetProjectRootPath();
             string assetsRelativePath = normalizedFullPath;
-
+            if (assetsRelativePath.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                assetsRelativePath = assetsRelativePath.Substring(projectRoot.Length).TrimStart('/');
+            }
 
 #if UNITY_2022_1_OR_NEWER
             ScreenCapture.CaptureScreenshot(assetsRelativePath, size);
 #else
             Debug.LogWarning("ScreenCapture is supported after Unity 2022.1. Using main camera capture as fallback.");
             CaptureFromCameraToAssetsFolder(Camera.main, captureName, size, false);
-#endif
-
-            if (assetsRelativePath.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
-            {
-                assetsRelativePath = assetsRelativePath.Substring(projectRoot.Length).TrimStart('/');
-            }
+#endif      
 
             return new ScreenshotCaptureResult(
                 normalizedFullPath,
