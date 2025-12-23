@@ -194,7 +194,7 @@ namespace MCPForUnity.Runtime.Serialization
         public override Matrix4x4 ReadJson(JsonReader reader, Type objectType, Matrix4x4 existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
             if (reader.TokenType == JsonToken.Null)
-                return Matrix4x4.identity;
+                return new Matrix4x4(); // Return zero matrix for null (consistent with missing field defaults)
 
             JObject jo = JObject.Load(reader);
             var matrix = new Matrix4x4();

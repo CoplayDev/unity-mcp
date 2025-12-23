@@ -1,6 +1,7 @@
-using System.IO;
+using System.Linq;
 using MCPForUnity.Runtime.Serialization;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -60,7 +61,7 @@ namespace MCPForUnity.Editor.Tests
         }
 
         [Test]
-        public void Serialize_DegenerateMatrix_DoesNotCrash()
+        public void Serialize_DegenerateMatrix_DoesNotCrashAndRoundtrips()
         {
             // This is the key test - a degenerate matrix that would crash
             // if we accessed lossyScale or rotation properties
@@ -68,11 +69,25 @@ namespace MCPForUnity.Editor.Tests
             matrix.m00 = 0; matrix.m11 = 0; matrix.m22 = 0; // Degenerate - determinant = 0
 
             // This should NOT throw or crash - the old code would fail here
-            Assert.DoesNotThrow(() =>
+            var json = JsonConvert.SerializeObject(matrix, _settings);
+            var result = JsonConvert.DeserializeObject<Matrix4x4>(json, _settings);
+
+            // Verify JSON only contains raw mXY properties
+            var jo = JObject.Parse(json);
+            var expectedProps = new[]
             {
-                var json = JsonConvert.SerializeObject(matrix, _settings);
-                var result = JsonConvert.DeserializeObject<Matrix4x4>(json, _settings);
-            });
+                "m00", "m01", "m02", "m03",
+                "m10", "m11", "m12", "m13",
+                "m20", "m21", "m22", "m23",
+                "m30", "m31", "m32", "m33"
+            };
+            CollectionAssert.AreEquivalent(expectedProps, jo.Properties().Select(p => p.Name).ToArray());
+
+            // Verify values roundtrip correctly (all zeros for degenerate matrix)
+            Assert.That(result.m00, Is.EqualTo(0f));
+            Assert.That(result.m11, Is.EqualTo(0f));
+            Assert.That(result.m22, Is.EqualTo(0f));
+            Assert.That(result, Is.EqualTo(matrix));
         }
 
         [Test]
@@ -94,12 +109,13 @@ namespace MCPForUnity.Editor.Tests
         }
 
         [Test]
-        public void Deserialize_NullToken_ReturnsIdentity()
+        public void Deserialize_NullToken_ReturnsZeroMatrix()
         {
             var json = "null";
             var result = JsonConvert.DeserializeObject<Matrix4x4>(json, _settings);
 
-            Assert.That(result, Is.EqualTo(Matrix4x4.identity));
+            // Returns zero matrix (consistent with missing field defaults of 0f)
+            Assert.That(result, Is.EqualTo(new Matrix4x4()));
         }
 
         [Test]
