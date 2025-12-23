@@ -5,7 +5,7 @@ using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEngine;
 
-namespace MCPForUnity.Editor.Tests
+namespace MCPForUnityTests.EditMode.Helpers
 {
     /// <summary>
     /// Tests for Matrix4x4Converter to ensure it safely serializes matrices
