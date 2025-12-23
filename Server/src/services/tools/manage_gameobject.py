@@ -3,6 +3,8 @@ import math
 from typing import Annotated, Any, Literal, Union
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
+
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
@@ -11,7 +13,11 @@ from services.tools.utils import coerce_bool, parse_json_payload
 
 
 @mcp_for_unity_tool(
-    description="Performs CRUD operations on GameObjects and components."
+    description="Performs CRUD operations on GameObjects and components.",
+    annotations=ToolAnnotations(
+        title="Manage GameObject",
+        destructiveHint=True,
+    ),
 )
 async def manage_gameobject(
     ctx: Context,

@@ -7,6 +7,8 @@ import json
 from typing import Annotated, Any, Literal
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
+
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from services.tools.utils import parse_json_payload
@@ -15,7 +17,11 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 
 
 @mcp_for_unity_tool(
-    description="Performs asset operations (import, create, modify, delete, etc.) in Unity."
+    description="Performs asset operations (import, create, modify, delete, etc.) in Unity.",
+    annotations=ToolAnnotations(
+        title="Manage Asset",
+        destructiveHint=True,
+    ),
 )
 async def manage_asset(
     ctx: Context,
