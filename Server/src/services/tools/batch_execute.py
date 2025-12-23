@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
@@ -18,6 +19,10 @@ MAX_COMMANDS_PER_BATCH = 25
     description=(
         "Runs a list of MCP tool calls as one batch. Use it to send a full sequence of commands, "
         "inspect the results, then submit the next batch for the following step."
+    ),
+    annotations=ToolAnnotations(
+        title="Batch Execute",
+        destructiveHint=True,
     ),
 )
 async def batch_execute(
