@@ -196,6 +196,9 @@ namespace MCPForUnity.Runtime.Serialization
             if (reader.TokenType == JsonToken.Null)
                 return new Matrix4x4(); // Return zero matrix for null (consistent with missing field defaults)
 
+            if (reader.TokenType != JsonToken.StartObject)
+                throw new JsonSerializationException($"Expected JSON object or null when deserializing Matrix4x4, got '{reader.TokenType}'.");
+
             JObject jo = JObject.Load(reader);
             var matrix = new Matrix4x4();
             matrix.m00 = jo["m00"]?.Value<float>() ?? 0f;
