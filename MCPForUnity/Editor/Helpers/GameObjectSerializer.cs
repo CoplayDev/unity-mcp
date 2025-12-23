@@ -524,6 +524,7 @@ namespace MCPForUnity.Editor.Helpers
                 new ColorConverter(),
                 new RectConverter(),
                 new BoundsConverter(),
+                new Matrix4x4Converter(), // Fix #478: Safe Matrix4x4 serialization for Cinemachine
                 new UnityEngineObjectConverter() // Handles serialization of references
             },
             ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
