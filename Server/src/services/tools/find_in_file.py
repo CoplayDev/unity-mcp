@@ -5,6 +5,7 @@ from typing import Annotated, Any
 from urllib.parse import unquote, urlparse
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
@@ -64,7 +65,13 @@ def _split_uri(uri: str) -> tuple[str, str]:
     return name, directory
 
 
-@mcp_for_unity_tool(description="Searches a file with a regex pattern and returns line numbers and excerpts.")
+@mcp_for_unity_tool(
+    description="Searches a file with a regex pattern and returns line numbers and excerpts.",
+    annotations=ToolAnnotations(
+        title="Find in File",
+        readOnlyHint=True,
+    ),
+)
 async def find_in_file(
     ctx: Context,
     uri: Annotated[str, "The resource URI to search under Assets/ or file path form supported by read_resource"],

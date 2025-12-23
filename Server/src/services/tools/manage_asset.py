@@ -7,6 +7,8 @@ import json
 from typing import Annotated, Any, Literal
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
+
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from services.tools.utils import parse_json_payload, coerce_int
@@ -20,7 +22,10 @@ from services.tools.preflight import preflight
         "Performs asset operations (import, create, modify, delete, etc.) in Unity.\n\n"
         "Tip (payload safety): for `action=\"search\"`, prefer paging (`page_size`, `page_number`) and keep "
         "`generate_preview=false` (previews can add large base64 blobs)."
-    )
+    ),
+    annotations=ToolAnnotations(
+        title="Manage Asset",
+    ),
 )
 async def manage_asset(
     ctx: Context,

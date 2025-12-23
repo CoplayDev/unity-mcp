@@ -1,6 +1,8 @@
 from typing import Annotated, Literal, Any
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
+
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from services.tools.utils import coerce_int, coerce_bool
@@ -10,7 +12,11 @@ from services.tools.preflight import preflight
 
 
 @mcp_for_unity_tool(
-    description="Performs CRUD operations on Unity scenes."
+    description="Performs CRUD operations on Unity scenes.",
+    annotations=ToolAnnotations(
+        title="Manage Scene",
+        destructiveHint=True,
+    ),
 )
 async def manage_scene(
     ctx: Context,
