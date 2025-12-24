@@ -501,7 +501,7 @@ async def validate_script(
 
 
 @mcp_for_unity_tool(
-    description="Compatibility router for legacy script operations. Prefer apply_text_edits (ranges) or script_apply_edits (structured) for edits.",
+    description="Compatibility router for legacy script operations. Prefer apply_text_edits (ranges) or script_apply_edits (structured) for edits. Read-only action: read. Destructive actions: create, delete.",
     annotations=ToolAnnotations(
         title="Manage Script",
         destructiveHint=True,

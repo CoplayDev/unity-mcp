@@ -13,7 +13,7 @@ from services.tools.utils import coerce_bool, parse_json_payload
 
 
 @mcp_for_unity_tool(
-    description="Performs CRUD operations on GameObjects and components.",
+    description="Performs CRUD operations on GameObjects and components. Read-only actions: find, get_components, get_component. Destructive actions: create, modify, delete, add_component, remove_component, set_component_property, duplicate, move_relative.",
     annotations=ToolAnnotations(
         title="Manage GameObject",
         destructiveHint=True,

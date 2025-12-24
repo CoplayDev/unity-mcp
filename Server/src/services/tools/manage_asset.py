@@ -17,7 +17,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 
 
 @mcp_for_unity_tool(
-    description="Performs asset operations (import, create, modify, delete, etc.) in Unity.",
+    description="Performs asset operations (import, create, modify, delete, etc.) in Unity. Read-only actions: search, get_info, get_components. Destructive actions: import, create, modify, delete, duplicate, move, rename, create_folder.",
     annotations=ToolAnnotations(
         title="Manage Asset",
         destructiveHint=True,
