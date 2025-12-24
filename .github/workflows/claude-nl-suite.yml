@@ -858,9 +858,11 @@ jobs:
           from pathlib import Path
           import xml.etree.ElementTree as ET
           import re
+          import shutil
 
           DESIRED = ["NL-0","NL-1","NL-2","NL-3","NL-4","T-A","T-B","T-C","T-D","T-E","T-F","T-G","T-H","T-I","T-J"]
           seen = set()
+          bad = set()
           def id_from_filename(p: Path):
             n = p.name
             m = re.match(r'NL-?(\d+)_results\.xml$', n, re.I)
@@ -872,12 +874,23 @@ jobs:
             return None
 
           for p in Path("reports").glob("*_results.xml"):
+            fid = id_from_filename(p)
             try:
               r = ET.parse(p).getroot()
             except Exception:
+              # If the file exists but isn't parseable, preserve it for debugging and
+              # treat it as a failing (malformed) fragment rather than "not produced".
+              if fid in DESIRED and p.exists() and p.stat().st_size > 0:
+                staging = Path("reports/_staging")
+                staging.mkdir(parents=True, exist_ok=True)
+                preserved = staging / f"{fid}_malformed.xml"
+                try:
+                  shutil.copyfile(p, preserved)
+                except Exception:
+                  pass
+                bad.add(fid)
               continue
             # Count by filename id primarily; fall back to testcase name if needed
-            fid = id_from_filename(p)
             if fid in DESIRED:
               seen.add(fid)
               continue
@@ -894,8 +907,12 @@ jobs:
               continue
             frag = Path(f"reports/{d}_results.xml")
             tc = ET.Element("testcase", {"classname":"UnityMCP.NL-T", "name": d})
-            fail = ET.SubElement(tc, "failure", {"message":"not produced"})
-            fail.text = "The agent did not emit a fragment for this test."
+            if d in bad:
+              fail = ET.SubElement(tc, "failure", {"message":"malformed xml"})
+              fail.text = "The agent wrote a fragment file, but it was not valid XML (parse failed). See reports/_staging/*_malformed.xml for the preserved original."
+            else:
+              fail = ET.SubElement(tc, "failure", {"message":"not produced"})
+              fail.text = "The agent did not emit a fragment for this test."
             ET.ElementTree(tc).write(frag, encoding="utf-8", xml_declaration=False)
             print(f"backfill: {d}")
           PY
@@ -1134,6 +1151,67 @@ jobs:
               lines.append('')
 
           md_out.write_text('\n'.join(lines), encoding='utf-8')
+          PY
+
+      # ---------- CI gate: fail job if any NL/T test missing or failed ----------
+      - name: Fail CI if NL/T incomplete or failed
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, re, sys
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          desired = ['NL-0','NL-1','NL-2','NL-3','NL-4','T-A','T-B','T-C','T-D','T-E','T-F','T-G','T-H','T-I','T-J']
+
+          junit_path = Path(os.environ.get('JUNIT_OUT', 'reports/junit-nl-suite.xml'))
+          if not junit_path.exists():
+              print("::error::No JUnit output found; failing CI gate.")
+              sys.exit(1)
+
+          def localname(tag: str) -> str:
+              return tag.rsplit('}', 1)[-1] if '}' in tag else tag
+
+          tree = ET.parse(junit_path)
+          root = tree.getroot()
+          suite = root.find('./*') if localname(root.tag) == 'testsuites' else root
+          cases = [] if suite is None else list(suite.findall('.//testcase'))
+
+          def id_from_case(tc):
+              name = (tc.get('name') or '').strip()
+              m = re.match(r'(NL-\d+|T-[A-Z])\b', name)
+              if m:
+                  return m.group(1)
+              so = tc.find('system-out')
+              if so is not None and so.text:
+                  m = re.search(r'\b(NL-\d+|T-[A-Z])\b', so.text)
+                  if m:
+                      return m.group(1)
+              return None
+
+          # Determine status per desired ID (first occurrence wins, matching the summary builder)
+          id_status = {}
+          for tc in cases:
+              tid = id_from_case(tc)
+              if not tid or tid not in desired or tid in id_status:
+                  continue
+              ok = (tc.find('failure') is None and tc.find('error') is None)
+              id_status[tid] = ok
+
+          missing = [d for d in desired if d not in id_status]
+          failed = [d for d, ok in id_status.items() if ok is False]
+
+          if missing:
+              print(f"::error::Missing NL/T tests in JUnit: {' '.join(missing)}")
+          if failed:
+              print(f"::error::Failing NL/T tests in JUnit: {' '.join(sorted(failed))}")
+
+          # Gate: all desired must be present and passing
+          if missing or failed:
+              sys.exit(1)
+
+          print("NL/T CI gate passed: all required tests present and passing.")
           PY
 
       # ---------- Collect execution transcript (if present) ----------
