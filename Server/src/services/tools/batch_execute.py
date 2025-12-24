@@ -18,7 +18,10 @@ MAX_COMMANDS_PER_BATCH = 25
     name="batch_execute",
     description=(
         "Runs a list of MCP tool calls as one batch. Use it to send a full sequence of commands, "
-        "inspect the results, then submit the next batch for the following step."
+        "inspect the results, then submit the next batch for the following step. "
+        "Note: Safety characteristics depend on the tools contained in the batch—batches with only "
+        "read-only tools (e.g., find, get_info) are safe, while batches containing create/modify/delete "
+        "operations may be destructive."
     ),
     annotations=ToolAnnotations(
         title="Batch Execute",
