@@ -1081,6 +1081,31 @@ jobs:
                   name_map[tid] = (tc.get('name') or tid)
 
           desired = ['NL-0','NL-1','NL-2','NL-3','NL-4','T-A','T-B','T-C','T-D','T-E','T-F','T-G','T-H','T-I','T-J']
+          default_titles = {
+              'NL-0': 'Baseline State Capture',
+              'NL-1': 'Core Method Operations',
+              'NL-2': 'Anchor Comment Insertion',
+              'NL-3': 'End-of-Class Content',
+              'NL-4': 'Console State Verification',
+              'T-A': 'Temporary Helper',
+              'T-B': 'Method Body Interior',
+              'T-C': 'Different Method Interior',
+              'T-D': 'End-of-Class Helper',
+              'T-E': 'Method Evolution',
+              'T-F': 'Atomic Multi-Edit',
+              'T-G': 'Path Normalization',
+              'T-H': 'Validation on Modified',
+              'T-I': 'Failure Surface',
+              'T-J': 'Idempotency',
+          }
+
+          def display_name(test_id: str) -> str:
+              # Prefer the emitted testcase "name" attribute (it may already include ID + title).
+              n = (name_map.get(test_id) or '').strip()
+              if n:
+                  return n
+              t = (default_titles.get(test_id) or '').strip()
+              return f"{test_id} — {t}" if t else test_id
 
           total = len(cases)
           failures = sum(1 for tc in cases if (tc.find('failure') is not None or tc.find('error') is not None))
@@ -1096,7 +1121,8 @@ jobs:
           ]
           for p in desired:
               st = id_status.get(p, None)
-              lines.append(f"- [x] {p}" if st is True else (f"- [ ] {p} (fail)" if st is False else f"- [ ] {p} (not run)"))
+              label = display_name(p)
+              lines.append(f"- [x] {label}" if st is True else (f"- [ ] {label} (fail)" if st is False else f"- [ ] {label} (not run)"))
           lines.append('')
 
           lines.append('## Test Details')
