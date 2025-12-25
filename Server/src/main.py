@@ -1,12 +1,21 @@
 import argparse
 import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, redirect_stdout
 import os
+import sys
 import threading
 import time
 from typing import AsyncIterator, Any
 from urllib.parse import urlparse
+import io
+from utils.cr_stripper import CRStripper
+
+if sys.platform == 'win32':
+    import msvcrt
+    # Set binary mode on stdout to prevent automatic translation at the FD level
+    msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
+
 
 from fastmcp import FastMCP
 from logging.handlers import RotatingFileHandler
@@ -402,8 +411,16 @@ Examples:
         mcp.run(transport=transport, host=host, port=port)
     else:
         # Use stdio transport for traditional MCP
-        logger.info("Starting FastMCP with stdio transport")
-        mcp.run(transport='stdio')
+        removed_crlf = io.TextIOWrapper(
+            CRStripper(sys.stdout.buffer),
+            encoding=sys.stdout.encoding or 'utf-8',
+            newline='\n',
+            line_buffering=True,
+        )
+
+        with redirect_stdout(removed_crlf):
+            logger.info("Starting FastMCP with stdio transport")
+            mcp.run(transport='stdio')
 
 
 # Run the server
