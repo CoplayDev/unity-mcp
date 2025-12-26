@@ -8,6 +8,7 @@ using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Resources;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using UnityEditor;
 
 namespace MCPForUnity.Editor.Tools
 {
@@ -232,6 +233,7 @@ namespace MCPForUnity.Editor.Tools
         /// <returns>The result for synchronous commands, or null for async commands (TCS will be completed later)</returns>
         public static object ExecuteCommand(string commandName, JObject @params, TaskCompletionSource<string> tcs)
         {
+            AssetDatabase.Refresh();
             var handlerInfo = GetHandlerInfo(commandName);
 
             if (handlerInfo.IsAsync)
@@ -256,6 +258,7 @@ namespace MCPForUnity.Editor.Tools
         /// <param name="params">Parameters to pass to the command (optional).</param>
         public static Task<object> InvokeCommandAsync(string commandName, JObject @params)
         {
+            AssetDatabase.Refresh();
             var handlerInfo = GetHandlerInfo(commandName);
             var payload = @params ?? new JObject();
 
