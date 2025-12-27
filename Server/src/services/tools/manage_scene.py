@@ -1,6 +1,8 @@
 from typing import Annotated, Literal, Any
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
+
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
@@ -8,7 +10,11 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 
 
 @mcp_for_unity_tool(
-    description="Performs CRUD operations on Unity scenes."
+    description="Performs CRUD operations on Unity scenes. Read-only actions: get_hierarchy, get_active, get_build_settings, screenshot. Destructive actions: create, load, save.",
+    annotations=ToolAnnotations(
+        title="Manage Scene",
+        destructiveHint=True,
+    ),
 )
 async def manage_scene(
     ctx: Context,
