@@ -16,6 +16,7 @@ from transport.legacy.unity_connection import (
     get_unity_connection_pool,
 )
 from transport.plugin_hub import PluginHub
+from core.auth import AuthSettings, auth_settings, verify_http_request
 
 logger = logging.getLogger("mcp-for-unity-server")
 
@@ -39,12 +40,16 @@ class ToolRegistrationResponse(BaseModel):
 class CustomToolService:
     _instance: "CustomToolService | None" = None
 
-    def __init__(self, mcp: FastMCP):
+    def __init__(self, mcp: FastMCP, auth_settings_value: AuthSettings | None = None):
         CustomToolService._instance = self
         self._mcp = mcp
         self._project_tools: dict[str, dict[str, ToolDefinitionModel]] = {}
         self._hash_to_project: dict[str, str] = {}
+        self._auth_settings: AuthSettings = auth_settings_value or auth_settings()
         self._register_http_routes()
+
+    def set_auth_settings(self, auth_settings_value: AuthSettings) -> None:
+        self._auth_settings = auth_settings_value
 
     @classmethod
     def get_instance(cls) -> "CustomToolService":
@@ -56,6 +61,9 @@ class CustomToolService:
     def _register_http_routes(self) -> None:
         @self._mcp.custom_route("/register-tools", methods=["POST"])
         async def register_tools(request: Request) -> JSONResponse:
+            failure = verify_http_request(request, self._auth_settings)
+            if failure:
+                return failure
             try:
                 payload = RegisterToolsPayload.model_validate(await request.json())
             except ValidationError as exc:

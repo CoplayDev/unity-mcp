@@ -25,6 +25,9 @@ namespace MCPForUnity.Editor.Constants
         internal const string PackageDeployLastBackupPath = "MCPForUnity.PackageDeploy.LastBackupPath";
         internal const string PackageDeployLastTargetPath = "MCPForUnity.PackageDeploy.LastTargetPath";
         internal const string PackageDeployLastSourcePath = "MCPForUnity.PackageDeploy.LastSourcePath";
+        internal const string AuthToken = "MCPForUnity.AuthToken";
+        internal const string AuthEnabled = "MCPForUnity.AuthEnabled";
+        internal const string AuthAllowedIps = "MCPForUnity.AuthAllowedIps";
 
         internal const string ServerSrc = "MCPForUnity.ServerSrc";
         internal const string UseEmbeddedServer = "MCPForUnity.UseEmbeddedServer";

@@ -15,6 +15,8 @@ namespace MCPForUnity.Editor.Helpers
 {
     public static class ConfigJsonBuilder
     {
+        private const string AuthTokenKey = "UNITY_MCP_AUTH_TOKEN";
+        private const string AuthTokenDescription = "Unity MCP auth token";
         public static string BuildManualConfigJson(string uvPath, McpClient client)
         {
             var root = new JObject();
@@ -22,7 +24,7 @@ namespace MCPForUnity.Editor.Helpers
             JObject container = isVSCode ? EnsureObject(root, "servers") : EnsureObject(root, "mcpServers");
 
             var unity = new JObject();
-            PopulateUnityNode(unity, uvPath, client, isVSCode);
+            PopulateUnityNode(root, unity, uvPath, client, isVSCode);
 
             container["unityMCP"] = unity;
 
@@ -35,7 +37,7 @@ namespace MCPForUnity.Editor.Helpers
             bool isVSCode = client?.IsVsCodeLayout == true;
             JObject container = isVSCode ? EnsureObject(root, "servers") : EnsureObject(root, "mcpServers");
             JObject unity = container["unityMCP"] as JObject ?? new JObject();
-            PopulateUnityNode(unity, uvPath, client, isVSCode);
+            PopulateUnityNode(root, unity, uvPath, client, isVSCode);
 
             container["unityMCP"] = unity;
             return root;
@@ -48,19 +50,36 @@ namespace MCPForUnity.Editor.Helpers
         /// - Adds transport configuration (HTTP or stdio)
         /// - Adds disabled:false for Windsurf/Kiro only when missing
         /// </summary>
-        private static void PopulateUnityNode(JObject unity, string uvPath, McpClient client, bool isVSCode)
+        private static void PopulateUnityNode(JObject root, JObject unity, string uvPath, McpClient client, bool isVSCode)
         {
             // Get transport preference (default to HTTP)
             bool useHttpTransport = client?.SupportsHttpTransport != false && EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool authEnabled = AuthPreferencesUtility.IsAuthEnabled();
             string httpProperty = string.IsNullOrEmpty(client?.HttpUrlProperty) ? "url" : client.HttpUrlProperty;
             var urlPropsToRemove = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "url", "serverUrl" };
             urlPropsToRemove.Remove(httpProperty);
 
             if (useHttpTransport)
             {
-                // HTTP mode: Use URL, no command
+                // HTTP mode: url + (optional) headers.
                 string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
                 unity[httpProperty] = httpUrl;
+
+                if (authEnabled)
+                {
+                    var headers = unity["headers"] as JObject ?? new JObject();
+                    EnsureInput(root, AuthTokenKey, AuthTokenDescription);
+                    headers["Authorization"] = $"Bearer ${{input:{AuthTokenKey}}}";
+                    unity["headers"] = headers;
+                }
+                else
+                {
+                    // Remove auth inputs and headers when disabled
+                    if (unity["headers"] != null)
+                    {
+                        unity.Remove("headers");
+                    }
+                }
 
                 foreach (var prop in urlPropsToRemove)
                 {
@@ -75,6 +94,9 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     unity["type"] = "http";
                 }
+
+                // Set version field
+                unity["version"] = AssetPathUtility.GetPackageVersion();
             }
             else
             {
@@ -106,6 +128,9 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     unity["type"] = "stdio";
                 }
+
+                // Set version field
+                unity["version"] = AssetPathUtility.GetPackageVersion();
             }
 
             // Remove type for non-VSCode clients
@@ -147,6 +172,45 @@ namespace MCPForUnity.Editor.Helpers
             var created = new JObject();
             parent[name] = created;
             return created;
+        }
+
+        private static void EnsureInput(JObject root, string id, string description)
+        {
+            if (root == null || string.IsNullOrWhiteSpace(id))
+            {
+                return;
+            }
+
+            if (root["inputs"] is not JArray inputs)
+            {
+                inputs = new JArray();
+                root["inputs"] = inputs;
+            }
+
+            foreach (var entry in inputs)
+            {
+                if (entry is JObject o)
+                {
+                    if (string.Equals(o.Value<string>("id"), id, StringComparison.Ordinal))
+                    {
+                        return;
+                    }
+                }
+                else if (entry != null && entry.Type == JTokenType.String)
+                {
+                    if (string.Equals(entry.Value<string>(), id, StringComparison.Ordinal))
+                    {
+                        return;
+                    }
+                }
+            }
+
+            inputs.Add(new JObject
+            {
+                ["id"] = id,
+                ["type"] = "promptString",
+                ["description"] = description ?? id,
+            });
         }
 
         private static IList<string> BuildUvxArgs(string fromUrl, string packageName)

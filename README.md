@@ -237,23 +237,41 @@ claude mcp add --scope user UnityMCP -- "C:/Users/USERNAME/AppData/Local/Microso
   "servers": {
     "unityMCP": {
       "type": "http",
-      "url": "http://localhost:8080/mcp"
+      "url": "http://localhost:8080/mcp",
+      "headers": { "Authorization": "Bearer ${input:UNITY_MCP_AUTH_TOKEN}" }
     }
   }
 }
 ```
 
-**macOS / Windows / Linux (Claude Desktop, Cursor, Claude Code, Windsurf, etc. – HTTP default)**
+**Cursor (all OS – HTTP default)**
 
 ```json
 {
   "mcpServers": {
     "unityMCP": {
-      "url": "http://localhost:8080/mcp"
+      "url": "http://localhost:8080/mcp",
+      "headers": { "Authorization": "Bearer ${input:UNITY_MCP_AUTH_TOKEN}" }
     }
   }
 }
 ```
+
+**macOS / Windows / Linux (Claude Desktop, Claude Code, Windsurf, etc. – HTTP default)**
+
+```json
+{
+  "mcpServers": {
+    "unityMCP": {
+      "url": "http://localhost:8080/mcp",
+      "headers": { "Authorization": "Bearer ${input:UNITY_MCP_AUTH_TOKEN}" }
+    }
+  }
+}
+```
+
+Notes:
+- Paste only the raw token into the prompt / env var (no `Bearer ` prefix).
 
 Set the URL to match whatever you entered in the Unity window (include `/mcp`).
 

@@ -57,10 +57,23 @@ uvx --from mcpforunityserver mcp-for-unity --transport http --http-url http://lo
   }
 }
 ```
+```
+
 
 ### Option 2: From GitHub Source
 
 Use this to run the latest released version from the repository. Change the version to `main` to run the latest unreleased changes from the repository.
+**MCP Client Configuration (HTTP):**
+```json
+{
+  "mcpServers": {
+    "UnityMCP": {
+      "url": "http://localhost:8080/mcp",
+      "headers": { "Authorization": "Bearer ${input:UNITY_MCP_AUTH_TOKEN}" }
+    }
+  }
+}
+```
 
 ```json
 {
@@ -108,48 +121,27 @@ cd unity-mcp/Server
 # Run with uv
 uv run src/main.py --transport stdio
 ```
+Configure your MCP client with `"url": "http://localhost:8080/mcp"` and include the `Authorization` header (`Bearer <token>`). If your client supports config interpolation, prefer `Bearer ${input:UNITY_MCP_AUTH_TOKEN}`.
 
 ---
 
 ## Configuration
+The server connects to Unity Editor automatically when both are running.
 
-The server connects to Unity Editor automatically when both are running. No additional configuration needed.
+**Authentication (optional; disabled by default)**
+- Toggle with `--auth` (default: off).
+- Allowlist with `UNITY_MCP_ALLOWED_IPS` (comma-separated). Default is loopback-only (`127.0.0.1/32, ::1/128`). Use `*` to allow any IP.
+- Token with `UNITY_MCP_AUTH_TOKEN` (optional). If omitted while enabled, the server generates one and persists it to the `api_key` file.
+- Token file lives at `api_key` (auto-created when needed):
+  - macOS: `~/Library/Application Support/UnityMCP/api_key`
+  - Windows: `%LOCALAPPDATA%\UnityMCP/api_key`
+  - Linux: `~/.local/share/UnityMCP/api_key`
+- HTTP clients send `Authorization: Bearer <token>`. When using auto-config, users enter only the token (the config adds the `Bearer ` prefix).
+- When auth is disabled, no auth headers are required.
 
-**Environment Variables:**
 
+**Environment/flags**
 - `DISABLE_TELEMETRY=true` - Opt out of anonymous usage analytics
 - `LOG_LEVEL=DEBUG` - Enable detailed logging (default: INFO)
 
 ---
-
-## Example Prompts
-
-Once connected, try these commands in your AI assistant:
-
-- "Create a 3D player controller with WASD movement"
-- "Add a rotating cube to the scene with a red material"
-- "Create a simple platformer level with obstacles"
-- "Generate a shader that creates a holographic effect"
-- "List all GameObjects in the current scene"
-
----
-
-## Documentation
-
-For complete documentation, troubleshooting, and advanced usage:
-
-📖 **[Full Documentation](https://github.com/CoplayDev/unity-mcp#readme)**
-
----
-
-## Requirements
-
-- **Python:** 3.10 or newer
-- **Unity Editor:** 2021.3 LTS or newer
-- **uv:** Python package manager ([Installation Guide](https://docs.astral.sh/uv/getting-started/installation/))
-
----
-
-## License
-
-MIT License - See [LICENSE](https://github.com/CoplayDev/unity-mcp/blob/main/LICENSE)

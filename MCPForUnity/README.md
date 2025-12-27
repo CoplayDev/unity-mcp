@@ -77,6 +77,16 @@ Notes:
 
 ---
 
+## Authentication
+- Authentication is optional (disabled by default). Enable it in the server settings, then copy the token shown in the UI.
+- Auto-config writes `Authorization: Bearer ...` and prompts for the token when the client supports `${input:...}`.
+
+Notes:
+- Enter/paste only the raw token (no `Bearer ` prefix).
+
+
+---
+
 ## Troubleshooting
 - Python or `uv` not found:
   - Help: [Fix MCP for Unity with Cursor, VS Code & Windsurf](https://github.com/CoplayDev/unity-mcp/wiki/1.-Fix-Unity-MCP-and-Cursor,-VSCode-&-Windsurf)
