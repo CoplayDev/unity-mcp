@@ -1,0 +1,21 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+    <ui:VisualElement class="pref-item">
+        <ui:VisualElement class="pref-row">
+            <!-- Key and Known indicator -->
+            <ui:VisualElement class="key-section">
+                <ui:Label name="key-label" class="key-label" />
+            </ui:VisualElement>
+            
+            <!-- Value field -->
+            <ui:TextField name="value-field" class="value-field" />
+            
+            <!-- Type dropdown -->
+            <ui:DropdownField name="type-dropdown" class="type-dropdown" choices="String,Int,Float,Bool" index="0" />
+            
+            <!-- Action buttons -->
+            <ui:VisualElement class="action-buttons">
+                <ui:Button name="save-button" text="✓" class="save-button" tooltip="Save changes" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
