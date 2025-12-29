@@ -15,7 +15,6 @@ from services.tools import get_unity_instance_from_context
     description="Execute a project-scoped custom tool registered by Unity.",
     annotations=ToolAnnotations(
         title="Execute Custom Tool",
-        destructiveHint=True,
     ),
 )
 async def execute_custom_tool(ctx: Context, tool_name: str, parameters: dict | None = None) -> MCPResponse:

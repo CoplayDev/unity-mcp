@@ -11,10 +11,9 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 
 
 @mcp_for_unity_tool(
-    description="Manages shader scripts in Unity (create, read, update, delete). Read-only action: read. Destructive actions: create, update, delete.",
+    description="Manages shader scripts in Unity (create, read, update, delete). Read-only action: read. Modifying actions: create, update, delete.",
     annotations=ToolAnnotations(
         title="Manage Shader",
-        destructiveHint=True,
     ),
 )
 async def manage_shader(

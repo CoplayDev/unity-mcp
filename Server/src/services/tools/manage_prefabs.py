@@ -14,7 +14,6 @@ from services.tools.utils import coerce_bool
     description="Performs prefab operations (open_stage, close_stage, save_open_stage, create_from_gameobject).",
     annotations=ToolAnnotations(
         title="Manage Prefabs",
-        destructiveHint=True,
     ),
 )
 async def manage_prefabs(
