@@ -24,6 +24,44 @@ namespace MCPForUnity.Editor.Windows
         private List<EditorPrefItem> currentPrefs = new List<EditorPrefItem>();
         private HashSet<string> knownMcpKeys = new HashSet<string>();
         
+        // Type mapping for known EditorPrefs
+        private readonly Dictionary<string, EditorPrefType> knownPrefTypes = new Dictionary<string, EditorPrefType>
+        {
+            // Boolean prefs
+            { EditorPrefKeys.DebugLogs, EditorPrefType.Bool },
+            { EditorPrefKeys.UseHttpTransport, EditorPrefType.Bool },
+            { EditorPrefKeys.ResumeHttpAfterReload, EditorPrefType.Bool },
+            { EditorPrefKeys.ResumeStdioAfterReload, EditorPrefType.Bool },
+            { EditorPrefKeys.UseEmbeddedServer, EditorPrefType.Bool },
+            { EditorPrefKeys.LockCursorConfig, EditorPrefType.Bool },
+            { EditorPrefKeys.AutoRegisterEnabled, EditorPrefType.Bool },
+            { EditorPrefKeys.SetupCompleted, EditorPrefType.Bool },
+            { EditorPrefKeys.SetupDismissed, EditorPrefType.Bool },
+            { EditorPrefKeys.CustomToolRegistrationEnabled, EditorPrefType.Bool },
+            { EditorPrefKeys.TelemetryDisabled, EditorPrefType.Bool },
+            
+            // Integer prefs
+            { EditorPrefKeys.UnitySocketPort, EditorPrefType.Int },
+            { EditorPrefKeys.ValidationLevel, EditorPrefType.Int },
+            { EditorPrefKeys.LastUpdateCheck, EditorPrefType.Int },
+            { EditorPrefKeys.LastStdIoUpgradeVersion, EditorPrefType.Int },
+            
+            // String prefs
+            { EditorPrefKeys.EditorWindowActivePanel, EditorPrefType.String },
+            { EditorPrefKeys.ClaudeCliPathOverride, EditorPrefType.String },
+            { EditorPrefKeys.UvxPathOverride, EditorPrefType.String },
+            { EditorPrefKeys.HttpBaseUrl, EditorPrefType.String },
+            { EditorPrefKeys.SessionId, EditorPrefType.String },
+            { EditorPrefKeys.WebSocketUrlOverride, EditorPrefType.String },
+            { EditorPrefKeys.GitUrlOverride, EditorPrefType.String },
+            { EditorPrefKeys.PackageDeploySourcePath, EditorPrefType.String },
+            { EditorPrefKeys.PackageDeployLastBackupPath, EditorPrefType.String },
+            { EditorPrefKeys.PackageDeployLastTargetPath, EditorPrefType.String },
+            { EditorPrefKeys.PackageDeployLastSourcePath, EditorPrefType.String },
+            { EditorPrefKeys.ServerSrc, EditorPrefType.String },
+            { EditorPrefKeys.LatestKnownVersion, EditorPrefType.String },
+        };
+        
         // Templates
         private VisualTreeAsset itemTemplate;
         
@@ -117,7 +155,8 @@ namespace MCPForUnity.Editor.Windows
             // Create items for existing prefs
             foreach (var key in allKeys)
             {
-                if (EditorPrefs.HasKey(key) && key != EditorPrefKeys.CustomerUuid)
+                // Skip Customer UUID but show everything else that's defined
+                if (key != EditorPrefKeys.CustomerUuid)
                 {
                     var item = CreateEditorPrefItem(key);
                     if (item != null)
@@ -146,79 +185,61 @@ namespace MCPForUnity.Editor.Windows
         {
             var item = new EditorPrefItem { Key = key, IsKnown = knownMcpKeys.Contains(key) };
             
-            // Check known MCP keys for their expected types
-            if (key == EditorPrefKeys.DebugLogs || key == EditorPrefKeys.UseHttpTransport || 
-                key == EditorPrefKeys.ResumeHttpAfterReload || key == EditorPrefKeys.ResumeStdioAfterReload ||
-                key == EditorPrefKeys.UseEmbeddedServer || key == EditorPrefKeys.LockCursorConfig ||
-                key == EditorPrefKeys.AutoRegisterEnabled || key == EditorPrefKeys.SetupCompleted ||
-                key == EditorPrefKeys.SetupDismissed || key == EditorPrefKeys.CustomToolRegistrationEnabled ||
-                key == EditorPrefKeys.TelemetryDisabled)
+            // Check if we know the type of this pref
+            if (knownPrefTypes.TryGetValue(key, out var knownType))
             {
-                // These are boolean values
-                item.Type = EditorPrefType.Bool;
-                item.Value = EditorPrefs.GetBool(key, false).ToString();
-            }
-            else if (key == EditorPrefKeys.UnitySocketPort || key == EditorPrefKeys.ValidationLevel ||
-                     key == EditorPrefKeys.LastUpdateCheck || key == EditorPrefKeys.LastStdIoUpgradeVersion)
-            {
-                // These are integer values
-                item.Type = EditorPrefType.Int;
-                item.Value = EditorPrefs.GetInt(key, 0).ToString();
+                // Use the known type
+                switch (knownType)
+                {
+                    case EditorPrefType.Bool:
+                        item.Type = EditorPrefType.Bool;
+                        item.Value = EditorPrefs.GetBool(key, false).ToString();
+                        break;
+                    case EditorPrefType.Int:
+                        item.Type = EditorPrefType.Int;
+                        item.Value = EditorPrefs.GetInt(key, 0).ToString();
+                        break;
+                    case EditorPrefType.Float:
+                        item.Type = EditorPrefType.Float;
+                        item.Value = EditorPrefs.GetFloat(key, 0f).ToString();
+                        break;
+                    case EditorPrefType.String:
+                        item.Type = EditorPrefType.String;
+                        item.Value = EditorPrefs.GetString(key, "");
+                        break;
+                }
             }
             else
             {
-                // Try to determine type by probing typed EditorPrefs accessors first,
-                // then falling back to string if no other type can be reliably detected.
-
-                // First, get the raw string value to check what's actually stored
-                var rawStringValue = EditorPrefs.GetString(key, null);
-                if (rawStringValue == null)
+                // Only try to detect type for unknown keys that actually exist
+                if (!EditorPrefs.HasKey(key))
                 {
-                    // Key doesn't exist, return null item
+                    // Key doesn't exist and we don't know its type, skip it
                     return null;
                 }
-
-                // Probe int using a sentinel value that should not normally be stored.
-                const int intSentinel = int.MinValue + 1;
-                var intValue = EditorPrefs.GetInt(key, intSentinel);
-                if (intValue != intSentinel && int.TryParse(rawStringValue, out _))
+                
+                // Unknown pref - try to detect type
+                var stringValue = EditorPrefs.GetString(key, "");
+                
+                if (int.TryParse(stringValue, out var intValue))
                 {
-                    // Only treat as int if the raw string can be parsed as int
                     item.Type = EditorPrefType.Int;
                     item.Value = intValue.ToString();
                 }
+                else if (float.TryParse(stringValue, out var floatValue))
+                {
+                    item.Type = EditorPrefType.Float;
+                    item.Value = floatValue.ToString();
+                }
+                else if (bool.TryParse(stringValue, out var boolValue))
+                {
+                    item.Type = EditorPrefType.Bool;
+                    item.Value = boolValue.ToString();
+                }
                 else
                 {
-                    // Probe float using NaN as a sentinel.
-                    var floatValue = EditorPrefs.GetFloat(key, float.NaN);
-                    if (!float.IsNaN(floatValue) && float.TryParse(rawStringValue, out _))
-                    {
-                        // Only treat as float if the raw string can be parsed as float
-                        item.Type = EditorPrefType.Float;
-                        item.Value = floatValue.ToString(CultureInfo.InvariantCulture);
-                    }
-                    else
-                    {
-                        // For bool, we need to be more careful. Only treat as bool if:
-                        // 1. The raw string is exactly "True" or "False" (case-insensitive)
-                        // 2. AND the bool probe returns consistent results
-                        var boolWhenDefaultTrue = EditorPrefs.GetBool(key, true);
-                        var boolWhenDefaultFalse = EditorPrefs.GetBool(key, false);
-                        
-                        if (boolWhenDefaultTrue != boolWhenDefaultFalse && 
-                            (rawStringValue.Equals("True", StringComparison.OrdinalIgnoreCase) || 
-                             rawStringValue.Equals("False", StringComparison.OrdinalIgnoreCase)))
-                        {
-                            item.Type = EditorPrefType.Bool;
-                            item.Value = boolWhenDefaultTrue.ToString();
-                        }
-                        else
-                        {
-                            // Fall back to treating the value as a string.
-                            item.Type = EditorPrefType.String;
-                            item.Value = rawStringValue;
-                        }
-                    }
+                    item.Type = EditorPrefType.String;
+                    item.Value = stringValue;
                 }
             }
             
