@@ -45,6 +45,12 @@ namespace MCPForUnity.Editor.Windows
                 $"{basePath}/Editor/Windows/EditorPrefs/EditorPrefsWindow.uxml"
             );
             
+            if (visualTree == null)
+            {
+                Debug.LogError("Failed to load EditorPrefsWindow.uxml template");
+                return;
+            }
+            
             // Load item template
             itemTemplate = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
                 $"{basePath}/Editor/Windows/EditorPrefs/EditorPrefItem.uxml"
