@@ -8,6 +8,32 @@ import time
 from typing import AsyncIterator, Any
 from urllib.parse import urlparse
 
+# Workaround for environments where tool signature evaluation runs with a globals
+# dict that does not include common `typing` names (e.g. when annotations are strings
+# and evaluated via `eval()` during schema generation).
+# Making these names available in builtins avoids `NameError: Annotated/Literal/... is not defined`.
+try:  # pragma: no cover - startup safety guard
+    import builtins
+    import typing as _typing
+
+    _typing_names = (
+        "Annotated",
+        "Literal",
+        "Any",
+        "Union",
+        "Optional",
+        "Dict",
+        "List",
+        "Tuple",
+        "Set",
+        "FrozenSet",
+    )
+    for _name in _typing_names:
+        if not hasattr(builtins, _name) and hasattr(_typing, _name):
+            setattr(builtins, _name, getattr(_typing, _name))  # type: ignore[attr-defined]
+except Exception:
+    pass
+
 from fastmcp import FastMCP
 from logging.handlers import RotatingFileHandler
 from starlette.requests import Request
@@ -242,6 +268,18 @@ Console Monitoring:
 Menu Items:
 - Use `execute_menu_item` when you have read the menu items resource
 - This lets you interact with Unity's menu system and third-party tools
+
+Payload sizing & paging (important):
+- Many Unity queries can return very large JSON. Prefer **paged + summary-first** calls.
+- `manage_scene(action="get_hierarchy")`:
+  - Use `page_size` + `cursor` and follow `next_cursor` until null.
+  - `page_size` is **items per page**; recommended starting point: **50**.
+- `manage_gameobject(action="get_components")`:
+  - Start with `include_properties=false` (metadata-only) and small `page_size` (e.g. **10-25**).
+  - Only request `include_properties=true` when needed; keep `page_size` small (e.g. **3-10**) to bound payloads.
+- `manage_asset(action="search")`:
+  - Use paging (`page_size`, `page_number`) and keep `page_size` modest (e.g. **25-50**) to avoid token-heavy responses.
+  - Keep `generate_preview=false` unless you explicitly need thumbnails (previews may include large base64 payloads).
 """
 )
 

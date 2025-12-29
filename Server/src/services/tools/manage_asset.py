@@ -9,35 +9,41 @@ from typing import Annotated, Any, Literal
 from fastmcp import Context
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
-from services.tools.utils import parse_json_payload
+from services.tools.utils import parse_json_payload, coerce_int
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 
 
 @mcp_for_unity_tool(
-    description="Performs asset operations (import, create, modify, delete, etc.) in Unity."
+    description=(
+        "Performs asset operations (import, create, modify, delete, etc.) in Unity.\n\n"
+        "Tip (payload safety): for `action=\"search\"`, prefer paging (`page_size`, `page_number`) and keep "
+        "`generate_preview=false` (previews can add large base64 blobs)."
+    )
 )
 async def manage_asset(
     ctx: Context,
     action: Annotated[Literal["import", "create", "modify", "delete", "duplicate", "move", "rename", "search", "get_info", "create_folder", "get_components"], "Perform CRUD operations on assets."],
-    path: Annotated[str, "Asset path (e.g., 'Materials/MyMaterial.mat') or search scope."],
+    path: Annotated[str, "Asset path (e.g., 'Materials/MyMaterial.mat') or search scope (e.g., 'Assets')."],
     asset_type: Annotated[str,
-                          "Asset type (e.g., 'Material', 'Folder') - required for 'create'."] | None = None,
+                          "Asset type (e.g., 'Material', 'Folder') - required for 'create'. Note: For ScriptableObjects, use manage_scriptable_object."] | None = None,
     properties: Annotated[dict[str, Any] | str,
                           "Dictionary (or JSON string) of properties for 'create'/'modify'."] | None = None,
     destination: Annotated[str,
                            "Target path for 'duplicate'/'move'."] | None = None,
     generate_preview: Annotated[bool,
-                                "Generate a preview/thumbnail for the asset when supported."] = False,
+                                "Generate a preview/thumbnail for the asset when supported. "
+                                "Warning: previews may include large base64 payloads; keep false unless needed."] = False,
     search_pattern: Annotated[str,
-                              "Search pattern (e.g., '*.prefab')."] | None = None,
+                              "Search pattern (e.g., '*.prefab' or AssetDatabase filters like 't:MonoScript'). "
+                              "Recommended: put queries like 't:MonoScript' here and set path='Assets'."] | None = None,
     filter_type: Annotated[str, "Filter type for search"] | None = None,
     filter_date_after: Annotated[str,
                                  "Date after which to filter"] | None = None,
     page_size: Annotated[int | float | str,
-                         "Page size for pagination"] | None = None,
+                         "Page size for pagination. Recommended: 25 (smaller for LLM-friendly responses)."] | None = None,
     page_number: Annotated[int | float | str,
-                           "Page number for pagination"] | None = None,
+                           "Page number for pagination (1-based)."] | None = None,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
 
@@ -83,24 +89,32 @@ async def manage_asset(
         await ctx.error(parse_error)
         return {"success": False, "message": parse_error}
 
-    # Coerce numeric inputs defensively
-    def _coerce_int(value, default=None):
-        if value is None:
-            return default
-        try:
-            if isinstance(value, bool):
-                return default
-            if isinstance(value, int):
-                return int(value)
-            s = str(value).strip()
-            if s.lower() in ("", "none", "null"):
-                return default
-            return int(float(s))
-        except Exception:
-            return default
+    page_size = coerce_int(page_size)
+    page_number = coerce_int(page_number)
 
-    page_size = _coerce_int(page_size)
-    page_number = _coerce_int(page_number)
+    # --- Payload-safe normalization for common LLM mistakes (search) ---
+    # Unity's C# handler treats `path` as a folder scope. If a model mistakenly puts a query like
+    # "t:MonoScript" into `path`, Unity will consider it an invalid folder and fall back to searching
+    # the entire project, which is token-heavy. Normalize such cases into search_pattern + Assets scope.
+    action_l = (action or "").lower()
+    if action_l == "search":
+        try:
+            raw_path = (path or "").strip()
+        except (AttributeError, TypeError):
+            # Handle case where path is not a string despite type annotation
+            raw_path = ""
+
+        # If the caller put an AssetDatabase query into `path`, treat it as `search_pattern`.
+        if (not search_pattern) and raw_path.startswith("t:"):
+            search_pattern = raw_path
+            path = "Assets"
+            await ctx.info("manage_asset(search): normalized query from `path` into `search_pattern` and set path='Assets'")
+
+        # If the caller used `asset_type` to mean a search filter, map it to filter_type.
+        # (In Unity, filterType becomes `t:<filterType>`.)
+        if (not filter_type) and asset_type and isinstance(asset_type, str):
+            filter_type = asset_type
+            await ctx.info("manage_asset(search): mapped `asset_type` into `filter_type` for safer server-side filtering")
 
     # Prepare parameters for the C# handler
     params_dict = {

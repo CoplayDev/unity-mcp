@@ -34,6 +34,9 @@ CONTRIBUTING.md.meta
 # Unity test project lock files
 TestProjects/UnityMCPTests/Packages/packages-lock.json
 
+# UnityMCPTests stress-run artifacts (these are created by tests/tools and should never be committed)
+TestProjects/UnityMCPTests/Assets/Temp/
+
 # Backup artifacts
 *.backup
 *.backup.meta

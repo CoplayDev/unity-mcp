@@ -229,31 +229,6 @@ namespace MCPForUnity.Editor.Tools
                     AssetDatabase.CreateAsset(pmat, fullPath);
                     newAsset = pmat;
                 }
-                else if (lowerAssetType == "scriptableobject")
-                {
-                    string scriptClassName = properties?["scriptClass"]?.ToString();
-                    if (string.IsNullOrEmpty(scriptClassName))
-                        return new ErrorResponse(
-                            "'scriptClass' property required when creating ScriptableObject asset."
-                        );
-
-                    Type scriptType = ComponentResolver.TryResolve(scriptClassName, out var resolvedType, out var error) ? resolvedType : null;
-                    if (
-                        scriptType == null
-                        || !typeof(ScriptableObject).IsAssignableFrom(scriptType)
-                    )
-                    {
-                        var reason = scriptType == null
-                            ? (string.IsNullOrEmpty(error) ? "Type not found." : error)
-                            : "Type found but does not inherit from ScriptableObject.";
-                        return new ErrorResponse($"Script class '{scriptClassName}' invalid: {reason}");
-                    }
-
-                    ScriptableObject so = ScriptableObject.CreateInstance(scriptType);
-                    // TODO: Apply properties from JObject to the ScriptableObject instance?
-                    AssetDatabase.CreateAsset(so, fullPath);
-                    newAsset = so;
-                }
                 else if (lowerAssetType == "prefab")
                 {
                     // Creating prefabs usually involves saving an existing GameObject hierarchy.
@@ -274,7 +249,7 @@ namespace MCPForUnity.Editor.Tools
                     // AssetDatabase.ImportAsset(fullPath); // Let Unity try to import it
                     // newAsset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(fullPath);
                     return new ErrorResponse(
-                        $"Creation for asset type '{assetType}' is not explicitly supported yet. Supported: Folder, Material, ScriptableObject."
+                        $"Creation for asset type '{assetType}' is not explicitly supported yet. Supported: Folder, Material, PhysicsMaterial."
                     );
                 }
 
@@ -445,11 +420,12 @@ namespace MCPForUnity.Editor.Tools
                     // Use |= in case the asset was already marked modified by previous logic (though unlikely here)
                     modified |= MaterialOps.ApplyProperties(material, properties, ManageGameObject.InputSerializer);
                 }
-                // Example: Modifying a ScriptableObject
+                // Example: Modifying a ScriptableObject (Use manage_scriptable_object instead!)
                 else if (asset is ScriptableObject so)
                 {
-                    // Apply properties directly to the ScriptableObject.
-                    modified |= ApplyObjectProperties(so, properties); // General helper
+                    // Deprecated: Prefer manage_scriptable_object for robust patching.
+                    // Kept for simple property setting fallback on existing assets if manage_scriptable_object isn't used.
+                    modified |= ApplyObjectProperties(so, properties); 
                 }
                 // Example: Modifying TextureImporter settings
                 else if (asset is Texture)

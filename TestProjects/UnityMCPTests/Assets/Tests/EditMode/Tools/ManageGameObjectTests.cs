@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -66,6 +67,81 @@ namespace MCPForUnityTests.Editor.Tools
             {
                 UnityEngine.Object.DestroyImmediate(createdObject);
             }
+        }
+
+        [Test]
+        public void GetComponents_ReturnsPagedMetadataByDefault()
+        {
+            // Arrange
+            testGameObject.AddComponent<Rigidbody>();
+            testGameObject.AddComponent<BoxCollider>();
+
+            var p = new JObject
+            {
+                ["action"] = "get_components",
+                ["target"] = testGameObject.name,
+                ["searchMethod"] = "by_name",
+                ["pageSize"] = 2
+            };
+
+            // Act
+            var raw = ManageGameObject.HandleCommand(p);
+            var result = raw as JObject ?? JObject.FromObject(raw);
+
+            // Assert
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            var data = result["data"] as JObject;
+            Assert.IsNotNull(data, "Expected data payload object.");
+            Assert.AreEqual(false, data.Value<bool>("includeProperties"));
+
+            var items = data["items"] as JArray;
+            Assert.IsNotNull(items, "Expected items array.");
+            Assert.AreEqual(2, items.Count, "Expected exactly pageSize items.");
+
+            var first = items[0] as JObject;
+            Assert.IsNotNull(first, "Expected item to be an object.");
+            Assert.IsNotNull(first["typeName"]);
+            Assert.IsNotNull(first["instanceID"]);
+            Assert.IsNull(first["properties"], "Metadata response should not include heavy serialized properties by default.");
+        }
+
+        [Test]
+        public void GetComponents_CanIncludePropertiesButStillPages()
+        {
+            // Arrange
+            testGameObject.AddComponent<Rigidbody>();
+            testGameObject.AddComponent<BoxCollider>();
+
+            var p = new JObject
+            {
+                ["action"] = "get_components",
+                ["target"] = testGameObject.name,
+                ["searchMethod"] = "by_name",
+                ["pageSize"] = 2,
+                ["includeProperties"] = true
+            };
+
+            // Act
+            var raw = ManageGameObject.HandleCommand(p);
+            var result = raw as JObject ?? JObject.FromObject(raw);
+
+            // Assert
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            var data = result["data"] as JObject;
+            Assert.IsNotNull(data);
+            Assert.AreEqual(true, data.Value<bool>("includeProperties"));
+
+            var items = data["items"] as JArray;
+            Assert.IsNotNull(items);
+            Assert.IsTrue(items.Count > 0);
+
+            var first = items[0] as JObject;
+            Assert.IsNotNull(first);
+            Assert.IsNotNull(first["typeName"]);
+            Assert.IsNotNull(first["instanceID"]);
+
+            // Heuristic: property-including payload should have more than just typeName/instanceID.
+            Assert.Greater(first.Properties().Count(), 2, "Expected richer component payload when includeProperties=true.");
         }
 
         [Test]

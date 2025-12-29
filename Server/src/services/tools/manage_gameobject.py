@@ -7,7 +7,7 @@ from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
-from services.tools.utils import coerce_bool, parse_json_payload
+from services.tools.utils import coerce_bool, parse_json_payload, coerce_int
 
 
 @mcp_for_unity_tool(
@@ -68,6 +68,11 @@ async def manage_gameobject(
     # Controls whether serialization of private [SerializeField] fields is included
     includeNonPublicSerialized: Annotated[bool | str,
                                           "Controls whether serialization of private [SerializeField] fields is included (accepts true/false or 'true'/'false')"] | None = None,
+    # --- Paging/safety for get_components ---
+    page_size: Annotated[int | str, "Page size for get_components paging."] | None = None,
+    cursor: Annotated[int | str, "Opaque cursor for get_components paging (offset)."] | None = None,
+    max_components: Annotated[int | str, "Hard cap on returned components per request (safety)."] | None = None,
+    include_properties: Annotated[bool | str, "If true, include serialized component properties (bounded)."] | None = None,
     # --- Parameters for 'duplicate' ---
     new_name: Annotated[str,
                         "New name for the duplicated object (default: SourceName_Copy)"] | None = None,
@@ -134,7 +139,12 @@ async def manage_gameobject(
     search_in_children = coerce_bool(search_in_children)
     search_inactive = coerce_bool(search_inactive)
     includeNonPublicSerialized = coerce_bool(includeNonPublicSerialized)
+    include_properties = coerce_bool(include_properties)
     world_space = coerce_bool(world_space, default=True)
+    # If coercion fails, omit these fields (None) rather than preserving invalid input.
+    page_size = coerce_int(page_size, default=None)
+    cursor = coerce_int(cursor, default=None)
+    max_components = coerce_int(max_components, default=None)
 
     # Coerce 'component_properties' from JSON string to dict for client compatibility
     component_properties = parse_json_payload(component_properties)
@@ -194,6 +204,10 @@ async def manage_gameobject(
             "searchInactive": search_inactive,
             "componentName": component_name,
             "includeNonPublicSerialized": includeNonPublicSerialized,
+            "pageSize": page_size,
+            "cursor": cursor,
+            "maxComponents": max_components,
+            "includeProperties": include_properties,
             # Parameters for 'duplicate'
             "new_name": new_name,
             "offset": offset,

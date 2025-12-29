@@ -58,3 +58,20 @@ def parse_json_payload(value: Any) -> Any:
     except (json.JSONDecodeError, ValueError):
         # If parsing fails, assume it was meant to be a literal string
         return value
+
+
+def coerce_int(value: Any, default: int | None = None) -> int | None:
+    """Attempt to coerce a loosely-typed value to an integer."""
+    if value is None:
+        return default
+    try:
+        if isinstance(value, bool):
+            return default
+        if isinstance(value, int):
+            return value
+        s = str(value).strip()
+        if s.lower() in ("", "none", "null"):
+            return default
+        return int(float(s))
+    except Exception:
+        return default

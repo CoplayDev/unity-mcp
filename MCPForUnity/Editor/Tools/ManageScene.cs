@@ -26,6 +26,15 @@ namespace MCPForUnity.Editor.Tools
             public int? buildIndex { get; set; }
             public string fileName { get; set; } = string.Empty;
             public int? superSize { get; set; }
+
+            // get_hierarchy paging + safety (summary-first)
+            public JToken parent { get; set; }
+            public int? pageSize { get; set; }
+            public int? cursor { get; set; }
+            public int? maxNodes { get; set; }
+            public int? maxDepth { get; set; }
+            public int? maxChildrenPerNode { get; set; }
+            public bool? includeTransform { get; set; }
         }
 
         private static SceneCommand ToSceneCommand(JObject p)
@@ -40,6 +49,21 @@ namespace MCPForUnity.Editor.Tools
                 if (double.TryParse(s, out var d)) return (int)d;
                 return t.Type == JTokenType.Integer ? t.Value<int>() : (int?)null;
             }
+            bool? BB(JToken t)
+            {
+                if (t == null || t.Type == JTokenType.Null) return null;
+                try
+                {
+                    if (t.Type == JTokenType.Boolean) return t.Value<bool>();
+                    var s = t.ToString().Trim();
+                    if (s.Length == 0) return null;
+                    if (bool.TryParse(s, out var b)) return b;
+                    if (s == "1") return true;
+                    if (s == "0") return false;
+                }
+                catch { }
+                return null;
+            }
             return new SceneCommand
             {
                 action = (p["action"]?.ToString() ?? string.Empty).Trim().ToLowerInvariant(),
@@ -47,7 +71,16 @@ namespace MCPForUnity.Editor.Tools
                 path = p["path"]?.ToString() ?? string.Empty,
                 buildIndex = BI(p["buildIndex"] ?? p["build_index"]),
                 fileName = (p["fileName"] ?? p["filename"])?.ToString() ?? string.Empty,
-                superSize = BI(p["superSize"] ?? p["super_size"] ?? p["supersize"])
+                superSize = BI(p["superSize"] ?? p["super_size"] ?? p["supersize"]),
+
+                // get_hierarchy paging + safety
+                parent = p["parent"],
+                pageSize = BI(p["pageSize"] ?? p["page_size"]),
+                cursor = BI(p["cursor"]),
+                maxNodes = BI(p["maxNodes"] ?? p["max_nodes"]),
+                maxDepth = BI(p["maxDepth"] ?? p["max_depth"]),
+                maxChildrenPerNode = BI(p["maxChildrenPerNode"] ?? p["max_children_per_node"]),
+                includeTransform = BB(p["includeTransform"] ?? p["include_transform"]),
             };
         }
 
@@ -137,7 +170,7 @@ namespace MCPForUnity.Editor.Tools
                     return SaveScene(fullPath, relativePath);
                 case "get_hierarchy":
                     try { McpLog.Info("[ManageScene] get_hierarchy: entering", always: false); } catch { }
-                    var gh = GetSceneHierarchy();
+                    var gh = GetSceneHierarchyPaged(cmd);
                     try { McpLog.Info("[ManageScene] get_hierarchy: exiting", always: false); } catch { }
                     return gh;
                 case "get_active":
@@ -452,7 +485,7 @@ namespace MCPForUnity.Editor.Tools
             }
         }
 
-        private static object GetSceneHierarchy()
+        private static object GetSceneHierarchyPaged(SceneCommand cmd)
         {
             try
             {
@@ -466,15 +499,71 @@ namespace MCPForUnity.Editor.Tools
                     );
                 }
 
-                try { McpLog.Info("[ManageScene] get_hierarchy: fetching root objects", always: false); } catch { }
-                GameObject[] rootObjects = activeScene.GetRootGameObjects();
-                try { McpLog.Info($"[ManageScene] get_hierarchy: rootCount={rootObjects?.Length ?? 0}", always: false); } catch { }
-                var hierarchy = rootObjects.Select(go => GetGameObjectDataRecursive(go)).ToList();
+                // Defaults tuned for safety; callers can override but we clamp to sane maxes.
+                // NOTE: pageSize is "items per page", not "number of pages".
+                // Keep this conservative to reduce peak response sizes when callers omit page_size.
+                int resolvedPageSize = Mathf.Clamp(cmd.pageSize ?? 50, 1, 500);
+                int resolvedCursor = Mathf.Max(0, cmd.cursor ?? 0);
+                int resolvedMaxNodes = Mathf.Clamp(cmd.maxNodes ?? 1000, 1, 5000);
+                int effectiveTake = Mathf.Min(resolvedPageSize, resolvedMaxNodes);
+                int resolvedMaxChildrenPerNode = Mathf.Clamp(cmd.maxChildrenPerNode ?? 200, 0, 2000);
+                bool includeTransform = cmd.includeTransform ?? false;
 
-                var resp = new SuccessResponse(
-                    $"Retrieved hierarchy for scene '{activeScene.name}'.",
-                    hierarchy
-                );
+                // NOTE: maxDepth is accepted for forward-compatibility, but current paging mode
+                // returns a single level (roots or direct children). This keeps payloads bounded.
+
+                List<GameObject> nodes;
+                string scope;
+
+                GameObject parentGo = ResolveGameObject(cmd.parent, activeScene);
+                if (cmd.parent == null || cmd.parent.Type == JTokenType.Null)
+                {
+                    try { McpLog.Info("[ManageScene] get_hierarchy: listing root objects (paged summary)", always: false); } catch { }
+                    nodes = activeScene.GetRootGameObjects().Where(go => go != null).ToList();
+                    scope = "roots";
+                }
+                else
+                {
+                    if (parentGo == null)
+                    {
+                        return new ErrorResponse($"Parent GameObject ('{cmd.parent}') not found.");
+                    }
+                    try { McpLog.Info($"[ManageScene] get_hierarchy: listing children of '{parentGo.name}' (paged summary)", always: false); } catch { }
+                    nodes = new List<GameObject>(parentGo.transform.childCount);
+                    foreach (Transform child in parentGo.transform)
+                    {
+                        if (child != null) nodes.Add(child.gameObject);
+                    }
+                    scope = "children";
+                }
+
+                int total = nodes.Count;
+                if (resolvedCursor > total) resolvedCursor = total;
+                int end = Mathf.Min(total, resolvedCursor + effectiveTake);
+
+                var items = new List<object>(Mathf.Max(0, end - resolvedCursor));
+                for (int i = resolvedCursor; i < end; i++)
+                {
+                    var go = nodes[i];
+                    if (go == null) continue;
+                    items.Add(BuildGameObjectSummary(go, includeTransform, resolvedMaxChildrenPerNode));
+                }
+
+                bool truncated = end < total;
+                string nextCursor = truncated ? end.ToString() : null;
+
+                var payload = new
+                {
+                    scope = scope,
+                    cursor = resolvedCursor,
+                    pageSize = effectiveTake,
+                    next_cursor = nextCursor,
+                    truncated = truncated,
+                    total = total,
+                    items = items,
+                };
+
+                var resp = new SuccessResponse($"Retrieved hierarchy page for scene '{activeScene.name}'.", payload);
                 try { McpLog.Info("[ManageScene] get_hierarchy: success", always: false); } catch { }
                 return resp;
             }
@@ -482,6 +571,111 @@ namespace MCPForUnity.Editor.Tools
             {
                 try { McpLog.Error($"[ManageScene] get_hierarchy: exception {e.Message}"); } catch { }
                 return new ErrorResponse($"Error getting scene hierarchy: {e.Message}");
+            }
+        }
+
+        private static GameObject ResolveGameObject(JToken targetToken, Scene activeScene)
+        {
+            if (targetToken == null || targetToken.Type == JTokenType.Null) return null;
+
+            try
+            {
+                if (targetToken.Type == JTokenType.Integer || int.TryParse(targetToken.ToString(), out _))
+                {
+                    if (int.TryParse(targetToken.ToString(), out int id))
+                    {
+                        var obj = EditorUtility.InstanceIDToObject(id);
+                        if (obj is GameObject go) return go;
+                        if (obj is Component c) return c.gameObject;
+                    }
+                }
+            }
+            catch { }
+
+            string s = targetToken.ToString();
+            if (string.IsNullOrEmpty(s)) return null;
+
+            // Path-based find (e.g., "Root/Child/GrandChild")
+            if (s.Contains("/"))
+            {
+                try { return GameObject.Find(s); } catch { }
+            }
+
+            // Name-based find (first match, includes inactive)
+            try
+            {
+                var all = activeScene.GetRootGameObjects();
+                foreach (var root in all)
+                {
+                    if (root == null) continue;
+                    if (root.name == s) return root;
+                    var trs = root.GetComponentsInChildren<Transform>(includeInactive: true);
+                    foreach (var t in trs)
+                    {
+                        if (t != null && t.gameObject != null && t.gameObject.name == s) return t.gameObject;
+                    }
+                }
+            }
+            catch { }
+
+            return null;
+        }
+
+        private static object BuildGameObjectSummary(GameObject go, bool includeTransform, int maxChildrenPerNode)
+        {
+            if (go == null) return null;
+
+            int childCount = 0;
+            try { childCount = go.transform != null ? go.transform.childCount : 0; } catch { }
+            bool childrenTruncated = childCount > 0; // We do not inline children in summary mode.
+
+            var d = new Dictionary<string, object>
+            {
+                { "name", go.name },
+                { "instanceID", go.GetInstanceID() },
+                { "activeSelf", go.activeSelf },
+                { "activeInHierarchy", go.activeInHierarchy },
+                { "tag", go.tag },
+                { "layer", go.layer },
+                { "isStatic", go.isStatic },
+                { "path", GetGameObjectPath(go) },
+                { "childCount", childCount },
+                { "childrenTruncated", childrenTruncated },
+                { "childrenCursor", childCount > 0 ? "0" : null },
+                { "childrenPageSizeDefault", maxChildrenPerNode },
+            };
+
+            if (includeTransform && go.transform != null)
+            {
+                var t = go.transform;
+                d["transform"] = new
+                {
+                    position = new[] { t.localPosition.x, t.localPosition.y, t.localPosition.z },
+                    rotation = new[] { t.localRotation.eulerAngles.x, t.localRotation.eulerAngles.y, t.localRotation.eulerAngles.z },
+                    scale = new[] { t.localScale.x, t.localScale.y, t.localScale.z },
+                };
+            }
+
+            return d;
+        }
+
+        private static string GetGameObjectPath(GameObject go)
+        {
+            if (go == null) return string.Empty;
+            try
+            {
+                var names = new Stack<string>();
+                Transform t = go.transform;
+                while (t != null)
+                {
+                    names.Push(t.name);
+                    t = t.parent;
+                }
+                return string.Join("/", names);
+            }
+            catch
+            {
+                return go.name;
             }
         }
 

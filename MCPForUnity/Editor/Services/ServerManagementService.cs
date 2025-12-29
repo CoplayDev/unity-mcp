@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Collections.Generic;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using UnityEditor;
@@ -171,15 +172,7 @@ namespace MCPForUnity.Editor.Services
             // First, try to stop any existing server
             StopLocalHttpServer();
 
-            // Clear the cache to ensure we get a fresh version
-            try
-            {
-                ClearUvxCache();
-            }
-            catch (Exception ex)
-            {
-                McpLog.Warn($"Failed to clear cache before starting server: {ex.Message}");
-            }
+            // Note: Dev mode cache-busting is handled by `uvx --no-cache --refresh` in the generated command.
 
             if (EditorUtility.DisplayDialog(
                 "Start Local HTTP Server",
@@ -237,20 +230,47 @@ namespace MCPForUnity.Editor.Services
                     return false;
                 }
 
-                McpLog.Info($"Attempting to stop any process listening on local port {port}. This will terminate the owning process even if it is not the MCP server.");
+                // Guardrails:
+                // - Never terminate the Unity Editor process.
+                // - Only terminate processes that look like the MCP server (uv/uvx/python running mcp-for-unity).
+                // This prevents accidental termination of unrelated services (including Unity itself).
+                int unityPid = GetCurrentProcessIdSafe();
 
-                int pid = GetProcessIdForPort(port);
-                if (pid > 0)
-                {
-                    KillProcess(pid);
-                    McpLog.Info($"Stopped local HTTP server on port {port} (PID: {pid})");
-                    return true;
-                }
-                else
+                var pids = GetListeningProcessIdsForPort(port);
+                if (pids.Count == 0)
                 {
                     McpLog.Info($"No process found listening on port {port}");
                     return false;
                 }
+
+                bool stoppedAny = false;
+                foreach (var pid in pids)
+                {
+                    if (pid <= 0) continue;
+                    if (unityPid > 0 && pid == unityPid)
+                    {
+                        McpLog.Warn($"Refusing to stop port {port}: owning PID appears to be the Unity Editor process (PID {pid}).");
+                        continue;
+                    }
+
+                    if (!LooksLikeMcpServerProcess(pid))
+                    {
+                        McpLog.Warn($"Refusing to stop port {port}: owning PID {pid} does not look like mcp-for-unity (uvx/uv/python).");
+                        continue;
+                    }
+
+                    if (TerminateProcess(pid))
+                    {
+                        McpLog.Info($"Stopped local HTTP server on port {port} (PID: {pid})");
+                        stoppedAny = true;
+                    }
+                    else
+                    {
+                        McpLog.Warn($"Failed to stop process PID {pid} on port {port}");
+                    }
+                }
+
+                return stoppedAny;
             }
             catch (Exception ex)
             {
@@ -259,8 +279,9 @@ namespace MCPForUnity.Editor.Services
             }
         }
 
-        private int GetProcessIdForPort(int port)
+        private List<int> GetListeningProcessIdsForPort(int port)
         {
+            var results = new List<int>();
             try
             {
                 string stdout, stderr;
@@ -280,7 +301,7 @@ namespace MCPForUnity.Editor.Services
                                 var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
                                 if (parts.Length > 0 && int.TryParse(parts[parts.Length - 1], out int pid))
                                 {
-                                    return pid;
+                                    results.Add(pid);
                                 }
                             }
                         }
@@ -288,12 +309,13 @@ namespace MCPForUnity.Editor.Services
                 }
                 else
                 {
-                    // lsof -i :<port> -t
+                    // lsof: only return LISTENers (avoids capturing random clients)
                     // Use /usr/sbin/lsof directly as it might not be in PATH for Unity
                     string lsofPath = "/usr/sbin/lsof";
                     if (!System.IO.File.Exists(lsofPath)) lsofPath = "lsof"; // Fallback
 
-                    success = ExecPath.TryRun(lsofPath, $"-i :{port} -t", Application.dataPath, out stdout, out stderr);
+                    // -nP: avoid DNS/service name lookups; faster and less error-prone
+                    success = ExecPath.TryRun(lsofPath, $"-nP -iTCP:{port} -sTCP:LISTEN -t", Application.dataPath, out stdout, out stderr);
                     if (success && !string.IsNullOrWhiteSpace(stdout))
                     {
                         var pidStrings = stdout.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
@@ -301,12 +323,7 @@ namespace MCPForUnity.Editor.Services
                         {
                             if (int.TryParse(pidString.Trim(), out int pid))
                             {
-                                if (pidStrings.Length > 1)
-                                {
-                                    McpLog.Debug($"Multiple processes found on port {port}; attempting to stop PID {pid} returned by lsof -t.");
-                                }
-
-                                return pid;
+                                results.Add(pid);
                             }
                         }
                     }
@@ -316,26 +333,96 @@ namespace MCPForUnity.Editor.Services
             {
                 McpLog.Warn($"Error checking port {port}: {ex.Message}");
             }
-            return -1;
+            return results.Distinct().ToList();
         }
 
-        private void KillProcess(int pid)
+        private static int GetCurrentProcessIdSafe()
+        {
+            try { return System.Diagnostics.Process.GetCurrentProcess().Id; }
+            catch { return -1; }
+        }
+
+        private bool LooksLikeMcpServerProcess(int pid)
+        {
+            try
+            {
+                // Windows best-effort: tasklist /FI "PID eq X"
+                if (Application.platform == RuntimePlatform.WindowsEditor)
+                {
+                    if (ExecPath.TryRun("cmd.exe", $"/c tasklist /FI \"PID eq {pid}\"", Application.dataPath, out var stdout, out var stderr, 5000))
+                    {
+                        string combined = (stdout ?? string.Empty) + "\n" + (stderr ?? string.Empty);
+                        combined = combined.ToLowerInvariant();
+                        // Common process names: python.exe, uv.exe, uvx.exe
+                        return combined.Contains("python") || combined.Contains("uvx") || combined.Contains("uv.exe") || combined.Contains("uvx.exe");
+                    }
+                    return false;
+                }
+
+                // macOS/Linux: ps -p pid -o comm= -o args=
+                if (ExecPath.TryRun("ps", $"-p {pid} -o comm= -o args=", Application.dataPath, out var psOut, out var psErr, 5000))
+                {
+                    string s = (psOut ?? string.Empty).Trim().ToLowerInvariant();
+                    if (string.IsNullOrEmpty(s))
+                    {
+                        s = (psErr ?? string.Empty).Trim().ToLowerInvariant();
+                    }
+
+                    // Explicitly never kill Unity / Unity Hub processes
+                    if (s.Contains("unity") || s.Contains("unityhub") || s.Contains("unity hub"))
+                    {
+                        return false;
+                    }
+
+                    // Positive indicators
+                    bool mentionsUvx = s.Contains("uvx") || s.Contains(" uvx ");
+                    bool mentionsUv = s.Contains("uv ") || s.Contains("/uv");
+                    bool mentionsPython = s.Contains("python");
+                    bool mentionsMcp = s.Contains("mcp-for-unity") || s.Contains("mcp_for_unity") || s.Contains("mcp for unity");
+                    bool mentionsTransport = s.Contains("--transport") && s.Contains("http");
+
+                    // Accept if it looks like uv/uvx/python launching our server package/entrypoint
+                    if ((mentionsUvx || mentionsUv || mentionsPython) && (mentionsMcp || mentionsTransport))
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch { }
+
+            return false;
+        }
+
+        private bool TerminateProcess(int pid)
         {
             try
             {
                 string stdout, stderr;
                 if (Application.platform == RuntimePlatform.WindowsEditor)
                 {
-                    ExecPath.TryRun("taskkill", $"/F /PID {pid}", Application.dataPath, out stdout, out stderr);
+                    // taskkill without /F first; fall back to /F if needed.
+                    bool ok = ExecPath.TryRun("taskkill", $"/PID {pid}", Application.dataPath, out stdout, out stderr);
+                    if (!ok)
+                    {
+                        ok = ExecPath.TryRun("taskkill", $"/F /PID {pid}", Application.dataPath, out stdout, out stderr);
+                    }
+                    return ok;
                 }
                 else
                 {
-                    ExecPath.TryRun("kill", $"-9 {pid}", Application.dataPath, out stdout, out stderr);
+                    // Try a graceful termination first, then escalate.
+                    bool ok = ExecPath.TryRun("kill", $"-15 {pid}", Application.dataPath, out stdout, out stderr);
+                    if (!ok)
+                    {
+                        ok = ExecPath.TryRun("kill", $"-9 {pid}", Application.dataPath, out stdout, out stderr);
+                    }
+                    return ok;
                 }
             }
             catch (Exception ex)
             {
                 McpLog.Error($"Error killing process {pid}: {ex.Message}");
+                return false;
             }
         }
 
@@ -368,9 +455,13 @@ namespace MCPForUnity.Editor.Services
                 return false;
             }
 
+            bool devForceRefresh = false;
+            try { devForceRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false); } catch { }
+
+            string devFlags = devForceRefresh ? "--no-cache --refresh " : string.Empty;
             string args = string.IsNullOrEmpty(fromUrl)
-                ? $"{packageName} --transport http --http-url {httpUrl}"
-                : $"--from {fromUrl} {packageName} --transport http --http-url {httpUrl}";
+                ? $"{devFlags}{packageName} --transport http --http-url {httpUrl}"
+                : $"{devFlags}--from {fromUrl} {packageName} --transport http --http-url {httpUrl}";
 
             command = $"{uvxPath} {args}";
             return true;

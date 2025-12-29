@@ -48,6 +48,7 @@ MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to 
 * `manage_prefabs`: Performs prefab operations (create, modify, delete, etc.).
 * `manage_scene`: Manages scenes (load, save, create, get hierarchy, etc.).
 * `manage_script`: Compatibility router for legacy script operations (create, read, delete). Prefer `apply_text_edits` or `script_apply_edits` for edits.
+* `manage_scriptable_object`: Creates and modifies ScriptableObject assets using Unity SerializedObject property paths.
 * `manage_shader`: Performs shader CRUD operations (create, read, modify, delete).
 * `read_console`: Gets messages from or clears the console.
 * `run_tests`: Runs tests in the Unity Editor.

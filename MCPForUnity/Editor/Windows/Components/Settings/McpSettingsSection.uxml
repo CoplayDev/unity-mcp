@@ -42,6 +42,13 @@
                     <ui:Label text="• Local: /Users/you/Projects/unity-mcp/Server" class="help-text" />
                     <ui:Label text="• Remote: git+https://github.com/CoplayDev/unity-mcp@v6.3.0#subdirectory=Server" class="help-text" />
 
+                    <ui:Label text="Dev Mode:" class="advanced-label" style="margin-top: 10px;" />
+                    <ui:Label text="When enabled, generated uvx commands add '--no-cache --refresh' before launching (slower startup, but avoids stale cached builds while iterating on the Server)." class="help-text" />
+                    <ui:VisualElement class="setting-row">
+                        <ui:Label text="Force fresh server install:" class="setting-label" />
+                        <ui:Toggle name="dev-mode-force-refresh-toggle" class="setting-toggle" />
+                    </ui:VisualElement>
+
                     <ui:Label text="Local Package Deployment:" class="advanced-label" style="margin-top: 12px;" />
                     <ui:Label text="Copy a MCPForUnity folder into this project's package location." class="help-text" />
                     <ui:VisualElement class="override-row">
