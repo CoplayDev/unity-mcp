@@ -27,7 +27,7 @@ namespace MCPForUnity.Editor.MenuItems
         }
 
 
-        [MenuItem("Window/MCP For Unity/EditorPrefs", priority = 3)]
+        [MenuItem("Window/MCP For Unity/Edit EditorPrefs", priority = 3)]
         public static void ShowEditorPrefsWindow()
         {
             EditorPrefsWindow.ShowWindow();
