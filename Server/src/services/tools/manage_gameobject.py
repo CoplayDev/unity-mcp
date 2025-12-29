@@ -14,10 +14,9 @@ from services.tools.preflight import preflight
 
 
 @mcp_for_unity_tool(
-    description="Performs CRUD operations on GameObjects and components. Read-only actions: find, get_components, get_component. Destructive actions: create, modify, delete, add_component, remove_component, set_component_property, duplicate, move_relative.",
+    description="Performs CRUD operations on GameObjects and components. Read-only actions: find, get_components, get_component. Modifying actions: create, modify, delete, add_component, remove_component, set_component_property, duplicate, move_relative.",
     annotations=ToolAnnotations(
         title="Manage GameObject",
-        destructiveHint=True,
     ),
 )
 async def manage_gameobject(

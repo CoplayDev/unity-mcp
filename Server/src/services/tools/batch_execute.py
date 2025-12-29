@@ -25,7 +25,6 @@ MAX_COMMANDS_PER_BATCH = 25
     ),
     annotations=ToolAnnotations(
         title="Batch Execute",
-        destructiveHint=True,
     ),
 )
 async def batch_execute(

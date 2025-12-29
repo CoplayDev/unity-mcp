@@ -17,7 +17,6 @@ from transport.legacy.unity_connection import async_send_command_with_retry
     description="Execute a Unity menu item by path.",
     annotations=ToolAnnotations(
         title="Execute Menu Item",
-        destructiveHint=True,
     ),
 )
 async def execute_menu_item(
