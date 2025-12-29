@@ -15,7 +15,6 @@ from transport.unity_transport import _current_transport
     description="Set the active Unity instance for this client/session. Accepts Name@hash or hash.",
     annotations=ToolAnnotations(
         title="Set Active Instance",
-        destructiveHint=True,
     ),
 )
 async def set_active_instance(
