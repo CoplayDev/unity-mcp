@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using MCPForUnity.Editor.Constants;
@@ -119,8 +120,11 @@ namespace MCPForUnity.Editor.Windows
                 if (EditorPrefs.HasKey(key) && key != EditorPrefKeys.CustomerUuid)
                 {
                     var item = CreateEditorPrefItem(key);
-                    currentPrefs.Add(item);
-                    prefsContainer.Add(CreateItemUI(item));
+                    if (item != null)
+                    {
+                        currentPrefs.Add(item);
+                        prefsContainer.Add(CreateItemUI(item));
+                    }
                 }
             }
         }
@@ -163,77 +167,64 @@ namespace MCPForUnity.Editor.Windows
             }
             else
             {
-                // Try to determine type by parsing the stored string value
-                var stringValue = EditorPrefs.GetString(key, "");
-                
-                if (TryGetInt(key, out var intValue))
+                // Try to determine type by probing typed EditorPrefs accessors first,
+                // then falling back to string if no other type can be reliably detected.
+
+                // First, get the raw string value to check what's actually stored
+                var rawStringValue = EditorPrefs.GetString(key, null);
+                if (rawStringValue == null)
                 {
+                    // Key doesn't exist, return null item
+                    return null;
+                }
+
+                // Probe int using a sentinel value that should not normally be stored.
+                const int intSentinel = int.MinValue + 1;
+                var intValue = EditorPrefs.GetInt(key, intSentinel);
+                if (intValue != intSentinel && int.TryParse(rawStringValue, out _))
+                {
+                    // Only treat as int if the raw string can be parsed as int
                     item.Type = EditorPrefType.Int;
                     item.Value = intValue.ToString();
                 }
-                else if (TryGetFloat(key, out var floatValue))
-                {
-                    item.Type = EditorPrefType.Float;
-                    item.Value = floatValue.ToString();
-                }
-                else if (TryGetBool(key, out var boolValue))
-                {
-                    item.Type = EditorPrefType.Bool;
-                    item.Value = boolValue.ToString();
-                }
                 else
                 {
-                    item.Type = EditorPrefType.String;
-                    item.Value = stringValue;
+                    // Probe float using NaN as a sentinel.
+                    var floatValue = EditorPrefs.GetFloat(key, float.NaN);
+                    if (!float.IsNaN(floatValue) && float.TryParse(rawStringValue, out _))
+                    {
+                        // Only treat as float if the raw string can be parsed as float
+                        item.Type = EditorPrefType.Float;
+                        item.Value = floatValue.ToString(CultureInfo.InvariantCulture);
+                    }
+                    else
+                    {
+                        // For bool, we need to be more careful. Only treat as bool if:
+                        // 1. The raw string is exactly "True" or "False" (case-insensitive)
+                        // 2. AND the bool probe returns consistent results
+                        var boolWhenDefaultTrue = EditorPrefs.GetBool(key, true);
+                        var boolWhenDefaultFalse = EditorPrefs.GetBool(key, false);
+                        
+                        if (boolWhenDefaultTrue != boolWhenDefaultFalse && 
+                            (rawStringValue.Equals("True", StringComparison.OrdinalIgnoreCase) || 
+                             rawStringValue.Equals("False", StringComparison.OrdinalIgnoreCase)))
+                        {
+                            item.Type = EditorPrefType.Bool;
+                            item.Value = boolWhenDefaultTrue.ToString();
+                        }
+                        else
+                        {
+                            // Fall back to treating the value as a string.
+                            item.Type = EditorPrefType.String;
+                            item.Value = rawStringValue;
+                        }
+                    }
                 }
             }
             
             return item;
         }
-        
-        private bool TryGetInt(string key, out int value)
-        {
-            // EditorPrefs doesn't have TryGetInt in Unity 2021.3, so we need to get the value as string and parse
-            if (EditorPrefs.HasKey(key))
-            {
-                var stringValue = EditorPrefs.GetString(key, "");
-                if (int.TryParse(stringValue, out value))
-                {
-                    return true;
-                }
-            }
-            value = default;
-            return false;
-        }
-        
-        private bool TryGetFloat(string key, out float value)
-        {
-            if (EditorPrefs.HasKey(key))
-            {
-                var stringValue = EditorPrefs.GetString(key, "");
-                if (float.TryParse(stringValue, out value))
-                {
-                    return true;
-                }
-            }
-            value = default;
-            return false;
-        }
-        
-        private bool TryGetBool(string key, out bool value)
-        {
-            if (EditorPrefs.HasKey(key))
-            {
-                var stringValue = EditorPrefs.GetString(key, "");
-                if (bool.TryParse(stringValue, out value))
-                {
-                    return true;
-                }
-            }
-            value = default;
-            return false;
-        }
-        
+   
         private VisualElement CreateItemUI(EditorPrefItem item)
         {
             if (itemTemplate == null)
