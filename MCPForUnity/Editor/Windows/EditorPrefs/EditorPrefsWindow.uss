@@ -146,17 +146,14 @@
 }
 
 .pref-item {
-    margin-bottom: 8px;
+    margin-bottom: 0;
     background-color: #393939;
-    border-left-width: 1px;
-    border-right-width: 1px;
-    border-top-width: 1px;
+    border-left-width: 0;
+    border-right-width: 0;
+    border-top-width: 0;
     border-bottom-width: 1px;
-    border-left-color: #555555;
-    border-right-color: #555555;
-    border-top-color: #555555;
     border-bottom-color: #555555;
-    border-radius: 4px;
+    border-radius: 0;
     padding: 8px;
 }
 
