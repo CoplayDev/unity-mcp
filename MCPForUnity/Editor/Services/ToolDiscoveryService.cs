@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Text.RegularExpressions;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Tools;
@@ -13,8 +12,7 @@ namespace MCPForUnity.Editor.Services
     public class ToolDiscoveryService : IToolDiscoveryService
     {
         private Dictionary<string, ToolMetadata> _cachedTools;
-        private readonly Dictionary<Type, string> _scriptPathCache = new();
-    private readonly Dictionary<string, string> _summaryCache = new();
+
 
         public List<ToolMetadata> DiscoverAllTools()
         {
@@ -25,33 +23,30 @@ namespace MCPForUnity.Editor.Services
 
             _cachedTools = new Dictionary<string, ToolMetadata>();
 
-            // Scan all assemblies for [McpForUnityTool] attributes
-            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
-
-            foreach (var assembly in assemblies)
+            var toolTypes = TypeCache.GetTypesWithAttribute<McpForUnityToolAttribute>();
+            foreach (var type in toolTypes)
             {
+                McpForUnityToolAttribute toolAttr;
                 try
                 {
-                    var types = assembly.GetTypes();
-
-                    foreach (var type in types)
-                    {
-                        var toolAttr = type.GetCustomAttribute<McpForUnityToolAttribute>();
-                        if (toolAttr == null)
-                            continue;
-
-                        var metadata = ExtractToolMetadata(type, toolAttr);
-                        if (metadata != null)
-                        {
-                            _cachedTools[metadata.Name] = metadata;
-                            EnsurePreferenceInitialized(metadata);
-                        }
-                    }
+                    toolAttr = type.GetCustomAttribute<McpForUnityToolAttribute>();
                 }
                 catch (Exception ex)
                 {
-                    // Skip assemblies that can't be reflected
-                    McpLog.Info($"Skipping assembly {assembly.FullName}: {ex.Message}");
+                    McpLog.Warn($"Failed to read [McpForUnityTool] for {type.FullName}: {ex.Message}");
+                    continue;
+                }
+
+                if (toolAttr == null)
+                {
+                    continue;
+                }
+
+                var metadata = ExtractToolMetadata(type, toolAttr);
+                if (metadata != null)
+                {
+                    _cachedTools[metadata.Name] = metadata;
+                    EnsurePreferenceInitialized(metadata);
                 }
             }
 
@@ -131,23 +126,15 @@ namespace MCPForUnity.Editor.Services
                     ClassName = type.Name,
                     Namespace = type.Namespace ?? "",
                     AssemblyName = type.Assembly.GetName().Name,
-                    AssetPath = ResolveScriptAssetPath(type),
                     AutoRegister = toolAttr.AutoRegister,
                     RequiresPolling = toolAttr.RequiresPolling,
                     PollAction = string.IsNullOrEmpty(toolAttr.PollAction) ? "status" : toolAttr.PollAction
                 };
 
                 metadata.IsBuiltIn = DetermineIsBuiltIn(type, metadata);
-                if (metadata.IsBuiltIn)
-                {
-                    string summaryDescription = ExtractSummaryDescription(type, metadata);
-                    if (!string.IsNullOrWhiteSpace(summaryDescription))
-                    {
-                        metadata.Description = summaryDescription;
-                    }
-                }
+
                 return metadata;
-                
+
             }
             catch (Exception ex)
             {
@@ -265,56 +252,6 @@ namespace MCPForUnity.Editor.Services
             return EditorPrefKeys.ToolEnabledPrefix + toolName;
         }
 
-        private string ResolveScriptAssetPath(Type type)
-        {
-            if (type == null)
-            {
-                return null;
-            }
-
-            if (_scriptPathCache.TryGetValue(type, out var cachedPath))
-            {
-                return cachedPath;
-            }
-
-            string resolvedPath = null;
-
-            try
-            {
-                string filter = string.IsNullOrEmpty(type.Name) ? "t:MonoScript" : $"{type.Name} t:MonoScript";
-                var guids = AssetDatabase.FindAssets(filter);
-
-                foreach (var guid in guids)
-                {
-                    string assetPath = AssetDatabase.GUIDToAssetPath(guid);
-                    if (string.IsNullOrEmpty(assetPath))
-                    {
-                        continue;
-                    }
-
-                    var script = AssetDatabase.LoadAssetAtPath<MonoScript>(assetPath);
-                    if (script == null)
-                    {
-                        continue;
-                    }
-
-                    var scriptClass = script.GetClass();
-                    if (scriptClass == type)
-                    {
-                            resolvedPath = assetPath.Replace('\\', '/');
-                        break;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                McpLog.Warn($"Failed to resolve asset path for {type.FullName}: {ex.Message}");
-            }
-
-            _scriptPathCache[type] = resolvedPath;
-            return resolvedPath;
-        }
-
         private bool DetermineIsBuiltIn(Type type, ToolMetadata metadata)
         {
             if (metadata == null)
@@ -322,25 +259,9 @@ namespace MCPForUnity.Editor.Services
                 return false;
             }
 
-            if (!string.IsNullOrEmpty(metadata.AssetPath))
+            if (type != null && !string.IsNullOrEmpty(type.Namespace) && type.Namespace.StartsWith("MCPForUnity.Editor.Tools", StringComparison.Ordinal))
             {
-                string normalizedPath = metadata.AssetPath.Replace("\\", "/");
-                string packageRoot = AssetPathUtility.GetMcpPackageRootPath();
-
-                if (!string.IsNullOrEmpty(packageRoot))
-                {
-                    string normalizedRoot = packageRoot.Replace("\\", "/");
-                    if (!normalizedRoot.EndsWith("/", StringComparison.Ordinal))
-                    {
-                        normalizedRoot += "/";
-                    }
-
-                    string builtInRoot = normalizedRoot + "Editor/Tools/";
-                    if (normalizedPath.StartsWith(builtInRoot, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
-                }
+                return true;
             }
 
             if (!string.IsNullOrEmpty(metadata.AssemblyName) && metadata.AssemblyName.Equals("MCPForUnity.Editor", StringComparison.Ordinal))
@@ -349,58 +270,6 @@ namespace MCPForUnity.Editor.Services
             }
 
             return false;
-        }
-
-        private string ExtractSummaryDescription(Type type, ToolMetadata metadata)
-        {
-            if (metadata == null || string.IsNullOrEmpty(metadata.AssetPath))
-            {
-                return null;
-            }
-
-            if (_summaryCache.TryGetValue(metadata.AssetPath, out var cachedSummary))
-            {
-                return cachedSummary;
-            }
-
-            string summary = null;
-
-            try
-            {
-                var monoScript = AssetDatabase.LoadAssetAtPath<MonoScript>(metadata.AssetPath);
-                string scriptText = monoScript?.text;
-                if (string.IsNullOrEmpty(scriptText))
-                {
-                    _summaryCache[metadata.AssetPath] = null;
-                    return null;
-                }
-
-                string classPattern = $@"///\s*<summary>\s*(?<content>[\s\S]*?)\s*</summary>\s*(?:\[[^\]]*\]\s*)*(?:public\s+)?(?:static\s+)?class\s+{Regex.Escape(type.Name)}";
-                var match = Regex.Match(scriptText, classPattern);
-
-                if (!match.Success)
-                {
-                    match = Regex.Match(scriptText, @"///\s*<summary>\s*(?<content>[\s\S]*?)\s*</summary>");
-                }
-
-                if (!match.Success)
-                {
-                    _summaryCache[metadata.AssetPath] = null;
-                    return null;
-                }
-
-                summary = match.Groups["content"].Value;
-                summary = Regex.Replace(summary, @"^\s*///\s?", string.Empty, RegexOptions.Multiline);
-                summary = Regex.Replace(summary, @"<[^>]+>", string.Empty);
-                summary = Regex.Replace(summary, @"\s+", " ").Trim();
-            }
-            catch (System.Exception ex)
-            {
-                McpLog.Warn($"Failed to extract summary description for {type?.FullName}: {ex.Message}");
-            }
-
-            _summaryCache[metadata.AssetPath] = summary;
-            return summary;
         }
     }
 }

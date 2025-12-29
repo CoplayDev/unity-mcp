@@ -2,17 +2,17 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Windows.Components.ClientConfig;
 using MCPForUnity.Editor.Windows.Components.Connection;
 using MCPForUnity.Editor.Windows.Components.Settings;
+using MCPForUnity.Editor.Windows.Components.Tools;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
-using MCPForUnity.Editor.Constants;
-using MCPForUnity.Editor.Windows.Components.Tools;
 
 namespace MCPForUnity.Editor.Windows
 {
@@ -31,6 +31,7 @@ namespace MCPForUnity.Editor.Windows
 
         private static readonly HashSet<MCPForUnityEditorWindow> OpenWindows = new();
         private bool guiCreated = false;
+        private bool toolsLoaded = false;
         private double lastRefreshTime = 0;
         private const double RefreshDebounceSeconds = 0.5;
 
@@ -196,16 +197,37 @@ namespace MCPForUnity.Editor.Windows
                 var toolsRoot = toolsTree.Instantiate();
                 toolsContainer.Add(toolsRoot);
                 toolsSection = new McpToolsSection(toolsRoot);
-                toolsSection.Refresh();
+
+                if (toolsTabToggle != null && toolsTabToggle.value)
+                {
+                    EnsureToolsLoaded();
+                }
             }
             else
             {
                 McpLog.Warn("Failed to load tools section UXML. Tool configuration will be unavailable.");
             }
+
             guiCreated = true;
 
             // Initial updates
             RefreshAllData();
+        }
+
+        private void EnsureToolsLoaded()
+        {
+            if (toolsLoaded)
+            {
+                return;
+            }
+
+            if (toolsSection == null)
+            {
+                return;
+            }
+
+            toolsLoaded = true;
+            toolsSection.Refresh();
         }
 
         private void OnEnable()
@@ -219,6 +241,7 @@ namespace MCPForUnity.Editor.Windows
             EditorApplication.update -= OnEditorUpdate;
             OpenWindows.Remove(this);
             guiCreated = false;
+            toolsLoaded = false;
         }
 
         private void OnFocus()
@@ -326,6 +349,11 @@ namespace MCPForUnity.Editor.Windows
 
             settingsTabToggle?.SetValueWithoutNotify(showSettings);
             toolsTabToggle?.SetValueWithoutNotify(!showSettings);
+
+            if (!showSettings)
+            {
+                EnsureToolsLoaded();
+            }
 
             EditorPrefs.SetString(EditorPrefKeys.EditorWindowActivePanel, panel.ToString());
         }
