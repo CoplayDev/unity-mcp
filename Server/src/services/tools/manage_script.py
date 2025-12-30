@@ -504,6 +504,7 @@ async def validate_script(
     description="Compatibility router for legacy script operations. Prefer apply_text_edits (ranges) or script_apply_edits (structured) for edits. Read-only action: read. Modifying actions: create, delete.",
     annotations=ToolAnnotations(
         title="Manage Script",
+        destructiveHint=True,
     ),
 )
 async def manage_script(
