@@ -110,12 +110,13 @@ namespace MCPForUnity.Editor.Clients.Configurators
                     };
                 }
 
-                if (config["mcp"] == null)
+                var mcpSection = config["mcp"] as JObject;
+                if (mcpSection == null)
                 {
-                    config["mcp"] = new JObject();
+                    mcpSection = new JObject();
+                    config["mcp"] = mcpSection;
                 }
 
-                var mcpSection = config["mcp"] as JObject;
                 string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
 
                 mcpSection[ServerName] = new JObject
@@ -132,7 +133,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException($"Failed to configure OpenCode: {ex.Message}");
+                throw new InvalidOperationException("Failed to configure OpenCode.", ex);
             }
         }
 
