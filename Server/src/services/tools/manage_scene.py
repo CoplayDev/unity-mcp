@@ -14,6 +14,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
     description="Performs CRUD operations on Unity scenes. Read-only actions: get_hierarchy, get_active, get_build_settings, screenshot. Modifying actions: create, load, save.",
     annotations=ToolAnnotations(
         title="Manage Scene",
+        destructiveHint=True,
     ),
 )
 async def manage_scene(

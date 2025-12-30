@@ -24,6 +24,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
     ),
     annotations=ToolAnnotations(
         title="Manage Asset",
+        destructiveHint=True,
     ),
 )
 async def manage_asset(

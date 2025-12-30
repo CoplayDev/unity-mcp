@@ -16,6 +16,7 @@ from services.tools.utils import coerce_bool, parse_json_payload, coerce_int
     description="Performs CRUD operations on GameObjects and components. Read-only actions: find, get_components, get_component. Modifying actions: create, modify, delete, add_component, remove_component, set_component_property, duplicate, move_relative.",
     annotations=ToolAnnotations(
         title="Manage GameObject",
+        destructiveHint=True,
     ),
 )
 async def manage_gameobject(
