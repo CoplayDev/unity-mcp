@@ -9,7 +9,7 @@
             </ui:VisualElement>
             <ui:VisualElement class="setting-row" name="http-url-row">
                 <ui:Label text="HTTP URL:" class="setting-label" />
-                <ui:TextField name="http-url" class="url-field" placeholder-text="http://localhost:8080" />
+                <ui:TextField name="http-url" class="url-field" />
             </ui:VisualElement>
             <ui:VisualElement name="http-server-command-section" class="manual-config-content">
                 <ui:Label text="Use this command to launch the server manually:" class="config-label" />
