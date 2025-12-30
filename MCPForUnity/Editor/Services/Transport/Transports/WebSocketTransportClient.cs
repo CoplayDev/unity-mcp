@@ -703,11 +703,6 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
         private static Uri BuildWebSocketUri(string baseUrl)
         {
-            if (string.IsNullOrWhiteSpace(baseUrl))
-            {
-                baseUrl = "http://localhost:8080";
-            }
-
             if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var httpUri))
             {
                 throw new InvalidOperationException($"Invalid MCP base URL: {baseUrl}");
