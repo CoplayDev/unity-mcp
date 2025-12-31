@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Annotated, Any, Literal
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
@@ -22,7 +23,11 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 
 
 @mcp_for_unity_tool(
-    description="Creates and modifies ScriptableObject assets using Unity SerializedObject property paths."
+    description="Creates and modifies ScriptableObject assets using Unity SerializedObject property paths.",
+    annotations=ToolAnnotations(
+        title="Manage Scriptable Object",
+        destructiveHint=True,
+    ),
 )
 async def manage_scriptable_object(
     ctx: Context,
