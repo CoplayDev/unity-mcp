@@ -27,7 +27,7 @@ namespace MCPForUnityTests.Editor.Tools
             var result = new TestRunResult(summary, new TestRunTestResult[0]);
 
             // Act
-            string message = FormatTestResultMessage("EditMode", result);
+            string message = MCPForUnity.Editor.Tools.RunTests.FormatTestResultMessage("EditMode", result);
 
             // Assert - THIS IS THE NEW FEATURE
             Assert.IsTrue(
@@ -51,7 +51,7 @@ namespace MCPForUnityTests.Editor.Tools
             var result = new TestRunResult(summary, new TestRunTestResult[0]);
 
             // Act
-            string message = FormatTestResultMessage("EditMode", result);
+            string message = MCPForUnity.Editor.Tools.RunTests.FormatTestResultMessage("EditMode", result);
 
             // Assert
             Assert.IsFalse(
@@ -61,21 +61,6 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsTrue(message.Contains("4/5 passed"), "Should contain pass ratio");
         }
 
-        /// <summary>
-        /// Helper method to format test result message.
-        /// This matches the implementation in RunTests.cs.
-        /// </summary>
-        private static string FormatTestResultMessage(string mode, TestRunResult result)
-        {
-            string message = $"{mode} tests completed: {result.Passed}/{result.Total} passed, {result.Failed} failed, {result.Skipped} skipped";
-
-            // Add warning when no tests matched the filter criteria
-            if (result.Total == 0)
-            {
-                message += " (No tests matched the specified filters)";
-            }
-
-            return message;
-        }
+        // Use MCPForUnity.Editor.Tools.RunTests.FormatTestResultMessage directly.
     }
 }

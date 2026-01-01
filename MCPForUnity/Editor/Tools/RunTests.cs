@@ -87,14 +87,7 @@ namespace MCPForUnity.Editor.Tools
 
             var result = await runTask.ConfigureAwait(true);
 
-            string message =
-                $"{parsedMode.Value} tests completed: {result.Passed}/{result.Total} passed, {result.Failed} failed, {result.Skipped} skipped";
-
-            // Add warning when no tests matched the filter criteria
-            if (result.Total == 0)
-            {
-                message += " (No tests matched the specified filters)";
-            }
+            string message = FormatTestResultMessage(parsedMode.Value.ToString(), result);
 
             var data = result.ToSerializable(parsedMode.Value.ToString(), includeDetails, includeFailedTests);
             return new SuccessResponse(message, data);
@@ -125,6 +118,20 @@ namespace MCPForUnity.Editor.Tools
                 CategoryNames = categoryNames,
                 AssemblyNames = assemblyNames
             };
+        }
+
+        internal static string FormatTestResultMessage(string mode, TestRunResult result)
+        {
+            string message =
+                $"{mode} tests completed: {result.Passed}/{result.Total} passed, {result.Failed} failed, {result.Skipped} skipped";
+
+            // Add warning when no tests matched the filter criteria
+            if (result.Total == 0)
+            {
+                message += " (No tests matched the specified filters)";
+            }
+
+            return message;
         }
 
         private static string[] ParseStringArray(JObject @params, string key)
