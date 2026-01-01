@@ -31,7 +31,7 @@ namespace MCPForUnityTests.Editor.Tools
 
             // Assert - THIS IS THE NEW FEATURE
             Assert.IsTrue(
-                message.Contains("No tests matched") || message.Contains("no tests found"),
+                message.Contains("No tests matched"),
                 $"Expected warning when total=0, but got: '{message}'"
             );
         }
@@ -55,7 +55,7 @@ namespace MCPForUnityTests.Editor.Tools
 
             // Assert
             Assert.IsFalse(
-                message.Contains("No tests matched") || message.Contains("no tests found"),
+                message.Contains("No tests matched"),
                 $"Should not have warning when tests exist, but got: '{message}'"
             );
             Assert.IsTrue(message.Contains("4/5 passed"), "Should contain pass ratio");
