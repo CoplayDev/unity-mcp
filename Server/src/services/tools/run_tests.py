@@ -34,7 +34,7 @@ class RunTestsTestResult(BaseModel):
 class RunTestsResult(BaseModel):
     mode: str
     summary: RunTestsSummary
-    results: list[RunTestsTestResult]
+    results: list[RunTestsTestResult] | None = None
 
 
 class RunTestsResponse(MCPResponse):
@@ -52,6 +52,8 @@ async def run_tests(
     group_names: Annotated[list[str] | str, "Same as test_names, except it allows for Regex"] | None = None,
     category_names: Annotated[list[str] | str, "NUnit category names to filter by (tests marked with [Category] attribute)"] | None = None,
     assembly_names: Annotated[list[str] | str, "Assembly names to filter tests by"] | None = None,
+    include_failed_tests: Annotated[bool, "Include details for failed/skipped tests only (default: false)"] = False,
+    include_details: Annotated[bool, "Include details for all tests (default: false)"] = False,
 ) -> RunTestsResponse:
     unity_instance = get_unity_instance_from_context(ctx)
 
@@ -87,6 +89,12 @@ async def run_tests(
     assembly_names_list = _coerce_string_list(assembly_names)
     if assembly_names_list:
         params["assemblyNames"] = assembly_names_list
+
+    # Add verbosity parameters
+    if include_failed_tests:
+        params["includeFailedTests"] = True
+    if include_details:
+        params["includeDetails"] = True
 
     response = await send_with_unity_instance(async_send_command_with_retry, unity_instance, "run_tests", params)
     await ctx.info(f'Response {response}')

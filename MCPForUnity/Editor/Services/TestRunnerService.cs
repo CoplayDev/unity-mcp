@@ -356,13 +356,33 @@ namespace MCPForUnity.Editor.Services
         public int Failed => Summary.Failed;
         public int Skipped => Summary.Skipped;
 
-        public object ToSerializable(string mode)
+        public object ToSerializable(string mode, bool includeDetails = false, bool includeFailedTests = false)
         {
+            // Determine which results to include
+            IEnumerable<object> resultsToSerialize;
+            if (includeDetails)
+            {
+                // Include all test results
+                resultsToSerialize = Results.Select(r => r.ToSerializable());
+            }
+            else if (includeFailedTests)
+            {
+                // Include only failed and skipped tests
+                resultsToSerialize = Results
+                    .Where(r => !string.Equals(r.State, "Passed", StringComparison.OrdinalIgnoreCase))
+                    .Select(r => r.ToSerializable());
+            }
+            else
+            {
+                // No individual test results
+                resultsToSerialize = null;
+            }
+
             return new
             {
                 mode,
                 summary = Summary.ToSerializable(),
-                results = Results.Select(r => r.ToSerializable()).ToList(),
+                results = resultsToSerialize?.ToList(),
             };
         }
 
