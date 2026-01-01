@@ -90,6 +90,12 @@ namespace MCPForUnity.Editor.Tools
             string message =
                 $"{parsedMode.Value} tests completed: {result.Passed}/{result.Total} passed, {result.Failed} failed, {result.Skipped} skipped";
 
+            // Add warning when no tests matched the filter criteria
+            if (result.Total == 0)
+            {
+                message += " (No tests matched the specified filters)";
+            }
+
             var data = result.ToSerializable(parsedMode.Value.ToString(), includeDetails, includeFailedTests);
             return new SuccessResponse(message, data);
         }

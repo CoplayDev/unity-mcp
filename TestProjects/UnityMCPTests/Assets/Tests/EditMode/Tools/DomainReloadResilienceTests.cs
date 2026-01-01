@@ -7,7 +7,7 @@ using System.IO;
 using MCPForUnity.Editor.Tools;
 using Newtonsoft.Json.Linq;
 
-namespace Tests.EditMode.Tools
+namespace MCPForUnityTests.Editor.Tools
 {
     /// <summary>
     /// Tests for domain reload resilience - ensuring MCP requests succeed even during Unity domain reloads.
