@@ -1450,7 +1450,11 @@ namespace MCPForUnity.Editor.Tools
             {
                 var compToken = componentsToAddArray.First;
                 if (compToken.Type == JTokenType.String)
+                {
                     typeName = compToken.ToString();
+                    // Check for properties in top-level componentProperties parameter
+                    properties = @params["componentProperties"]?[typeName] as JObject;
+                }
                 else if (compToken is JObject compObj)
                 {
                     typeName = compObj["typeName"]?.ToString();

@@ -460,6 +460,8 @@ namespace MCPForUnity.Editor.Tools
         {
             string materialPath = NormalizePath(@params["materialPath"]?.ToString());
             string shaderName = @params["shader"]?.ToString() ?? "Standard";
+            JToken colorToken = @params["color"];
+            string colorProperty = @params["property"]?.ToString();
             
             JObject properties = null;
             JToken propsToken = @params["properties"];
@@ -494,25 +496,104 @@ namespace MCPForUnity.Editor.Tools
                 return new { status = "error", message = $"Could not find shader: {shaderName}" };
             }
 
-            Material material = new Material(shader);
-            
             // Check for existing asset to avoid silent overwrite
             if (AssetDatabase.LoadAssetAtPath<Material>(materialPath) != null)
             {
                 return new { status = "error", message = $"Material already exists at {materialPath}" };
             }
-            
-            AssetDatabase.CreateAsset(material, materialPath);
-            
-            if (properties != null)
-            {
-                MaterialOps.ApplyProperties(material, properties, ManageGameObject.InputSerializer);
-            }
-            
-            EditorUtility.SetDirty(material);
-            AssetDatabase.SaveAssets();
 
-            return new { status = "success", message = $"Created material at {materialPath} with shader {shaderName}" };
+            Material material = null;
+            var shouldDestroyMaterial = true;
+            try
+            {
+                material = new Material(shader);
+
+                // Apply color param during creation (keeps Python tool signature and C# implementation consistent).
+                // If "properties" already contains a color property, let properties win.
+                bool shouldApplyColor = false;
+                if (colorToken != null)
+                {
+                    if (properties == null)
+                    {
+                        shouldApplyColor = true;
+                    }
+                    else if (!string.IsNullOrEmpty(colorProperty))
+                    {
+                        // If colorProperty is specified, only check that specific property.
+                        shouldApplyColor = !properties.ContainsKey(colorProperty);
+                    }
+                    else
+                    {
+                        // If colorProperty is not specified, check fallback properties.
+                        shouldApplyColor = !properties.ContainsKey("_BaseColor") && !properties.ContainsKey("_Color");
+                    }
+                }
+
+                if (shouldApplyColor)
+                {
+                    Color color;
+                    try
+                    {
+                        color = MaterialOps.ParseColor(colorToken, ManageGameObject.InputSerializer);
+                    }
+                    catch (Exception e)
+                    {
+                        return new { status = "error", message = $"Invalid color format: {e.Message}" };
+                    }
+
+                    if (!string.IsNullOrEmpty(colorProperty))
+                    {
+                        if (material.HasProperty(colorProperty))
+                        {
+                            material.SetColor(colorProperty, color);
+                        }
+                        else
+                        {
+                            return new
+                            {
+                                status = "error",
+                                message = $"Specified color property '{colorProperty}' does not exist on this material."
+                            };
+                        }
+                    }
+                    else if (material.HasProperty("_BaseColor"))
+                    {
+                        material.SetColor("_BaseColor", color);
+                    }
+                    else if (material.HasProperty("_Color"))
+                    {
+                        material.SetColor("_Color", color);
+                    }
+                    else
+                    {
+                        return new
+                        {
+                            status = "error",
+                            message = "Could not find suitable color property (_BaseColor or _Color) on this material's shader."
+                        };
+                    }
+                }
+
+                AssetDatabase.CreateAsset(material, materialPath);
+                shouldDestroyMaterial = false; // material is now owned by the AssetDatabase
+
+                if (properties != null)
+                {
+                    MaterialOps.ApplyProperties(material, properties, ManageGameObject.InputSerializer);
+                }
+
+                EditorUtility.SetDirty(material);
+                AssetDatabase.SaveAssets();
+
+                return new { status = "success", message = $"Created material at {materialPath} with shader {shaderName}" };
+            }
+            finally
+            {
+                if (shouldDestroyMaterial && material != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(material);
+                }
+            }
         }
     }
 }
