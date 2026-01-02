@@ -1,6 +1,8 @@
 from typing import Annotated, Any, Literal
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
+
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
@@ -9,7 +11,11 @@ from services.tools.utils import coerce_bool
 
 
 @mcp_for_unity_tool(
-    description="Performs prefab operations (open_stage, close_stage, save_open_stage, create_from_gameobject)."
+    description="Performs prefab operations (open_stage, close_stage, save_open_stage, create_from_gameobject).",
+    annotations=ToolAnnotations(
+        title="Manage Prefabs",
+        destructiveHint=True,
+    ),
 )
 async def manage_prefabs(
     ctx: Context,

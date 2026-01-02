@@ -5,13 +5,19 @@ import sys
 from core.telemetry import get_package_version
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
+
 from services.registry import mcp_for_unity_tool
 from transport.unity_instance_middleware import get_unity_instance_middleware
 from transport.plugin_hub import PluginHub
 
 
 @mcp_for_unity_tool(
-    description="Return the current FastMCP request context details (client_id, session_id, and meta dump)."
+    description="Return the current FastMCP request context details (client_id, session_id, and meta dump).",
+    annotations=ToolAnnotations(
+        title="Debug Request Context",
+        readOnlyHint=True,
+    ),
 )
 def debug_request_context(ctx: Context) -> dict[str, Any]:
     # Check request_context properties
