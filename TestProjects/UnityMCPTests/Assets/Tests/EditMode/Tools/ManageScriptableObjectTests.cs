@@ -1,9 +1,10 @@
 using System;
+using System.Collections;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
-using System.Threading;
+using UnityEngine.TestTools;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Tools;
 using MCPForUnityTests.Editor.Tools.Fixtures;
@@ -14,16 +15,17 @@ namespace MCPForUnityTests.Editor.Tools
     {
         private const string TempRoot = "Assets/Temp/ManageScriptableObjectTests";
         private const string NestedFolder = TempRoot + "/Nested/Deeper";
+        private const double UnityReadyTimeoutSeconds = 180.0;
 
         private string _createdAssetPath;
         private string _createdGuid;
         private string _matAPath;
         private string _matBPath;
 
-        [SetUp]
-        public void SetUp()
+        [UnitySetUp]
+        public IEnumerator SetUp()
         {
-            WaitForUnityReady();
+            yield return WaitForUnityReady(UnityReadyTimeoutSeconds);
             EnsureFolder("Assets/Temp");
             // Start from a clean slate every time (prevents intermittent setup failures).
             if (AssetDatabase.IsValidFolder(TempRoot))
@@ -47,7 +49,7 @@ namespace MCPForUnityTests.Editor.Tools
             AssetDatabase.CreateAsset(new Material(shader), _matBPath);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-            WaitForUnityReady();
+            yield return WaitForUnityReady(UnityReadyTimeoutSeconds);
         }
 
         [TearDown]
@@ -308,7 +310,7 @@ namespace MCPForUnityTests.Editor.Tools
             return result as JObject ?? JObject.FromObject(result);
         }
 
-        private static void WaitForUnityReady(double timeoutSeconds = 30.0)
+        private static IEnumerator WaitForUnityReady(double timeoutSeconds = 30.0)
         {
             // Some EditMode tests trigger script compilation/domain reload. Tools like ManageScriptableObject
             // intentionally return "compiling_or_reloading" during these windows. Wait until Unity is stable
@@ -320,7 +322,7 @@ namespace MCPForUnityTests.Editor.Tools
                 {
                     Assert.Fail($"Timed out waiting for Unity to finish compiling/updating (>{timeoutSeconds:0.0}s).");
                 }
-                Thread.Sleep(50);
+                yield return null; // yield to the editor loop so importing/compiling can actually progress
             }
         }
     }

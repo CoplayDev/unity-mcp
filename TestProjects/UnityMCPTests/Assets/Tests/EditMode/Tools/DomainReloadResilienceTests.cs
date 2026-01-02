@@ -12,6 +12,8 @@ namespace MCPForUnityTests.Editor.Tools
     /// <summary>
     /// Tests for domain reload resilience - ensuring MCP requests succeed even during Unity domain reloads.
     /// </summary>
+    [Category("domain_reload")]
+    [Explicit("Intentionally triggers script compilation/domain reload; run explicitly to avoid slowing/flaking cold-start EditMode runs.")]
     public class DomainReloadResilienceTests
     {
         private const string TempDir = "Assets/Temp/DomainReloadTests";
