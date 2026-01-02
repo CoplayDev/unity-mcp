@@ -343,21 +343,20 @@ namespace MCPForUnity.Editor.Clients
             // Capture main-thread-only values before delegating to thread-safe method
             string projectDir = Path.GetDirectoryName(Application.dataPath);
             bool useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
-            return CheckStatusWithProjectDir(projectDir, useHttpTransport, attemptAutoRewrite);
+            // Resolve claudePath on the main thread (EditorPrefs access)
+            string claudePath = MCPServiceLocator.Paths.GetClaudeCliPath();
+            return CheckStatusWithProjectDir(projectDir, useHttpTransport, claudePath, attemptAutoRewrite);
         }
 
         /// <summary>
         /// Internal thread-safe version of CheckStatus.
         /// Can be called from background threads because all main-thread-only values are passed as parameters.
-        /// Both projectDir and useHttpTransport are REQUIRED (non-nullable) to enforce thread safety at compile time.
+        /// projectDir, useHttpTransport, and claudePath are REQUIRED (non-nullable) to enforce thread safety at compile time.
         /// </summary>
-        internal McpStatus CheckStatusWithProjectDir(string projectDir, bool useHttpTransport, bool attemptAutoRewrite = true)
+        internal McpStatus CheckStatusWithProjectDir(string projectDir, bool useHttpTransport, string claudePath, bool attemptAutoRewrite = true)
         {
             try
             {
-                var pathService = MCPServiceLocator.Paths;
-                string claudePath = pathService.GetClaudeCliPath();
-
                 if (string.IsNullOrEmpty(claudePath))
                 {
                     client.SetStatus(McpStatus.NotConfigured, "Claude CLI not found");

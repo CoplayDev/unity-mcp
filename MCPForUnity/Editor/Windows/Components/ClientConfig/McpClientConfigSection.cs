@@ -341,6 +341,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                 // Capture main-thread-only values before async task
                 string projectDir = Path.GetDirectoryName(Application.dataPath);
                 bool useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+                string claudePath = MCPServiceLocator.Paths.GetClaudeCliPath();
 
                 Task.Run(() =>
                 {
@@ -349,7 +350,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                     if (client is ClaudeCliMcpConfigurator claudeConfigurator)
                     {
                         // Use thread-safe version with captured main-thread values
-                        claudeConfigurator.CheckStatusWithProjectDir(projectDir, useHttpTransport, attemptAutoRewrite: false);
+                        claudeConfigurator.CheckStatusWithProjectDir(projectDir, useHttpTransport, claudePath, attemptAutoRewrite: false);
                     }
                 }).ContinueWith(t =>
                 {
