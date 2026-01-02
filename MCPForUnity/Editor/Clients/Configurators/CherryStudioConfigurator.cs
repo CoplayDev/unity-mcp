@@ -63,12 +63,13 @@ namespace MCPForUnity.Editor.Clients.Configurators
                        "# Cherry Studio supports STDIO and SSE transports.\n" +
                        "# \n" +
                        "# OPTION 1: Use STDIO mode (recommended)\n" +
-                       "# Switch transport to 'Stdio' in Advanced Settings, then:\n" +
+                       "# Switch transport to 'Stdio' in Advanced Settings to see configuration.\n" +
+                       "# Then configure Cherry Studio:\n" +
                        "# - Open Cherry Studio → Settings → MCP Server → Add Server\n" +
                        "# - Name: unity-mcp\n" +
                        "# - Type: STDIO\n" +
                        "# - Command: uvx\n" +
-                       "# - Arguments: (see stdio snippet below)\n" +
+                       "# - Arguments: (provided in stdio mode)\n" +
                        "# \n" +
                        "# OPTION 2: SSE mode (future support)\n" +
                        "# Note: Unity MCP does not currently have an SSE endpoint.\n" +
