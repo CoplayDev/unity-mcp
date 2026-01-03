@@ -62,14 +62,10 @@ namespace MCPForUnity.Editor.Clients.Configurators
                 return "# Cherry Studio does not support WebSocket transport.\n" +
                        "# Cherry Studio supports STDIO and SSE transports.\n" +
                        "# \n" +
-                       "# OPTION 1: Use STDIO mode (recommended)\n" +
-                       "# Switch transport to 'Stdio' in Advanced Settings to see configuration.\n" +
-                       "# Then configure Cherry Studio:\n" +
-                       "# - Open Cherry Studio → Settings → MCP Server → Add Server\n" +
-                       "# - Name: unity-mcp\n" +
-                       "# - Type: STDIO\n" +
-                       "# - Command: uvx\n" +
-                       "# - Arguments: (provided in stdio mode)\n" +
+                       "# To use Cherry Studio:\n" +
+                       "# 1. Switch transport to 'Stdio' in Advanced Settings below\n" +
+                       "# 2. Return to this configuration screen\n" +
+                       "# 3. Copy the STDIO configuration snippet that will appear\n" +
                        "# \n" +
                        "# OPTION 2: SSE mode (future support)\n" +
                        "# Note: Unity MCP does not currently have an SSE endpoint.\n" +
