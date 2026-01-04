@@ -9,7 +9,7 @@
             </ui:VisualElement>
             <ui:VisualElement class="setting-row" name="http-url-row">
                 <ui:Label text="HTTP URL:" class="setting-label" />
-                <ui:TextField name="http-url" class="url-field" placeholder-text="http://localhost:8080" />
+                <ui:TextField name="http-url" class="url-field" />
             </ui:VisualElement>
             <ui:VisualElement name="http-server-command-section" class="manual-config-content">
                 <ui:Label text="Use this command to launch the server manually:" class="config-label" />
@@ -19,8 +19,7 @@
                 </ui:VisualElement>
                 <ui:Label name="http-server-command-hint" class="help-text" />
                 <ui:VisualElement style="flex-direction: row; justify-content: flex-start; margin-bottom: 6px;">
-                    <ui:Button name="start-http-server-button" text="Start Server" class="secondary-button" style="width: auto; flex-grow: 1; margin-right: 5px;" />
-                    <ui:Button name="stop-http-server-button" text="Stop Server" class="secondary-button" style="width: auto; flex-grow: 1;" />
+                    <ui:Button name="start-http-server-button" text="Start Server" class="action-button start-server-button" style="width: auto; flex-grow: 1;" />
                 </ui:VisualElement>
             </ui:VisualElement>
             <ui:VisualElement class="setting-row" name="unity-socket-port-row">
@@ -34,7 +33,7 @@
                 </ui:VisualElement>
                 <ui:Button name="connection-toggle" text="Start" class="action-button" />
             </ui:VisualElement>
-            <ui:VisualElement class="setting-row">
+            <ui:VisualElement class="setting-row" name="health-row">
                 <ui:Label text="Health:" class="setting-label" />
                 <ui:VisualElement class="status-container">
                     <ui:VisualElement name="health-indicator" class="status-dot" />

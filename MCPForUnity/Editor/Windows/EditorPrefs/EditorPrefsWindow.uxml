@@ -1,0 +1,30 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+    <Style src="../Components/Common.uss" />
+    <Style src="EditorPrefsWindow.uss" />
+    
+    <ui:ScrollView name="scroll-view" mode="Vertical">
+        <!-- Header -->
+        <ui:VisualElement class="header">
+            <ui:Label text="EditorPrefs Manager" class="title" />
+            <ui:Label text="Manage MCP for Unity EditorPrefs. Useful for development and testing." class="description" />
+        </ui:VisualElement>
+        
+        <!-- Add New Row (initially hidden) -->
+        <ui:VisualElement name="add-new-row" class="add-new-row" style="display: none;">
+            <ui:VisualElement class="add-row-content">
+                <ui:TextField name="new-key-field" label="Key" class="key-field" />
+                <ui:TextField name="new-value-field" label="Value" class="value-field" />
+                <ui:DropdownField name="new-type-dropdown" label="Type" class="type-dropdown" choices="String,Int,Float,Bool" index="0" />
+                <ui:VisualElement class="add-buttons">
+                    <ui:Button name="create-button" text="Create" class="save-button" />
+                    <ui:Button name="cancel-button" text="Cancel" class="cancel-button" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        
+        <!-- Prefs List -->
+        <ui:VisualElement name="prefs-container" class="prefs-container">
+            <!-- Items will be added here programmatically -->
+        </ui:VisualElement>
+    </ui:ScrollView>
+</ui:UXML>

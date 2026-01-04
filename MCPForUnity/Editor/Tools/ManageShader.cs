@@ -94,7 +94,7 @@ namespace MCPForUnity.Editor.Tools
                     {
                         Directory.CreateDirectory(fullPathDir);
                         // Refresh AssetDatabase to recognize new folders
-                        AssetDatabase.Refresh();
+                        AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
                     }
                 }
                 catch (Exception e)
@@ -174,7 +174,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 File.WriteAllText(fullPath, contents, new System.Text.UTF8Encoding(false));
                 AssetDatabase.ImportAsset(relativePath);
-                AssetDatabase.Refresh(); // Ensure Unity recognizes the new shader
+                AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport); // Ensure Unity recognizes the new shader
                 return new SuccessResponse(
                     $"Shader '{name}.shader' created successfully at '{relativePath}'.",
                     new { path = relativePath }
@@ -242,7 +242,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 File.WriteAllText(fullPath, contents, new System.Text.UTF8Encoding(false));
                 AssetDatabase.ImportAsset(relativePath);
-                AssetDatabase.Refresh();
+                AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
                 return new SuccessResponse(
                     $"Shader '{Path.GetFileName(relativePath)}' updated successfully.",
                     new { path = relativePath }

@@ -18,15 +18,15 @@ AllowedTools: Write,mcp__unity__manage_editor,mcp__unity__list_resources,mcp__un
 - Each file must contain EXACTLY one `<testcase>` root element
 - NO prologue, epilogue, code fences, or extra characters
 - NO markdown formatting or explanations outside the XML
-- Use this exact format:
+- Use this exact shape (write the XML directly into the file; do not wrap it in ``` fences):
 
-```xml
 <testcase name="NL-0 — Baseline State Capture" classname="UnityMCP.NL-T">
   <system-out><![CDATA[
 (evidence of what was accomplished)
   ]]></system-out>
 </testcase>
-```
+
+- Must end with the closing tag `</testcase>` (well‑formed XML only).
 
 - If test fails, include: `<failure message="reason"/>`
 - TESTID must be one of: NL-0, NL-1, NL-2, NL-3, NL-4

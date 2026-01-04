@@ -1,4 +1,8 @@
 from typing import Any
+import os
+import sys
+
+from core.telemetry import get_package_version
 
 from fastmcp import Context
 from services.registry import mcp_for_unity_tool
@@ -50,6 +54,11 @@ def debug_request_context(ctx: Context) -> dict[str, Any]:
     return {
         "success": True,
         "data": {
+            "server": {
+                "version": get_package_version(),
+                "cwd": os.getcwd(),
+                "argv": list(sys.argv),
+            },
             "request_context": {
                 "client_id": rc_client_id,
                 "session_id": rc_session_id,

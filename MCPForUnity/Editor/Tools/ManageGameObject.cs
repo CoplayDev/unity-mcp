@@ -180,8 +180,44 @@ namespace MCPForUnity.Editor.Tools
                             return new ErrorResponse(
                                 "'target' parameter required for get_components."
                             );
-                        // Pass the includeNonPublicSerialized flag here
-                        return GetComponentsFromTarget(getCompTarget, searchMethod, includeNonPublicSerialized);
+                        // Paging + safety: return metadata by default; deep fields are opt-in.
+                        int CoerceInt(JToken t, int @default)
+                        {
+                            if (t == null || t.Type == JTokenType.Null) return @default;
+                            try
+                            {
+                                if (t.Type == JTokenType.Integer) return t.Value<int>();
+                                var s = t.ToString().Trim();
+                                if (s.Length == 0) return @default;
+                                if (int.TryParse(s, out var i)) return i;
+                                if (double.TryParse(s, out var d)) return (int)d;
+                            }
+                            catch { }
+                            return @default;
+                        }
+                        bool CoerceBool(JToken t, bool @default)
+                        {
+                            if (t == null || t.Type == JTokenType.Null) return @default;
+                            try
+                            {
+                                if (t.Type == JTokenType.Boolean) return t.Value<bool>();
+                                var s = t.ToString().Trim();
+                                if (s.Length == 0) return @default;
+                                if (bool.TryParse(s, out var b)) return b;
+                                if (s == "1") return true;
+                                if (s == "0") return false;
+                            }
+                            catch { }
+                            return @default;
+                        }
+
+                        int pageSize = CoerceInt(@params["pageSize"] ?? @params["page_size"], 25);
+                        int cursor = CoerceInt(@params["cursor"], 0);
+                        int maxComponents = CoerceInt(@params["maxComponents"] ?? @params["max_components"], 50);
+                        bool includeProperties = CoerceBool(@params["includeProperties"] ?? @params["include_properties"], false);
+
+                        // Pass the includeNonPublicSerialized flag through, but only used if includeProperties is true.
+                        return GetComponentsFromTarget(getCompTarget, searchMethod, includeNonPublicSerialized, pageSize, cursor, maxComponents, includeProperties);
                     case "get_component":
                         string getSingleCompTarget = targetToken?.ToString();
                         if (getSingleCompTarget == null)
@@ -554,7 +590,7 @@ namespace MCPForUnity.Editor.Tools
                     )
                     {
                         System.IO.Directory.CreateDirectory(directoryPath);
-                        AssetDatabase.Refresh(); // Refresh asset database to recognize the new folder
+                        AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport); // Refresh asset database to recognize the new folder
                         Debug.Log(
                             $"[ManageGameObject.Create] Created directory for prefab: {directoryPath}"
                         );
@@ -1191,7 +1227,15 @@ namespace MCPForUnity.Editor.Tools
             return new SuccessResponse($"Found {results.Count} GameObject(s).", results);
         }
 
-        private static object GetComponentsFromTarget(string target, string searchMethod, bool includeNonPublicSerialized = true)
+        private static object GetComponentsFromTarget(
+            string target,
+            string searchMethod,
+            bool includeNonPublicSerialized = true,
+            int pageSize = 25,
+            int cursor = 0,
+            int maxComponents = 50,
+            bool includeProperties = false
+        )
         {
             GameObject targetGo = FindObjectInternal(target, searchMethod);
             if (targetGo == null)
@@ -1203,57 +1247,90 @@ namespace MCPForUnity.Editor.Tools
 
             try
             {
-                // --- Get components, immediately copy to list, and null original array --- 
-                Component[] originalComponents = targetGo.GetComponents<Component>();
-                List<Component> componentsToIterate = new List<Component>(originalComponents ?? Array.Empty<Component>()); // Copy immediately, handle null case
-                int componentCount = componentsToIterate.Count;
-                originalComponents = null; // Null the original reference
-                                           // Debug.Log($"[GetComponentsFromTarget] Found {componentCount} components on {targetGo.name}. Copied to list, nulled original. Starting REVERSE for loop...");
-                                           // --- End Copy and Null --- 
+                int resolvedPageSize = Mathf.Clamp(pageSize, 1, 200);
+                int resolvedCursor = Mathf.Max(0, cursor);
+                int resolvedMaxComponents = Mathf.Clamp(maxComponents, 1, 500);
+                int effectiveTake = Mathf.Min(resolvedPageSize, resolvedMaxComponents);
 
-                var componentData = new List<object>();
-
-                for (int i = componentCount - 1; i >= 0; i--) // Iterate backwards over the COPY
+                // Build a stable list once; pagination is applied to this list.
+                var all = targetGo.GetComponents<Component>();
+                var components = new List<Component>(all?.Length ?? 0);
+                if (all != null)
                 {
-                    Component c = componentsToIterate[i]; // Use the copy
-                    if (c == null)
+                    for (int i = 0; i < all.Length; i++)
                     {
-                        // Debug.LogWarning($"[GetComponentsFromTarget REVERSE for] Encountered a null component at index {i} on {targetGo.name}. Skipping.");
-                        continue; // Safety check
+                        if (all[i] != null) components.Add(all[i]);
                     }
-                    // Debug.Log($"[GetComponentsFromTarget REVERSE for] Processing component: {c.GetType()?.FullName ?? "null"} (ID: {c.GetInstanceID()}) at index {i} on {targetGo.name}");
+                }
+
+                int total = components.Count;
+                if (resolvedCursor > total) resolvedCursor = total;
+                int end = Mathf.Min(total, resolvedCursor + effectiveTake);
+
+                var items = new List<object>(Mathf.Max(0, end - resolvedCursor));
+
+                // If caller explicitly asked for properties, we still enforce a conservative payload budget.
+                const int maxPayloadChars = 250_000; // ~250KB assuming 1 char ~= 1 byte ASCII-ish
+                int payloadChars = 0;
+
+                for (int i = resolvedCursor; i < end; i++)
+                {
+                    var c = components[i];
+                    if (c == null) continue;
+
+                    if (!includeProperties)
+                    {
+                        items.Add(BuildComponentMetadata(c));
+                        continue;
+                    }
+
                     try
                     {
                         var data = Helpers.GameObjectSerializer.GetComponentData(c, includeNonPublicSerialized);
-                        if (data != null) // Ensure GetComponentData didn't return null
+                        if (data == null) continue;
+
+                        // Rough cap to keep responses from exploding even when includeProperties is true.
+                        var token = JToken.FromObject(data);
+                        int addChars = token.ToString(Newtonsoft.Json.Formatting.None).Length;
+                        if (payloadChars + addChars > maxPayloadChars && items.Count > 0)
                         {
-                            componentData.Insert(0, data); // Insert at beginning to maintain original order in final list
+                            // Stop early; next_cursor will allow fetching more (or caller can use get_component).
+                            end = i;
+                            break;
                         }
-                        // else
-                        // {
-                        //     Debug.LogWarning($"[GetComponentsFromTarget REVERSE for] GetComponentData returned null for component {c.GetType().FullName} (ID: {c.GetInstanceID()}) on {targetGo.name}. Skipping addition.");
-                        // }
+                        payloadChars += addChars;
+                        items.Add(token);
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogError($"[GetComponentsFromTarget REVERSE for] Error processing component {c.GetType().FullName} (ID: {c.GetInstanceID()}) on {targetGo.name}: {ex.Message}\n{ex.StackTrace}");
-                        // Optionally add placeholder data or just skip
-                        componentData.Insert(0, new JObject( // Insert error marker at beginning
-                            new JProperty("typeName", c.GetType().FullName + " (Serialization Error)"),
-                            new JProperty("instanceID", c.GetInstanceID()),
-                            new JProperty("error", ex.Message)
-                        ));
+                        // Avoid throwing; mark the component as failed.
+                        items.Add(
+                            new JObject(
+                                new JProperty("typeName", c.GetType().FullName + " (Serialization Error)"),
+                                new JProperty("instanceID", c.GetInstanceID()),
+                                new JProperty("error", ex.Message)
+                            )
+                        );
                     }
                 }
-                // Debug.Log($"[GetComponentsFromTarget] Finished REVERSE for loop.");
 
-                // Cleanup the list we created
-                componentsToIterate.Clear();
-                componentsToIterate = null;
+                bool truncated = end < total;
+                string nextCursor = truncated ? end.ToString() : null;
+
+                var payload = new
+                {
+                    cursor = resolvedCursor,
+                    pageSize = effectiveTake,
+                    next_cursor = nextCursor,
+                    truncated = truncated,
+                    total = total,
+                    includeProperties = includeProperties,
+                    items = items,
+                };
 
                 return new SuccessResponse(
-                    $"Retrieved {componentData.Count} components from '{targetGo.name}'.",
-                    componentData // List was built in original order
+                    $"Retrieved components page from '{targetGo.name}'.",
+                    payload
                 );
             }
             catch (Exception e)
@@ -1262,6 +1339,21 @@ namespace MCPForUnity.Editor.Tools
                     $"Error getting components from '{targetGo.name}': {e.Message}"
                 );
             }
+        }
+
+        private static object BuildComponentMetadata(Component c)
+        {
+            if (c == null) return null;
+            var d = new Dictionary<string, object>
+            {
+                { "typeName", c.GetType().FullName },
+                { "instanceID", c.GetInstanceID() },
+            };
+            if (c is Behaviour b)
+            {
+                d["enabled"] = b.enabled;
+            }
+            return d;
         }
 
         private static object GetSingleComponentFromTarget(string target, string searchMethod, string componentName, bool includeNonPublicSerialized = true)
@@ -1358,7 +1450,11 @@ namespace MCPForUnity.Editor.Tools
             {
                 var compToken = componentsToAddArray.First;
                 if (compToken.Type == JTokenType.String)
+                {
                     typeName = compToken.ToString();
+                    // Check for properties in top-level componentProperties parameter
+                    properties = @params["componentProperties"]?[typeName] as JObject;
+                }
                 else if (compToken is JObject compObj)
                 {
                     typeName = compObj["typeName"]?.ToString();

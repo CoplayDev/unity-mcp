@@ -6,6 +6,7 @@ from typing import Annotated, Any, Literal
 from fastmcp import Context
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
+from services.tools.utils import coerce_int, coerce_bool
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 
@@ -38,42 +39,24 @@ async def read_console(
     format = format if format is not None else 'detailed'
     # Coerce booleans defensively (strings like 'true'/'false')
 
-    def _coerce_bool(value, default=None):
-        if value is None:
-            return default
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, str):
-            v = value.strip().lower()
-            if v in ("true", "1", "yes", "on"):
-                return True
-            if v in ("false", "0", "no", "off"):
-                return False
-        return bool(value)
-
-    include_stacktrace = _coerce_bool(include_stacktrace, True)
+    include_stacktrace = coerce_bool(include_stacktrace, default=True)
 
     # Normalize action if it's a string
     if isinstance(action, str):
         action = action.lower()
 
-    # Coerce count defensively (string/float -> int)
-    def _coerce_int(value, default=None):
-        if value is None:
-            return default
-        try:
-            if isinstance(value, bool):
-                return default
-            if isinstance(value, int):
-                return int(value)
-            s = str(value).strip()
-            if s.lower() in ("", "none", "null"):
-                return default
-            return int(float(s))
-        except Exception:
-            return default
+    # Coerce count defensively (string/float -> int).
+    # Important: leaving count unset previously meant "return all console entries", which can be extremely slow
+    # (and can exceed the plugin command timeout when Unity has a large console).
+    # To keep the tool responsive by default, we cap the default to a reasonable number of most-recent entries.
+    # If a client truly wants everything, it can pass count="all" (or count="*") explicitly.
+    if isinstance(count, str) and count.strip().lower() in ("all", "*"):
+        count = None
+    else:
+        count = coerce_int(count)
 
-    count = _coerce_int(count)
+    if action == "get" and count is None:
+        count = 200
 
     # Prepare parameters for the C# handler
     params_dict = {

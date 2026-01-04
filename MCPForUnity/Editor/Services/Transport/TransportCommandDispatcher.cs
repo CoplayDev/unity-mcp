@@ -16,8 +16,13 @@ namespace MCPForUnity.Editor.Services.Transport
     /// Guarantees that MCP commands are executed on the Unity main thread while preserving
     /// the legacy response format expected by the server.
     /// </summary>
+    [InitializeOnLoad]
     internal static class TransportCommandDispatcher
     {
+        private static SynchronizationContext _mainThreadContext;
+        private static int _mainThreadId;
+        private static int _processingFlag;
+
         private sealed class PendingCommand
         {
             public PendingCommand(
@@ -59,6 +64,23 @@ namespace MCPForUnity.Editor.Services.Transport
         private static bool updateHooked;
         private static bool initialised;
 
+        static TransportCommandDispatcher()
+        {
+            // Ensure this runs on the Unity main thread at editor load.
+            _mainThreadContext = SynchronizationContext.Current;
+            _mainThreadId = Thread.CurrentThread.ManagedThreadId;
+
+            EnsureInitialised();
+
+            // Always keep the update hook installed so commands arriving from background
+            // websocket tasks don't depend on a background-thread event subscription.
+            if (!updateHooked)
+            {
+                updateHooked = true;
+                EditorApplication.update += ProcessQueue;
+            }
+        }
+
         /// <summary>
         /// Schedule a command for execution on the Unity main thread and await its JSON response.
         /// </summary>
@@ -83,10 +105,89 @@ namespace MCPForUnity.Editor.Services.Transport
             lock (PendingLock)
             {
                 Pending[id] = pending;
-                HookUpdate();
             }
 
+            // Proactively wake up the main thread execution loop. This improves responsiveness
+            // in scenarios where EditorApplication.update is throttled or temporarily not firing
+            // (e.g., Unity unfocused, compiling, or during domain reload transitions).
+            RequestMainThreadPump();
+
             return tcs.Task;
+        }
+
+        internal static Task<T> RunOnMainThreadAsync<T>(Func<T> func, CancellationToken cancellationToken)
+        {
+            if (func is null)
+            {
+                throw new ArgumentNullException(nameof(func));
+            }
+
+            var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            var registration = cancellationToken.CanBeCanceled
+                ? cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken))
+                : default;
+
+            void Invoke()
+            {
+                try
+                {
+                    if (tcs.Task.IsCompleted)
+                    {
+                        return;
+                    }
+
+                    var result = func();
+                    tcs.TrySetResult(result);
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+                finally
+                {
+                    registration.Dispose();
+                }
+            }
+
+            // Best-effort nudge: if we're posting from a background thread (e.g., websocket receive),
+            // encourage Unity to run a loop iteration so the posted callback can execute even when unfocused.
+            try { EditorApplication.QueuePlayerLoopUpdate(); } catch { }
+
+            if (_mainThreadContext != null && Thread.CurrentThread.ManagedThreadId != _mainThreadId)
+            {
+                _mainThreadContext.Post(_ => Invoke(), null);
+                return tcs.Task;
+            }
+
+            Invoke();
+            return tcs.Task;
+        }
+
+        private static void RequestMainThreadPump()
+        {
+            void Pump()
+            {
+                try
+                {
+                    // Hint Unity to run a loop iteration soon.
+                    EditorApplication.QueuePlayerLoopUpdate();
+                }
+                catch
+                {
+                    // Best-effort only.
+                }
+
+                ProcessQueue();
+            }
+
+            if (_mainThreadContext != null && Thread.CurrentThread.ManagedThreadId != _mainThreadId)
+            {
+                _mainThreadContext.Post(_ => Pump(), null);
+                return;
+            }
+
+            Pump();
         }
 
         private static void EnsureInitialised()
@@ -102,28 +203,28 @@ namespace MCPForUnity.Editor.Services.Transport
 
         private static void HookUpdate()
         {
-            if (updateHooked)
-            {
-                return;
-            }
-
+            // Deprecated: we keep the update hook installed permanently (see static ctor).
+            if (updateHooked) return;
             updateHooked = true;
             EditorApplication.update += ProcessQueue;
         }
 
         private static void UnhookUpdateIfIdle()
         {
-            if (Pending.Count > 0 || !updateHooked)
-            {
-                return;
-            }
-
-            updateHooked = false;
-            EditorApplication.update -= ProcessQueue;
+            // Intentionally no-op: keep update hook installed so background commands always process.
+            // This avoids "must focus Unity to re-establish contact" edge cases.
+            return;
         }
 
         private static void ProcessQueue()
         {
+            if (Interlocked.Exchange(ref _processingFlag, 1) == 1)
+            {
+                return;
+            }
+
+            try
+            {
             List<(string id, PendingCommand pending)> ready;
 
             lock (PendingLock)
@@ -150,6 +251,11 @@ namespace MCPForUnity.Editor.Services.Transport
             foreach (var (id, pending) in ready)
             {
                 ProcessCommand(id, pending);
+            }
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _processingFlag, 0);
             }
         }
 

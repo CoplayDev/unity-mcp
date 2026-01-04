@@ -24,6 +24,18 @@ namespace MCPForUnity.Editor.Services
         bool StopLocalHttpServer();
 
         /// <summary>
+        /// Stop the Unity-managed local HTTP server if a handshake/pidfile exists,
+        /// even if the current transport selection has changed.
+        /// </summary>
+        bool StopManagedLocalHttpServer();
+
+        /// <summary>
+        /// Best-effort detection: returns true if a local MCP HTTP server appears to be running
+        /// on the configured local URL/port (used to drive UI state even if the session is not active).
+        /// </summary>
+        bool IsLocalHttpServerRunning();
+
+        /// <summary>
         /// Attempts to get the command that will be executed when starting the local HTTP server
         /// </summary>
         /// <param name="command">The command that will be executed when available</param>

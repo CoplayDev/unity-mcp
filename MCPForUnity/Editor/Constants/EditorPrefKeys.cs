@@ -7,6 +7,13 @@ namespace MCPForUnity.Editor.Constants
     internal static class EditorPrefKeys
     {
         internal const string UseHttpTransport = "MCPForUnity.UseHttpTransport";
+        internal const string HttpTransportScope = "MCPForUnity.HttpTransportScope"; // "local" | "remote"
+        internal const string LastLocalHttpServerPid = "MCPForUnity.LocalHttpServer.LastPid";
+        internal const string LastLocalHttpServerPort = "MCPForUnity.LocalHttpServer.LastPort";
+        internal const string LastLocalHttpServerStartedUtc = "MCPForUnity.LocalHttpServer.LastStartedUtc";
+        internal const string LastLocalHttpServerPidArgsHash = "MCPForUnity.LocalHttpServer.LastPidArgsHash";
+        internal const string LastLocalHttpServerPidFilePath = "MCPForUnity.LocalHttpServer.LastPidFilePath";
+        internal const string LastLocalHttpServerInstanceToken = "MCPForUnity.LocalHttpServer.LastInstanceToken";
         internal const string DebugLogs = "MCPForUnity.DebugLogs";
         internal const string ValidationLevel = "MCPForUnity.ValidationLevel";
         internal const string UnitySocketPort = "MCPForUnity.UnitySocketPort";
@@ -20,6 +27,7 @@ namespace MCPForUnity.Editor.Constants
         internal const string SessionId = "MCPForUnity.SessionId";
         internal const string WebSocketUrlOverride = "MCPForUnity.WebSocketUrl";
         internal const string GitUrlOverride = "MCPForUnity.GitUrlOverride";
+        internal const string DevModeForceServerRefresh = "MCPForUnity.DevModeForceServerRefresh";
 
         internal const string PackageDeploySourcePath = "MCPForUnity.PackageDeploy.SourcePath";
         internal const string PackageDeployLastBackupPath = "MCPForUnity.PackageDeploy.LastBackupPath";

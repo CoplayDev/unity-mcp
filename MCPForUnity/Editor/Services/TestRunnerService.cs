@@ -93,6 +93,8 @@ namespace MCPForUnity.Editor.Services
 
                 _leafResults.Clear();
                 _runCompletionSource = new TaskCompletionSource<TestRunResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+                // Mark running immediately so readiness snapshots reflect the busy state even before callbacks fire.
+                TestRunStatus.MarkStarted(mode);
 
                 var filter = new Filter
                 {
@@ -115,6 +117,8 @@ namespace MCPForUnity.Editor.Services
             }
             catch
             {
+                // Ensure the status is cleared if we failed to start the run.
+                TestRunStatus.MarkFinished();
                 if (adjustedPlayModeOptions)
                 {
                     RestoreEnterPlayModeOptions(originalEnterPlayModeOptionsEnabled, originalEnterPlayModeOptions);
@@ -163,6 +167,20 @@ namespace MCPForUnity.Editor.Services
         public void RunStarted(ITestAdaptor testsToRun)
         {
             _leafResults.Clear();
+            try
+            {
+                // Best-effort progress info for async polling (avoid heavy payloads).
+                int? total = null;
+                if (testsToRun != null)
+                {
+                    total = CountLeafTests(testsToRun);
+                }
+                TestJobManager.OnRunStarted(total);
+            }
+            catch
+            {
+                TestJobManager.OnRunStarted(null);
+            }
         }
 
         public void RunFinished(ITestResultAdaptor result)
@@ -175,11 +193,27 @@ namespace MCPForUnity.Editor.Services
             var payload = TestRunResult.Create(result, _leafResults);
             _runCompletionSource.TrySetResult(payload);
             _runCompletionSource = null;
+            TestRunStatus.MarkFinished();
+            TestJobManager.OnRunFinished();
+            TestJobManager.FinalizeCurrentJobFromRunFinished(payload);
         }
 
         public void TestStarted(ITestAdaptor test)
         {
-            // No-op
+            try
+            {
+                // Prefer FullName for uniqueness; fall back to Name.
+                string fullName = test?.FullName;
+                if (string.IsNullOrWhiteSpace(fullName))
+                {
+                    fullName = test?.Name;
+                }
+                TestJobManager.OnTestStarted(fullName);
+            }
+            catch
+            {
+                // ignore
+            }
         }
 
         public void TestFinished(ITestResultAdaptor result)
@@ -192,10 +226,71 @@ namespace MCPForUnity.Editor.Services
             if (!result.HasChildren)
             {
                 _leafResults.Add(result);
+                try
+                {
+                    string fullName = result.Test?.FullName;
+                    if (string.IsNullOrWhiteSpace(fullName))
+                    {
+                        fullName = result.Test?.Name;
+                    }
+
+                    bool isFailure = false;
+                    string message = null;
+                    try
+                    {
+                        // NUnit outcomes are strings in the adaptor; keep it simple.
+                        string outcome = result.ResultState;
+                        if (!string.IsNullOrWhiteSpace(outcome))
+                        {
+                            var o = outcome.Trim().ToLowerInvariant();
+                            isFailure = o.Contains("failed") || o.Contains("error");
+                        }
+                        message = result.Message;
+                    }
+                    catch
+                    {
+                        // ignore adaptor quirks
+                    }
+
+                    TestJobManager.OnLeafTestFinished(fullName, isFailure, message);
+                }
+                catch
+                {
+                    // ignore
+                }
             }
         }
 
         #endregion
+
+        private static int CountLeafTests(ITestAdaptor node)
+        {
+            if (node == null)
+            {
+                return 0;
+            }
+
+            if (!node.HasChildren)
+            {
+                return 1;
+            }
+
+            int total = 0;
+            try
+            {
+                foreach (var child in node.Children)
+                {
+                    total += CountLeafTests(child);
+                }
+            }
+            catch
+            {
+                // If Unity changes the adaptor behavior, treat it as "unknown total".
+                return 0;
+            }
+
+            return total;
+        }
 
         private static bool EnsurePlayModeRunsWithoutDomainReload(
             out bool originalEnterPlayModeOptionsEnabled,
@@ -356,13 +451,33 @@ namespace MCPForUnity.Editor.Services
         public int Failed => Summary.Failed;
         public int Skipped => Summary.Skipped;
 
-        public object ToSerializable(string mode)
+        public object ToSerializable(string mode, bool includeDetails = false, bool includeFailedTests = false)
         {
+            // Determine which results to include
+            IEnumerable<object> resultsToSerialize;
+            if (includeDetails)
+            {
+                // Include all test results
+                resultsToSerialize = Results.Select(r => r.ToSerializable());
+            }
+            else if (includeFailedTests)
+            {
+                // Include only failed and skipped tests
+                resultsToSerialize = Results
+                    .Where(r => !string.Equals(r.State, "Passed", StringComparison.OrdinalIgnoreCase))
+                    .Select(r => r.ToSerializable());
+            }
+            else
+            {
+                // No individual test results
+                resultsToSerialize = null;
+            }
+
             return new
             {
                 mode,
                 summary = Summary.ToSerializable(),
-                results = Results.Select(r => r.ToSerializable()).ToList(),
+                results = resultsToSerialize?.ToList(),
             };
         }
 

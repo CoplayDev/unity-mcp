@@ -25,13 +25,11 @@ jobs:
         unityVersion:
           - 2021.3.45f2
     steps:
-      # Checkout
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           lfs: true
 
-      # Cache
       - uses: actions/cache@v4
         with:
           path: ${{ matrix.projectPath }}/Library
@@ -40,7 +38,20 @@ jobs:
             Library-${{ matrix.projectPath }}-
             Library-
 
-      # Test
+      # Run domain reload tests first (they're [Explicit] so need explicit category)
+      - name: Run domain reload tests
+        uses: game-ci/unity-test-runner@v4
+        id: domain-tests
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        with:
+          projectPath: ${{ matrix.projectPath }}
+          unityVersion: ${{ matrix.unityVersion }}
+          testMode: ${{ matrix.testMode }}
+          customParameters: -testCategory domain_reload
+
       - name: Run tests
         uses: game-ci/unity-test-runner@v4
         id: tests
@@ -53,7 +64,6 @@ jobs:
           unityVersion: ${{ matrix.unityVersion }}
           testMode: ${{ matrix.testMode }}
 
-      # Upload test results
       - uses: actions/upload-artifact@v4
         if: always()
         with:

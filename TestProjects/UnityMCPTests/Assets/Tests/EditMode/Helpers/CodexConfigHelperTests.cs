@@ -32,6 +32,9 @@ namespace MCPForUnityTests.Editor.Helpers
         private string _originalGitOverride;
         private bool _hadHttpTransport;
         private bool _originalHttpTransport;
+        private bool _hadDevForceRefresh;
+        private bool _originalDevForceRefresh;
+        private IPlatformService _originalPlatformService;
 
         [OneTimeSetUp]
         public void OneTimeSetUp()
@@ -40,6 +43,9 @@ namespace MCPForUnityTests.Editor.Helpers
             _originalGitOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, string.Empty);
             _hadHttpTransport = EditorPrefs.HasKey(EditorPrefKeys.UseHttpTransport);
             _originalHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            _hadDevForceRefresh = EditorPrefs.HasKey(EditorPrefKeys.DevModeForceServerRefresh);
+            _originalDevForceRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
+            _originalPlatformService = MCPServiceLocator.Platform;
         }
 
         [SetUp]
@@ -49,13 +55,28 @@ namespace MCPForUnityTests.Editor.Helpers
             EditorPrefs.DeleteKey(EditorPrefKeys.GitUrlOverride);
             // Default to stdio mode for existing tests unless specified otherwise
             EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
+            // Ensure deterministic uvx args ordering for these tests regardless of editor settings
+            // (dev-mode inserts --no-cache/--refresh, which changes the first args).
+            EditorPrefs.SetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
         }
 
         [TearDown]
         public void TearDown()
         {
-            // Reset service locator after each test
-            MCPServiceLocator.Reset();
+            // IMPORTANT:
+            // These tests can be executed while an MCP session is active (e.g., when running tests via MCP).
+            // MCPServiceLocator.Reset() disposes the bridge + transport manager, which can kill the MCP connection
+            // mid-run. Instead, restore only what this fixture mutates.
+            // To avoid leaking global state to other tests/fixtures, restore the original platform service
+            // instance captured before this fixture started running.
+            if (_originalPlatformService != null)
+            {
+                MCPServiceLocator.Register<IPlatformService>(_originalPlatformService);
+            }
+            else
+            {
+                MCPServiceLocator.Register<IPlatformService>(new PlatformService());
+            }
         }
 
         [OneTimeTearDown]
@@ -77,6 +98,15 @@ namespace MCPForUnityTests.Editor.Helpers
             else
             {
                 EditorPrefs.DeleteKey(EditorPrefKeys.UseHttpTransport);
+            }
+
+            if (_hadDevForceRefresh)
+            {
+                EditorPrefs.SetBool(EditorPrefKeys.DevModeForceServerRefresh, _originalDevForceRefresh);
+            }
+            else
+            {
+                EditorPrefs.DeleteKey(EditorPrefKeys.DevModeForceServerRefresh);
             }
         }
 

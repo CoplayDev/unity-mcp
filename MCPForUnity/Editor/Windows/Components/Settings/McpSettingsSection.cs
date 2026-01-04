@@ -30,6 +30,7 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
         private TextField gitUrlOverride;
         private Button browseGitUrlButton;
         private Button clearGitUrlButton;
+        private Toggle devModeForceRefreshToggle;
         private TextField deploySourcePath;
         private Button browseDeploySourceButton;
         private Button clearDeploySourceButton;
@@ -79,6 +80,7 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             gitUrlOverride = Root.Q<TextField>("git-url-override");
             browseGitUrlButton = Root.Q<Button>("browse-git-url-button");
             clearGitUrlButton = Root.Q<Button>("clear-git-url-button");
+            devModeForceRefreshToggle = Root.Q<Toggle>("dev-mode-force-refresh-toggle");
             deploySourcePath = Root.Q<TextField>("deploy-source-path");
             browseDeploySourceButton = Root.Q<Button>("browse-deploy-source-button");
             clearDeploySourceButton = Root.Q<Button>("clear-deploy-source-button");
@@ -105,6 +107,7 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
 
             advancedSettingsFoldout.value = false;
             gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
+            devModeForceRefreshToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
 
             UpdateDeploymentSection();
         }
@@ -150,6 +153,12 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
                 OnGitUrlChanged?.Invoke();
                 OnHttpServerCommandUpdateRequested?.Invoke();
             };
+
+            devModeForceRefreshToggle.RegisterValueChangedCallback(evt =>
+            {
+                EditorPrefs.SetBool(EditorPrefKeys.DevModeForceServerRefresh, evt.newValue);
+                OnHttpServerCommandUpdateRequested?.Invoke();
+            });
 
             deploySourcePath.RegisterValueChangedCallback(evt =>
             {
@@ -205,6 +214,7 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             }
 
             gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
+            devModeForceRefreshToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
             UpdateDeploymentSection();
         }
 

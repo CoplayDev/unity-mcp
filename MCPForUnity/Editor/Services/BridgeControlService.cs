@@ -82,6 +82,24 @@ namespace MCPForUnity.Editor.Services
             var mode = ResolvePreferredMode();
             try
             {
+                // Treat transports as mutually exclusive for user-driven session starts:
+                // stop the *other* transport first to avoid duplicated sessions (e.g. stdio lingering when switching to HTTP).
+                var otherMode = mode == TransportMode.Http ? TransportMode.Stdio : TransportMode.Http;
+                try
+                {
+                    await _transportManager.StopAsync(otherMode);
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Warn($"Error stopping other transport ({otherMode}) before start: {ex.Message}");
+                }
+
+                // Legacy safety: stdio may have been started outside TransportManager state.
+                if (otherMode == TransportMode.Stdio)
+                {
+                    try { StdioBridgeHost.Stop(); } catch { }
+                }
+
                 bool started = await _transportManager.StartAsync(mode);
                 if (!started)
                 {

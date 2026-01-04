@@ -1,0 +1,225 @@
+.header {
+    padding-bottom: 16px;
+    border-bottom-width: 1px;
+    border-bottom-color: #333333;
+    margin-bottom: 16px;
+}
+
+.title {
+    -unity-font-style: bold;
+    font-size: 18px;
+    margin-bottom: 4px;
+}
+
+.description {
+    color: #999999;
+    font-size: 12px;
+    white-space: normal;
+    margin-left: 4px;
+}
+
+.controls {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding: 8px;
+    background-color: #393939;
+    border-radius: 4px;
+}
+
+.add-section {
+    margin-bottom: 16px;
+}
+
+.primary-button {
+    -unity-text-align: middle-left;
+    background-color: #4a90e2;
+    color: white;
+    border-radius: 4px;
+    padding: 8px 16px;
+}
+
+.primary-button:hover {
+    background-color: #357abd;
+}
+
+.secondary-button {
+    background-color: #393939;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: #555555;
+    border-right-color: #555555;
+    border-top-color: #555555;
+    border-bottom-color: #555555;
+    border-radius: 4px;
+    padding: 6px 12px;
+    width: 80px;
+}
+
+.secondary-button:hover {
+    background-color: #484848;
+}
+
+/* Add New Row */
+.add-new-row {
+    background-color: #393939;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: #555555;
+    border-right-color: #555555;
+    border-top-color: #555555;
+    border-bottom-color: #555555;
+    border-radius: 4px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.add-row-content {
+    flex-direction: row;
+    align-items: flex-end;
+}
+
+.add-row-content .key-field {
+    flex: 1;
+    min-width: 200px;
+    margin-right: 12px;
+}
+
+.add-row-content .value-field {
+    flex: 1;
+    min-width: 150px;
+    margin-right: 12px;
+}
+
+.add-row-content .type-dropdown {
+    width: 100px;
+    margin-right: 12px;
+}
+
+.add-buttons {
+    flex-direction: row;
+    justify-content: flex-end;
+    margin-top: 8px;
+}
+
+.add-buttons .cancel-button {
+    margin-left: 8px;
+}
+
+.save-button {
+    background-color: #4caf50;
+    color: white;
+    min-width: 60px;
+    border-radius: 4px;
+}
+
+.save-button:hover {
+    background-color: #45a049;
+}
+
+.cancel-button {
+    background-color: #393939;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: #555555;
+    border-right-color: #555555;
+    border-top-color: #555555;
+    border-bottom-color: #555555;
+    min-width: 60px;
+    border-radius: 4px;
+}
+
+.cancel-button:hover {
+    background-color: #484848;
+}
+
+/* Pref Items */
+.prefs-container {
+    flex-direction: column;
+}
+
+.pref-item {
+    margin-bottom: 0;
+    background-color: #393939;
+    border-left-width: 0;
+    border-right-width: 0;
+    border-top-width: 0;
+    border-bottom-width: 1px;
+    border-bottom-color: #555555;
+    border-radius: 0;
+    padding: 8px;
+}
+
+.pref-row {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: nowrap; /* Prevent wrapping */
+}
+
+.pref-row .key-section {
+    flex-shrink: 0;
+    width: 200px; /* Fixed width for key section */
+    margin-right: 12px;
+}
+
+.pref-row .value-field {
+    flex: 1;
+    min-width: 150px;
+    margin-right: 12px;
+}
+
+.pref-row .type-dropdown {
+    width: 100px;
+    margin-right: 12px;
+}
+
+.pref-row .action-buttons {
+    flex-direction: row;
+    width: 32px;
+    justify-content: flex-start;
+}
+
+.key-section {
+    flex-direction: column;
+    min-width: 200px;
+}
+
+.key-label {
+    -unity-font-style: bold;
+    color: white;
+    white-space: normal;
+}
+
+.value-field {
+    flex: 1;
+    min-width: 150px;
+}
+
+.type-dropdown {
+    width: 100px;
+}
+
+.action-buttons {
+    flex-direction: row;
+}
+
+.action-buttons .save-button {
+    background-color: #4caf50;
+    color: white;
+    min-width: 32px;
+    height: 28px;
+    padding: 0;
+    font-size: 16px;
+    -unity-font-style: bold;
+}
+
+.action-buttons .save-button:hover {
+    background-color: #45a049;
+}

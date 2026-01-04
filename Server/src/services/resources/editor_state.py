@@ -39,4 +39,13 @@ async def get_editor_state(ctx: Context) -> EditorStateResponse | MCPResponse:
         "get_editor_state",
         {}
     )
-    return EditorStateResponse(**response) if isinstance(response, dict) else response
+    # When Unity is reloading/unresponsive (often when unfocused), transports may return
+    # a retryable MCPResponse payload with success=false and no data. Do not attempt to
+    # coerce that into EditorStateResponse (it would fail validation); return it as-is.
+    if isinstance(response, dict):
+        if not response.get("success", True):
+            return MCPResponse(**response)
+        if response.get("data") is None:
+            return MCPResponse(success=False, error="Editor state missing 'data' payload", data=response)
+        return EditorStateResponse(**response)
+    return response

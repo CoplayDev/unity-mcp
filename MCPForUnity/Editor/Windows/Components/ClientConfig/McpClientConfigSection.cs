@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Clients;
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
 using MCPForUnity.Editor.Services;
@@ -288,12 +289,14 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
             McpLog.Info("Configuration copied to clipboard");
         }
 
-        public void RefreshSelectedClient()
+        public void RefreshSelectedClient(bool forceImmediate = false)
         {
             if (selectedClientIndex >= 0 && selectedClientIndex < configurators.Count)
             {
                 var client = configurators[selectedClientIndex];
-                RefreshClientStatus(client, forceImmediate: true);
+                // Force immediate for non-Claude CLI, or when explicitly requested
+                bool shouldForceImmediate = forceImmediate || client is not ClaudeCliMcpConfigurator;
+                RefreshClientStatus(client, shouldForceImmediate);
                 UpdateManualConfiguration();
                 UpdateClaudeCliPathVisibility();
             }
@@ -318,14 +321,6 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 
         private void RefreshClaudeCliStatus(IMcpClientConfigurator client, bool forceImmediate)
         {
-            if (forceImmediate)
-            {
-                MCPServiceLocator.Client.CheckClientStatus(client, attemptAutoRewrite: false);
-                lastStatusChecks[client] = DateTime.UtcNow;
-                ApplyStatusToUi(client);
-                return;
-            }
-
             bool hasStatus = lastStatusChecks.ContainsKey(client);
             bool needsRefresh = !hasStatus || ShouldRefreshClient(client);
 
@@ -338,14 +333,25 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                 ApplyStatusToUi(client);
             }
 
-            if (needsRefresh && !statusRefreshInFlight.Contains(client))
+            if ((forceImmediate || needsRefresh) && !statusRefreshInFlight.Contains(client))
             {
                 statusRefreshInFlight.Add(client);
                 ApplyStatusToUi(client, showChecking: true);
 
+                // Capture main-thread-only values before async task
+                string projectDir = Path.GetDirectoryName(Application.dataPath);
+                bool useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+                string claudePath = MCPServiceLocator.Paths.GetClaudeCliPath();
+
                 Task.Run(() =>
                 {
-                    MCPServiceLocator.Client.CheckClientStatus(client, attemptAutoRewrite: false);
+                    // Defensive: RefreshClientStatus routes Claude CLI clients here, but avoid hard-cast
+                    // so accidental future call sites can't crash the UI.
+                    if (client is ClaudeCliMcpConfigurator claudeConfigurator)
+                    {
+                        // Use thread-safe version with captured main-thread values
+                        claudeConfigurator.CheckStatusWithProjectDir(projectDir, useHttpTransport, claudePath, attemptAutoRewrite: false);
+                    }
                 }).ContinueWith(t =>
                 {
                     bool faulted = false;

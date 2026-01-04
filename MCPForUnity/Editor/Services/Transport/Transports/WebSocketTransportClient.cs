@@ -68,35 +68,9 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
         private Task<List<ToolMetadata>> GetEnabledToolsOnMainThreadAsync(CancellationToken token)
         {
-            var tcs = new TaskCompletionSource<List<ToolMetadata>>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            // Register cancellation to break the deadlock if StopAsync is called while waiting for main thread
-            var registration = token.Register(() => tcs.TrySetCanceled());
-
-            EditorApplication.delayCall += () =>
-            {
-                try
-                {
-                    if (tcs.Task.IsCompleted)
-                    {
-                        return;
-                    }
-
-                    var tools = _toolDiscoveryService?.GetEnabledTools() ?? new List<ToolMetadata>();
-                    tcs.TrySetResult(tools);
-                }
-                catch (Exception ex)
-                {
-                    tcs.TrySetException(ex);
-                }
-                finally
-                {
-                    // Ensure registration is disposed even if discovery throws
-                    registration.Dispose();
-                }
-            };
-
-            return tcs.Task;
+            return TransportCommandDispatcher.RunOnMainThreadAsync(
+                () => _toolDiscoveryService?.GetEnabledTools() ?? new List<ToolMetadata>(),
+                token);
         }
 
         public async Task<bool> StartAsync()
@@ -703,11 +677,6 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
         private static Uri BuildWebSocketUri(string baseUrl)
         {
-            if (string.IsNullOrWhiteSpace(baseUrl))
-            {
-                baseUrl = "http://localhost:8080";
-            }
-
             if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var httpUri))
             {
                 throw new InvalidOperationException($"Invalid MCP base URL: {baseUrl}");

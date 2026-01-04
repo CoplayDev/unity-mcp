@@ -83,11 +83,101 @@ class UnityInstanceMiddleware(Middleware):
         with self._lock:
             self._active_by_key.pop(key, None)
 
+    async def _maybe_autoselect_instance(self, ctx) -> str | None:
+        """
+        Auto-select the sole Unity instance when no active instance is set.
+
+        Note: This method both *discovers* and *persists* the selection via
+        `set_active_instance` as a side-effect, since callers expect the selection
+        to stick for subsequent tool/resource calls in the same session.
+        """
+        try:
+            # Import here to avoid circular dependencies / optional transport modules.
+            from transport.unity_transport import _current_transport
+
+            transport = _current_transport()
+            if PluginHub.is_configured():
+                try:
+                    sessions_data = await PluginHub.get_sessions()
+                    sessions = sessions_data.sessions or {}
+                    ids: list[str] = []
+                    for session_info in sessions.values():
+                        project = getattr(session_info, "project", None) or "Unknown"
+                        hash_value = getattr(session_info, "hash", None)
+                        if hash_value:
+                            ids.append(f"{project}@{hash_value}")
+                    if len(ids) == 1:
+                        chosen = ids[0]
+                        self.set_active_instance(ctx, chosen)
+                        logger.info(
+                            "Auto-selected sole Unity instance via PluginHub: %s",
+                            chosen,
+                        )
+                        return chosen
+                except (ConnectionError, ValueError, KeyError, TimeoutError, AttributeError) as exc:
+                    logger.debug(
+                        "PluginHub auto-select probe failed (%s); falling back to stdio",
+                        type(exc).__name__,
+                        exc_info=True,
+                    )
+                except Exception as exc:
+                    if isinstance(exc, (SystemExit, KeyboardInterrupt)):
+                        raise
+                    logger.debug(
+                        "PluginHub auto-select probe failed with unexpected error (%s); falling back to stdio",
+                        type(exc).__name__,
+                        exc_info=True,
+                    )
+
+            if transport != "http":
+                try:
+                    # Import here to avoid circular imports in legacy transport paths.
+                    from transport.legacy.unity_connection import get_unity_connection_pool
+
+                    pool = get_unity_connection_pool()
+                    instances = pool.discover_all_instances(force_refresh=True)
+                    ids = [getattr(inst, "id", None) for inst in instances]
+                    ids = [inst_id for inst_id in ids if inst_id]
+                    if len(ids) == 1:
+                        chosen = ids[0]
+                        self.set_active_instance(ctx, chosen)
+                        logger.info(
+                            "Auto-selected sole Unity instance via stdio discovery: %s",
+                            chosen,
+                        )
+                        return chosen
+                except (ConnectionError, ValueError, KeyError, TimeoutError, AttributeError) as exc:
+                    logger.debug(
+                        "Stdio auto-select probe failed (%s)",
+                        type(exc).__name__,
+                        exc_info=True,
+                    )
+                except Exception as exc:
+                    if isinstance(exc, (SystemExit, KeyboardInterrupt)):
+                        raise
+                    logger.debug(
+                        "Stdio auto-select probe failed with unexpected error (%s)",
+                        type(exc).__name__,
+                        exc_info=True,
+                    )
+        except Exception as exc:
+            if isinstance(exc, (SystemExit, KeyboardInterrupt)):
+                raise
+            logger.debug(
+                "Auto-select path encountered an unexpected error (%s)",
+                type(exc).__name__,
+                exc_info=True,
+            )
+
+        return None
+
     async def _inject_unity_instance(self, context: MiddlewareContext) -> None:
         """Inject active Unity instance into context if available."""
         ctx = context.fastmcp_context
 
         active_instance = self.get_active_instance(ctx)
+        if not active_instance:
+            active_instance = await self._maybe_autoselect_instance(ctx)
         if active_instance:
             # If using HTTP transport (PluginHub configured), validate session
             # But for stdio transport (no PluginHub needed or maybe partially configured),

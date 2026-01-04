@@ -6,6 +6,9 @@ from pathlib import Path
 SERVER_ROOT = Path(__file__).resolve().parents[2]
 if str(SERVER_ROOT) not in sys.path:
     sys.path.insert(0, str(SERVER_ROOT))
+SERVER_SRC = SERVER_ROOT / "src"
+if str(SERVER_SRC) not in sys.path:
+    sys.path.insert(0, str(SERVER_SRC))
 
 # Ensure telemetry is disabled during test collection and execution to avoid
 # any background network or thread startup that could slow or block pytest.
@@ -86,3 +89,39 @@ fastmcp.server = fastmcp_server
 fastmcp_server.middleware = fastmcp_server_middleware
 sys.modules.setdefault("fastmcp.server", fastmcp_server)
 sys.modules.setdefault("fastmcp.server.middleware", fastmcp_server_middleware)
+
+# Stub minimal starlette modules to avoid optional dependency imports.
+starlette = types.ModuleType("starlette")
+starlette_endpoints = types.ModuleType("starlette.endpoints")
+starlette_websockets = types.ModuleType("starlette.websockets")
+starlette_requests = types.ModuleType("starlette.requests")
+starlette_responses = types.ModuleType("starlette.responses")
+
+
+class _DummyWebSocketEndpoint:
+    pass
+
+
+class _DummyWebSocket:
+    pass
+
+
+class _DummyRequest:
+    pass
+
+
+class _DummyJSONResponse:
+    def __init__(self, *args, **kwargs):
+        pass
+
+
+starlette_endpoints.WebSocketEndpoint = _DummyWebSocketEndpoint
+starlette_websockets.WebSocket = _DummyWebSocket
+starlette_requests.Request = _DummyRequest
+starlette_responses.JSONResponse = _DummyJSONResponse
+
+sys.modules.setdefault("starlette", starlette)
+sys.modules.setdefault("starlette.endpoints", starlette_endpoints)
+sys.modules.setdefault("starlette.websockets", starlette_websockets)
+sys.modules.setdefault("starlette.requests", starlette_requests)
+sys.modules.setdefault("starlette.responses", starlette_responses)

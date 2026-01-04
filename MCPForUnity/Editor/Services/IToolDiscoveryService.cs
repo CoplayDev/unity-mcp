@@ -14,7 +14,6 @@ namespace MCPForUnity.Editor.Services
         public string ClassName { get; set; }
         public string Namespace { get; set; }
         public string AssemblyName { get; set; }
-        public string AssetPath { get; set; }
         public bool AutoRegister { get; set; } = true;
         public bool RequiresPolling { get; set; } = false;
         public string PollAction { get; set; } = "status";

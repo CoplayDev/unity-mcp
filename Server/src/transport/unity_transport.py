@@ -9,6 +9,7 @@ from typing import Awaitable, Callable, TypeVar
 from fastmcp import Context
 
 from transport.plugin_hub import PluginHub
+from models.models import MCPResponse
 from models.unity_response import normalize_unity_response
 from services.tools import get_unity_instance_from_context
 
@@ -91,12 +92,21 @@ async def send_with_unity_instance(
         if not isinstance(params, dict):
             raise TypeError(
                 "Command parameters must be a dict for HTTP transport")
-        raw = await PluginHub.send_command_for_instance(
-            unity_instance,
-            command_type,
-            params,
-        )
-        return normalize_unity_response(raw)
+        try:
+            raw = await PluginHub.send_command_for_instance(
+                unity_instance,
+                command_type,
+                params,
+            )
+            return normalize_unity_response(raw)
+        except Exception as exc:
+            # NOTE: asyncio.TimeoutError has an empty str() by default, which is confusing for clients.
+            err = str(exc) or f"{type(exc).__name__}"
+            # Fail fast with a retry hint instead of hanging for COMMAND_TIMEOUT.
+            # The client can decide whether retrying is appropriate for the command.
+            return normalize_unity_response(
+                MCPResponse(success=False, error=err, hint="retry").model_dump()
+            )
 
     if unity_instance:
         kwargs.setdefault("instance_id", unity_instance)

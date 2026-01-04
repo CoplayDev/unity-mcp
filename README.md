@@ -16,9 +16,9 @@
 
 **Create your Unity apps with LLMs!**
 
-MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to interact directly with your Unity Editor via a local **MCP (Model Context Protocol) Client**. Give your LLM tools to manage assets, control scenes, edit scripts, and automate tasks within Unity.
+MCP for Unity acts as a bridge, allowing AI assistants (Claude, Cursor, Antigravity, VS Code, etc) to interact directly with your Unity Editor via a local **MCP (Model Context Protocol) Client**. Give your LLM tools to manage assets, control scenes, edit scripts, and automate tasks within Unity.
 
-<img width="406" height="704" alt="MCP for Unity screenshot" src="docs/images/readme_ui.png">
+<img width="406" height="704" alt="MCP for Unity screenshot" src="docs/images/unity-mcp-ui-v8.6.png">
 
 ---
 
@@ -48,9 +48,12 @@ MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to 
 * `manage_prefabs`: Performs prefab operations (create, modify, delete, etc.).
 * `manage_scene`: Manages scenes (load, save, create, get hierarchy, etc.).
 * `manage_script`: Compatibility router for legacy script operations (create, read, delete). Prefer `apply_text_edits` or `script_apply_edits` for edits.
+* `manage_scriptable_object`: Creates and modifies ScriptableObject assets using Unity SerializedObject property paths.
 * `manage_shader`: Performs shader CRUD operations (create, read, modify, delete).
 * `read_console`: Gets messages from or clears the console.
-* `run_tests`: Runs tests in the Unity Editor.
+* `run_tests_async`: Starts tests asynchronously and returns a job_id for polling (preferred).
+* `get_test_job`: Polls an async test job for progress and results.
+* `run_tests`: Runs tests synchronously (blocks until complete; prefer `run_tests_async` for long suites).
 * `execute_custom_tool`: Execute a project-scoped custom tool registered by Unity.
 * `execute_menu_item`: Executes Unity Editor menu items (e.g., "File/Save Project").
 * `set_active_instance`: Routes subsequent tool calls to a specific Unity instance (when multiple are running). Requires the exact `Name@hash` from `unity_instances`.
@@ -151,7 +154,7 @@ MCP for Unity connects your tools using two components:
 
 **Need a stable/fixed version?** Use a tagged URL instead (updates require uninstalling and re-installing):
 ```
-https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v8.2.1
+https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v8.6.0
 ```
 
 #### To install via OpenUPM
@@ -167,8 +170,8 @@ https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v8.2.1
 HTTP transport is enabled out of the box. The Unity window can launch the FastMCP server for you:
 
 1. Open `Window > MCP for Unity`.
-2. Make sure the **Transport** dropdown is set to `HTTP` (default) and the **HTTP URL** is what you want (defaults to `http://localhost:8080`).
-3. Click **Start Local HTTP Server**. Unity spawns a new operating-system terminal running `uv ... server.py --transport http`.
+2. Make sure the **Transport** dropdown is set to `HTTP Local` (default) and the **HTTP URL** is what you want (defaults to `http://localhost:8080`).
+3. Click **Start Server**. Unity spawns a new operating-system terminal running `uv ... server.py --transport http`.
 4. Keep that terminal window open while you work; closing it stops the server. Use the **Stop Session** button in the Unity window if you need to tear it down cleanly.
 
 > Prefer stdio? Change the transport dropdown to `Stdio` and Unity will fall back to the embedded TCP bridge instead of launching the HTTP server.
@@ -178,7 +181,7 @@ HTTP transport is enabled out of the box. The Unity window can launch the FastMC
 You can also start the server yourself from a terminal—useful for CI or when you want to see raw logs:
 
 ```bash
-uvx --from "git+https://github.com/CoplayDev/unity-mcp@v8.1.0#subdirectory=Server" mcp-for-unity --transport http --http-url http://localhost:8080
+uvx --from "git+https://github.com/CoplayDev/unity-mcp@v8.6.0#subdirectory=Server" mcp-for-unity --transport http --http-url http://localhost:8080
 ```
 
 Keep the process running while clients are connected.
@@ -406,7 +409,7 @@ Your privacy matters to us. All telemetry is optional and designed to respect yo
     - Check the status window: Window > MCP for Unity.
     - Restart Unity.
 - **MCP Client Not Connecting / Server Not Starting:**
-    - Make sure the local HTTP server is running (Window > MCP for Unity > Start Local HTTP Server). Keep the spawned terminal window open.
+    - Make sure the local HTTP server is running (Window > MCP for Unity > Start Server). Keep the spawned terminal window open.
     - **Verify Server Path:** Double-check the --directory path in your MCP Client's JSON config. It must exactly match the installation location:
       - **Windows:** `%USERPROFILE%\AppData\Local\UnityMCP\UnityMcpServer\src`
       - **macOS:** `~/Library/AppSupport/UnityMCP/UnityMcpServer\src` 

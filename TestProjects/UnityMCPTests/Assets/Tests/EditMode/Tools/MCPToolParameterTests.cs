@@ -8,7 +8,7 @@ using System;
 using System.IO;
 using System.Text.RegularExpressions;
 
-namespace Tests.EditMode
+namespace MCPForUnityTests.Editor.Tools
 {
     /// <summary>
     /// Tests specifically for MCP tool parameter handling issues.

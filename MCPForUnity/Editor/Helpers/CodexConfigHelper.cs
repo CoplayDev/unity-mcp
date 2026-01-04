@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.External.Tommy;
 using UnityEditor;
+using UnityEngine;
 
 namespace MCPForUnity.Editor.Helpers
 {
@@ -15,6 +17,26 @@ namespace MCPForUnity.Editor.Helpers
     /// </summary>
     public static class CodexConfigHelper
     {
+        private static bool GetDevModeForceRefresh()
+        {
+            try
+            {
+                return EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void AddDevModeArgs(TomlArray args, bool devForceRefresh)
+        {
+            if (args == null) return;
+            if (!devForceRefresh) return;
+            args.Add(new TomlString { Value = "--no-cache" });
+            args.Add(new TomlString { Value = "--refresh" });
+        }
+
         public static string BuildCodexServerBlock(string uvPath)
         {
             var table = new TomlTable();
@@ -37,9 +59,12 @@ namespace MCPForUnity.Editor.Helpers
             {
                 // Stdio mode: Use command and args
                 var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
+                bool devForceRefresh = GetDevModeForceRefresh();
+
                 unityMCP["command"] = uvxPath;
 
                 var args = new TomlArray();
+                AddDevModeArgs(args, devForceRefresh);
                 if (!string.IsNullOrEmpty(fromUrl))
                 {
                     args.Add(new TomlString { Value = "--from" });
@@ -184,9 +209,12 @@ namespace MCPForUnity.Editor.Helpers
             {
                 // Stdio mode: Use command and args
                 var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
+                bool devForceRefresh = GetDevModeForceRefresh();
+
                 unityMCP["command"] = new TomlString { Value = uvxPath };
 
                 var argsArray = new TomlArray();
+                AddDevModeArgs(argsArray, devForceRefresh);
                 if (!string.IsNullOrEmpty(fromUrl))
                 {
                     argsArray.Add(new TomlString { Value = "--from" });

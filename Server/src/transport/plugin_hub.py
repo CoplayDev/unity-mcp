@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 import uuid
 from typing import Any
@@ -12,6 +13,7 @@ from starlette.endpoints import WebSocketEndpoint
 from starlette.websockets import WebSocket
 
 from core.config import config
+from models.models import MCPResponse
 from transport.plugin_registry import PluginRegistry
 from transport.models import (
     WelcomeMessage,
@@ -28,6 +30,10 @@ from transport.models import (
 logger = logging.getLogger("mcp-for-unity-server")
 
 
+class PluginDisconnectedError(RuntimeError):
+    """Raised when a plugin WebSocket disconnects while commands are in flight."""
+
+
 class PluginHub(WebSocketEndpoint):
     """Manages persistent WebSocket connections to Unity plugins."""
 
@@ -35,10 +41,15 @@ class PluginHub(WebSocketEndpoint):
     KEEP_ALIVE_INTERVAL = 15
     SERVER_TIMEOUT = 30
     COMMAND_TIMEOUT = 30
+    # Fast-path commands should never block the client for long; return a retry hint instead.
+    # This helps avoid the Cursor-side ~30s tool-call timeout when Unity is compiling/reloading
+    # or is throttled while unfocused.
+    _FAST_FAIL_COMMANDS: set[str] = {"read_console", "get_editor_state", "ping"}
 
     _registry: PluginRegistry | None = None
     _connections: dict[str, WebSocket] = {}
-    _pending: dict[str, asyncio.Future] = {}
+    # command_id -> {"future": Future, "session_id": str}
+    _pending: dict[str, dict[str, Any]] = {}
     _lock: asyncio.Lock | None = None
     _loop: asyncio.AbstractEventLoop | None = None
 
@@ -95,6 +106,21 @@ class PluginHub(WebSocketEndpoint):
                 (sid for sid, ws in cls._connections.items() if ws is websocket), None)
             if session_id:
                 cls._connections.pop(session_id, None)
+                # Fail-fast any in-flight commands for this session to avoid waiting for COMMAND_TIMEOUT.
+                pending_ids = [
+                    command_id
+                    for command_id, entry in cls._pending.items()
+                    if entry.get("session_id") == session_id
+                ]
+                for command_id in pending_ids:
+                    entry = cls._pending.get(command_id)
+                    future = entry.get("future") if isinstance(entry, dict) else None
+                    if future and not future.done():
+                        future.set_exception(
+                            PluginDisconnectedError(
+                                f"Unity plugin session {session_id} disconnected while awaiting command_result"
+                            )
+                        )
                 if cls._registry:
                     await cls._registry.unregister(session_id)
                 logger.info(
@@ -108,6 +134,39 @@ class PluginHub(WebSocketEndpoint):
         websocket = await cls._get_connection(session_id)
         command_id = str(uuid.uuid4())
         future: asyncio.Future = asyncio.get_running_loop().create_future()
+        # Compute a per-command timeout:
+        # - fast-path commands: short timeout (encourage retry)
+        # - long-running commands (e.g., run_tests): allow caller to request a longer timeout via params
+        unity_timeout_s = float(cls.COMMAND_TIMEOUT)
+        server_wait_s = float(cls.COMMAND_TIMEOUT)
+        if command_type in cls._FAST_FAIL_COMMANDS:
+            try:
+                fast_timeout = float(os.environ.get("UNITY_MCP_FAST_COMMAND_TIMEOUT", "3"))
+            except Exception:
+                fast_timeout = 3.0
+            unity_timeout_s = fast_timeout
+            server_wait_s = fast_timeout
+        else:
+            # Common tools pass a requested timeout in seconds (e.g., run_tests(timeout_seconds=900)).
+            requested = None
+            try:
+                if isinstance(params, dict):
+                    requested = params.get("timeout_seconds", None)
+                    if requested is None:
+                        requested = params.get("timeoutSeconds", None)
+            except Exception:
+                requested = None
+
+            if requested is not None:
+                try:
+                    requested_s = float(requested)
+                    # Clamp to a sane upper bound to avoid accidental infinite hangs.
+                    requested_s = max(1.0, min(requested_s, 60.0 * 60.0))
+                    unity_timeout_s = max(unity_timeout_s, requested_s)
+                    # Give the server a small cushion beyond the Unity-side timeout to account for transport overhead.
+                    server_wait_s = max(server_wait_s, requested_s + 5.0)
+                except Exception:
+                    pass
 
         lock = cls._lock
         if lock is None:
@@ -117,18 +176,35 @@ class PluginHub(WebSocketEndpoint):
             if command_id in cls._pending:
                 raise RuntimeError(
                     f"Duplicate command id generated: {command_id}")
-            cls._pending[command_id] = future
+            cls._pending[command_id] = {"future": future, "session_id": session_id}
 
         try:
             msg = ExecuteCommandMessage(
                 id=command_id,
                 name=command_type,
                 params=params,
-                timeout=cls.COMMAND_TIMEOUT,
+                timeout=unity_timeout_s,
             )
-            await websocket.send_json(msg.model_dump())
-            result = await asyncio.wait_for(future, timeout=cls.COMMAND_TIMEOUT)
-            return result
+            try:
+                await websocket.send_json(msg.model_dump())
+            except Exception as exc:
+                # If send fails (socket already closing), fail the future so callers don't hang.
+                if not future.done():
+                    future.set_exception(exc)
+                raise
+            try:
+                result = await asyncio.wait_for(future, timeout=server_wait_s)
+                return result
+            except PluginDisconnectedError as exc:
+                return MCPResponse(success=False, error=str(exc), hint="retry").model_dump()
+            except asyncio.TimeoutError:
+                if command_type in cls._FAST_FAIL_COMMANDS:
+                    return MCPResponse(
+                        success=False,
+                        error=f"Unity did not respond to '{command_type}' within {server_wait_s:.1f}s; please retry",
+                        hint="retry",
+                    ).model_dump()
+                raise
         finally:
             async with lock:
                 cls._pending.pop(command_id, None)
@@ -245,7 +321,8 @@ class PluginHub(WebSocketEndpoint):
             return
 
         async with lock:
-            future = cls._pending.get(command_id)
+            entry = cls._pending.get(command_id)
+        future = entry.get("future") if isinstance(entry, dict) else None
         if future and not future.done():
             future.set_result(result)
 
@@ -364,6 +441,40 @@ class PluginHub(WebSocketEndpoint):
         params: dict[str, Any],
     ) -> dict[str, Any]:
         session_id = await cls._resolve_session_id(unity_instance)
+
+        # During domain reload / immediate reconnect windows, the plugin may be connected but not yet
+        # ready to process execute commands on the Unity main thread (which can be further delayed when
+        # the Unity Editor is unfocused). For fast-path commands, we do a bounded readiness probe using
+        # a main-thread ping command (handled by TransportCommandDispatcher) rather than waiting on
+        # register_tools (which can be delayed by EditorApplication.delayCall).
+        if command_type in cls._FAST_FAIL_COMMANDS and command_type != "ping":
+            try:
+                max_wait_s = float(os.environ.get("UNITY_MCP_SESSION_READY_WAIT_SECONDS", "6"))
+            except Exception:
+                max_wait_s = 6.0
+            max_wait_s = max(0.0, min(max_wait_s, 30.0))
+            if max_wait_s > 0:
+                deadline = time.monotonic() + max_wait_s
+                while time.monotonic() < deadline:
+                    try:
+                        probe = await cls.send_command(session_id, "ping", {})
+                    except Exception:
+                        probe = None
+
+                    # The Unity-side dispatcher responds with {status:"success", result:{message:"pong"}}
+                    if isinstance(probe, dict) and probe.get("status") == "success":
+                        result = probe.get("result") if isinstance(probe.get("result"), dict) else {}
+                        if result.get("message") == "pong":
+                            break
+                    await asyncio.sleep(0.1)
+                else:
+                    # Not ready within the bounded window: return retry hint without sending.
+                    return MCPResponse(
+                        success=False,
+                        error=f"Unity session not ready for '{command_type}' (ping not answered); please retry",
+                        hint="retry",
+                    ).model_dump()
+
         return await cls.send_command(session_id, command_type, params)
 
     # ------------------------------------------------------------------

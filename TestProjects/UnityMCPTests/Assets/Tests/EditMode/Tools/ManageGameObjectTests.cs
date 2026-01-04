@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -66,6 +67,81 @@ namespace MCPForUnityTests.Editor.Tools
             {
                 UnityEngine.Object.DestroyImmediate(createdObject);
             }
+        }
+
+        [Test]
+        public void GetComponents_ReturnsPagedMetadataByDefault()
+        {
+            // Arrange
+            testGameObject.AddComponent<Rigidbody>();
+            testGameObject.AddComponent<BoxCollider>();
+
+            var p = new JObject
+            {
+                ["action"] = "get_components",
+                ["target"] = testGameObject.name,
+                ["searchMethod"] = "by_name",
+                ["pageSize"] = 2
+            };
+
+            // Act
+            var raw = ManageGameObject.HandleCommand(p);
+            var result = raw as JObject ?? JObject.FromObject(raw);
+
+            // Assert
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            var data = result["data"] as JObject;
+            Assert.IsNotNull(data, "Expected data payload object.");
+            Assert.AreEqual(false, data.Value<bool>("includeProperties"));
+
+            var items = data["items"] as JArray;
+            Assert.IsNotNull(items, "Expected items array.");
+            Assert.AreEqual(2, items.Count, "Expected exactly pageSize items.");
+
+            var first = items[0] as JObject;
+            Assert.IsNotNull(first, "Expected item to be an object.");
+            Assert.IsNotNull(first["typeName"]);
+            Assert.IsNotNull(first["instanceID"]);
+            Assert.IsNull(first["properties"], "Metadata response should not include heavy serialized properties by default.");
+        }
+
+        [Test]
+        public void GetComponents_CanIncludePropertiesButStillPages()
+        {
+            // Arrange
+            testGameObject.AddComponent<Rigidbody>();
+            testGameObject.AddComponent<BoxCollider>();
+
+            var p = new JObject
+            {
+                ["action"] = "get_components",
+                ["target"] = testGameObject.name,
+                ["searchMethod"] = "by_name",
+                ["pageSize"] = 2,
+                ["includeProperties"] = true
+            };
+
+            // Act
+            var raw = ManageGameObject.HandleCommand(p);
+            var result = raw as JObject ?? JObject.FromObject(raw);
+
+            // Assert
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            var data = result["data"] as JObject;
+            Assert.IsNotNull(data);
+            Assert.AreEqual(true, data.Value<bool>("includeProperties"));
+
+            var items = data["items"] as JArray;
+            Assert.IsNotNull(items);
+            Assert.IsTrue(items.Count > 0);
+
+            var first = items[0] as JObject;
+            Assert.IsNotNull(first);
+            Assert.IsNotNull(first["typeName"]);
+            Assert.IsNotNull(first["instanceID"]);
+
+            // Heuristic: property-including payload should have more than just typeName/instanceID.
+            Assert.Greater(first.Properties().Count(), 2, "Expected richer component payload when includeProperties=true.");
         }
 
         [Test]
@@ -552,6 +628,138 @@ namespace MCPForUnityTests.Editor.Tools
             // Clean up
             UnityEngine.Object.DestroyImmediate(material1);
             UnityEngine.Object.DestroyImmediate(material2);
+            UnityEngine.Object.DestroyImmediate(testObject);
+        }
+
+        [Test]
+        public void AddComponent_StringArrayFormat_AppliesComponentProperties()
+        {
+            // Arrange - Create a GameObject to add component to
+            var testObject = new GameObject("AddComponentTestObject");
+
+            // Create params using string array format with top-level componentProperties
+            var addComponentParams = new JObject
+            {
+                ["action"] = "add_component",
+                ["target"] = testObject.name,
+                ["search_method"] = "by_name",
+                ["componentsToAdd"] = new JArray { "Rigidbody" },
+                ["componentProperties"] = new JObject
+                {
+                    ["Rigidbody"] = new JObject
+                    {
+                        ["mass"] = 7.5f,
+                        ["useGravity"] = false,
+                        ["drag"] = 2.0f
+                    }
+                }
+            };
+
+            // Act
+            var result = ManageGameObject.HandleCommand(addComponentParams);
+
+            // Assert - Verify component was added
+            var rigidbody = testObject.GetComponent<Rigidbody>();
+            Assert.IsNotNull(rigidbody, "Rigidbody component should be added to GameObject");
+
+            // Verify properties were set correctly during component creation
+            Assert.AreEqual(7.5f, rigidbody.mass, 0.001f,
+                "Mass should be set to 7.5 via componentProperties during add_component");
+            Assert.AreEqual(false, rigidbody.useGravity,
+                "UseGravity should be set to false via componentProperties during add_component");
+            Assert.AreEqual(2.0f, rigidbody.drag, 0.001f,
+                "Drag should be set to 2.0 via componentProperties during add_component");
+
+            // Verify result indicates success
+            Assert.IsNotNull(result, "Should return a result object");
+            var resultObj = result as JObject ?? JObject.FromObject(result);
+            Assert.IsTrue(resultObj.Value<bool>("success"),
+                "Result should indicate success when adding component with properties");
+
+            // Clean up
+            UnityEngine.Object.DestroyImmediate(testObject);
+        }
+
+        [Test]
+        public void AddComponent_ObjectFormat_StillAppliesComponentProperties()
+        {
+            // Arrange - Create a GameObject to add component to
+            var testObject = new GameObject("AddComponentObjectFormatTestObject");
+
+            // Create params using object array format (existing behavior)
+            var addComponentParams = new JObject
+            {
+                ["action"] = "add_component",
+                ["target"] = testObject.name,
+                ["search_method"] = "by_name",
+                ["componentsToAdd"] = new JArray
+                {
+                    new JObject
+                    {
+                        ["typeName"] = "Rigidbody",
+                        ["properties"] = new JObject
+                        {
+                            ["mass"] = 3.5f,
+                            ["useGravity"] = true
+                        }
+                    }
+                }
+            };
+
+            // Act
+            var result = ManageGameObject.HandleCommand(addComponentParams);
+
+            // Assert - Verify component was added
+            var rigidbody = testObject.GetComponent<Rigidbody>();
+            Assert.IsNotNull(rigidbody, "Rigidbody component should be added to GameObject");
+
+            // Verify properties were set correctly
+            Assert.AreEqual(3.5f, rigidbody.mass, 0.001f,
+                "Mass should be set to 3.5 via inline properties");
+            Assert.AreEqual(true, rigidbody.useGravity,
+                "UseGravity should be set to true via inline properties");
+
+            // Clean up
+            UnityEngine.Object.DestroyImmediate(testObject);
+        }
+
+        [Test]
+        public void AddComponent_ComponentNameFormat_AppliesComponentProperties()
+        {
+            // Arrange - Create a GameObject to add component to
+            var testObject = new GameObject("AddComponentNameFormatTestObject");
+
+            // Create params using componentName format (existing behavior)
+            var addComponentParams = new JObject
+            {
+                ["action"] = "add_component",
+                ["target"] = testObject.name,
+                ["search_method"] = "by_name",
+                ["componentName"] = "Rigidbody",
+                ["componentProperties"] = new JObject
+                {
+                    ["Rigidbody"] = new JObject
+                    {
+                        ["mass"] = 5.0f,
+                        ["drag"] = 1.5f
+                    }
+                }
+            };
+
+            // Act
+            var result = ManageGameObject.HandleCommand(addComponentParams);
+
+            // Assert - Verify component was added
+            var rigidbody = testObject.GetComponent<Rigidbody>();
+            Assert.IsNotNull(rigidbody, "Rigidbody component should be added to GameObject");
+
+            // Verify properties were set correctly
+            Assert.AreEqual(5.0f, rigidbody.mass, 0.001f,
+                "Mass should be set to 5.0 via componentName format");
+            Assert.AreEqual(1.5f, rigidbody.drag, 0.001f,
+                "Drag should be set to 1.5 via componentName format");
+
+            // Clean up
             UnityEngine.Object.DestroyImmediate(testObject);
         }
     }

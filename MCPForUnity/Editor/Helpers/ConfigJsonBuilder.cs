@@ -81,7 +81,10 @@ namespace MCPForUnity.Editor.Helpers
                 // Stdio mode: Use uvx command
                 var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
 
-                var toolArgs = BuildUvxArgs(fromUrl, packageName);
+                bool devForceRefresh = false;
+                try { devForceRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false); } catch { }
+
+                var toolArgs = BuildUvxArgs(fromUrl, packageName, devForceRefresh);
 
                 if (ShouldUseWindowsCmdShim(client))
                 {
@@ -149,15 +152,23 @@ namespace MCPForUnity.Editor.Helpers
             return created;
         }
 
-        private static IList<string> BuildUvxArgs(string fromUrl, string packageName)
+        private static IList<string> BuildUvxArgs(string fromUrl, string packageName, bool devForceRefresh)
         {
-            var args = new List<string> { packageName };
-
+            // Dev mode: force a fresh install/resolution (avoids stale cached builds while iterating).
+            // `--no-cache` is the key flag; `--refresh` ensures metadata is revalidated.
+            // Keep ordering consistent with other uvx builders: dev flags first, then --from <url>, then package name.
+            var args = new List<string>();
+            if (devForceRefresh)
+            {
+                args.Add("--no-cache");
+                args.Add("--refresh");
+            }
             if (!string.IsNullOrEmpty(fromUrl))
             {
-                args.Insert(0, fromUrl);
-                args.Insert(0, "--from");
+                args.Add("--from");
+                args.Add(fromUrl);
             }
+            args.Add(packageName);
 
             args.Add("--transport");
             args.Add("stdio");

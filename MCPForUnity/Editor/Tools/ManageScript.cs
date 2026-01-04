@@ -978,7 +978,7 @@ namespace MCPForUnity.Editor.Tools
                 bool deleted = AssetDatabase.MoveAssetToTrash(relativePath);
                 if (deleted)
                 {
-                    AssetDatabase.Refresh();
+                    AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
                     return new SuccessResponse(
                         $"Script '{Path.GetFileName(relativePath)}' moved to trash successfully.",
                         new { deleted = true }

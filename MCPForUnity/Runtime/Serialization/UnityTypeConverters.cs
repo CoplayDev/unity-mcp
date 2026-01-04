@@ -160,6 +160,67 @@ namespace MCPForUnity.Runtime.Serialization
         }
     }
 
+    /// <summary>
+    /// Safe converter for Matrix4x4 that only accesses raw matrix elements (m00-m33).
+    /// Avoids computed properties (lossyScale, rotation, inverse) that call ValidTRS()
+    /// and can crash Unity on non-TRS matrices (common in Cinemachine components).
+    /// Fixes: https://github.com/CoplayDev/unity-mcp/issues/478
+    /// </summary>
+    public class Matrix4x4Converter : JsonConverter<Matrix4x4>
+    {
+        public override void WriteJson(JsonWriter writer, Matrix4x4 value, JsonSerializer serializer)
+        {
+            writer.WriteStartObject();
+            // Only access raw matrix elements - NEVER computed properties like lossyScale/rotation
+            writer.WritePropertyName("m00"); writer.WriteValue(value.m00);
+            writer.WritePropertyName("m01"); writer.WriteValue(value.m01);
+            writer.WritePropertyName("m02"); writer.WriteValue(value.m02);
+            writer.WritePropertyName("m03"); writer.WriteValue(value.m03);
+            writer.WritePropertyName("m10"); writer.WriteValue(value.m10);
+            writer.WritePropertyName("m11"); writer.WriteValue(value.m11);
+            writer.WritePropertyName("m12"); writer.WriteValue(value.m12);
+            writer.WritePropertyName("m13"); writer.WriteValue(value.m13);
+            writer.WritePropertyName("m20"); writer.WriteValue(value.m20);
+            writer.WritePropertyName("m21"); writer.WriteValue(value.m21);
+            writer.WritePropertyName("m22"); writer.WriteValue(value.m22);
+            writer.WritePropertyName("m23"); writer.WriteValue(value.m23);
+            writer.WritePropertyName("m30"); writer.WriteValue(value.m30);
+            writer.WritePropertyName("m31"); writer.WriteValue(value.m31);
+            writer.WritePropertyName("m32"); writer.WriteValue(value.m32);
+            writer.WritePropertyName("m33"); writer.WriteValue(value.m33);
+            writer.WriteEndObject();
+        }
+
+        public override Matrix4x4 ReadJson(JsonReader reader, Type objectType, Matrix4x4 existingValue, bool hasExistingValue, JsonSerializer serializer)
+        {
+            if (reader.TokenType == JsonToken.Null)
+                return new Matrix4x4(); // Return zero matrix for null (consistent with missing field defaults)
+
+            if (reader.TokenType != JsonToken.StartObject)
+                throw new JsonSerializationException($"Expected JSON object or null when deserializing Matrix4x4, got '{reader.TokenType}'.");
+
+            JObject jo = JObject.Load(reader);
+            var matrix = new Matrix4x4();
+            matrix.m00 = jo["m00"]?.Value<float>() ?? 0f;
+            matrix.m01 = jo["m01"]?.Value<float>() ?? 0f;
+            matrix.m02 = jo["m02"]?.Value<float>() ?? 0f;
+            matrix.m03 = jo["m03"]?.Value<float>() ?? 0f;
+            matrix.m10 = jo["m10"]?.Value<float>() ?? 0f;
+            matrix.m11 = jo["m11"]?.Value<float>() ?? 0f;
+            matrix.m12 = jo["m12"]?.Value<float>() ?? 0f;
+            matrix.m13 = jo["m13"]?.Value<float>() ?? 0f;
+            matrix.m20 = jo["m20"]?.Value<float>() ?? 0f;
+            matrix.m21 = jo["m21"]?.Value<float>() ?? 0f;
+            matrix.m22 = jo["m22"]?.Value<float>() ?? 0f;
+            matrix.m23 = jo["m23"]?.Value<float>() ?? 0f;
+            matrix.m30 = jo["m30"]?.Value<float>() ?? 0f;
+            matrix.m31 = jo["m31"]?.Value<float>() ?? 0f;
+            matrix.m32 = jo["m32"]?.Value<float>() ?? 0f;
+            matrix.m33 = jo["m33"]?.Value<float>() ?? 0f;
+            return matrix;
+        }
+    }
+
     // Converter for UnityEngine.Object references (GameObjects, Components, Materials, Textures, etc.)
     public class UnityEngineObjectConverter : JsonConverter<UnityEngine.Object>
     {
