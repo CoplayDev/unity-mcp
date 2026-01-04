@@ -49,6 +49,21 @@ To run only unit tests:
 uv run pytest tests/ -v -m unit
 ```
 
+### Code Coverage
+
+Run tests with coverage tracking:
+
+```bash
+cd Server
+uv run pytest tests/ --cov=src --cov-report=html --cov-report=term
+
+# View HTML report
+open htmlcov/index.html  # macOS
+xdg-open htmlcov/index.html  # Linux
+```
+
+Coverage configuration is in `Server/pyproject.toml` under `[tool.coverage.*]`.
+
 ## 🚀 Available Development Features
 
 ### ✅ Development Deployment Scripts

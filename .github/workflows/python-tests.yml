@@ -30,10 +30,19 @@ jobs:
           uv sync
           uv pip install -e ".[dev]"
 
-      - name: Run tests
+      - name: Run tests with coverage
         run: |
           cd Server
-          uv run pytest tests/ -v --tb=short
+          uv run pytest tests/ -v --tb=short --cov=src --cov-report=xml --cov-report=html --cov-report=term
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: ./Server/coverage.xml
+          flags: python
+          name: python-coverage
+          fail_ci_if_error: false
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
@@ -43,3 +52,5 @@ jobs:
           path: |
             Server/.pytest_cache/
             Server/tests/
+            Server/coverage.xml
+            Server/htmlcov/
