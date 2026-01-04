@@ -55,7 +55,7 @@ Run tests with coverage tracking:
 
 ```bash
 cd Server
-uv run pytest tests/ --cov=src --cov-report=html --cov-report=term
+uv run pytest tests/ --cov --cov-report=html --cov-report=term
 
 # View HTML report
 open htmlcov/index.html  # macOS

@@ -33,7 +33,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           cd Server
-          uv run pytest tests/ -v --tb=short --cov=src --cov-report=xml --cov-report=html --cov-report=term
+          uv run pytest tests/ -v --tb=short --cov --cov-report=xml --cov-report=html --cov-report=term
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
