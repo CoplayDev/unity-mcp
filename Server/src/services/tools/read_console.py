@@ -11,8 +11,15 @@ from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 
 
+def _strip_stacktrace_from_list(items: list) -> None:
+    """Remove stacktrace fields from a list of log entries."""
+    for item in items:
+        if isinstance(item, dict) and "stacktrace" in item:
+            item.pop("stacktrace", None)
+
+
 @mcp_for_unity_tool(
-    description="Gets messages from or clears the Unity Editor console. Note: For maximum client compatibility, pass count as a quoted string (e.g., '5')."
+    description="Gets messages from or clears the Unity Editor console. Defaults to 10 most recent entries. Use page_size/cursor for paging. Note: For maximum client compatibility, pass count as a quoted string (e.g., '5')."
 )
 async def read_console(
     ctx: Context,
@@ -21,10 +28,12 @@ async def read_console(
     types: Annotated[list[Literal['error', 'warning',
                                   'log', 'all']], "Message types to get"] | None = None,
     count: Annotated[int | str,
-                     "Max messages to return (accepts int or string, e.g., 5 or '5')"] | None = None,
+                     "Max messages to return in non-paging mode (accepts int or string, e.g., 5 or '5'). Ignored when paging with page_size/cursor."] | None = None,
     filter_text: Annotated[str, "Text filter for messages"] | None = None,
     since_timestamp: Annotated[str,
                                "Get messages after this timestamp (ISO 8601)"] | None = None,
+    page_size: Annotated[int | str, "Page size for paginated console reads. Defaults to 50 when omitted."] | None = None,
+    cursor: Annotated[int | str, "Opaque cursor for paging (0-based offset). Defaults to 0."] | None = None,
     format: Annotated[Literal['plain', 'detailed',
                               'json'], "Output format"] | None = None,
     include_stacktrace: Annotated[bool | str,
@@ -35,11 +44,13 @@ async def read_console(
     unity_instance = get_unity_instance_from_context(ctx)
     # Set defaults if values are None
     action = action if action is not None else 'get'
-    types = types if types is not None else ['error', 'warning', 'log']
-    format = format if format is not None else 'detailed'
+    types = types if types is not None else ['error', 'warning']
+    format = format if format is not None else 'plain'
     # Coerce booleans defensively (strings like 'true'/'false')
 
-    include_stacktrace = coerce_bool(include_stacktrace, default=True)
+    include_stacktrace = coerce_bool(include_stacktrace, default=False)
+    coerced_page_size = coerce_int(page_size, default=None)
+    coerced_cursor = coerce_int(cursor, default=None)
 
     # Normalize action if it's a string
     if isinstance(action, str):
@@ -56,7 +67,7 @@ async def read_console(
         count = coerce_int(count)
 
     if action == "get" and count is None:
-        count = 200
+        count = 10
 
     # Prepare parameters for the C# handler
     params_dict = {
@@ -65,6 +76,8 @@ async def read_console(
         "count": count,
         "filterText": filter_text,
         "sinceTimestamp": since_timestamp,
+        "pageSize": coerced_page_size,
+        "cursor": coerced_cursor,
         "format": format.lower() if isinstance(format, str) else format,
         "includeStacktrace": include_stacktrace
     }
@@ -83,16 +96,13 @@ async def read_console(
         # Strip stacktrace fields from returned lines if present
         try:
             data = resp.get("data")
-            # Handle standard format: {"data": {"lines": [...]}}
-            if isinstance(data, dict) and "lines" in data and isinstance(data["lines"], list):
-                for line in data["lines"]:
-                    if isinstance(line, dict) and "stacktrace" in line:
-                        line.pop("stacktrace", None)
-            # Handle legacy/direct list format if any
+            if isinstance(data, dict):
+                for key in ("lines", "items"):
+                    if key in data and isinstance(data[key], list):
+                        _strip_stacktrace_from_list(data[key])
+                        break
             elif isinstance(data, list):
-                for line in data:
-                    if isinstance(line, dict) and "stacktrace" in line:
-                        line.pop("stacktrace", None)
+                _strip_stacktrace_from_list(data)
         except Exception:
             pass
     return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}

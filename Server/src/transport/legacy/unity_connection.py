@@ -686,28 +686,46 @@ def get_unity_connection(instance_identifier: str | None = None) -> UnityConnect
 # Centralized retry helpers
 # -----------------------------
 
+def _extract_response_reason(resp: object) -> str | None:
+    """Extract a normalized (lowercase) reason string from a response.
+
+    Returns lowercase reason values to enable case-insensitive comparisons
+    by callers (e.g. _is_reloading_response, refresh_unity).
+    """
+    if isinstance(resp, MCPResponse):
+        data = getattr(resp, "data", None)
+        if isinstance(data, dict):
+            reason = data.get("reason")
+            if isinstance(reason, str):
+                return reason.lower()
+        message_text = f"{resp.message or ''} {resp.error or ''}".lower()
+        if "reload" in message_text:
+            return "reloading"
+        return None
+
+    if isinstance(resp, dict):
+        if resp.get("state") == "reloading":
+            return "reloading"
+        data = resp.get("data")
+        if isinstance(data, dict):
+            reason = data.get("reason")
+            if isinstance(reason, str):
+                return reason.lower()
+        message_text = (resp.get("message") or resp.get("error") or "").lower()
+        if "reload" in message_text:
+            return "reloading"
+        return None
+
+    return None
+
+
 def _is_reloading_response(resp: object) -> bool:
     """Return True if the Unity response indicates the editor is reloading.
 
     Supports both raw dict payloads from Unity and MCPResponse objects returned
     by preflight checks or transport helpers.
     """
-    # Structured MCPResponse from preflight/transport
-    if isinstance(resp, MCPResponse):
-        # Explicit "please retry" hint from preflight
-        if getattr(resp, "hint", None) == "retry":
-            return True
-        message_text = f"{resp.message or ''} {resp.error or ''}".lower()
-        return "reload" in message_text
-
-    # Raw Unity payloads
-    if isinstance(resp, dict):
-        if resp.get("state") == "reloading":
-            return True
-        message_text = (resp.get("message") or resp.get("error") or "").lower()
-        return "reload" in message_text
-
-    return False
+    return _extract_response_reason(resp) == "reloading"
 
 
 def send_command_with_retry(
@@ -738,15 +756,82 @@ def send_command_with_retry(
         max_retries = getattr(config, "reload_max_retries", 40)
     if retry_ms is None:
         retry_ms = getattr(config, "reload_retry_ms", 250)
+    try:
+        max_wait_s = float(os.environ.get(
+            "UNITY_MCP_RELOAD_MAX_WAIT_S", "2.0"))
+    except ValueError as e:
+        raw_val = os.environ.get("UNITY_MCP_RELOAD_MAX_WAIT_S", "2.0")
+        logger.warning(
+            "Invalid UNITY_MCP_RELOAD_MAX_WAIT_S=%r, using default 2.0: %s",
+            raw_val, e)
+        max_wait_s = 2.0
+    # Clamp to [0, 30] to prevent misconfiguration from causing excessive waits
+    max_wait_s = max(0.0, min(max_wait_s, 30.0))
 
     response = conn.send_command(command_type, params)
     retries = 0
+    wait_started = None
+    reason = _extract_response_reason(response)
     while _is_reloading_response(response) and retries < max_retries:
-        delay_ms = int(response.get("retry_after_ms", retry_ms)
-                       ) if isinstance(response, dict) else retry_ms
-        time.sleep(max(0.0, delay_ms / 1000.0))
+        if wait_started is None:
+            wait_started = time.monotonic()
+            logger.debug(
+                "Unity reload wait started: command=%s instance=%s reason=%s max_wait_s=%.2f",
+                command_type,
+                instance_id or "default",
+                reason or "reloading",
+                max_wait_s,
+            )
+        if max_wait_s <= 0:
+            break
+        elapsed = time.monotonic() - wait_started
+        if elapsed >= max_wait_s:
+            break
+        delay_ms = retry_ms
+        if isinstance(response, dict):
+            retry_after = response.get("retry_after_ms")
+            if retry_after is None and isinstance(response.get("data"), dict):
+                retry_after = response["data"].get("retry_after_ms")
+            if retry_after is not None:
+                delay_ms = int(retry_after)
+        sleep_ms = max(50, min(int(delay_ms), 250))
+        logger.debug(
+            "Unity reload wait retry: command=%s instance=%s reason=%s retry_after_ms=%s sleep_ms=%s",
+            command_type,
+            instance_id or "default",
+            reason or "reloading",
+            delay_ms,
+            sleep_ms,
+        )
+        time.sleep(max(0.0, sleep_ms / 1000.0))
         retries += 1
         response = conn.send_command(command_type, params)
+        reason = _extract_response_reason(response)
+
+    if wait_started is not None:
+        waited = time.monotonic() - wait_started
+        if _is_reloading_response(response):
+            logger.debug(
+                "Unity reload wait exceeded budget: command=%s instance=%s waited_s=%.3f",
+                command_type,
+                instance_id or "default",
+                waited,
+            )
+            return MCPResponse(
+                success=False,
+                error="Unity is reloading; please retry",
+                hint="retry",
+                data={
+                    "reason": "reloading",
+                    "retry_after_ms": min(250, max(50, retry_ms)),
+                },
+            )
+        logger.debug(
+            "Unity reload wait completed: command=%s instance=%s waited_s=%.3f",
+            command_type,
+            instance_id or "default",
+            waited,
+        )
     return response
 
 

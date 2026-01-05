@@ -34,6 +34,10 @@ class PluginDisconnectedError(RuntimeError):
     """Raised when a plugin WebSocket disconnects while commands are in flight."""
 
 
+class NoUnitySessionError(RuntimeError):
+    """Raised when no Unity plugins are available."""
+
+
 class PluginHub(WebSocketEndpoint):
     """Manages persistent WebSocket connections to Unity plugins."""
 
@@ -361,11 +365,20 @@ class PluginHub(WebSocketEndpoint):
         if cls._registry is None:
             raise RuntimeError("Plugin registry not configured")
 
-        # Use the same defaults as the stdio transport reload handling so that
-        # HTTP/WebSocket and TCP behave consistently without per-project env.
-        max_retries = max(1, int(getattr(config, "reload_max_retries", 40)))
+        # Bound waiting for Unity sessions so calls fail fast when editors are not ready.
+        try:
+            max_wait_s = float(
+                os.environ.get("UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S", "2.0"))
+        except ValueError as e:
+            raw_val = os.environ.get("UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S", "2.0")
+            logger.warning(
+                "Invalid UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S=%r, using default 2.0: %s",
+                raw_val, e)
+            max_wait_s = 2.0
+        # Clamp to [0, 30] to prevent misconfiguration from causing excessive waits
+        max_wait_s = max(0.0, min(max_wait_s, 30.0))
         retry_ms = float(getattr(config, "reload_retry_ms", 250))
-        sleep_seconds = max(0.05, retry_ms / 1000.0)
+        sleep_seconds = max(0.05, min(0.25, retry_ms / 1000.0))
 
         # Allow callers to provide either just the hash or Name@hash
         target_hash: str | None = None
@@ -394,7 +407,7 @@ class PluginHub(WebSocketEndpoint):
             return None, count
 
         session_id, session_count = await _try_once()
-        deadline = time.monotonic() + (max_retries * sleep_seconds)
+        deadline = time.monotonic() + max_wait_s
         wait_started = None
 
         # If there is no active plugin yet (e.g., Unity starting up or reloading),
@@ -408,14 +421,18 @@ class PluginHub(WebSocketEndpoint):
             if wait_started is None:
                 wait_started = time.monotonic()
                 logger.debug(
-                    f"No plugin session available (instance={unity_instance or 'default'}); waiting up to {deadline - wait_started:.2f}s",
+                    "No plugin session available (instance=%s); waiting up to %.2fs",
+                    unity_instance or "default",
+                    max_wait_s,
                 )
             await asyncio.sleep(sleep_seconds)
             session_id, session_count = await _try_once()
 
         if session_id is not None and wait_started is not None:
             logger.debug(
-                f"Plugin session restored after {time.monotonic() - wait_started:.3f}s (instance={unity_instance or 'default'})",
+                "Plugin session restored after %.3fs (instance=%s)",
+                time.monotonic() - wait_started,
+                unity_instance or "default",
             )
         if session_id is None and not target_hash and session_count > 1:
             raise RuntimeError(
@@ -425,11 +442,13 @@ class PluginHub(WebSocketEndpoint):
 
         if session_id is None:
             logger.warning(
-                f"No Unity plugin reconnected within {max_retries * sleep_seconds:.2f}s (instance={unity_instance or 'default'})",
+                "No Unity plugin reconnected within %.2fs (instance=%s)",
+                max_wait_s,
+                unity_instance or "default",
             )
             # At this point we've given the plugin ample time to reconnect; surface
             # a clear error so the client can prompt the user to open Unity.
-            raise RuntimeError("No Unity plugins are currently connected")
+            raise NoUnitySessionError("No Unity plugins are currently connected")
 
         return session_id
 
@@ -440,7 +459,20 @@ class PluginHub(WebSocketEndpoint):
         command_type: str,
         params: dict[str, Any],
     ) -> dict[str, Any]:
-        session_id = await cls._resolve_session_id(unity_instance)
+        try:
+            session_id = await cls._resolve_session_id(unity_instance)
+        except NoUnitySessionError:
+            logger.debug(
+                "Unity session unavailable; returning retry: command=%s instance=%s",
+                command_type,
+                unity_instance or "default",
+            )
+            return MCPResponse(
+                success=False,
+                error="Unity session not available; please retry",
+                hint="retry",
+                data={"reason": "no_unity_session", "retry_after_ms": 250},
+            ).model_dump()
 
         # During domain reload / immediate reconnect windows, the plugin may be connected but not yet
         # ready to process execute commands on the Unity main thread (which can be further delayed when
@@ -450,7 +482,11 @@ class PluginHub(WebSocketEndpoint):
         if command_type in cls._FAST_FAIL_COMMANDS and command_type != "ping":
             try:
                 max_wait_s = float(os.environ.get("UNITY_MCP_SESSION_READY_WAIT_SECONDS", "6"))
-            except Exception:
+            except ValueError as e:
+                raw_val = os.environ.get("UNITY_MCP_SESSION_READY_WAIT_SECONDS", "6")
+                logger.warning(
+                    "Invalid UNITY_MCP_SESSION_READY_WAIT_SECONDS=%r, using default 6.0: %s",
+                    raw_val, e)
                 max_wait_s = 6.0
             max_wait_s = max(0.0, min(max_wait_s, 30.0))
             if max_wait_s > 0:

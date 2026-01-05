@@ -36,7 +36,7 @@ async def test_read_console_full_default(monkeypatch):
 
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_cmd, params, **_kwargs):
         captured["params"] = params
         return {
             "success": True,
@@ -54,10 +54,10 @@ async def test_read_console_full_default(monkeypatch):
     resp = await read_console(ctx=DummyContext(), action="get", count=10)
     assert resp == {
         "success": True,
-        "data": {"lines": [{"level": "error", "message": "oops", "stacktrace": "trace", "time": "t"}]},
+        "data": {"lines": [{"level": "error", "message": "oops", "time": "t"}]},
     }
     assert captured["params"]["count"] == 10
-    assert captured["params"]["includeStacktrace"] is True
+    assert captured["params"]["includeStacktrace"] is False
 
 
 @pytest.mark.asyncio
@@ -67,7 +67,7 @@ async def test_read_console_truncated(monkeypatch):
 
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_cmd, params, **_kwargs):
         captured["params"] = params
         return {
             "success": True,
@@ -86,3 +86,100 @@ async def test_read_console_truncated(monkeypatch):
     assert resp == {"success": True, "data": {
         "lines": [{"level": "error", "message": "oops"}]}}
     assert captured["params"]["includeStacktrace"] is False
+
+
+@pytest.mark.asyncio
+async def test_read_console_default_count(monkeypatch):
+    """Test that read_console defaults to count=10 when not specified."""
+    tools = setup_tools()
+    read_console = tools["read_console"]
+
+    captured = {}
+
+    async def fake_send(_cmd, params, **_kwargs):
+        captured["params"] = params
+        return {
+            "success": True,
+            "data": {"lines": [{"level": "error", "message": f"error {i}"} for i in range(15)]},
+        }
+
+    # Patch the send_command_with_retry function in the tools module
+    import services.tools.read_console
+    monkeypatch.setattr(
+        services.tools.read_console,
+        "async_send_command_with_retry",
+        fake_send,
+    )
+
+    # Call without specifying count - should default to 10
+    resp = await read_console(ctx=DummyContext(), action="get")
+    assert resp["success"] is True
+    # Verify that the default count of 10 was used
+    assert captured["params"]["count"] == 10
+
+
+@pytest.mark.asyncio
+async def test_read_console_paging(monkeypatch):
+    """Test that read_console paging works with page_size and cursor."""
+    tools = setup_tools()
+    read_console = tools["read_console"]
+
+    captured = {}
+
+    async def fake_send(_cmd, params, **_kwargs):
+        captured["params"] = params
+        # Simulate Unity returning paging info matching C# structure
+        page_size = params.get("pageSize", 10)
+        cursor = params.get("cursor", 0)
+        # Simulate 25 total messages
+        all_messages = [{"level": "error", "message": f"error {i}"} for i in range(25)]
+        
+        # Return a page of results
+        start = cursor
+        end = min(start + page_size, len(all_messages))
+        messages = all_messages[start:end]
+        
+        return {
+            "success": True,
+            "data": {
+                "items": messages,
+                "cursor": cursor,
+                "pageSize": page_size,
+                "nextCursor": str(end) if end < len(all_messages) else None,
+                "truncated": end < len(all_messages),
+                "total": len(all_messages),
+            },
+        }
+
+    # Patch the send_command_with_retry function in the tools module
+    import services.tools.read_console
+    monkeypatch.setattr(
+        services.tools.read_console,
+        "async_send_command_with_retry",
+        fake_send,
+    )
+
+    # First page - get first 5 entries
+    resp = await read_console(ctx=DummyContext(), action="get", page_size=5, cursor=0)
+    assert resp["success"] is True
+    assert captured["params"]["pageSize"] == 5
+    assert captured["params"]["cursor"] == 0
+    assert len(resp["data"]["items"]) == 5
+    assert resp["data"]["truncated"] is True
+    assert resp["data"]["nextCursor"] == "5"
+    assert resp["data"]["total"] == 25
+    
+    # Second page - get next 5 entries
+    resp = await read_console(ctx=DummyContext(), action="get", page_size=5, cursor=5)
+    assert resp["success"] is True
+    assert captured["params"]["cursor"] == 5
+    assert len(resp["data"]["items"]) == 5
+    assert resp["data"]["truncated"] is True
+    assert resp["data"]["nextCursor"] == "10"
+    
+    # Last page - get remaining entries
+    resp = await read_console(ctx=DummyContext(), action="get", page_size=5, cursor=20)
+    assert resp["success"] is True
+    assert len(resp["data"]["items"]) == 5
+    assert resp["data"]["truncated"] is False
+    assert resp["data"]["nextCursor"] is None

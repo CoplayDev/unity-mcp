@@ -19,7 +19,7 @@ namespace MCPForUnityTests.Editor.Tools
             Debug.Log("Log to clear");
             
             // Verify content exists before clear
-            var getBefore = ToJObject(ReadConsole.HandleCommand(new JObject { ["action"] = "get", ["count"] = 10 }));
+            var getBefore = ToJObject(ReadConsole.HandleCommand(new JObject { ["action"] = "get", ["types"] = new JArray { "error", "warning", "log" }, ["count"] = 10 }));
             Assert.IsTrue(getBefore.Value<bool>("success"), getBefore.ToString());
             var entriesBefore = getBefore["data"] as JArray;
             
@@ -35,7 +35,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsTrue(result.Value<bool>("success"), result.ToString());
             
             // Verify clear effect
-            var getAfter = ToJObject(ReadConsole.HandleCommand(new JObject { ["action"] = "get", ["count"] = 10 }));
+            var getAfter = ToJObject(ReadConsole.HandleCommand(new JObject { ["action"] = "get", ["types"] = new JArray { "error", "warning", "log" }, ["count"] = 10 }));
             Assert.IsTrue(getAfter.Value<bool>("success"), getAfter.ToString());
             var entriesAfter = getAfter["data"] as JArray;
             Assert.IsTrue(entriesAfter == null || entriesAfter.Count == 0, "Console should be empty after clear.");
@@ -51,6 +51,8 @@ namespace MCPForUnityTests.Editor.Tools
             var paramsObj = new JObject
             {
                 ["action"] = "get",
+                ["types"] = new JArray { "error", "warning", "log" },
+                ["format"] = "detailed",
                 ["count"] = 1000 // Fetch enough to likely catch our message
             };
 
@@ -88,4 +90,3 @@ namespace MCPForUnityTests.Editor.Tools
         }
     }
 }
-
