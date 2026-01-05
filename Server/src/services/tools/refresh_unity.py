@@ -5,6 +5,7 @@ import time
 from typing import Annotated, Any, Literal
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
 
 from models import MCPResponse
 from services.registry import mcp_for_unity_tool
@@ -15,7 +16,11 @@ from services.state.external_changes_scanner import external_changes_scanner
 
 
 @mcp_for_unity_tool(
-    description="Request a Unity asset database refresh and optionally a script compilation. Can optionally wait for readiness."
+    description="Request a Unity asset database refresh and optionally a script compilation. Can optionally wait for readiness.",
+    annotations=ToolAnnotations(
+        title="Refresh Unity",
+        destructiveHint=True,
+    ),
 )
 async def refresh_unity(
     ctx: Context,
