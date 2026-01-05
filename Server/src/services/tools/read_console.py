@@ -44,7 +44,7 @@ async def read_console(
     unity_instance = get_unity_instance_from_context(ctx)
     # Set defaults if values are None
     action = action if action is not None else 'get'
-    types = types if types is not None else ['error', 'warning']
+    types = types if types is not None else ['error', 'warning', 'log']
     format = format if format is not None else 'plain'
     # Coerce booleans defensively (strings like 'true'/'false')
 
