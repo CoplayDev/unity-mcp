@@ -4,6 +4,8 @@ Defines the read_console tool for accessing Unity Editor console messages.
 from typing import Annotated, Any, Literal
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
+
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from services.tools.utils import coerce_int, coerce_bool
@@ -19,7 +21,10 @@ def _strip_stacktrace_from_list(items: list) -> None:
 
 
 @mcp_for_unity_tool(
-    description="Gets messages from or clears the Unity Editor console. Defaults to 10 most recent entries. Use page_size/cursor for paging. Note: For maximum client compatibility, pass count as a quoted string (e.g., '5')."
+    description="Gets messages from or clears the Unity Editor console. Defaults to 10 most recent entries. Use page_size/cursor for paging. Note: For maximum client compatibility, pass count as a quoted string (e.g., '5'). The 'get' action is read-only; 'clear' modifies ephemeral UI state (not project data).",
+    annotations=ToolAnnotations(
+        title="Read Console",
+    ),
 )
 async def read_console(
     ctx: Context,
@@ -44,7 +49,7 @@ async def read_console(
     unity_instance = get_unity_instance_from_context(ctx)
     # Set defaults if values are None
     action = action if action is not None else 'get'
-    types = types if types is not None else ['error', 'warning']
+    types = types if types is not None else ['error', 'warning', 'log']
     format = format if format is not None else 'plain'
     # Coerce booleans defensively (strings like 'true'/'false')
 

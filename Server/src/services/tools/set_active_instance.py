@@ -2,6 +2,8 @@ from typing import Annotated, Any
 from types import SimpleNamespace
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
+
 from services.registry import mcp_for_unity_tool
 from transport.legacy.unity_connection import get_unity_connection_pool
 from transport.unity_instance_middleware import get_unity_instance_middleware
@@ -10,7 +12,10 @@ from transport.unity_transport import _current_transport
 
 
 @mcp_for_unity_tool(
-    description="Set the active Unity instance for this client/session. Accepts Name@hash or hash."
+    description="Set the active Unity instance for this client/session. Accepts Name@hash or hash.",
+    annotations=ToolAnnotations(
+        title="Set Active Instance",
+    ),
 )
 async def set_active_instance(
         ctx: Context,

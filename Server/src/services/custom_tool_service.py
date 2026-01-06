@@ -266,15 +266,14 @@ class CustomToolService:
             return None
         return {"message": str(response)}
 
-    def _safe_response(self, response):
-        if isinstance(response, dict):
-            return response
-        if response is None:
-            return None
-        return {"message": str(response)}
-
 
 def compute_project_id(project_name: str, project_path: str) -> str:
+    """
+    DEPRECATED: Computes a SHA256-based project ID.
+    This function is no longer used as of the multi-session fix.
+    Unity instances now use their native project_hash (SHA1-based) for consistency
+    across stdio and WebSocket transports.
+    """
     combined = f"{project_name}:{project_path}"
     return sha256(combined.encode("utf-8")).hexdigest().upper()[:16]
 
@@ -307,7 +306,12 @@ def resolve_project_id_for_unity_instance(unity_instance: str | None) -> str | N
             )
 
         if target:
-            return compute_project_id(target.name, target.path)
+            # Return the project_hash from Unity (not a computed SHA256 hash).
+            # This matches the hash Unity uses when registering tools via WebSocket.
+            if target.hash:
+                return target.hash
+            logger.warning(f"Unity instance {target.id} has empty hash; cannot resolve project ID")
+            return None
     except Exception:
         logger.debug(
             f"Failed to resolve project id via connection pool for {unity_instance}")

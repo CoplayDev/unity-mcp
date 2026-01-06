@@ -47,7 +47,6 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         private Button testConnectionButton;
 
         private bool connectionToggleInProgress;
-        private bool autoStartInProgress;
         private bool httpServerToggleInProgress;
         private Task verificationTask;
         private string lastHealthStatus;
@@ -269,16 +268,28 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             bool debugMode = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
             bool stdioSelected = transportDropdown != null && (TransportProtocol)transportDropdown.value == TransportProtocol.Stdio;
 
-            // Keep the consolidated Start/Stop Server button label in sync even when the session is not running
+            // Keep the Start/Stop Server button label in sync even when the session is not running
             // (e.g., orphaned server after a domain reload).
+            // NOTE: This also updates lastLocalServerRunning which is used below for session toggle visibility.
             UpdateStartHttpButtonState();
 
-            // If local-server controls are active, hide the manual session toggle controls and
-            // rely on the Start/Stop Server button. We still keep the session status text visible
-            // next to the dot for clarity.
+            // Detect orphaned session: if HTTP Local session thinks it's running but the server is gone,
+            // automatically end the session to keep UI in sync with reality.
+            if (showLocalServerControls && isRunning && !lastLocalServerRunning && !connectionToggleInProgress)
+            {
+                McpLog.Info("Server no longer running; ending orphaned session.");
+                _ = EndOrphanedSessionAsync();
+                isRunning = false; // Update local state for the rest of this method
+            }
+
+            // For HTTP Local: show session toggle button only when server is running (so user can manually start/end session).
+            // For Stdio/HTTP Remote: always show the session toggle button.
+            // This separates server lifecycle from session lifecycle for multi-instance scenarios.
+            // We use lastLocalServerRunning which was just refreshed by UpdateStartHttpButtonState() above.
             if (connectionToggleButton != null)
             {
-                connectionToggleButton.style.display = showLocalServerControls ? DisplayStyle.None : DisplayStyle.Flex;
+                bool showSessionToggle = !showLocalServerControls || lastLocalServerRunning;
+                connectionToggleButton.style.display = showSessionToggle ? DisplayStyle.Flex : DisplayStyle.None;
             }
 
             // Hide "Test" buttons unless Debug Mode is enabled.
@@ -297,7 +308,14 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
             if (isRunning)
             {
-                connectionStatusLabel.text = "Session Active";
+                // Show instance name (project folder name) for better identification in multi-instance scenarios.
+                // Defensive: handle edge cases where path parsing might return null/empty.
+                string projectDir = System.IO.Path.GetDirectoryName(Application.dataPath);
+                string instanceName = !string.IsNullOrEmpty(projectDir) 
+                    ? System.IO.Path.GetFileName(projectDir) 
+                    : "Unity";
+                if (string.IsNullOrEmpty(instanceName)) instanceName = "Unity";
+                connectionStatusLabel.text = $"Session Active ({instanceName})";
                 statusIndicator.RemoveFromClassList("disconnected");
                 statusIndicator.AddToClassList("connected");
                 connectionToggleButton.text = "End Session";
@@ -429,7 +447,6 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
             bool httpLocalSelected = IsHttpLocalSelected();
             bool canStartLocalServer = httpLocalSelected && MCPServiceLocator.Server.IsLocalUrl();
-            bool sessionRunning = MCPServiceLocator.Bridge.IsRunning;
             bool localServerRunning = false;
 
             // Avoid running expensive port/PID checks every UI tick.
@@ -444,16 +461,15 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 localServerRunning = lastLocalServerRunning;
             }
 
-            // Single consolidated button: Start Server (launch local server + start session) or
-            // Stop Server (end session + attempt to stop local server).
-            bool shouldShowStop = sessionRunning || localServerRunning;
+            // Server button only controls server lifecycle (Start/Stop Server).
+            // Session lifecycle is handled by the separate connectionToggleButton.
+            bool shouldShowStop = localServerRunning;
             startHttpServerButton.text = shouldShowStop ? "Stop Server" : "Start Server";
             // Note: Server logs may contain transient HTTP 400s on /mcp during startup probing and
             // CancelledError stack traces on shutdown when streaming requests are cancelled; this is expected.
-            startHttpServerButton.EnableInClassList("server-running", shouldShowStop);
+            startHttpServerButton.EnableInClassList("server-running", localServerRunning);
             startHttpServerButton.SetEnabled(
-                (canStartLocalServer && !httpServerToggleInProgress && !autoStartInProgress) ||
-                (shouldShowStop && !httpServerToggleInProgress));
+                !httpServerToggleInProgress && (shouldShowStop || canStartLocalServer));
             startHttpServerButton.tooltip = httpLocalSelected
                 ? (canStartLocalServer ? string.Empty : "HTTP Local requires a localhost URL (localhost/127.0.0.1/0.0.0.0/::1).")
                 : string.Empty;
@@ -481,34 +497,36 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
             try
             {
-                // If a session is active, treat this as "Stop Server" (end session first, then try to stop server).
-                if (bridgeService.IsRunning)
+                // Check if a local server is running.
+                bool serverRunning = IsHttpLocalSelected() && MCPServiceLocator.Server.IsLocalHttpServerRunning();
+
+                if (serverRunning)
                 {
-                    await bridgeService.StopAsync();
+                    // Stop Server: end session first (if active), then stop the server.
+                    if (bridgeService.IsRunning)
+                    {
+                        await bridgeService.StopAsync();
+                    }
                     bool stopped = MCPServiceLocator.Server.StopLocalHttpServer();
                     if (!stopped)
                     {
                         McpLog.Warn("Failed to stop HTTP server or no server was running");
                     }
-                    return;
                 }
-
-                // If the session isn't running but the local server is, allow stopping the server directly.
-                if (IsHttpLocalSelected() && MCPServiceLocator.Server.IsLocalHttpServerRunning())
+                else
                 {
-                    bool stopped = MCPServiceLocator.Server.StopLocalHttpServer();
-                    if (!stopped)
+                    // Start Server: launch the local HTTP server.
+                    // When WE start the server, auto-start our session (we clearly want to use it).
+                    // This differs from detecting an already-running server, where we require manual session start.
+                    bool serverStarted = MCPServiceLocator.Server.StartLocalHttpServer();
+                    if (serverStarted)
                     {
-                        McpLog.Warn("Failed to stop HTTP server or no server was running");
+                        await TryAutoStartSessionAsync();
                     }
-                    return;
-                }
-
-                // Otherwise, "Start Server" and then auto-start the session.
-                bool started = MCPServiceLocator.Server.StartLocalHttpServer();
-                if (started)
-                {
-                    await TryAutoStartSessionAfterHttpServerAsync();
+                    else
+                    {
+                        McpLog.Warn("Failed to start local HTTP server");
+                    }
                 }
             }
             catch (Exception ex)
@@ -522,6 +540,40 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 RefreshHttpUi();
                 UpdateConnectionStatus();
             }
+        }
+
+        private async Task TryAutoStartSessionAsync()
+        {
+            // Wait briefly for the HTTP server to become ready, then start the session.
+            // This is called when THIS instance starts the server (not when detecting an external server).
+            var bridgeService = MCPServiceLocator.Bridge;
+            const int maxAttempts = 10;
+            var delay = TimeSpan.FromSeconds(1);
+
+            for (int attempt = 0; attempt < maxAttempts; attempt++)
+            {
+                // Check if server is actually accepting connections
+                if (!MCPServiceLocator.Server.IsLocalHttpServerRunning())
+                {
+                    await Task.Delay(delay);
+                    continue;
+                }
+
+                bool started = await bridgeService.StartAsync();
+                if (started)
+                {
+                    await VerifyBridgeConnectionAsync();
+                    UpdateConnectionStatus();
+                    return;
+                }
+
+                if (attempt < maxAttempts - 1)
+                {
+                    await Task.Delay(delay);
+                }
+            }
+
+            McpLog.Warn("Failed to auto-start session after launching the HTTP server.");
         }
 
         private void PersistUnityPortFromField()
@@ -605,156 +657,25 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             await VerifyBridgeConnectionAsync();
         }
 
-        private async Task TryAutoStartSessionAfterHttpServerAsync()
+        private async Task EndOrphanedSessionAsync()
         {
-            if (autoStartInProgress)
-            {
-                return;
-            }
-
-            var bridgeService = MCPServiceLocator.Bridge;
-            if (bridgeService.IsRunning)
-            {
-                return;
-            }
-
-            autoStartInProgress = true;
-            connectionToggleButton?.SetEnabled(false);
-            const int maxAttempts = 10;
-            var delay = TimeSpan.FromSeconds(1);
-
+            // Fire-and-forget cleanup of orphaned session when server is no longer running.
+            // This prevents the UI from showing "Session Active" when the underlying server is gone.
             try
             {
-                // Wait until the HTTP server is actually accepting connections to reduce transient "unable to connect then recovers"
-                // behavior (session start attempts can race the server startup).
-                // Dev mode uses --no-cache --refresh which causes uvx to rebuild the package, taking significantly longer.
-                bool devModeEnabled = false;
-                try { devModeEnabled = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false); } catch { }
-                var startupTimeout = devModeEnabled ? TimeSpan.FromSeconds(45) : TimeSpan.FromSeconds(10);
-                
-                if (devModeEnabled)
-                {
-                    McpLog.Info("Dev mode enabled: server startup may take longer while uvx rebuilds the package...");
-                }
-                
-                bool serverReady = await WaitForHttpServerAcceptingConnectionsAsync(startupTimeout);
-                if (!serverReady)
-                {
-                    McpLog.Warn($"HTTP server did not become reachable within {startupTimeout.TotalSeconds}s; will still attempt to start the session.");
-                }
-
-                for (int attempt = 0; attempt < maxAttempts; attempt++)
-                {
-                    bool started = await bridgeService.StartAsync();
-                    if (started)
-                    {
-                        await VerifyBridgeConnectionAsync();
-                        UpdateConnectionStatus();
-                        return;
-                    }
-
-                    if (attempt < maxAttempts - 1)
-                    {
-                        await Task.Delay(delay);
-                    }
-                }
-
-                McpLog.Warn("Failed to auto-start MCP session after launching the HTTP server.");
+                connectionToggleInProgress = true;
+                connectionToggleButton?.SetEnabled(false);
+                await MCPServiceLocator.Bridge.StopAsync();
+            }
+            catch (Exception ex)
+            {
+                McpLog.Warn($"Failed to end orphaned session: {ex.Message}");
             }
             finally
             {
-                autoStartInProgress = false;
+                connectionToggleInProgress = false;
                 connectionToggleButton?.SetEnabled(true);
                 UpdateConnectionStatus();
-            }
-        }
-
-        private static async Task<bool> WaitForHttpServerAcceptingConnectionsAsync(TimeSpan timeout)
-        {
-            try
-            {
-                string baseUrl = HttpEndpointUtility.GetBaseUrl();
-                if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) || uri.Port <= 0)
-                {
-                    return true; // Don't block if URL cannot be parsed
-                }
-
-                string host = uri.Host;
-                int port = uri.Port;
-
-                // Normalize wildcard/bind-all hosts to loopback for readiness checks.
-                // When the server binds to 0.0.0.0 or ::, clients typically connect via localhost/127.0.0.1.
-                string normalizedHost;
-                if (string.IsNullOrWhiteSpace(host)
-                    || string.Equals(host, "0.0.0.0", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(host, "::", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(host, "*", StringComparison.OrdinalIgnoreCase))
-                {
-                    normalizedHost = "localhost";
-                }
-                else
-                {
-                    normalizedHost = host;
-                }
-
-                var deadline = DateTime.UtcNow + timeout;
-                while (DateTime.UtcNow < deadline)
-                {
-                    try
-                    {
-                        using var client = new TcpClient();
-                        var connectTask = client.ConnectAsync(normalizedHost, port);
-                        var completed = await Task.WhenAny(connectTask, Task.Delay(250));
-                        if (completed != connectTask)
-                        {
-                            // Avoid leaving a long-running ConnectAsync in-flight (default OS connect timeout can be very long),
-                            // which can accumulate across retries and impact overall editor/network responsiveness.
-                            // Closing the client will cause ConnectAsync to complete quickly (typically with an exception),
-                            // which we then attempt to observe (bounded) by awaiting.
-                            try { client.Close(); } catch { }
-                        }
-
-                        try
-                        {
-                            // Even after Close(), some platforms may take a moment to complete the connect task.
-                            // Keep this bounded so the readiness loop can't hang here.
-                            var connectCompleted = await Task.WhenAny(connectTask, Task.Delay(250));
-                            if (connectCompleted == connectTask)
-                            {
-                                await connectTask;
-                            }
-                            else
-                            {
-                                _ = connectTask.ContinueWith(
-                                    t => _ = t.Exception,
-                                    System.Threading.CancellationToken.None,
-                                    TaskContinuationOptions.OnlyOnFaulted,
-                                    TaskScheduler.Default);
-                            }
-                        }
-                        catch
-                        {
-                            // Ignore connection exceptions and retry until timeout.
-                        }
-
-                        if (client.Connected)
-                        {
-                            return true;
-                        }
-                    }
-                    catch
-                    {
-                        // Ignore and retry until timeout
-                    }
-
-                    await Task.Delay(150);
-                }
-
-                return false;
-            }
-            catch
-            {
-                return false;
             }
         }
 

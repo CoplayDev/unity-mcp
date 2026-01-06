@@ -2,6 +2,7 @@
 from typing import Annotated, Literal, Any
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 
 from models import MCPResponse
@@ -43,7 +44,11 @@ class RunTestsResponse(MCPResponse):
 
 
 @mcp_for_unity_tool(
-    description="Runs Unity tests synchronously (blocks until complete). Prefer run_tests_async for non-blocking execution with progress polling."
+    description="Runs Unity tests synchronously (blocks until complete). Prefer run_tests_async for non-blocking execution with progress polling.",
+    annotations=ToolAnnotations(
+        title="Run Tests",
+        destructiveHint=True,
+    ),
 )
 async def run_tests(
     ctx: Context,

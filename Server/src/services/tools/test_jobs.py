@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Annotated, Any, Literal
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
 
 from models import MCPResponse
 from services.registry import mcp_for_unity_tool
@@ -13,7 +14,13 @@ import transport.unity_transport as unity_transport
 from transport.legacy.unity_connection import async_send_command_with_retry
 
 
-@mcp_for_unity_tool(description="Starts a Unity test run asynchronously and returns a job_id immediately. Preferred over run_tests for long-running suites. Poll with get_test_job for progress.")
+@mcp_for_unity_tool(
+    description="Starts a Unity test run asynchronously and returns a job_id immediately. Preferred over run_tests for long-running suites. Poll with get_test_job for progress.",
+    annotations=ToolAnnotations(
+        title="Run Tests Async",
+        destructiveHint=True,
+    ),
+)
 async def run_tests_async(
     ctx: Context,
     mode: Annotated[Literal["EditMode", "PlayMode"], "Unity test mode to run"] = "EditMode",
@@ -66,7 +73,13 @@ async def run_tests_async(
     return response if isinstance(response, dict) else MCPResponse(success=False, error=str(response)).model_dump()
 
 
-@mcp_for_unity_tool(description="Polls an async Unity test job by job_id.")
+@mcp_for_unity_tool(
+    description="Polls an async Unity test job by job_id.",
+    annotations=ToolAnnotations(
+        title="Get Test Job",
+        readOnlyHint=True,
+    ),
+)
 async def get_test_job(
     ctx: Context,
     job_id: Annotated[str, "Job id returned by run_tests_async"],

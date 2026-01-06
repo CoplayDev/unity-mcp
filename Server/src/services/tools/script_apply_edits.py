@@ -4,6 +4,7 @@ import re
 from typing import Annotated, Any, Union
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
@@ -309,8 +310,10 @@ def _err(code: str, message: str, *, expected: dict[str, Any] | None = None, rew
 # Natural-language parsing removed; clients should send structured edits.
 
 
-@mcp_for_unity_tool(name="script_apply_edits", description=(
-    """Structured C# edits (methods/classes) with safer boundaries - prefer this over raw text.
+@mcp_for_unity_tool(
+    name="script_apply_edits",
+    description=(
+        """Structured C# edits (methods/classes) with safer boundaries - prefer this over raw text.
     Best practices:
     - Prefer anchor_* ops for pattern-based insert/replace near stable markers
     - Use replace_method/delete_method for whole-method changes (keeps signatures balanced)
@@ -356,7 +359,12 @@ def _err(code: str, message: str, *, expected: dict[str, Any] | None = None, rew
     ],
     }
     ]"""
-))
+    ),
+    annotations=ToolAnnotations(
+        title="Script Apply Edits",
+        destructiveHint=True,
+    ),
+)
 async def script_apply_edits(
     ctx: Context,
     name: Annotated[str, "Name of the script to edit"],
