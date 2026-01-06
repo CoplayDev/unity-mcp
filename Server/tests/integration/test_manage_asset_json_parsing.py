@@ -57,7 +57,7 @@ class TestManageAssetJsonParsing:
 
         # Verify behavior: parsing fails with a clear error
         assert result.get("success") is False
-        assert "failed to parse properties" in result.get("message", "")
+        assert "Failed to parse properties" in result.get("message", "")
 
     @pytest.mark.asyncio
     async def test_properties_dict_unchanged(self, monkeypatch):

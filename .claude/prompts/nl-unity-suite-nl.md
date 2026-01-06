@@ -3,7 +3,7 @@
 You are running inside CI for the `unity-mcp` repo. Use only the tools allowed by the workflow. Work autonomously; do not prompt the user. Do NOT spawn subagents.
 
 **Print this once, verbatim, early in the run:**
-AllowedTools: Write,mcp__unity__manage_editor,mcp__unity__list_resources,mcp__unity__read_resource,mcp__unity__apply_text_edits,mcp__unity__script_apply_edits,mcp__unity__validate_script,mcp__unity__find_in_file,mcp__unity__read_console,mcp__unity__get_sha
+AllowedTools: Write,mcp__UnityMCP__apply_text_edits,mcp__UnityMCP__script_apply_edits,mcp__UnityMCP__validate_script,mcp__UnityMCP__find_in_file,mcp__UnityMCP__read_console,mcp__UnityMCP__get_sha
 
 ---
 
@@ -11,7 +11,7 @@ AllowedTools: Write,mcp__unity__manage_editor,mcp__unity__list_resources,mcp__un
 1) Pick target file (prefer):
    - `unity://path/Assets/Scripts/LongUnityScriptClaudeTest.cs`
 2) Execute NL tests NL-0..NL-4 in order using minimal, precise edits that build on each other.
-3) Validate each edit with `mcp__unity__validate_script(level:"standard")`.
+3) Validate each edit with `mcp__UnityMCP__validate_script(level:"standard")`.
 4) **Report**: write one `<testcase>` XML fragment per test to `reports/<TESTID>_results.xml`. Do **not** read or edit `$JUNIT_OUT`.
 
 **CRITICAL XML FORMAT REQUIREMENTS:**
@@ -50,7 +50,7 @@ CI provides:
 ## Transcript Minimization Rules
 - Do not restate tool JSON; summarize in ≤ 2 short lines.
 - Never paste full file contents. For matches, include only the matched line and ±1 line.
-- Prefer `mcp__unity__find_in_file` for targeting; avoid `mcp__unity__read_resource` unless strictly necessary. If needed, limit to `head_bytes ≤ 256` or `tail_lines ≤ 10`.
+- Prefer `mcp__UnityMCP__find_in_file` for targeting to minimize transcript size.
 - Per‑test `system-out` ≤ 400 chars: brief status only (no SHA).
 - Console evidence: fetch the last 10 lines with `include_stacktrace:false` and include ≤ 3 lines in the fragment.
 - Avoid quoting multi‑line diffs; reference markers instead.
@@ -59,17 +59,17 @@ CI provides:
 ---
 
 ## Tool Mapping
-- **Anchors/regex/structured**: `mcp__unity__script_apply_edits`
+- **Anchors/regex/structured**: `mcp__UnityMCP__script_apply_edits`
   - Allowed ops: `anchor_insert`, `replace_method`, `insert_method`, `delete_method`, `regex_replace`
   - For `anchor_insert`, always set `"position": "before"` or `"after"`.
-- **Precise ranges / atomic batch**: `mcp__unity__apply_text_edits` (non‑overlapping ranges)
+- **Precise ranges / atomic batch**: `mcp__UnityMCP__apply_text_edits` (non‑overlapping ranges)
 STRICT OP GUARDRAILS
 - Do not use `anchor_replace`. Structured edits must be one of: `anchor_insert`, `replace_method`, `insert_method`, `delete_method`, `regex_replace`.
-- For multi‑spot textual tweaks in one operation, compute non‑overlapping ranges with `mcp__unity__find_in_file` and use `mcp__unity__apply_text_edits`.
+- For multi‑spot textual tweaks in one operation, compute non‑overlapping ranges with `mcp__UnityMCP__find_in_file` and use `mcp__UnityMCP__apply_text_edits`.
 
-- **Hash-only**: `mcp__unity__get_sha` — returns `{sha256,lengthBytes,lastModifiedUtc}` without file body
-- **Validation**: `mcp__unity__validate_script(level:"standard")`
-- **Dynamic targeting**: Use `mcp__unity__find_in_file` to locate current positions of methods/markers
+- **Hash-only**: `mcp__UnityMCP__get_sha` — returns `{sha256,lengthBytes,lastModifiedUtc}` without file body
+- **Validation**: `mcp__UnityMCP__validate_script(level:"standard")`
+- **Dynamic targeting**: Use `mcp__UnityMCP__find_in_file` to locate current positions of methods/markers
 
 ---
 
@@ -83,7 +83,7 @@ STRICT OP GUARDRAILS
 5. **Composability**: Tests demonstrate how operations work together in real workflows
 
 **State Tracking:**
-- Track file SHA after each test (`mcp__unity__get_sha`) for potential preconditions in later passes. Do not include SHA values in report fragments.
+- Track file SHA after each test (`mcp__UnityMCP__get_sha`) for potential preconditions in later passes. Do not include SHA values in report fragments.
 - Use content signatures (method names, comment markers) to verify expected state
 - Validate structural integrity after each major change
 

@@ -90,38 +90,5 @@ fastmcp_server.middleware = fastmcp_server_middleware
 sys.modules.setdefault("fastmcp.server", fastmcp_server)
 sys.modules.setdefault("fastmcp.server.middleware", fastmcp_server_middleware)
 
-# Stub minimal starlette modules to avoid optional dependency imports.
-starlette = types.ModuleType("starlette")
-starlette_endpoints = types.ModuleType("starlette.endpoints")
-starlette_websockets = types.ModuleType("starlette.websockets")
-starlette_requests = types.ModuleType("starlette.requests")
-starlette_responses = types.ModuleType("starlette.responses")
-
-
-class _DummyWebSocketEndpoint:
-    pass
-
-
-class _DummyWebSocket:
-    pass
-
-
-class _DummyRequest:
-    pass
-
-
-class _DummyJSONResponse:
-    def __init__(self, *args, **kwargs):
-        pass
-
-
-starlette_endpoints.WebSocketEndpoint = _DummyWebSocketEndpoint
-starlette_websockets.WebSocket = _DummyWebSocket
-starlette_requests.Request = _DummyRequest
-starlette_responses.JSONResponse = _DummyJSONResponse
-
-sys.modules.setdefault("starlette", starlette)
-sys.modules.setdefault("starlette.endpoints", starlette_endpoints)
-sys.modules.setdefault("starlette.websockets", starlette_websockets)
-sys.modules.setdefault("starlette.requests", starlette_requests)
-sys.modules.setdefault("starlette.responses", starlette_responses)
+# Note: starlette is now a proper dependency (via mcp package), so we don't stub it anymore.
+# The real starlette package will be imported when needed.

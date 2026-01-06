@@ -1,0 +1,160 @@
+using System;
+using System.Globalization;
+using Newtonsoft.Json.Linq;
+
+namespace MCPForUnity.Editor.Helpers
+{
+    /// <summary>
+    /// Utility class for coercing JSON parameter values to strongly-typed values.
+    /// Handles various input formats (strings, numbers, booleans) gracefully.
+    /// </summary>
+    public static class ParamCoercion
+    {
+        /// <summary>
+        /// Coerces a JToken to an integer value, handling strings and floats.
+        /// </summary>
+        /// <param name="token">The JSON token to coerce</param>
+        /// <param name="defaultValue">Default value if coercion fails</param>
+        /// <returns>The coerced integer value or default</returns>
+        public static int CoerceInt(JToken token, int defaultValue)
+        {
+            if (token == null || token.Type == JTokenType.Null)
+                return defaultValue;
+
+            try
+            {
+                if (token.Type == JTokenType.Integer)
+                    return token.Value<int>();
+
+                var s = token.ToString().Trim();
+                if (s.Length == 0)
+                    return defaultValue;
+
+                if (int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var i))
+                    return i;
+
+                if (double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var d))
+                    return (int)d;
+            }
+            catch
+            {
+                // Swallow and return default
+            }
+
+            return defaultValue;
+        }
+
+        /// <summary>
+        /// Coerces a JToken to a boolean value, handling strings like "true", "1", etc.
+        /// </summary>
+        /// <param name="token">The JSON token to coerce</param>
+        /// <param name="defaultValue">Default value if coercion fails</param>
+        /// <returns>The coerced boolean value or default</returns>
+        public static bool CoerceBool(JToken token, bool defaultValue)
+        {
+            if (token == null || token.Type == JTokenType.Null)
+                return defaultValue;
+
+            try
+            {
+                if (token.Type == JTokenType.Boolean)
+                    return token.Value<bool>();
+
+                var s = token.ToString().Trim().ToLowerInvariant();
+                if (s.Length == 0)
+                    return defaultValue;
+
+                if (bool.TryParse(s, out var b))
+                    return b;
+
+                if (s == "1" || s == "yes" || s == "on")
+                    return true;
+
+                if (s == "0" || s == "no" || s == "off")
+                    return false;
+            }
+            catch
+            {
+                // Swallow and return default
+            }
+
+            return defaultValue;
+        }
+
+        /// <summary>
+        /// Coerces a JToken to a float value, handling strings and integers.
+        /// </summary>
+        /// <param name="token">The JSON token to coerce</param>
+        /// <param name="defaultValue">Default value if coercion fails</param>
+        /// <returns>The coerced float value or default</returns>
+        public static float CoerceFloat(JToken token, float defaultValue)
+        {
+            if (token == null || token.Type == JTokenType.Null)
+                return defaultValue;
+
+            try
+            {
+                if (token.Type == JTokenType.Float || token.Type == JTokenType.Integer)
+                    return token.Value<float>();
+
+                var s = token.ToString().Trim();
+                if (s.Length == 0)
+                    return defaultValue;
+
+                if (float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var f))
+                    return f;
+            }
+            catch
+            {
+                // Swallow and return default
+            }
+
+            return defaultValue;
+        }
+
+        /// <summary>
+        /// Coerces a JToken to a string value, with null handling.
+        /// </summary>
+        /// <param name="token">The JSON token to coerce</param>
+        /// <param name="defaultValue">Default value if null or empty</param>
+        /// <returns>The string value or default</returns>
+        public static string CoerceString(JToken token, string defaultValue = null)
+        {
+            if (token == null || token.Type == JTokenType.Null)
+                return defaultValue;
+
+            var s = token.ToString();
+            return string.IsNullOrEmpty(s) ? defaultValue : s;
+        }
+
+        /// <summary>
+        /// Coerces a JToken to an enum value, handling strings.
+        /// </summary>
+        /// <typeparam name="T">The enum type</typeparam>
+        /// <param name="token">The JSON token to coerce</param>
+        /// <param name="defaultValue">Default value if coercion fails</param>
+        /// <returns>The coerced enum value or default</returns>
+        public static T CoerceEnum<T>(JToken token, T defaultValue) where T : struct, Enum
+        {
+            if (token == null || token.Type == JTokenType.Null)
+                return defaultValue;
+
+            try
+            {
+                var s = token.ToString().Trim();
+                if (s.Length == 0)
+                    return defaultValue;
+
+                if (Enum.TryParse<T>(s, ignoreCase: true, out var result))
+                    return result;
+            }
+            catch
+            {
+                // Swallow and return default
+            }
+
+            return defaultValue;
+        }
+    }
+}
+

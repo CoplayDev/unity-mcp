@@ -42,3 +42,12 @@ TestProjects/UnityMCPTests/Assets/Temp/
 *.backup.meta
 
 .wt-origin-main/
+
+# CI test reports (generated during test runs)
+reports/
+
+# Local Claude configs (not for repo)
+.claude/local/
+
+# Local testing harness
+scripts/local-test/
