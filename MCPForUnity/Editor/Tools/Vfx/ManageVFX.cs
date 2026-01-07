@@ -5,7 +5,6 @@ using System.Reflection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Helpers;
-using MCPForUnity.Editor.Tools.Vfx;
 using UnityEngine;
 using UnityEditor;
 
@@ -13,7 +12,7 @@ using UnityEditor;
 using UnityEngine.VFX;
 #endif
 
-namespace MCPForUnity.Editor.Tools
+namespace MCPForUnity.Editor.Tools.Vfx
 {
     /// <summary>
     /// Tool for managing Unity VFX components:
@@ -626,7 +625,7 @@ namespace MCPForUnity.Editor.Tools
             if (string.IsNullOrEmpty(param) || string.IsNullOrEmpty(path)) return new { success = false, message = "Parameter and texturePath required" };
 
             var findInst = new JObject { ["find"] = path };
-            Texture tex = ManageGameObject.FindObjectByInstruction(findInst, typeof(Texture)) as Texture;
+            Texture tex = ObjectResolver.Resolve(findInst, typeof(Texture)) as Texture;
             if (tex == null) return new { success = false, message = $"Texture not found: {path}" };
 
             Undo.RecordObject(vfx, $"Set VFX Texture {param}");
@@ -646,7 +645,7 @@ namespace MCPForUnity.Editor.Tools
             if (string.IsNullOrEmpty(param) || string.IsNullOrEmpty(path)) return new { success = false, message = "Parameter and meshPath required" };
 
             var findInst = new JObject { ["find"] = path };
-            Mesh mesh = ManageGameObject.FindObjectByInstruction(findInst, typeof(Mesh)) as Mesh;
+            Mesh mesh = ObjectResolver.Resolve(findInst, typeof(Mesh)) as Mesh;
             if (mesh == null) return new { success = false, message = $"Mesh not found: {path}" };
 
             Undo.RecordObject(vfx, $"Set VFX Mesh {param}");

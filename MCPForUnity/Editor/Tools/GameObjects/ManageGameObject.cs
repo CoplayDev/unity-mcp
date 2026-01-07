@@ -111,20 +111,5 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                 return new ErrorResponse($"Internal error processing action '{action}': {e.Message}");
             }
         }
-
-        /// <summary>
-        /// Finds a specific UnityEngine.Object based on a find instruction JObject.
-        /// Primarily used by UnityEngineObjectConverter during deserialization.
-        /// </summary>
-        /// <remarks>
-        /// This method now delegates to ObjectResolver.Resolve() for cleaner architecture.
-        /// Kept for backwards compatibility with existing code.
-        /// </remarks>
-        public static UnityEngine.Object FindObjectByInstruction(JObject instruction, Type targetType)
-        {
-            return ObjectResolver.Resolve(instruction, targetType);
-        }
-
-
     }
 }

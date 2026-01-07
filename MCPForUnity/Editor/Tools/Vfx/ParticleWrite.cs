@@ -201,13 +201,13 @@ namespace MCPForUnity.Editor.Tools.Vfx
             if (@params["materialPath"] != null)
             {
                 var findInst = new JObject { ["find"] = @params["materialPath"].ToString() };
-                Material mat = ManageGameObject.FindObjectByInstruction(findInst, typeof(Material)) as Material;
+                Material mat = ObjectResolver.Resolve(findInst, typeof(Material)) as Material;
                 if (mat != null) { renderer.sharedMaterial = mat; changes.Add("material"); }
             }
             if (@params["trailMaterialPath"] != null)
             {
                 var findInst = new JObject { ["find"] = @params["trailMaterialPath"].ToString() };
-                Material mat = ManageGameObject.FindObjectByInstruction(findInst, typeof(Material)) as Material;
+                Material mat = ObjectResolver.Resolve(findInst, typeof(Material)) as Material;
                 if (mat != null) { renderer.trailMaterial = mat; changes.Add("trailMaterial"); }
             }
 
