@@ -28,8 +28,9 @@ async def test_run_tests_async_forwards_params(monkeypatch):
     assert captured["params"]["mode"] == "EditMode"
     assert captured["params"]["testNames"] == ["MyNamespace.MyTests.TestA"]
     assert captured["params"]["includeDetails"] is True
-    payload = resp.model_dump() if hasattr(resp, "model_dump") else resp
-    assert payload["success"] is True
+    assert resp.success is True
+    assert resp.data is not None
+    assert resp.data.job_id == "abc123"
 
 
 @pytest.mark.asyncio
@@ -50,5 +51,6 @@ async def test_get_test_job_forwards_job_id(monkeypatch):
     resp = await get_test_job(DummyContext(), job_id="job-1")
     assert captured["command_type"] == "get_test_job"
     assert captured["params"]["job_id"] == "job-1"
-    payload = resp.model_dump() if hasattr(resp, "model_dump") else resp
-    assert payload["data"]["job_id"] == "job-1"
+    assert resp.success is True
+    assert resp.data is not None
+    assert resp.data.job_id == "job-1"
