@@ -24,7 +24,7 @@ def mcp_for_unity_resource(
         **kwargs: Additional arguments passed to @mcp.resource()
 
     Example:
-        @mcp_for_unity_resource("mcpformcpforunity://resource", description="Gets something interesting")
+        @mcp_for_unity_resource("mcpforunity://resource", description="Gets something interesting")
         async def my_custom_resource(ctx: Context, ...):
             pass
     """

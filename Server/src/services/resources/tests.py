@@ -21,7 +21,7 @@ class GetTestsResponse(MCPResponse):
     data: list[TestItem] = []
 
 
-@mcp_for_unity_resource(uri="mcpformcpforunity://tests", name="get_tests", description="Provides a list of all tests.")
+@mcp_for_unity_resource(uri="mcpforunity://tests", name="get_tests", description="Provides a list of all tests.")
 async def get_tests(ctx: Context) -> GetTestsResponse | MCPResponse:
     """Provides a list of all tests.
     """
@@ -35,7 +35,7 @@ async def get_tests(ctx: Context) -> GetTestsResponse | MCPResponse:
     return GetTestsResponse(**response) if isinstance(response, dict) else response
 
 
-@mcp_for_unity_resource(uri="mcpformcpforunity://tests/{mode}", name="get_tests_for_mode", description="Provides a list of tests for a specific mode.")
+@mcp_for_unity_resource(uri="mcpforunity://tests/{mode}", name="get_tests_for_mode", description="Provides a list of tests for a specific mode.")
 async def get_tests_for_mode(
     ctx: Context,
     mode: Annotated[Literal["EditMode", "PlayMode"], Field(description="The mode to filter tests by.")],
