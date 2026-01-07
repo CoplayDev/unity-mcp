@@ -97,6 +97,7 @@ namespace MCPForUnity.Editor.Windows
 
         private void OnDoneClicked()
         {
+            Setup.SetupWindowService.MarkSetupCompleted();
             Close();
         }
 
