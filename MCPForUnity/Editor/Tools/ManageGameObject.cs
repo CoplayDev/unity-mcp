@@ -72,7 +72,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 catch (Exception e)
                 {
-                    Debug.LogWarning($"[ManageGameObject] Could not parse 'componentProperties' JSON string: {e.Message}");
+                    McpLog.Warn($"[ManageGameObject] Could not parse 'componentProperties' JSON string: {e.Message}");
                 }
             }
 
@@ -116,7 +116,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ManageGameObject] Action '{action}' failed: {e}");
+                McpLog.Error($"[ManageGameObject] Action '{action}' failed: {e}");
                 return new ErrorResponse($"Internal error processing action '{action}': {e.Message}");
             }
         }
@@ -149,7 +149,7 @@ namespace MCPForUnity.Editor.Tools
                 )
                 {
                     string prefabNameOnly = prefabPath;
-                    Debug.Log(
+                    McpLog.Info(
                         $"[ManageGameObject.Create] Searching for prefab named: '{prefabNameOnly}'"
                     );
                     string[] guids = AssetDatabase.FindAssets($"t:Prefab {prefabNameOnly}");
@@ -172,7 +172,7 @@ namespace MCPForUnity.Editor.Tools
                     else // Exactly one found
                     {
                         prefabPath = AssetDatabase.GUIDToAssetPath(guids[0]); // Update prefabPath with the full path
-                        Debug.Log(
+                        McpLog.Info(
                             $"[ManageGameObject.Create] Found unique prefab at path: '{prefabPath}'"
                         );
                     }
@@ -180,7 +180,7 @@ namespace MCPForUnity.Editor.Tools
                 else if (!prefabPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
                 {
                     // If it looks like a path but doesn't end with .prefab, assume user forgot it and append it.
-                    Debug.LogWarning(
+                    McpLog.Warn(
                         $"[ManageGameObject.Create] Provided prefabPath '{prefabPath}' does not end with .prefab. Assuming it's missing and appending."
                     );
                     prefabPath += ".prefab";
@@ -200,7 +200,7 @@ namespace MCPForUnity.Editor.Tools
                         if (newGo == null)
                         {
                             // This might happen if the asset exists but isn't a valid GameObject prefab somehow
-                            Debug.LogError(
+                            McpLog.Error(
                                 $"[ManageGameObject.Create] Failed to instantiate prefab at '{prefabPath}', asset might be corrupted or not a GameObject."
                             );
                             return new ErrorResponse(
@@ -217,7 +217,7 @@ namespace MCPForUnity.Editor.Tools
                             newGo,
                             $"Instantiate Prefab '{prefabAsset.name}' as '{newGo.name}'"
                         );
-                        Debug.Log(
+                        McpLog.Info(
                             $"[ManageGameObject.Create] Instantiated prefab '{prefabAsset.name}' from path '{prefabPath}' as '{newGo.name}'."
                         );
                     }
@@ -232,7 +232,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     // Only return error if prefabPath was specified but not found.
                     // If prefabPath was empty/null, we proceed to create primitive/empty.
-                    Debug.LogWarning(
+                    McpLog.Warn(
                         $"[ManageGameObject.Create] Prefab asset not found at path: '{prefabPath}'. Will proceed to create new object if specified."
                     );
                     // Do not return error here, allow fallback to primitive/empty creation
@@ -337,7 +337,7 @@ namespace MCPForUnity.Editor.Tools
                 // Check if tag exists first (Unity doesn't throw exceptions for undefined tags, just logs a warning)
                 if (tag != "Untagged" && !System.Linq.Enumerable.Contains(InternalEditorUtility.tags, tag))
                 {
-                    Debug.Log($"[ManageGameObject.Create] Tag '{tag}' not found. Creating it.");
+                    McpLog.Info($"[ManageGameObject.Create] Tag '{tag}' not found. Creating it.");
                     try
                     {
                         InternalEditorUtility.AddTag(tag);
@@ -371,7 +371,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 else
                 {
-                    Debug.LogWarning(
+                    McpLog.Warn(
                         $"[ManageGameObject.Create] Layer '{layerName}' not found. Using default layer."
                     );
                 }
@@ -406,7 +406,7 @@ namespace MCPForUnity.Editor.Tools
                     }
                     else
                     {
-                        Debug.LogWarning(
+                        McpLog.Warn(
                             $"[ManageGameObject] Invalid component format in componentsToAdd: {compToken}"
                         );
                     }
@@ -430,7 +430,7 @@ namespace MCPForUnity.Editor.Tools
                 // Ensure the *saving* path ends with .prefab
                 if (!finalPrefabPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
                 {
-                    Debug.Log(
+                    McpLog.Info(
                         $"[ManageGameObject.Create] Appending .prefab extension to save path: '{finalPrefabPath}' -> '{finalPrefabPath}.prefab'"
                     );
                     finalPrefabPath += ".prefab";
@@ -447,7 +447,7 @@ namespace MCPForUnity.Editor.Tools
                     {
                         System.IO.Directory.CreateDirectory(directoryPath);
                         AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport); // Refresh asset database to recognize the new folder
-                        Debug.Log(
+                        McpLog.Info(
                             $"[ManageGameObject.Create] Created directory for prefab: {directoryPath}"
                         );
                     }
@@ -466,7 +466,7 @@ namespace MCPForUnity.Editor.Tools
                             $"Failed to save GameObject '{name}' as prefab at '{finalPrefabPath}'. Check path and permissions."
                         );
                     }
-                    Debug.Log(
+                    McpLog.Info(
                         $"[ManageGameObject.Create] GameObject '{name}' saved as prefab to '{finalPrefabPath}' and instance connected."
                     );
                     // Mark the new prefab asset as dirty? Not usually necessary, SaveAsPrefabAsset handles it.
@@ -593,7 +593,7 @@ namespace MCPForUnity.Editor.Tools
                 // Check if tag exists first (Unity doesn't throw exceptions for undefined tags, just logs a warning)
                 if (tagToSet != "Untagged" && !System.Linq.Enumerable.Contains(InternalEditorUtility.tags, tagToSet))
                 {
-                    Debug.Log($"[ManageGameObject] Tag '{tagToSet}' not found. Creating it.");
+                    McpLog.Info($"[ManageGameObject] Tag '{tagToSet}' not found. Creating it.");
                     try
                     {
                         InternalEditorUtility.AddTag(tagToSet);
@@ -850,7 +850,7 @@ namespace MCPForUnity.Editor.Tools
                     }
                     else
                     {
-                        Debug.LogWarning($"[ManageGameObject.Duplicate] Parent '{parentToken}' not found. Keeping original parent.");
+                        McpLog.Warn($"[ManageGameObject.Duplicate] Parent '{parentToken}' not found. Keeping original parent.");
                     }
                 }
             }
@@ -976,7 +976,7 @@ namespace MCPForUnity.Editor.Tools
                     case "forward": case "front": return Vector3.forward;
                     case "back": case "backward": case "behind": return Vector3.back;
                     default:
-                        Debug.LogWarning($"[ManageGameObject.MoveRelative] Unknown direction '{direction}', defaulting to forward.");
+                        McpLog.Warn($"[ManageGameObject.MoveRelative] Unknown direction '{direction}', defaulting to forward.");
                         return Vector3.forward;
                 }
             }
@@ -992,7 +992,7 @@ namespace MCPForUnity.Editor.Tools
                     case "forward": case "front": return referenceTransform.forward;
                     case "back": case "backward": case "behind": return -referenceTransform.forward;
                     default:
-                        Debug.LogWarning($"[ManageGameObject.MoveRelative] Unknown direction '{direction}', defaulting to forward.");
+                        McpLog.Warn($"[ManageGameObject.MoveRelative] Unknown direction '{direction}', defaulting to forward.");
                         return referenceTransform.forward;
                 }
             }
@@ -1057,7 +1057,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"Failed to parse JArray as Vector3: {array}. Error: {ex.Message}");
+                    McpLog.Warn($"Failed to parse JArray as Vector3: {array}. Error: {ex.Message}");
                 }
             }
             return null;
@@ -1124,7 +1124,7 @@ namespace MCPForUnity.Editor.Tools
                 rootSearchObject = FindObjectInternal(targetToken, "by_id_or_name_or_path"); // Find the root for child search
                 if (rootSearchObject == null)
                 {
-                    Debug.LogWarning(
+                    McpLog.Warn(
                         $"[ManageGameObject.Find] Root object '{targetToken}' for child search not found."
                     );
                     return results; // Return empty if root not found
@@ -1209,7 +1209,7 @@ namespace MCPForUnity.Editor.Tools
                     }
                     else
                     {
-                        Debug.LogWarning(
+                        McpLog.Warn(
                             $"[ManageGameObject.Find] Component type not found: {searchTerm}"
                         );
                     }
@@ -1238,7 +1238,7 @@ namespace MCPForUnity.Editor.Tools
                     results.AddRange(allObjectsName.Where(go => go.name == searchTerm));
                     break;
                 default:
-                    Debug.LogWarning(
+                    McpLog.Warn(
                         $"[ManageGameObject.Find] Unknown search method: {searchMethod}"
                     );
                     break;
@@ -1465,13 +1465,13 @@ namespace MCPForUnity.Editor.Tools
                         var msg = suggestions.Any()
                             ? $"Property '{propName}' not found. Did you mean: {string.Join(", ", suggestions)}? Available: [{string.Join(", ", availableProperties)}]"
                             : $"Property '{propName}' not found. Available: [{string.Join(", ", availableProperties)}]";
-                        Debug.LogWarning($"[ManageGameObject] {msg}");
+                        McpLog.Warn($"[ManageGameObject] {msg}");
                         failures.Add(msg);
                     }
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError(
+                    McpLog.Error(
                         $"[ManageGameObject] Error setting property '{propName}' on '{compName}': {e.Message}"
                     );
                     failures.Add($"Error setting '{propName}': {e.Message}");
@@ -1522,7 +1522,7 @@ namespace MCPForUnity.Editor.Tools
                     }
                     else
                     {
-                        Debug.LogWarning($"[SetProperty] Conversion failed for property '{memberName}' (Type: {propInfo.PropertyType.Name}) from token: {value.ToString(Formatting.None)}");
+                        McpLog.Warn($"[SetProperty] Conversion failed for property '{memberName}' (Type: {propInfo.PropertyType.Name}) from token: {value.ToString(Formatting.None)}");
                     }
                 }
                 else
@@ -1541,7 +1541,7 @@ namespace MCPForUnity.Editor.Tools
                         }
                         else
                         {
-                            Debug.LogWarning($"[SetProperty] Conversion failed for field '{memberName}' (Type: {fieldInfo.FieldType.Name}) from token: {value.ToString(Formatting.None)}");
+                            McpLog.Warn($"[SetProperty] Conversion failed for field '{memberName}' (Type: {fieldInfo.FieldType.Name}) from token: {value.ToString(Formatting.None)}");
                         }
                     }
                     else
@@ -1563,7 +1563,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception ex)
             {
-                Debug.LogError(
+                McpLog.Error(
                     $"[SetProperty] Failed to set '{memberName}' on {type.Name}: {ex.Message}\nToken: {value.ToString(Formatting.None)}"
                 );
             }
@@ -1622,7 +1622,7 @@ namespace MCPForUnity.Editor.Tools
                         fieldInfo = currentType.GetField(part, flags);
                         if (fieldInfo == null)
                         {
-                            Debug.LogWarning(
+                            McpLog.Warn(
                                 $"[SetNestedProperty] Could not find property or field '{part}' on type '{currentType.Name}'"
                             );
                             return false;
@@ -1637,7 +1637,7 @@ namespace MCPForUnity.Editor.Tools
                     //Need to stop if current property is null
                     if (currentObject == null)
                     {
-                        Debug.LogWarning(
+                        McpLog.Warn(
                             $"[SetNestedProperty] Property '{part}' is null, cannot access nested properties."
                         );
                         return false;
@@ -1650,7 +1650,7 @@ namespace MCPForUnity.Editor.Tools
                             var materials = currentObject as Material[];
                             if (arrayIndex < 0 || arrayIndex >= materials.Length)
                             {
-                                Debug.LogWarning(
+                                McpLog.Warn(
                                     $"[SetNestedProperty] Material index {arrayIndex} out of range (0-{materials.Length - 1})"
                                 );
                                 return false;
@@ -1662,7 +1662,7 @@ namespace MCPForUnity.Editor.Tools
                             var list = currentObject as System.Collections.IList;
                             if (arrayIndex < 0 || arrayIndex >= list.Count)
                             {
-                                Debug.LogWarning(
+                                McpLog.Warn(
                                     $"[SetNestedProperty] Index {arrayIndex} out of range (0-{list.Count - 1})"
                                 );
                                 return false;
@@ -1671,7 +1671,7 @@ namespace MCPForUnity.Editor.Tools
                         }
                         else
                         {
-                            Debug.LogWarning(
+                            McpLog.Warn(
                                 $"[SetNestedProperty] Property '{part}' is not an array or list, cannot access by index."
                             );
                             return false;
@@ -1702,7 +1702,7 @@ namespace MCPForUnity.Editor.Tools
                     }
                     else
                     {
-                        Debug.LogWarning($"[SetNestedProperty] Final conversion failed for property '{finalPart}' (Type: {finalPropInfo.PropertyType.Name}) from token: {value.ToString(Formatting.None)}");
+                        McpLog.Warn($"[SetNestedProperty] Final conversion failed for property '{finalPart}' (Type: {finalPropInfo.PropertyType.Name}) from token: {value.ToString(Formatting.None)}");
                     }
                 }
                 else
@@ -1719,12 +1719,12 @@ namespace MCPForUnity.Editor.Tools
                         }
                         else
                         {
-                            Debug.LogWarning($"[SetNestedProperty] Final conversion failed for field '{finalPart}' (Type: {finalFieldInfo.FieldType.Name}) from token: {value.ToString(Formatting.None)}");
+                            McpLog.Warn($"[SetNestedProperty] Final conversion failed for field '{finalPart}' (Type: {finalFieldInfo.FieldType.Name}) from token: {value.ToString(Formatting.None)}");
                         }
                     }
                     else
                     {
-                        Debug.LogWarning(
+                        McpLog.Warn(
                             $"[SetNestedProperty] Could not find final writable property or field '{finalPart}' on type '{currentType.Name}'"
                         );
                     }
@@ -1732,7 +1732,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception ex)
             {
-                Debug.LogError(
+                McpLog.Error(
                     $"[SetNestedProperty] Error setting nested property '{path}': {ex.Message}\nToken: {value.ToString(Formatting.None)}"
                 );
             }
@@ -1805,7 +1805,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 return new Vector3(arr[0].ToObject<float>(), arr[1].ToObject<float>(), arr[2].ToObject<float>());
             }
-            Debug.LogWarning($"Could not parse JToken '{token}' as Vector3 using fallback. Returning Vector3.zero.");
+            McpLog.Warn($"Could not parse JToken '{token}' as Vector3 using fallback. Returning Vector3.zero.");
             return Vector3.zero;
 
         }
@@ -1820,7 +1820,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 return new Vector2(arr[0].ToObject<float>(), arr[1].ToObject<float>());
             }
-            Debug.LogWarning($"Could not parse JToken '{token}' as Vector2 using fallback. Returning Vector2.zero.");
+            McpLog.Warn($"Could not parse JToken '{token}' as Vector2 using fallback. Returning Vector2.zero.");
             return Vector2.zero;
         }
         private static Quaternion ParseJTokenToQuaternion(JToken token)
@@ -1834,7 +1834,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 return new Quaternion(arr[0].ToObject<float>(), arr[1].ToObject<float>(), arr[2].ToObject<float>(), arr[3].ToObject<float>());
             }
-            Debug.LogWarning($"Could not parse JToken '{token}' as Quaternion using fallback. Returning Quaternion.identity.");
+            McpLog.Warn($"Could not parse JToken '{token}' as Quaternion using fallback. Returning Quaternion.identity.");
             return Quaternion.identity;
         }
         private static Color ParseJTokenToColor(JToken token)
@@ -1848,7 +1848,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 return new Color(arr[0].ToObject<float>(), arr[1].ToObject<float>(), arr[2].ToObject<float>(), arr[3].ToObject<float>());
             }
-            Debug.LogWarning($"Could not parse JToken '{token}' as Color using fallback. Returning Color.white.");
+            McpLog.Warn($"Could not parse JToken '{token}' as Color using fallback. Returning Color.white.");
             return Color.white;
         }
         private static Rect ParseJTokenToRect(JToken token)
@@ -1862,7 +1862,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 return new Rect(arr[0].ToObject<float>(), arr[1].ToObject<float>(), arr[2].ToObject<float>(), arr[3].ToObject<float>());
             }
-            Debug.LogWarning($"Could not parse JToken '{token}' as Rect using fallback. Returning Rect.zero.");
+            McpLog.Warn($"Could not parse JToken '{token}' as Rect using fallback. Returning Rect.zero.");
             return Rect.zero;
         }
         private static Bounds ParseJTokenToBounds(JToken token)
@@ -1880,7 +1880,7 @@ namespace MCPForUnity.Editor.Tools
             // {
             //      return new Bounds(new Vector3(arr[0].ToObject<float>(), arr[1].ToObject<float>(), arr[2].ToObject<float>()), new Vector3(arr[3].ToObject<float>(), arr[4].ToObject<float>(), arr[5].ToObject<float>()));
             // }
-            Debug.LogWarning($"Could not parse JToken '{token}' as Bounds using fallback. Returning new Bounds(Vector3.zero, Vector3.zero).");
+            McpLog.Warn($"Could not parse JToken '{token}' as Bounds using fallback. Returning new Bounds(Vector3.zero, Vector3.zero).");
             return new Bounds(Vector3.zero, Vector3.zero);
         }
         // --- End Redundant Parse Helpers ---
@@ -1913,7 +1913,7 @@ namespace MCPForUnity.Editor.Tools
             // Log the resolver error if type wasn't found
             if (!string.IsNullOrEmpty(error))
             {
-                Debug.LogWarning($"[FindType] {error}");
+                McpLog.Warn($"[FindType] {error}");
             }
 
             return null;
@@ -1980,7 +1980,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[Property Matching] Error getting suggestions for '{userInput}': {ex.Message}");
+                McpLog.Warn($"[Property Matching] Error getting suggestions for '{userInput}': {ex.Message}");
                 return new List<string>();
             }
         }

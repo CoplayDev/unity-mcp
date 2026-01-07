@@ -74,7 +74,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 catch (Exception e)
                 {
-                    Debug.LogWarning($"[ManageAsset] Could not parse 'properties' JSON string: {e.Message}");
+                    McpLog.Warn($"[ManageAsset] Could not parse 'properties' JSON string: {e.Message}");
                 }
             }
 
@@ -119,7 +119,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ManageAsset] Action '{action}' failed for path '{path}': {e}");
+                McpLog.Error($"[ManageAsset] Action '{action}' failed for path '{path}': {e}");
                 return new ErrorResponse(
                     $"Internal error processing action '{action}' on '{path}': {e.Message}"
                 );
@@ -143,7 +143,7 @@ namespace MCPForUnity.Editor.Tools
                 // applying properties via reflection or specific methods, saving, then reimporting.
                 if (properties != null && properties.HasValues)
                 {
-                    Debug.LogWarning(
+                    McpLog.Warn(
                         "[ManageAsset.Reimport] Modifying importer properties before reimport is not fully implemented yet."
                     );
                     // AssetImporter importer = AssetImporter.GetAtPath(fullPath);
@@ -376,7 +376,7 @@ namespace MCPForUnity.Editor.Tools
                             // Only warn about resolution failure if component also not found
                             if (targetComponent == null && !resolved)
                             {
-                                Debug.LogWarning(
+                                McpLog.Warn(
                                     $"[ManageAsset.ModifyAsset] Failed to resolve component '{componentName}' on '{gameObject.name}': {compError}"
                                 );
                             }
@@ -393,7 +393,7 @@ namespace MCPForUnity.Editor.Tools
                             else
                             {
                                 // Log a warning if a specified component couldn't be found
-                                Debug.LogWarning(
+                                McpLog.Warn(
                                     $"[ManageAsset.ModifyAsset] Component '{componentName}' not found on GameObject '{gameObject.name}' in asset '{fullPath}'. Skipping modification for this component."
                                 );
                             }
@@ -403,7 +403,7 @@ namespace MCPForUnity.Editor.Tools
                             // Log a warning if the structure isn't {"ComponentName": {"prop": value}}
                             // We could potentially try to apply this property directly to the GameObject here if needed,
                             // but the primary goal is component modification.
-                            Debug.LogWarning(
+                            McpLog.Warn(
                                 $"[ManageAsset.ModifyAsset] Property '{prop.Name}' for GameObject modification should have a JSON object value containing component properties. Value was: {prop.Value.Type}. Skipping."
                             );
                         }
@@ -444,7 +444,7 @@ namespace MCPForUnity.Editor.Tools
                     }
                     else
                     {
-                        Debug.LogWarning($"Could not get TextureImporter for {fullPath}.");
+                        McpLog.Warn($"Could not get TextureImporter for {fullPath}.");
                     }
                 }
                 // TODO: Add modification logic for other common asset types (Models, AudioClips importers, etc.)
@@ -452,7 +452,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     // This block handles non-GameObject/Material/ScriptableObject/Texture assets.
                     // Attempts to apply properties directly to the asset itself.
-                    Debug.LogWarning(
+                    McpLog.Warn(
                         $"[ManageAsset.ModifyAsset] Asset type '{asset.GetType().Name}' at '{fullPath}' is not explicitly handled for component modification. Attempting generic property setting on the asset itself."
                     );
                     modified |= ApplyObjectProperties(asset, properties);
@@ -486,7 +486,7 @@ namespace MCPForUnity.Editor.Tools
             catch (Exception e)
             {
                 // Log the detailed error internally
-                Debug.LogError($"[ManageAsset] Action 'modify' failed for path '{path}': {e}");
+                McpLog.Error($"[ManageAsset] Action 'modify' failed for path '{path}': {e}");
                 // Return a user-friendly error message
                 return new ErrorResponse($"Failed to modify asset '{fullPath}': {e.Message}");
             }
@@ -648,7 +648,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     // Maybe the user provided a file path instead of a folder?
                     // We could search in the containing folder, or return an error.
-                    Debug.LogWarning(
+                    McpLog.Warn(
                         $"Search path '{folderScope[0]}' is not a valid folder. Searching entire project."
                     );
                     folderScope = null; // Search everywhere if path isn't a folder
@@ -671,7 +671,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 else
                 {
-                    Debug.LogWarning(
+                    McpLog.Warn(
                         $"Could not parse filterDateAfter: '{filterDateAfterStr}'. Expected ISO 8601 format."
                     );
                 }
@@ -816,7 +816,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception e)
             {
-                Debug.LogError(
+                McpLog.Error(
                     $"[ManageAsset.GetComponentsFromAsset] Error getting components for '{fullPath}': {e}"
                 );
                 return new ErrorResponse(
@@ -1018,7 +1018,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception ex)
             {
-                Debug.LogWarning(
+                McpLog.Warn(
                     $"[SetPropertyOrField] Failed to set '{memberName}' on {type.Name}: {ex.Message}"
                 );
             }
@@ -1081,7 +1081,7 @@ namespace MCPForUnity.Editor.Tools
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogWarning(
+                        McpLog.Warn(
                             $"Failed to generate readable preview for '{path}': {ex.Message}. Preview might not be readable."
                         );
                         // Fallback: Try getting static preview if available?
@@ -1090,7 +1090,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 else
                 {
-                    Debug.LogWarning(
+                    McpLog.Warn(
                         $"Could not get asset preview for {path} (Type: {assetType?.Name}). Is it supported?"
                     );
                 }

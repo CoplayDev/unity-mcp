@@ -152,7 +152,7 @@ namespace MCPForUnity.Editor.Helpers
             // Consider using by_name search with includeInactive if you need to find inactive objects.
             if (includeInactive)
             {
-                Debug.LogWarning("[GameObjectLookup] SearchByPath with includeInactive=true: " +
+                McpLog.Warn("[GameObjectLookup] SearchByPath with includeInactive=true: " +
                     "GameObject.Find() cannot find inactive objects. Use by_name search instead.");
             }
             
@@ -224,7 +224,7 @@ namespace MCPForUnity.Editor.Helpers
             Type componentType = FindComponentType(componentTypeName);
             if (componentType == null)
             {
-                Debug.LogWarning($"[GameObjectLookup] Component type '{componentTypeName}' not found.");
+                McpLog.Warn($"[GameObjectLookup] Component type '{componentTypeName}' not found.");
                 yield break;
             }
 

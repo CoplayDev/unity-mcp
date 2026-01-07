@@ -122,7 +122,7 @@ namespace MCPForUnity.Editor.Helpers
         public static object GetComponentData(Component c, bool includeNonPublicSerializedFields = true)
         {
             // --- Add Early Logging --- 
-            // Debug.Log($"[GetComponentData] Starting for component: {c?.GetType()?.FullName ?? "null"} (ID: {c?.GetInstanceID() ?? 0})");
+            // McpLog.Info($"[GetComponentData] Starting for component: {c?.GetType()?.FullName ?? "null"} (ID: {c?.GetInstanceID() ?? 0})");
             // --- End Early Logging ---
 
             if (c == null) return null;
@@ -132,7 +132,7 @@ namespace MCPForUnity.Editor.Helpers
             if (componentType == typeof(Transform))
             {
                 Transform tr = c as Transform;
-                // Debug.Log($"[GetComponentData] Manually serializing Transform (ID: {tr.GetInstanceID()})");
+                // McpLog.Info($"[GetComponentData] Manually serializing Transform (ID: {tr.GetInstanceID()})");
                 return new Dictionary<string, object>
                 {
                     { "typeName", componentType.FullName },
@@ -295,7 +295,7 @@ namespace MCPForUnity.Editor.Helpers
             var serializablePropertiesOutput = new Dictionary<string, object>();
 
             // --- Add Logging Before Property Loop ---
-            // Debug.Log($"[GetComponentData] Starting property loop for {componentType.Name}...");
+            // McpLog.Info($"[GetComponentData] Starting property loop for {componentType.Name}...");
             // --- End Logging Before Property Loop ---
 
             // Use cached properties
@@ -313,7 +313,7 @@ namespace MCPForUnity.Editor.Helpers
                     // Also skip potentially problematic Matrix properties prone to cycles/errors
                     propName == "worldToLocalMatrix" || propName == "localToWorldMatrix")
                 {
-                    // Debug.Log($"[GetComponentData] Explicitly skipping generic property: {propName}"); // Optional log
+                    // McpLog.Info($"[GetComponentData] Explicitly skipping generic property: {propName}"); // Optional log
                     skipProperty = true;
                 }
                 // --- End Skip Generic Properties ---
@@ -330,7 +330,7 @@ namespace MCPForUnity.Editor.Helpers
                      propName == "previousViewProjectionMatrix" ||
                      propName == "cameraToWorldMatrix"))
                 {
-                    // Debug.Log($"[GetComponentData] Explicitly skipping Camera property: {propName}");
+                    // McpLog.Info($"[GetComponentData] Explicitly skipping Camera property: {propName}");
                     skipProperty = true;
                 }
                 // --- End Skip Camera Properties ---
@@ -342,7 +342,7 @@ namespace MCPForUnity.Editor.Helpers
                      propName == "worldToLocalMatrix" ||
                      propName == "localToWorldMatrix"))
                 {
-                    // Debug.Log($"[GetComponentData] Explicitly skipping Transform property: {propName}");
+                    // McpLog.Info($"[GetComponentData] Explicitly skipping Transform property: {propName}");
                     skipProperty = true;
                 }
                 // --- End Skip Transform Properties ---
@@ -356,7 +356,7 @@ namespace MCPForUnity.Editor.Helpers
                 try
                 {
                     // --- Add detailed logging --- 
-                    // Debug.Log($"[GetComponentData] Accessing: {componentType.Name}.{propName}");
+                    // McpLog.Info($"[GetComponentData] Accessing: {componentType.Name}.{propName}");
                     // --- End detailed logging ---
 
                     // --- Special handling for material/mesh properties in edit mode ---
@@ -392,12 +392,12 @@ namespace MCPForUnity.Editor.Helpers
                 }
                 catch (Exception)
                 {
-                    // Debug.LogWarning($"Could not read property {propName} on {componentType.Name}");
+                    // McpLog.Warn($"Could not read property {propName} on {componentType.Name}");
                 }
             }
 
             // --- Add Logging Before Field Loop ---
-            // Debug.Log($"[GetComponentData] Starting field loop for {componentType.Name}...");
+            // McpLog.Info($"[GetComponentData] Starting field loop for {componentType.Name}...");
             // --- End Logging Before Field Loop ---
 
             // Use cached fields
@@ -406,7 +406,7 @@ namespace MCPForUnity.Editor.Helpers
                 try
                 {
                     // --- Add detailed logging for fields --- 
-                    // Debug.Log($"[GetComponentData] Accessing Field: {componentType.Name}.{fieldInfo.Name}");
+                    // McpLog.Info($"[GetComponentData] Accessing Field: {componentType.Name}.{fieldInfo.Name}");
                     // --- End detailed logging for fields ---
                     object value = fieldInfo.GetValue(c);
                     string fieldName = fieldInfo.Name;
@@ -415,7 +415,7 @@ namespace MCPForUnity.Editor.Helpers
                 }
                 catch (Exception)
                 {
-                    // Debug.LogWarning($"Could not read field {fieldInfo.Name} on {componentType.Name}");
+                    // McpLog.Warn($"Could not read field {fieldInfo.Name} on {componentType.Name}");
                 }
             }
             // --- End Use cached metadata ---
@@ -452,7 +452,7 @@ namespace MCPForUnity.Editor.Helpers
             catch (Exception e)
             {
                 // Catch potential errors during JToken conversion or addition to dictionary
-                Debug.LogWarning($"[AddSerializableValue] Error processing value for '{name}' (Type: {type.FullName}): {e.Message}. Skipping.");
+                McpLog.Warn($"[AddSerializableValue] Error processing value for '{name}' (Type: {type.FullName}): {e.Message}. Skipping.");
             }
         }
 
@@ -508,7 +508,7 @@ namespace MCPForUnity.Editor.Helpers
                     {
                         return jValue.Value;
                     }
-                    // Debug.LogWarning($"Unsupported JTokenType encountered: {token.Type}. Returning null.");
+                    // McpLog.Warn($"Unsupported JTokenType encountered: {token.Type}. Returning null.");
                     return null;
             }
         }
@@ -545,12 +545,12 @@ namespace MCPForUnity.Editor.Helpers
             }
             catch (JsonSerializationException e)
             {
-                Debug.LogWarning($"[GameObjectSerializer] Newtonsoft.Json Error serializing value of type {type.FullName}: {e.Message}. Skipping property/field.");
+                McpLog.Warn($"[GameObjectSerializer] Newtonsoft.Json Error serializing value of type {type.FullName}: {e.Message}. Skipping property/field.");
                 return null; // Indicate serialization failure
             }
             catch (Exception e) // Catch other unexpected errors
             {
-                Debug.LogWarning($"[GameObjectSerializer] Unexpected error serializing value of type {type.FullName}: {e}. Skipping property/field.");
+                McpLog.Warn($"[GameObjectSerializer] Unexpected error serializing value of type {type.FullName}: {e}. Skipping property/field.");
                 return null; // Indicate serialization failure
             }
         }

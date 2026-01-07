@@ -49,7 +49,7 @@ namespace MCPForUnity.Editor.Helpers
                 }
                 catch (Exception e)
                 {
-                    Debug.LogWarning($"Error reading existing config: {e.Message}.");
+                    McpLog.Warn($"Error reading existing config: {e.Message}.");
                 }
             }
 
@@ -71,7 +71,7 @@ namespace MCPForUnity.Editor.Helpers
                 // If user has partial/invalid JSON (e.g., mid-edit), start from a fresh object
                 if (!string.IsNullOrWhiteSpace(existingJson))
                 {
-                    Debug.LogWarning("UnityMCP: Configuration file could not be parsed; rewriting server block.");
+                    McpLog.Warn("UnityMCP: Configuration file could not be parsed; rewriting server block.");
                 }
                 existingConfig = new JObject();
             }
@@ -137,7 +137,7 @@ namespace MCPForUnity.Editor.Helpers
                 }
                 catch (Exception e)
                 {
-                    Debug.LogWarning($"UnityMCP: Failed to read Codex config '{configPath}': {e.Message}");
+                    McpLog.Warn($"UnityMCP: Failed to read Codex config '{configPath}': {e.Message}");
                     existingToml = string.Empty;
                 }
             }

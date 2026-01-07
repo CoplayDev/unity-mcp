@@ -1,4 +1,5 @@
 using System;
+using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -39,7 +40,7 @@ namespace MCPForUnity.Editor.Helpers
 
             if (string.IsNullOrEmpty(findTerm))
             {
-                Debug.LogWarning("[ObjectResolver] Find instruction missing 'find' term.");
+                McpLog.Warn("[ObjectResolver] Find instruction missing 'find' term.");
                 return null;
             }
 
@@ -85,20 +86,20 @@ namespace MCPForUnity.Editor.Helpers
                     }
                     else
                     {
-                        Debug.LogWarning($"[ObjectResolver] Could not find component type '{componentName}'. Falling back to target type '{targetType.Name}'.");
+                        McpLog.Warn($"[ObjectResolver] Could not find component type '{componentName}'. Falling back to target type '{targetType.Name}'.");
                     }
                 }
 
                 Component foundComp = foundGo.GetComponent(componentToGetType);
                 if (foundComp == null)
                 {
-                    Debug.LogWarning($"[ObjectResolver] Found GameObject '{foundGo.name}' but could not find component of type '{componentToGetType.Name}'.");
+                    McpLog.Warn($"[ObjectResolver] Found GameObject '{foundGo.name}' but could not find component of type '{componentToGetType.Name}'.");
                 }
                 return foundComp;
             }
             else
             {
-                Debug.LogWarning($"[ObjectResolver] Find instruction handling not implemented for target type: {targetType.Name}");
+                McpLog.Warn($"[ObjectResolver] Find instruction handling not implemented for target type: {targetType.Name}");
                 return null;
             }
         }
@@ -190,7 +191,7 @@ namespace MCPForUnity.Editor.Helpers
             }
             else if (guids.Length > 1)
             {
-                Debug.LogWarning($"[ObjectResolver] Ambiguous asset find: Found {guids.Length} assets matching filter '{searchFilter}'. Provide a full path or unique name.");
+                McpLog.Warn($"[ObjectResolver] Ambiguous asset find: Found {guids.Length} assets matching filter '{searchFilter}'. Provide a full path or unique name.");
                 return null;
             }
 

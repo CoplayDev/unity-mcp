@@ -110,6 +110,14 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 if (string.IsNullOrEmpty(scope))
                 {
                     scope = MCPServiceLocator.Server.IsLocalUrl() ? "local" : "remote";
+                    try
+                    {
+                        EditorPrefs.SetString(EditorPrefKeys.HttpTransportScope, scope);
+                    }
+                    catch
+                    {
+                        McpLog.Debug("Failed to set HttpTransportScope pref.");
+                    }
                 }
 
                 transportDropdown.value = scope == "remote" ? TransportProtocol.HTTPRemote : TransportProtocol.HTTPLocal;

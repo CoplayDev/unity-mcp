@@ -111,7 +111,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception e)
             {
-                Debug.LogError(
+                McpLog.Error(
                     $"[ReadConsole] Static Initialization Failed: Could not setup reflection for LogEntries/LogEntry. Console reading/clearing will likely fail. Specific Error: {e.Message}"
                 );
                 // Set members to null to prevent NullReferenceExceptions later, HandleCommand should check this.
@@ -144,7 +144,7 @@ namespace MCPForUnity.Editor.Tools
             )
             {
                 // Log the error here as well for easier debugging in Unity Console
-                Debug.LogError(
+                McpLog.Error(
                     "[ReadConsole] HandleCommand called but reflection members are not initialized. Static constructor might have failed silently or there's an issue."
                 );
                 return new ErrorResponse(
@@ -184,7 +184,7 @@ namespace MCPForUnity.Editor.Tools
 
                     if (!string.IsNullOrEmpty(sinceTimestampStr))
                     {
-                        Debug.LogWarning(
+                        McpLog.Warn(
                             "[ReadConsole] Filtering by 'since_timestamp' is not currently implemented."
                         );
                         // Need a way to get timestamp per log entry.
@@ -209,7 +209,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ReadConsole] Action '{action}' failed: {e}");
+                McpLog.Error($"[ReadConsole] Action '{action}' failed: {e}");
                 return new ErrorResponse($"Internal error processing action '{action}': {e.Message}");
             }
         }
@@ -225,7 +225,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ReadConsole] Failed to clear console: {e}");
+                McpLog.Error($"[ReadConsole] Failed to clear console: {e}");
                 return new ErrorResponse($"Failed to clear console: {e.Message}");
             }
         }
@@ -400,7 +400,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ReadConsole] Error while retrieving log entries: {e}");
+                McpLog.Error($"[ReadConsole] Error while retrieving log entries: {e}");
                 // EndGettingEntries will be called in the finally block
                 return new ErrorResponse($"Error retrieving log entries: {e.Message}");
             }
@@ -413,7 +413,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"[ReadConsole] Failed to call EndGettingEntries: {e}");
+                    McpLog.Error($"[ReadConsole] Failed to call EndGettingEntries: {e}");
                     // Don't return error here as we might have valid data, but log it.
                 }
             }
