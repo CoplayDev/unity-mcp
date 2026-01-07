@@ -136,7 +136,7 @@ namespace MCPForUnity.Editor.Dependencies
 
             if (result.GetMissingRequired().Count > 0)
             {
-                result.RecommendedActions.Add("Use the Setup Window (Window > MCP for Unity > Setup Window) for guided installation.");
+                result.RecommendedActions.Add("Use the Setup Window (Window > MCP for Unity > Local Setup Window) for guided installation.");
             }
         }
     }
