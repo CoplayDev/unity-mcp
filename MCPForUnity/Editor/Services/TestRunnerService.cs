@@ -330,7 +330,7 @@ namespace MCPForUnity.Editor.Services
                 {
                     if (string.IsNullOrEmpty(scene.path))
                     {
-                        McpLog.Warn($"[TestRunnerService] Skipping unsaved scene '{scene.name}': save it manually before running PlayMode tests.");
+                        McpLog.Warn($"[TestRunnerService] Skipping unsaved scene '{scene.name}': save it manually before running tests.");
                         continue;
                     }
                     try
