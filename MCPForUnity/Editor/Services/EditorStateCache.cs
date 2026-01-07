@@ -33,7 +33,7 @@ namespace MCPForUnity.Editor.Services
 
         private static JObject _cached;
 
-        private sealed class EditorStateV2Snapshot
+        private sealed class EditorStateSnapshot
         {
             [JsonProperty("schema_version")]
             public string SchemaVersion { get; set; }
@@ -45,28 +45,28 @@ namespace MCPForUnity.Editor.Services
             public long Sequence { get; set; }
 
             [JsonProperty("unity")]
-            public EditorStateV2Unity Unity { get; set; }
+            public EditorStateUnity Unity { get; set; }
 
             [JsonProperty("editor")]
-            public EditorStateV2Editor Editor { get; set; }
+            public EditorStateEditor Editor { get; set; }
 
             [JsonProperty("activity")]
-            public EditorStateV2Activity Activity { get; set; }
+            public EditorStateActivity Activity { get; set; }
 
             [JsonProperty("compilation")]
-            public EditorStateV2Compilation Compilation { get; set; }
+            public EditorStateCompilation Compilation { get; set; }
 
             [JsonProperty("assets")]
-            public EditorStateV2Assets Assets { get; set; }
+            public EditorStateAssets Assets { get; set; }
 
             [JsonProperty("tests")]
-            public EditorStateV2Tests Tests { get; set; }
+            public EditorStateTests Tests { get; set; }
 
             [JsonProperty("transport")]
-            public EditorStateV2Transport Transport { get; set; }
+            public EditorStateTransport Transport { get; set; }
         }
 
-        private sealed class EditorStateV2Unity
+        private sealed class EditorStateUnity
         {
             [JsonProperty("instance_id")]
             public string InstanceId { get; set; }
@@ -84,19 +84,19 @@ namespace MCPForUnity.Editor.Services
             public bool? IsBatchMode { get; set; }
         }
 
-        private sealed class EditorStateV2Editor
+        private sealed class EditorStateEditor
         {
             [JsonProperty("is_focused")]
             public bool? IsFocused { get; set; }
 
             [JsonProperty("play_mode")]
-            public EditorStateV2PlayMode PlayMode { get; set; }
+            public EditorStatePlayMode PlayMode { get; set; }
 
             [JsonProperty("active_scene")]
-            public EditorStateV2ActiveScene ActiveScene { get; set; }
+            public EditorStateActiveScene ActiveScene { get; set; }
         }
 
-        private sealed class EditorStateV2PlayMode
+        private sealed class EditorStatePlayMode
         {
             [JsonProperty("is_playing")]
             public bool? IsPlaying { get; set; }
@@ -108,7 +108,7 @@ namespace MCPForUnity.Editor.Services
             public bool? IsChanging { get; set; }
         }
 
-        private sealed class EditorStateV2ActiveScene
+        private sealed class EditorStateActiveScene
         {
             [JsonProperty("path")]
             public string Path { get; set; }
@@ -120,7 +120,7 @@ namespace MCPForUnity.Editor.Services
             public string Name { get; set; }
         }
 
-        private sealed class EditorStateV2Activity
+        private sealed class EditorStateActivity
         {
             [JsonProperty("phase")]
             public string Phase { get; set; }
@@ -132,7 +132,7 @@ namespace MCPForUnity.Editor.Services
             public string[] Reasons { get; set; }
         }
 
-        private sealed class EditorStateV2Compilation
+        private sealed class EditorStateCompilation
         {
             [JsonProperty("is_compiling")]
             public bool? IsCompiling { get; set; }
@@ -153,7 +153,7 @@ namespace MCPForUnity.Editor.Services
             public long? LastDomainReloadAfterUnixMs { get; set; }
         }
 
-        private sealed class EditorStateV2Assets
+        private sealed class EditorStateAssets
         {
             [JsonProperty("is_updating")]
             public bool? IsUpdating { get; set; }
@@ -171,10 +171,10 @@ namespace MCPForUnity.Editor.Services
             public long? ExternalChangesLastClearedUnixMs { get; set; }
 
             [JsonProperty("refresh")]
-            public EditorStateV2Refresh Refresh { get; set; }
+            public EditorStateRefresh Refresh { get; set; }
         }
 
-        private sealed class EditorStateV2Refresh
+        private sealed class EditorStateRefresh
         {
             [JsonProperty("is_refresh_in_progress")]
             public bool? IsRefreshInProgress { get; set; }
@@ -186,7 +186,7 @@ namespace MCPForUnity.Editor.Services
             public long? LastRefreshFinishedUnixMs { get; set; }
         }
 
-        private sealed class EditorStateV2Tests
+        private sealed class EditorStateTests
         {
             [JsonProperty("is_running")]
             public bool? IsRunning { get; set; }
@@ -204,10 +204,10 @@ namespace MCPForUnity.Editor.Services
             public string StartedBy { get; set; }
 
             [JsonProperty("last_run")]
-            public EditorStateV2LastRun LastRun { get; set; }
+            public EditorStateLastRun LastRun { get; set; }
         }
 
-        private sealed class EditorStateV2LastRun
+        private sealed class EditorStateLastRun
         {
             [JsonProperty("finished_unix_ms")]
             public long? FinishedUnixMs { get; set; }
@@ -219,7 +219,7 @@ namespace MCPForUnity.Editor.Services
             public object Counts { get; set; }
         }
 
-        private sealed class EditorStateV2Transport
+        private sealed class EditorStateTransport
         {
             [JsonProperty("unity_bridge_connected")]
             public bool? UnityBridgeConnected { get; set; }
@@ -331,12 +331,12 @@ namespace MCPForUnity.Editor.Services
                 activityPhase = "playmode_transition";
             }
 
-            var snapshot = new EditorStateV2Snapshot
+            var snapshot = new EditorStateSnapshot
             {
                 SchemaVersion = "unity-mcp/editor_state@2",
                 ObservedAtUnixMs = _observedUnixMs,
                 Sequence = _sequence,
-                Unity = new EditorStateV2Unity
+                Unity = new EditorStateUnity
                 {
                     InstanceId = null,
                     UnityVersion = Application.unityVersion,
@@ -344,29 +344,29 @@ namespace MCPForUnity.Editor.Services
                     Platform = Application.platform.ToString(),
                     IsBatchMode = Application.isBatchMode
                 },
-                Editor = new EditorStateV2Editor
+                Editor = new EditorStateEditor
                 {
                     IsFocused = isFocused,
-                    PlayMode = new EditorStateV2PlayMode
+                    PlayMode = new EditorStatePlayMode
                     {
                         IsPlaying = EditorApplication.isPlaying,
                         IsPaused = EditorApplication.isPaused,
                         IsChanging = EditorApplication.isPlayingOrWillChangePlaymode
                     },
-                    ActiveScene = new EditorStateV2ActiveScene
+                    ActiveScene = new EditorStateActiveScene
                     {
                         Path = scenePath,
                         Guid = sceneGuid,
                         Name = scene.name ?? string.Empty
                     }
                 },
-                Activity = new EditorStateV2Activity
+                Activity = new EditorStateActivity
                 {
                     Phase = activityPhase,
                     SinceUnixMs = _observedUnixMs,
                     Reasons = new[] { reason }
                 },
-                Compilation = new EditorStateV2Compilation
+                Compilation = new EditorStateCompilation
                 {
                     IsCompiling = isCompiling,
                     IsDomainReloadPending = _domainReloadPending,
@@ -375,21 +375,21 @@ namespace MCPForUnity.Editor.Services
                     LastDomainReloadBeforeUnixMs = _domainReloadBeforeUnixMs,
                     LastDomainReloadAfterUnixMs = _domainReloadAfterUnixMs
                 },
-                Assets = new EditorStateV2Assets
+                Assets = new EditorStateAssets
                 {
                     IsUpdating = EditorApplication.isUpdating,
                     ExternalChangesDirty = false,
                     ExternalChangesLastSeenUnixMs = null,
                     ExternalChangesDirtySinceUnixMs = null,
                     ExternalChangesLastClearedUnixMs = null,
-                    Refresh = new EditorStateV2Refresh
+                    Refresh = new EditorStateRefresh
                     {
                         IsRefreshInProgress = false,
                         LastRefreshRequestedUnixMs = null,
                         LastRefreshFinishedUnixMs = null
                     }
                 },
-                Tests = new EditorStateV2Tests
+                Tests = new EditorStateTests
                 {
                     IsRunning = testsRunning,
                     Mode = testsMode,
@@ -397,7 +397,7 @@ namespace MCPForUnity.Editor.Services
                     StartedUnixMs = TestRunStatus.StartedUnixMs,
                     StartedBy = "unknown",
                     LastRun = TestRunStatus.FinishedUnixMs.HasValue
-                        ? new EditorStateV2LastRun
+                        ? new EditorStateLastRun
                         {
                             FinishedUnixMs = TestRunStatus.FinishedUnixMs,
                             Result = "unknown",
@@ -405,7 +405,7 @@ namespace MCPForUnity.Editor.Services
                         }
                         : null
                 },
-                Transport = new EditorStateV2Transport
+                Transport = new EditorStateTransport
                 {
                     UnityBridgeConnected = null,
                     LastMessageUnixMs = null
