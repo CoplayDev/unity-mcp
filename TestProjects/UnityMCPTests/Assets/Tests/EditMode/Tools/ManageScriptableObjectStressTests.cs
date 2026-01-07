@@ -731,6 +731,285 @@ namespace MCPForUnityTests.Editor.Tools
             Debug.Log("[DryRun] Successfully validated patches without applying");
         }
 
+        /// <summary>
+        /// Test: Dry-run validates AnimationCurve format and provides early feedback.
+        /// </summary>
+        [Test]
+        public void DryRun_AnimationCurve_ValidFormat_PassesValidation()
+        {
+            // Create a test asset first
+            var createResult = ToJObject(ManageScriptableObject.HandleCommand(new JObject
+            {
+                ["action"] = "create",
+                ["typeName"] = "ComplexStressSO",
+                ["folderPath"] = _runRoot,
+                ["assetName"] = "DryRunAnimCurveValid",
+                ["overwrite"] = true
+            }));
+            Assert.IsTrue(createResult.Value<bool>("success"), createResult.ToString());
+
+            var path = createResult["data"]?["path"]?.ToString();
+            var guid = createResult["data"]?["guid"]?.ToString();
+            _createdAssets.Add(path);
+
+            // Dry-run with valid AnimationCurve format
+            var dryRunResult = ToJObject(ManageScriptableObject.HandleCommand(new JObject
+            {
+                ["action"] = "modify",
+                ["target"] = new JObject { ["guid"] = guid },
+                ["dryRun"] = true,
+                ["patches"] = new JArray
+                {
+                    new JObject
+                    {
+                        ["propertyPath"] = "animCurve",
+                        ["op"] = "set",
+                        ["value"] = new JObject
+                        {
+                            ["keys"] = new JArray
+                            {
+                                new JObject { ["time"] = 0f, ["value"] = 0f },
+                                new JObject { ["time"] = 1f, ["value"] = 1f, ["inSlope"] = 0f, ["outSlope"] = 0f }
+                            }
+                        }
+                    }
+                }
+            }));
+
+            Assert.IsTrue(dryRunResult.Value<bool>("success"), $"Dry-run should succeed: {dryRunResult}");
+
+            var data = dryRunResult["data"] as JObject;
+            var validationResults = data["validationResults"] as JArray;
+            Assert.IsNotNull(validationResults, "Should have validation results");
+            Assert.AreEqual(1, validationResults.Count);
+
+            // Should pass validation with informative message
+            Assert.IsTrue(validationResults[0].Value<bool>("ok"), $"Valid AnimationCurve format should pass: {validationResults[0]}");
+            var message = validationResults[0].Value<string>("message");
+            Assert.IsTrue(message.Contains("AnimationCurve") && message.Contains("2 keyframes"), 
+                $"Message should describe curve: {message}");
+
+            Debug.Log($"[DryRun_AnimationCurve] Valid format passed: {message}");
+        }
+
+        /// <summary>
+        /// Test: Dry-run catches invalid AnimationCurve format early.
+        /// </summary>
+        [Test]
+        public void DryRun_AnimationCurve_InvalidFormat_FailsWithClearError()
+        {
+            // Create a test asset first
+            var createResult = ToJObject(ManageScriptableObject.HandleCommand(new JObject
+            {
+                ["action"] = "create",
+                ["typeName"] = "ComplexStressSO",
+                ["folderPath"] = _runRoot,
+                ["assetName"] = "DryRunAnimCurveInvalid",
+                ["overwrite"] = true
+            }));
+            Assert.IsTrue(createResult.Value<bool>("success"), createResult.ToString());
+
+            var path = createResult["data"]?["path"]?.ToString();
+            var guid = createResult["data"]?["guid"]?.ToString();
+            _createdAssets.Add(path);
+
+            // Dry-run with INVALID AnimationCurve format (non-numeric time)
+            var dryRunResult = ToJObject(ManageScriptableObject.HandleCommand(new JObject
+            {
+                ["action"] = "modify",
+                ["target"] = new JObject { ["guid"] = guid },
+                ["dryRun"] = true,
+                ["patches"] = new JArray
+                {
+                    new JObject
+                    {
+                        ["propertyPath"] = "animCurve",
+                        ["op"] = "set",
+                        ["value"] = new JObject
+                        {
+                            ["keys"] = new JArray
+                            {
+                                new JObject { ["time"] = "not-a-number", ["value"] = 0f }  // Invalid!
+                            }
+                        }
+                    }
+                }
+            }));
+
+            Assert.IsTrue(dryRunResult.Value<bool>("success"), $"Dry-run call should succeed: {dryRunResult}");
+
+            var data = dryRunResult["data"] as JObject;
+            var validationResults = data["validationResults"] as JArray;
+            Assert.IsNotNull(validationResults);
+
+            // Validation should FAIL with clear error message
+            Assert.IsFalse(validationResults[0].Value<bool>("ok"), $"Invalid AnimationCurve format should fail validation: {validationResults[0]}");
+            var message = validationResults[0].Value<string>("message");
+            Assert.IsTrue(message.Contains("Keyframe") && message.Contains("time") && message.Contains("number"),
+                $"Error message should identify the problem: {message}");
+
+            Debug.Log($"[DryRun_AnimationCurve] Invalid format caught early: {message}");
+        }
+
+        /// <summary>
+        /// Test: Dry-run validates Quaternion format and provides early feedback.
+        /// </summary>
+        [Test]
+        public void DryRun_Quaternion_ValidFormat_PassesValidation()
+        {
+            // Create a test asset first
+            var createResult = ToJObject(ManageScriptableObject.HandleCommand(new JObject
+            {
+                ["action"] = "create",
+                ["typeName"] = "ComplexStressSO",
+                ["folderPath"] = _runRoot,
+                ["assetName"] = "DryRunQuatValid",
+                ["overwrite"] = true
+            }));
+            Assert.IsTrue(createResult.Value<bool>("success"), createResult.ToString());
+
+            var path = createResult["data"]?["path"]?.ToString();
+            var guid = createResult["data"]?["guid"]?.ToString();
+            _createdAssets.Add(path);
+
+            // Dry-run with valid Quaternion format (Euler angles)
+            var dryRunResult = ToJObject(ManageScriptableObject.HandleCommand(new JObject
+            {
+                ["action"] = "modify",
+                ["target"] = new JObject { ["guid"] = guid },
+                ["dryRun"] = true,
+                ["patches"] = new JArray
+                {
+                    new JObject
+                    {
+                        ["propertyPath"] = "rotation",
+                        ["op"] = "set",
+                        ["value"] = new JArray { 45f, 90f, 0f }  // Valid Euler angles
+                    }
+                }
+            }));
+
+            Assert.IsTrue(dryRunResult.Value<bool>("success"), $"Dry-run should succeed: {dryRunResult}");
+
+            var data = dryRunResult["data"] as JObject;
+            var validationResults = data["validationResults"] as JArray;
+            Assert.IsNotNull(validationResults);
+
+            // Should pass validation with informative message
+            Assert.IsTrue(validationResults[0].Value<bool>("ok"), $"Valid Quaternion format should pass: {validationResults[0]}");
+            var message = validationResults[0].Value<string>("message");
+            Assert.IsTrue(message.Contains("Quaternion") && message.Contains("Euler"),
+                $"Message should describe format: {message}");
+
+            Debug.Log($"[DryRun_Quaternion] Valid Euler format passed: {message}");
+        }
+
+        /// <summary>
+        /// Test: Dry-run catches invalid Quaternion format (wrong array length) early.
+        /// </summary>
+        [Test]
+        public void DryRun_Quaternion_WrongArrayLength_FailsWithClearError()
+        {
+            // Create a test asset first
+            var createResult = ToJObject(ManageScriptableObject.HandleCommand(new JObject
+            {
+                ["action"] = "create",
+                ["typeName"] = "ComplexStressSO",
+                ["folderPath"] = _runRoot,
+                ["assetName"] = "DryRunQuatWrongLength",
+                ["overwrite"] = true
+            }));
+            Assert.IsTrue(createResult.Value<bool>("success"), createResult.ToString());
+
+            var path = createResult["data"]?["path"]?.ToString();
+            var guid = createResult["data"]?["guid"]?.ToString();
+            _createdAssets.Add(path);
+
+            // Dry-run with INVALID Quaternion format (wrong array length)
+            var dryRunResult = ToJObject(ManageScriptableObject.HandleCommand(new JObject
+            {
+                ["action"] = "modify",
+                ["target"] = new JObject { ["guid"] = guid },
+                ["dryRun"] = true,
+                ["patches"] = new JArray
+                {
+                    new JObject
+                    {
+                        ["propertyPath"] = "rotation",
+                        ["op"] = "set",
+                        ["value"] = new JArray { 1f, 2f }  // Invalid! Must be 3 or 4 elements
+                    }
+                }
+            }));
+
+            Assert.IsTrue(dryRunResult.Value<bool>("success"), $"Dry-run call should succeed: {dryRunResult}");
+
+            var data = dryRunResult["data"] as JObject;
+            var validationResults = data["validationResults"] as JArray;
+            Assert.IsNotNull(validationResults);
+
+            // Validation should FAIL with clear error message
+            Assert.IsFalse(validationResults[0].Value<bool>("ok"), $"Wrong array length should fail validation: {validationResults[0]}");
+            var message = validationResults[0].Value<string>("message");
+            Assert.IsTrue(message.Contains("3 elements") || message.Contains("4 elements"),
+                $"Error message should explain valid lengths: {message}");
+
+            Debug.Log($"[DryRun_Quaternion] Wrong array length caught early: {message}");
+        }
+
+        /// <summary>
+        /// Test: Dry-run catches invalid Quaternion format (non-numeric values) early.
+        /// </summary>
+        [Test]
+        public void DryRun_Quaternion_NonNumericValue_FailsWithClearError()
+        {
+            // Create a test asset first
+            var createResult = ToJObject(ManageScriptableObject.HandleCommand(new JObject
+            {
+                ["action"] = "create",
+                ["typeName"] = "ComplexStressSO",
+                ["folderPath"] = _runRoot,
+                ["assetName"] = "DryRunQuatNonNumeric",
+                ["overwrite"] = true
+            }));
+            Assert.IsTrue(createResult.Value<bool>("success"), createResult.ToString());
+
+            var path = createResult["data"]?["path"]?.ToString();
+            var guid = createResult["data"]?["guid"]?.ToString();
+            _createdAssets.Add(path);
+
+            // Dry-run with INVALID Quaternion format (non-numeric value)
+            var dryRunResult = ToJObject(ManageScriptableObject.HandleCommand(new JObject
+            {
+                ["action"] = "modify",
+                ["target"] = new JObject { ["guid"] = guid },
+                ["dryRun"] = true,
+                ["patches"] = new JArray
+                {
+                    new JObject
+                    {
+                        ["propertyPath"] = "rotation",
+                        ["op"] = "set",
+                        ["value"] = new JArray { 45f, "ninety", 0f }  // Invalid! Non-numeric
+                    }
+                }
+            }));
+
+            Assert.IsTrue(dryRunResult.Value<bool>("success"), $"Dry-run call should succeed: {dryRunResult}");
+
+            var data = dryRunResult["data"] as JObject;
+            var validationResults = data["validationResults"] as JArray;
+            Assert.IsNotNull(validationResults);
+
+            // Validation should FAIL with clear error message
+            Assert.IsFalse(validationResults[0].Value<bool>("ok"), $"Non-numeric value should fail validation: {validationResults[0]}");
+            var message = validationResults[0].Value<string>("message");
+            Assert.IsTrue(message.Contains("number") || message.Contains("numeric"),
+                $"Error message should mention number requirement: {message}");
+
+            Debug.Log($"[DryRun_Quaternion] Non-numeric value caught early: {message}");
+        }
+
         #endregion
 
         #region Phase 6: Extended Type Support Tests
