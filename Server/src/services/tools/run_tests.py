@@ -151,10 +151,7 @@ async def run_tests(
     if isinstance(response, dict):
         if not response.get("success", True):
             return MCPResponse(**response)
-        # Most tools in this codebase return raw dict payloads; keep consistency for callers/tests.
-        # We still validate that the payload matches expected shape (best-effort) but return dict.
-        RunTestsStartResponse(**response)
-        return response
+        return RunTestsStartResponse(**response)
     return MCPResponse(success=False, error=str(response))
 
 
