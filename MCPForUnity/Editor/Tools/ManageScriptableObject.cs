@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text.RegularExpressions;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
@@ -229,6 +227,26 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse(CodeInvalidParams, new { message = "'patches' must be an array.", targetPath, targetGuid });
             }
 
+            // Phase 5: Dry-run mode - validate patches without applying
+            bool dryRun = @params["dryRun"]?.ToObject<bool?>() ?? @params["dry_run"]?.ToObject<bool?>() ?? false;
+            
+            if (dryRun)
+            {
+                var validationResults = ValidatePatches(target, patches);
+                return new SuccessResponse(
+                    "Dry-run validation complete.",
+                    new
+                    {
+                        targetGuid,
+                        targetPath,
+                        targetTypeName = target.GetType().FullName,
+                        dryRun = true,
+                        valid = validationResults.All(r => (bool)r.GetType().GetProperty("ok")?.GetValue(r)),
+                        validationResults
+                    }
+                );
+            }
+
             var (results, warnings) = ApplyPatches(target, patches);
 
             return new SuccessResponse(
@@ -242,6 +260,148 @@ namespace MCPForUnity.Editor.Tools
                     warnings = warnings.Count > 0 ? warnings : null
                 }
             );
+        }
+
+        /// <summary>
+        /// Validates patches without applying them (for dry-run mode).
+        /// Checks that property paths exist and that value types are compatible.
+        /// </summary>
+        private static List<object> ValidatePatches(UnityEngine.Object target, JArray patches)
+        {
+            var results = new List<object>(patches.Count);
+            var so = new SerializedObject(target);
+            so.Update();
+
+            for (int i = 0; i < patches.Count; i++)
+            {
+                if (patches[i] is not JObject patchObj)
+                {
+                    results.Add(new { index = i, propertyPath = "", op = "", ok = false, message = $"Patch at index {i} must be an object." });
+                    continue;
+                }
+
+                string propertyPath = patchObj["propertyPath"]?.ToString()
+                    ?? patchObj["property_path"]?.ToString()
+                    ?? patchObj["path"]?.ToString();
+                string op = (patchObj["op"]?.ToString() ?? "set").Trim();
+
+                if (string.IsNullOrWhiteSpace(propertyPath))
+                {
+                    results.Add(new { index = i, propertyPath = propertyPath ?? "", op, ok = false, message = "Missing required field: propertyPath" });
+                    continue;
+                }
+
+                // Normalize the path
+                string normalizedPath = NormalizePropertyPath(propertyPath);
+                string normalizedOp = op.ToLowerInvariant();
+
+                // For array_resize, check if the array exists
+                if (normalizedOp == "array_resize")
+                {
+                    var valueToken = patchObj["value"];
+                    if (valueToken == null || valueToken.Type == JTokenType.Null)
+                    {
+                        results.Add(new { index = i, propertyPath = normalizedPath, op, ok = false, message = "array_resize requires integer 'value'." });
+                        continue;
+                    }
+
+                    int size = ParamCoercion.CoerceInt(valueToken, -1);
+                    if (size < 0)
+                    {
+                        results.Add(new { index = i, propertyPath = normalizedPath, op, ok = false, message = "array_resize requires non-negative integer 'value'." });
+                        continue;
+                    }
+
+                    // Check if the array path exists
+                    string arrayPath = normalizedPath;
+                    if (arrayPath.EndsWith(".Array.size", StringComparison.Ordinal))
+                    {
+                        arrayPath = arrayPath.Substring(0, arrayPath.Length - ".Array.size".Length);
+                    }
+
+                    var arrayProp = so.FindProperty(arrayPath);
+                    if (arrayProp == null)
+                    {
+                        results.Add(new { index = i, propertyPath = normalizedPath, op, ok = false, message = $"Array not found: {arrayPath}" });
+                        continue;
+                    }
+
+                    if (!arrayProp.isArray)
+                    {
+                        results.Add(new { index = i, propertyPath = normalizedPath, op, ok = false, message = $"Property is not an array: {arrayPath}" });
+                        continue;
+                    }
+
+                    results.Add(new { index = i, propertyPath = normalizedPath, op, ok = true, message = $"Will resize to {size}.", currentSize = arrayProp.arraySize });
+                    continue;
+                }
+
+                // For set operations, check if the property exists (or can be auto-grown)
+                var prop = so.FindProperty(normalizedPath);
+                
+                // Check if it's an auto-growable array element path
+                bool isAutoGrowable = false;
+                if (prop == null)
+                {
+                    var match = Regex.Match(normalizedPath, @"^(.+?)\.Array\.data\[(\d+)\]");
+                    if (match.Success)
+                    {
+                        string arrayPath = match.Groups[1].Value;
+                        var arrayProp = so.FindProperty(arrayPath);
+                        if (arrayProp != null && arrayProp.isArray)
+                        {
+                            isAutoGrowable = true;
+                            // Get the element type info from existing elements or report as growable
+                            int targetIndex = int.Parse(match.Groups[2].Value);
+                            if (arrayProp.arraySize > 0)
+                            {
+                                var sampleElement = arrayProp.GetArrayElementAtIndex(0);
+                                results.Add(new { 
+                                    index = i, 
+                                    propertyPath = normalizedPath, 
+                                    op, 
+                                    ok = true, 
+                                    message = $"Will auto-grow array from {arrayProp.arraySize} to {targetIndex + 1}.",
+                                    elementType = sampleElement?.propertyType.ToString() ?? "unknown"
+                                });
+                            }
+                            else
+                            {
+                                results.Add(new { 
+                                    index = i, 
+                                    propertyPath = normalizedPath, 
+                                    op, 
+                                    ok = true, 
+                                    message = $"Will auto-grow empty array to size {targetIndex + 1}."
+                                });
+                            }
+                            continue;
+                        }
+                    }
+                }
+
+                if (prop == null && !isAutoGrowable)
+                {
+                    results.Add(new { index = i, propertyPath = normalizedPath, op, ok = false, message = $"Property not found: {normalizedPath}" });
+                    continue;
+                }
+
+                if (prop != null)
+                {
+                    // Property exists - report its type for validation
+                    results.Add(new { 
+                        index = i, 
+                        propertyPath = normalizedPath, 
+                        op, 
+                        ok = true, 
+                        message = "Property found.",
+                        propertyType = prop.propertyType.ToString(),
+                        isArray = prop.isArray
+                    });
+                }
+            }
+
+            return results;
         }
 
         private static (List<object> results, List<string> warnings) ApplyPatches(UnityEngine.Object target, JArray patches)
@@ -303,15 +463,17 @@ namespace MCPForUnity.Editor.Tools
             changed = false;
             try
             {
+                // Phase 1.1: Normalize friendly path syntax (e.g., myList[5] → myList.Array.data[5])
+                string normalizedPath = NormalizePropertyPath(propertyPath);
                 string normalizedOp = op.Trim().ToLowerInvariant();
 
                 switch (normalizedOp)
                 {
                     case "array_resize":
-                        return ApplyArrayResize(so, propertyPath, patchObj, out changed);
+                        return ApplyArrayResize(so, normalizedPath, patchObj, out changed);
                     case "set":
                     default:
-                        return ApplySet(so, propertyPath, patchObj, out changed);
+                        return ApplySet(so, normalizedPath, patchObj, out changed);
                 }
             }
             catch (Exception ex)
@@ -320,10 +482,102 @@ namespace MCPForUnity.Editor.Tools
             }
         }
 
+        /// <summary>
+        /// Normalizes friendly property path syntax to Unity's internal format.
+        /// Converts bracket notation (e.g., myList[5]) to Unity's Array.data format (myList.Array.data[5]).
+        /// </summary>
+        private static string NormalizePropertyPath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                return path;
+
+            // Pattern: word[number] where it's not already in .Array.data[number] format
+            // We need to handle cases like: myList[5], nested.list[0].field, etc.
+            // But NOT: myList.Array.data[5] (already in Unity format)
+            
+            // Replace fieldName[index] with fieldName.Array.data[index]
+            // But only if it's not already in Array.data format
+            return Regex.Replace(path, @"(\w+)\[(\d+)\]", m =>
+            {
+                string fieldName = m.Groups[1].Value;
+                string index = m.Groups[2].Value;
+                
+                // Check if this match is already part of .Array.data[index] pattern
+                // by checking if the text immediately before the field name is ".Array."
+                // and the field name is "data"
+                int matchStart = m.Index;
+                if (fieldName == "data" && matchStart >= 7) // Length of ".Array."
+                {
+                    string preceding = path.Substring(matchStart - 7, 7);
+                    if (preceding == ".Array.")
+                    {
+                        // Already in Unity format (e.g., myList.Array.data[0]), return as-is
+                        return m.Value;
+                    }
+                }
+                
+                return $"{fieldName}.Array.data[{index}]";
+            });
+        }
+
+        /// <summary>
+        /// Ensures an array has sufficient capacity for the given index.
+        /// Automatically resizes the array if the target index is beyond current bounds.
+        /// </summary>
+        /// <param name="so">The SerializedObject containing the array</param>
+        /// <param name="path">The normalized property path (must be in Array.data format)</param>
+        /// <param name="resized">True if the array was resized</param>
+        /// <returns>True if the path is valid for setting, false if it cannot be resolved</returns>
+        private static bool EnsureArrayCapacity(SerializedObject so, string path, out bool resized)
+        {
+            resized = false;
+            
+            // Match pattern: something.Array.data[N]
+            var match = Regex.Match(path, @"^(.+?)\.Array\.data\[(\d+)\]");
+            if (!match.Success)
+            {
+                // Not an array element path, nothing to do
+                return true;
+            }
+
+            string arrayPath = match.Groups[1].Value;
+            if (!int.TryParse(match.Groups[2].Value, out int targetIndex))
+            {
+                return false;
+            }
+
+            var arrayProp = so.FindProperty(arrayPath);
+            if (arrayProp == null || !arrayProp.isArray)
+            {
+                // Array property not found or not an array
+                return false;
+            }
+
+            if (arrayProp.arraySize <= targetIndex)
+            {
+                // Need to grow the array
+                arrayProp.arraySize = targetIndex + 1;
+                so.ApplyModifiedProperties();
+                so.Update();
+                resized = true;
+            }
+
+            return true;
+        }
+
         private static object ApplyArrayResize(SerializedObject so, string propertyPath, JObject patchObj, out bool changed)
         {
             changed = false;
-            if (!TryGetInt(patchObj["value"], out int newSize))
+            
+            // Use ParamCoercion for robust int parsing
+            var valueToken = patchObj["value"];
+            if (valueToken == null || valueToken.Type == JTokenType.Null)
+            {
+                return new { propertyPath, op = "array_resize", ok = false, message = "array_resize requires integer 'value'." };
+            }
+            
+            int newSize = ParamCoercion.CoerceInt(valueToken, -1);
+            if (newSize < 0)
             {
                 return new { propertyPath, op = "array_resize", ok = false, message = "array_resize requires integer 'value'." };
             }
@@ -408,25 +662,63 @@ namespace MCPForUnity.Editor.Tools
         private static object ApplySet(SerializedObject so, string propertyPath, JObject patchObj, out bool changed)
         {
             changed = false;
+            
+            // Phase 1.2: Auto-resize arrays if targeting an index beyond current bounds
+            if (!EnsureArrayCapacity(so, propertyPath, out bool arrayResized))
+            {
+                // Could not resolve the array path - try to find the property anyway for a better error message
+                var checkProp = so.FindProperty(propertyPath);
+                if (checkProp == null)
+                {
+                    // Try to provide helpful context about what went wrong
+                    var arrayMatch = Regex.Match(propertyPath, @"^(.+?)\.Array\.data\[(\d+)\]");
+                    if (arrayMatch.Success)
+                    {
+                        string arrayPath = arrayMatch.Groups[1].Value;
+                        var arrayProp = so.FindProperty(arrayPath);
+                        if (arrayProp == null)
+                        {
+                            return new { propertyPath, op = "set", ok = false, message = $"Array property not found: {arrayPath}" };
+                        }
+                        if (!arrayProp.isArray)
+                        {
+                            return new { propertyPath, op = "set", ok = false, message = $"Property is not an array: {arrayPath}" };
+                        }
+                    }
+                    return new { propertyPath, op = "set", ok = false, message = $"Property not found: {propertyPath}" };
+                }
+            }
+            
             var prop = so.FindProperty(propertyPath);
             if (prop == null)
             {
                 return new { propertyPath, op = "set", ok = false, message = $"Property not found: {propertyPath}" };
             }
+            
+            // Track if we resized - this counts as a change
+            if (arrayResized)
+            {
+                changed = true;
+            }
 
             if (prop.propertyType == SerializedPropertyType.ObjectReference)
             {
                 var refObj = patchObj["ref"] as JObject;
+                var objRefValue = patchObj["value"];
                 UnityEngine.Object newRef = null;
                 string refGuid = refObj?["guid"]?.ToString();
                 string refPath = refObj?["path"]?.ToString();
+                string resolveMethod = "explicit";
 
-                if (refObj == null && patchObj["value"]?.Type == JTokenType.Null)
+                if (refObj == null && objRefValue?.Type == JTokenType.Null)
                 {
+                    // Explicit null - clear the reference
                     newRef = null;
+                    resolveMethod = "cleared";
                 }
                 else if (!string.IsNullOrEmpty(refGuid) || !string.IsNullOrEmpty(refPath))
                 {
+                    // Traditional ref object with guid or path
                     string resolvedPath = !string.IsNullOrEmpty(refGuid)
                         ? AssetDatabase.GUIDToAssetPath(refGuid)
                         : AssetPathUtility.SanitizeAssetPath(refPath);
@@ -434,6 +726,31 @@ namespace MCPForUnity.Editor.Tools
                     if (!string.IsNullOrEmpty(resolvedPath))
                     {
                         newRef = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(resolvedPath);
+                    }
+                    resolveMethod = !string.IsNullOrEmpty(refGuid) ? "ref.guid" : "ref.path";
+                }
+                else if (objRefValue?.Type == JTokenType.String)
+                {
+                    // Phase 4: GUID shorthand - allow plain string value
+                    string strVal = objRefValue.ToString();
+                    
+                    // Check if it's a GUID (32 hex characters, no dashes)
+                    if (Regex.IsMatch(strVal, @"^[0-9a-fA-F]{32}$"))
+                    {
+                        string guidPath = AssetDatabase.GUIDToAssetPath(strVal);
+                        if (!string.IsNullOrEmpty(guidPath))
+                        {
+                            newRef = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(guidPath);
+                            resolveMethod = "guid-shorthand";
+                        }
+                    }
+                    // Check if it looks like an asset path
+                    else if (strVal.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || 
+                             strVal.Contains("/"))
+                    {
+                        string sanitizedPath = AssetPathUtility.SanitizeAssetPath(strVal);
+                        newRef = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(sanitizedPath);
+                        resolveMethod = "path-shorthand";
                     }
                 }
 
@@ -443,7 +760,8 @@ namespace MCPForUnity.Editor.Tools
                     changed = true;
                 }
 
-                return new { propertyPath, op = "set", ok = true, resolvedPropertyType = prop.propertyType.ToString(), message = newRef == null ? "Cleared reference." : "Set reference." };
+                string refMessage = newRef == null ? "Cleared reference." : $"Set reference ({resolveMethod}).";
+                return new { propertyPath, op = "set", ok = true, resolvedPropertyType = prop.propertyType.ToString(), message = refMessage };
             }
 
             var valueToken = patchObj["value"];
@@ -459,46 +777,238 @@ namespace MCPForUnity.Editor.Tools
 
         private static bool TrySetValue(SerializedProperty prop, JToken valueToken, out string message)
         {
+            return TrySetValueRecursive(prop, valueToken, out message, 0);
+        }
+
+        /// <summary>
+        /// Recursively sets values on SerializedProperties, supporting bulk array and object mapping.
+        /// </summary>
+        /// <param name="prop">The property to set</param>
+        /// <param name="valueToken">The JSON value</param>
+        /// <param name="message">Output message describing the result</param>
+        /// <param name="depth">Current recursion depth (for safety limits)</param>
+        private static bool TrySetValueRecursive(SerializedProperty prop, JToken valueToken, out string message, int depth)
+        {
             message = null;
+            const int MaxRecursionDepth = 20;
+
+            if (depth > MaxRecursionDepth)
+            {
+                message = $"Maximum recursion depth ({MaxRecursionDepth}) exceeded. Check for circular references.";
+                return false;
+            }
+
             try
             {
+                // Phase 3.1: Handle bulk array mapping - JArray value for array/list properties
+                if (prop.isArray && prop.propertyType != SerializedPropertyType.String && valueToken is JArray jArray)
+                {
+                    // Resize the array to match the JSON array
+                    prop.arraySize = jArray.Count;
+                    
+                    // Get the SerializedObject and apply so we can access elements
+                    var so = prop.serializedObject;
+                    so.ApplyModifiedProperties();
+                    so.Update();
+
+                    int successCount = 0;
+                    var errors = new List<string>();
+
+                    for (int i = 0; i < jArray.Count; i++)
+                    {
+                        var elementProp = prop.GetArrayElementAtIndex(i);
+                        if (elementProp == null)
+                        {
+                            errors.Add($"Could not get element at index {i}");
+                            continue;
+                        }
+
+                        if (TrySetValueRecursive(elementProp, jArray[i], out string elemMessage, depth + 1))
+                        {
+                            successCount++;
+                        }
+                        else
+                        {
+                            errors.Add($"[{i}]: {elemMessage}");
+                        }
+                    }
+
+                    so.ApplyModifiedProperties();
+
+                    if (errors.Count > 0)
+                    {
+                        message = $"Set {successCount}/{jArray.Count} elements. Errors: {string.Join("; ", errors)}";
+                        return successCount > 0; // Partial success
+                    }
+
+                    message = $"Set array with {jArray.Count} elements.";
+                    return true;
+                }
+
+                // Phase 3.2: Handle bulk object mapping - JObject value for Generic (struct/class) properties
+                if (prop.propertyType == SerializedPropertyType.Generic && !prop.isArray && valueToken is JObject jObj)
+                {
+                    int successCount = 0;
+                    var errors = new List<string>();
+                    var so = prop.serializedObject;
+
+                    foreach (var kvp in jObj)
+                    {
+                        string childPath = prop.propertyPath + "." + kvp.Key;
+                        var childProp = so.FindProperty(childPath);
+
+                        if (childProp == null)
+                        {
+                            errors.Add($"Property not found: {kvp.Key}");
+                            continue;
+                        }
+
+                        if (TrySetValueRecursive(childProp, kvp.Value, out string childMessage, depth + 1))
+                        {
+                            successCount++;
+                        }
+                        else
+                        {
+                            errors.Add($"{kvp.Key}: {childMessage}");
+                        }
+                    }
+
+                    so.ApplyModifiedProperties();
+
+                    if (errors.Count > 0)
+                    {
+                        message = $"Set {successCount}/{jObj.Count} fields. Errors: {string.Join("; ", errors)}";
+                        return successCount > 0; // Partial success
+                    }
+
+                    message = $"Set struct/class with {jObj.Count} fields.";
+                    return true;
+                }
+
                 // Supported Types: Integer, Boolean, Float, String, Enum, Vector2, Vector3, Vector4, Color
+                // Using shared helpers from ParamCoercion and VectorParsing
                 switch (prop.propertyType)
                 {
                     case SerializedPropertyType.Integer:
-                        if (!TryGetInt(valueToken, out var intVal)) { message = "Expected integer value."; return false; }
-                        prop.intValue = intVal; message = "Set int."; return true;
+                        // Use ParamCoercion for robust int parsing
+                        int intVal = ParamCoercion.CoerceInt(valueToken, int.MinValue);
+                        if (intVal == int.MinValue && valueToken?.Type != JTokenType.Integer)
+                        {
+                            // Double-check: if it's actually int.MinValue or failed to parse
+                            if (valueToken == null || valueToken.Type == JTokenType.Null ||
+                                (valueToken.Type == JTokenType.String && !int.TryParse(valueToken.ToString(), out _)))
+                            {
+                                message = "Expected integer value.";
+                                return false;
+                            }
+                        }
+                        prop.intValue = intVal;
+                        message = "Set int.";
+                        return true;
 
                     case SerializedPropertyType.Boolean:
-                        if (!TryGetBool(valueToken, out var boolVal)) { message = "Expected boolean value."; return false; }
-                        prop.boolValue = boolVal; message = "Set bool."; return true;
+                        // Use ParamCoercion for robust bool parsing (handles "true", "1", "yes", etc.)
+                        if (valueToken == null || valueToken.Type == JTokenType.Null)
+                        {
+                            message = "Expected boolean value.";
+                            return false;
+                        }
+                        bool boolVal = ParamCoercion.CoerceBool(valueToken, false);
+                        // Verify it actually looked like a bool
+                        if (valueToken.Type != JTokenType.Boolean)
+                        {
+                            string strVal = valueToken.ToString().Trim().ToLowerInvariant();
+                            if (strVal != "true" && strVal != "false" && strVal != "1" && strVal != "0" &&
+                                strVal != "yes" && strVal != "no" && strVal != "on" && strVal != "off")
+                            {
+                                message = "Expected boolean value.";
+                                return false;
+                            }
+                        }
+                        prop.boolValue = boolVal;
+                        message = "Set bool.";
+                        return true;
 
                     case SerializedPropertyType.Float:
-                        if (!TryGetFloat(valueToken, out var floatVal)) { message = "Expected float value."; return false; }
-                        prop.floatValue = floatVal; message = "Set float."; return true;
+                        // Use ParamCoercion for robust float parsing
+                        float floatVal = ParamCoercion.CoerceFloat(valueToken, float.NaN);
+                        if (float.IsNaN(floatVal))
+                        {
+                            message = "Expected float value.";
+                            return false;
+                        }
+                        prop.floatValue = floatVal;
+                        message = "Set float.";
+                        return true;
 
                     case SerializedPropertyType.String:
                         prop.stringValue = valueToken.Type == JTokenType.Null ? null : valueToken.ToString();
-                        message = "Set string."; return true;
+                        message = "Set string.";
+                        return true;
 
                     case SerializedPropertyType.Enum:
                         return TrySetEnum(prop, valueToken, out message);
 
                     case SerializedPropertyType.Vector2:
-                        if (!TryGetVector2(valueToken, out var v2)) { message = "Expected Vector2 (array or object)."; return false; }
-                        prop.vector2Value = v2; message = "Set Vector2."; return true;
+                        // Use VectorParsing for Vector2
+                        var v2 = VectorParsing.ParseVector2(valueToken);
+                        if (v2 == null)
+                        {
+                            message = "Expected Vector2 (array or object).";
+                            return false;
+                        }
+                        prop.vector2Value = v2.Value;
+                        message = "Set Vector2.";
+                        return true;
 
                     case SerializedPropertyType.Vector3:
-                        if (!TryGetVector3(valueToken, out var v3)) { message = "Expected Vector3 (array or object)."; return false; }
-                        prop.vector3Value = v3; message = "Set Vector3."; return true;
+                        // Use VectorParsing for Vector3
+                        var v3 = VectorParsing.ParseVector3(valueToken);
+                        if (v3 == null)
+                        {
+                            message = "Expected Vector3 (array or object).";
+                            return false;
+                        }
+                        prop.vector3Value = v3.Value;
+                        message = "Set Vector3.";
+                        return true;
 
                     case SerializedPropertyType.Vector4:
-                        if (!TryGetVector4(valueToken, out var v4)) { message = "Expected Vector4 (array or object)."; return false; }
-                        prop.vector4Value = v4; message = "Set Vector4."; return true;
+                        // Use VectorParsing for Vector4
+                        var v4 = VectorParsing.ParseVector4(valueToken);
+                        if (v4 == null)
+                        {
+                            message = "Expected Vector4 (array or object).";
+                            return false;
+                        }
+                        prop.vector4Value = v4.Value;
+                        message = "Set Vector4.";
+                        return true;
 
                     case SerializedPropertyType.Color:
-                        if (!TryGetColor(valueToken, out var col)) { message = "Expected Color (array or object)."; return false; }
-                        prop.colorValue = col; message = "Set Color."; return true;
+                        // Use VectorParsing for Color
+                        var col = VectorParsing.ParseColor(valueToken);
+                        if (col == null)
+                        {
+                            message = "Expected Color (array or object).";
+                            return false;
+                        }
+                        prop.colorValue = col.Value;
+                        message = "Set Color.";
+                        return true;
+
+                    case SerializedPropertyType.Generic:
+                        // Generic properties (structs/classes) should be handled above with JObject mapping
+                        // If we get here, the value wasn't a JObject
+                        if (prop.isArray)
+                        {
+                            message = $"Expected array (JArray) for array property, got {valueToken?.Type.ToString() ?? "null"}.";
+                        }
+                        else
+                        {
+                            message = $"Expected object (JObject) for struct/class property, got {valueToken?.Type.ToString() ?? "null"}.";
+                        }
+                        return false;
 
                     default:
                         message = $"Unsupported SerializedPropertyType: {prop.propertyType}";
@@ -721,159 +1231,8 @@ namespace MCPForUnity.Editor.Tools
             return true;
         }
 
-        private static bool TryGetInt(JToken token, out int value)
-        {
-            value = default;
-            if (token == null || token.Type == JTokenType.Null) return false;
-            try
-            {
-                if (token.Type == JTokenType.Integer) { value = token.Value<int>(); return true; }
-                if (token.Type == JTokenType.Float) { value = Convert.ToInt32(token.Value<double>()); return true; }
-                var s = token.ToString().Trim();
-                return int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
-            }
-            catch { return false; }
-        }
-
-        private static bool TryGetFloat(JToken token, out float value)
-        {
-            value = default;
-            if (token == null || token.Type == JTokenType.Null) return false;
-            try
-            {
-                if (token.Type == JTokenType.Float || token.Type == JTokenType.Integer) { value = token.Value<float>(); return true; }
-                var s = token.ToString().Trim();
-                return float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
-            }
-            catch { return false; }
-        }
-
-        private static bool TryGetBool(JToken token, out bool value)
-        {
-            value = default;
-            if (token == null || token.Type == JTokenType.Null) return false;
-            try
-            {
-                if (token.Type == JTokenType.Boolean) { value = token.Value<bool>(); return true; }
-                var s = token.ToString().Trim();
-                return bool.TryParse(s, out value);
-            }
-            catch { return false; }
-        }
-
-        // --- Vector/Color Parsing Helpers ---
-
-        private static bool TryGetVector2(JToken token, out Vector2 value)
-        {
-            value = default;
-            if (token == null || token.Type == JTokenType.Null) return false;
-
-            // Handle [x, y]
-            if (token is JArray arr && arr.Count >= 2)
-            {
-                if (TryGetFloat(arr[0], out float x) && TryGetFloat(arr[1], out float y))
-                {
-                    value = new Vector2(x, y);
-                    return true;
-                }
-            }
-            // Handle { "x": ..., "y": ... }
-            if (token is JObject obj)
-            {
-                if (TryGetFloat(obj["x"], out float x) && TryGetFloat(obj["y"], out float y))
-                {
-                    value = new Vector2(x, y);
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        private static bool TryGetVector3(JToken token, out Vector3 value)
-        {
-            value = default;
-            if (token == null || token.Type == JTokenType.Null) return false;
-
-            // Handle [x, y, z]
-            if (token is JArray arr && arr.Count >= 3)
-            {
-                if (TryGetFloat(arr[0], out float x) && TryGetFloat(arr[1], out float y) && TryGetFloat(arr[2], out float z))
-                {
-                    value = new Vector3(x, y, z);
-                    return true;
-                }
-            }
-            // Handle { "x": ..., "y": ..., "z": ... }
-            if (token is JObject obj)
-            {
-                if (TryGetFloat(obj["x"], out float x) && TryGetFloat(obj["y"], out float y) && TryGetFloat(obj["z"], out float z))
-                {
-                    value = new Vector3(x, y, z);
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        private static bool TryGetVector4(JToken token, out Vector4 value)
-        {
-            value = default;
-            if (token == null || token.Type == JTokenType.Null) return false;
-
-            // Handle [x, y, z, w]
-            if (token is JArray arr && arr.Count >= 4)
-            {
-                if (TryGetFloat(arr[0], out float x) && TryGetFloat(arr[1], out float y) 
-                    && TryGetFloat(arr[2], out float z) && TryGetFloat(arr[3], out float w))
-                {
-                    value = new Vector4(x, y, z, w);
-                    return true;
-                }
-            }
-            // Handle { "x": ..., "y": ..., "z": ..., "w": ... }
-            if (token is JObject obj)
-            {
-                if (TryGetFloat(obj["x"], out float x) && TryGetFloat(obj["y"], out float y) 
-                    && TryGetFloat(obj["z"], out float z) && TryGetFloat(obj["w"], out float w))
-                {
-                    value = new Vector4(x, y, z, w);
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        private static bool TryGetColor(JToken token, out Color value)
-        {
-            value = default;
-            if (token == null || token.Type == JTokenType.Null) return false;
-
-            // Handle [r, g, b, a]
-            if (token is JArray arr && arr.Count >= 3)
-            {
-                float r = 0, g = 0, b = 0, a = 1;
-                bool ok = TryGetFloat(arr[0], out r) && TryGetFloat(arr[1], out g) && TryGetFloat(arr[2], out b);
-                if (arr.Count > 3) TryGetFloat(arr[3], out a);
-                if (ok)
-                {
-                    value = new Color(r, g, b, a);
-                    return true;
-                }
-            }
-            // Handle { "r": ..., "g": ..., "b": ..., "a": ... }
-            if (token is JObject obj)
-            {
-                if (TryGetFloat(obj["r"], out float r) && TryGetFloat(obj["g"], out float g) && TryGetFloat(obj["b"], out float b))
-                {
-                    // Alpha is optional, defaults to 1.0
-                    float a = 1.0f;
-                    TryGetFloat(obj["a"], out a); 
-                    value = new Color(r, g, b, a);
-                    return true;
-                }
-            }
-            return false;
-        }
+        // NOTE: Local TryGet* helpers have been removed. 
+        // Using shared helpers instead: ParamCoercion (for int/float/bool) and VectorParsing (for Vector2/3/4, Color)
 
         private static string NormalizeAction(string raw)
         {

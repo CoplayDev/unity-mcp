@@ -41,6 +41,8 @@ async def manage_scriptable_object(
     target: Annotated[dict[str, Any] | str | None, "Target asset reference {guid|path} (for modify)."] = None,
     # --- shared ---
     patches: Annotated[list[dict[str, Any]] | str | None, "Patch list (or JSON string) to apply."] = None,
+    # --- validation ---
+    dry_run: Annotated[bool | str | None, "If true, validate patches without applying (modify only)."] = None,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
 
@@ -62,6 +64,7 @@ async def manage_scriptable_object(
         "overwrite": coerce_bool(overwrite, default=None),
         "target": parsed_target,
         "patches": parsed_patches,
+        "dryRun": coerce_bool(dry_run, default=None),
     }
 
     # Remove None values to keep Unity handler simpler
