@@ -45,6 +45,9 @@ class PluginHub(WebSocketEndpoint):
     KEEP_ALIVE_INTERVAL = 15
     SERVER_TIMEOUT = 30
     COMMAND_TIMEOUT = 30
+    # Timeout (seconds) for fast-fail commands like ping/read_console/get_editor_state.
+    # Keep short so MCP clients aren't blocked during Unity compilation/reload/unfocused throttling.
+    FAST_FAIL_TIMEOUT = 2.0
     # Fast-path commands should never block the client for long; return a retry hint instead.
     # This helps avoid the Cursor-side ~30s tool-call timeout when Unity is compiling/reloading
     # or is throttled while unfocused.
