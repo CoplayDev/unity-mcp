@@ -5,6 +5,7 @@ from typing import Annotated, Any, Literal
 
 from fastmcp import Context
 from mcp.types import ToolAnnotations
+from pydantic import BaseModel
 
 from models import MCPResponse
 from services.registry import mcp_for_unity_tool
@@ -12,6 +13,78 @@ from services.tools import get_unity_instance_from_context
 from services.tools.preflight import preflight
 import transport.unity_transport as unity_transport
 from transport.legacy.unity_connection import async_send_command_with_retry
+
+
+class RunTestsSummary(BaseModel):
+    total: int
+    passed: int
+    failed: int
+    skipped: int
+    durationSeconds: float
+    resultState: str
+
+
+class RunTestsTestResult(BaseModel):
+    name: str
+    fullName: str
+    state: str
+    durationSeconds: float
+    message: str | None = None
+    stackTrace: str | None = None
+    output: str | None = None
+
+
+class RunTestsResult(BaseModel):
+    mode: str
+    summary: RunTestsSummary
+    results: list[RunTestsTestResult] | None = None
+
+
+class RunTestsStartData(BaseModel):
+    job_id: str
+    status: str
+    mode: str
+    include_details: bool | None = None
+    include_failed_tests: bool | None = None
+
+
+class RunTestsStartResponse(MCPResponse):
+    data: RunTestsStartData | None = None
+
+
+class TestJobFailure(BaseModel):
+    full_name: str | None = None
+    message: str | None = None
+
+
+class TestJobProgress(BaseModel):
+    completed: int | None = None
+    total: int | None = None
+    current_test_full_name: str | None = None
+    current_test_started_unix_ms: int | None = None
+    last_finished_test_full_name: str | None = None
+    last_finished_unix_ms: int | None = None
+    stuck_suspected: bool | None = None
+    editor_is_focused: bool | None = None
+    blocked_reason: str | None = None
+    failures_so_far: list[TestJobFailure] | None = None
+    failures_capped: bool | None = None
+
+
+class GetTestJobData(BaseModel):
+    job_id: str
+    status: str
+    mode: str | None = None
+    started_unix_ms: int | None = None
+    finished_unix_ms: int | None = None
+    last_update_unix_ms: int | None = None
+    progress: TestJobProgress | None = None
+    error: str | None = None
+    result: RunTestsResult | None = None
+
+
+class GetTestJobResponse(MCPResponse):
+    data: GetTestJobData | None = None
 
 
 @mcp_for_unity_tool(
@@ -37,7 +110,7 @@ async def run_tests(
                                     "Include details for failed/skipped tests only (default: false)"] = False,
     include_details: Annotated[bool,
                                "Include details for all tests (default: false)"] = False,
-) -> dict[str, Any] | MCPResponse:
+) -> RunTestsStartResponse | MCPResponse:
     unity_instance = get_unity_instance_from_context(ctx)
 
     gate = await preflight(ctx, requires_no_tests=True, wait_for_no_compile=True, refresh_if_dirty=True)
@@ -75,9 +148,11 @@ async def run_tests(
         params,
     )
 
-    if isinstance(response, dict) and not response.get("success", True):
-        return MCPResponse(**response)
-    return response if isinstance(response, dict) else MCPResponse(success=False, error=str(response)).model_dump()
+    if isinstance(response, dict):
+        if not response.get("success", True):
+            return MCPResponse(**response)
+        return RunTestsStartResponse(**response)
+    return MCPResponse(success=False, error=str(response))
 
 
 @mcp_for_unity_tool(
@@ -94,7 +169,7 @@ async def get_test_job(
                                     "Include details for failed/skipped tests only (default: false)"] = False,
     include_details: Annotated[bool,
                                "Include details for all tests (default: false)"] = False,
-) -> dict[str, Any] | MCPResponse:
+) -> GetTestJobResponse | MCPResponse:
     unity_instance = get_unity_instance_from_context(ctx)
 
     params: dict[str, Any] = {"job_id": job_id}
@@ -109,6 +184,8 @@ async def get_test_job(
         "get_test_job",
         params,
     )
-    if isinstance(response, dict) and not response.get("success", True):
-        return MCPResponse(**response)
-    return response if isinstance(response, dict) else MCPResponse(success=False, error=str(response)).model_dump()
+    if isinstance(response, dict):
+        if not response.get("success", True):
+            return MCPResponse(**response)
+        return GetTestJobResponse(**response)
+    return MCPResponse(success=False, error=str(response))
