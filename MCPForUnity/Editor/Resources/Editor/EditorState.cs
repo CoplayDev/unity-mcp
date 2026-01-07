@@ -1,8 +1,7 @@
 using System;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Services;
 using Newtonsoft.Json.Linq;
-using UnityEditor;
-using UnityEditor.SceneManagement;
 
 namespace MCPForUnity.Editor.Resources.Editor
 {
@@ -16,20 +15,8 @@ namespace MCPForUnity.Editor.Resources.Editor
         {
             try
             {
-                var activeScene = EditorSceneManager.GetActiveScene();
-                var state = new
-                {
-                    isPlaying = EditorApplication.isPlaying,
-                    isPaused = EditorApplication.isPaused,
-                    isCompiling = EditorApplication.isCompiling,
-                    isUpdating = EditorApplication.isUpdating,
-                    timeSinceStartup = EditorApplication.timeSinceStartup,
-                    activeSceneName = activeScene.name ?? "",
-                    selectionCount = UnityEditor.Selection.count,
-                    activeObjectName = UnityEditor.Selection.activeObject?.name
-                };
-
-                return new SuccessResponse("Retrieved editor state.", state);
+                var snapshot = EditorStateCache.GetSnapshot();
+                return new SuccessResponse("Retrieved editor state.", snapshot);
             }
             catch (Exception e)
             {

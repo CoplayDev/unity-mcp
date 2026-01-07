@@ -42,10 +42,10 @@ async def preflight(
     if _in_pytest():
         return None
 
-    # Load canonical v2 state (server enriches advice + staleness).
+    # Load canonical editor state (server enriches advice + staleness).
     try:
-        from services.resources.editor_state_v2 import get_editor_state_v2
-        state_resp = await get_editor_state_v2(ctx)
+        from services.resources.editor_state import get_editor_state
+        state_resp = await get_editor_state(ctx)
         state = state_resp.model_dump() if hasattr(
             state_resp, "model_dump") else state_resp
     except Exception:
@@ -95,8 +95,8 @@ async def preflight(
 
             # Refresh state for the next loop iteration.
             try:
-                from services.resources.editor_state_v2 import get_editor_state_v2
-                state_resp = await get_editor_state_v2(ctx)
+                from services.resources.editor_state import get_editor_state
+                state_resp = await get_editor_state(ctx)
                 state = state_resp.model_dump() if hasattr(
                     state_resp, "model_dump") else state_resp
                 data = state.get("data") if isinstance(state, dict) else None

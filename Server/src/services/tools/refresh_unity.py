@@ -13,6 +13,7 @@ from services.tools import get_unity_instance_from_context
 import transport.unity_transport as unity_transport
 from transport.legacy.unity_connection import async_send_command_with_retry, _extract_response_reason
 from services.state.external_changes_scanner import external_changes_scanner
+from services.resources.editor_state import get_editor_state, _infer_single_instance_id
 
 
 @mcp_for_unity_tool(
@@ -64,14 +65,13 @@ async def refresh_unity(
             recovered_from_disconnect = True
 
     # Optional server-side wait loop (defensive): if Unity tool doesn't wait or returns quickly,
-    # poll the canonical editor_state v2 resource until ready or timeout.
+    # poll the canonical editor_state resource until ready or timeout.
     if wait_for_ready:
         timeout_s = 60.0
         start = time.monotonic()
-        from services.resources.editor_state_v2 import get_editor_state_v2
 
         while time.monotonic() - start < timeout_s:
-            state_resp = await get_editor_state_v2(ctx)
+            state_resp = await get_editor_state(ctx)
             state = state_resp.model_dump() if hasattr(
                 state_resp, "model_dump") else state_resp
             data = (state or {}).get("data") if isinstance(
@@ -84,8 +84,6 @@ async def refresh_unity(
 
     # After readiness is restored, clear any external-dirty flag for this instance so future tools can proceed cleanly.
     try:
-        from services.resources.editor_state_v2 import _infer_single_instance_id
-
         inst = unity_instance or await _infer_single_instance_id(ctx)
         if inst:
             external_changes_scanner.clear_dirty(inst)
