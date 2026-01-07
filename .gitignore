@@ -44,10 +44,14 @@ TestProjects/UnityMCPTests/Assets/Temp/
 .wt-origin-main/
 
 # CI test reports (generated during test runs)
-reports/
+reports/*.xml
+reports/*.log
+reports/*.md
+reports/_snapshots/
+reports/_staging/
 
-# Local Claude configs (not for repo)
+# Local Claude configs (generated at runtime)
 .claude/local/
 
-# Local testing harness
-scripts/local-test/
+# Unity MCP status files (runtime)
+.unity-mcp/

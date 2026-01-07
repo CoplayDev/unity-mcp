@@ -1,0 +1,7 @@
+# Local testing artifacts - can keep these out of git
+*.log
+.DS_Store
+
+# You can optionally keep these files out too:
+# README.md
+# *.sh
