@@ -210,7 +210,10 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                             }
                         }
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        McpLog.Warn($"[GameObjectModify] Error aggregating component errors: {ex.Message}");
+                    }
                 }
 
                 return new ErrorResponse(

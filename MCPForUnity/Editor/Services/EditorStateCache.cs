@@ -164,6 +164,12 @@ namespace MCPForUnity.Editor.Services
             [JsonProperty("external_changes_last_seen_unix_ms")]
             public long? ExternalChangesLastSeenUnixMs { get; set; }
 
+            [JsonProperty("external_changes_dirty_since_unix_ms")]
+            public long? ExternalChangesDirtySinceUnixMs { get; set; }
+
+            [JsonProperty("external_changes_last_cleared_unix_ms")]
+            public long? ExternalChangesLastClearedUnixMs { get; set; }
+
             [JsonProperty("refresh")]
             public EditorStateV2Refresh Refresh { get; set; }
         }
@@ -374,6 +380,8 @@ namespace MCPForUnity.Editor.Services
                     IsUpdating = EditorApplication.isUpdating,
                     ExternalChangesDirty = false,
                     ExternalChangesLastSeenUnixMs = null,
+                    ExternalChangesDirtySinceUnixMs = null,
+                    ExternalChangesLastClearedUnixMs = null,
                     Refresh = new EditorStateV2Refresh
                     {
                         IsRefreshInProgress = false,

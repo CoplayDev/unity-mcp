@@ -51,6 +51,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 case "pause": ps.Pause(withChildren); break;
                 case "restart": ps.Stop(withChildren, ParticleSystemStopBehavior.StopEmittingAndClear); ps.Play(withChildren); break;
                 case "clear": ps.Clear(withChildren); break;
+                default: return new { success = false, message = $"Unknown action: {action}" };
             }
 
             return new { success = true, message = $"ParticleSystem {action}" };
