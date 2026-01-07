@@ -226,14 +226,14 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
-        /// Parses a JToken into a Color, returning a default value if parsing fails.
-        /// Added for ManageVFX refactoring.
+        /// Parses a JToken into a Color, returning Color.white if parsing fails and no default is specified.
         /// </summary>
-        public static Color ParseColorOrDefault(JToken token, Color defaultValue = default)
-        {
-            if (defaultValue == default) defaultValue = Color.black;
-            return ParseColor(token) ?? defaultValue;
-        }
+        public static Color ParseColorOrDefault(JToken token) => ParseColor(token) ?? Color.white;
+        
+        /// <summary>
+        /// Parses a JToken into a Color, returning the specified default if parsing fails.
+        /// </summary>
+        public static Color ParseColorOrDefault(JToken token, Color defaultValue) => ParseColor(token) ?? defaultValue;
 
 
         /// <summary>
