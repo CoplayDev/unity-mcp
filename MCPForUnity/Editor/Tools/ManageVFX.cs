@@ -8,7 +8,7 @@ using MCPForUnity.Editor.Helpers;
 using UnityEngine;
 using UnityEditor;
 
-#if UNITY_VFX_GRAPH
+#if UNITY_VFX_GRAPH //Please enable the symbol in the project settings for VisualEffectGraph to work
 using UnityEngine.VFX;
 #endif
 
@@ -77,332 +77,19 @@ namespace MCPForUnity.Editor.Tools
 
         #region Common Helpers
 
-        private static Color ParseColor(JToken token)
-        {
-            if (token == null) return Color.white;
+        // Parsing delegates for use with RendererHelpers
+        private static Color ParseColor(JToken token) => VectorParsing.ParseColorOrDefault(token);
+        private static Vector3 ParseVector3(JToken token) => VectorParsing.ParseVector3OrDefault(token);
+        private static Vector4 ParseVector4(JToken token) => VectorParsing.ParseVector4OrDefault(token);
+        private static Gradient ParseGradient(JToken token) => VectorParsing.ParseGradientOrDefault(token);
+        private static AnimationCurve ParseAnimationCurve(JToken token, float defaultValue = 1f) 
+            => VectorParsing.ParseAnimationCurveOrDefault(token, defaultValue);
 
-            if (token is JArray arr)
-            {
-                float r = arr.Count > 0 ? arr[0].ToObject<float>() : 1f;
-                float g = arr.Count > 1 ? arr[1].ToObject<float>() : 1f;
-                float b = arr.Count > 2 ? arr[2].ToObject<float>() : 1f;
-                float a = arr.Count > 3 ? arr[3].ToObject<float>() : 1f;
-                return new Color(r, g, b, a);
-            }
-
-            if (token is JObject obj)
-            {
-                float r = obj["r"]?.ToObject<float>() ?? 1f;
-                float g = obj["g"]?.ToObject<float>() ?? 1f;
-                float b = obj["b"]?.ToObject<float>() ?? 1f;
-                float a = obj["a"]?.ToObject<float>() ?? 1f;
-                return new Color(r, g, b, a);
-            }
-
-            return Color.white;
-        }
-
-        private static Vector3 ParseVector3(JToken token)
-        {
-            if (token == null) return Vector3.zero;
-
-            if (token is JArray arr)
-            {
-                float x = arr.Count > 0 ? arr[0].ToObject<float>() : 0f;
-                float y = arr.Count > 1 ? arr[1].ToObject<float>() : 0f;
-                float z = arr.Count > 2 ? arr[2].ToObject<float>() : 0f;
-                return new Vector3(x, y, z);
-            }
-
-            if (token is JObject obj)
-            {
-                float x = obj["x"]?.ToObject<float>() ?? 0f;
-                float y = obj["y"]?.ToObject<float>() ?? 0f;
-                float z = obj["z"]?.ToObject<float>() ?? 0f;
-                return new Vector3(x, y, z);
-            }
-
-            return Vector3.zero;
-        }
-
-        private static Vector4 ParseVector4(JToken token)
-        {
-            if (token == null) return Vector4.zero;
-
-            if (token is JArray arr)
-            {
-                float x = arr.Count > 0 ? arr[0].ToObject<float>() : 0f;
-                float y = arr.Count > 1 ? arr[1].ToObject<float>() : 0f;
-                float z = arr.Count > 2 ? arr[2].ToObject<float>() : 0f;
-                float w = arr.Count > 3 ? arr[3].ToObject<float>() : 0f;
-                return new Vector4(x, y, z, w);
-            }
-
-            if (token is JObject obj)
-            {
-                float x = obj["x"]?.ToObject<float>() ?? 0f;
-                float y = obj["y"]?.ToObject<float>() ?? 0f;
-                float z = obj["z"]?.ToObject<float>() ?? 0f;
-                float w = obj["w"]?.ToObject<float>() ?? 0f;
-                return new Vector4(x, y, z, w);
-            }
-
-            return Vector4.zero;
-        }
-
-        private static Gradient ParseGradient(JToken token)
-        {
-            Gradient gradient = new Gradient();
-
-            if (token == null)
-            {
-                gradient.SetKeys(
-                    new GradientColorKey[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
-                    new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 1f) }
-                );
-                return gradient;
-            }
-
-            if (token is JObject obj && obj["startColor"] != null)
-            {
-                Color startColor = ParseColor(obj["startColor"]);
-                Color endColor = ParseColor(obj["endColor"] ?? obj["startColor"]);
-                float startAlpha = obj["startAlpha"]?.ToObject<float>() ?? startColor.a;
-                float endAlpha = obj["endAlpha"]?.ToObject<float>() ?? endColor.a;
-                
-                gradient.SetKeys(
-                    new GradientColorKey[] { new GradientColorKey(startColor, 0f), new GradientColorKey(endColor, 1f) },
-                    new GradientAlphaKey[] { new GradientAlphaKey(startAlpha, 0f), new GradientAlphaKey(endAlpha, 1f) }
-                );
-                return gradient;
-            }
-
-            if (token is JObject gradObj)
-            {
-                var colorKeys = new List<GradientColorKey>();
-                var alphaKeys = new List<GradientAlphaKey>();
-
-                if (gradObj["colorKeys"] is JArray colorKeysArr)
-                {
-                    foreach (var key in colorKeysArr)
-                    {
-                        Color color = ParseColor(key["color"]);
-                        float time = key["time"]?.ToObject<float>() ?? 0f;
-                        colorKeys.Add(new GradientColorKey(color, time));
-                    }
-                }
-
-                if (gradObj["alphaKeys"] is JArray alphaKeysArr)
-                {
-                    foreach (var key in alphaKeysArr)
-                    {
-                        float alpha = key["alpha"]?.ToObject<float>() ?? 1f;
-                        float time = key["time"]?.ToObject<float>() ?? 0f;
-                        alphaKeys.Add(new GradientAlphaKey(alpha, time));
-                    }
-                }
-
-                if (colorKeys.Count == 0)
-                {
-                    colorKeys.Add(new GradientColorKey(Color.white, 0f));
-                    colorKeys.Add(new GradientColorKey(Color.white, 1f));
-                }
-
-                if (alphaKeys.Count == 0)
-                {
-                    alphaKeys.Add(new GradientAlphaKey(1f, 0f));
-                    alphaKeys.Add(new GradientAlphaKey(1f, 1f));
-                }
-
-                gradient.SetKeys(colorKeys.ToArray(), alphaKeys.ToArray());
-            }
-
-            return gradient;
-        }
-
-        private static AnimationCurve ParseAnimationCurve(JToken token, float defaultValue = 1f)
-        {
-            if (token == null)
-                return AnimationCurve.Constant(0f, 1f, defaultValue);
-
-            if (token.Type == JTokenType.Float || token.Type == JTokenType.Integer)
-            {
-                return AnimationCurve.Constant(0f, 1f, token.ToObject<float>());
-            }
-
-            if (token is JObject obj)
-            {
-                if (obj["keys"] is JArray keys)
-                {
-                    AnimationCurve curve = new AnimationCurve();
-                    foreach (var key in keys)
-                    {
-                        float time = key["time"]?.ToObject<float>() ?? 0f;
-                        float value = key["value"]?.ToObject<float>() ?? defaultValue;
-                        float inTangent = key["inTangent"]?.ToObject<float>() ?? 0f;
-                        float outTangent = key["outTangent"]?.ToObject<float>() ?? 0f;
-                        curve.AddKey(new Keyframe(time, value, inTangent, outTangent));
-                    }
-                    return curve;
-                }
-                else
-                {
-                    float startValue = obj["start"]?.ToObject<float>() ?? obj["startValue"]?.ToObject<float>() ?? defaultValue;
-                    float endValue = obj["end"]?.ToObject<float>() ?? obj["endValue"]?.ToObject<float>() ?? defaultValue;
-                    AnimationCurve curve = new AnimationCurve();
-                    curve.AddKey(0f, startValue);
-                    curve.AddKey(1f, endValue);
-                    return curve;
-                }
-            }
-
-            return AnimationCurve.Constant(0f, 1f, defaultValue);
-        }
-
-        private static GameObject FindTargetGameObject(JObject @params)
-        {
-            string target = @params["target"]?.ToString();
-            string searchMethod = @params["searchMethod"]?.ToString();
-
-            if (string.IsNullOrEmpty(target))
-            {
-                return null;
-            }
-
-            var instruction = new JObject { ["find"] = target };
-            if (!string.IsNullOrEmpty(searchMethod))
-            {
-                instruction["method"] = searchMethod;
-            }
-
-            return ManageGameObject.FindObjectByInstruction(instruction, typeof(GameObject)) as GameObject;
-        }
-
-        /// <summary>
-        /// Applies common Renderer properties (shadows, lighting, probes, sorting, rendering layer).
-        /// Used by ParticleSetRenderer, LineSetProperties, TrailSetProperties.
-        /// </summary>
-        private static void ApplyCommonRendererProperties(Renderer renderer, JObject @params, List<string> changes)
-        {
-            // Shadows
-            if (@params["shadowCastingMode"] != null && Enum.TryParse<UnityEngine.Rendering.ShadowCastingMode>(@params["shadowCastingMode"].ToString(), true, out var shadowMode)) 
-            { renderer.shadowCastingMode = shadowMode; changes.Add("shadowCastingMode"); }
-            if (@params["receiveShadows"] != null) { renderer.receiveShadows = @params["receiveShadows"].ToObject<bool>(); changes.Add("receiveShadows"); }
-            if (@params["shadowBias"] != null) { renderer.shadowBias = @params["shadowBias"].ToObject<float>(); changes.Add("shadowBias"); }
-            
-            // Lighting and probes
-            if (@params["lightProbeUsage"] != null && Enum.TryParse<UnityEngine.Rendering.LightProbeUsage>(@params["lightProbeUsage"].ToString(), true, out var probeUsage)) 
-            { renderer.lightProbeUsage = probeUsage; changes.Add("lightProbeUsage"); }
-            if (@params["reflectionProbeUsage"] != null && Enum.TryParse<UnityEngine.Rendering.ReflectionProbeUsage>(@params["reflectionProbeUsage"].ToString(), true, out var reflectionUsage)) 
-            { renderer.reflectionProbeUsage = reflectionUsage; changes.Add("reflectionProbeUsage"); }
-            
-            // Motion vectors
-            if (@params["motionVectorGenerationMode"] != null && Enum.TryParse<MotionVectorGenerationMode>(@params["motionVectorGenerationMode"].ToString(), true, out var motionMode)) 
-            { renderer.motionVectorGenerationMode = motionMode; changes.Add("motionVectorGenerationMode"); }
-            
-            // Sorting
-            if (@params["sortingOrder"] != null) { renderer.sortingOrder = @params["sortingOrder"].ToObject<int>(); changes.Add("sortingOrder"); }
-            if (@params["sortingLayerName"] != null) { renderer.sortingLayerName = @params["sortingLayerName"].ToString(); changes.Add("sortingLayerName"); }
-            if (@params["sortingLayerID"] != null) { renderer.sortingLayerID = @params["sortingLayerID"].ToObject<int>(); changes.Add("sortingLayerID"); }
-            
-            // Rendering layer mask (for SRP)
-            if (@params["renderingLayerMask"] != null) { renderer.renderingLayerMask = @params["renderingLayerMask"].ToObject<uint>(); changes.Add("renderingLayerMask"); }
-        }
-
-        /// <summary>
-        /// Gets common Renderer properties for GetInfo methods.
-        /// </summary>
-        private static object GetCommonRendererInfo(Renderer renderer)
-        {
-            return new
-            {
-                shadowCastingMode = renderer.shadowCastingMode.ToString(),
-                receiveShadows = renderer.receiveShadows,
-                lightProbeUsage = renderer.lightProbeUsage.ToString(),
-                reflectionProbeUsage = renderer.reflectionProbeUsage.ToString(),
-                sortingOrder = renderer.sortingOrder,
-                sortingLayerName = renderer.sortingLayerName,
-                renderingLayerMask = renderer.renderingLayerMask
-            };
-        }
-
-        /// <summary>
-        /// Sets width properties for LineRenderer or TrailRenderer.
-        /// </summary>
-        private static void ApplyWidthProperties(JObject @params, List<string> changes,
-            Action<float> setStartWidth, Action<float> setEndWidth,
-            Action<AnimationCurve> setWidthCurve, Action<float> setWidthMultiplier)
-        {
-            if (@params["width"] != null) 
-            { 
-                float w = @params["width"].ToObject<float>(); 
-                setStartWidth(w); 
-                setEndWidth(w); 
-                changes.Add("width"); 
-            }
-            if (@params["startWidth"] != null) { setStartWidth(@params["startWidth"].ToObject<float>()); changes.Add("startWidth"); }
-            if (@params["endWidth"] != null) { setEndWidth(@params["endWidth"].ToObject<float>()); changes.Add("endWidth"); }
-            if (@params["widthCurve"] != null) { setWidthCurve(ParseAnimationCurve(@params["widthCurve"], 1f)); changes.Add("widthCurve"); }
-            if (@params["widthMultiplier"] != null) { setWidthMultiplier(@params["widthMultiplier"].ToObject<float>()); changes.Add("widthMultiplier"); }
-        }
-
-        /// <summary>
-        /// Sets color properties for LineRenderer or TrailRenderer.
-        /// </summary>
-        private static void ApplyColorProperties(JObject @params, List<string> changes,
-            Action<Color> setStartColor, Action<Color> setEndColor,
-            Action<Gradient> setGradient, bool fadeEndAlpha = false)
-        {
-            if (@params["color"] != null) 
-            { 
-                Color c = ParseColor(@params["color"]); 
-                setStartColor(c); 
-                setEndColor(fadeEndAlpha ? new Color(c.r, c.g, c.b, 0f) : c); 
-                changes.Add("color"); 
-            }
-            if (@params["startColor"] != null) { setStartColor(ParseColor(@params["startColor"])); changes.Add("startColor"); }
-            if (@params["endColor"] != null) { setEndColor(ParseColor(@params["endColor"])); changes.Add("endColor"); }
-            if (@params["gradient"] != null) { setGradient(ParseGradient(@params["gradient"])); changes.Add("gradient"); }
-        }
-
-        /// <summary>
-        /// Sets material for a Renderer.
-        /// </summary>
-        private static object SetRendererMaterial(Renderer renderer, JObject @params, string undoName)
-        {
-            if (renderer == null) return new { success = false, message = $"{renderer?.GetType().Name ?? "Renderer"} not found" };
-
-            string path = @params["materialPath"]?.ToString();
-            if (string.IsNullOrEmpty(path)) return new { success = false, message = "materialPath required" };
-
-            var findInst = new JObject { ["find"] = path };
-            Material mat = ManageGameObject.FindObjectByInstruction(findInst, typeof(Material)) as Material;
-            if (mat == null) return new { success = false, message = $"Material not found: {path}" };
-
-            Undo.RecordObject(renderer, undoName);
-            renderer.sharedMaterial = mat;
-            EditorUtility.SetDirty(renderer);
-
-            return new { success = true, message = $"Set material to {mat.name}" };
-        }
-
-        /// <summary>
-        /// Applies Line/Trail specific properties (loop, alignment, textureMode, etc.).
-        /// </summary>
-        private static void ApplyLineTrailProperties(JObject @params, List<string> changes,
-            Action<bool> setLoop, Action<bool> setUseWorldSpace,
-            Action<int> setNumCornerVertices, Action<int> setNumCapVertices,
-            Action<LineAlignment> setAlignment, Action<LineTextureMode> setTextureMode,
-            Action<bool> setGenerateLightingData)
-        {
-            if (@params["loop"] != null && setLoop != null) { setLoop(@params["loop"].ToObject<bool>()); changes.Add("loop"); }
-            if (@params["useWorldSpace"] != null && setUseWorldSpace != null) { setUseWorldSpace(@params["useWorldSpace"].ToObject<bool>()); changes.Add("useWorldSpace"); }
-            if (@params["numCornerVertices"] != null) { setNumCornerVertices(@params["numCornerVertices"].ToObject<int>()); changes.Add("numCornerVertices"); }
-            if (@params["numCapVertices"] != null) { setNumCapVertices(@params["numCapVertices"].ToObject<int>()); changes.Add("numCapVertices"); }
-            if (@params["alignment"] != null && Enum.TryParse<LineAlignment>(@params["alignment"].ToString(), true, out var align)) { setAlignment(align); changes.Add("alignment"); }
-            if (@params["textureMode"] != null && Enum.TryParse<LineTextureMode>(@params["textureMode"].ToString(), true, out var texMode)) { setTextureMode(texMode); changes.Add("textureMode"); }
-            if (@params["generateLightingData"] != null) { setGenerateLightingData(@params["generateLightingData"].ToObject<bool>()); changes.Add("generateLightingData"); }
-        }
+        // Object resolution - delegates to ObjectResolver
+        private static GameObject FindTargetGameObject(JObject @params) 
+            => ObjectResolver.ResolveGameObject(@params["target"], @params["searchMethod"]?.ToString());
+        private static Material FindMaterialByPath(string path) 
+            => ObjectResolver.ResolveMaterial(path);
 
         #endregion
 
@@ -770,8 +457,11 @@ namespace MCPForUnity.Editor.Tools
             if (@params["flip"] != null) { renderer.flip = ParseVector3(@params["flip"]); changes.Add("flip"); }
             if (@params["allowRoll"] != null) { renderer.allowRoll = @params["allowRoll"].ToObject<bool>(); changes.Add("allowRoll"); }
             
+            //special case for particle system renderer
+            if (@params["shadowBias"] != null) { renderer.shadowBias = @params["shadowBias"].ToObject<float>(); changes.Add("shadowBias"); }
+            
             // Common Renderer properties (shadows, lighting, probes, sorting)
-            ApplyCommonRendererProperties(renderer, @params, changes);
+            RendererHelpers.ApplyCommonRendererProperties(renderer, @params, changes);
             
             // Material
             if (@params["materialPath"] != null)
@@ -1619,9 +1309,10 @@ namespace MCPForUnity.Editor.Tools
             Undo.RecordObject(lr, "Set Line Width");
             var changes = new List<string>();
 
-            ApplyWidthProperties(@params, changes,
+            RendererHelpers.ApplyWidthProperties(@params, changes,
                 v => lr.startWidth = v, v => lr.endWidth = v,
-                v => lr.widthCurve = v, v => lr.widthMultiplier = v);
+                v => lr.widthCurve = v, v => lr.widthMultiplier = v,
+                ParseAnimationCurve);
 
             EditorUtility.SetDirty(lr);
             return new { success = true, message = $"Updated: {string.Join(", ", changes)}" };
@@ -1635,9 +1326,10 @@ namespace MCPForUnity.Editor.Tools
             Undo.RecordObject(lr, "Set Line Color");
             var changes = new List<string>();
 
-            ApplyColorProperties(@params, changes,
+            RendererHelpers.ApplyColorProperties(@params, changes,
                 v => lr.startColor = v, v => lr.endColor = v,
-                v => lr.colorGradient = v, fadeEndAlpha: false);
+                v => lr.colorGradient = v,
+                ParseColor, ParseGradient, fadeEndAlpha: false);
 
             EditorUtility.SetDirty(lr);
             return new { success = true, message = $"Updated: {string.Join(", ", changes)}" };
@@ -1646,7 +1338,7 @@ namespace MCPForUnity.Editor.Tools
         private static object LineSetMaterial(JObject @params)
         {
             LineRenderer lr = FindLineRenderer(@params);
-            return SetRendererMaterial(lr, @params, "Set Line Material");
+            return RendererHelpers.SetRendererMaterial(lr, @params, "Set Line Material", FindMaterialByPath);
         }
 
         private static object LineSetProperties(JObject @params)
@@ -1658,14 +1350,14 @@ namespace MCPForUnity.Editor.Tools
             var changes = new List<string>();
 
             // Line-specific properties
-            ApplyLineTrailProperties(@params, changes,
+            RendererHelpers.ApplyLineTrailProperties(@params, changes,
                 v => lr.loop = v, v => lr.useWorldSpace = v,
                 v => lr.numCornerVertices = v, v => lr.numCapVertices = v,
                 v => lr.alignment = v, v => lr.textureMode = v,
                 v => lr.generateLightingData = v);
             
             // Common Renderer properties (shadows, lighting, probes, sorting)
-            ApplyCommonRendererProperties(lr, @params, changes);
+            RendererHelpers.ApplyCommonRendererProperties(lr, @params, changes);
 
             EditorUtility.SetDirty(lr);
             return new { success = true, message = $"Updated: {string.Join(", ", changes)}" };
@@ -1892,9 +1584,10 @@ namespace MCPForUnity.Editor.Tools
             Undo.RecordObject(tr, "Set Trail Width");
             var changes = new List<string>();
 
-            ApplyWidthProperties(@params, changes,
+            RendererHelpers.ApplyWidthProperties(@params, changes,
                 v => tr.startWidth = v, v => tr.endWidth = v,
-                v => tr.widthCurve = v, v => tr.widthMultiplier = v);
+                v => tr.widthCurve = v, v => tr.widthMultiplier = v,
+                ParseAnimationCurve);
 
             EditorUtility.SetDirty(tr);
             return new { success = true, message = $"Updated: {string.Join(", ", changes)}" };
@@ -1908,9 +1601,10 @@ namespace MCPForUnity.Editor.Tools
             Undo.RecordObject(tr, "Set Trail Color");
             var changes = new List<string>();
 
-            ApplyColorProperties(@params, changes,
+            RendererHelpers.ApplyColorProperties(@params, changes,
                 v => tr.startColor = v, v => tr.endColor = v,
-                v => tr.colorGradient = v, fadeEndAlpha: true);
+                v => tr.colorGradient = v,
+                ParseColor, ParseGradient, fadeEndAlpha: true);
 
             EditorUtility.SetDirty(tr);
             return new { success = true, message = $"Updated: {string.Join(", ", changes)}" };
@@ -1919,7 +1613,7 @@ namespace MCPForUnity.Editor.Tools
         private static object TrailSetMaterial(JObject @params)
         {
             TrailRenderer tr = FindTrailRenderer(@params);
-            return SetRendererMaterial(tr, @params, "Set Trail Material");
+            return RendererHelpers.SetRendererMaterial(tr, @params, "Set Trail Material", FindMaterialByPath);
         }
 
         private static object TrailSetProperties(JObject @params)
@@ -1936,14 +1630,14 @@ namespace MCPForUnity.Editor.Tools
             if (@params["emitting"] != null) { tr.emitting = @params["emitting"].ToObject<bool>(); changes.Add("emitting"); }
             
             // Shared Line/Trail properties
-            ApplyLineTrailProperties(@params, changes,
+            RendererHelpers.ApplyLineTrailProperties(@params, changes,
                 null, null, // Trail doesn't have loop or useWorldSpace
                 v => tr.numCornerVertices = v, v => tr.numCapVertices = v,
                 v => tr.alignment = v, v => tr.textureMode = v,
                 v => tr.generateLightingData = v);
             
             // Common Renderer properties (shadows, lighting, probes, sorting)
-            ApplyCommonRendererProperties(tr, @params, changes);
+            RendererHelpers.ApplyCommonRendererProperties(tr, @params, changes);
 
             EditorUtility.SetDirty(tr);
             return new { success = true, message = $"Updated: {string.Join(", ", changes)}" };

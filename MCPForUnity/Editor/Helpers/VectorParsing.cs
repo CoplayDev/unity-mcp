@@ -1,13 +1,14 @@
 using System;
+using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 
 namespace MCPForUnity.Editor.Helpers
 {
     /// <summary>
-    /// Utility class for parsing JSON tokens into Unity vector and math types.
+    /// Utility class for parsing JSON tokens into Unity vector, math, and animation types.
     /// Supports both array format [x, y, z] and object format {x: 1, y: 2, z: 3}.
-    /// </summary>
+   /// </summary>
     public static class VectorParsing
     {
         /// <summary>
@@ -222,6 +223,242 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Parses a JToken into a Color, returning a default value if parsing fails.
+        /// Added for ManageVFX refactoring.
+        /// </summary>
+        public static Color ParseColorOrDefault(JToken token, Color defaultValue = default)
+        {
+            if (defaultValue == default) defaultValue = Color.white;
+            return ParseColor(token) ?? defaultValue;
+        }
+
+
+        /// <summary>
+        /// Parses a JToken (array or object) into a Vector4.
+        /// Added for ManageVFX refactoring.
+        /// </summary>
+        /// <param name="token">The JSON token to parse</param>
+        /// <returns>The parsed Vector4 or null if parsing fails</returns>
+        public static Vector4? ParseVector4(JToken token)
+        {
+            if (token == null || token.Type == JTokenType.Null)
+                return null;
+
+            try
+            {
+                // Array format: [x, y, z, w]
+                if (token is JArray array && array.Count >= 4)
+                {
+                    return new Vector4(
+                        array[0].ToObject<float>(),
+                        array[1].ToObject<float>(),
+                        array[2].ToObject<float>(),
+                        array[3].ToObject<float>()
+                    );
+                }
+
+                // Object format: {x: 1, y: 2, z: 3, w: 4}
+                if (token is JObject obj && obj.ContainsKey("x") && obj.ContainsKey("y") && obj.ContainsKey("z") && obj.ContainsKey("w"))
+                {
+                    return new Vector4(
+                        obj["x"].ToObject<float>(),
+                        obj["y"].ToObject<float>(),
+                        obj["z"].ToObject<float>(),
+                        obj["w"].ToObject<float>()
+                    );
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[VectorParsing] Failed to parse Vector4 from '{token}': {ex.Message}");
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Parses a JToken into a Vector4, returning a default value if parsing fails.
+        /// Added for ManageVFX refactoring.
+        /// </summary>
+        public static Vector4 ParseVector4OrDefault(JToken token, Vector4 defaultValue = default)
+        {
+            return ParseVector4(token) ?? defaultValue;
+        }
+
+        /// <summary>
+        /// Parses a JToken into a Gradient.
+        /// Supports formats:
+        /// - Simple: {startColor: [r,g,b,a], endColor: [r,g,b,a]}
+        /// - Full: {colorKeys: [{color: [r,g,b,a], time: 0.0}, ...], alphaKeys: [{alpha: 1.0, time: 0.0}, ...]}
+        /// Added for ManageVFX refactoring.
+        /// </summary>
+        /// <param name="token">The JSON token to parse</param>
+        /// <returns>The parsed Gradient or null if parsing fails</returns>
+        public static Gradient ParseGradient(JToken token)
+        {
+            if (token == null || token.Type == JTokenType.Null)
+                return null;
+
+            try
+            {
+                Gradient gradient = new Gradient();
+
+                if (token is JObject obj)
+                {
+                    // Simple format: {startColor: ..., endColor: ...}
+                    if (obj.ContainsKey("startColor"))
+                    {
+                        Color startColor = ParseColorOrDefault(obj["startColor"]);
+                        Color endColor = ParseColorOrDefault(obj["endColor"] ?? obj["startColor"]);
+                        float startAlpha = obj["startAlpha"]?.ToObject<float>() ?? startColor.a;
+                        float endAlpha = obj["endAlpha"]?.ToObject<float>() ?? endColor.a;
+                        
+                        gradient.SetKeys(
+                            new GradientColorKey[] { new GradientColorKey(startColor, 0f), new GradientColorKey(endColor, 1f) },
+                            new GradientAlphaKey[] { new GradientAlphaKey(startAlpha, 0f), new GradientAlphaKey(endAlpha, 1f) }
+                        );
+                        return gradient;
+                    }
+
+                    // Full format: {colorKeys: [...], alphaKeys: [...]}
+                    var colorKeys = new List<GradientColorKey>();
+                    var alphaKeys = new List<GradientAlphaKey>();
+
+                    if (obj["colorKeys"] is JArray colorKeysArr)
+                    {
+                        foreach (var key in colorKeysArr)
+                        {
+                            Color color = ParseColorOrDefault(key["color"]);
+                            float time = key["time"]?.ToObject<float>() ?? 0f;
+                            colorKeys.Add(new GradientColorKey(color, time));
+                        }
+                    }
+
+                    if (obj["alphaKeys"] is JArray alphaKeysArr)
+                    {
+                        foreach (var key in alphaKeysArr)
+                        {
+                            float alpha = key["alpha"]?.ToObject<float>() ?? 1f;
+                            float time = key["time"]?.ToObject<float>() ?? 0f;
+                            alphaKeys.Add(new GradientAlphaKey(alpha, time));
+                        }
+                    }
+
+                    // Ensure at least 2 keys
+                    if (colorKeys.Count == 0)
+                    {
+                        colorKeys.Add(new GradientColorKey(Color.white, 0f));
+                        colorKeys.Add(new GradientColorKey(Color.white, 1f));
+                    }
+
+                    if (alphaKeys.Count == 0)
+                    {
+                        alphaKeys.Add(new GradientAlphaKey(1f, 0f));
+                        alphaKeys.Add(new GradientAlphaKey(1f, 1f));
+                    }
+
+                    gradient.SetKeys(colorKeys.ToArray(), alphaKeys.ToArray());
+                    return gradient;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[VectorParsing] Failed to parse Gradient from '{token}': {ex.Message}");
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Parses a JToken into a Gradient, returning a default gradient if parsing fails.
+        /// Added for ManageVFX refactoring.
+        /// </summary>
+        public static Gradient ParseGradientOrDefault(JToken token)
+        {
+            var result = ParseGradient(token);
+            if (result != null) return result;
+
+            // Return default white gradient
+            var gradient = new Gradient();
+            gradient.SetKeys(
+                new GradientColorKey[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 1f) }
+            );
+            return gradient;
+        }
+
+        /// <summary>
+        /// Parses a JToken into an AnimationCurve.
+        /// Supports formats:
+        /// - Constant: 1.0 (number)
+        /// - Simple: {start: 0.0, end: 1.0}
+        /// - Full: {keys: [{time: 0.0, value: 1.0, inTangent: 0.0, outTangent: 0.0}, ...]}
+        /// Added for ManageVFX refactoring.
+        /// </summary>
+        /// <param name="token">The JSON token to parse</param>
+        /// <returns>The parsed AnimationCurve or null if parsing fails</returns>
+        public static AnimationCurve ParseAnimationCurve(JToken token)
+        {
+            if (token == null || token.Type == JTokenType.Null)
+                return null;
+
+            try
+            {
+                // Constant value: just a number
+                if (token.Type == JTokenType.Float || token.Type == JTokenType.Integer)
+                {
+                    return AnimationCurve.Constant(0f, 1f, token.ToObject<float>());
+                }
+
+                if (token is JObject obj)
+                {
+                    // Full format: {keys: [...]}
+                    if (obj["keys"] is JArray keys)
+                    {
+                        AnimationCurve curve = new AnimationCurve();
+                        foreach (var key in keys)
+                        {
+                            float time = key["time"]?.ToObject<float>() ?? 0f;
+                            float value = key["value"]?.ToObject<float>() ?? 1f;
+                            float inTangent = key["inTangent"]?.ToObject<float>() ?? 0f;
+                            float outTangent = key["outTangent"]?.ToObject<float>() ?? 0f;
+                            curve.AddKey(new Keyframe(time, value, inTangent, outTangent));
+                        }
+                        return curve;
+                    }
+
+                    // Simple format: {start: 0.0, end: 1.0} or {startValue: 0.0, endValue: 1.0}
+                    if (obj.ContainsKey("start") || obj.ContainsKey("startValue") || obj.ContainsKey("end") || obj.ContainsKey("endValue"))
+                    {
+                        float startValue = obj["start"]?.ToObject<float>() ?? obj["startValue"]?.ToObject<float>() ?? 1f;
+                        float endValue = obj["end"]?.ToObject<float>() ?? obj["endValue"]?.ToObject<float>() ?? 1f;
+                        AnimationCurve curve = new AnimationCurve();
+                        curve.AddKey(0f, startValue);
+                        curve.AddKey(1f, endValue);
+                        return curve;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[VectorParsing] Failed to parse AnimationCurve from '{token}': {ex.Message}");
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Parses a JToken into an AnimationCurve, returning a constant curve if parsing fails.
+        /// Added for ManageVFX refactoring.
+        /// </summary>
+        /// <param name="token">The JSON token to parse</param>
+        /// <param name="defaultValue">The constant value for the default curve</param>
+        public static AnimationCurve ParseAnimationCurveOrDefault(JToken token, float defaultValue = 1f)
+        {
+            return ParseAnimationCurve(token) ?? AnimationCurve.Constant(0f, 1f, defaultValue);
         }
 
         /// <summary>
