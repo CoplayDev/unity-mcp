@@ -95,7 +95,7 @@ namespace MCPForUnity.Editor.Tools.GameObjects
             if (!string.IsNullOrEmpty(layerName))
             {
                 int layerId = LayerMask.NameToLayer(layerName);
-                if (layerId == -1 && layerName != "Default")
+                if (layerId == -1)
                 {
                     return new ErrorResponse($"Invalid layer specified: '{layerName}'. Use a valid layer name.");
                 }
