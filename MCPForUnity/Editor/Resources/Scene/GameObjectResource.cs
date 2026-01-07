@@ -282,4 +282,3 @@ namespace MCPForUnity.Editor.Resources.Scene
         }
     }
 }
-

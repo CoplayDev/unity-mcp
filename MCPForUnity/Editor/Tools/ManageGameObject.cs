@@ -348,7 +348,7 @@ namespace MCPForUnity.Editor.Tools
                         return new ErrorResponse($"Failed to create tag '{tag}': {ex.Message}.");
                     }
                 }
-                
+
                 try
                 {
                     newGo.tag = tag;
@@ -589,7 +589,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 // Ensure the tag is not empty, if empty, it means "Untagged" implicitly
                 string tagToSet = string.IsNullOrEmpty(tag) ? "Untagged" : tag;
-                
+
                 // Check if tag exists first (Unity doesn't throw exceptions for undefined tags, just logs a warning)
                 if (tagToSet != "Untagged" && !System.Linq.Enumerable.Contains(InternalEditorUtility.tags, tagToSet))
                 {
@@ -603,7 +603,7 @@ namespace MCPForUnity.Editor.Tools
                         return new ErrorResponse($"Failed to create tag '{tagToSet}': {ex.Message}.");
                     }
                 }
-                
+
                 try
                 {
                     targetGo.tag = tagToSet;
@@ -835,7 +835,7 @@ namespace MCPForUnity.Editor.Tools
             // Handle parent
             if (parentToken != null)
             {
-                if (parentToken.Type == JTokenType.Null || 
+                if (parentToken.Type == JTokenType.Null ||
                     (parentToken.Type == JTokenType.String && string.IsNullOrEmpty(parentToken.ToString())))
                 {
                     // Explicit null parent - move to root
@@ -1509,7 +1509,7 @@ namespace MCPForUnity.Editor.Tools
                 }
 
                 // Try both original and normalized names
-                PropertyInfo propInfo = type.GetProperty(memberName, flags) 
+                PropertyInfo propInfo = type.GetProperty(memberName, flags)
                                      ?? type.GetProperty(normalizedName, flags);
                 if (propInfo != null && propInfo.CanWrite)
                 {
@@ -1528,7 +1528,7 @@ namespace MCPForUnity.Editor.Tools
                 else
                 {
                     // Try both original and normalized names for fields
-                    FieldInfo fieldInfo = type.GetField(memberName, flags) 
+                    FieldInfo fieldInfo = type.GetField(memberName, flags)
                                        ?? type.GetField(normalizedName, flags);
                     if (fieldInfo != null) // Check if !IsLiteral?
                     {

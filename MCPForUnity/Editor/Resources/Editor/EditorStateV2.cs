@@ -25,5 +25,3 @@ namespace MCPForUnity.Editor.Resources.Editor
         }
     }
 }
-
-
