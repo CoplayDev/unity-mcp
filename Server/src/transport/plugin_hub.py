@@ -142,19 +142,15 @@ class PluginHub(WebSocketEndpoint):
         future: asyncio.Future = asyncio.get_running_loop().create_future()
         # Compute a per-command timeout:
         # - fast-path commands: short timeout (encourage retry)
-        # - long-running commands (e.g., run_tests): allow caller to request a longer timeout via params
+        # - long-running commands: allow caller to request a longer timeout via params
         unity_timeout_s = float(cls.COMMAND_TIMEOUT)
         server_wait_s = float(cls.COMMAND_TIMEOUT)
         if command_type in cls._FAST_FAIL_COMMANDS:
-            try:
-                fast_timeout = float(os.environ.get(
-                    "UNITY_MCP_FAST_COMMAND_TIMEOUT", "3"))
-            except Exception:
-                fast_timeout = 3.0
+            fast_timeout = float(cls.FAST_FAIL_TIMEOUT)
             unity_timeout_s = fast_timeout
             server_wait_s = fast_timeout
         else:
-            # Common tools pass a requested timeout in seconds (e.g., run_tests(timeout_seconds=900)).
+            # Common tools pass a requested timeout in seconds (e.g., timeout_seconds=900).
             requested = None
             try:
                 if isinstance(params, dict):

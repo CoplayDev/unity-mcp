@@ -57,9 +57,8 @@ MCP for Unity acts as a bridge, allowing AI assistants (Claude, Cursor, Antigrav
 * `find_gameobjects`: Search for GameObjects by name, tag, layer, component, path, or ID (paginated).
 * `read_console`: Gets messages from or clears the Unity console.
 * `refresh_unity`: Request asset database refresh and optional compilation.
-* `run_tests_async`: Starts tests asynchronously, returns job_id for polling (preferred).
+* `run_tests`: Starts tests asynchronously, returns job_id for polling.
 * `get_test_job`: Polls an async test job for progress and results.
-* `run_tests`: Runs tests synchronously (blocks until complete).
 * `execute_custom_tool`: Execute project-scoped custom tools registered by Unity.
 * `execute_menu_item`: Executes Unity Editor menu items (e.g., "File/Save Project").
 * `set_active_instance`: Routes tool calls to a specific Unity instance. Requires `Name@hash` from `unity_instances`.

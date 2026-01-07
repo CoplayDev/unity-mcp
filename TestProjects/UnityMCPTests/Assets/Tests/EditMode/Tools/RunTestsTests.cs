@@ -1,66 +1,65 @@
 using System;
+using System.Reflection;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
-using MCPForUnity.Editor.Services;
+using MCPForUnity.Editor.Helpers;
 
 namespace MCPForUnityTests.Editor.Tools
 {
     /// <summary>
     /// Tests for RunTests tool functionality.
     /// Note: We cannot easily test the full HandleCommand because it would create
-    /// recursive test runner calls. Instead, we test the message formatting logic.
+    /// recursive test runner calls.
     /// </summary>
     public class RunTestsTests
     {
         [Test]
-        public void FormatResultMessage_WithNoTests_IncludesWarning()
+        public void HandleCommand_WhenTestsAlreadyRunning_ReturnsBusyError()
         {
-            // Arrange
-            var summary = new TestRunSummary(
-                total: 0,
-                passed: 0,
-                failed: 0,
-                skipped: 0,
-                durationSeconds: 0.0,
-                resultState: "Passed"
-            );
-            var result = new TestRunResult(summary, new TestRunTestResult[0]);
+            // Arrange: Force TestJobManager into a "busy" state without starting a real run.
+            // We do this via reflection because TestJobManager is internal.
+            var asm = typeof(MCPForUnity.Editor.Services.MCPServiceLocator).Assembly;
+            var testJobManagerType = asm.GetType("MCPForUnity.Editor.Services.TestJobManager");
+            Assert.NotNull(testJobManagerType, "Could not locate TestJobManager type via reflection");
 
-            // Act
-            string message = MCPForUnity.Editor.Tools.RunTests.FormatTestResultMessage("EditMode", result);
+            var currentJobIdField = testJobManagerType.GetField("_currentJobId", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.NotNull(currentJobIdField, "Could not locate TestJobManager._currentJobId field");
 
-            // Assert - THIS IS THE NEW FEATURE
-            Assert.IsTrue(
-                message.Contains("No tests matched"),
-                $"Expected warning when total=0, but got: '{message}'"
-            );
+            var originalJobId = currentJobIdField.GetValue(null) as string;
+            currentJobIdField.SetValue(null, "busy-test-job-id");
+
+            try
+            {
+                var resultObj = MCPForUnity.Editor.Tools.RunTests.HandleCommand(new JObject()).GetAwaiter().GetResult();
+
+                Assert.IsInstanceOf<ErrorResponse>(resultObj);
+                var err = (ErrorResponse)resultObj;
+                Assert.AreEqual(false, err.Success);
+                Assert.AreEqual("tests_running", err.Code);
+
+                var data = err.Data != null ? JObject.FromObject(err.Data) : null;
+                Assert.NotNull(data, "Expected data payload on tests_running error");
+                Assert.AreEqual("tests_running", data["reason"]?.ToString());
+                Assert.GreaterOrEqual(data["retry_after_ms"]?.Value<int>() ?? 0, 500);
+            }
+            finally
+            {
+                currentJobIdField.SetValue(null, originalJobId);
+            }
         }
 
         [Test]
-        public void FormatResultMessage_WithTests_NoWarning()
+        public void HandleCommand_WithInvalidMode_ReturnsError()
         {
-            // Arrange
-            var summary = new TestRunSummary(
-                total: 5,
-                passed: 4,
-                failed: 1,
-                skipped: 0,
-                durationSeconds: 1.5,
-                resultState: "Failed"
-            );
-            var result = new TestRunResult(summary, new TestRunTestResult[0]);
+            var resultObj = MCPForUnity.Editor.Tools.RunTests.HandleCommand(new JObject
+            {
+                ["mode"] = "NotARealMode"
+            }).GetAwaiter().GetResult();
 
-            // Act
-            string message = MCPForUnity.Editor.Tools.RunTests.FormatTestResultMessage("EditMode", result);
-
-            // Assert
-            Assert.IsFalse(
-                message.Contains("No tests matched"),
-                $"Should not have warning when tests exist, but got: '{message}'"
-            );
-            Assert.IsTrue(message.Contains("4/5 passed"), "Should contain pass ratio");
+            Assert.IsInstanceOf<ErrorResponse>(resultObj);
+            var err = (ErrorResponse)resultObj;
+            Assert.AreEqual(false, err.Success);
+            Assert.IsTrue(err.Error.Contains("Unknown test mode", StringComparison.OrdinalIgnoreCase));
         }
-
-        // Use MCPForUnity.Editor.Tools.RunTests.FormatTestResultMessage directly.
     }
 }
