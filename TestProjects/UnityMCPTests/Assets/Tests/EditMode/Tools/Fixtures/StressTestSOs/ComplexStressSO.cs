@@ -45,4 +45,8 @@ public class ComplexStressSO : ScriptableObject
     public NestedData nestedStruct;
     public ComplexSubClass nestedClass;
     public List<NestedData> nestedDataList;
+
+    [Header("Extended Types (Phase 6)")]
+    public AnimationCurve animCurve;
+    public Quaternion rotation;
 }
