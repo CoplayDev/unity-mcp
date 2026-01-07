@@ -75,3 +75,20 @@ def coerce_int(value: Any, default: int | None = None) -> int | None:
         return int(float(s))
     except Exception:
         return default
+
+
+def coerce_float(value: Any, default: float | None = None) -> float | None:
+    """Attempt to coerce a loosely-typed value to a float."""
+    if value is None:
+        return default
+    try:
+        if isinstance(value, bool):
+            return default
+        if isinstance(value, (int, float)):
+            return float(value)
+        s = str(value).strip()
+        if s.lower() in ("", "none", "null"):
+            return default
+        return float(s)
+    except Exception:
+        return default
