@@ -55,10 +55,12 @@ MCP for Unity acts as a bridge, allowing AI assistants (Claude, Cursor, Antigrav
 * `manage_vfx`: VFX effect operations, including line/trail renderer, particle system, and VisualEffectGraph (in development).
 * `batch_execute`: ⚡ **RECOMMENDED** - Executes multiple commands in one batch for 10-100x better performance. Use this for any repetitive operations.
 * `find_gameobjects`: Search for GameObjects by name, tag, layer, component, path, or ID (paginated).
+* `find_in_file`: Search a C# script with a regex pattern and return matching line numbers and excerpts.
 * `read_console`: Gets messages from or clears the Unity console.
 * `refresh_unity`: Request asset database refresh and optional compilation.
 * `run_tests`: Starts tests asynchronously, returns job_id for polling.
 * `get_test_job`: Polls an async test job for progress and results.
+* `debug_request_context`: Return the current request context details (client_id, session_id, and meta dump).
 * `execute_custom_tool`: Execute project-scoped custom tools registered by Unity.
 * `execute_menu_item`: Executes Unity Editor menu items (e.g., "File/Save Project").
 * `set_active_instance`: Routes tool calls to a specific Unity instance. Requires `Name@hash` from `unity_instances`.
@@ -76,22 +78,23 @@ MCP for Unity acts as a bridge, allowing AI assistants (Claude, Cursor, Antigrav
 
   Your LLM can retrieve the following resources:
 
-* `custom_tools`: Lists custom tools available for the active Unity project.
-* `unity_instances`: Lists all running Unity Editor instances with details (name, path, hash, status, session).
-* `menu_items`: All available menu items in the Unity Editor.
-* `tests`: All available tests (EditMode, PlayMode) in the Unity Editor.
-* `gameobject_api`: Documentation for GameObject resources and how to use `find_gameobjects` tool.
-* `unity://scene/gameobject/{instanceID}`: Read-only access to GameObject data (name, tag, transform, components, children).
-* `unity://scene/gameobject/{instanceID}/components`: Read-only access to all components on a GameObject with full property serialization.
-* `unity://scene/gameobject/{instanceID}/component/{componentName}`: Read-only access to a specific component's properties.
-* `editor_active_tool`: Currently active editor tool (Move, Rotate, Scale, etc.) and transform handle settings.
-* `editor_prefab_stage`: Current prefab editing context if a prefab is open in isolation mode.
-* `editor_selection`: Detailed information about currently selected objects in the editor.
-* `editor_state`: Editor readiness snapshot with advice and staleness info.
-* `editor_windows`: All currently open editor windows with titles, types, positions, and focus state.
-* `project_info`: Static project information (root path, Unity version, platform).
-* `project_layers`: All layers defined in TagManager with their indices (0-31).
-* `project_tags`: All tags defined in TagManager.
+* `custom_tools` [`mcpforunity://custom-tools`]: Lists custom tools available for the active Unity project.
+* `unity_instances` [`mcpforunity://instances`]: Lists all running Unity Editor instances with details (name, path, hash, status, session).
+* `menu_items` [`mcpforunity://menu-items`]: All available menu items in the Unity Editor.
+* `get_tests` [`mcpforunity://tests`]: All available tests (EditMode + PlayMode) in the Unity Editor.
+* `get_tests_for_mode` [`mcpforunity://tests/{mode}`]: All available tests for a specific mode (EditMode or PlayMode).
+* `gameobject_api` [`mcpforunity://scene/gameobject-api`]: Documentation for GameObject resources and how to use `find_gameobjects` tool.
+* `gameobject` [`mcpforunity://scene/gameobject/{instance_id}`]: Read-only access to GameObject data (name, tag, transform, components, children).
+* `gameobject_components` [`mcpforunity://scene/gameobject/{instance_id}/components`]: Read-only access to all components on a GameObject with full property serialization.
+* `gameobject_component` [`mcpforunity://scene/gameobject/{instance_id}/component/{component_name}`]: Read-only access to a specific component's properties.
+* `editor_active_tool` [`mcpforunity://editor/active-tool`]: Currently active editor tool (Move, Rotate, Scale, etc.) and transform handle settings.
+* `editor_prefab_stage` [`mcpforunity://editor/prefab-stage`]: Current prefab editing context if a prefab is open in isolation mode.
+* `editor_selection` [`mcpforunity://editor/selection`]: Detailed information about currently selected objects in the editor.
+* `editor_state` [`mcpforunity://editor/state`]: Editor readiness snapshot with advice and staleness info.
+* `editor_windows` [`mcpforunity://editor/windows`]: All currently open editor windows with titles, types, positions, and focus state.
+* `project_info` [`mcpforunity://project/info`]: Static project information (root path, Unity version, platform).
+* `project_layers` [`mcpforunity://project/layers`]: All layers defined in TagManager with their indices (0-31).
+* `project_tags` [`mcpforunity://project/tags`]: All tags defined in TagManager.
 </details>
 ---
 
