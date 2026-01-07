@@ -49,7 +49,7 @@ async def test_split_uri_unity_path(monkeypatch):
     # No need to patch tools.manage_script; it now calls unity_connection.send_command_with_retry
 
     fn = test_tools['apply_text_edits']
-    uri = "unity://path/Assets/Scripts/MyScript.cs"
+    uri = "mcpforunity://path/Assets/Scripts/MyScript.cs"
     await fn(DummyContext(), uri=uri, edits=[], precondition_sha256=None)
 
     assert captured['cmd'] == 'manage_script'

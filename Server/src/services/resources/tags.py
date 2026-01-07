@@ -14,7 +14,7 @@ class TagsResponse(MCPResponse):
 
 
 @mcp_for_unity_resource(
-    uri="unity://project/tags",
+    uri="mcpforunity://project/tags",
     name="project_tags",
     description="All tags defined in the project's TagManager. Read this before using add_tag or remove_tag tools."
 )

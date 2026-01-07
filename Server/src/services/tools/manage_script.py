@@ -16,7 +16,7 @@ def _split_uri(uri: str) -> tuple[str, str]:
     """Split an incoming URI or path into (name, directory) suitable for Unity.
 
     Rules:
-    - unity://path/Assets/... → keep as Assets-relative (after decode/normalize)
+    - mcpforunity://path/Assets/... → keep as Assets-relative (after decode/normalize)
     - file://... → percent-decode, normalize, strip host and leading slashes,
         then, if any 'Assets' segment exists, return path relative to that 'Assets' root.
         Otherwise, fall back to original name/dir behavior.
@@ -24,8 +24,8 @@ def _split_uri(uri: str) -> tuple[str, str]:
         return relative to 'Assets'.
     """
     raw_path: str
-    if uri.startswith("unity://path/"):
-        raw_path = uri[len("unity://path/"):]
+    if uri.startswith("mcpforunity://path/"):
+        raw_path = uri[len("mcpforunity://path/"):]
     elif uri.startswith("file://"):
         parsed = urlparse(uri)
         host = (parsed.netloc or "").strip()
@@ -86,7 +86,7 @@ def _split_uri(uri: str) -> tuple[str, str]:
 )
 async def apply_text_edits(
     ctx: Context,
-    uri: Annotated[str, "URI of the script to edit under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
+    uri: Annotated[str, "URI of the script to edit under Assets/ directory, mcpforunity://path/Assets/... or file://... or Assets/..."],
     edits: Annotated[list[dict[str, Any]], "List of edits to apply to the script, i.e. a list of {startLine,startCol,endLine,endCol,newText} (1-indexed!)"],
     precondition_sha256: Annotated[str,
                                    "Optional SHA256 of the script to edit, used to prevent concurrent edits"] | None = None,
@@ -434,7 +434,7 @@ async def create_script(
 )
 async def delete_script(
     ctx: Context,
-    uri: Annotated[str, "URI of the script to delete under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
+    uri: Annotated[str, "URI of the script to delete under Assets/ directory, mcpforunity://path/Assets/... or file://... or Assets/..."],
 ) -> dict[str, Any]:
     """Delete a C# script by URI."""
     unity_instance = get_unity_instance_from_context(ctx)
@@ -462,7 +462,7 @@ async def delete_script(
 )
 async def validate_script(
     ctx: Context,
-    uri: Annotated[str, "URI of the script to validate under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
+    uri: Annotated[str, "URI of the script to validate under Assets/ directory, mcpforunity://path/Assets/... or file://... or Assets/..."],
     level: Annotated[Literal['basic', 'standard'],
                      "Validation level"] = "basic",
     include_diagnostics: Annotated[bool,
@@ -621,7 +621,7 @@ async def manage_script_capabilities(ctx: Context) -> dict[str, Any]:
 )
 async def get_sha(
     ctx: Context,
-    uri: Annotated[str, "URI of the script to edit under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
+    uri: Annotated[str, "URI of the script to edit under Assets/ directory, mcpforunity://path/Assets/... or file://... or Assets/..."],
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
     await ctx.info(

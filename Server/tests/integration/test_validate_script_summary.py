@@ -52,5 +52,5 @@ async def test_validate_script_returns_counts(monkeypatch):
                         "async_send_command_with_retry", fake_send)
     # No need to patch tools.manage_script; it now calls unity_connection.send_command_with_retry
 
-    resp = await validate_script(DummyContext(), uri="unity://path/Assets/Scripts/A.cs")
+    resp = await validate_script(DummyContext(), uri="mcpforunity://path/Assets/Scripts/A.cs")
     assert resp == {"success": True, "data": {"warnings": 1, "errors": 2}}

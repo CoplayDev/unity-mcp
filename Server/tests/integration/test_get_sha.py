@@ -39,7 +39,7 @@ async def test_get_sha_param_shape_and_routing(monkeypatch):
     async def fake_send(cmd, params, **kwargs):
         captured["cmd"] = cmd
         captured["params"] = params
-        return {"success": True, "data": {"sha256": "abc", "lengthBytes": 1, "lastModifiedUtc": "2020-01-01T00:00:00Z", "uri": "unity://path/Assets/Scripts/A.cs", "path": "Assets/Scripts/A.cs"}}
+        return {"success": True, "data": {"sha256": "abc", "lengthBytes": 1, "lastModifiedUtc": "2020-01-01T00:00:00Z", "uri": "mcpforunity://path/Assets/Scripts/A.cs", "path": "Assets/Scripts/A.cs"}}
 
     # Patch the send_command_with_retry function at the module level where it's imported
     import transport.legacy.unity_connection
@@ -50,7 +50,7 @@ async def test_get_sha_param_shape_and_routing(monkeypatch):
     )
     # No need to patch tools.manage_script; it now calls unity_connection.send_command_with_retry
 
-    resp = await get_sha(DummyContext(), uri="unity://path/Assets/Scripts/A.cs")
+    resp = await get_sha(DummyContext(), uri="mcpforunity://path/Assets/Scripts/A.cs")
     assert captured["cmd"] == "manage_script"
     assert captured["params"]["action"] == "get_sha"
     assert captured["params"]["name"] == "A"

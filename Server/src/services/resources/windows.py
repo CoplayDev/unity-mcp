@@ -31,7 +31,7 @@ class WindowsResponse(MCPResponse):
 
 
 @mcp_for_unity_resource(
-    uri="unity://editor/windows",
+    uri="mcpforunity://editor/windows",
     name="editor_windows",
     description="All currently open editor windows with their titles, types, positions, and focus state."
 )

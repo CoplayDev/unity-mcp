@@ -2,9 +2,9 @@
 Tests for the GameObject resources.
 
 Resources:
-- unity://scene/gameobject/{instance_id}
-- unity://scene/gameobject/{instance_id}/components
-- unity://scene/gameobject/{instance_id}/component/{component_name}
+- mcpforunity://scene/gameobject/{instance_id}
+- mcpforunity://scene/gameobject/{instance_id}/components
+- mcpforunity://scene/gameobject/{instance_id}/component/{component_name}
 """
 import pytest
 

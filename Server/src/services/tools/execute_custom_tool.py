@@ -23,7 +23,7 @@ async def execute_custom_tool(ctx: Context, tool_name: str, parameters: dict | N
     if not unity_instance:
         return MCPResponse(
             success=False,
-            message="No active Unity instance. Call set_active_instance with Name@hash from unity://instances.",
+            message="No active Unity instance. Call set_active_instance with Name@hash from mcpforunity://instances.",
         )
 
     project_id = resolve_project_id_for_unity_instance(unity_instance)
