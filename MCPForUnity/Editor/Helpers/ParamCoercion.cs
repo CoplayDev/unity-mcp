@@ -157,6 +157,65 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
+        /// Checks if a JToken represents a numeric value (integer or float).
+        /// Useful for validating JSON values before parsing.
+        /// </summary>
+        /// <param name="token">The JSON token to check</param>
+        /// <returns>True if the token is an integer or float, false otherwise</returns>
+        public static bool IsNumericToken(JToken token)
+        {
+            return token != null && (token.Type == JTokenType.Integer || token.Type == JTokenType.Float);
+        }
+        
+        /// <summary>
+        /// Validates that an optional field in a JObject is numeric if present.
+        /// Used for dry-run validation of complex type formats.
+        /// </summary>
+        /// <param name="obj">The JSON object containing the field</param>
+        /// <param name="fieldName">The name of the field to validate</param>
+        /// <param name="error">Output error message if validation fails</param>
+        /// <returns>True if the field is absent, null, or numeric; false if present but non-numeric</returns>
+        public static bool ValidateNumericField(JObject obj, string fieldName, out string error)
+        {
+            error = null;
+            var token = obj[fieldName];
+            if (token == null || token.Type == JTokenType.Null)
+            {
+                return true; // Field not present, valid (will use default)
+            }
+            if (!IsNumericToken(token))
+            {
+                error = $"must be a number, got {token.Type}";
+                return false;
+            }
+            return true;
+        }
+        
+        /// <summary>
+        /// Validates that an optional field in a JObject is an integer if present.
+        /// Used for dry-run validation of complex type formats.
+        /// </summary>
+        /// <param name="obj">The JSON object containing the field</param>
+        /// <param name="fieldName">The name of the field to validate</param>
+        /// <param name="error">Output error message if validation fails</param>
+        /// <returns>True if the field is absent, null, or integer; false if present but non-integer</returns>
+        public static bool ValidateIntegerField(JObject obj, string fieldName, out string error)
+        {
+            error = null;
+            var token = obj[fieldName];
+            if (token == null || token.Type == JTokenType.Null)
+            {
+                return true; // Field not present, valid
+            }
+            if (token.Type != JTokenType.Integer)
+            {
+                error = $"must be an integer, got {token.Type}";
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>
         /// Normalizes a property name by removing separators and converting to camelCase.
         /// Handles common naming variations from LLMs and humans.
         /// Examples:

@@ -1,6 +1,7 @@
 """Async Unity Test Runner jobs: start + poll."""
 from __future__ import annotations
 
+import asyncio
 from typing import Annotated, Any, Literal
 
 from fastmcp import Context
@@ -169,6 +170,10 @@ async def get_test_job(
                                     "Include details for failed/skipped tests only (default: false)"] = False,
     include_details: Annotated[bool,
                                "Include details for all tests (default: false)"] = False,
+    wait_timeout: Annotated[int | None,
+                            "If set, wait up to this many seconds for tests to complete before returning. "
+                            "Reduces polling frequency and avoids client-side loop detection. "
+                            "Recommended: 30-60 seconds. Returns immediately if tests complete sooner."] = None,
 ) -> GetTestJobResponse | MCPResponse:
     unity_instance = get_unity_instance_from_context(ctx)
 
@@ -178,12 +183,45 @@ async def get_test_job(
     if include_details:
         params["includeDetails"] = True
 
-    response = await unity_transport.send_with_unity_instance(
-        async_send_command_with_retry,
-        unity_instance,
-        "get_test_job",
-        params,
-    )
+    async def _fetch_status() -> dict[str, Any]:
+        return await unity_transport.send_with_unity_instance(
+            async_send_command_with_retry,
+            unity_instance,
+            "get_test_job",
+            params,
+        )
+
+    # If wait_timeout is specified, poll server-side until complete or timeout
+    if wait_timeout and wait_timeout > 0:
+        deadline = asyncio.get_event_loop().time() + wait_timeout
+        poll_interval = 2.0  # Poll Unity every 2 seconds
+        
+        while True:
+            response = await _fetch_status()
+            
+            if not isinstance(response, dict):
+                return MCPResponse(success=False, error=str(response))
+            
+            if not response.get("success", True):
+                return MCPResponse(**response)
+            
+            # Check if tests are done
+            data = response.get("data", {})
+            status = data.get("status", "")
+            if status in ("succeeded", "failed", "cancelled"):
+                return GetTestJobResponse(**response)
+            
+            # Check timeout
+            remaining = deadline - asyncio.get_event_loop().time()
+            if remaining <= 0:
+                # Timeout reached, return current status
+                return GetTestJobResponse(**response)
+            
+            # Wait before next poll (but don't exceed remaining time)
+            await asyncio.sleep(min(poll_interval, remaining))
+    
+    # No wait_timeout - return immediately (original behavior)
+    response = await _fetch_status()
     if isinstance(response, dict):
         if not response.get("success", True):
             return MCPResponse(**response)

@@ -388,16 +388,50 @@ namespace MCPForUnity.Editor.Tools
 
                 if (prop != null)
                 {
-                    // Property exists - report its type for validation
-                    results.Add(new { 
-                        index = i, 
-                        propertyPath = normalizedPath, 
-                        op, 
-                        ok = true, 
-                        message = "Property found.",
-                        propertyType = prop.propertyType.ToString(),
-                        isArray = prop.isArray
-                    });
+                    // Property exists - validate value format for supported complex types
+                    var valueToken = patchObj["value"];
+                    string valueValidationMsg = null;
+                    bool valueFormatOk = true;
+                    
+                    // Enhanced dry-run: validate value format for AnimationCurve and Quaternion
+                    // Uses shared validators from VectorParsing
+                    if (valueToken != null && valueToken.Type != JTokenType.Null)
+                    {
+                        switch (prop.propertyType)
+                        {
+                            case SerializedPropertyType.AnimationCurve:
+                                valueFormatOk = VectorParsing.ValidateAnimationCurveFormat(valueToken, out valueValidationMsg);
+                                break;
+                            case SerializedPropertyType.Quaternion:
+                                valueFormatOk = VectorParsing.ValidateQuaternionFormat(valueToken, out valueValidationMsg);
+                                break;
+                        }
+                    }
+                    
+                    if (valueFormatOk)
+                    {
+                        results.Add(new { 
+                            index = i, 
+                            propertyPath = normalizedPath, 
+                            op, 
+                            ok = true, 
+                            message = valueValidationMsg ?? "Property found.",
+                            propertyType = prop.propertyType.ToString(),
+                            isArray = prop.isArray
+                        });
+                    }
+                    else
+                    {
+                        results.Add(new { 
+                            index = i, 
+                            propertyPath = normalizedPath, 
+                            op, 
+                            ok = false, 
+                            message = valueValidationMsg,
+                            propertyType = prop.propertyType.ToString(),
+                            isArray = prop.isArray
+                        });
+                    }
                 }
             }
 
@@ -1057,9 +1091,32 @@ namespace MCPForUnity.Editor.Tools
 
         /// <summary>
         /// Sets an AnimationCurve property from a JSON structure.
-        /// Expected format: { "keys": [ { "time": 0, "value": 0, "inSlope": 0, "outSlope": 2 }, ... ] }
-        /// or a simple array: [ { "time": 0, "value": 0 }, ... ]
+        /// 
+        /// <para><b>Supported formats:</b></para>
+        /// <list type="bullet">
+        ///   <item>Wrapped: <c>{ "keys": [ { "time": 0, "value": 1.0 }, ... ] }</c></item>
+        ///   <item>Direct array: <c>[ { "time": 0, "value": 1.0 }, ... ]</c></item>
+        ///   <item>Null/empty: Sets an empty AnimationCurve</item>
+        /// </list>
+        /// 
+        /// <para><b>Keyframe fields:</b></para>
+        /// <list type="bullet">
+        ///   <item><c>time</c> (float): Keyframe time position. <b>Default: 0</b></item>
+        ///   <item><c>value</c> (float): Keyframe value. <b>Default: 0</b></item>
+        ///   <item><c>inSlope</c> or <c>inTangent</c> (float): Incoming tangent slope. <b>Default: 0</b></item>
+        ///   <item><c>outSlope</c> or <c>outTangent</c> (float): Outgoing tangent slope. <b>Default: 0</b></item>
+        ///   <item><c>weightedMode</c> (int): Weighted mode enum (0=None, 1=In, 2=Out, 3=Both). <b>Default: 0 (None)</b></item>
+        ///   <item><c>inWeight</c> (float): Incoming tangent weight. <b>Default: 0</b></item>
+        ///   <item><c>outWeight</c> (float): Outgoing tangent weight. <b>Default: 0</b></item>
+        /// </list>
+        /// 
+        /// <para><b>Note:</b> All keyframe fields are optional. Missing fields gracefully default to 0,
+        /// which produces linear interpolation when both tangents are 0.</para>
         /// </summary>
+        /// <param name="prop">The SerializedProperty of type AnimationCurve to set</param>
+        /// <param name="valueToken">JSON token containing the curve data</param>
+        /// <param name="message">Output message describing the result</param>
+        /// <returns>True if successful, false if the format is invalid</returns>
         private static bool TrySetAnimationCurve(SerializedProperty prop, JToken valueToken, out string message)
         {
             message = null;
@@ -1144,12 +1201,28 @@ namespace MCPForUnity.Editor.Tools
 
         /// <summary>
         /// Sets a Quaternion property from JSON.
-        /// Accepts:
-        /// - [x, y, z] as Euler angles (degrees)
-        /// - [x, y, z, w] as raw quaternion components
-        /// - { "x": 0, "y": 0, "z": 0, "w": 1 } as raw quaternion
-        /// - { "euler": [x, y, z] } for explicit euler
+        /// 
+        /// <para><b>Supported formats:</b></para>
+        /// <list type="bullet">
+        ///   <item>Euler array: <c>[x, y, z]</c> - Euler angles in degrees</item>
+        ///   <item>Raw quaternion array: <c>[x, y, z, w]</c> - Direct quaternion components</item>
+        ///   <item>Object format: <c>{ "x": 0, "y": 0, "z": 0, "w": 1 }</c> - Direct components</item>
+        ///   <item>Explicit euler: <c>{ "euler": [x, y, z] }</c> - Euler angles in degrees</item>
+        ///   <item>Null/empty: Sets Quaternion.identity (no rotation)</item>
+        /// </list>
+        /// 
+        /// <para><b>Format detection:</b></para>
+        /// <list type="bullet">
+        ///   <item>3-element array → Interpreted as Euler angles (degrees)</item>
+        ///   <item>4-element array → Interpreted as raw quaternion [x, y, z, w]</item>
+        ///   <item>Object with euler → Uses euler array for rotation</item>
+        ///   <item>Object with x, y, z, w → Uses raw quaternion components</item>
+        /// </list>
         /// </summary>
+        /// <param name="prop">The SerializedProperty of type Quaternion to set</param>
+        /// <param name="valueToken">JSON token containing the quaternion data</param>
+        /// <param name="message">Output message describing the result</param>
+        /// <returns>True if successful, false if the format is invalid</returns>
         private static bool TrySetQuaternion(SerializedProperty prop, JToken valueToken, out string message)
         {
             message = null;
