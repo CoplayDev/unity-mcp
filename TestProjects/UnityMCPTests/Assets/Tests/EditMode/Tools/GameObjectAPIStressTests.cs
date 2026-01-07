@@ -6,10 +6,10 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using MCPForUnity.Editor.Tools;
-using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Resources.Scene;
 using UnityEngine.TestTools;
 using Debug = UnityEngine.Debug;
+using static MCPForUnityTests.Editor.TestUtilities;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -49,21 +49,6 @@ namespace MCPForUnityTests.Editor.Tools
             var go = new GameObject(name);
             _createdObjects.Add(go);
             return go;
-        }
-
-        private static JObject ToJObject(object result)
-        {
-            if (result == null) return new JObject();
-            if (result is JObject jobj) return jobj;
-            try
-            {
-                return JObject.FromObject(result);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[ToJObject] Failed to convert result: {ex.Message}");
-                return new JObject { ["error"] = ex.Message };
-            }
         }
 
         #region Bulk GameObject Creation

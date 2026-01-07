@@ -8,10 +8,10 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.TestTools;
-using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Tools;
 using MCPForUnityTests.Editor.Tools.Fixtures;
 using Debug = UnityEngine.Debug;
+using static MCPForUnityTests.Editor.TestUtilities;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -42,10 +42,7 @@ namespace MCPForUnityTests.Editor.Tools
             _createdAssets.Clear();
 
             // Create test assets for reference tests
-            var shader = Shader.Find("Universal Render Pipeline/Lit")
-                ?? Shader.Find("HDRP/Lit")
-                ?? Shader.Find("Standard")
-                ?? Shader.Find("Unlit/Color");
+            var shader = FindFallbackShader();
             Assert.IsNotNull(shader, "A fallback shader must be available.");
 
             _matPath = $"{_runRoot}/TestMat.mat";
@@ -79,6 +76,9 @@ namespace MCPForUnityTests.Editor.Tools
             {
                 AssetDatabase.DeleteAsset(_runRoot);
             }
+
+            // Clean up empty parent folders to avoid debris
+            CleanupEmptyParentFolders(TempRoot);
 
             AssetDatabase.Refresh();
         }
@@ -1092,50 +1092,6 @@ namespace MCPForUnityTests.Editor.Tools
 
             Debug.Log("[UnsupportedType] Error message improvement verified in code review");
             Assert.Pass("Error message improvement verified in code");
-        }
-
-        #endregion
-
-        #region Helper Methods
-
-        private static void EnsureFolder(string folderPath)
-        {
-            if (AssetDatabase.IsValidFolder(folderPath))
-                return;
-
-            var sanitized = AssetPathUtility.SanitizeAssetPath(folderPath);
-            if (string.Equals(sanitized, "Assets", StringComparison.OrdinalIgnoreCase))
-                return;
-
-            var parts = sanitized.Split('/');
-            string current = "Assets";
-            for (int i = 1; i < parts.Length; i++)
-            {
-                var next = current + "/" + parts[i];
-                if (!AssetDatabase.IsValidFolder(next))
-                {
-                    AssetDatabase.CreateFolder(current, parts[i]);
-                }
-                current = next;
-            }
-        }
-
-        private static JObject ToJObject(object result)
-        {
-            return result as JObject ?? JObject.FromObject(result);
-        }
-
-        private static IEnumerator WaitForUnityReady(double timeoutSeconds = 30.0)
-        {
-            double start = EditorApplication.timeSinceStartup;
-            while (EditorApplication.isCompiling || EditorApplication.isUpdating)
-            {
-                if (EditorApplication.timeSinceStartup - start > timeoutSeconds)
-                {
-                    Assert.Fail($"Timed out waiting for Unity to finish compiling/updating (>{timeoutSeconds:0.0}s).");
-                }
-                yield return null;
-            }
         }
 
         #endregion

@@ -5,7 +5,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using MCPForUnity.Editor.Tools;
-using MCPForUnity.Editor.Helpers;
+using static MCPForUnityTests.Editor.TestUtilities;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -43,21 +43,8 @@ namespace MCPForUnityTests.Editor.Tools
                 AssetDatabase.DeleteAsset(TempRoot);
             }
             
-            // Clean up parent Temp folder if it's empty
-            if (AssetDatabase.IsValidFolder("Assets/Temp"))
-            {
-                // Only delete if empty
-                var subFolders = AssetDatabase.GetSubFolders("Assets/Temp");
-                if (subFolders.Length == 0)
-                {
-                    AssetDatabase.DeleteAsset("Assets/Temp");
-                }
-            }
-        }
-
-        private static JObject ToJObject(object result)
-        {
-            return result as JObject ?? JObject.FromObject(result);
+            // Clean up empty parent folders to avoid debris
+            CleanupEmptyParentFolders(TempRoot);
         }
 
         [Test]
