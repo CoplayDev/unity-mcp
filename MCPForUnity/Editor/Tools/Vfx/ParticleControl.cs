@@ -3,7 +3,7 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 
-namespace MCPForUnity.Editor.Tools.ManageVfx
+namespace MCPForUnity.Editor.Tools.Vfx
 {
     internal static class ParticleControl
     {

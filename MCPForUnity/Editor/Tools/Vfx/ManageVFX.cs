@@ -5,7 +5,7 @@ using System.Reflection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Helpers;
-using MCPForUnity.Editor.Tools.ManageVfx;
+using MCPForUnity.Editor.Tools.Vfx;
 using UnityEngine;
 using UnityEditor;
 

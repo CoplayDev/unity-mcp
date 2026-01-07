@@ -1,7 +1,7 @@
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 
-namespace MCPForUnity.Editor.Tools.ManageVfx
+namespace MCPForUnity.Editor.Tools.Vfx
 {
     internal static class ParticleCommon
     {

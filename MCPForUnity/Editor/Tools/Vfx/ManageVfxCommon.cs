@@ -2,7 +2,7 @@ using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Helpers;
 using UnityEngine;
 
-namespace MCPForUnity.Editor.Tools.ManageVfx
+namespace MCPForUnity.Editor.Tools.Vfx
 {
     internal static class ManageVfxCommon
     {
