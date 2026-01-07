@@ -278,6 +278,132 @@ namespace MCPForUnity.Editor.Tools
             return ManageGameObject.FindObjectByInstruction(instruction, typeof(GameObject)) as GameObject;
         }
 
+        /// <summary>
+        /// Applies common Renderer properties (shadows, lighting, probes, sorting, rendering layer).
+        /// Used by ParticleSetRenderer, LineSetProperties, TrailSetProperties.
+        /// </summary>
+        private static void ApplyCommonRendererProperties(Renderer renderer, JObject @params, List<string> changes)
+        {
+            // Shadows
+            if (@params["shadowCastingMode"] != null && Enum.TryParse<UnityEngine.Rendering.ShadowCastingMode>(@params["shadowCastingMode"].ToString(), true, out var shadowMode)) 
+            { renderer.shadowCastingMode = shadowMode; changes.Add("shadowCastingMode"); }
+            if (@params["receiveShadows"] != null) { renderer.receiveShadows = @params["receiveShadows"].ToObject<bool>(); changes.Add("receiveShadows"); }
+            if (@params["shadowBias"] != null) { renderer.shadowBias = @params["shadowBias"].ToObject<float>(); changes.Add("shadowBias"); }
+            
+            // Lighting and probes
+            if (@params["lightProbeUsage"] != null && Enum.TryParse<UnityEngine.Rendering.LightProbeUsage>(@params["lightProbeUsage"].ToString(), true, out var probeUsage)) 
+            { renderer.lightProbeUsage = probeUsage; changes.Add("lightProbeUsage"); }
+            if (@params["reflectionProbeUsage"] != null && Enum.TryParse<UnityEngine.Rendering.ReflectionProbeUsage>(@params["reflectionProbeUsage"].ToString(), true, out var reflectionUsage)) 
+            { renderer.reflectionProbeUsage = reflectionUsage; changes.Add("reflectionProbeUsage"); }
+            
+            // Motion vectors
+            if (@params["motionVectorGenerationMode"] != null && Enum.TryParse<MotionVectorGenerationMode>(@params["motionVectorGenerationMode"].ToString(), true, out var motionMode)) 
+            { renderer.motionVectorGenerationMode = motionMode; changes.Add("motionVectorGenerationMode"); }
+            
+            // Sorting
+            if (@params["sortingOrder"] != null) { renderer.sortingOrder = @params["sortingOrder"].ToObject<int>(); changes.Add("sortingOrder"); }
+            if (@params["sortingLayerName"] != null) { renderer.sortingLayerName = @params["sortingLayerName"].ToString(); changes.Add("sortingLayerName"); }
+            if (@params["sortingLayerID"] != null) { renderer.sortingLayerID = @params["sortingLayerID"].ToObject<int>(); changes.Add("sortingLayerID"); }
+            
+            // Rendering layer mask (for SRP)
+            if (@params["renderingLayerMask"] != null) { renderer.renderingLayerMask = @params["renderingLayerMask"].ToObject<uint>(); changes.Add("renderingLayerMask"); }
+        }
+
+        /// <summary>
+        /// Gets common Renderer properties for GetInfo methods.
+        /// </summary>
+        private static object GetCommonRendererInfo(Renderer renderer)
+        {
+            return new
+            {
+                shadowCastingMode = renderer.shadowCastingMode.ToString(),
+                receiveShadows = renderer.receiveShadows,
+                lightProbeUsage = renderer.lightProbeUsage.ToString(),
+                reflectionProbeUsage = renderer.reflectionProbeUsage.ToString(),
+                sortingOrder = renderer.sortingOrder,
+                sortingLayerName = renderer.sortingLayerName,
+                renderingLayerMask = renderer.renderingLayerMask
+            };
+        }
+
+        /// <summary>
+        /// Sets width properties for LineRenderer or TrailRenderer.
+        /// </summary>
+        private static void ApplyWidthProperties(JObject @params, List<string> changes,
+            Action<float> setStartWidth, Action<float> setEndWidth,
+            Action<AnimationCurve> setWidthCurve, Action<float> setWidthMultiplier)
+        {
+            if (@params["width"] != null) 
+            { 
+                float w = @params["width"].ToObject<float>(); 
+                setStartWidth(w); 
+                setEndWidth(w); 
+                changes.Add("width"); 
+            }
+            if (@params["startWidth"] != null) { setStartWidth(@params["startWidth"].ToObject<float>()); changes.Add("startWidth"); }
+            if (@params["endWidth"] != null) { setEndWidth(@params["endWidth"].ToObject<float>()); changes.Add("endWidth"); }
+            if (@params["widthCurve"] != null) { setWidthCurve(ParseAnimationCurve(@params["widthCurve"], 1f)); changes.Add("widthCurve"); }
+            if (@params["widthMultiplier"] != null) { setWidthMultiplier(@params["widthMultiplier"].ToObject<float>()); changes.Add("widthMultiplier"); }
+        }
+
+        /// <summary>
+        /// Sets color properties for LineRenderer or TrailRenderer.
+        /// </summary>
+        private static void ApplyColorProperties(JObject @params, List<string> changes,
+            Action<Color> setStartColor, Action<Color> setEndColor,
+            Action<Gradient> setGradient, bool fadeEndAlpha = false)
+        {
+            if (@params["color"] != null) 
+            { 
+                Color c = ParseColor(@params["color"]); 
+                setStartColor(c); 
+                setEndColor(fadeEndAlpha ? new Color(c.r, c.g, c.b, 0f) : c); 
+                changes.Add("color"); 
+            }
+            if (@params["startColor"] != null) { setStartColor(ParseColor(@params["startColor"])); changes.Add("startColor"); }
+            if (@params["endColor"] != null) { setEndColor(ParseColor(@params["endColor"])); changes.Add("endColor"); }
+            if (@params["gradient"] != null) { setGradient(ParseGradient(@params["gradient"])); changes.Add("gradient"); }
+        }
+
+        /// <summary>
+        /// Sets material for a Renderer.
+        /// </summary>
+        private static object SetRendererMaterial(Renderer renderer, JObject @params, string undoName)
+        {
+            if (renderer == null) return new { success = false, message = $"{renderer?.GetType().Name ?? "Renderer"} not found" };
+
+            string path = @params["materialPath"]?.ToString();
+            if (string.IsNullOrEmpty(path)) return new { success = false, message = "materialPath required" };
+
+            var findInst = new JObject { ["find"] = path };
+            Material mat = ManageGameObject.FindObjectByInstruction(findInst, typeof(Material)) as Material;
+            if (mat == null) return new { success = false, message = $"Material not found: {path}" };
+
+            Undo.RecordObject(renderer, undoName);
+            renderer.sharedMaterial = mat;
+            EditorUtility.SetDirty(renderer);
+
+            return new { success = true, message = $"Set material to {mat.name}" };
+        }
+
+        /// <summary>
+        /// Applies Line/Trail specific properties (loop, alignment, textureMode, etc.).
+        /// </summary>
+        private static void ApplyLineTrailProperties(JObject @params, List<string> changes,
+            Action<bool> setLoop, Action<bool> setUseWorldSpace,
+            Action<int> setNumCornerVertices, Action<int> setNumCapVertices,
+            Action<LineAlignment> setAlignment, Action<LineTextureMode> setTextureMode,
+            Action<bool> setGenerateLightingData)
+        {
+            if (@params["loop"] != null && setLoop != null) { setLoop(@params["loop"].ToObject<bool>()); changes.Add("loop"); }
+            if (@params["useWorldSpace"] != null && setUseWorldSpace != null) { setUseWorldSpace(@params["useWorldSpace"].ToObject<bool>()); changes.Add("useWorldSpace"); }
+            if (@params["numCornerVertices"] != null) { setNumCornerVertices(@params["numCornerVertices"].ToObject<int>()); changes.Add("numCornerVertices"); }
+            if (@params["numCapVertices"] != null) { setNumCapVertices(@params["numCapVertices"].ToObject<int>()); changes.Add("numCapVertices"); }
+            if (@params["alignment"] != null && Enum.TryParse<LineAlignment>(@params["alignment"].ToString(), true, out var align)) { setAlignment(align); changes.Add("alignment"); }
+            if (@params["textureMode"] != null && Enum.TryParse<LineTextureMode>(@params["textureMode"].ToString(), true, out var texMode)) { setTextureMode(texMode); changes.Add("textureMode"); }
+            if (@params["generateLightingData"] != null) { setGenerateLightingData(@params["generateLightingData"].ToObject<bool>()); changes.Add("generateLightingData"); }
+        }
+
         #endregion
 
         // ==================== PARTICLE SYSTEM ====================
@@ -644,25 +770,8 @@ namespace MCPForUnity.Editor.Tools
             if (@params["flip"] != null) { renderer.flip = ParseVector3(@params["flip"]); changes.Add("flip"); }
             if (@params["allowRoll"] != null) { renderer.allowRoll = @params["allowRoll"].ToObject<bool>(); changes.Add("allowRoll"); }
             
-            // Common Renderer properties - Shadows
-            if (@params["shadowCastingMode"] != null && Enum.TryParse<UnityEngine.Rendering.ShadowCastingMode>(@params["shadowCastingMode"].ToString(), true, out var shadowMode)) { renderer.shadowCastingMode = shadowMode; changes.Add("shadowCastingMode"); }
-            if (@params["receiveShadows"] != null) { renderer.receiveShadows = @params["receiveShadows"].ToObject<bool>(); changes.Add("receiveShadows"); }
-            if (@params["shadowBias"] != null) { renderer.shadowBias = @params["shadowBias"].ToObject<float>(); changes.Add("shadowBias"); }
-            
-            // Lighting and probes
-            if (@params["lightProbeUsage"] != null && Enum.TryParse<UnityEngine.Rendering.LightProbeUsage>(@params["lightProbeUsage"].ToString(), true, out var probeUsage)) { renderer.lightProbeUsage = probeUsage; changes.Add("lightProbeUsage"); }
-            if (@params["reflectionProbeUsage"] != null && Enum.TryParse<UnityEngine.Rendering.ReflectionProbeUsage>(@params["reflectionProbeUsage"].ToString(), true, out var reflectionUsage)) { renderer.reflectionProbeUsage = reflectionUsage; changes.Add("reflectionProbeUsage"); }
-            
-            // Motion vectors
-            if (@params["motionVectorGenerationMode"] != null && Enum.TryParse<MotionVectorGenerationMode>(@params["motionVectorGenerationMode"].ToString(), true, out var motionMode)) { renderer.motionVectorGenerationMode = motionMode; changes.Add("motionVectorGenerationMode"); }
-            
-            // Sorting
-            if (@params["sortingOrder"] != null) { renderer.sortingOrder = @params["sortingOrder"].ToObject<int>(); changes.Add("sortingOrder"); }
-            if (@params["sortingLayerName"] != null) { renderer.sortingLayerName = @params["sortingLayerName"].ToString(); changes.Add("sortingLayerName"); }
-            if (@params["sortingLayerID"] != null) { renderer.sortingLayerID = @params["sortingLayerID"].ToObject<int>(); changes.Add("sortingLayerID"); }
-            
-            // Rendering layer mask (for SRP)
-            if (@params["renderingLayerMask"] != null) { renderer.renderingLayerMask = @params["renderingLayerMask"].ToObject<uint>(); changes.Add("renderingLayerMask"); }
+            // Common Renderer properties (shadows, lighting, probes, sorting)
+            ApplyCommonRendererProperties(renderer, @params, changes);
             
             // Material
             if (@params["materialPath"] != null)
@@ -1510,11 +1619,9 @@ namespace MCPForUnity.Editor.Tools
             Undo.RecordObject(lr, "Set Line Width");
             var changes = new List<string>();
 
-            if (@params["width"] != null) { float w = @params["width"].ToObject<float>(); lr.startWidth = w; lr.endWidth = w; changes.Add("width"); }
-            if (@params["startWidth"] != null) { lr.startWidth = @params["startWidth"].ToObject<float>(); changes.Add("startWidth"); }
-            if (@params["endWidth"] != null) { lr.endWidth = @params["endWidth"].ToObject<float>(); changes.Add("endWidth"); }
-            if (@params["widthCurve"] != null) { lr.widthCurve = ParseAnimationCurve(@params["widthCurve"], 1f); changes.Add("widthCurve"); }
-            if (@params["widthMultiplier"] != null) { lr.widthMultiplier = @params["widthMultiplier"].ToObject<float>(); changes.Add("widthMultiplier"); }
+            ApplyWidthProperties(@params, changes,
+                v => lr.startWidth = v, v => lr.endWidth = v,
+                v => lr.widthCurve = v, v => lr.widthMultiplier = v);
 
             EditorUtility.SetDirty(lr);
             return new { success = true, message = $"Updated: {string.Join(", ", changes)}" };
@@ -1528,10 +1635,9 @@ namespace MCPForUnity.Editor.Tools
             Undo.RecordObject(lr, "Set Line Color");
             var changes = new List<string>();
 
-            if (@params["color"] != null) { Color c = ParseColor(@params["color"]); lr.startColor = c; lr.endColor = c; changes.Add("color"); }
-            if (@params["startColor"] != null) { lr.startColor = ParseColor(@params["startColor"]); changes.Add("startColor"); }
-            if (@params["endColor"] != null) { lr.endColor = ParseColor(@params["endColor"]); changes.Add("endColor"); }
-            if (@params["gradient"] != null) { lr.colorGradient = ParseGradient(@params["gradient"]); changes.Add("gradient"); }
+            ApplyColorProperties(@params, changes,
+                v => lr.startColor = v, v => lr.endColor = v,
+                v => lr.colorGradient = v, fadeEndAlpha: false);
 
             EditorUtility.SetDirty(lr);
             return new { success = true, message = $"Updated: {string.Join(", ", changes)}" };
@@ -1540,20 +1646,7 @@ namespace MCPForUnity.Editor.Tools
         private static object LineSetMaterial(JObject @params)
         {
             LineRenderer lr = FindLineRenderer(@params);
-            if (lr == null) return new { success = false, message = "LineRenderer not found" };
-
-            string path = @params["materialPath"]?.ToString();
-            if (string.IsNullOrEmpty(path)) return new { success = false, message = "materialPath required" };
-
-            var findInst = new JObject { ["find"] = path };
-            Material mat = ManageGameObject.FindObjectByInstruction(findInst, typeof(Material)) as Material;
-            if (mat == null) return new { success = false, message = $"Material not found: {path}" };
-
-            Undo.RecordObject(lr, "Set Line Material");
-            lr.sharedMaterial = mat;
-            EditorUtility.SetDirty(lr);
-
-            return new { success = true, message = $"Set material to {mat.name}" };
+            return SetRendererMaterial(lr, @params, "Set Line Material");
         }
 
         private static object LineSetProperties(JObject @params)
@@ -1565,33 +1658,14 @@ namespace MCPForUnity.Editor.Tools
             var changes = new List<string>();
 
             // Line-specific properties
-            if (@params["loop"] != null) { lr.loop = @params["loop"].ToObject<bool>(); changes.Add("loop"); }
-            if (@params["useWorldSpace"] != null) { lr.useWorldSpace = @params["useWorldSpace"].ToObject<bool>(); changes.Add("useWorldSpace"); }
-            if (@params["numCornerVertices"] != null) { lr.numCornerVertices = @params["numCornerVertices"].ToObject<int>(); changes.Add("numCornerVertices"); }
-            if (@params["numCapVertices"] != null) { lr.numCapVertices = @params["numCapVertices"].ToObject<int>(); changes.Add("numCapVertices"); }
-            if (@params["alignment"] != null && Enum.TryParse<LineAlignment>(@params["alignment"].ToString(), true, out var align)) { lr.alignment = align; changes.Add("alignment"); }
-            if (@params["textureMode"] != null && Enum.TryParse<LineTextureMode>(@params["textureMode"].ToString(), true, out var texMode)) { lr.textureMode = texMode; changes.Add("textureMode"); }
-            if (@params["generateLightingData"] != null) { lr.generateLightingData = @params["generateLightingData"].ToObject<bool>(); changes.Add("generateLightingData"); }
+            ApplyLineTrailProperties(@params, changes,
+                v => lr.loop = v, v => lr.useWorldSpace = v,
+                v => lr.numCornerVertices = v, v => lr.numCapVertices = v,
+                v => lr.alignment = v, v => lr.textureMode = v,
+                v => lr.generateLightingData = v);
             
-            // Common Renderer properties - Shadows
-            if (@params["shadowCastingMode"] != null && Enum.TryParse<UnityEngine.Rendering.ShadowCastingMode>(@params["shadowCastingMode"].ToString(), true, out var shadowMode)) { lr.shadowCastingMode = shadowMode; changes.Add("shadowCastingMode"); }
-            if (@params["receiveShadows"] != null) { lr.receiveShadows = @params["receiveShadows"].ToObject<bool>(); changes.Add("receiveShadows"); }
-            if (@params["shadowBias"] != null) { lr.shadowBias = @params["shadowBias"].ToObject<float>(); changes.Add("shadowBias"); }
-            
-            // Lighting and probes
-            if (@params["lightProbeUsage"] != null && Enum.TryParse<UnityEngine.Rendering.LightProbeUsage>(@params["lightProbeUsage"].ToString(), true, out var probeUsage)) { lr.lightProbeUsage = probeUsage; changes.Add("lightProbeUsage"); }
-            if (@params["reflectionProbeUsage"] != null && Enum.TryParse<UnityEngine.Rendering.ReflectionProbeUsage>(@params["reflectionProbeUsage"].ToString(), true, out var reflectionUsage)) { lr.reflectionProbeUsage = reflectionUsage; changes.Add("reflectionProbeUsage"); }
-            
-            // Motion vectors
-            if (@params["motionVectorGenerationMode"] != null && Enum.TryParse<MotionVectorGenerationMode>(@params["motionVectorGenerationMode"].ToString(), true, out var motionMode)) { lr.motionVectorGenerationMode = motionMode; changes.Add("motionVectorGenerationMode"); }
-            
-            // Sorting
-            if (@params["sortingOrder"] != null) { lr.sortingOrder = @params["sortingOrder"].ToObject<int>(); changes.Add("sortingOrder"); }
-            if (@params["sortingLayerName"] != null) { lr.sortingLayerName = @params["sortingLayerName"].ToString(); changes.Add("sortingLayerName"); }
-            if (@params["sortingLayerID"] != null) { lr.sortingLayerID = @params["sortingLayerID"].ToObject<int>(); changes.Add("sortingLayerID"); }
-            
-            // Rendering layer mask (for SRP)
-            if (@params["renderingLayerMask"] != null) { lr.renderingLayerMask = @params["renderingLayerMask"].ToObject<uint>(); changes.Add("renderingLayerMask"); }
+            // Common Renderer properties (shadows, lighting, probes, sorting)
+            ApplyCommonRendererProperties(lr, @params, changes);
 
             EditorUtility.SetDirty(lr);
             return new { success = true, message = $"Updated: {string.Join(", ", changes)}" };
@@ -1818,11 +1892,9 @@ namespace MCPForUnity.Editor.Tools
             Undo.RecordObject(tr, "Set Trail Width");
             var changes = new List<string>();
 
-            if (@params["width"] != null) { float w = @params["width"].ToObject<float>(); tr.startWidth = w; tr.endWidth = w; changes.Add("width"); }
-            if (@params["startWidth"] != null) { tr.startWidth = @params["startWidth"].ToObject<float>(); changes.Add("startWidth"); }
-            if (@params["endWidth"] != null) { tr.endWidth = @params["endWidth"].ToObject<float>(); changes.Add("endWidth"); }
-            if (@params["widthCurve"] != null) { tr.widthCurve = ParseAnimationCurve(@params["widthCurve"], 1f); changes.Add("widthCurve"); }
-            if (@params["widthMultiplier"] != null) { tr.widthMultiplier = @params["widthMultiplier"].ToObject<float>(); changes.Add("widthMultiplier"); }
+            ApplyWidthProperties(@params, changes,
+                v => tr.startWidth = v, v => tr.endWidth = v,
+                v => tr.widthCurve = v, v => tr.widthMultiplier = v);
 
             EditorUtility.SetDirty(tr);
             return new { success = true, message = $"Updated: {string.Join(", ", changes)}" };
@@ -1836,10 +1908,9 @@ namespace MCPForUnity.Editor.Tools
             Undo.RecordObject(tr, "Set Trail Color");
             var changes = new List<string>();
 
-            if (@params["color"] != null) { Color c = ParseColor(@params["color"]); tr.startColor = c; tr.endColor = new Color(c.r, c.g, c.b, 0f); changes.Add("color"); }
-            if (@params["startColor"] != null) { tr.startColor = ParseColor(@params["startColor"]); changes.Add("startColor"); }
-            if (@params["endColor"] != null) { tr.endColor = ParseColor(@params["endColor"]); changes.Add("endColor"); }
-            if (@params["gradient"] != null) { tr.colorGradient = ParseGradient(@params["gradient"]); changes.Add("gradient"); }
+            ApplyColorProperties(@params, changes,
+                v => tr.startColor = v, v => tr.endColor = v,
+                v => tr.colorGradient = v, fadeEndAlpha: true);
 
             EditorUtility.SetDirty(tr);
             return new { success = true, message = $"Updated: {string.Join(", ", changes)}" };
@@ -1848,20 +1919,7 @@ namespace MCPForUnity.Editor.Tools
         private static object TrailSetMaterial(JObject @params)
         {
             TrailRenderer tr = FindTrailRenderer(@params);
-            if (tr == null) return new { success = false, message = "TrailRenderer not found" };
-
-            string path = @params["materialPath"]?.ToString();
-            if (string.IsNullOrEmpty(path)) return new { success = false, message = "materialPath required" };
-
-            var findInst = new JObject { ["find"] = path };
-            Material mat = ManageGameObject.FindObjectByInstruction(findInst, typeof(Material)) as Material;
-            if (mat == null) return new { success = false, message = $"Material not found: {path}" };
-
-            Undo.RecordObject(tr, "Set Trail Material");
-            tr.sharedMaterial = mat;
-            EditorUtility.SetDirty(tr);
-
-            return new { success = true, message = $"Set material to {mat.name}" };
+            return SetRendererMaterial(tr, @params, "Set Trail Material");
         }
 
         private static object TrailSetProperties(JObject @params)
@@ -1872,35 +1930,20 @@ namespace MCPForUnity.Editor.Tools
             Undo.RecordObject(tr, "Set Trail Properties");
             var changes = new List<string>();
 
-            // Trail-specific properties
+            // Trail-specific properties (not shared with LineRenderer)
             if (@params["minVertexDistance"] != null) { tr.minVertexDistance = @params["minVertexDistance"].ToObject<float>(); changes.Add("minVertexDistance"); }
             if (@params["autodestruct"] != null) { tr.autodestruct = @params["autodestruct"].ToObject<bool>(); changes.Add("autodestruct"); }
             if (@params["emitting"] != null) { tr.emitting = @params["emitting"].ToObject<bool>(); changes.Add("emitting"); }
-            if (@params["numCornerVertices"] != null) { tr.numCornerVertices = @params["numCornerVertices"].ToObject<int>(); changes.Add("numCornerVertices"); }
-            if (@params["numCapVertices"] != null) { tr.numCapVertices = @params["numCapVertices"].ToObject<int>(); changes.Add("numCapVertices"); }
-            if (@params["alignment"] != null && Enum.TryParse<LineAlignment>(@params["alignment"].ToString(), true, out var align)) { tr.alignment = align; changes.Add("alignment"); }
-            if (@params["textureMode"] != null && Enum.TryParse<LineTextureMode>(@params["textureMode"].ToString(), true, out var texMode)) { tr.textureMode = texMode; changes.Add("textureMode"); }
-            if (@params["generateLightingData"] != null) { tr.generateLightingData = @params["generateLightingData"].ToObject<bool>(); changes.Add("generateLightingData"); }
             
-            // Common Renderer properties - Shadows
-            if (@params["shadowCastingMode"] != null && Enum.TryParse<UnityEngine.Rendering.ShadowCastingMode>(@params["shadowCastingMode"].ToString(), true, out var shadowMode)) { tr.shadowCastingMode = shadowMode; changes.Add("shadowCastingMode"); }
-            if (@params["receiveShadows"] != null) { tr.receiveShadows = @params["receiveShadows"].ToObject<bool>(); changes.Add("receiveShadows"); }
-            if (@params["shadowBias"] != null) { tr.shadowBias = @params["shadowBias"].ToObject<float>(); changes.Add("shadowBias"); }
+            // Shared Line/Trail properties
+            ApplyLineTrailProperties(@params, changes,
+                null, null, // Trail doesn't have loop or useWorldSpace
+                v => tr.numCornerVertices = v, v => tr.numCapVertices = v,
+                v => tr.alignment = v, v => tr.textureMode = v,
+                v => tr.generateLightingData = v);
             
-            // Lighting and probes
-            if (@params["lightProbeUsage"] != null && Enum.TryParse<UnityEngine.Rendering.LightProbeUsage>(@params["lightProbeUsage"].ToString(), true, out var probeUsage)) { tr.lightProbeUsage = probeUsage; changes.Add("lightProbeUsage"); }
-            if (@params["reflectionProbeUsage"] != null && Enum.TryParse<UnityEngine.Rendering.ReflectionProbeUsage>(@params["reflectionProbeUsage"].ToString(), true, out var reflectionUsage)) { tr.reflectionProbeUsage = reflectionUsage; changes.Add("reflectionProbeUsage"); }
-            
-            // Motion vectors
-            if (@params["motionVectorGenerationMode"] != null && Enum.TryParse<MotionVectorGenerationMode>(@params["motionVectorGenerationMode"].ToString(), true, out var motionMode)) { tr.motionVectorGenerationMode = motionMode; changes.Add("motionVectorGenerationMode"); }
-            
-            // Sorting
-            if (@params["sortingOrder"] != null) { tr.sortingOrder = @params["sortingOrder"].ToObject<int>(); changes.Add("sortingOrder"); }
-            if (@params["sortingLayerName"] != null) { tr.sortingLayerName = @params["sortingLayerName"].ToString(); changes.Add("sortingLayerName"); }
-            if (@params["sortingLayerID"] != null) { tr.sortingLayerID = @params["sortingLayerID"].ToObject<int>(); changes.Add("sortingLayerID"); }
-            
-            // Rendering layer mask (for SRP)
-            if (@params["renderingLayerMask"] != null) { tr.renderingLayerMask = @params["renderingLayerMask"].ToObject<uint>(); changes.Add("renderingLayerMask"); }
+            // Common Renderer properties (shadows, lighting, probes, sorting)
+            ApplyCommonRendererProperties(tr, @params, changes);
 
             EditorUtility.SetDirty(tr);
             return new { success = true, message = $"Updated: {string.Join(", ", changes)}" };
