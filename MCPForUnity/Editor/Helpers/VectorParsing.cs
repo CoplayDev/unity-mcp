@@ -273,7 +273,7 @@ namespace MCPForUnity.Editor.Helpers
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[VectorParsing] Failed to parse Vector4 from '{token}': {ex.Message}");
+                McpLog.Warn($"[VectorParsing] Failed to parse Vector4 from '{token}': {ex.Message}");
             }
 
             return null;

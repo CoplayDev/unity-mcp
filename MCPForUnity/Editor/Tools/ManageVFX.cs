@@ -877,6 +877,16 @@ namespace MCPForUnity.Editor.Tools
             searchPaths.Add("Assets/VFX/Templates");
             searchPaths.Add("Assets/VFX");
             
+            // Precompute normalized package path for comparison
+            string normalizedPackagePath = null;
+            if (packageInfo != null)
+            {
+                normalizedPackagePath = packageInfo.resolvedPath.Replace("\\", "/");
+            }
+            
+            // Precompute the Assets base path for converting absolute paths to project-relative
+            string assetsBasePath = Application.dataPath.Replace("\\", "/");
+            
             foreach (string basePath in searchPaths)
             {
                 if (!System.IO.Directory.Exists(basePath)) continue;
@@ -886,10 +896,29 @@ namespace MCPForUnity.Editor.Tools
                     string[] vfxFiles = System.IO.Directory.GetFiles(basePath, "*.vfx", System.IO.SearchOption.AllDirectories);
                     foreach (string file in vfxFiles)
                     {
-                        string relativePath = file.Replace("\\", "/");
+                        string absolutePath = file.Replace("\\", "/");
                         string name = System.IO.Path.GetFileNameWithoutExtension(file);
-                        bool isPackage = packageInfo != null && relativePath.StartsWith(packageInfo.resolvedPath.Replace("\\", "/"));
-                        templates.Add(new { name = name, path = relativePath, source = isPackage ? "package" : "project" });
+                        bool isPackage = normalizedPackagePath != null && absolutePath.StartsWith(normalizedPackagePath);
+                        
+                        // Convert absolute path to project-relative path
+                        string projectRelativePath;
+                        if (isPackage)
+                        {
+                            // For package paths, convert to Packages/... format
+                            projectRelativePath = "Packages/" + packageInfo.name + absolutePath.Substring(normalizedPackagePath.Length);
+                        }
+                        else if (absolutePath.StartsWith(assetsBasePath))
+                        {
+                            // For project assets, convert to Assets/... format
+                            projectRelativePath = "Assets" + absolutePath.Substring(assetsBasePath.Length);
+                        }
+                        else
+                        {
+                            // Fallback: use the absolute path if we can't determine the relative path
+                            projectRelativePath = absolutePath;
+                        }
+                        
+                        templates.Add(new { name = name, path = projectRelativePath, source = isPackage ? "package" : "project" });
                     }
                 }
                 catch { }
@@ -1648,6 +1677,7 @@ namespace MCPForUnity.Editor.Tools
             TrailRenderer tr = FindTrailRenderer(@params);
             if (tr == null) return new { success = false, message = "TrailRenderer not found" };
 
+            Undo.RecordObject(tr, "Clear Trail");
             tr.Clear();
             return new { success = true, message = "Trail cleared" };
         }

@@ -156,11 +156,11 @@ namespace MCPForUnity.Editor.Helpers
         {
             if (@params["loop"] != null && setLoop != null) { setLoop(@params["loop"].ToObject<bool>()); changes.Add("loop"); }
             if (@params["useWorldSpace"] != null && setUseWorldSpace != null) { setUseWorldSpace(@params["useWorldSpace"].ToObject<bool>()); changes.Add("useWorldSpace"); }
-            if (@params["numCornerVertices"] != null) { setNumCornerVertices(@params["numCornerVertices"].ToObject<int>()); changes.Add("numCornerVertices"); }
-            if (@params["numCapVertices"] != null) { setNumCapVertices(@params["numCapVertices"].ToObject<int>()); changes.Add("numCapVertices"); }
-            if (@params["alignment"] != null && Enum.TryParse<LineAlignment>(@params["alignment"].ToString(), true, out var align)) { setAlignment(align); changes.Add("alignment"); }
-            if (@params["textureMode"] != null && Enum.TryParse<LineTextureMode>(@params["textureMode"].ToString(), true, out var texMode)) { setTextureMode(texMode); changes.Add("textureMode"); }
-            if (@params["generateLightingData"] != null) { setGenerateLightingData(@params["generateLightingData"].ToObject<bool>()); changes.Add("generateLightingData"); }
+            if (@params["numCornerVertices"] != null && setNumCornerVertices != null) { setNumCornerVertices(@params["numCornerVertices"].ToObject<int>()); changes.Add("numCornerVertices"); }
+            if (@params["numCapVertices"] != null && setNumCapVertices != null) { setNumCapVertices(@params["numCapVertices"].ToObject<int>()); changes.Add("numCapVertices"); }
+            if (@params["alignment"] != null && setAlignment != null && Enum.TryParse<LineAlignment>(@params["alignment"].ToString(), true, out var align)) { setAlignment(align); changes.Add("alignment"); }
+            if (@params["textureMode"] != null && setTextureMode != null && Enum.TryParse<LineTextureMode>(@params["textureMode"].ToString(), true, out var texMode)) { setTextureMode(texMode); changes.Add("textureMode"); }
+            if (@params["generateLightingData"] != null && setGenerateLightingData != null) { setGenerateLightingData(@params["generateLightingData"].ToObject<bool>()); changes.Add("generateLightingData"); }
         }
 
     }
