@@ -295,11 +295,14 @@ async def manage_vfx(
     
 ) -> dict[str, Any]:
     """Unified VFX management tool."""
-    
-    # Validate action against known actions
-    if action not in ALL_ACTIONS:
+
+    # Normalize action to lowercase to match Unity-side behavior
+    action_normalized = action.lower()
+
+    # Validate action against known actions using normalized value
+    if action_normalized not in ALL_ACTIONS:
         # Provide helpful error with closest matches by prefix
-        prefix = action.split("_")[0] + "_" if "_" in action else ""
+        prefix = action_normalized.split("_")[0] + "_" if "_" in action_normalized else ""
         available_by_prefix = {
             "particle_": PARTICLE_ACTIONS,
             "vfx_": VFX_ACTIONS,
@@ -308,14 +311,23 @@ async def manage_vfx(
         }
         suggestions = available_by_prefix.get(prefix, [])
         if suggestions:
-            return {"success": False, "message": f"Unknown action '{action}'. Available {prefix}* actions: {', '.join(suggestions)}"}
+            return {
+                "success": False,
+                "message": f"Unknown action '{action}'. Available {prefix}* actions: {', '.join(suggestions)}",
+            }
         else:
-            return {"success": False, "message": f"Unknown action '{action}'. Use prefixes: particle_*, vfx_*, line_*, trail_*. Run with action='ping' to test connection."}
-    
+            return {
+                "success": False,
+                "message": (
+                    f"Unknown action '{action}'. Use prefixes: "
+                    "particle_*, vfx_*, line_*, trail_*. Run with action='ping' to test connection."
+                ),
+            }
+
     unity_instance = get_unity_instance_from_context(ctx)
-    
-    # Build parameters dict with normalization at entry point
-    params_dict: dict[str, Any] = {"action": action}
+
+    # Build parameters dict with normalized action to stay consistent with Unity
+    params_dict: dict[str, Any] = {"action": action_normalized}
     
     # Target
     if target is not None:
