@@ -14,7 +14,7 @@ from services.tools.preflight import preflight
 
 
 @mcp_for_unity_tool(
-    description="Search for GameObjects in the scene. Returns instance IDs only (paginated) for efficient lookups. Use unity://scene/gameobject/{id} resource to get full GameObject data."
+    description="Search for GameObjects in the scene. Returns instance IDs only (paginated) for efficient lookups. Use mcpforunity://scene/gameobject/{id} resource to get full GameObject data."
 )
 async def find_gameobjects(
     ctx: Context,
@@ -38,9 +38,9 @@ async def find_gameobjects(
     It returns only instance IDs to minimize payload size.
 
     For detailed GameObject information, use the returned IDs with:
-    - unity://scene/gameobject/{id} - Get full GameObject data
-    - unity://scene/gameobject/{id}/components - Get all components
-    - unity://scene/gameobject/{id}/component/{name} - Get specific component
+    - mcpforunity://scene/gameobject/{id} - Get full GameObject data
+    - mcpforunity://scene/gameobject/{id}/components - Get all components
+    - mcpforunity://scene/gameobject/{id}/component/{name} - Get specific component
     """
     unity_instance = get_unity_instance_from_context(ctx)
 

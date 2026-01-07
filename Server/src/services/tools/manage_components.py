@@ -14,7 +14,7 @@ from services.tools.preflight import preflight
 
 
 @mcp_for_unity_tool(
-    description="Manages components on GameObjects (add, remove, set_property). For reading component data, use the unity://scene/gameobject/{id}/components resource."
+    description="Manages components on GameObjects (add, remove, set_property). For reading component data, use the mcpforunity://scene/gameobject/{id}/components resource."
 )
 async def manage_components(
     ctx: Context,

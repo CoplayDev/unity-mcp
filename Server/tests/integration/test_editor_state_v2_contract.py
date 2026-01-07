@@ -8,7 +8,7 @@ from .test_helpers import DummyContext
 @pytest.mark.asyncio
 async def test_editor_state_v2_is_registered_and_has_contract_fields(monkeypatch):
     """
-    Canonical editor state resource should be `unity://editor/state` and conform to v2 contract fields.
+    Canonical editor state resource should be `mcpforunity://editor/state` and conform to v2 contract fields.
     """
     # Import module to ensure it registers its decorator without disturbing global registry state.
     import services.resources.editor_state  # noqa: F401
@@ -16,11 +16,11 @@ async def test_editor_state_v2_is_registered_and_has_contract_fields(monkeypatch
     resources = get_registered_resources()
 
     state_res = next(
-        (r for r in resources if r.get("uri") == "unity://editor/state"),
+        (r for r in resources if r.get("uri") == "mcpforunity://editor/state"),
         None,
     )
     assert state_res is not None, (
-        "Expected canonical editor state resource `unity://editor/state` to be registered. "
+        "Expected canonical editor state resource `mcpforunity://editor/state` to be registered. "
         "This is required so clients can poll readiness/staleness and avoid tool loops."
     )
 

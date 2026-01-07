@@ -2,9 +2,9 @@
 MCP Resources for reading GameObject data from Unity scenes.
 
 These resources provide read-only access to:
-- Single GameObject data (unity://scene/gameobject/{id})
-- All components on a GameObject (unity://scene/gameobject/{id}/components)
-- Single component on a GameObject (unity://scene/gameobject/{id}/component/{name})
+- Single GameObject data (mcpforunity://scene/gameobject/{id})
+- All components on a GameObject (mcpforunity://scene/gameobject/{id}/components)
+- Single component on a GameObject (mcpforunity://scene/gameobject/{id}/component/{name})
 """
 from typing import Any
 from pydantic import BaseModel
@@ -40,7 +40,7 @@ def _validate_instance_id(instance_id: str) -> tuple[int | None, MCPResponse | N
 # =============================================================================
 
 @mcp_for_unity_resource(
-    uri="unity://scene/gameobject-api",
+    uri="mcpforunity://scene/gameobject-api",
     name="gameobject_api",
     description="Documentation for GameObject resources. Use find_gameobjects tool to get instance IDs, then access resources below."
 )
@@ -63,23 +63,23 @@ async def get_gameobject_api_docs(_ctx: Context) -> MCPResponse:
             "Example: Adding components to 3 objects → 1 batch_execute with 3 manage_components commands"
         ],
         "resources": {
-            "unity://scene/gameobject/{instance_id}": {
+            "mcpforunity://scene/gameobject/{instance_id}": {
                 "description": "Get basic GameObject data (name, tag, layer, transform, component type list)",
-                "example": "unity://scene/gameobject/-81840",
+                "example": "mcpforunity://scene/gameobject/-81840",
                 "returns": ["instanceID", "name", "tag", "layer", "transform", "componentTypes", "path", "parent", "children"]
             },
-            "unity://scene/gameobject/{instance_id}/components": {
+            "mcpforunity://scene/gameobject/{instance_id}/components": {
                 "description": "Get all components with full property serialization (paginated)",
-                "example": "unity://scene/gameobject/-81840/components",
+                "example": "mcpforunity://scene/gameobject/-81840/components",
                 "parameters": {
                     "page_size": "Number of components per page (default: 25)",
                     "cursor": "Pagination offset (default: 0)",
                     "include_properties": "Include full property data (default: true)"
                 }
             },
-            "unity://scene/gameobject/{instance_id}/component/{component_name}": {
+            "mcpforunity://scene/gameobject/{instance_id}/component/{component_name}": {
                 "description": "Get a single component by type name with full properties",
-                "example": "unity://scene/gameobject/-81840/component/Camera",
+                "example": "mcpforunity://scene/gameobject/-81840/component/Camera",
                 "note": "Use the component type name (e.g., 'Camera', 'Rigidbody', 'Transform')"
             }
         },
@@ -127,7 +127,7 @@ class GameObjectResponse(MCPResponse):
 
 
 @mcp_for_unity_resource(
-    uri="unity://scene/gameobject/{instance_id}",
+    uri="mcpforunity://scene/gameobject/{instance_id}",
     name="gameobject",
     description="Get detailed information about a single GameObject by instance ID. Returns name, tag, layer, active state, transform data, parent/children IDs, and component type list (no full component properties)."
 )
@@ -168,7 +168,7 @@ class ComponentsResponse(MCPResponse):
 
 
 @mcp_for_unity_resource(
-    uri="unity://scene/gameobject/{instance_id}/components",
+    uri="mcpforunity://scene/gameobject/{instance_id}/components",
     name="gameobject_components",
     description="Get all components on a GameObject with full property serialization. Supports pagination with pageSize and cursor parameters."
 )
@@ -214,7 +214,7 @@ class SingleComponentResponse(MCPResponse):
 
 
 @mcp_for_unity_resource(
-    uri="unity://scene/gameobject/{instance_id}/component/{component_name}",
+    uri="mcpforunity://scene/gameobject/{instance_id}/component/{component_name}",
     name="gameobject_component",
     description="Get a specific component on a GameObject by type name. Returns the fully serialized component with all properties."
 )

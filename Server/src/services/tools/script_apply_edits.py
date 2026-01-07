@@ -229,7 +229,7 @@ def _normalize_script_locator(name: str, path: str) -> tuple[str, str]:
     - name = "SmartReach.cs", path = "Assets/Scripts/Interaction"
     - name = "Assets/Scripts/Interaction/SmartReach.cs", path = ""
     - path = "Assets/Scripts/Interaction/SmartReach.cs" (name empty)
-    - name or path using uri prefixes: unity://path/..., file://...
+    - name or path using uri prefixes: mcpforunity://path/..., file://...
     - accidental duplicates like "Assets/.../SmartReach.cs/SmartReach.cs"
 
     Returns (name_without_extension, directory_path_under_Assets).
@@ -238,8 +238,8 @@ def _normalize_script_locator(name: str, path: str) -> tuple[str, str]:
     p = (path or "").strip()
 
     def strip_prefix(s: str) -> str:
-        if s.startswith("unity://path/"):
-            return s[len("unity://path/"):]
+        if s.startswith("mcpforunity://path/"):
+            return s[len("mcpforunity://path/"):]
         if s.startswith("file://"):
             return s[len("file://"):]
         return s

@@ -282,7 +282,7 @@ namespace MCPForUnity.Editor.Tools
                             catch { lengthBytes = fi.Exists ? fi.Length : 0; }
                             var data = new
                             {
-                                uri = $"unity://path/{relativePath}",
+                                uri = $"mcpforunity://path/{relativePath}",
                                 path = relativePath,
                                 sha256 = sha,
                                 lengthBytes,
@@ -372,7 +372,7 @@ namespace MCPForUnity.Editor.Tools
                     try { File.Delete(tmp); } catch { }
                 }
 
-                var uri = $"unity://path/{relativePath}";
+                var uri = $"mcpforunity://path/{relativePath}";
                 var ok = new SuccessResponse(
                     $"Script '{name}.cs' created successfully at '{relativePath}'.",
                     new { uri, scheduledRefresh = false }
@@ -401,7 +401,7 @@ namespace MCPForUnity.Editor.Tools
 
                 // Return both normal and encoded contents for larger files
                 bool isLarge = contents.Length > 10000; // If content is large, include encoded version
-                var uri = $"unity://path/{relativePath}";
+                var uri = $"mcpforunity://path/{relativePath}";
                 var responseData = new
                 {
                     uri,
@@ -481,7 +481,7 @@ namespace MCPForUnity.Editor.Tools
                 }
 
                 // Prepare success response BEFORE any operation that can trigger a domain reload
-                var uri = $"unity://path/{relativePath}";
+                var uri = $"mcpforunity://path/{relativePath}";
                 var ok = new SuccessResponse(
                     $"Script '{name}.cs' updated successfully at '{relativePath}'.",
                     new { uri, path = relativePath, scheduledRefresh = true }
@@ -704,7 +704,7 @@ namespace MCPForUnity.Editor.Tools
                     $"No-op: contents unchanged for '{relativePath}'.",
                     new
                     {
-                        uri = $"unity://path/{relativePath}",
+                        uri = $"mcpforunity://path/{relativePath}",
                         path = relativePath,
                         editsApplied = 0,
                         no_op = true,
@@ -805,7 +805,7 @@ namespace MCPForUnity.Editor.Tools
                     $"Applied {spans.Count} text edit(s) to '{relativePath}'.",
                     new
                     {
-                        uri = $"unity://path/{relativePath}",
+                        uri = $"mcpforunity://path/{relativePath}",
                         path = relativePath,
                         editsApplied = spans.Count,
                         sha256 = newSha,
@@ -1375,7 +1375,7 @@ namespace MCPForUnity.Editor.Tools
                         new
                         {
                             path = relativePath,
-                            uri = $"unity://path/{relativePath}",
+                            uri = $"mcpforunity://path/{relativePath}",
                             editsApplied = 0,
                             no_op = true,
                             sha256 = sameSha,
@@ -1441,7 +1441,7 @@ namespace MCPForUnity.Editor.Tools
                     new
                     {
                         path = relativePath,
-                        uri = $"unity://path/{relativePath}",
+                        uri = $"mcpforunity://path/{relativePath}",
                         editsApplied = appliedCount,
                         scheduledRefresh = !immediate,
                         sha256 = newSha
@@ -2637,8 +2637,8 @@ namespace MCPForUnity.Editor.Tools
         {
             if (string.IsNullOrEmpty(p)) return p;
             p = p.Replace('\\', '/').Trim();
-            if (p.StartsWith("unity://path/", StringComparison.OrdinalIgnoreCase))
-                p = p.Substring("unity://path/".Length);
+            if (p.StartsWith("mcpforunity://path/", StringComparison.OrdinalIgnoreCase))
+                p = p.Substring("mcpforunity://path/".Length);
             while (p.StartsWith("Assets/Assets/", StringComparison.OrdinalIgnoreCase))
                 p = p.Substring("Assets/".Length);
             if (!p.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))

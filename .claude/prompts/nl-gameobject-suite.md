@@ -51,7 +51,7 @@ AllowedTools: Write,mcp__UnityMCP__manage_editor,mcp__UnityMCP__manage_gameobjec
 **Goal**: Test reading a single GameObject via resource
 **Actions**:
 - Use the instance ID from GO-1
-- Call `mcp__UnityMCP__read_resource(uri="unity://scene/gameobject/{instanceID}")` replacing {instanceID} with the actual ID
+- Call `mcp__UnityMCP__read_resource(uri="mcpforunity://scene/gameobject/{instanceID}")` replacing {instanceID} with the actual ID
 - Verify response includes: instanceID, name, tag, layer, transform, path
 - **Pass criteria**: All expected fields present
 
@@ -59,7 +59,7 @@ AllowedTools: Write,mcp__UnityMCP__manage_editor,mcp__UnityMCP__manage_gameobjec
 **Goal**: Test reading components via resource
 **Actions**:
 - Use the instance ID from GO-1
-- Call `mcp__UnityMCP__read_resource(uri="unity://scene/gameobject/{instanceID}/components")` replacing {instanceID} with the actual ID
+- Call `mcp__UnityMCP__read_resource(uri="mcpforunity://scene/gameobject/{instanceID}/components")` replacing {instanceID} with the actual ID
 - Verify response includes paginated component list in `data.items`
 - Verify at least one component has typeName and instanceID
 - **Pass criteria**: Components list returned with proper pagination
@@ -94,7 +94,7 @@ AllowedTools: Write,mcp__UnityMCP__manage_editor,mcp__UnityMCP__manage_gameobjec
 **Goal**: Test reading a single component via resource
 **Actions**:
 - Get instance ID of GO_Test_Object from GO-5
-- Call `mcp__UnityMCP__read_resource(uri="unity://scene/gameobject/{instanceID}/component/Rigidbody")` replacing {instanceID}
+- Call `mcp__UnityMCP__read_resource(uri="mcpforunity://scene/gameobject/{instanceID}/component/Rigidbody")` replacing {instanceID}
 - Verify response includes component data with typeName="Rigidbody"
 - Verify mass property is 5.0 (set in GO-4)
 - **Pass criteria**: Component data returned with correct properties
@@ -131,9 +131,9 @@ AllowedTools: Write,mcp__UnityMCP__manage_editor,mcp__UnityMCP__manage_gameobjec
 - `manage_components(action, target, component_type?, properties?)` - Add/remove/set_property/get_all/get_single
 
 ### New Resources  
-- `unity://scene/gameobject/{instanceID}` - Single GameObject data
-- `unity://scene/gameobject/{instanceID}/components` - All components (paginated)
-- `unity://scene/gameobject/{instanceID}/component/{componentName}` - Single component
+- `mcpforunity://scene/gameobject/{instanceID}` - Single GameObject data
+- `mcpforunity://scene/gameobject/{instanceID}/components` - All components (paginated)
+- `mcpforunity://scene/gameobject/{instanceID}/component/{componentName}` - Single component
 
 ### Updated Resources
 - `manage_scene(action="get_hierarchy")` - Now includes `componentTypes` array in each item

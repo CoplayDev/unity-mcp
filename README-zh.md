@@ -8,6 +8,7 @@
 [![Discord](https://img.shields.io/badge/discord-join-red.svg?logo=discord&logoColor=white)](https://discord.gg/y4p8KfzrN4)
 [![](https://img.shields.io/badge/Website-Visit-purple)](https://www.coplay.dev/?ref=unity-mcp)
 [![](https://img.shields.io/badge/Unity-000000?style=flat&logo=unity&logoColor=blue 'Unity')](https://unity.com/releases/editor/archive)
+[![Unity Asset Store](https://img.shields.io/badge/Unity%20Asset%20Store-Get%20Package-FF6A00?style=flat&logo=unity&logoColor=white)](https://assetstore.unity.com/packages/tools/generative-ai/mcp-for-unity-ai-driven-development-329908)
 [![python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
 [![](https://badge.mcpx.dev?status=on 'MCP Enabled')](https://modelcontextprotocol.io/introduction)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/w/CoplayDev/unity-mcp)
@@ -18,7 +19,7 @@
 
 MCP for Unity 作为桥梁，允许 AI 助手（如 Claude、Cursor）通过本地 **MCP（模型上下文协议）客户端** 直接与您的 Unity 编辑器交互。为您的大语言模型提供管理资源、控制场景、编辑脚本和自动化 Unity 任务的工具。
 
-<img width="406" height="704" alt="MCP for Unity screenshot" src="docs/images/readme_ui.png">
+<img alt="MCP for Unity building a scene" src="docs/images/building_scene.gif">
 
 ### 💬 加入我们的 [Discord](https://discord.gg/y4p8KfzrN4)
 
@@ -39,25 +40,34 @@ MCP for Unity 作为桥梁，允许 AI 助手（如 Claude、Cursor）通过本�
 
   您的大语言模型可以使用以下功能：
 
-* `execute_custom_tool`: 执行由 Unity 注册的项目范围自定义工具。
-* `execute_menu_item`: 执行 Unity 编辑器菜单项（例如，"File/Save Project"）。
-* `manage_asset`: 执行资源操作（导入、创建、修改、删除等）。
-* `manage_editor`: 控制和查询编辑器的状态和设置。
-* `manage_gameobject`: 管理游戏对象：创建、修改、删除、查找和组件操作。
-* `manage_material`: 管理材质：创建、设置属性、分配给渲染器以及查询材质信息。
-* `manage_prefabs`: 执行预制件操作（创建、修改、删除等）。
-* `manage_scene`: 管理场景（加载、保存、创建、获取层次结构等）。
-* `manage_script`: 传统脚本操作的兼容性路由器（创建、读取、删除）。建议使用 `apply_text_edits` 或 `script_apply_edits` 进行编辑。
-* `manage_shader`: 执行着色器 CRUD 操作（创建、读取、修改、删除）。
-* `read_console`: 获取控制台消息或清除控制台。
-* `run_tests`: 在 Unity 编辑器中运行测试。
-* `set_active_instance`: 将后续工具调用路由到特定的 Unity 实例（当运行多个实例时）。
-* `apply_text_edits`: 具有前置条件哈希和原子多编辑批次的精确文本编辑。
-* `script_apply_edits`: 结构化 C# 方法/类编辑（插入/替换/删除），具有更安全的边界。
-* `validate_script`: 快速验证（基本/标准）以在写入前后捕获语法/结构问题。
-* `create_script`: 在给定的项目路径创建新的 C# 脚本。
+* `manage_asset`: 执行资源操作（导入、创建、修改、删除、搜索等）。
+* `manage_editor`: 控制编辑器状态（播放模式、活动工具、标签、层）。
+* `manage_gameobject`: 管理 GameObject（创建、修改、删除、查找、复制、移动）。
+* `manage_components`: 管理 GameObject 上的组件（添加、移除、设置属性）。
+* `manage_material`: 管理材质（创建、设置属性/颜色、分配给渲染器）。
+* `manage_prefabs`: 预制体操作（打开/关闭 Stage、保存、从 GameObject 创建）。
+* `manage_scene`: 场景管理（加载、保存、创建、获取层级、截图）。
+* `manage_script`: 传统脚本操作（创建、读取、删除）。编辑建议使用 `apply_text_edits` 或 `script_apply_edits`。
+* `manage_scriptable_object`: 创建并修改 ScriptableObject 资产。
+* `manage_shader`: Shader CRUD（创建、读取、更新、删除）。
+* `manage_vfx`: VFX 操作（ParticleSystem / LineRenderer / TrailRenderer / VisualEffectGraph 等）。
+* `batch_execute`: ⚡ **推荐** - 批量执行多条命令（10-100x 性能提升）。
+* `find_gameobjects`: 按 name/tag/layer/component/path/id 搜索 GameObject（分页）。
+* `find_in_file`: 使用正则搜索 C# 脚本并返回匹配的行号与片段。
+* `read_console`: 获取或清除 Unity Console 日志。
+* `refresh_unity`: 请求刷新资产数据库，并可选触发编译。
+* `run_tests`: 异步启动测试，返回 job_id。
+* `get_test_job`: 轮询异步测试任务的进度和结果。
+* `debug_request_context`: 返回当前请求上下文（client_id、session_id、meta）。
+* `execute_custom_tool`: 执行由 Unity 注册的项目级自定义工具。
+* `execute_menu_item`: 执行 Unity 编辑器菜单项（例如 "File/Save Project"）。
+* `set_active_instance`: 将后续工具调用路由到特定 Unity 实例（从 `unity_instances` 获取 `Name@hash`）。
+* `apply_text_edits`: 使用行/列范围进行精确文本编辑（支持前置条件哈希）。
+* `script_apply_edits`: 结构化 C# 方法/类编辑（insert/replace/delete），边界更安全。
+* `validate_script`: 快速验证（basic/standard），用于捕获语法/结构问题。
+* `create_script`: 在指定项目路径创建新的 C# 脚本。
 * `delete_script`: 通过 URI 或 Assets 相对路径删除 C# 脚本。
-* `get_sha`: 获取 Unity C# 脚本的 SHA256 和基本元数据，而不返回文件内容。
+* `get_sha`: 获取 Unity C# 脚本的 SHA256 与元数据（不返回内容）。
 </details>
 
 
@@ -66,18 +76,23 @@ MCP for Unity 作为桥梁，允许 AI 助手（如 Claude、Cursor）通过本�
 
   您的大语言模型可以检索以下资源：
 
-* `custom_tools`: 列出活动 Unity 项目可用的自定义工具。
-* `unity_instances`: 列出所有正在运行的 Unity 编辑器实例及其详细信息（名称、路径、端口、状态）。
-* `menu_items`: 检索 Unity 编辑器中所有可用的菜单项。
-* `tests`: 检索 Unity 编辑器中所有可用的测试。可以选择特定类型的测试（例如，"EditMode"、"PlayMode"）。
-* `editor_active_tool`: 当前活动的编辑器工具（移动、旋转、缩放等）和变换手柄设置。
-* `editor_prefab_stage`: 如果预制件在隔离模式下打开，则为当前预制件编辑上下文。
-* `editor_selection`: 有关编辑器中当前选定对象的详细信息。
-* `editor_state`: 当前编辑器运行时状态，包括播放模式、编译状态、活动场景和选择摘要。
-* `editor_windows`: 所有当前打开的编辑器窗口及其标题、类型、位置和焦点状态。
-* `project_info`: 静态项目信息，包括根路径、Unity 版本和平台。
-* `project_layers`: 项目 TagManager 中定义的所有层及其索引（0-31）。
-* `project_tags`: 项目 TagManager 中定义的所有标签。
+* `custom_tools` [`mcpforunity://custom-tools`]: 列出活动 Unity 项目可用的自定义工具。
+* `unity_instances` [`mcpforunity://instances`]: 列出所有正在运行的 Unity 编辑器实例及其详细信息。
+* `menu_items` [`mcpforunity://menu-items`]: Unity 编辑器中所有可用菜单项。
+* `get_tests` [`mcpforunity://tests`]: Unity 编辑器中所有可用测试（EditMode + PlayMode）。
+* `get_tests_for_mode` [`mcpforunity://tests/{mode}`]: 指定模式（EditMode 或 PlayMode）的测试列表。
+* `gameobject_api` [`mcpforunity://scene/gameobject-api`]: GameObject 资源用法说明（先用 `find_gameobjects` 获取 instance ID）。
+* `gameobject` [`mcpforunity://scene/gameobject/{instance_id}`]: 读取单个 GameObject 信息（不含完整组件序列化）。
+* `gameobject_components` [`mcpforunity://scene/gameobject/{instance_id}/components`]: 读取某 GameObject 的全部组件（支持分页，可选包含属性）。
+* `gameobject_component` [`mcpforunity://scene/gameobject/{instance_id}/component/{component_name}`]: 读取某 GameObject 上指定组件的完整属性。
+* `editor_active_tool` [`mcpforunity://editor/active-tool`]: 当前活动工具（Move/Rotate/Scale 等）与变换手柄设置。
+* `editor_prefab_stage` [`mcpforunity://editor/prefab-stage`]: 当前 Prefab Stage 上下文（若未打开则 isOpen=false）。
+* `editor_selection` [`mcpforunity://editor/selection`]: 编辑器当前选中对象的详细信息。
+* `editor_state` [`mcpforunity://editor/state`]: 编辑器就绪状态快照（包含建议与 staleness）。
+* `editor_windows` [`mcpforunity://editor/windows`]: 当前打开的编辑器窗口列表（标题、类型、位置、焦点）。
+* `project_info` [`mcpforunity://project/info`]: 静态项目信息（根路径、Unity 版本、平台）。
+* `project_layers` [`mcpforunity://project/layers`]: 项目层（0-31）及名称。
+* `project_tags` [`mcpforunity://project/tags`]: 项目 Tag 列表。
 </details>
 
 ---
@@ -177,9 +192,9 @@ https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v8.6.0
 HTTP 传输默认启用。Unity 窗口可以为您启动 FastMCP 服务器：
 
 1. 打开 `Window > MCP for Unity`。
-2. 确保**传输**下拉菜单设置为 `HTTP`（默认），并且 **HTTP URL** 是您想要的（默认为 `http://localhost:8080`）。
-3. 点击**启动本地 HTTP 服务器**。Unity 会生成一个新的操作系统终端，运行 `uv ... server.py --transport http`。
-4. 在您工作时保持该终端窗口打开；关闭它会停止服务器。如果您需要干净地关闭它，请使用 Unity 窗口中的**停止会话**按钮。
+2. 确保 **Transport** 下拉菜单设置为 `HTTP Local`（默认），并将 **HTTP URL** 设置为你想要的地址（默认为 `http://localhost:8080`）。
+3. 点击 **Start Server**。Unity 会生成一个新的系统终端窗口，运行 `uv ... server.py --transport http`。
+4. 在你工作时保持该终端窗口打开；关闭它会停止服务器。如果你需要干净地关闭它，请使用 Unity 窗口中的 **Stop Session** 按钮。
 
 > 更喜欢 stdio？将传输下拉菜单更改为 `Stdio`，Unity 将回退到嵌入式 TCP 桥接器，而不是启动 HTTP 服务器。
 
@@ -188,25 +203,29 @@ HTTP 传输默认启用。Unity 窗口可以为您启动 FastMCP 服务器：
 您也可以从终端自己启动服务器——对 CI 或当您想查看原始日志时很有用：
 
 ```bash
-uvx --from "git+https://github.com/CoplayDev/unity-mcp@v8.1.0#subdirectory=Server" mcp-for-unity --transport http --http-url http://localhost:8080
+uvx --from "git+https://github.com/CoplayDev/unity-mcp@v8.6.0#subdirectory=Server" mcp-for-unity --transport http --http-url http://localhost:8080
 ```
 
 在客户端连接时保持进程运行。
 
 ### 🛠️ 步骤 3：配置您的 MCP 客户端
-将您的 MCP 客户端（Claude、Cursor 等）连接到步骤 2（自动）的 HTTP 服务器或通过手动配置（如下）。
+将你的 MCP 客户端（Claude、Cursor 等）连接到步骤 2 启动的 HTTP 服务器（自动）或使用下方的手动配置。
 
-**选项 A：自动设置（推荐用于 Claude/Cursor/VSC Copilot）**
+对于 **Claude Desktop** 用户，可以尝试下载并上传 `claude_skill_unity.zip`（Unity_Skills），参见这个链接：https://www.claude.com/blog/skills
+
+**选项 A：配置按钮（推荐用于 Claude/Cursor/VSC Copilot）**
 
 1. 在 Unity 中，前往 `Window > MCP for Unity`。
-2. 点击 `Auto-Setup`。
-3. 寻找绿色状态指示器 🟢 和"Connected ✓"。*（这会写入指向您在步骤 2 中启动的服务器的 HTTP `url`）。*
+2. 从下拉菜单选择你的 Client/IDE。
+3. 点击 `Configure` 按钮。（或点击 `Configure All Detected Clients` 自动尝试配置所有检测到的客户端，但会更慢。）
+4. 寻找绿色状态指示器 🟢 和 "Connected ✓"。*（这会写入指向你在步骤 2 中启动的服务器的 HTTP `url`）。*
 
 <details><summary><strong>客户端特定故障排除</strong></summary>
 
   - **VSCode**：使用 `Code/User/mcp.json` 和顶级 `servers.unityMCP`、`"type": "http"` 以及步骤 2 中的 URL。在 Windows 上，当您切换回 stdio 时，MCP for Unity 仍然偏好绝对 `uv.exe` 路径。
   - **Cursor / Windsurf** [(**帮助链接**)](https://github.com/CoplayDev/unity-mcp/wiki/1.-Fix-Unity-MCP-and-Cursor,-VSCode-&-Windsurf)：如果缺少 `uv`，MCP for Unity 窗口会显示"uv Not Found"和快速 [HELP] 链接以及"Choose `uv` Install Location"按钮。
-  - **Claude Code** [(**帮助链接**)](https://github.com/CoplayDev/unity-mcp/wiki/2.-Fix-Unity-MCP-and-Claude-Code)：如果找不到 `claude`，窗口会显示"Claude Not Found"和 [HELP] 以及"Choose Claude Location"按钮。注销现在会立即更新 UI。</details>
+  - **Claude Code** [(**帮助链接**)](https://github.com/CoplayDev/unity-mcp/wiki/2.-Fix-Unity-MCP-and-Claude-Code)：如果找不到 `claude`，窗口会显示"Claude Not Found"和 [HELP] 以及"Choose Claude Location"按钮。注销现在会立即更新 UI。
+</details>
 
 **选项 B：手动配置**
 
@@ -254,7 +273,7 @@ claude mcp add --scope user UnityMCP -- "C:/Users/USERNAME/AppData/Local/Microso
 ```json
 {
   "mcpServers": {
-    "UnityMCP": {
+    "unityMCP": {
       "url": "http://localhost:8080/mcp"
     }
   }
@@ -293,7 +312,7 @@ claude mcp add --scope user UnityMCP -- "C:/Users/USERNAME/AppData/Local/Microso
 ```json
 {
   "mcpServers": {
-    "UnityMCP": {
+    "unityMCP": {
       "command": "uv",
       "args": [
         "run",
@@ -313,7 +332,7 @@ claude mcp add --scope user UnityMCP -- "C:/Users/USERNAME/AppData/Local/Microso
 ```json
 {
   "mcpServers": {
-    "UnityMCP": {
+    "unityMCP": {
       "command": "C:/Users/YOUR_USERNAME/AppData/Local/Microsoft/WinGet/Links/uv.exe",
       "args": [
         "run",
@@ -336,7 +355,7 @@ claude mcp add --scope user UnityMCP -- "C:/Users/USERNAME/AppData/Local/Microso
 
 ## 使用方法 ▶️
 
-1. **打开您的 Unity 项目** 并验证 HTTP 服务器正在运行（Window > MCP for Unity > Start Local HTTP Server）。一旦服务器启动，指示器应显示"Session Active"。
+1. **打开你的 Unity 项目** 并确认 HTTP 服务器正在运行（Window > MCP for Unity > Start Server）。服务器启动后，指示器应显示 "Session Active"。
     
 2. **启动您的 MCP 客户端**（Claude、Cursor 等）。它连接到步骤 3 中配置的 HTTP 端点——客户端不会生成额外的终端。
     
@@ -344,15 +363,27 @@ claude mcp add --scope user UnityMCP -- "C:/Users/USERNAME/AppData/Local/Microso
 
     示例提示：`创建一个 3D 玩家控制器`，`创建一个 3D 井字游戏`，`创建一个酷炫的着色器并应用到立方体上`。
 
+### 💡 性能提示：使用 `batch_execute`
+
+当你需要执行多个操作时，请使用 `batch_execute` 而不是逐个调用工具。这可以显著降低延迟和 token 成本（单次最多 25 条命令）：
+
+```text
+❌ 慢：创建 5 个立方体 → 5 次 manage_gameobject 调用
+✅ 快：创建 5 个立方体 → 1 次 batch_execute（包含 5 条 manage_gameobject 命令）
+
+❌ 慢：先查找对象，再逐个加组件 → N+M 次调用
+✅ 快：查找 + 批量加组件 → 1 次 find + 1 次 batch_execute（包含 M 条 manage_components 命令）
+```
+
 ### 使用多个 Unity 实例
 
 MCP for Unity 同时支持多个 Unity 编辑器实例。每个实例在每个 MCP 客户端会话中是隔离的。
 
 **要将工具调用定向到特定实例：**
 
-1. 列出可用实例：要求您的大语言模型检查 `unity_instances` 资源
-2. 设置活动实例：使用 `set_active_instance` 与实例名称（例如，`MyProject@abc123`）
-3. 所有后续工具路由到该实例，直到更改
+1. 列出可用实例：要求你的大语言模型检查 `unity_instances` 资源
+2. 设置活动实例：使用 `set_active_instance`，并传入 `unity_instances` 返回的精确 `Name@hash`（例如 `MyProject@abc123`）
+3. 后续所有工具都会路由到该实例，直到你再次更改。如果存在多个实例且未设置活动实例，服务器会报错并提示选择实例。
 
 **示例：**
 ```
@@ -412,7 +443,7 @@ MCP for Unity 包含**注重隐私的匿名遥测**来帮助我们改进产品�
     - 检查状态窗口：Window > MCP for Unity。
     - 重启 Unity。
 - **MCP 客户端未连接/服务器未启动：**
-    - 确保本地 HTTP 服务器正在运行（Window > MCP for Unity > Start Local HTTP Server）。保持生成的终端窗口打开。
+    - 确保本地 HTTP 服务器正在运行（Window > MCP for Unity > Start Server）。保持生成的终端窗口打开。
     - **验证服务器路径：** 双重检查您的 MCP 客户端 JSON 配置中的 --directory 路径。它必须完全匹配安装位置：
       - **Windows：** `%USERPROFILE%\AppData\Local\UnityMCP\UnityMcpServer\src`
       - **macOS：** `~/Library/AppSupport/UnityMCP/UnityMcpServer\src` 

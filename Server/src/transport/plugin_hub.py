@@ -45,7 +45,9 @@ class PluginHub(WebSocketEndpoint):
     KEEP_ALIVE_INTERVAL = 15
     SERVER_TIMEOUT = 30
     COMMAND_TIMEOUT = 30
-    FAST_FAIL_TIMEOUT = 10  # Short timeout for fast-fail commands to avoid Cursor's ~30s tool-call timeout
+    # Timeout (seconds) for fast-fail commands like ping/read_console/get_editor_state.
+    # Keep short so MCP clients aren't blocked during Unity compilation/reload/unfocused throttling.
+    FAST_FAIL_TIMEOUT = 2.0
     # Fast-path commands should never block the client for long; return a retry hint instead.
     # This helps avoid the Cursor-side ~30s tool-call timeout when Unity is compiling/reloading
     # or is throttled while unfocused.
@@ -418,7 +420,7 @@ class PluginHub(WebSocketEndpoint):
             if not target_hash and session_count > 1:
                 raise RuntimeError(
                     "Multiple Unity instances are connected. "
-                    "Call set_active_instance with Name@hash from unity://instances."
+                    "Call set_active_instance with Name@hash from mcpforunity://instances."
                 )
             if wait_started is None:
                 wait_started = time.monotonic()
@@ -439,7 +441,7 @@ class PluginHub(WebSocketEndpoint):
         if session_id is None and not target_hash and session_count > 1:
             raise RuntimeError(
                 "Multiple Unity instances are connected. "
-                "Call set_active_instance with Name@hash from unity://instances."
+                "Call set_active_instance with Name@hash from mcpforunity://instances."
             )
 
         if session_id is None:

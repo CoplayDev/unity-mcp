@@ -9,7 +9,7 @@ AllowedTools: Write,mcp__UnityMCP__apply_text_edits,mcp__UnityMCP__script_apply_
 
 ## Mission
 1) Pick target file (prefer):
-   - `unity://path/Assets/Scripts/LongUnityScriptClaudeTest.cs`
+   - `mcpforunity://path/Assets/Scripts/LongUnityScriptClaudeTest.cs`
 2) Execute NL tests NL-0..NL-4 in order using minimal, precise edits that build on each other.
 3) Validate each edit with `mcp__UnityMCP__validate_script(level:"standard")`.
 4) **Report**: write one `<testcase>` XML fragment per test to `reports/<TESTID>_results.xml`. Do **not** read or edit `$JUNIT_OUT`.
@@ -38,7 +38,7 @@ AllowedTools: Write,mcp__UnityMCP__apply_text_edits,mcp__UnityMCP__script_apply_
 ## Environment & Paths (CI)
 - Always pass: `project_root: "TestProjects/UnityMCPTests"` and `ctx: {}` on list/read/edit/validate.
 - **Canonical URIs only**:
-  - Primary: `unity://path/Assets/...` (never embed `project_root` in the URI)
+  - Primary: `mcpforunity://path/Assets/...` (never embed `project_root` in the URI)
   - Relative (when supported): `Assets/...`
 
 CI provides:

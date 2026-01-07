@@ -125,13 +125,6 @@ def main() -> int:
         # Remove auto-popup setup window for Asset Store packaging
         remove_line_exact(setup_service, "[InitializeOnLoad]")
 
-        # Make the menu entry explicitly local-only
-        replace_once(
-            menu_file,
-            r'(\[MenuItem\()("Window/MCP For Unity/Setup Window")',
-            r'\1"Window/MCP For Unity/Local Setup Window"',
-        )
-
         # Set default base URL to the hosted endpoint
         replace_once(
             http_util,

@@ -17,7 +17,7 @@ def _split_uri(uri: str) -> tuple[str, str]:
     """Split an incoming URI or path into (name, directory) suitable for Unity.
 
     Rules:
-    - unity://path/Assets/... → keep as Assets-relative (after decode/normalize)
+    - mcpforunity://path/Assets/... → keep as Assets-relative (after decode/normalize)
     - file://... → percent-decode, normalize, strip host and leading slashes,
         then, if any 'Assets' segment exists, return path relative to that 'Assets' root.
         Otherwise, fall back to original name/dir behavior.
@@ -25,8 +25,8 @@ def _split_uri(uri: str) -> tuple[str, str]:
         return relative to 'Assets'.
     """
     raw_path: str
-    if uri.startswith("unity://path/"):
-        raw_path = uri[len("unity://path/"):]
+    if uri.startswith("mcpforunity://path/"):
+        raw_path = uri[len("mcpforunity://path/"):]
     elif uri.startswith("file://"):
         parsed = urlparse(uri)
         host = (parsed.netloc or "").strip()
