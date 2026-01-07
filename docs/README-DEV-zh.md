@@ -37,7 +37,7 @@ python mcp_source.py [--manifest /path/to/manifest.json] [--repo /path/to/unity-
 
 ## 多 Unity 实例路由
 
-- 使用资源 `unity://instances` 查看所有已连接实例，复制资源返回的精确 `Name@hash`。
+- 使用资源 `mcpforunity://instances` 查看所有已连接实例，复制资源返回的精确 `Name@hash`。
 - 当存在多个实例时，在调用任何工具/资源前先用 `set_active_instance(Name@hash)` 选择目标。
 - 如果未选择且连接了多个实例，服务器会返回错误并要求你先选择。
 

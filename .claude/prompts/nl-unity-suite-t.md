@@ -8,7 +8,7 @@ AllowedTools: Write,mcp__UnityMCP__manage_editor,mcp__UnityMCP__list_resources,m
 
 ## Mission
 1) Pick target file (prefer):
-   - `unity://path/Assets/Scripts/LongUnityScriptClaudeTest.cs`
+   - `mcpforunity://path/Assets/Scripts/LongUnityScriptClaudeTest.cs`
 2) Execute T tests T-A..T-J in order using minimal, precise edits that build on the NL pass state.
 3) Validate each edit with `mcp__UnityMCP__validate_script(level:"standard")`.
 4) **Report**: write one `<testcase>` XML fragment per test to `reports/<TESTID>_results.xml`. Do **not** read or edit `$JUNIT_OUT`.
@@ -37,7 +37,7 @@ AllowedTools: Write,mcp__UnityMCP__manage_editor,mcp__UnityMCP__list_resources,m
 ## Environment & Paths (CI)
 - Always pass: `project_root: "TestProjects/UnityMCPTests"` and `ctx: {}` on list/read/edit/validate.
 - **Canonical URIs only**:
-  - Primary: `unity://path/Assets/...` (never embed `project_root` in the URI)
+  - Primary: `mcpforunity://path/Assets/...` (never embed `project_root` in the URI)
   - Relative (when supported): `Assets/...`
 
 CI provides:
@@ -151,7 +151,7 @@ STRICT OP GUARDRAILS
 ### T-G. Path Normalization Test (No State Change)
 **Goal**: Verify URI forms work equivalently on modified file
 **Actions**:
-- Make identical edit using `unity://path/Assets/Scripts/LongUnityScriptClaudeTest.cs`
+- Make identical edit using `mcpforunity://path/Assets/Scripts/LongUnityScriptClaudeTest.cs`
 - Then using `Assets/Scripts/LongUnityScriptClaudeTest.cs` 
 - Second should return `stale_file`, retry with updated SHA
 - Verify both URI forms target same file

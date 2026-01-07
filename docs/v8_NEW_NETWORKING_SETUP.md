@@ -186,7 +186,7 @@ In the `plugin_hub`'s `on_receive` handler, we look out for the `register_tools`
 
 That requirement of keeping tools local to the projeect made this implementation a bit trickier. We have the requirement because in this project, we can run multiple Unity instances at the same time. So it doesn't make sense to make every tool globally available to all connected projects.
 
-To make tools local to the project, we add a `unity://custom-tools` resource which lists all tools mapped to a session (which is retrieve from FastMCP's context). And then we add a `execute_custom_tool` function tool which can call the tools the user added. This worked surprisingly well, but required some tweaks:
+To make tools local to the project, we add a `mcpforunity://custom-tools` resource which lists all tools mapped to a session (which is retrieve from FastMCP's context). And then we add a `execute_custom_tool` function tool which can call the tools the user added. This worked surprisingly well, but required some tweaks:
 
 - We removed the fallback for session IDs in the server. If there's more than one Unity instance connected to the server, the MCP client MUST call `set_active_instance` so the mapping between session IDs and Unity instances will be correct.
 - We removed the `read_resources` tool. It simply did not work, and LLMs would go in circles for a long time before actually reading the resource directly. This only works because MCP resources have up to date information and gives the MCP clients the right context to call the tools.
