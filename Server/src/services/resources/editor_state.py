@@ -130,9 +130,7 @@ async def infer_single_instance_id(ctx: Context) -> str | None:
     Best-effort: if exactly one Unity instance is connected, return its Name@hash id.
     This makes editor_state outputs self-describing even when no explicit active instance is set.
     """
-    ctx.info("If exactly one Unity instance is connected, return its Name@hash id.")
-    if _in_pytest():
-        return None
+    await ctx.info("If exactly one Unity instance is connected, return its Name@hash id.")
 
     try:
         transport = unity_transport._current_transport()

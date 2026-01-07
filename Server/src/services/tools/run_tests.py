@@ -187,6 +187,5 @@ async def get_test_job(
     if isinstance(response, dict):
         if not response.get("success", True):
             return MCPResponse(**response)
-        GetTestJobResponse(**response)
-        return response
+        return GetTestJobResponse(**response)
     return MCPResponse(success=False, error=str(response))
