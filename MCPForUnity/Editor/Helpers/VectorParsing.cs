@@ -231,7 +231,7 @@ namespace MCPForUnity.Editor.Helpers
         /// </summary>
         public static Color ParseColorOrDefault(JToken token, Color defaultValue = default)
         {
-            if (defaultValue == default) defaultValue = Color.white;
+            if (defaultValue == default) defaultValue = Color.black;
             return ParseColor(token) ?? defaultValue;
         }
 
@@ -366,7 +366,7 @@ namespace MCPForUnity.Editor.Helpers
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[VectorParsing] Failed to parse Gradient from '{token}': {ex.Message}");
+                McpLog.Warn($"[VectorParsing] Failed to parse Gradient from '{token}': {ex.Message}");
             }
 
             return null;
@@ -444,7 +444,7 @@ namespace MCPForUnity.Editor.Helpers
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[VectorParsing] Failed to parse AnimationCurve from '{token}': {ex.Message}");
+                McpLog.Warn($"[VectorParsing] Failed to parse AnimationCurve from '{token}': {ex.Message}");
             }
 
             return null;

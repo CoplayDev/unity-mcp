@@ -685,6 +685,7 @@ namespace MCPForUnity.Editor.Tools
             else
             {
                 // Create empty VFX asset using reflection to access internal API
+                // Note: Develop in Progress, TODO:// Find authenticated way to create VFX asset
                 try
                 {
                     // Try to use VisualEffectAssetEditorUtility.CreateNewAsset if available
@@ -1438,10 +1439,10 @@ namespace MCPForUnity.Editor.Tools
             Vector3 forward = Vector3.Cross(right, normal).normalized;
 
             Undo.RecordObject(lr, "Create Circle");
-            lr.positionCount = segments + 1;
+            lr.positionCount = segments;
             lr.loop = true;
 
-            for (int i = 0; i <= segments; i++)
+            for (int i = 0; i < segments; i++)
             {
                 float angle = (float)i / segments * Mathf.PI * 2f;
                 Vector3 point = center + (right * Mathf.Cos(angle) + forward * Mathf.Sin(angle)) * radius;
