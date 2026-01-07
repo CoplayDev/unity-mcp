@@ -1,5 +1,13 @@
 {
   "dependencies": {
+    "com.unity.asset-store-tools": {
+      "version": "file:com.unity.asset-store-tools",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {
+        "com.unity.nuget.newtonsoft-json": "3.2.1"
+      }
+    },
     "com.unity.burst": {
       "version": "1.8.18",
       "depth": 1,
@@ -51,6 +59,13 @@
     },
     "com.unity.mathematics": {
       "version": "1.2.6",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.nuget.newtonsoft-json": {
+      "version": "3.2.1",
       "depth": 1,
       "source": "registry",
       "dependencies": {},

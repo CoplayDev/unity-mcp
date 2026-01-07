@@ -1,0 +1,9 @@
+.account-toolbar {
+	background-color: rgb(68, 68, 68);
+	border-color: rgb(33, 33, 33);
+	border-top-width: 1px;
+}
+
+.account-toolbar-user-image {
+	background-image: url("../Icons/account-dark.png");
+}
