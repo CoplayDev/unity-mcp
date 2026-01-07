@@ -3,7 +3,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEditorInternal;
 using Newtonsoft.Json.Linq;
-using MCPForUnity.Editor.Tools;
+using MCPForUnity.Editor.Tools.GameObjects;
 
 namespace MCPForUnityTests.Editor.Tools
 {

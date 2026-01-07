@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
-using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
+using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Tools.GameObjects;
 
 namespace MCPForUnity.Editor.Tools.Vfx
 {

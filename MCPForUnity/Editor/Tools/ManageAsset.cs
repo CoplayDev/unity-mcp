@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 using MCPForUnity.Editor.Helpers; // For Response class
-using static MCPForUnity.Editor.Tools.ManageGameObject;
+using MCPForUnity.Editor.Tools;
 
 #if UNITY_6000_0_OR_NEWER
 using PhysicsMaterialType = UnityEngine.PhysicsMaterial;
@@ -425,7 +425,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     // Deprecated: Prefer manage_scriptable_object for robust patching.
                     // Kept for simple property setting fallback on existing assets if manage_scriptable_object isn't used.
-                    modified |= ApplyObjectProperties(so, properties); 
+                    modified |= ApplyObjectProperties(so, properties);
                 }
                 // Example: Modifying TextureImporter settings
                 else if (asset is Texture)

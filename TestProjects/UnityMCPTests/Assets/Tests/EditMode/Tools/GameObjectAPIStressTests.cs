@@ -6,6 +6,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using MCPForUnity.Editor.Tools;
+using MCPForUnity.Editor.Tools.GameObjects;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Resources.Scene;
 using UnityEngine.TestTools;
