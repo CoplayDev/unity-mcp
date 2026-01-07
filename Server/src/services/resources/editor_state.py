@@ -3,6 +3,7 @@ import time
 from typing import Any
 
 from fastmcp import Context
+from pydantic import BaseModel
 
 from models import MCPResponse
 from services.registry import mcp_for_unity_resource
@@ -10,6 +11,109 @@ from services.tools import get_unity_instance_from_context
 from services.state.external_changes_scanner import external_changes_scanner
 import transport.unity_transport as unity_transport
 from transport.legacy.unity_connection import async_send_command_with_retry
+
+
+class EditorStateV2Unity(BaseModel):
+    instance_id: str | None = None
+    unity_version: str | None = None
+    project_id: str | None = None
+    platform: str | None = None
+    is_batch_mode: bool | None = None
+
+
+class EditorStateV2PlayMode(BaseModel):
+    is_playing: bool | None = None
+    is_paused: bool | None = None
+    is_changing: bool | None = None
+
+
+class EditorStateV2ActiveScene(BaseModel):
+    path: str | None = None
+    guid: str | None = None
+    name: str | None = None
+
+
+class EditorStateV2Editor(BaseModel):
+    is_focused: bool | None = None
+    play_mode: EditorStateV2PlayMode | None = None
+    active_scene: EditorStateV2ActiveScene | None = None
+
+
+class EditorStateV2Activity(BaseModel):
+    phase: str | None = None
+    since_unix_ms: int | None = None
+    reasons: list[str] | None = None
+
+
+class EditorStateV2Compilation(BaseModel):
+    is_compiling: bool | None = None
+    is_domain_reload_pending: bool | None = None
+    last_compile_started_unix_ms: int | None = None
+    last_compile_finished_unix_ms: int | None = None
+    last_domain_reload_before_unix_ms: int | None = None
+    last_domain_reload_after_unix_ms: int | None = None
+
+
+class EditorStateV2Refresh(BaseModel):
+    is_refresh_in_progress: bool | None = None
+    last_refresh_requested_unix_ms: int | None = None
+    last_refresh_finished_unix_ms: int | None = None
+
+
+class EditorStateV2Assets(BaseModel):
+    is_updating: bool | None = None
+    external_changes_dirty: bool | None = None
+    external_changes_last_seen_unix_ms: int | None = None
+    external_changes_dirty_since_unix_ms: int | None = None
+    external_changes_last_cleared_unix_ms: int | None = None
+    refresh: EditorStateV2Refresh | None = None
+
+
+class EditorStateV2LastRun(BaseModel):
+    finished_unix_ms: int | None = None
+    result: str | None = None
+    counts: Any | None = None
+
+
+class EditorStateV2Tests(BaseModel):
+    is_running: bool | None = None
+    mode: str | None = None
+    current_job_id: str | None = None
+    started_unix_ms: int | None = None
+    started_by: str | None = None
+    last_run: EditorStateV2LastRun | None = None
+
+
+class EditorStateV2Transport(BaseModel):
+    unity_bridge_connected: bool | None = None
+    last_message_unix_ms: int | None = None
+
+
+class EditorStateV2Advice(BaseModel):
+    ready_for_tools: bool | None = None
+    blocking_reasons: list[str] | None = None
+    recommended_retry_after_ms: int | None = None
+    recommended_next_action: str | None = None
+
+
+class EditorStateV2Staleness(BaseModel):
+    age_ms: int | None = None
+    is_stale: bool | None = None
+
+
+class EditorStateV2Data(BaseModel):
+    schema_version: str
+    observed_at_unix_ms: int
+    sequence: int
+    unity: EditorStateV2Unity | None = None
+    editor: EditorStateV2Editor | None = None
+    activity: EditorStateV2Activity | None = None
+    compilation: EditorStateV2Compilation | None = None
+    assets: EditorStateV2Assets | None = None
+    tests: EditorStateV2Tests | None = None
+    transport: EditorStateV2Transport | None = None
+    advice: EditorStateV2Advice | None = None
+    staleness: EditorStateV2Staleness | None = None
 
 
 def _now_unix_ms() -> int:
@@ -181,4 +285,21 @@ async def get_editor_state(ctx: Context) -> MCPResponse:
         pass
 
     state_v2 = _enrich_advice_and_staleness(state_v2)
-    return MCPResponse(success=True, message="Retrieved editor state.", data=state_v2)
+
+    try:
+        if hasattr(EditorStateV2Data, "model_validate"):
+            validated = EditorStateV2Data.model_validate(state_v2)
+        else:
+            validated = EditorStateV2Data.parse_obj(
+                state_v2)  # type: ignore[attr-defined]
+        data = validated.model_dump() if hasattr(
+            validated, "model_dump") else validated.dict()
+    except Exception as e:
+        return MCPResponse(
+            success=False,
+            error="invalid_editor_state",
+            message=f"Editor state payload failed validation: {e}",
+            data={"raw": state_v2},
+        )
+
+    return MCPResponse(success=True, message="Retrieved editor state.", data=data)
