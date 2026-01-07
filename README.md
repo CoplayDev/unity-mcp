@@ -352,9 +352,9 @@ Replace `YOUR_USERNAME` and `AppSupport` path segments as needed for your platfo
 
 ### 💡 Performance Tip: Use `batch_execute`
 
-When performing multiple operations, use the `batch_execute` tool instead of calling tools one-by-one. This dramatically reduces latency and token costs:
+When performing multiple operations, use the `batch_execute` tool instead of calling tools one-by-one. This dramatically reduces latency and token costs (supports up to 25 commands per batch):
 
-```
+```text
 ❌ Slow: Create 5 cubes → 5 separate manage_gameobject calls
 ✅ Fast: Create 5 cubes → 1 batch_execute call with 5 commands
 

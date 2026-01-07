@@ -20,7 +20,8 @@ MAX_COMMANDS_PER_BATCH = 25
         "Executes multiple MCP commands in a single batch for dramatically better performance. "
         "STRONGLY RECOMMENDED when creating/modifying multiple objects, adding components to multiple targets, "
         "or performing any repetitive operations. Reduces latency and token costs by 10-100x compared to "
-        "sequential tool calls. Example: creating 5 cubes → use 1 batch_execute with 5 create commands instead of 5 separate calls."
+        "sequential tool calls. Supports up to 25 commands per batch. "
+        "Example: creating 5 cubes → use 1 batch_execute with 5 create commands instead of 5 separate calls."
     ),
     annotations=ToolAnnotations(
         title="Batch Execute",

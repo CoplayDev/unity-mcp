@@ -9,35 +9,8 @@ from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
-from services.tools.utils import parse_json_payload
+from services.tools.utils import parse_json_payload, normalize_properties
 from services.tools.preflight import preflight
-
-
-def _normalize_properties(value: Any) -> tuple[dict[str, Any] | None, str | None]:
-    """
-    Robustly normalize properties parameter to a dict.
-    Returns (parsed_dict, error_message). If error_message is set, parsed_dict is None.
-    """
-    if value is None:
-        return None, None
-    
-    # Already a dict - return as-is
-    if isinstance(value, dict):
-        return value, None
-    
-    # Try parsing as string
-    if isinstance(value, str):
-        # Check for obviously invalid values from serialization bugs
-        if value in ("[object Object]", "undefined", "null", ""):
-            return None, f"properties received invalid value: '{value}'. Expected a JSON object like {{\"propertyName\": value}}"
-        
-        parsed = parse_json_payload(value)
-        if isinstance(parsed, dict):
-            return parsed, None
-        
-        return None, f"properties must be a JSON object (dict), got string that parsed to {type(parsed).__name__}"
-    
-    return None, f"properties must be a dict or JSON string, got {type(value).__name__}"
 
 
 @mcp_for_unity_tool(
@@ -109,7 +82,7 @@ async def manage_components(
         }
 
     # --- Normalize properties with detailed error handling ---
-    properties, props_error = _normalize_properties(properties)
+    properties, props_error = normalize_properties(properties)
     if props_error:
         return {"success": False, "message": props_error}
     

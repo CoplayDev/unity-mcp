@@ -46,13 +46,9 @@ async def manage_editor(
         params = {
             "action": action,
             "waitForCompletion": wait_for_completion,
-            "toolName": tool_name,  # Corrected parameter name to match C#
-            "tagName": tag_name,   # Pass tag name
-            "layerName": layer_name,  # Pass layer name
-            # Add other parameters based on the action being performed
-            # "width": width,
-            # "height": height,
-            # etc.
+            "toolName": tool_name,
+            "tagName": tag_name,
+            "layerName": layer_name,
         }
         params = {k: v for k, v in params.items() if v is not None}
 

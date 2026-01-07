@@ -9,7 +9,7 @@ from mcp.types import ToolAnnotations
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
-from services.tools.utils import parse_json_payload, coerce_int
+from services.tools.utils import parse_json_payload, coerce_int, normalize_properties
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 
@@ -45,28 +45,6 @@ def _normalize_color(value: Any) -> tuple[list[float] | None, str | None]:
         return None, f"Failed to parse color string: {value}"
     
     return None, f"color must be a list or JSON string, got {type(value).__name__}"
-
-
-def _normalize_properties(value: Any) -> tuple[dict[str, Any] | None, str | None]:
-    """
-    Normalize properties parameter to a dict.
-    """
-    if value is None:
-        return None, None
-    
-    if isinstance(value, dict):
-        return value, None
-    
-    if isinstance(value, str):
-        if value in ("[object Object]", "undefined", "null", ""):
-            return None, f"properties received invalid value: '{value}'. Expected a JSON object"
-        
-        parsed = parse_json_payload(value)
-        if isinstance(parsed, dict):
-            return parsed, None
-        return None, f"properties must parse to a dict, got {type(parsed).__name__}"
-    
-    return None, f"properties must be a dict or JSON string, got {type(value).__name__}"
 
 
 @mcp_for_unity_tool(
@@ -117,7 +95,7 @@ async def manage_material(
         return {"success": False, "message": color_error}
     
     # --- Normalize properties with validation ---
-    properties, props_error = _normalize_properties(properties)
+    properties, props_error = normalize_properties(properties)
     if props_error:
         return {"success": False, "message": props_error}
     

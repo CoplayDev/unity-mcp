@@ -547,24 +547,44 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             // Wait briefly for the HTTP server to become ready, then start the session.
             // This is called when THIS instance starts the server (not when detecting an external server).
             var bridgeService = MCPServiceLocator.Bridge;
-            const int maxAttempts = 10;
-            var delay = TimeSpan.FromSeconds(1);
+            // Windows/dev mode may take much longer due to uv package resolution, fresh downloads, antivirus scans, etc.
+            const int maxAttempts = 30;
+            // Use shorter delays initially, then longer delays to allow server startup
+            var shortDelay = TimeSpan.FromMilliseconds(500);
+            var longDelay = TimeSpan.FromSeconds(3);
 
             for (int attempt = 0; attempt < maxAttempts; attempt++)
             {
-                // Check if server is actually accepting connections
-                if (!MCPServiceLocator.Server.IsLocalHttpServerRunning())
-                {
-                    await Task.Delay(delay);
-                    continue;
-                }
+                var delay = attempt < 6 ? shortDelay : longDelay;
 
-                bool started = await bridgeService.StartAsync();
-                if (started)
+                // Check if server is actually accepting connections
+                bool serverDetected = MCPServiceLocator.Server.IsLocalHttpServerRunning();
+
+                if (serverDetected)
                 {
-                    await VerifyBridgeConnectionAsync();
-                    UpdateConnectionStatus();
-                    return;
+                    // Server detected - try to connect
+                    bool started = await bridgeService.StartAsync();
+                    if (started)
+                    {
+                        await VerifyBridgeConnectionAsync();
+                        UpdateConnectionStatus();
+                        return;
+                    }
+                }
+                else if (attempt >= 20)
+                {
+                    // After many attempts without detection, try connecting anyway as a last resort.
+                    // This handles cases where process detection fails but the server is actually running.
+                    // Only try once every 3 attempts to avoid spamming connection errors (at attempts 20, 23, 26, 29).
+                    if ((attempt - 20) % 3 != 0) continue;
+                    
+                    bool started = await bridgeService.StartAsync();
+                    if (started)
+                    {
+                        await VerifyBridgeConnectionAsync();
+                        UpdateConnectionStatus();
+                        return;
+                    }
                 }
 
                 if (attempt < maxAttempts - 1)

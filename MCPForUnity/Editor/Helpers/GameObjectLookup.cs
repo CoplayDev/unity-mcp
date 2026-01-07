@@ -282,41 +282,12 @@ namespace MCPForUnity.Editor.Helpers
         /// <summary>
         /// Finds a component type by name, searching loaded assemblies.
         /// </summary>
+        /// <remarks>
+        /// Delegates to UnityTypeResolver.ResolveComponent() for unified type resolution.
+        /// </remarks>
         public static Type FindComponentType(string typeName)
         {
-            // Try direct type lookup first
-            var type = Type.GetType(typeName);
-            if (type != null && typeof(Component).IsAssignableFrom(type))
-                return type;
-
-            // Search in UnityEngine
-            type = typeof(Component).Assembly.GetType($"UnityEngine.{typeName}");
-            if (type != null && typeof(Component).IsAssignableFrom(type))
-                return type;
-
-            // Search all loaded assemblies
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                try
-                {
-                    // Try exact match
-                    type = assembly.GetType(typeName);
-                    if (type != null && typeof(Component).IsAssignableFrom(type))
-                        return type;
-
-                    // Try with UnityEngine prefix
-                    type = assembly.GetType($"UnityEngine.{typeName}");
-                    if (type != null && typeof(Component).IsAssignableFrom(type))
-                        return type;
-                }
-                catch (Exception)
-                {
-                    // Skip assemblies that can't be searched (e.g., dynamic, reflection-only)
-                    // This is expected for some assemblies in Unity's domain
-                }
-            }
-
-            return null;
+            return UnityTypeResolver.ResolveComponent(typeName);
         }
 
         /// <summary>

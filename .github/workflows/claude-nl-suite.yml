@@ -1235,7 +1235,12 @@ jobs:
                       return (0, 999)
               if n.startswith('T-') and len(n) > 2:
                   return (1, ord(n[2]))
-              return (2, n)
+              if n.startswith('GO-'):
+                  try:
+                      return (2, int(n.split('-')[1]))
+                  except:
+                      return (2, 999)
+              return (3, n)
 
           MAX_CHARS = 2000
           seen = set()

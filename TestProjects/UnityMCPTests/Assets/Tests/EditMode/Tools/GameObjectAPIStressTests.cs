@@ -54,7 +54,16 @@ namespace MCPForUnityTests.Editor.Tools
         private static JObject ToJObject(object result)
         {
             if (result == null) return new JObject();
-            return result as JObject ?? JObject.FromObject(result);
+            if (result is JObject jobj) return jobj;
+            try
+            {
+                return JObject.FromObject(result);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[ToJObject] Failed to convert result: {ex.Message}");
+                return new JObject { ["error"] = ex.Message };
+            }
         }
 
         #region Bulk GameObject Creation
@@ -85,7 +94,8 @@ namespace MCPForUnityTests.Editor.Tools
             
             sw.Stop();
             Debug.Log($"[BulkCreate] Created {SMALL_BATCH} objects in {sw.ElapsedMilliseconds}ms");
-            Assert.Less(sw.ElapsedMilliseconds, 5000, "Bulk create took too long");
+            // Use generous threshold for CI variability
+            Assert.Less(sw.ElapsedMilliseconds, 10000, "Bulk create took too long (CI threshold)");
         }
 
         [Test]

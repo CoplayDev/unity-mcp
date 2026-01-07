@@ -84,7 +84,7 @@ namespace MCPForUnityTests.Editor.Tools
             var result = ToJObject(ManageMaterial.HandleCommand(paramsObj));
 
             // Assert
-            Assert.AreEqual("success", result.Value<string>("status"), result.ToString());
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
             
             mat = AssetDatabase.LoadAssetAtPath<Material>(_matPath); // Reload
             var prop = mat.shader.name == "Standard" ? "_Color" : "_BaseColor";
@@ -109,7 +109,7 @@ namespace MCPForUnityTests.Editor.Tools
             var result = ToJObject(ManageMaterial.HandleCommand(paramsObj));
 
             // Assert
-            Assert.AreEqual("success", result.Value<string>("status"), result.ToString());
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
             
             var mat = AssetDatabase.LoadAssetAtPath<Material>(_matPath);
             var prop = mat.HasProperty("_BaseColor") ? "_BaseColor" : "_Color";
@@ -140,7 +140,7 @@ namespace MCPForUnityTests.Editor.Tools
                 var result = ToJObject(ManageMaterial.HandleCommand(paramsObj));
 
                 // Assert
-                Assert.AreEqual("success", result.Value<string>("status"), result.ToString());
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
                 
                 var renderer = go.GetComponent<Renderer>();
                 Assert.IsNotNull(renderer.sharedMaterial);
@@ -181,7 +181,7 @@ namespace MCPForUnityTests.Editor.Tools
                 var result = ToJObject(ManageMaterial.HandleCommand(paramsObj));
 
                 // Assert
-                Assert.AreEqual("success", result.Value<string>("status"), result.ToString());
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
                 
                 var renderer = go.GetComponent<Renderer>();
                 var block = new MaterialPropertyBlock();
@@ -215,10 +215,12 @@ namespace MCPForUnityTests.Editor.Tools
             var result = ToJObject(ManageMaterial.HandleCommand(paramsObj));
 
             // Assert
-            Assert.AreEqual("success", result.Value<string>("status"), result.ToString());
-            Assert.IsNotNull(result["properties"]);
-            Assert.IsInstanceOf<JArray>(result["properties"]);
-            var props = result["properties"] as JArray;
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            var data = result["data"] as JObject;
+            Assert.IsNotNull(data, "Response should have data object");
+            Assert.IsNotNull(data["properties"]);
+            Assert.IsInstanceOf<JArray>(data["properties"]);
+            var props = data["properties"] as JArray;
             Assert.IsTrue(props.Count > 0);
             
             // Check for standard properties

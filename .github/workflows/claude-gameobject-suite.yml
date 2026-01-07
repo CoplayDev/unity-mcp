@@ -473,8 +473,8 @@ jobs:
                   if localname(froot.tag) == 'testcase':
                       suite.append(froot)
                       added += 1
-              except Exception:
-                  pass
+              except Exception as e:
+                  print(f"Warning: Could not parse fragment {frag}: {e}")
 
           if added:
               for tc in list(suite.findall('.//testcase')):

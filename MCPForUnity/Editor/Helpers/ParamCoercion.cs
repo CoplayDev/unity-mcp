@@ -155,6 +155,48 @@ namespace MCPForUnity.Editor.Helpers
 
             return defaultValue;
         }
+
+        /// <summary>
+        /// Normalizes a property name by removing separators and converting to camelCase.
+        /// Handles common naming variations from LLMs and humans.
+        /// Examples:
+        ///   "Use Gravity" → "useGravity"
+        ///   "is_kinematic" → "isKinematic"
+        ///   "max-angular-velocity" → "maxAngularVelocity"
+        ///   "Angular Drag" → "angularDrag"
+        /// </summary>
+        /// <param name="input">The property name to normalize</param>
+        /// <returns>The normalized camelCase property name</returns>
+        public static string NormalizePropertyName(string input)
+        {
+            if (string.IsNullOrEmpty(input))
+                return input;
+
+            // Split on common separators: space, underscore, dash
+            var parts = input.Split(new[] { ' ', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0)
+                return input;
+
+            // First word is lowercase, subsequent words are Title case (camelCase)
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < parts.Length; i++)
+            {
+                string part = parts[i];
+                if (i == 0)
+                {
+                    // First word: all lowercase
+                    sb.Append(part.ToLowerInvariant());
+                }
+                else
+                {
+                    // Subsequent words: capitalize first letter, lowercase rest
+                    sb.Append(char.ToUpperInvariant(part[0]));
+                    if (part.Length > 1)
+                        sb.Append(part.Substring(1).ToLowerInvariant());
+                }
+            }
+            return sb.ToString();
+        }
     }
 }
 

@@ -25,8 +25,6 @@ async def execute_menu_item(
     menu_path: Annotated[str,
                          "Menu path for 'execute' or 'exists' (e.g., 'File/Save Project')"] | None = None,
 ) -> MCPResponse:
-    # Get active instance from session state
-    # Removed session_state import
     unity_instance = get_unity_instance_from_context(ctx)
     params_dict: dict[str, Any] = {"menuPath": menu_path}
     params_dict = {k: v for k, v in params_dict.items() if v is not None}

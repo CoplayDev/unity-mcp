@@ -21,9 +21,9 @@ public class LongUnityScriptClaudeTest : MonoBehaviour
     private int padAccumulator = 0;
     private Vector3 padVector = Vector3.zero;
     
-    // Animation blend hashes
-    private static readonly int BlendXHash = Animator.StringToHash("BlendX");
-    private static readonly int BlendYHash = Animator.StringToHash("BlendY");
+    // Animation blend hashes (match animator parameter names)
+    private static readonly int BlendXHash = Animator.StringToHash("reachX");
+    private static readonly int BlendYHash = Animator.StringToHash("reachY");
 
 
     [Header("Tuning")]

@@ -1,7 +1,6 @@
 """
 Defines the manage_asset tool for interacting with Unity assets.
 """
-import ast
 import asyncio
 import json
 from typing import Annotated, Any, Literal
@@ -11,45 +10,10 @@ from mcp.types import ToolAnnotations
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
-from services.tools.utils import parse_json_payload, coerce_int
+from services.tools.utils import parse_json_payload, coerce_int, normalize_properties
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 from services.tools.preflight import preflight
-
-
-def _normalize_properties(value: Any) -> tuple[dict[str, Any] | None, str | None]:
-    """
-    Robustly normalize properties parameter to a dict.
-    Returns (parsed_dict, error_message). If error_message is set, parsed_dict is None.
-    """
-    if value is None:
-        return {}, None
-    
-    # Already a dict - return as-is
-    if isinstance(value, dict):
-        return value, None
-    
-    # Try parsing as string
-    if isinstance(value, str):
-        # Check for obviously invalid values from serialization bugs
-        if value in ("[object Object]", "undefined", "null", ""):
-            return None, f"properties received invalid value: '{value}'. Expected a JSON object like {{\"key\": value}}"
-        
-        # Try JSON parsing first
-        parsed = parse_json_payload(value)
-        if isinstance(parsed, dict):
-            return parsed, None
-        
-        # Fallback to ast.literal_eval for Python dict literals
-        try:
-            parsed = ast.literal_eval(value)
-            if isinstance(parsed, dict):
-                return parsed, None
-            return None, f"properties must evaluate to a dict, got {type(parsed).__name__}"
-        except (ValueError, SyntaxError) as e:
-            return None, f"Failed to parse properties: {e}"
-    
-    return None, f"properties must be a dict or JSON string, got {type(value).__name__}"
 
 
 @mcp_for_unity_tool(
@@ -96,7 +60,7 @@ async def manage_asset(
         return gate.model_dump()
 
     # --- Normalize properties using robust module-level helper ---
-    properties, parse_error = _normalize_properties(properties)
+    properties, parse_error = normalize_properties(properties)
     if parse_error:
         await ctx.error(f"manage_asset: {parse_error}")
         return {"success": False, "message": parse_error}

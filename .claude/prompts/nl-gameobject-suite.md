@@ -115,13 +115,12 @@ AllowedTools: Write,mcp__UnityMCP__manage_editor,mcp__UnityMCP__manage_gameobjec
 - Clean up: `mcp__UnityMCP__manage_gameobject(action="delete", target="GO_Test_Object")`
 - **Pass criteria**: Pagination works (cursor present when more results available)
 
-### GO-10. Deprecation Warnings
-**Goal**: Verify legacy actions log deprecation warnings
+### GO-10. Removed Actions Return Error
+**Goal**: Verify legacy actions (find, get_components, etc.) return clear errors directing to new tools
 **Actions**:
-- Call legacy action: `mcp__UnityMCP__manage_gameobject(action="find", search_term="Camera", search_method="by_component")`
-- Read console using `mcp__UnityMCP__read_console` for deprecation warning
-- Verify warning mentions "find_gameobjects" as replacement
-- **Pass criteria**: Deprecation warning logged
+- Call removed action: `mcp__UnityMCP__manage_gameobject(action="find", search_term="Camera", search_method="by_component")`
+- Verify response contains error indicating action is unknown/removed
+- **Pass criteria**: Error response received (legacy actions were removed, not deprecated)
 
 ---
 

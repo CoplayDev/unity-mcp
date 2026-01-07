@@ -83,7 +83,7 @@ def _normalize_component_properties(value: Any) -> tuple[dict[str, dict[str, Any
 
 
 @mcp_for_unity_tool(
-    description="Performs CRUD operations on GameObjects and components. Read-only actions: find, get_components, get_component. Modifying actions: create, modify, delete, add_component, remove_component, set_component_property, duplicate, move_relative.",
+    description="Performs CRUD operations on GameObjects. Actions: create, modify, delete, duplicate, move_relative. For finding GameObjects use find_gameobjects tool. For component operations use manage_components tool.",
     annotations=ToolAnnotations(
         title="Manage GameObject",
         destructiveHint=True,
@@ -91,7 +91,7 @@ def _normalize_component_properties(value: Any) -> tuple[dict[str, dict[str, Any
 )
 async def manage_gameobject(
     ctx: Context,
-    action: Annotated[Literal["create", "modify", "delete", "find", "add_component", "remove_component", "set_component_property", "get_components", "get_component", "duplicate", "move_relative"], "Perform CRUD operations on GameObjects and components."] | None = None,
+    action: Annotated[Literal["create", "modify", "delete", "duplicate", "move_relative"], "Action to perform on GameObject."] | None = None,
     target: Annotated[str,
                       "GameObject identifier by name or path for modify/delete/component actions"] | None = None,
     search_method: Annotated[Literal["by_id", "by_name", "by_path", "by_tag", "by_layer", "by_component"],
@@ -175,7 +175,7 @@ async def manage_gameobject(
     if action is None:
         return {
             "success": False,
-            "message": "Missing required parameter 'action'. Valid actions: create, modify, delete, find, add_component, remove_component, set_component_property, get_components, get_component, duplicate, move_relative"
+            "message": "Missing required parameter 'action'. Valid actions: create, modify, delete, duplicate, move_relative. For finding GameObjects use find_gameobjects tool. For component operations use manage_components tool."
         }
 
     # --- Normalize vector parameters using robust helper ---
@@ -205,23 +205,7 @@ async def manage_gameobject(
         return {"success": False, "message": comp_props_error}
         
     try:
-        # Map tag to search_term when search_method is by_tag for backward compatibility
-        if action == "find" and search_method == "by_tag" and tag is not None and search_term is None:
-            search_term = tag
-
         # Validate parameter usage to prevent silent failures
-        if action == "find":
-            if name is not None:
-                return {
-                    "success": False,
-                    "message": "For 'find' action, use 'search_term' parameter, not 'name'. Remove 'name' parameter. Example: search_term='Player', search_method='by_name'"
-                }
-            if search_term is None:
-                return {
-                    "success": False,
-                    "message": "For 'find' action, 'search_term' parameter is required. Use search_term (not 'name') to specify what to find."
-                }
-
         if action in ["create", "modify"]:
             if search_term is not None:
                 return {

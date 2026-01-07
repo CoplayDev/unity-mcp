@@ -215,7 +215,7 @@ namespace MCPForUnity.Editor.Tools
 
                         if (propertiesForApply.HasValues)
                         {
-                            MaterialOps.ApplyProperties(mat, propertiesForApply, ManageGameObject.InputSerializer);
+                            MaterialOps.ApplyProperties(mat, propertiesForApply, UnityJsonSerializer.Instance);
                         }
                     }
                     AssetDatabase.CreateAsset(mat, fullPath);
@@ -418,7 +418,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     // Apply properties directly to the material. If this modifies, it sets modified=true.
                     // Use |= in case the asset was already marked modified by previous logic (though unlikely here)
-                    modified |= MaterialOps.ApplyProperties(material, properties, ManageGameObject.InputSerializer);
+                    modified |= MaterialOps.ApplyProperties(material, properties, UnityJsonSerializer.Instance);
                 }
                 // Example: Modifying a ScriptableObject (Use manage_scriptable_object instead!)
                 else if (asset is ScriptableObject so)
@@ -989,7 +989,7 @@ namespace MCPForUnity.Editor.Tools
                 System.Reflection.PropertyInfo propInfo = type.GetProperty(memberName, flags);
                 if (propInfo != null && propInfo.CanWrite)
                 {
-                    object convertedValue = ConvertJTokenToType(value, propInfo.PropertyType);
+                    object convertedValue = Helpers.PropertyConversion.TryConvertToType(value, propInfo.PropertyType);
                     if (
                         convertedValue != null
                         && !object.Equals(propInfo.GetValue(target), convertedValue)
@@ -1004,7 +1004,7 @@ namespace MCPForUnity.Editor.Tools
                     System.Reflection.FieldInfo fieldInfo = type.GetField(memberName, flags);
                     if (fieldInfo != null)
                     {
-                        object convertedValue = ConvertJTokenToType(value, fieldInfo.FieldType);
+                        object convertedValue = Helpers.PropertyConversion.TryConvertToType(value, fieldInfo.FieldType);
                         if (
                             convertedValue != null
                             && !object.Equals(fieldInfo.GetValue(target), convertedValue)
@@ -1024,89 +1024,6 @@ namespace MCPForUnity.Editor.Tools
             }
             return false;
         }
-
-        /// <summary>
-        /// Simple JToken to Type conversion for common Unity types and primitives.
-        /// </summary>
-        private static object ConvertJTokenToType(JToken token, Type targetType)
-        {
-            try
-            {
-                if (token == null || token.Type == JTokenType.Null)
-                    return null;
-
-                if (targetType == typeof(string))
-                    return token.ToObject<string>();
-                if (targetType == typeof(int))
-                    return token.ToObject<int>();
-                if (targetType == typeof(float))
-                    return token.ToObject<float>();
-                if (targetType == typeof(bool))
-                    return token.ToObject<bool>();
-                if (targetType == typeof(Vector2) && token is JArray arrV2 && arrV2.Count == 2)
-                    return new Vector2(arrV2[0].ToObject<float>(), arrV2[1].ToObject<float>());
-                if (targetType == typeof(Vector3) && token is JArray arrV3 && arrV3.Count == 3)
-                    return new Vector3(
-                        arrV3[0].ToObject<float>(),
-                        arrV3[1].ToObject<float>(),
-                        arrV3[2].ToObject<float>()
-                    );
-                if (targetType == typeof(Vector4) && token is JArray arrV4 && arrV4.Count == 4)
-                    return new Vector4(
-                        arrV4[0].ToObject<float>(),
-                        arrV4[1].ToObject<float>(),
-                        arrV4[2].ToObject<float>(),
-                        arrV4[3].ToObject<float>()
-                    );
-                if (targetType == typeof(Quaternion) && token is JArray arrQ && arrQ.Count == 4)
-                    return new Quaternion(
-                        arrQ[0].ToObject<float>(),
-                        arrQ[1].ToObject<float>(),
-                        arrQ[2].ToObject<float>(),
-                        arrQ[3].ToObject<float>()
-                    );
-                if (targetType == typeof(Color) && token is JArray arrC && arrC.Count >= 3) // Allow RGB or RGBA
-                    return new Color(
-                        arrC[0].ToObject<float>(),
-                        arrC[1].ToObject<float>(),
-                        arrC[2].ToObject<float>(),
-                        arrC.Count > 3 ? arrC[3].ToObject<float>() : 1.0f
-                    );
-                if (targetType.IsEnum)
-                    return Enum.Parse(targetType, token.ToString(), true); // Case-insensitive enum parsing
-
-                // Handle loading Unity Objects (Materials, Textures, etc.) by path
-                if (
-                    typeof(UnityEngine.Object).IsAssignableFrom(targetType)
-                    && token.Type == JTokenType.String
-                )
-                {
-                    string assetPath = AssetPathUtility.SanitizeAssetPath(token.ToString());
-                    UnityEngine.Object loadedAsset = AssetDatabase.LoadAssetAtPath(
-                        assetPath,
-                        targetType
-                    );
-                    if (loadedAsset == null)
-                    {
-                        Debug.LogWarning(
-                            $"[ConvertJTokenToType] Could not load asset of type {targetType.Name} from path: {assetPath}"
-                        );
-                    }
-                    return loadedAsset;
-                }
-
-                // Fallback: Try direct conversion (might work for other simple value types)
-                return token.ToObject(targetType);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning(
-                    $"[ConvertJTokenToType] Could not convert JToken '{token}' (type {token.Type}) to type '{targetType.Name}': {ex.Message}"
-                );
-                return null;
-            }
-        }
-
 
         // --- Data Serialization ---
 

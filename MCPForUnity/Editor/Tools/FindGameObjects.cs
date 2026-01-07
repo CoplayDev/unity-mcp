@@ -37,41 +37,30 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse("'searchTerm' or 'target' parameter is required.");
             }
 
-            // Pagination parameters
-            int pageSize = ParamCoercion.CoerceInt(@params["pageSize"] ?? @params["page_size"], 50);
-            int cursor = ParamCoercion.CoerceInt(@params["cursor"], 0);
+            // Pagination parameters using standard PaginationRequest
+            var pagination = PaginationRequest.FromParams(@params, defaultPageSize: 50);
+            pagination.PageSize = Mathf.Clamp(pagination.PageSize, 1, 500);
 
             // Search options
             bool includeInactive = ParamCoercion.CoerceBool(@params["includeInactive"] ?? @params["searchInactive"] ?? @params["include_inactive"], false);
-
-            // Validate pageSize bounds
-            pageSize = Mathf.Clamp(pageSize, 1, 500);
 
             try
             {
                 // Get all matching instance IDs
                 var allIds = GameObjectLookup.SearchGameObjects(searchMethod, searchTerm, includeInactive, 0);
-                int totalCount = allIds.Count;
+                
+                // Use standard pagination response
+                var paginatedResult = PaginationResponse<int>.Create(allIds, pagination);
 
-                // Apply pagination
-                var pagedIds = allIds.Skip(cursor).Take(pageSize).ToList();
-
-                // Calculate next cursor
-                int? nextCursor = cursor + pagedIds.Count < totalCount ? cursor + pagedIds.Count : (int?)null;
-
-                return new
+                return new SuccessResponse("Found GameObjects", new
                 {
-                    success = true,
-                    data = new
-                    {
-                        instanceIDs = pagedIds,
-                        pageSize = pageSize,
-                        cursor = cursor,
-                        nextCursor = nextCursor,
-                        totalCount = totalCount,
-                        hasMore = nextCursor.HasValue
-                    }
-                };
+                    instanceIDs = paginatedResult.Items,
+                    pageSize = paginatedResult.PageSize,
+                    cursor = paginatedResult.Cursor,
+                    nextCursor = paginatedResult.NextCursor,
+                    totalCount = paginatedResult.TotalCount,
+                    hasMore = paginatedResult.HasMore
+                });
             }
             catch (System.Exception ex)
             {

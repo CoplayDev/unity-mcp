@@ -945,19 +945,32 @@ namespace MCPForUnity.Editor.Services
 
                 if (Application.platform == RuntimePlatform.WindowsEditor)
                 {
-                    // netstat -ano | findstr :<port>
-                    success = ExecPath.TryRun("cmd.exe", $"/c netstat -ano | findstr :{port}", Application.dataPath, out stdout, out stderr);
-                    if (success && !string.IsNullOrEmpty(stdout))
+                    // Run netstat -ano directly (without findstr) and filter in C#.
+                    // Using findstr in a pipe causes the entire command to return exit code 1 when no matches are found,
+                    // which ExecPath.TryRun interprets as failure. Running netstat alone gives us exit code 0 on success.
+                    success = ExecPath.TryRun("netstat.exe", "-ano", Application.dataPath, out stdout, out stderr);
+
+                    // Process stdout regardless of success flag - netstat might still produce valid output
+                    if (!string.IsNullOrEmpty(stdout))
                     {
+                        string portSuffix = $":{port}";
                         var lines = stdout.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
                         foreach (var line in lines)
                         {
-                            if (line.Contains("LISTENING"))
+                            // Windows netstat format: Proto  Local Address          Foreign Address        State           PID
+                            // Example: TCP    0.0.0.0:8080           0.0.0.0:0              LISTENING       12345
+                            if (line.Contains("LISTENING") && line.Contains(portSuffix))
                             {
                                 var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                                if (parts.Length > 0 && int.TryParse(parts[parts.Length - 1], out int pid))
+                                // Verify the local address column actually ends with :{port}
+                                // parts[0] = Proto (TCP), parts[1] = Local Address, parts[2] = Foreign Address, parts[3] = State, parts[4] = PID
+                                if (parts.Length >= 5)
                                 {
-                                    results.Add(pid);
+                                    string localAddr = parts[1];
+                                    if (localAddr.EndsWith(portSuffix) && int.TryParse(parts[parts.Length - 1], out int pid))
+                                    {
+                                        results.Add(pid);
+                                    }
                                 }
                             }
                         }
@@ -1002,16 +1015,44 @@ namespace MCPForUnity.Editor.Services
         {
             try
             {
-                bool debugLogs = false;
-                try { debugLogs = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false); } catch { }
-
-                // Windows best-effort: tasklist /FI "PID eq X"
+                // Windows best-effort: First check process name with tasklist, then try to get command line with wmic
                 if (Application.platform == RuntimePlatform.WindowsEditor)
                 {
-                    ExecPath.TryRun("cmd.exe", $"/c tasklist /FI \"PID eq {pid}\"", Application.dataPath, out var stdout, out var stderr, 5000);
-                    string combined = ((stdout ?? string.Empty) + "\n" + (stderr ?? string.Empty)).ToLowerInvariant();
-                    // Common process names: python.exe, uv.exe, uvx.exe
-                    return combined.Contains("python") || combined.Contains("uvx") || combined.Contains("uv.exe") || combined.Contains("uvx.exe");
+                    // Step 1: Check if process name matches known server executables
+                    ExecPath.TryRun("cmd.exe", $"/c tasklist /FI \"PID eq {pid}\"", Application.dataPath, out var tasklistOut, out var tasklistErr, 5000);
+                    string tasklistCombined = ((tasklistOut ?? string.Empty) + "\n" + (tasklistErr ?? string.Empty)).ToLowerInvariant();
+
+                    // Check for common process names
+                    bool isPythonOrUv = tasklistCombined.Contains("python") || tasklistCombined.Contains("uvx") || tasklistCombined.Contains("uv.exe");
+                    if (!isPythonOrUv)
+                    {
+                        return false;
+                    }
+
+                    // Step 2: Try to get command line with wmic for better validation
+                    ExecPath.TryRun("cmd.exe", $"/c wmic process where \"ProcessId={pid}\" get CommandLine /value", Application.dataPath, out var wmicOut, out var wmicErr, 5000);
+                    string wmicCombined = ((wmicOut ?? string.Empty) + "\n" + (wmicErr ?? string.Empty)).ToLowerInvariant();
+                    string wmicCompact = NormalizeForMatch(wmicOut ?? string.Empty);
+
+                    // If we can see the command line, validate it's our server
+                    if (!string.IsNullOrEmpty(wmicCombined) && wmicCombined.Contains("commandline="))
+                    {
+                        bool mentionsMcp = wmicCompact.Contains("mcp-for-unity")
+                                           || wmicCompact.Contains("mcp_for_unity")
+                                           || wmicCompact.Contains("mcpforunity")
+                                           || wmicCompact.Contains("mcpforunityserver");
+                        bool mentionsTransport = wmicCompact.Contains("--transporthttp") || (wmicCompact.Contains("--transport") && wmicCompact.Contains("http"));
+                        bool mentionsUvicorn = wmicCombined.Contains("uvicorn");
+
+                        if (mentionsMcp || mentionsTransport || mentionsUvicorn)
+                        {
+                            return true;
+                        }
+                    }
+
+                    // Fall back to just checking for python/uv processes if wmic didn't give us details
+                    // This is less precise but necessary for cases where wmic access is restricted
+                    return isPythonOrUv;
                 }
 
                 // macOS/Linux: ps -p pid -ww -o comm= -o args=
@@ -1027,7 +1068,6 @@ namespace MCPForUnity.Editor.Services
                 string sCompact = NormalizeForMatch(raw);
                 if (!string.IsNullOrEmpty(s))
                 {
-
                     bool mentionsMcp = sCompact.Contains("mcp-for-unity")
                                        || sCompact.Contains("mcp_for_unity")
                                        || sCompact.Contains("mcpforunity");
@@ -1058,15 +1098,6 @@ namespace MCPForUnity.Editor.Services
                     {
                         return true;
                     }
-
-                    if (debugLogs)
-                    {
-                        LogStopDiagnosticsOnce(pid, $"ps='{TrimForLog(s)}' uvx={mentionsUvx} uv={mentionsUv} py={mentionsPython} uvicorn={mentionsUvicorn} mcp={mentionsMcp} transportHttp={mentionsTransport}");
-                    }
-                }
-                else if (debugLogs)
-                {
-                    LogStopDiagnosticsOnce(pid, "ps output was empty (could not classify process).");
                 }
             }
             catch { }

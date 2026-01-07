@@ -40,15 +40,16 @@ async def find_gameobjects(
     """
     unity_instance = get_unity_instance_from_context(ctx)
 
-    gate = await preflight(ctx, wait_for_no_compile=True, refresh_if_dirty=True)
-    if gate is not None:
-        return gate.model_dump()
-
+    # Validate required parameters before preflight I/O
     if not search_term:
         return {
             "success": False,
             "message": "Missing required parameter 'search_term'. Specify what to search for."
         }
+
+    gate = await preflight(ctx, wait_for_no_compile=True, refresh_if_dirty=True)
+    if gate is not None:
+        return gate.model_dump()
 
     # Coerce parameters
     include_inactive = coerce_bool(include_inactive, default=False)

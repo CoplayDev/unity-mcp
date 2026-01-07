@@ -887,45 +887,12 @@ namespace MCPForUnity.Editor.Tools
             return normalized == "create" || normalized == "createso";
         }
 
+        /// <summary>
+        /// Resolves a type by name. Delegates to UnityTypeResolver.ResolveAny().
+        /// </summary>
         private static Type ResolveType(string typeName)
         {
-            if (string.IsNullOrWhiteSpace(typeName)) return null;
-
-            var type = Type.GetType(typeName, throwOnError: false);
-            if (type != null) return type;
-
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies().Where(a => a != null && !a.IsDynamic))
-            {
-                try
-                {
-                    type = asm.GetType(typeName, throwOnError: false);
-                    if (type != null) return type;
-                }
-                catch
-                {
-                    // ignore
-                }
-            }
-
-            // fallback: scan types by FullName match (covers cases where GetType lookup fails)
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies().Where(a => a != null && !a.IsDynamic))
-            {
-                Type[] types;
-                try { types = asm.GetTypes(); }
-                catch (ReflectionTypeLoadException e) { types = e.Types.Where(t => t != null).ToArray(); }
-                catch { continue; }
-
-                foreach (var t in types)
-                {
-                    if (t == null) continue;
-                    if (string.Equals(t.FullName, typeName, StringComparison.Ordinal))
-                    {
-                        return t;
-                    }
-                }
-            }
-
-            return null;
+            return Helpers.UnityTypeResolver.ResolveAny(typeName);
         }
     }
 }

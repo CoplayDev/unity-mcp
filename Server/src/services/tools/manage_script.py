@@ -513,7 +513,7 @@ async def manage_script(
     name: Annotated[str, "Script name (no .cs extension)", "Name of the script to create"],
     path: Annotated[str, "Asset path (default: 'Assets/')", "Path under Assets/ to create the script at, e.g., 'Assets/Scripts/My.cs'"],
     contents: Annotated[str, "Contents of the script to create",
-                        "C# code for 'create'/'update'"] | None = None,
+                        "C# code for 'create' action"] | None = None,
     script_type: Annotated[str, "Script type (e.g., 'C#')",
                            "Type hint (e.g., 'MonoBehaviour')"] | None = None,
     namespace: Annotated[str, "Namespace for the script"] | None = None,

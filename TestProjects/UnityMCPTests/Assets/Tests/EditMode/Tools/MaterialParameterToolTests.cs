@@ -144,7 +144,7 @@ namespace MCPForUnityTests.Editor.Tools
             };
 
             var assignResult = ToJObject(ManageMaterial.HandleCommand(assignParams));
-            Assert.AreEqual("success", assignResult.Value<string>("status"), assignResult.ToString());
+            Assert.IsTrue(assignResult.Value<bool>("success"), assignResult.ToString());
 
             var renderer = _sphere.GetComponent<MeshRenderer>();
             Assert.IsNotNull(renderer, "Sphere should have MeshRenderer.");

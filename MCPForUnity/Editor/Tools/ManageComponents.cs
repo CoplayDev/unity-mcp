@@ -73,56 +73,48 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse($"Target GameObject ('{targetToken}') not found using method '{searchMethod ?? "default"}'.");
             }
 
-            string componentType = ParamCoercion.CoerceString(@params["componentType"] ?? @params["component_type"], null);
-            if (string.IsNullOrEmpty(componentType))
+            string componentTypeName = ParamCoercion.CoerceString(@params["componentType"] ?? @params["component_type"], null);
+            if (string.IsNullOrEmpty(componentTypeName))
             {
                 return new ErrorResponse("'componentType' parameter is required for 'add' action.");
             }
 
-            // Resolve component type
-            Type type = FindComponentType(componentType);
+            // Resolve component type using unified type resolver
+            Type type = UnityTypeResolver.ResolveComponent(componentTypeName);
             if (type == null)
             {
-                return new ErrorResponse($"Component type '{componentType}' not found. Use a fully-qualified name if needed.");
+                return new ErrorResponse($"Component type '{componentTypeName}' not found. Use a fully-qualified name if needed.");
             }
 
-            // Optional properties to set on the new component
+            // Use ComponentOps for the actual operation
+            Component newComponent = ComponentOps.AddComponent(targetGo, type, out string error);
+            if (newComponent == null)
+            {
+                return new ErrorResponse(error ?? $"Failed to add component '{componentTypeName}'.");
+            }
+
+            // Set properties if provided
             JObject properties = @params["properties"] as JObject ?? @params["componentProperties"] as JObject;
-
-            try
+            if (properties != null && properties.HasValues)
             {
-                // Undo.AddComponent creates its own undo record, no need for RecordObject
-                Component newComponent = Undo.AddComponent(targetGo, type);
-
-                if (newComponent == null)
-                {
-                    return new ErrorResponse($"Failed to add component '{componentType}' to '{targetGo.name}'.");
-                }
-
-                // Set properties if provided
-                if (properties != null && properties.HasValues)
-                {
-                    SetPropertiesOnComponent(newComponent, properties);
-                }
-
-                EditorUtility.SetDirty(targetGo);
-
-                return new
-                {
-                    success = true,
-                    message = $"Component '{componentType}' added to '{targetGo.name}'.",
-                    data = new
-                    {
-                        instanceID = targetGo.GetInstanceID(),
-                        componentType = type.FullName,
-                        componentInstanceID = newComponent.GetInstanceID()
-                    }
-                };
+                // Record for undo before modifying properties
+                Undo.RecordObject(newComponent, "Modify Component Properties");
+                SetPropertiesOnComponent(newComponent, properties);
             }
-            catch (Exception e)
+
+            EditorUtility.SetDirty(targetGo);
+
+            return new
             {
-                return new ErrorResponse($"Error adding component '{componentType}': {e.Message}");
-            }
+                success = true,
+                message = $"Component '{componentTypeName}' added to '{targetGo.name}'.",
+                data = new
+                {
+                    instanceID = targetGo.GetInstanceID(),
+                    componentType = type.FullName,
+                    componentInstanceID = newComponent.GetInstanceID()
+                }
+            };
         }
 
         private static object RemoveComponent(JObject @params, JToken targetToken, string searchMethod)
@@ -133,50 +125,37 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse($"Target GameObject ('{targetToken}') not found using method '{searchMethod ?? "default"}'.");
             }
 
-            string componentType = ParamCoercion.CoerceString(@params["componentType"] ?? @params["component_type"], null);
-            if (string.IsNullOrEmpty(componentType))
+            string componentTypeName = ParamCoercion.CoerceString(@params["componentType"] ?? @params["component_type"], null);
+            if (string.IsNullOrEmpty(componentTypeName))
             {
                 return new ErrorResponse("'componentType' parameter is required for 'remove' action.");
             }
 
-            // Resolve component type
-            Type type = FindComponentType(componentType);
+            // Resolve component type using unified type resolver
+            Type type = UnityTypeResolver.ResolveComponent(componentTypeName);
             if (type == null)
             {
-                return new ErrorResponse($"Component type '{componentType}' not found.");
+                return new ErrorResponse($"Component type '{componentTypeName}' not found.");
             }
 
-            // Prevent removal of Transform (check early before GetComponent)
-            if (type == typeof(Transform))
+            // Use ComponentOps for the actual operation
+            bool removed = ComponentOps.RemoveComponent(targetGo, type, out string error);
+            if (!removed)
             {
-                return new ErrorResponse("Cannot remove the Transform component.");
+                return new ErrorResponse(error ?? $"Failed to remove component '{componentTypeName}'.");
             }
 
-            Component component = targetGo.GetComponent(type);
-            if (component == null)
-            {
-                return new ErrorResponse($"Component '{componentType}' not found on '{targetGo.name}'.");
-            }
+            EditorUtility.SetDirty(targetGo);
 
-            try
+            return new
             {
-                Undo.DestroyObjectImmediate(component);
-                EditorUtility.SetDirty(targetGo);
-
-                return new
+                success = true,
+                message = $"Component '{componentTypeName}' removed from '{targetGo.name}'.",
+                data = new
                 {
-                    success = true,
-                    message = $"Component '{componentType}' removed from '{targetGo.name}'.",
-                    data = new
-                    {
-                        instanceID = targetGo.GetInstanceID()
-                    }
-                };
-            }
-            catch (Exception e)
-            {
-                return new ErrorResponse($"Error removing component '{componentType}': {e.Message}");
-            }
+                    instanceID = targetGo.GetInstanceID()
+                }
+            };
         }
 
         private static object SetProperty(JObject @params, JToken targetToken, string searchMethod)
@@ -193,8 +172,8 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse("'componentType' parameter is required for 'set_property' action.");
             }
 
-            // Resolve component type
-            Type type = FindComponentType(componentType);
+            // Resolve component type using unified type resolver
+            Type type = UnityTypeResolver.ResolveComponent(componentType);
             if (type == null)
             {
                 return new ErrorResponse($"Component type '{componentType}' not found.");
@@ -309,16 +288,6 @@ namespace MCPForUnity.Editor.Tools
             return GameObjectLookup.FindByTarget(targetToken, searchMethod ?? "by_name", true);
         }
 
-        /// <summary>
-        /// Finds a component type by name. Delegates to GameObjectLookup.FindComponentType.
-        /// </summary>
-        private static Type FindComponentType(string typeName)
-        {
-            if (string.IsNullOrEmpty(typeName))
-                return null;
-            return GameObjectLookup.FindComponentType(typeName);
-        }
-
         private static void SetPropertiesOnComponent(Component component, JObject properties)
         {
             if (component == null || properties == null)
@@ -340,78 +309,20 @@ namespace MCPForUnity.Editor.Tools
 
         /// <summary>
         /// Attempts to set a property or field on a component.
-        /// Note: Property/field lookup is case-insensitive for better usability with external callers.
+        /// Delegates to ComponentOps.SetProperty for unified implementation.
         /// </summary>
         private static string TrySetProperty(Component component, string propertyName, JToken value)
         {
             if (component == null || string.IsNullOrEmpty(propertyName))
-                return $"Invalid component or property name";
+                return "Invalid component or property name";
 
-            var type = component.GetType();
-
-            // Try property first
-            var propInfo = type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
-            if (propInfo != null && propInfo.CanWrite)
+            if (ComponentOps.SetProperty(component, propertyName, value, out string error))
             {
-                try
-                {
-                    var convertedValue = ConvertValue(value, propInfo.PropertyType);
-                    propInfo.SetValue(component, convertedValue);
-                    return null; // Success
-                }
-                catch (Exception e)
-                {
-                    Debug.LogWarning($"[ManageComponents] Failed to set property '{propertyName}': {e.Message}");
-                    return $"Failed to set property '{propertyName}': {e.Message}";
-                }
+                return null; // Success
             }
 
-            // Try field
-            var fieldInfo = type.GetField(propertyName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
-            if (fieldInfo != null)
-            {
-                try
-                {
-                    var convertedValue = ConvertValue(value, fieldInfo.FieldType);
-                    fieldInfo.SetValue(component, convertedValue);
-                    return null; // Success
-                }
-                catch (Exception e)
-                {
-                    Debug.LogWarning($"[ManageComponents] Failed to set field '{propertyName}': {e.Message}");
-                    return $"Failed to set field '{propertyName}': {e.Message}";
-                }
-            }
-
-            Debug.LogWarning($"[ManageComponents] Property or field '{propertyName}' not found on {type.Name}");
-            return $"Property '{propertyName}' not found on {type.Name}";
-        }
-
-        private static object ConvertValue(JToken token, Type targetType)
-        {
-            if (token == null || token.Type == JTokenType.Null)
-                return null;
-
-            // Handle Unity types
-            if (targetType == typeof(Vector3))
-            {
-                return VectorParsing.ParseVector3OrDefault(token);
-            }
-            if (targetType == typeof(Vector2))
-            {
-                return VectorParsing.ParseVector2(token) ?? Vector2.zero;
-            }
-            if (targetType == typeof(Quaternion))
-            {
-                return VectorParsing.ParseQuaternion(token) ?? Quaternion.identity;
-            }
-            if (targetType == typeof(Color))
-            {
-                return VectorParsing.ParseColor(token) ?? Color.white;
-            }
-
-            // Use Newtonsoft for other types
-            return token.ToObject(targetType);
+            Debug.LogWarning($"[ManageComponents] {error}");
+            return error;
         }
 
         #endregion

@@ -15,6 +15,17 @@ namespace MCPForUnity.Editor.Helpers
     public static class AssetPathUtility
     {
         /// <summary>
+        /// Normalizes path separators to forward slashes without modifying the path structure.
+        /// Use this for non-asset paths (e.g., file system paths, relative directories).
+        /// </summary>
+        public static string NormalizeSeparators(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                return path;
+            return path.Replace('\\', '/');
+        }
+
+        /// <summary>
         /// Normalizes a Unity asset path by ensuring forward slashes are used and that it is rooted under "Assets/".
         /// </summary>
         public static string SanitizeAssetPath(string path)
@@ -24,7 +35,7 @@ namespace MCPForUnity.Editor.Helpers
                 return path;
             }
 
-            path = path.Replace('\\', '/');
+            path = NormalizeSeparators(path);
             if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
             {
                 return "Assets/" + path.TrimStart('/');

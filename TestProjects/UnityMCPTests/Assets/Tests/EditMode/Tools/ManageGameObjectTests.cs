@@ -122,7 +122,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.Contains("useGravity", properties, "Rigidbody should have useGravity property");
 
             // Test AI suggestions
-            var suggestions = ComponentResolver.GetAIPropertySuggestions("Use Gravity", properties);
+            var suggestions = ComponentResolver.GetFuzzyPropertySuggestions("Use Gravity", properties);
             Assert.Contains("useGravity", suggestions, "Should suggest useGravity for 'Use Gravity'");
         }
 
@@ -153,7 +153,7 @@ namespace MCPForUnityTests.Editor.Tools
 
             foreach (var (input, expected) in testCases)
             {
-                var suggestions = ComponentResolver.GetAIPropertySuggestions(input, testProperties);
+                var suggestions = ComponentResolver.GetFuzzyPropertySuggestions(input, testProperties);
                 Assert.Contains(expected, suggestions, $"Should suggest {expected} for input '{input}'");
             }
         }
@@ -163,13 +163,13 @@ namespace MCPForUnityTests.Editor.Tools
         {
             // This test verifies that error messages are helpful and contain suggestions
             var testProperties = new List<string> { "mass", "velocity", "drag", "useGravity" };
-            var suggestions = ComponentResolver.GetAIPropertySuggestions("weight", testProperties);
+            var suggestions = ComponentResolver.GetFuzzyPropertySuggestions("weight", testProperties);
 
             // Even if no perfect match, should return valid list
             Assert.IsNotNull(suggestions, "Should return valid suggestions list");
 
             // Test with completely invalid input
-            var badSuggestions = ComponentResolver.GetAIPropertySuggestions("xyz123invalid", testProperties);
+            var badSuggestions = ComponentResolver.GetFuzzyPropertySuggestions("xyz123invalid", testProperties);
             Assert.IsNotNull(badSuggestions, "Should handle invalid input gracefully");
         }
 
@@ -181,12 +181,12 @@ namespace MCPForUnityTests.Editor.Tools
 
             // First call - populate cache
             var startTime = System.DateTime.UtcNow;
-            var suggestions1 = ComponentResolver.GetAIPropertySuggestions(input, properties);
+            var suggestions1 = ComponentResolver.GetFuzzyPropertySuggestions(input, properties);
             var firstCallTime = (System.DateTime.UtcNow - startTime).TotalMilliseconds;
 
             // Second call - should use cache
             startTime = System.DateTime.UtcNow;
-            var suggestions2 = ComponentResolver.GetAIPropertySuggestions(input, properties);
+            var suggestions2 = ComponentResolver.GetFuzzyPropertySuggestions(input, properties);
             var secondCallTime = (System.DateTime.UtcNow - startTime).TotalMilliseconds;
 
             Assert.AreEqual(suggestions1.Count, suggestions2.Count, "Cached results should be identical");
@@ -315,8 +315,9 @@ namespace MCPForUnityTests.Editor.Tools
             };
 
             // Expect the error logs from the invalid property
-            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("Unexpected error converting token to UnityEngine.Vector3"));
-            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("SetProperty.*Failed to set 'velocity'"));
+            // Note: PropertyConversion logs "Error converting token to..." when conversion fails
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("Error converting token to UnityEngine.Vector3"));
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(@"\[SetProperty\].*Failed to set 'velocity'"));
             LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("Property 'velocity' not found"));
 
             // Act
@@ -555,5 +556,81 @@ namespace MCPForUnityTests.Editor.Tools
             UnityEngine.Object.DestroyImmediate(material2);
             UnityEngine.Object.DestroyImmediate(testObject);
         }
+
+        #region Prefab Asset Handling Tests
+
+        [Test]
+        public void HandleCommand_WithPrefabPath_ReturnsGuidanceError_ForModifyAction()
+        {
+            // Arrange - Attempt to modify a prefab asset directly
+            var modifyParams = new JObject
+            {
+                ["action"] = "modify",
+                ["target"] = "Assets/Prefabs/MyPrefab.prefab"
+            };
+
+            // Act
+            var result = ManageGameObject.HandleCommand(modifyParams);
+
+            // Assert - Should return an error with guidance to use correct tools
+            Assert.IsNotNull(result, "Should return a result");
+            var errorResponse = result as MCPForUnity.Editor.Helpers.ErrorResponse;
+            Assert.IsNotNull(errorResponse, "Should return an ErrorResponse");
+            Assert.IsFalse(errorResponse.Success, "Should indicate failure");
+            Assert.That(errorResponse.Error, Does.Contain("prefab asset"), "Error should mention prefab asset");
+            Assert.That(errorResponse.Error, Does.Contain("manage_asset"), "Error should guide to manage_asset");
+            Assert.That(errorResponse.Error, Does.Contain("manage_prefabs"), "Error should guide to manage_prefabs");
+        }
+
+        [Test]
+        public void HandleCommand_WithPrefabPath_ReturnsGuidanceError_ForDeleteAction()
+        {
+            // Arrange - Attempt to delete a prefab asset directly
+            var deleteParams = new JObject
+            {
+                ["action"] = "delete",
+                ["target"] = "Assets/Prefabs/SomePrefab.prefab"
+            };
+
+            // Act
+            var result = ManageGameObject.HandleCommand(deleteParams);
+
+            // Assert - Should return an error with guidance
+            Assert.IsNotNull(result, "Should return a result");
+            var errorResponse = result as MCPForUnity.Editor.Helpers.ErrorResponse;
+            Assert.IsNotNull(errorResponse, "Should return an ErrorResponse");
+            Assert.IsFalse(errorResponse.Success, "Should indicate failure");
+            Assert.That(errorResponse.Error, Does.Contain("prefab asset"), "Error should mention prefab asset");
+        }
+
+        [Test]
+        public void HandleCommand_WithPrefabPath_AllowsCreateAction()
+        {
+            // Arrange - Create (instantiate) from a prefab should be allowed
+            // Note: This will fail because the prefab doesn't exist, but the error should NOT be
+            // the prefab redirection error - it should be a "prefab not found" type error
+            var createParams = new JObject
+            {
+                ["action"] = "create",
+                ["prefab_path"] = "Assets/Prefabs/NonExistent.prefab",
+                ["name"] = "TestInstance"
+            };
+
+            // Act
+            var result = ManageGameObject.HandleCommand(createParams);
+
+            // Assert - Should NOT return the prefab redirection error
+            // (It may fail for other reasons like prefab not found, but not due to redirection)
+            var errorResponse = result as MCPForUnity.Editor.Helpers.ErrorResponse;
+            if (errorResponse != null)
+            {
+                // If there's an error, it should NOT be the prefab asset guidance error
+                Assert.That(errorResponse.Error, Does.Not.Contain("Use 'manage_asset'"),
+                    "Create action should not be blocked by prefab check");
+            }
+            // If it's not an error, that's also fine (means create was allowed)
+        }
+
+        #endregion
     }
 }
