@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Tools;
+using MCPForUnity.Editor.Tools.GameObjects;
 
 namespace MCPForUnityTests.Editor.Tools
 {

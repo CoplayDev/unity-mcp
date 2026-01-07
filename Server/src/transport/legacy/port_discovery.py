@@ -279,9 +279,9 @@ class PortDiscovery:
                     if freshness.tzinfo:
                         from datetime import timezone
                         now = datetime.now(timezone.utc)
-                    
+
                     age_s = (now - freshness).total_seconds()
-                    
+
                     if is_reloading and age_s < 60:
                         pass  # keep it, status="reloading"
                     else:

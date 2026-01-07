@@ -30,7 +30,8 @@ try:  # pragma: no cover - startup safety guard
     )
     for _name in _typing_names:
         if not hasattr(builtins, _name) and hasattr(_typing, _name):
-            setattr(builtins, _name, getattr(_typing, _name))  # type: ignore[attr-defined]
+            # type: ignore[attr-defined]
+            setattr(builtins, _name, getattr(_typing, _name))
 except Exception:
     pass
 

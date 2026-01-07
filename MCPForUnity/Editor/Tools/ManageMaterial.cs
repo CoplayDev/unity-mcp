@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
+using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using MCPForUnity.Editor.Helpers;
-using UnityEngine;
 using UnityEditor;
+using UnityEngine;
 
 namespace MCPForUnity.Editor.Tools
 {
@@ -28,16 +28,16 @@ namespace MCPForUnity.Editor.Tools
 
                     case "create":
                         return CreateMaterial(@params);
-                    
+
                     case "set_material_shader_property":
                         return SetMaterialShaderProperty(@params);
-                        
+
                     case "set_material_color":
                         return SetMaterialColor(@params);
 
                     case "assign_material_to_renderer":
                         return AssignMaterialToRenderer(@params);
-                        
+
                     case "set_renderer_color":
                         return SetRendererColor(@params);
 
@@ -57,7 +57,7 @@ namespace MCPForUnity.Editor.Tools
         private static string NormalizePath(string path)
         {
             if (string.IsNullOrEmpty(path)) return path;
-            
+
             // Normalize separators and ensure Assets/ root
             path = AssetPathUtility.SanitizeAssetPath(path);
 
@@ -66,7 +66,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 path += ".mat";
             }
-            
+
             return path;
         }
 
@@ -94,23 +94,23 @@ namespace MCPForUnity.Editor.Tools
 
             // Normalize alias/casing once for all code paths
             property = MaterialOps.ResolvePropertyName(mat, property);
-            
+
             // 1. Try handling Texture instruction explicitly (ManageMaterial special feature)
             if (value.Type == JTokenType.Object)
             {
-                 // Check if it looks like an instruction
-                 if (value is JObject obj && (obj.ContainsKey("find") || obj.ContainsKey("method")))
-                 {
-                     Texture tex = ObjectResolver.Resolve(obj, typeof(Texture)) as Texture;
-                     if (tex != null && mat.HasProperty(property))
-                     {
-                         mat.SetTexture(property, tex);
-                         EditorUtility.SetDirty(mat);
-                         return new SuccessResponse($"Set texture property {property} on {mat.name}");
-                     }
-                 }
+                // Check if it looks like an instruction
+                if (value is JObject obj && (obj.ContainsKey("find") || obj.ContainsKey("method")))
+                {
+                    Texture tex = ObjectResolver.Resolve(obj, typeof(Texture)) as Texture;
+                    if (tex != null && mat.HasProperty(property))
+                    {
+                        mat.SetTexture(property, tex);
+                        EditorUtility.SetDirty(mat);
+                        return new SuccessResponse($"Set texture property {property} on {mat.name}");
+                    }
+                }
             }
-            
+
             // 2. Fallback to standard logic via MaterialOps (handles Colors, Floats, Strings->Path)
             bool success = MaterialOps.TrySetShaderProperty(mat, property, value, UnityJsonSerializer.Instance);
 
@@ -145,7 +145,7 @@ namespace MCPForUnity.Editor.Tools
             }
 
             Color color;
-            try 
+            try
             {
                 color = MaterialOps.ParseColor(colorToken, UnityJsonSerializer.Instance);
             }
@@ -199,7 +199,7 @@ namespace MCPForUnity.Editor.Tools
             string searchMethod = @params["searchMethod"]?.ToString();
             string materialPath = NormalizePath(@params["materialPath"]?.ToString());
             int slot = @params["slot"]?.ToObject<int>() ?? 0;
-            
+
             if (string.IsNullOrEmpty(target) || string.IsNullOrEmpty(materialPath))
             {
                 return new ErrorResponse("target and materialPath are required");
@@ -207,7 +207,7 @@ namespace MCPForUnity.Editor.Tools
 
             var goInstruction = new JObject { ["find"] = target };
             if (!string.IsNullOrEmpty(searchMethod)) goInstruction["method"] = searchMethod;
-            
+
             GameObject go = ObjectResolver.Resolve(goInstruction, typeof(GameObject)) as GameObject;
             if (go == null)
             {
@@ -217,7 +217,7 @@ namespace MCPForUnity.Editor.Tools
             Renderer renderer = go.GetComponent<Renderer>();
             if (renderer == null)
             {
-                 return new ErrorResponse($"GameObject {go.name} has no Renderer component");
+                return new ErrorResponse($"GameObject {go.name} has no Renderer component");
             }
 
             var matInstruction = new JObject { ["find"] = materialPath };
@@ -232,11 +232,11 @@ namespace MCPForUnity.Editor.Tools
             Material[] sharedMats = renderer.sharedMaterials;
             if (slot < 0 || slot >= sharedMats.Length)
             {
-                 return new ErrorResponse($"Slot {slot} out of bounds (count: {sharedMats.Length})");
+                return new ErrorResponse($"Slot {slot} out of bounds (count: {sharedMats.Length})");
             }
 
             sharedMats[slot] = mat;
-            renderer.sharedMaterials = sharedMats; 
+            renderer.sharedMaterials = sharedMats;
 
             EditorUtility.SetDirty(renderer);
             return new SuccessResponse($"Assigned material {mat.name} to {go.name} slot {slot}");
@@ -248,7 +248,7 @@ namespace MCPForUnity.Editor.Tools
             string searchMethod = @params["searchMethod"]?.ToString();
             JToken colorToken = @params["color"];
             int slot = @params["slot"]?.ToObject<int>() ?? 0;
-            string mode = @params["mode"]?.ToString() ?? "property_block"; 
+            string mode = @params["mode"]?.ToString() ?? "property_block";
 
             if (string.IsNullOrEmpty(target) || colorToken == null)
             {
@@ -256,7 +256,7 @@ namespace MCPForUnity.Editor.Tools
             }
 
             Color color;
-            try 
+            try
             {
                 color = MaterialOps.ParseColor(colorToken, UnityJsonSerializer.Instance);
             }
@@ -267,7 +267,7 @@ namespace MCPForUnity.Editor.Tools
 
             var goInstruction = new JObject { ["find"] = target };
             if (!string.IsNullOrEmpty(searchMethod)) goInstruction["method"] = searchMethod;
-            
+
             GameObject go = ObjectResolver.Resolve(goInstruction, typeof(GameObject)) as GameObject;
             if (go == null)
             {
@@ -277,7 +277,7 @@ namespace MCPForUnity.Editor.Tools
             Renderer renderer = go.GetComponent<Renderer>();
             if (renderer == null)
             {
-                 return new ErrorResponse($"GameObject {go.name} has no Renderer component");
+                return new ErrorResponse($"GameObject {go.name} has no Renderer component");
             }
 
             if (mode == "property_block")
@@ -289,7 +289,7 @@ namespace MCPForUnity.Editor.Tools
 
                 MaterialPropertyBlock block = new MaterialPropertyBlock();
                 renderer.GetPropertyBlock(block, slot);
-                
+
                 if (renderer.sharedMaterials[slot] != null)
                 {
                     Material mat = renderer.sharedMaterials[slot];
@@ -301,7 +301,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     block.SetColor("_Color", color);
                 }
-                
+
                 renderer.SetPropertyBlock(block, slot);
                 EditorUtility.SetDirty(renderer);
                 return new SuccessResponse($"Set renderer color (PropertyBlock) on slot {slot}");
@@ -310,16 +310,16 @@ namespace MCPForUnity.Editor.Tools
             {
                 if (slot >= 0 && slot < renderer.sharedMaterials.Length)
                 {
-                     Material mat = renderer.sharedMaterials[slot];
-                     if (mat == null)
-                     {
-                         return new ErrorResponse($"No material in slot {slot}");
-                     }
-                     Undo.RecordObject(mat, "Set Material Color");
-                     if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
-                     else mat.SetColor("_Color", color);
-                     EditorUtility.SetDirty(mat);
-                     return new SuccessResponse("Set shared material color");
+                    Material mat = renderer.sharedMaterials[slot];
+                    if (mat == null)
+                    {
+                        return new ErrorResponse($"No material in slot {slot}");
+                    }
+                    Undo.RecordObject(mat, "Set Material Color");
+                    if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
+                    else mat.SetColor("_Color", color);
+                    EditorUtility.SetDirty(mat);
+                    return new SuccessResponse("Set shared material color");
                 }
                 return new ErrorResponse("Invalid slot");
             }
@@ -327,20 +327,20 @@ namespace MCPForUnity.Editor.Tools
             {
                 if (slot >= 0 && slot < renderer.materials.Length)
                 {
-                     Material mat = renderer.materials[slot]; 
-                     if (mat == null)
-                     {
-                         return new ErrorResponse($"No material in slot {slot}");
-                     }
-                     // Note: Undo cannot fully revert material instantiation
-                     Undo.RecordObject(mat, "Set Instance Material Color");
-                     if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
-                     else mat.SetColor("_Color", color);
-                     return new SuccessResponse("Set instance material color", new { warning = "Material instance created; Undo cannot fully revert instantiation." });
-                 }
-                 return new ErrorResponse("Invalid slot");
+                    Material mat = renderer.materials[slot];
+                    if (mat == null)
+                    {
+                        return new ErrorResponse($"No material in slot {slot}");
+                    }
+                    // Note: Undo cannot fully revert material instantiation
+                    Undo.RecordObject(mat, "Set Instance Material Color");
+                    if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
+                    else mat.SetColor("_Color", color);
+                    return new SuccessResponse("Set instance material color", new { warning = "Material instance created; Undo cannot fully revert instantiation." });
+                }
+                return new ErrorResponse("Invalid slot");
             }
-            
+
             return new ErrorResponse($"Unknown mode: {mode}");
         }
 
@@ -349,7 +349,7 @@ namespace MCPForUnity.Editor.Tools
             string materialPath = NormalizePath(@params["materialPath"]?.ToString());
             if (string.IsNullOrEmpty(materialPath))
             {
-                 return new ErrorResponse("materialPath is required");
+                return new ErrorResponse("materialPath is required");
             }
 
             var findInstruction = new JObject { ["find"] = materialPath };
@@ -359,7 +359,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 return new ErrorResponse($"Could not find material at path: {materialPath}");
             }
-            
+
             Shader shader = mat.shader;
             var properties = new List<object>();
 
@@ -416,17 +416,19 @@ namespace MCPForUnity.Editor.Tools
                 string name = ShaderUtil.GetPropertyName(shader, i);
                 ShaderUtil.ShaderPropertyType type = ShaderUtil.GetPropertyType(shader, i);
                 string description = ShaderUtil.GetPropertyDescription(shader, i);
-                
+
                 object currentValue = null;
-                try {
+                try
+                {
                     if (mat.HasProperty(name))
                     {
-                        switch (type) {
-                            case ShaderUtil.ShaderPropertyType.Color: 
+                        switch (type)
+                        {
+                            case ShaderUtil.ShaderPropertyType.Color:
                                 var c = mat.GetColor(name);
                                 currentValue = new { r = c.r, g = c.g, b = c.b, a = c.a };
                                 break;
-                            case ShaderUtil.ShaderPropertyType.Vector: 
+                            case ShaderUtil.ShaderPropertyType.Vector:
                                 var v = mat.GetVector(name);
                                 currentValue = new { x = v.x, y = v.y, z = v.z, w = v.w };
                                 break;
@@ -435,11 +437,14 @@ namespace MCPForUnity.Editor.Tools
                             case ShaderUtil.ShaderPropertyType.TexEnv: currentValue = mat.GetTexture(name)?.name ?? "null"; break;
                         }
                     }
-                } catch (Exception ex) {
+                }
+                catch (Exception ex)
+                {
                     currentValue = $"<error: {ex.Message}>";
                 }
-                
-                properties.Add(new {
+
+                properties.Add(new
+                {
                     name = name,
                     type = type.ToString(),
                     description = description,
@@ -448,7 +453,8 @@ namespace MCPForUnity.Editor.Tools
             }
 #endif
 
-            return new SuccessResponse($"Retrieved material info for {mat.name}", new {
+            return new SuccessResponse($"Retrieved material info for {mat.name}", new
+            {
                 material = mat.name,
                 shader = shader.name,
                 properties = properties
@@ -461,7 +467,7 @@ namespace MCPForUnity.Editor.Tools
             string shaderName = @params["shader"]?.ToString() ?? "Standard";
             JToken colorToken = @params["color"];
             string colorProperty = @params["property"]?.ToString();
-            
+
             JObject properties = null;
             JToken propsToken = @params["properties"];
             if (propsToken != null)
@@ -486,7 +492,7 @@ namespace MCPForUnity.Editor.Tools
             // This check catches edge cases where normalization might fail
             if (!materialPath.StartsWith("Assets/"))
             {
-                 return new ErrorResponse($"Invalid path '{materialPath}'. Path must be within Assets/ folder.");
+                return new ErrorResponse($"Invalid path '{materialPath}'. Path must be within Assets/ folder.");
             }
 
             Shader shader = RenderPipelineUtility.ResolveShader(shaderName);

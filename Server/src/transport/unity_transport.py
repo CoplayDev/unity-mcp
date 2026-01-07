@@ -105,7 +105,8 @@ async def send_with_unity_instance(
             # Fail fast with a retry hint instead of hanging for COMMAND_TIMEOUT.
             # The client can decide whether retrying is appropriate for the command.
             return normalize_unity_response(
-                MCPResponse(success=False, error=err, hint="retry").model_dump()
+                MCPResponse(success=False, error=err,
+                            hint="retry").model_dump()
             )
 
     if unity_instance:

@@ -35,8 +35,10 @@ async def manage_components(
         "How to find the target GameObject"
     ] | None = None,
     # For set_property action - single property
-    property: Annotated[str, "Property name to set (for set_property action)"] | None = None,
-    value: Annotated[Any, "Value to set (for set_property action)"] | None = None,
+    property: Annotated[str,
+                        "Property name to set (for set_property action)"] | None = None,
+    value: Annotated[Any,
+                     "Value to set (for set_property action)"] | None = None,
     # For add/set_property - multiple properties
     properties: Annotated[
         dict[str, Any],
@@ -45,12 +47,12 @@ async def manage_components(
 ) -> dict[str, Any]:
     """
     Manage components on GameObjects.
-    
+
     Actions:
     - add: Add a new component to a GameObject
     - remove: Remove a component from a GameObject  
     - set_property: Set one or more properties on a component
-    
+
     Examples:
     - Add Rigidbody: action="add", target="Player", component_type="Rigidbody"
     - Remove BoxCollider: action="remove", target=-12345, component_type="BoxCollider"
@@ -85,7 +87,7 @@ async def manage_components(
     properties, props_error = normalize_properties(properties)
     if props_error:
         return {"success": False, "message": props_error}
-    
+
     # --- Validate value parameter for serialization issues ---
     if value is not None and isinstance(value, str) and value in ("[object Object]", "undefined"):
         return {"success": False, "message": f"value received invalid input: '{value}'. Expected an actual value."}
@@ -127,4 +129,3 @@ async def manage_components(
 
     except Exception as e:
         return {"success": False, "message": f"Error managing component: {e!s}"}
-

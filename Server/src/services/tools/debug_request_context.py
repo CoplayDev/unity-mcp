@@ -48,7 +48,7 @@ def debug_request_context(ctx: Context) -> dict[str, Any]:
     middleware = get_unity_instance_middleware()
     derived_key = middleware.get_session_key(ctx)
     active_instance = middleware.get_active_instance(ctx)
-    
+
     # Debugging middleware internals
     # NOTE: These fields expose internal implementation details and may change between versions.
     with middleware._lock:

@@ -47,7 +47,7 @@ def _validate_instance_id(instance_id: str) -> tuple[int | None, MCPResponse | N
 async def get_gameobject_api_docs(_ctx: Context) -> MCPResponse:
     """
     Returns documentation for the GameObject resource API.
-    
+
     This is a helper resource that explains how to use the parameterized
     GameObject resources which require an instance ID.
     """
@@ -134,18 +134,18 @@ class GameObjectResponse(MCPResponse):
 async def get_gameobject(ctx: Context, instance_id: str) -> MCPResponse:
     """Get GameObject data by instance ID."""
     unity_instance = get_unity_instance_from_context(ctx)
-    
+
     id_int, error = _validate_instance_id(instance_id)
     if error:
         return error
-    
+
     response = await send_with_unity_instance(
         async_send_command_with_retry,
         unity_instance,
         "get_gameobject",
         {"instanceID": id_int}
     )
-    
+
     return _normalize_response(response)
 
 
@@ -173,7 +173,7 @@ class ComponentsResponse(MCPResponse):
     description="Get all components on a GameObject with full property serialization. Supports pagination with pageSize and cursor parameters."
 )
 async def get_gameobject_components(
-    ctx: Context, 
+    ctx: Context,
     instance_id: str,
     page_size: int = 25,
     cursor: int = 0,
@@ -181,11 +181,11 @@ async def get_gameobject_components(
 ) -> MCPResponse:
     """Get all components on a GameObject."""
     unity_instance = get_unity_instance_from_context(ctx)
-    
+
     id_int, error = _validate_instance_id(instance_id)
     if error:
         return error
-    
+
     response = await send_with_unity_instance(
         async_send_command_with_retry,
         unity_instance,
@@ -197,7 +197,7 @@ async def get_gameobject_components(
             "includeProperties": include_properties
         }
     )
-    
+
     return _normalize_response(response)
 
 
@@ -219,17 +219,17 @@ class SingleComponentResponse(MCPResponse):
     description="Get a specific component on a GameObject by type name. Returns the fully serialized component with all properties."
 )
 async def get_gameobject_component(
-    ctx: Context, 
+    ctx: Context,
     instance_id: str,
     component_name: str
 ) -> MCPResponse:
     """Get a specific component on a GameObject."""
     unity_instance = get_unity_instance_from_context(ctx)
-    
+
     id_int, error = _validate_instance_id(instance_id)
     if error:
         return error
-    
+
     response = await send_with_unity_instance(
         async_send_command_with_retry,
         unity_instance,
@@ -239,6 +239,5 @@ async def get_gameobject_component(
             "componentName": component_name
         }
     )
-    
-    return _normalize_response(response)
 
+    return _normalize_response(response)

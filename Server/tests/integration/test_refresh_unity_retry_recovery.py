@@ -32,8 +32,8 @@ async def test_refresh_unity_recovers_from_retry_disconnect(monkeypatch):
     import services.tools.refresh_unity as refresh_mod
     monkeypatch.setattr(refresh_mod.unity_transport, "send_with_unity_instance", fake_send_with_unity_instance)
 
-    import services.resources.editor_state_v2 as esv2_mod
-    monkeypatch.setattr(esv2_mod, "get_editor_state_v2", fake_get_editor_state_v2)
+    import services.resources.editor_state as es_mod
+    monkeypatch.setattr(es_mod, "get_editor_state", fake_get_editor_state_v2)
 
     resp = await refresh_unity(ctx, wait_for_ready=True)
     payload = resp.model_dump() if hasattr(resp, "model_dump") else resp

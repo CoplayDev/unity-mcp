@@ -21,7 +21,7 @@ def _normalize_vector(value: Any, default: Any = None) -> list[float] | None:
     """
     if value is None:
         return default
-    
+
     # If already a list/tuple with 3 elements, convert to floats
     if isinstance(value, (list, tuple)) and len(value) == 3:
         try:
@@ -29,7 +29,7 @@ def _normalize_vector(value: Any, default: Any = None) -> list[float] | None:
             return vec if all(math.isfinite(n) for n in vec) else default
         except (ValueError, TypeError):
             return default
-    
+
     # Try parsing as JSON string
     if isinstance(value, str):
         parsed = parse_json_payload(value)
@@ -39,7 +39,7 @@ def _normalize_vector(value: Any, default: Any = None) -> list[float] | None:
                 return vec if all(math.isfinite(n) for n in vec) else default
             except (ValueError, TypeError):
                 pass
-        
+
         # Handle legacy comma-separated strings "1,2,3" or "[1,2,3]"
         s = value.strip()
         if s.startswith("[") and s.endswith("]"):
@@ -51,7 +51,7 @@ def _normalize_vector(value: Any, default: Any = None) -> list[float] | None:
                 return vec if all(math.isfinite(n) for n in vec) else default
             except (ValueError, TypeError):
                 pass
-    
+
     return default
 
 
@@ -62,23 +62,23 @@ def _normalize_component_properties(value: Any) -> tuple[dict[str, dict[str, Any
     """
     if value is None:
         return None, None
-    
+
     # Already a dict - validate structure
     if isinstance(value, dict):
         return value, None
-    
+
     # Try parsing as JSON string
     if isinstance(value, str):
         # Check for obviously invalid values
         if value in ("[object Object]", "undefined", "null", ""):
             return None, f"component_properties received invalid value: '{value}'. Expected a JSON object like {{\"ComponentName\": {{\"property\": value}}}}"
-        
+
         parsed = parse_json_payload(value)
         if isinstance(parsed, dict):
             return parsed, None
-        
+
         return None, f"component_properties must be a JSON object (dict), got string that parsed to {type(parsed).__name__}"
-    
+
     return None, f"component_properties must be a dict or JSON string, got {type(value).__name__}"
 
 
@@ -91,7 +91,8 @@ def _normalize_component_properties(value: Any) -> tuple[dict[str, dict[str, Any
 )
 async def manage_gameobject(
     ctx: Context,
-    action: Annotated[Literal["create", "modify", "delete", "duplicate", "move_relative"], "Action to perform on GameObject."] | None = None,
+    action: Annotated[Literal["create", "modify", "delete", "duplicate",
+                              "move_relative"], "Action to perform on GameObject."] | None = None,
     target: Annotated[str,
                       "GameObject identifier by name or path for modify/delete/component actions"] | None = None,
     search_method: Annotated[Literal["by_id", "by_name", "by_path", "by_tag", "by_layer", "by_component"],
@@ -145,10 +146,14 @@ async def manage_gameobject(
     includeNonPublicSerialized: Annotated[bool | str,
                                           "Controls whether serialization of private [SerializeField] fields is included (accepts true/false or 'true'/'false')"] | None = None,
     # --- Paging/safety for get_components ---
-    page_size: Annotated[int | str, "Page size for get_components paging."] | None = None,
-    cursor: Annotated[int | str, "Opaque cursor for get_components paging (offset)."] | None = None,
-    max_components: Annotated[int | str, "Hard cap on returned components per request (safety)."] | None = None,
-    include_properties: Annotated[bool | str, "If true, include serialized component properties (bounded)."] | None = None,
+    page_size: Annotated[int | str,
+                         "Page size for get_components paging."] | None = None,
+    cursor: Annotated[int | str,
+                      "Opaque cursor for get_components paging (offset)."] | None = None,
+    max_components: Annotated[int | str,
+                              "Hard cap on returned components per request (safety)."] | None = None,
+    include_properties: Annotated[bool | str,
+                                  "If true, include serialized component properties (bounded)."] | None = None,
     # --- Parameters for 'duplicate' ---
     new_name: Annotated[str,
                         "New name for the duplicated object (default: SourceName_Copy)"] | None = None,
@@ -156,13 +161,13 @@ async def manage_gameobject(
                       "Offset from original/reference position as [x, y, z] array"] | None = None,
     # --- Parameters for 'move_relative' ---
     reference_object: Annotated[str,
-                               "Reference object for relative movement (required for move_relative)"] | None = None,
+                                "Reference object for relative movement (required for move_relative)"] | None = None,
     direction: Annotated[Literal["left", "right", "up", "down", "forward", "back", "front", "backward", "behind"],
-                        "Direction for relative movement (e.g., 'right', 'up', 'forward')"] | None = None,
+                         "Direction for relative movement (e.g., 'right', 'up', 'forward')"] | None = None,
     distance: Annotated[float,
-                       "Distance to move in the specified direction (default: 1.0)"] | None = None,
+                        "Distance to move in the specified direction (default: 1.0)"] | None = None,
     world_space: Annotated[bool | str,
-                          "If True (default), use world space directions; if False, use reference object's local directions"] | None = None,
+                           "If True (default), use world space directions; if False, use reference object's local directions"] | None = None,
 ) -> dict[str, Any]:
     # Get active instance from session state
     # Removed session_state import
@@ -183,7 +188,7 @@ async def manage_gameobject(
     rotation = _normalize_vector(rotation)
     scale = _normalize_vector(scale)
     offset = _normalize_vector(offset)
-    
+
     # --- Normalize boolean parameters ---
     save_as_prefab = coerce_bool(save_as_prefab)
     set_active = coerce_bool(set_active)
@@ -193,17 +198,18 @@ async def manage_gameobject(
     includeNonPublicSerialized = coerce_bool(includeNonPublicSerialized)
     include_properties = coerce_bool(include_properties)
     world_space = coerce_bool(world_space, default=True)
-    
+
     # --- Normalize integer parameters ---
     page_size = coerce_int(page_size, default=None)
     cursor = coerce_int(cursor, default=None)
     max_components = coerce_int(max_components, default=None)
 
     # --- Normalize component_properties with detailed error handling ---
-    component_properties, comp_props_error = _normalize_component_properties(component_properties)
+    component_properties, comp_props_error = _normalize_component_properties(
+        component_properties)
     if comp_props_error:
         return {"success": False, "message": comp_props_error}
-        
+
     try:
         # Validate parameter usage to prevent silent failures
         if action in ["create", "modify"]:

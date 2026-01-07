@@ -33,16 +33,23 @@ async def manage_scriptable_object(
     ctx: Context,
     action: Annotated[Literal["create", "modify"], "Action to perform: create or modify."],
     # --- create params ---
-    type_name: Annotated[str | None, "Namespace-qualified ScriptableObject type name (for create)."] = None,
-    folder_path: Annotated[str | None, "Target folder under Assets/... (for create)."] = None,
-    asset_name: Annotated[str | None, "Asset file name without extension (for create)."] = None,
-    overwrite: Annotated[bool | str | None, "If true, overwrite existing asset at same path (for create)."] = None,
+    type_name: Annotated[str | None,
+                         "Namespace-qualified ScriptableObject type name (for create)."] = None,
+    folder_path: Annotated[str | None,
+                           "Target folder under Assets/... (for create)."] = None,
+    asset_name: Annotated[str | None,
+                          "Asset file name without extension (for create)."] = None,
+    overwrite: Annotated[bool | str | None,
+                         "If true, overwrite existing asset at same path (for create)."] = None,
     # --- modify params ---
-    target: Annotated[dict[str, Any] | str | None, "Target asset reference {guid|path} (for modify)."] = None,
+    target: Annotated[dict[str, Any] | str | None,
+                      "Target asset reference {guid|path} (for modify)."] = None,
     # --- shared ---
-    patches: Annotated[list[dict[str, Any]] | str | None, "Patch list (or JSON string) to apply."] = None,
+    patches: Annotated[list[dict[str, Any]] | str | None,
+                       "Patch list (or JSON string) to apply."] = None,
     # --- validation ---
-    dry_run: Annotated[bool | str | None, "If true, validate patches without applying (modify only)."] = None,
+    dry_run: Annotated[bool | str | None,
+                       "If true, validate patches without applying (modify only)."] = None,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
 
@@ -78,6 +85,3 @@ async def manage_scriptable_object(
     )
     await ctx.info(f"Response {response}")
     return response if isinstance(response, dict) else {"success": False, "message": "Unexpected response from Unity."}
-
-
-

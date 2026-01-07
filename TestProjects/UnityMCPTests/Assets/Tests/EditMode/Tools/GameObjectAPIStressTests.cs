@@ -1,15 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Resources.Scene;
+using MCPForUnity.Editor.Tools;
+using MCPForUnity.Editor.Tools.GameObjects;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
-using MCPForUnity.Editor.Tools;
-using MCPForUnity.Editor.Resources.Scene;
 using UnityEngine.TestTools;
-using Debug = UnityEngine.Debug;
 using static MCPForUnityTests.Editor.TestUtilities;
+using Debug = UnityEngine.Debug;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -57,7 +59,7 @@ namespace MCPForUnityTests.Editor.Tools
         public void BulkCreate_SmallBatch_AllSucceed()
         {
             var sw = Stopwatch.StartNew();
-            
+
             for (int i = 0; i < SMALL_BATCH; i++)
             {
                 var result = ToJObject(ManageGameObject.HandleCommand(new JObject
@@ -65,9 +67,9 @@ namespace MCPForUnityTests.Editor.Tools
                     ["action"] = "create",
                     ["name"] = $"BulkTest_{i}"
                 }));
-                
+
                 Assert.IsTrue(result["success"]?.Value<bool>() ?? false, $"Failed to create object {i}");
-                
+
                 // Track for cleanup
                 int instanceId = result["data"]?["instanceID"]?.Value<int>() ?? 0;
                 if (instanceId != 0)
@@ -76,7 +78,7 @@ namespace MCPForUnityTests.Editor.Tools
                     if (go != null) _createdObjects.Add(go);
                 }
             }
-            
+
             sw.Stop();
             Debug.Log($"[BulkCreate] Created {SMALL_BATCH} objects in {sw.ElapsedMilliseconds}ms");
             // Use generous threshold for CI variability
@@ -87,7 +89,7 @@ namespace MCPForUnityTests.Editor.Tools
         public void BulkCreate_MediumBatch_AllSucceed()
         {
             var sw = Stopwatch.StartNew();
-            
+
             for (int i = 0; i < MEDIUM_BATCH; i++)
             {
                 var result = ToJObject(ManageGameObject.HandleCommand(new JObject
@@ -95,9 +97,9 @@ namespace MCPForUnityTests.Editor.Tools
                     ["action"] = "create",
                     ["name"] = $"MediumBulk_{i}"
                 }));
-                
+
                 Assert.IsTrue(result["success"]?.Value<bool>() ?? false, $"Failed to create object {i}");
-                
+
                 int instanceId = result["data"]?["instanceID"]?.Value<int>() ?? 0;
                 if (instanceId != 0)
                 {
@@ -105,7 +107,7 @@ namespace MCPForUnityTests.Editor.Tools
                     if (go != null) _createdObjects.Add(go);
                 }
             }
-            
+
             sw.Stop();
             Debug.Log($"[BulkCreate] Created {MEDIUM_BATCH} objects in {sw.ElapsedMilliseconds}ms");
             Assert.Less(sw.ElapsedMilliseconds, 15000, "Medium batch create took too long");
@@ -138,9 +140,9 @@ namespace MCPForUnityTests.Editor.Tools
             var firstIds = firstData?["instanceIDs"] as JArray;
             Assert.IsNotNull(firstIds);
             Assert.AreEqual(1, firstIds.Count, "Should find exactly one object with exact name match");
-            
+
             Debug.Log($"[FindGameObjects] Found object by exact name. Testing pagination with a unique marker component.");
-            
+
             // Now test pagination by searching for only the objects created by this test
             var result = ToJObject(FindGameObjects.HandleCommand(new JObject
             {
@@ -152,17 +154,17 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsTrue(result["success"]?.Value<bool>() ?? false);
             var data = result["data"] as JObject;
             Assert.IsNotNull(data);
-            
+
             var instanceIds = data["instanceIDs"] as JArray;
             Assert.IsNotNull(instanceIds);
             Assert.AreEqual(25, instanceIds.Count, "First page should have 25 items");
-            
+
             int totalCount = data["totalCount"]?.Value<int>() ?? 0;
             Assert.AreEqual(LARGE_BATCH, totalCount, $"Should find exactly {LARGE_BATCH} objects created by this test");
-            
+
             bool hasMore = data["hasMore"]?.Value<bool>() ?? false;
             Assert.IsTrue(hasMore, "Should have more pages");
-            
+
             Debug.Log($"[FindGameObjects] Found {totalCount} objects, first page has {instanceIds.Count}");
         }
 
@@ -205,7 +207,7 @@ namespace MCPForUnityTests.Editor.Tools
                 Assert.IsTrue(result["success"]?.Value<bool>() ?? false);
                 var data = result["data"] as JObject;
                 var instanceIds = data["instanceIDs"] as JArray;
-                
+
                 // Count how many of our created objects are in this page
                 foreach (var id in instanceIds)
                 {
@@ -215,12 +217,12 @@ namespace MCPForUnityTests.Editor.Tools
                     }
                 }
                 pageCount++;
-                
+
                 bool hasMore = data["hasMore"]?.Value<bool>() ?? false;
                 if (!hasMore) break;
-                
+
                 cursor = data["nextCursor"]?.Value<int>() ?? cursor + pageSize;
-                
+
                 // Safety limit
                 if (pageCount > 50) break;
             }
@@ -237,7 +239,7 @@ namespace MCPForUnityTests.Editor.Tools
         public void AddComponents_MultipleToSingleObject()
         {
             var go = CreateTestObject("ComponentHost");
-            
+
             string[] componentTypeNames = new[]
             {
                 "BoxCollider",
@@ -247,7 +249,7 @@ namespace MCPForUnityTests.Editor.Tools
             };
 
             var sw = Stopwatch.StartNew();
-            
+
             foreach (var compType in componentTypeNames)
             {
                 var result = ToJObject(ManageComponents.HandleCommand(new JObject
@@ -257,13 +259,13 @@ namespace MCPForUnityTests.Editor.Tools
                     ["searchMethod"] = "by_id",
                     ["componentType"] = compType  // Correct parameter name
                 }));
-                
+
                 Assert.IsTrue(result["success"]?.Value<bool>() ?? false, $"Failed to add {compType}: {result["message"]}");
             }
 
             sw.Stop();
             Debug.Log($"[AddComponents] Added {componentTypeNames.Length} components in {sw.ElapsedMilliseconds}ms");
-            
+
             // Verify all components present
             Assert.AreEqual(componentTypeNames.Length + 1, go.GetComponents<Component>().Length); // +1 for Transform
         }
@@ -272,7 +274,7 @@ namespace MCPForUnityTests.Editor.Tools
         public void GetComponents_ObjectWithManyComponents()
         {
             var go = CreateTestObject("HeavyComponents");
-            
+
             // Add many components - but skip AudioSource as it triggers deprecated API warnings
             go.AddComponent<BoxCollider>();
             go.AddComponent<SphereCollider>();
@@ -284,7 +286,7 @@ namespace MCPForUnityTests.Editor.Tools
             go.AddComponent<AudioListener>();
 
             var sw = Stopwatch.StartNew();
-            
+
             // Use the resource handler for getting components
             var result = ToJObject(GameObjectComponentsResource.HandleCommand(new JObject
             {
@@ -294,14 +296,14 @@ namespace MCPForUnityTests.Editor.Tools
             }));
 
             sw.Stop();
-            
+
             Assert.IsTrue(result["success"]?.Value<bool>() ?? false, $"GetComponents failed: {result["message"]}");
             var data = result["data"] as JObject;
             var components = data?["components"] as JArray;
-            
+
             Assert.IsNotNull(components);
             Assert.AreEqual(9, components.Count); // 8 added + Transform
-            
+
             Debug.Log($"[GetComponents] Retrieved {components.Count} components with properties in {sw.ElapsedMilliseconds}ms");
         }
 
@@ -328,7 +330,7 @@ namespace MCPForUnityTests.Editor.Tools
             }));
 
             Assert.IsTrue(result["success"]?.Value<bool>() ?? false, $"Set property failed: {result["message"]}");
-            
+
             var rb = go.GetComponent<Rigidbody>();
             Assert.AreEqual(10.5f, rb.mass, 0.01f);
             Assert.AreEqual(0.5f, rb.drag, 0.01f);
@@ -347,14 +349,14 @@ namespace MCPForUnityTests.Editor.Tools
             // Create a deep hierarchy: Root/Level1/Level2/Level3/Target
             var root = CreateTestObject("DeepRoot");
             var current = root;
-            
+
             for (int i = 1; i <= 5; i++)
             {
                 var child = CreateTestObject($"Level{i}");
                 child.transform.SetParent(current.transform);
                 current = child;
             }
-            
+
             var target = CreateTestObject("DeepTarget");
             target.transform.SetParent(current.transform);
 
@@ -368,7 +370,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsTrue(result["success"]?.Value<bool>() ?? false);
             var data = result["data"] as JObject;
             var ids = data?["instanceIDs"] as JArray;
-            
+
             Assert.IsNotNull(ids);
             Assert.AreEqual(1, ids.Count);
             Assert.AreEqual(target.GetInstanceID(), ids[0].Value<int>());
@@ -393,14 +395,14 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsTrue(result["success"]?.Value<bool>() ?? false);
             var data = result["data"] as JObject;
             var items = data?["items"] as JArray;
-            
+
             Assert.IsNotNull(items);
             Assert.GreaterOrEqual(items.Count, 1);
-            
+
             // Verify componentTypes is included
             var firstItem = items[0] as JObject;
             Assert.IsNotNull(firstItem?["componentTypes"], "Should include componentTypes");
-            
+
             Debug.Log($"[GetHierarchy] Retrieved {items.Count} items from hierarchy");
         }
 
@@ -415,12 +417,12 @@ namespace MCPForUnityTests.Editor.Tools
             go.tag = "Player";
             go.layer = 8;
             go.isStatic = true;
-            
+
             // Add components - AudioSource is OK here since we're only reading component types, not serializing properties
             go.AddComponent<Rigidbody>();
             go.AddComponent<BoxCollider>();
             go.AddComponent<AudioSource>();
-            
+
             // Add children
             for (int i = 0; i < 5; i++)
             {
@@ -429,7 +431,7 @@ namespace MCPForUnityTests.Editor.Tools
             }
 
             var sw = Stopwatch.StartNew();
-            
+
             // Call the resource directly (no action param needed)
             var result = ToJObject(GameObjectResource.HandleCommand(new JObject
             {
@@ -437,22 +439,22 @@ namespace MCPForUnityTests.Editor.Tools
             }));
 
             sw.Stop();
-            
+
             Assert.IsTrue(result["success"]?.Value<bool>() ?? false);
             var data = result["data"] as JObject;
-            
+
             Assert.AreEqual("ComplexObject", data?["name"]?.Value<string>());
             Assert.AreEqual("Player", data?["tag"]?.Value<string>());
             Assert.AreEqual(8, data?["layer"]?.Value<int>());
-            
+
             var componentTypes = data?["componentTypes"] as JArray;
             Assert.IsNotNull(componentTypes);
             Assert.AreEqual(4, componentTypes.Count); // Transform + 3 added
-            
+
             var children = data?["children"] as JArray;
             Assert.IsNotNull(children);
             Assert.AreEqual(5, children.Count);
-            
+
             Debug.Log($"[GameObjectResource] Read complex object in {sw.ElapsedMilliseconds}ms");
         }
 
@@ -460,19 +462,19 @@ namespace MCPForUnityTests.Editor.Tools
         public void ComponentsResource_ReadAllWithFullSerialization()
         {
             var go = CreateTestObject("FullSerialize");
-            
+
             var rb = go.AddComponent<Rigidbody>();
             rb.mass = 5.5f;
             rb.drag = 1.2f;
-            
+
             var col = go.AddComponent<BoxCollider>();
             col.size = new Vector3(2, 3, 4);
             col.center = new Vector3(0.5f, 0.5f, 0.5f);
-            
+
             // Skip AudioSource to avoid deprecated API warnings
 
             var sw = Stopwatch.StartNew();
-            
+
             // Use the components resource handler
             var result = ToJObject(GameObjectComponentsResource.HandleCommand(new JObject
             {
@@ -481,16 +483,16 @@ namespace MCPForUnityTests.Editor.Tools
             }));
 
             sw.Stop();
-            
+
             Assert.IsTrue(result["success"]?.Value<bool>() ?? false);
             var data = result["data"] as JObject;
             var components = data?["components"] as JArray;
-            
+
             Assert.IsNotNull(components);
             Assert.AreEqual(3, components.Count); // Transform + Rigidbody + BoxCollider
-            
+
             Debug.Log($"[ComponentsResource] Full serialization of {components.Count} components in {sw.ElapsedMilliseconds}ms");
-            
+
             // Verify serialized data includes properties
             bool foundRigidbody = false;
             foreach (JObject comp in components)
@@ -517,7 +519,7 @@ namespace MCPForUnityTests.Editor.Tools
         public void RapidFireOperations_CreateModifyDelete()
         {
             var sw = Stopwatch.StartNew();
-            
+
             for (int i = 0; i < SMALL_BATCH; i++)
             {
                 // Create
@@ -527,10 +529,10 @@ namespace MCPForUnityTests.Editor.Tools
                     ["name"] = $"RapidFire_{i}"
                 }));
                 Assert.IsTrue(createResult["success"]?.Value<bool>() ?? false, $"Create failed: {createResult["message"]}");
-                
+
                 int instanceId = createResult["data"]?["instanceID"]?.Value<int>() ?? 0;
                 Assert.AreNotEqual(0, instanceId, "Instance ID should not be 0");
-                
+
                 // Modify - use layer 0 (Default) to avoid layer name issues
                 var modifyResult = ToJObject(ManageGameObject.HandleCommand(new JObject
                 {
@@ -541,7 +543,7 @@ namespace MCPForUnityTests.Editor.Tools
                     ["setActive"] = true
                 }));
                 Assert.IsTrue(modifyResult["success"]?.Value<bool>() ?? false, $"Modify failed: {modifyResult["message"]}");
-                
+
                 // Delete
                 var deleteResult = ToJObject(ManageGameObject.HandleCommand(new JObject
                 {

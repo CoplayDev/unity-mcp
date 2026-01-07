@@ -1,10 +1,11 @@
 using System;
 using System.IO;
+using MCPForUnity.Editor.Tools;
+using MCPForUnity.Editor.Tools.GameObjects;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
-using MCPForUnity.Editor.Tools;
 using static MCPForUnityTests.Editor.TestUtilities;
 
 namespace MCPForUnityTests.Editor.Tools
@@ -56,16 +57,16 @@ namespace MCPForUnityTests.Editor.Tools
             {
                 AssetDatabase.DeleteAsset(_matPath);
             }
-            
+
             // Clean up temp directory after each test
             if (AssetDatabase.IsValidFolder(TempRoot))
             {
                 AssetDatabase.DeleteAsset(TempRoot);
             }
-            
+
             // Clean up empty parent folders to avoid debris
             CleanupEmptyParentFolders(TempRoot);
-            
+
             AssetDatabase.Refresh();
         }
 
