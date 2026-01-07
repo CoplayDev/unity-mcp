@@ -65,7 +65,7 @@ async def set_active_instance(
             return {
                 "success": False,
                 "error": f"Instance '{value}' not found. "
-                         "Use unity://instances to copy an exact Name@hash."
+                "Use unity://instances to copy an exact Name@hash."
             }
     else:
         lookup = value.lower()
@@ -80,7 +80,7 @@ async def set_active_instance(
             return {
                 "success": False,
                 "error": f"Instance hash '{value}' does not match any running Unity editors. "
-                         "Use unity://instances to confirm the available hashes."
+                "Use unity://instances to confirm the available hashes."
             }
         if len(matches) > 1:
             matching_ids = ", ".join(
@@ -89,10 +89,10 @@ async def set_active_instance(
             return {
                 "success": False,
                 "error": f"Instance hash '{value}' is ambiguous ({matching_ids}). "
-                         "Provide the full Name@hash from unity://instances."
+                "Provide the full Name@hash from unity://instances."
             }
         resolved = matches[0]
-    
+
     if resolved is None:
         # Should be unreachable due to logic above, but satisfies static analysis
         return {
@@ -106,7 +106,7 @@ async def set_active_instance(
     # The session key is an internal detail but useful for debugging response.
     middleware.set_active_instance(ctx, resolved.id)
     session_key = middleware.get_session_key(ctx)
-    
+
     return {
         "success": True,
         "message": f"Active instance set to {resolved.id}",

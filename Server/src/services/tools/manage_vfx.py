@@ -11,7 +11,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 # All possible actions grouped by component type
 PARTICLE_ACTIONS = [
     "particle_get_info", "particle_set_main", "particle_set_emission", "particle_set_shape",
-    "particle_set_color_over_lifetime", "particle_set_size_over_lifetime", 
+    "particle_set_color_over_lifetime", "particle_set_size_over_lifetime",
     "particle_set_velocity_over_lifetime", "particle_set_noise", "particle_set_renderer",
     "particle_enable_module", "particle_play", "particle_stop", "particle_pause",
     "particle_restart", "particle_clear", "particle_add_burst", "particle_clear_bursts"
@@ -39,7 +39,8 @@ TRAIL_ACTIONS = [
     "trail_set_material", "trail_set_properties", "trail_clear", "trail_emit"
 ]
 
-ALL_ACTIONS = ["ping"] + PARTICLE_ACTIONS + VFX_ACTIONS + LINE_ACTIONS + TRAIL_ACTIONS
+ALL_ACTIONS = ["ping"] + PARTICLE_ACTIONS + \
+    VFX_ACTIONS + LINE_ACTIONS + TRAIL_ACTIONS
 
 
 @mcp_for_unity_tool(
@@ -126,173 +127,282 @@ Use `target` parameter to specify the GameObject:
 async def manage_vfx(
     ctx: Context,
     action: Annotated[str, "Action to perform. Use prefix: particle_, vfx_, line_, or trail_"],
-    
+
     # Target specification (common) - REQUIRED for most actions
     # Using str | None to accept any string format
-    target: Annotated[str | None, "Target GameObject with the VFX component. Use name (e.g. 'Fire'), path ('Effects/Fire'), instance ID, or tag. The GameObject MUST have the required component (ParticleSystem/VisualEffect/LineRenderer/TrailRenderer) for the action prefix."] = None,
+    target: Annotated[str | None,
+                      "Target GameObject with the VFX component. Use name (e.g. 'Fire'), path ('Effects/Fire'), instance ID, or tag. The GameObject MUST have the required component (ParticleSystem/VisualEffect/LineRenderer/TrailRenderer) for the action prefix."] = None,
     search_method: Annotated[
         Literal["by_id", "by_name", "by_path", "by_tag", "by_layer"] | None,
         "How to find target: by_name (default), by_path (hierarchy path), by_id (instance ID - most reliable), by_tag, by_layer"
     ] = None,
-    
+
     # === PARTICLE SYSTEM PARAMETERS ===
     # Main module - All use Any to accept string coercion from MCP clients
-    duration: Annotated[Any, "[Particle] Duration in seconds (number or string)"] = None,
-    looping: Annotated[Any, "[Particle] Whether to loop (bool or string 'true'/'false')"] = None,
-    prewarm: Annotated[Any, "[Particle] Prewarm the system (bool or string)"] = None,
-    start_delay: Annotated[Any, "[Particle] Start delay (number or MinMaxCurve dict)"] = None,
-    start_lifetime: Annotated[Any, "[Particle] Particle lifetime (number or MinMaxCurve dict)"] = None,
-    start_speed: Annotated[Any, "[Particle] Initial speed (number or MinMaxCurve dict)"] = None,
-    start_size: Annotated[Any, "[Particle] Initial size (number or MinMaxCurve dict)"] = None,
-    start_rotation: Annotated[Any, "[Particle] Initial rotation (number or MinMaxCurve dict)"] = None,
-    start_color: Annotated[Any, "[Particle/VFX] Start color [r,g,b,a] (array, dict, or JSON string)"] = None,
-    gravity_modifier: Annotated[Any, "[Particle] Gravity multiplier (number or MinMaxCurve dict)"] = None,
-    simulation_space: Annotated[Literal["Local", "World", "Custom"] | None, "[Particle] Simulation space"] = None,
-    scaling_mode: Annotated[Literal["Hierarchy", "Local", "Shape"] | None, "[Particle] Scaling mode"] = None,
-    play_on_awake: Annotated[Any, "[Particle] Play on awake (bool or string)"] = None,
-    max_particles: Annotated[Any, "[Particle] Maximum particles (integer or string)"] = None,
-    
+    duration: Annotated[Any,
+                        "[Particle] Duration in seconds (number or string)"] = None,
+    looping: Annotated[Any,
+                       "[Particle] Whether to loop (bool or string 'true'/'false')"] = None,
+    prewarm: Annotated[Any,
+                       "[Particle] Prewarm the system (bool or string)"] = None,
+    start_delay: Annotated[Any,
+                           "[Particle] Start delay (number or MinMaxCurve dict)"] = None,
+    start_lifetime: Annotated[Any,
+                              "[Particle] Particle lifetime (number or MinMaxCurve dict)"] = None,
+    start_speed: Annotated[Any,
+                           "[Particle] Initial speed (number or MinMaxCurve dict)"] = None,
+    start_size: Annotated[Any,
+                          "[Particle] Initial size (number or MinMaxCurve dict)"] = None,
+    start_rotation: Annotated[Any,
+                              "[Particle] Initial rotation (number or MinMaxCurve dict)"] = None,
+    start_color: Annotated[Any,
+                           "[Particle/VFX] Start color [r,g,b,a] (array, dict, or JSON string)"] = None,
+    gravity_modifier: Annotated[Any,
+                                "[Particle] Gravity multiplier (number or MinMaxCurve dict)"] = None,
+    simulation_space: Annotated[Literal["Local", "World",
+                                        "Custom"] | None, "[Particle] Simulation space"] = None,
+    scaling_mode: Annotated[Literal["Hierarchy", "Local",
+                                    "Shape"] | None, "[Particle] Scaling mode"] = None,
+    play_on_awake: Annotated[Any,
+                             "[Particle] Play on awake (bool or string)"] = None,
+    max_particles: Annotated[Any,
+                             "[Particle] Maximum particles (integer or string)"] = None,
+
     # Emission
-    rate_over_time: Annotated[Any, "[Particle] Emission rate over time (number or MinMaxCurve dict)"] = None,
-    rate_over_distance: Annotated[Any, "[Particle] Emission rate over distance (number or MinMaxCurve dict)"] = None,
-    
+    rate_over_time: Annotated[Any,
+                              "[Particle] Emission rate over time (number or MinMaxCurve dict)"] = None,
+    rate_over_distance: Annotated[Any,
+                                  "[Particle] Emission rate over distance (number or MinMaxCurve dict)"] = None,
+
     # Shape
-    shape_type: Annotated[Literal["Sphere", "Hemisphere", "Cone", "Box", "Circle", "Edge", "Donut"] | None, "[Particle] Shape type"] = None,
-    radius: Annotated[Any, "[Particle/Line] Shape radius (number or string)"] = None,
-    radius_thickness: Annotated[Any, "[Particle] Radius thickness 0-1 (number or string)"] = None,
+    shape_type: Annotated[Literal["Sphere", "Hemisphere", "Cone", "Box",
+                                  "Circle", "Edge", "Donut"] | None, "[Particle] Shape type"] = None,
+    radius: Annotated[Any,
+                      "[Particle/Line] Shape radius (number or string)"] = None,
+    radius_thickness: Annotated[Any,
+                                "[Particle] Radius thickness 0-1 (number or string)"] = None,
     angle: Annotated[Any, "[Particle] Cone angle (number or string)"] = None,
     arc: Annotated[Any, "[Particle] Arc angle (number or string)"] = None,
-    
+
     # Noise
-    strength: Annotated[Any, "[Particle] Noise strength (number or MinMaxCurve dict)"] = None,
-    frequency: Annotated[Any, "[Particle] Noise frequency (number or string)"] = None,
-    scroll_speed: Annotated[Any, "[Particle] Noise scroll speed (number or MinMaxCurve dict)"] = None,
-    damping: Annotated[Any, "[Particle] Noise damping (bool or string)"] = None,
-    octave_count: Annotated[Any, "[Particle] Noise octaves 1-4 (integer or string)"] = None,
-    quality: Annotated[Literal["Low", "Medium", "High"] | None, "[Particle] Noise quality"] = None,
-    
+    strength: Annotated[Any,
+                        "[Particle] Noise strength (number or MinMaxCurve dict)"] = None,
+    frequency: Annotated[Any,
+                         "[Particle] Noise frequency (number or string)"] = None,
+    scroll_speed: Annotated[Any,
+                            "[Particle] Noise scroll speed (number or MinMaxCurve dict)"] = None,
+    damping: Annotated[Any,
+                       "[Particle] Noise damping (bool or string)"] = None,
+    octave_count: Annotated[Any,
+                            "[Particle] Noise octaves 1-4 (integer or string)"] = None,
+    quality: Annotated[Literal["Low", "Medium", "High"]
+                       | None, "[Particle] Noise quality"] = None,
+
     # Module control
-    module: Annotated[str | None, "[Particle] Module name to enable/disable"] = None,
-    enabled: Annotated[Any, "[Particle] Enable/disable module (bool or string)"] = None,
-    
+    module: Annotated[str | None,
+                      "[Particle] Module name to enable/disable"] = None,
+    enabled: Annotated[Any,
+                       "[Particle] Enable/disable module (bool or string)"] = None,
+
     # Burst
-    time: Annotated[Any, "[Particle/Trail] Burst time or trail duration (number or string)"] = None,
+    time: Annotated[Any,
+                    "[Particle/Trail] Burst time or trail duration (number or string)"] = None,
     count: Annotated[Any, "[Particle] Burst count (integer or string)"] = None,
-    min_count: Annotated[Any, "[Particle] Min burst count (integer or string)"] = None,
-    max_count: Annotated[Any, "[Particle] Max burst count (integer or string)"] = None,
-    cycles: Annotated[Any, "[Particle] Burst cycles (integer or string)"] = None,
-    interval: Annotated[Any, "[Particle] Burst interval (number or string)"] = None,
-    probability: Annotated[Any, "[Particle] Burst probability 0-1 (number or string)"] = None,
-    
+    min_count: Annotated[Any,
+                         "[Particle] Min burst count (integer or string)"] = None,
+    max_count: Annotated[Any,
+                         "[Particle] Max burst count (integer or string)"] = None,
+    cycles: Annotated[Any,
+                      "[Particle] Burst cycles (integer or string)"] = None,
+    interval: Annotated[Any,
+                        "[Particle] Burst interval (number or string)"] = None,
+    probability: Annotated[Any,
+                           "[Particle] Burst probability 0-1 (number or string)"] = None,
+
     # Playback
-    with_children: Annotated[Any, "[Particle] Apply to children (bool or string)"] = None,
-    
+    with_children: Annotated[Any,
+                             "[Particle] Apply to children (bool or string)"] = None,
+
     # === VFX GRAPH PARAMETERS ===
     # Asset management
-    asset_name: Annotated[str | None, "[VFX] Name for new VFX asset (without .vfx extension)"] = None,
-    folder_path: Annotated[str | None, "[VFX] Folder path for new asset (default: Assets/VFX)"] = None,
-    template: Annotated[str | None, "[VFX] Template name for new asset (use vfx_list_templates to see available)"] = None,
-    asset_path: Annotated[str | None, "[VFX] Path to VFX asset to assign (e.g. Assets/VFX/MyEffect.vfx)"] = None,
-    overwrite: Annotated[Any, "[VFX] Overwrite existing asset (bool or string)"] = None,
-    folder: Annotated[str | None, "[VFX] Folder to search for assets (for vfx_list_assets)"] = None,
-    search: Annotated[str | None, "[VFX] Search pattern for assets (for vfx_list_assets)"] = None,
-    
+    asset_name: Annotated[str | None,
+                          "[VFX] Name for new VFX asset (without .vfx extension)"] = None,
+    folder_path: Annotated[str | None,
+                           "[VFX] Folder path for new asset (default: Assets/VFX)"] = None,
+    template: Annotated[str | None,
+                        "[VFX] Template name for new asset (use vfx_list_templates to see available)"] = None,
+    asset_path: Annotated[str | None,
+                          "[VFX] Path to VFX asset to assign (e.g. Assets/VFX/MyEffect.vfx)"] = None,
+    overwrite: Annotated[Any,
+                         "[VFX] Overwrite existing asset (bool or string)"] = None,
+    folder: Annotated[str | None,
+                      "[VFX] Folder to search for assets (for vfx_list_assets)"] = None,
+    search: Annotated[str | None,
+                      "[VFX] Search pattern for assets (for vfx_list_assets)"] = None,
+
     # Runtime parameters
     parameter: Annotated[str | None, "[VFX] Exposed parameter name"] = None,
-    value: Annotated[Any, "[VFX] Parameter value (number, bool, array, or string)"] = None,
+    value: Annotated[Any,
+                     "[VFX] Parameter value (number, bool, array, or string)"] = None,
     texture_path: Annotated[str | None, "[VFX] Texture asset path"] = None,
     mesh_path: Annotated[str | None, "[VFX] Mesh asset path"] = None,
-    gradient: Annotated[Any, "[VFX/Line/Trail] Gradient {colorKeys, alphaKeys} or {startColor, endColor} (dict or JSON string)"] = None,
-    curve: Annotated[Any, "[VFX] Animation curve keys or {startValue, endValue} (array, dict, or JSON string)"] = None,
+    gradient: Annotated[Any,
+                        "[VFX/Line/Trail] Gradient {colorKeys, alphaKeys} or {startColor, endColor} (dict or JSON string)"] = None,
+    curve: Annotated[Any,
+                     "[VFX] Animation curve keys or {startValue, endValue} (array, dict, or JSON string)"] = None,
     event_name: Annotated[str | None, "[VFX] Event name to send"] = None,
-    velocity: Annotated[Any, "[VFX] Event velocity [x,y,z] (array or JSON string)"] = None,
+    velocity: Annotated[Any,
+                        "[VFX] Event velocity [x,y,z] (array or JSON string)"] = None,
     size: Annotated[Any, "[VFX] Event size (number or string)"] = None,
     lifetime: Annotated[Any, "[VFX] Event lifetime (number or string)"] = None,
-    play_rate: Annotated[Any, "[VFX] Playback speed multiplier (number or string)"] = None,
+    play_rate: Annotated[Any,
+                         "[VFX] Playback speed multiplier (number or string)"] = None,
     seed: Annotated[Any, "[VFX] Random seed (integer or string)"] = None,
-    reset_seed_on_play: Annotated[Any, "[VFX] Reset seed on play (bool or string)"] = None,
-    
+    reset_seed_on_play: Annotated[Any,
+                                  "[VFX] Reset seed on play (bool or string)"] = None,
+
     # === LINE/TRAIL RENDERER PARAMETERS ===
-    positions: Annotated[Any, "[Line] Positions [[x,y,z], ...] (array or JSON string)"] = None,
-    position: Annotated[Any, "[Line/Trail] Single position [x,y,z] (array or JSON string)"] = None,
+    positions: Annotated[Any,
+                         "[Line] Positions [[x,y,z], ...] (array or JSON string)"] = None,
+    position: Annotated[Any,
+                        "[Line/Trail] Single position [x,y,z] (array or JSON string)"] = None,
     index: Annotated[Any, "[Line] Position index (integer or string)"] = None,
-    
+
     # Width
-    width: Annotated[Any, "[Line/Trail] Uniform width (number or string)"] = None,
-    start_width: Annotated[Any, "[Line/Trail] Start width (number or string)"] = None,
-    end_width: Annotated[Any, "[Line/Trail] End width (number or string)"] = None,
-    width_curve: Annotated[Any, "[Line/Trail] Width curve (number or dict)"] = None,
-    width_multiplier: Annotated[Any, "[Line/Trail] Width multiplier (number or string)"] = None,
-    
+    width: Annotated[Any,
+                     "[Line/Trail] Uniform width (number or string)"] = None,
+    start_width: Annotated[Any,
+                           "[Line/Trail] Start width (number or string)"] = None,
+    end_width: Annotated[Any,
+                         "[Line/Trail] End width (number or string)"] = None,
+    width_curve: Annotated[Any,
+                           "[Line/Trail] Width curve (number or dict)"] = None,
+    width_multiplier: Annotated[Any,
+                                "[Line/Trail] Width multiplier (number or string)"] = None,
+
     # Color
-    color: Annotated[Any, "[Line/Trail/VFX] Color [r,g,b,a] (array or JSON string)"] = None,
-    start_color_line: Annotated[Any, "[Line/Trail] Start color (array or JSON string)"] = None,
-    end_color: Annotated[Any, "[Line/Trail] End color (array or JSON string)"] = None,
-    
+    color: Annotated[Any,
+                     "[Line/Trail/VFX] Color [r,g,b,a] (array or JSON string)"] = None,
+    start_color_line: Annotated[Any,
+                                "[Line/Trail] Start color (array or JSON string)"] = None,
+    end_color: Annotated[Any,
+                         "[Line/Trail] End color (array or JSON string)"] = None,
+
     # Material & properties
-    material_path: Annotated[str | None, "[Particle/Line/Trail] Material asset path"] = None,
-    trail_material_path: Annotated[str | None, "[Particle] Trail material asset path"] = None,
-    loop: Annotated[Any, "[Line] Connect end to start (bool or string)"] = None,
-    use_world_space: Annotated[Any, "[Line] Use world space (bool or string)"] = None,
-    num_corner_vertices: Annotated[Any, "[Line/Trail] Corner vertices (integer or string)"] = None,
-    num_cap_vertices: Annotated[Any, "[Line/Trail] Cap vertices (integer or string)"] = None,
-    alignment: Annotated[Literal["View", "Local", "TransformZ"] | None, "[Line/Trail] Alignment"] = None,
-    texture_mode: Annotated[Literal["Stretch", "Tile", "DistributePerSegment", "RepeatPerSegment"] | None, "[Line/Trail] Texture mode"] = None,
-    generate_lighting_data: Annotated[Any, "[Line/Trail] Generate lighting data for GI (bool or string)"] = None,
-    sorting_order: Annotated[Any, "[Line/Trail/Particle] Sorting order (integer or string)"] = None,
-    sorting_layer_name: Annotated[str | None, "[Renderer] Sorting layer name"] = None,
-    sorting_layer_id: Annotated[Any, "[Renderer] Sorting layer ID (integer or string)"] = None,
-    render_mode: Annotated[str | None, "[Particle] Render mode (Billboard, Stretch, HorizontalBillboard, VerticalBillboard, Mesh, None)"] = None,
-    sort_mode: Annotated[str | None, "[Particle] Sort mode (None, Distance, OldestInFront, YoungestInFront, Depth)"] = None,
-    
+    material_path: Annotated[str | None,
+                             "[Particle/Line/Trail] Material asset path"] = None,
+    trail_material_path: Annotated[str | None,
+                                   "[Particle] Trail material asset path"] = None,
+    loop: Annotated[Any,
+                    "[Line] Connect end to start (bool or string)"] = None,
+    use_world_space: Annotated[Any,
+                               "[Line] Use world space (bool or string)"] = None,
+    num_corner_vertices: Annotated[Any,
+                                   "[Line/Trail] Corner vertices (integer or string)"] = None,
+    num_cap_vertices: Annotated[Any,
+                                "[Line/Trail] Cap vertices (integer or string)"] = None,
+    alignment: Annotated[Literal["View", "Local", "TransformZ"]
+                         | None, "[Line/Trail] Alignment"] = None,
+    texture_mode: Annotated[Literal["Stretch", "Tile", "DistributePerSegment",
+                                    "RepeatPerSegment"] | None, "[Line/Trail] Texture mode"] = None,
+    generate_lighting_data: Annotated[Any,
+                                      "[Line/Trail] Generate lighting data for GI (bool or string)"] = None,
+    sorting_order: Annotated[Any,
+                             "[Line/Trail/Particle] Sorting order (integer or string)"] = None,
+    sorting_layer_name: Annotated[str | None,
+                                  "[Renderer] Sorting layer name"] = None,
+    sorting_layer_id: Annotated[Any,
+                                "[Renderer] Sorting layer ID (integer or string)"] = None,
+    render_mode: Annotated[str | None,
+                           "[Particle] Render mode (Billboard, Stretch, HorizontalBillboard, VerticalBillboard, Mesh, None)"] = None,
+    sort_mode: Annotated[str | None,
+                         "[Particle] Sort mode (None, Distance, OldestInFront, YoungestInFront, Depth)"] = None,
+
     # === RENDERER COMMON PROPERTIES (Shadows, Lighting, Probes) ===
-    shadow_casting_mode: Annotated[Literal["Off", "On", "TwoSided", "ShadowsOnly"] | None, "[Renderer] Shadow casting mode"] = None,
-    receive_shadows: Annotated[Any, "[Renderer] Receive shadows (bool or string)"] = None,
-    shadow_bias: Annotated[Any, "[Renderer] Shadow bias (number or string)"] = None,
-    light_probe_usage: Annotated[Literal["Off", "BlendProbes", "UseProxyVolume", "CustomProvided"] | None, "[Renderer] Light probe usage mode"] = None,
-    reflection_probe_usage: Annotated[Literal["Off", "BlendProbes", "BlendProbesAndSkybox", "Simple"] | None, "[Renderer] Reflection probe usage mode"] = None,
-    motion_vector_generation_mode: Annotated[Literal["Camera", "Object", "ForceNoMotion"] | None, "[Renderer] Motion vector generation mode"] = None,
-    rendering_layer_mask: Annotated[Any, "[Renderer] Rendering layer mask for SRP (integer or string)"] = None,
-    
+    shadow_casting_mode: Annotated[Literal["Off", "On", "TwoSided",
+                                           "ShadowsOnly"] | None, "[Renderer] Shadow casting mode"] = None,
+    receive_shadows: Annotated[Any,
+                               "[Renderer] Receive shadows (bool or string)"] = None,
+    shadow_bias: Annotated[Any,
+                           "[Renderer] Shadow bias (number or string)"] = None,
+    light_probe_usage: Annotated[Literal["Off", "BlendProbes", "UseProxyVolume",
+                                         "CustomProvided"] | None, "[Renderer] Light probe usage mode"] = None,
+    reflection_probe_usage: Annotated[Literal["Off", "BlendProbes", "BlendProbesAndSkybox",
+                                              "Simple"] | None, "[Renderer] Reflection probe usage mode"] = None,
+    motion_vector_generation_mode: Annotated[Literal["Camera", "Object",
+                                                     "ForceNoMotion"] | None, "[Renderer] Motion vector generation mode"] = None,
+    rendering_layer_mask: Annotated[Any,
+                                    "[Renderer] Rendering layer mask for SRP (integer or string)"] = None,
+
     # === PARTICLE RENDERER SPECIFIC ===
-    min_particle_size: Annotated[Any, "[Particle] Min particle size relative to viewport (number or string)"] = None,
-    max_particle_size: Annotated[Any, "[Particle] Max particle size relative to viewport (number or string)"] = None,
-    length_scale: Annotated[Any, "[Particle] Length scale for stretched billboard (number or string)"] = None,
-    velocity_scale: Annotated[Any, "[Particle] Velocity scale for stretched billboard (number or string)"] = None,
-    camera_velocity_scale: Annotated[Any, "[Particle] Camera velocity scale for stretched billboard (number or string)"] = None,
-    normal_direction: Annotated[Any, "[Particle] Normal direction 0-1 (number or string)"] = None,
-    pivot: Annotated[Any, "[Particle] Pivot offset [x,y,z] (array or JSON string)"] = None,
-    flip: Annotated[Any, "[Particle] Flip [x,y,z] (array or JSON string)"] = None,
-    allow_roll: Annotated[Any, "[Particle] Allow roll for mesh particles (bool or string)"] = None,
-    
+    min_particle_size: Annotated[Any,
+                                 "[Particle] Min particle size relative to viewport (number or string)"] = None,
+    max_particle_size: Annotated[Any,
+                                 "[Particle] Max particle size relative to viewport (number or string)"] = None,
+    length_scale: Annotated[Any,
+                            "[Particle] Length scale for stretched billboard (number or string)"] = None,
+    velocity_scale: Annotated[Any,
+                              "[Particle] Velocity scale for stretched billboard (number or string)"] = None,
+    camera_velocity_scale: Annotated[Any,
+                                     "[Particle] Camera velocity scale for stretched billboard (number or string)"] = None,
+    normal_direction: Annotated[Any,
+                                "[Particle] Normal direction 0-1 (number or string)"] = None,
+    pivot: Annotated[Any,
+                     "[Particle] Pivot offset [x,y,z] (array or JSON string)"] = None,
+    flip: Annotated[Any,
+                    "[Particle] Flip [x,y,z] (array or JSON string)"] = None,
+    allow_roll: Annotated[Any,
+                          "[Particle] Allow roll for mesh particles (bool or string)"] = None,
+
     # Shape creation (line_create_*)
-    start: Annotated[Any, "[Line] Start point [x,y,z] (array or JSON string)"] = None,
-    end: Annotated[Any, "[Line] End point [x,y,z] (array or JSON string)"] = None,
-    center: Annotated[Any, "[Line] Circle/arc center [x,y,z] (array or JSON string)"] = None,
-    segments: Annotated[Any, "[Line] Number of segments (integer or string)"] = None,
-    normal: Annotated[Any, "[Line] Normal direction [x,y,z] (array or JSON string)"] = None,
-    start_angle: Annotated[Any, "[Line] Arc start angle degrees (number or string)"] = None,
-    end_angle: Annotated[Any, "[Line] Arc end angle degrees (number or string)"] = None,
-    control_point1: Annotated[Any, "[Line] Bezier control point 1 (array or JSON string)"] = None,
-    control_point2: Annotated[Any, "[Line] Bezier control point 2 (cubic) (array or JSON string)"] = None,
-    
+    start: Annotated[Any,
+                     "[Line] Start point [x,y,z] (array or JSON string)"] = None,
+    end: Annotated[Any,
+                   "[Line] End point [x,y,z] (array or JSON string)"] = None,
+    center: Annotated[Any,
+                      "[Line] Circle/arc center [x,y,z] (array or JSON string)"] = None,
+    segments: Annotated[Any,
+                        "[Line] Number of segments (integer or string)"] = None,
+    normal: Annotated[Any,
+                      "[Line] Normal direction [x,y,z] (array or JSON string)"] = None,
+    start_angle: Annotated[Any,
+                           "[Line] Arc start angle degrees (number or string)"] = None,
+    end_angle: Annotated[Any,
+                         "[Line] Arc end angle degrees (number or string)"] = None,
+    control_point1: Annotated[Any,
+                              "[Line] Bezier control point 1 (array or JSON string)"] = None,
+    control_point2: Annotated[Any,
+                              "[Line] Bezier control point 2 (cubic) (array or JSON string)"] = None,
+
     # Trail specific
-    min_vertex_distance: Annotated[Any, "[Trail] Min vertex distance (number or string)"] = None,
-    autodestruct: Annotated[Any, "[Trail] Destroy when finished (bool or string)"] = None,
+    min_vertex_distance: Annotated[Any,
+                                   "[Trail] Min vertex distance (number or string)"] = None,
+    autodestruct: Annotated[Any,
+                            "[Trail] Destroy when finished (bool or string)"] = None,
     emitting: Annotated[Any, "[Trail] Is emitting (bool or string)"] = None,
-    
+
     # Common vector params for shape/velocity
-    x: Annotated[Any, "[Particle] Velocity X (number or MinMaxCurve dict)"] = None,
-    y: Annotated[Any, "[Particle] Velocity Y (number or MinMaxCurve dict)"] = None,
-    z: Annotated[Any, "[Particle] Velocity Z (number or MinMaxCurve dict)"] = None,
-    speed_modifier: Annotated[Any, "[Particle] Speed modifier (number or MinMaxCurve dict)"] = None,
-    space: Annotated[Literal["Local", "World"] | None, "[Particle] Velocity space"] = None,
-    separate_axes: Annotated[Any, "[Particle] Separate XYZ axes (bool or string)"] = None,
-    size_over_lifetime: Annotated[Any, "[Particle] Size over lifetime (number or MinMaxCurve dict)"] = None,
-    size_x: Annotated[Any, "[Particle] Size X (number or MinMaxCurve dict)"] = None,
-    size_y: Annotated[Any, "[Particle] Size Y (number or MinMaxCurve dict)"] = None,
-    size_z: Annotated[Any, "[Particle] Size Z (number or MinMaxCurve dict)"] = None,
-    
+    x: Annotated[Any,
+                 "[Particle] Velocity X (number or MinMaxCurve dict)"] = None,
+    y: Annotated[Any,
+                 "[Particle] Velocity Y (number or MinMaxCurve dict)"] = None,
+    z: Annotated[Any,
+                 "[Particle] Velocity Z (number or MinMaxCurve dict)"] = None,
+    speed_modifier: Annotated[Any,
+                              "[Particle] Speed modifier (number or MinMaxCurve dict)"] = None,
+    space: Annotated[Literal["Local", "World"] |
+                     None, "[Particle] Velocity space"] = None,
+    separate_axes: Annotated[Any,
+                             "[Particle] Separate XYZ axes (bool or string)"] = None,
+    size_over_lifetime: Annotated[Any,
+                                  "[Particle] Size over lifetime (number or MinMaxCurve dict)"] = None,
+    size_x: Annotated[Any,
+                      "[Particle] Size X (number or MinMaxCurve dict)"] = None,
+    size_y: Annotated[Any,
+                      "[Particle] Size Y (number or MinMaxCurve dict)"] = None,
+    size_z: Annotated[Any,
+                      "[Particle] Size Z (number or MinMaxCurve dict)"] = None,
+
 ) -> dict[str, Any]:
     """Unified VFX management tool."""
 
@@ -302,7 +412,8 @@ async def manage_vfx(
     # Validate action against known actions using normalized value
     if action_normalized not in ALL_ACTIONS:
         # Provide helpful error with closest matches by prefix
-        prefix = action_normalized.split("_")[0] + "_" if "_" in action_normalized else ""
+        prefix = action_normalized.split(
+            "_")[0] + "_" if "_" in action_normalized else ""
         available_by_prefix = {
             "particle_": PARTICLE_ACTIONS,
             "vfx_": VFX_ACTIONS,
@@ -328,13 +439,13 @@ async def manage_vfx(
 
     # Build parameters dict with normalized action to stay consistent with Unity
     params_dict: dict[str, Any] = {"action": action_normalized}
-    
+
     # Target
     if target is not None:
         params_dict["target"] = target
     if search_method is not None:
         params_dict["searchMethod"] = search_method
-    
+
     # === PARTICLE SYSTEM ===
     # Pass through all values - C# side handles parsing (ParseColor, ParseVector3, ParseMinMaxCurve, ToObject<T>)
     if duration is not None:
@@ -365,13 +476,13 @@ async def manage_vfx(
         params_dict["playOnAwake"] = play_on_awake
     if max_particles is not None:
         params_dict["maxParticles"] = max_particles
-    
+
     # Emission
     if rate_over_time is not None:
         params_dict["rateOverTime"] = rate_over_time
     if rate_over_distance is not None:
         params_dict["rateOverDistance"] = rate_over_distance
-    
+
     # Shape
     if shape_type is not None:
         params_dict["shapeType"] = shape_type
@@ -383,7 +494,7 @@ async def manage_vfx(
         params_dict["angle"] = angle
     if arc is not None:
         params_dict["arc"] = arc
-    
+
     # Noise
     if strength is not None:
         params_dict["strength"] = strength
@@ -397,13 +508,13 @@ async def manage_vfx(
         params_dict["octaveCount"] = octave_count
     if quality is not None:
         params_dict["quality"] = quality
-    
+
     # Module
     if module is not None:
         params_dict["module"] = module
     if enabled is not None:
         params_dict["enabled"] = enabled
-    
+
     # Burst
     if time is not None:
         params_dict["time"] = time
@@ -419,11 +530,11 @@ async def manage_vfx(
         params_dict["interval"] = interval
     if probability is not None:
         params_dict["probability"] = probability
-    
+
     # Playback
     if with_children is not None:
         params_dict["withChildren"] = with_children
-    
+
     # === VFX GRAPH ===
     # Asset management parameters
     if asset_name is not None:
@@ -440,7 +551,7 @@ async def manage_vfx(
         params_dict["folder"] = folder
     if search is not None:
         params_dict["search"] = search
-    
+
     # Runtime parameters
     if parameter is not None:
         params_dict["parameter"] = parameter
@@ -468,7 +579,7 @@ async def manage_vfx(
         params_dict["seed"] = seed
     if reset_seed_on_play is not None:
         params_dict["resetSeedOnPlay"] = reset_seed_on_play
-    
+
     # === LINE/TRAIL RENDERER ===
     if positions is not None:
         params_dict["positions"] = positions
@@ -476,7 +587,7 @@ async def manage_vfx(
         params_dict["position"] = position
     if index is not None:
         params_dict["index"] = index
-    
+
     # Width
     if width is not None:
         params_dict["width"] = width
@@ -488,7 +599,7 @@ async def manage_vfx(
         params_dict["widthCurve"] = width_curve
     if width_multiplier is not None:
         params_dict["widthMultiplier"] = width_multiplier
-    
+
     # Color
     if color is not None:
         params_dict["color"] = color
@@ -496,7 +607,7 @@ async def manage_vfx(
         params_dict["startColor"] = start_color_line
     if end_color is not None:
         params_dict["endColor"] = end_color
-    
+
     # Material & properties
     if material_path is not None:
         params_dict["materialPath"] = material_path
@@ -526,7 +637,7 @@ async def manage_vfx(
         params_dict["renderMode"] = render_mode
     if sort_mode is not None:
         params_dict["sortMode"] = sort_mode
-    
+
     # Renderer common properties (shadows, lighting, probes)
     if shadow_casting_mode is not None:
         params_dict["shadowCastingMode"] = shadow_casting_mode
@@ -542,7 +653,7 @@ async def manage_vfx(
         params_dict["motionVectorGenerationMode"] = motion_vector_generation_mode
     if rendering_layer_mask is not None:
         params_dict["renderingLayerMask"] = rendering_layer_mask
-    
+
     # Particle renderer specific
     if min_particle_size is not None:
         params_dict["minParticleSize"] = min_particle_size
@@ -562,7 +673,7 @@ async def manage_vfx(
         params_dict["flip"] = flip
     if allow_roll is not None:
         params_dict["allowRoll"] = allow_roll
-    
+
     # Shape creation
     if start is not None:
         params_dict["start"] = start
@@ -582,7 +693,7 @@ async def manage_vfx(
         params_dict["controlPoint1"] = control_point1
     if control_point2 is not None:
         params_dict["controlPoint2"] = control_point2
-    
+
     # Trail specific
     if min_vertex_distance is not None:
         params_dict["minVertexDistance"] = min_vertex_distance
@@ -590,7 +701,7 @@ async def manage_vfx(
         params_dict["autodestruct"] = autodestruct
     if emitting is not None:
         params_dict["emitting"] = emitting
-    
+
     # Velocity/size axes
     if x is not None:
         params_dict["x"] = x
@@ -612,10 +723,10 @@ async def manage_vfx(
         params_dict["sizeY"] = size_y
     if size_z is not None:
         params_dict["sizeZ"] = size_z
-    
+
     # Remove None values
     params_dict = {k: v for k, v in params_dict.items() if v is not None}
-    
+
     # Send to Unity
     result = await send_with_unity_instance(
         async_send_command_with_retry,
@@ -623,5 +734,5 @@ async def manage_vfx(
         "manage_vfx",
         params_dict,
     )
-    
+
     return result if isinstance(result, dict) else {"success": False, "message": str(result)}

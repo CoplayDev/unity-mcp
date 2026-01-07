@@ -21,7 +21,7 @@ def _normalize_color(value: Any) -> tuple[list[float] | None, str | None]:
     """
     if value is None:
         return None, None
-    
+
     # Already a list - validate
     if isinstance(value, (list, tuple)):
         if len(value) in (3, 4):
@@ -30,12 +30,12 @@ def _normalize_color(value: Any) -> tuple[list[float] | None, str | None]:
             except (ValueError, TypeError):
                 return None, f"color values must be numbers, got {value}"
         return None, f"color must have 3 or 4 components, got {len(value)}"
-    
+
     # Try parsing as string
     if isinstance(value, str):
         if value in ("[object Object]", "undefined", "null", ""):
             return None, f"color received invalid value: '{value}'. Expected [r, g, b] or [r, g, b, a]"
-        
+
         parsed = parse_json_payload(value)
         if isinstance(parsed, (list, tuple)) and len(parsed) in (3, 4):
             try:
@@ -43,7 +43,7 @@ def _normalize_color(value: Any) -> tuple[list[float] | None, str | None]:
             except (ValueError, TypeError):
                 return None, f"color values must be numbers, got {parsed}"
         return None, f"Failed to parse color string: {value}"
-    
+
     return None, f"color must be a list or JSON string, got {type(value).__name__}"
 
 
@@ -65,27 +65,35 @@ async def manage_material(
         "set_renderer_color",
         "get_material_info"
     ], "Action to perform."],
-    
+
     # Common / Shared
-    material_path: Annotated[str, "Path to material asset (Assets/...)"] | None = None,
-    property: Annotated[str, "Shader property name (e.g., _BaseColor, _MainTex)"] | None = None,
+    material_path: Annotated[str,
+                             "Path to material asset (Assets/...)"] | None = None,
+    property: Annotated[str,
+                        "Shader property name (e.g., _BaseColor, _MainTex)"] | None = None,
 
     # create
     shader: Annotated[str, "Shader name (default: Standard)"] | None = None,
-    properties: Annotated[dict[str, Any], "Initial properties to set as {name: value} dict."] | None = None,
-    
+    properties: Annotated[dict[str, Any],
+                          "Initial properties to set as {name: value} dict."] | None = None,
+
     # set_material_shader_property
-    value: Annotated[list | float | int | str | bool | None, "Value to set (color array, float, texture path/instruction)"] | None = None,
-    
+    value: Annotated[list | float | int | str | bool | None,
+                     "Value to set (color array, float, texture path/instruction)"] | None = None,
+
     # set_material_color / set_renderer_color
-    color: Annotated[list[float], "Color as [r, g, b] or [r, g, b, a] array."] | None = None,
-    
+    color: Annotated[list[float],
+                     "Color as [r, g, b] or [r, g, b, a] array."] | None = None,
+
     # assign_material_to_renderer / set_renderer_color
-    target: Annotated[str, "Target GameObject (name, path, or find instruction)"] | None = None,
-    search_method: Annotated[Literal["by_name", "by_path", "by_tag", "by_layer", "by_component"], "Search method for target"] | None = None,
+    target: Annotated[str,
+                      "Target GameObject (name, path, or find instruction)"] | None = None,
+    search_method: Annotated[Literal["by_name", "by_path", "by_tag",
+                                     "by_layer", "by_component"], "Search method for target"] | None = None,
     slot: Annotated[int, "Material slot index (0-based)"] | None = None,
-    mode: Annotated[Literal["shared", "instance", "property_block"], "Assignment/modification mode"] | None = None,
-    
+    mode: Annotated[Literal["shared", "instance", "property_block"],
+                    "Assignment/modification mode"] | None = None,
+
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
 
@@ -93,12 +101,12 @@ async def manage_material(
     color, color_error = _normalize_color(color)
     if color_error:
         return {"success": False, "message": color_error}
-    
+
     # --- Normalize properties with validation ---
     properties, props_error = normalize_properties(properties)
     if props_error:
         return {"success": False, "message": props_error}
-    
+
     # --- Normalize value (parse JSON if string) ---
     value = parse_json_payload(value)
     if isinstance(value, str) and value in ("[object Object]", "undefined"):
@@ -132,5 +140,5 @@ async def manage_material(
         "manage_material",
         params_dict,
     )
-    
+
     return result if isinstance(result, dict) else {"success": False, "message": str(result)}

@@ -310,7 +310,8 @@ def resolve_project_id_for_unity_instance(unity_instance: str | None) -> str | N
             # This matches the hash Unity uses when registering tools via WebSocket.
             if target.hash:
                 return target.hash
-            logger.warning(f"Unity instance {target.id} has empty hash; cannot resolve project ID")
+            logger.warning(
+                f"Unity instance {target.id} has empty hash; cannot resolve project ID")
             return None
     except Exception:
         logger.debug(

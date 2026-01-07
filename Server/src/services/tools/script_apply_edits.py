@@ -380,7 +380,7 @@ async def script_apply_edits(
     unity_instance = get_unity_instance_from_context(ctx)
     await ctx.info(
         f"Processing script_apply_edits: {name} (unity_instance={unity_instance or 'default'})")
-        
+
     # Parse edits if they came as a stringified JSON
     edits = parse_json_payload(edits)
     if not isinstance(edits, list):

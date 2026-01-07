@@ -27,7 +27,7 @@ def get_unity_instance_middleware() -> 'UnityInstanceMiddleware':
             if _unity_instance_middleware is None:
                 # Auto-initialize if not set (lazy singleton) to handle import order or test cases
                 _unity_instance_middleware = UnityInstanceMiddleware()
-        
+
     return _unity_instance_middleware
 
 
@@ -102,7 +102,8 @@ class UnityInstanceMiddleware(Middleware):
                     sessions = sessions_data.sessions or {}
                     ids: list[str] = []
                     for session_info in sessions.values():
-                        project = getattr(session_info, "project", None) or "Unknown"
+                        project = getattr(
+                            session_info, "project", None) or "Unknown"
                         hash_value = getattr(session_info, "hash", None)
                         if hash_value:
                             ids.append(f"{project}@{hash_value}")
@@ -183,7 +184,7 @@ class UnityInstanceMiddleware(Middleware):
             # But for stdio transport (no PluginHub needed or maybe partially configured),
             # we should be careful not to clear instance just because PluginHub can't resolve it.
             # The 'active_instance' (Name@hash) might be valid for stdio even if PluginHub fails.
-            
+
             session_id: str | None = None
             # Only validate via PluginHub if we are actually using HTTP transport
             # OR if we want to support hybrid mode. For now, let's be permissive.

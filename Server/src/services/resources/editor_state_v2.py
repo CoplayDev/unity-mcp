@@ -40,7 +40,8 @@ async def _infer_single_instance_id(ctx: Context) -> str | None:
             from transport.plugin_hub import PluginHub
 
             sessions_data = await PluginHub.get_sessions()
-            sessions = sessions_data.sessions if hasattr(sessions_data, "sessions") else {}
+            sessions = sessions_data.sessions if hasattr(
+                sessions_data, "sessions") else {}
             if isinstance(sessions, dict) and len(sessions) == 1:
                 session = next(iter(sessions.values()))
                 project = getattr(session, "project", None)
@@ -209,9 +210,11 @@ async def get_editor_state_v2(ctx: Context) -> MCPResponse:
         )
         if isinstance(legacy, dict) and not legacy.get("success", True):
             return MCPResponse(**legacy)
-        state_v2 = _build_v2_from_legacy(legacy if isinstance(legacy, dict) else {})
+        state_v2 = _build_v2_from_legacy(
+            legacy if isinstance(legacy, dict) else {})
     else:
-        state_v2 = response.get("data") if isinstance(response.get("data"), dict) else {}
+        state_v2 = response.get("data") if isinstance(
+            response.get("data"), dict) else {}
         # Ensure required v2 marker exists even if Unity returns partial.
         state_v2.setdefault("schema_version", "unity-mcp/editor_state@2")
         state_v2.setdefault("observed_at_unix_ms", _now_unix_ms())
@@ -241,11 +244,14 @@ async def get_editor_state_v2(ctx: Context) -> MCPResponse:
 
             # Cache the project root for this instance (best-effort).
             proj_resp = await get_project_info(ctx)
-            proj = proj_resp.model_dump() if hasattr(proj_resp, "model_dump") else proj_resp
+            proj = proj_resp.model_dump() if hasattr(
+                proj_resp, "model_dump") else proj_resp
             proj_data = proj.get("data") if isinstance(proj, dict) else None
-            project_root = proj_data.get("projectRoot") if isinstance(proj_data, dict) else None
+            project_root = proj_data.get("projectRoot") if isinstance(
+                proj_data, dict) else None
             if isinstance(project_root, str) and project_root.strip():
-                external_changes_scanner.set_project_root(instance_id, project_root)
+                external_changes_scanner.set_project_root(
+                    instance_id, project_root)
 
             ext = external_changes_scanner.update_and_get(instance_id)
 
@@ -255,16 +261,18 @@ async def get_editor_state_v2(ctx: Context) -> MCPResponse:
                 state_v2["assets"] = assets
             # IMPORTANT: Unity's cached snapshot may include placeholder defaults; the server scanner is authoritative
             # for external changes (filesystem edits outside Unity). Always overwrite these fields from the scanner.
-            assets["external_changes_dirty"] = bool(ext.get("external_changes_dirty", False))
-            assets["external_changes_last_seen_unix_ms"] = ext.get("external_changes_last_seen_unix_ms")
+            assets["external_changes_dirty"] = bool(
+                ext.get("external_changes_dirty", False))
+            assets["external_changes_last_seen_unix_ms"] = ext.get(
+                "external_changes_last_seen_unix_ms")
             # Extra bookkeeping fields (server-only) are safe to add under assets.
-            assets["external_changes_dirty_since_unix_ms"] = ext.get("dirty_since_unix_ms")
-            assets["external_changes_last_cleared_unix_ms"] = ext.get("last_cleared_unix_ms")
+            assets["external_changes_dirty_since_unix_ms"] = ext.get(
+                "dirty_since_unix_ms")
+            assets["external_changes_last_cleared_unix_ms"] = ext.get(
+                "last_cleared_unix_ms")
     except Exception:
         # Best-effort; do not fail readiness resource if filesystem scan can't run.
         pass
 
     state_v2 = _enrich_advice_and_staleness(state_v2)
     return MCPResponse(success=True, message="Retrieved editor state (v2).", data=state_v2)
-
-

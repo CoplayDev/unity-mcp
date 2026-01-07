@@ -23,13 +23,20 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 )
 async def run_tests_async(
     ctx: Context,
-    mode: Annotated[Literal["EditMode", "PlayMode"], "Unity test mode to run"] = "EditMode",
-    test_names: Annotated[list[str] | str, "Full names of specific tests to run"] | None = None,
-    group_names: Annotated[list[str] | str, "Same as test_names, except it allows for Regex"] | None = None,
-    category_names: Annotated[list[str] | str, "NUnit category names to filter by"] | None = None,
-    assembly_names: Annotated[list[str] | str, "Assembly names to filter tests by"] | None = None,
-    include_failed_tests: Annotated[bool, "Include details for failed/skipped tests only (default: false)"] = False,
-    include_details: Annotated[bool, "Include details for all tests (default: false)"] = False,
+    mode: Annotated[Literal["EditMode", "PlayMode"],
+                    "Unity test mode to run"] = "EditMode",
+    test_names: Annotated[list[str] | str,
+                          "Full names of specific tests to run"] | None = None,
+    group_names: Annotated[list[str] | str,
+                           "Same as test_names, except it allows for Regex"] | None = None,
+    category_names: Annotated[list[str] | str,
+                              "NUnit category names to filter by"] | None = None,
+    assembly_names: Annotated[list[str] | str,
+                              "Assembly names to filter tests by"] | None = None,
+    include_failed_tests: Annotated[bool,
+                                    "Include details for failed/skipped tests only (default: false)"] = False,
+    include_details: Annotated[bool,
+                               "Include details for all tests (default: false)"] = False,
 ) -> dict[str, Any] | MCPResponse:
     unity_instance = get_unity_instance_from_context(ctx)
 
@@ -83,8 +90,10 @@ async def run_tests_async(
 async def get_test_job(
     ctx: Context,
     job_id: Annotated[str, "Job id returned by run_tests_async"],
-    include_failed_tests: Annotated[bool, "Include details for failed/skipped tests only (default: false)"] = False,
-    include_details: Annotated[bool, "Include details for all tests (default: false)"] = False,
+    include_failed_tests: Annotated[bool,
+                                    "Include details for failed/skipped tests only (default: false)"] = False,
+    include_details: Annotated[bool,
+                               "Include details for all tests (default: false)"] = False,
 ) -> dict[str, Any] | MCPResponse:
     unity_instance = get_unity_instance_from_context(ctx)
 
@@ -103,5 +112,3 @@ async def get_test_job(
     if isinstance(response, dict) and not response.get("success", True):
         return MCPResponse(**response)
     return response if isinstance(response, dict) else MCPResponse(success=False, error=str(response)).model_dump()
-
-

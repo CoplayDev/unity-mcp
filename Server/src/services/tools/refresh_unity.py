@@ -25,9 +25,12 @@ from services.state.external_changes_scanner import external_changes_scanner
 async def refresh_unity(
     ctx: Context,
     mode: Annotated[Literal["if_dirty", "force"], "Refresh mode"] = "if_dirty",
-    scope: Annotated[Literal["assets", "scripts", "all"], "Refresh scope"] = "all",
-    compile: Annotated[Literal["none", "request"], "Whether to request compilation"] = "none",
-    wait_for_ready: Annotated[bool, "If true, wait until editor_state.advice.ready_for_tools is true"] = True,
+    scope: Annotated[Literal["assets", "scripts", "all"],
+                     "Refresh scope"] = "all",
+    compile: Annotated[Literal["none", "request"],
+                       "Whether to request compilation"] = "none",
+    wait_for_ready: Annotated[bool,
+                              "If true, wait until editor_state.advice.ready_for_tools is true"] = True,
 ) -> MCPResponse | dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
 
@@ -53,7 +56,8 @@ async def refresh_unity(
         hint = response.get("hint")
         err = (response.get("error") or response.get("message") or "")
         reason = _extract_response_reason(response)
-        is_retryable = (hint == "retry") or ("disconnected" in str(err).lower())
+        is_retryable = (hint == "retry") or (
+            "disconnected" in str(err).lower())
         if (not wait_for_ready) or (not is_retryable):
             return MCPResponse(**response)
         if reason not in {"reloading", "no_unity_session"}:
@@ -68,9 +72,12 @@ async def refresh_unity(
 
         while time.monotonic() - start < timeout_s:
             state_resp = await get_editor_state_v2(ctx)
-            state = state_resp.model_dump() if hasattr(state_resp, "model_dump") else state_resp
-            data = (state or {}).get("data") if isinstance(state, dict) else None
-            advice = (data or {}).get("advice") if isinstance(data, dict) else None
+            state = state_resp.model_dump() if hasattr(
+                state_resp, "model_dump") else state_resp
+            data = (state or {}).get("data") if isinstance(
+                state, dict) else None
+            advice = (data or {}).get(
+                "advice") if isinstance(data, dict) else None
             if isinstance(advice, dict) and advice.get("ready_for_tools") is True:
                 break
             await asyncio.sleep(0.25)

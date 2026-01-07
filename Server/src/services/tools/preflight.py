@@ -46,7 +46,8 @@ async def preflight(
     try:
         from services.resources.editor_state_v2 import get_editor_state_v2
         state_resp = await get_editor_state_v2(ctx)
-        state = state_resp.model_dump() if hasattr(state_resp, "model_dump") else state_resp
+        state = state_resp.model_dump() if hasattr(
+            state_resp, "model_dump") else state_resp
     except Exception:
         # If we cannot determine readiness, fall back to proceeding (tools already contain retry logic).
         return None
@@ -80,9 +81,12 @@ async def preflight(
     if wait_for_no_compile:
         deadline = time.monotonic() + float(max_wait_s)
         while True:
-            compilation = data.get("compilation") if isinstance(data, dict) else None
-            is_compiling = isinstance(compilation, dict) and compilation.get("is_compiling") is True
-            is_domain_reload_pending = isinstance(compilation, dict) and compilation.get("is_domain_reload_pending") is True
+            compilation = data.get("compilation") if isinstance(
+                data, dict) else None
+            is_compiling = isinstance(compilation, dict) and compilation.get(
+                "is_compiling") is True
+            is_domain_reload_pending = isinstance(compilation, dict) and compilation.get(
+                "is_domain_reload_pending") is True
             if not is_compiling and not is_domain_reload_pending:
                 break
             if time.monotonic() >= deadline:
@@ -93,7 +97,8 @@ async def preflight(
             try:
                 from services.resources.editor_state_v2 import get_editor_state_v2
                 state_resp = await get_editor_state_v2(ctx)
-                state = state_resp.model_dump() if hasattr(state_resp, "model_dump") else state_resp
+                state = state_resp.model_dump() if hasattr(
+                    state_resp, "model_dump") else state_resp
                 data = state.get("data") if isinstance(state, dict) else None
                 if not isinstance(data, dict):
                     return None
@@ -103,5 +108,3 @@ async def preflight(
     # Staleness: if the snapshot is stale, proceed (tools will still run), but callers that read resources can back off.
     # In future we may make this strict for some tools.
     return None
-
-
