@@ -8,6 +8,7 @@
 [![Discord](https://img.shields.io/badge/discord-join-red.svg?logo=discord&logoColor=white)](https://discord.gg/y4p8KfzrN4)
 [![](https://img.shields.io/badge/Website-Visit-purple)](https://www.coplay.dev/?ref=unity-mcp)
 [![](https://img.shields.io/badge/Unity-000000?style=flat&logo=unity&logoColor=blue 'Unity')](https://unity.com/releases/editor/archive)
+[![Unity Asset Store](https://img.shields.io/badge/Unity%20Asset%20Store-Get%20Package-FF6A00?style=flat&logo=unity&logoColor=white)](https://assetstore.unity.com/packages/tools/generative-ai/mcp-for-unity-ai-driven-development-329908)
 [![python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
 [![](https://badge.mcpx.dev?status=on 'MCP Enabled')](https://modelcontextprotocol.io/introduction)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/w/CoplayDev/unity-mcp)
@@ -18,7 +19,7 @@
 
 MCP for Unity acts as a bridge, allowing AI assistants (Claude, Cursor, Antigravity, VS Code, etc) to interact directly with your Unity Editor via a local **MCP (Model Context Protocol) Client**. Give your LLM tools to manage assets, control scenes, edit scripts, and automate tasks within Unity.
 
-<img width="406" height="704" alt="MCP for Unity screenshot" src="docs/images/unity-mcp-ui-v8.6.png">
+<img alt="MCP for Unity building a scene" src="docs/images/building_scene.gif">
 
 ---
 
@@ -110,8 +111,9 @@ MCP for Unity connects your tools using two components:
 
 ### Prerequisites
 
+If you are **not** installing via the Unity Asset Store, you will need to install the following:
+
   * **Python:** Version 3.10 or newer. [Download Python](https://www.python.org/downloads/)
-  * **Unity Hub & Editor:** Version 2021.3 LTS or newer. [Download Unity](https://unity.com/download)
   * **uv (Python toolchain manager):**
       ```bash
       # macOS / Linux
@@ -122,33 +124,44 @@ MCP for Unity connects your tools using two components:
 
       # Docs: https://docs.astral.sh/uv/getting-started/installation/
       ```
-      
+
+All installations require these:
+
+  * **Unity Hub & Editor:** Version 2021.3 LTS or newer. [Download Unity](https://unity.com/download)
   * **An MCP Client:** : [Claude Desktop](https://claude.ai/download) | [Claude Code](https://github.com/anthropics/claude-code) | [Cursor](https://www.cursor.com/en/downloads) | [Visual Studio Code Copilot](https://code.visualstudio.com/docs/copilot/overview) | [Windsurf](https://windsurf.com) | Others work with manual config
 
- *  <details> <summary><strong>[Optional] Roslyn for Advanced Script Validation</strong></summary>
+<details> <summary><strong>[Optional] Roslyn for Advanced Script Validation</strong></summary>
 
-        For **Strict** validation level that catches undefined namespaces, types, and methods: 
+  For **Strict** validation level that catches undefined namespaces, types, and methods: 
 
-        **Method 1: NuGet for Unity (Recommended)**
-        1. Install [NuGetForUnity](https://github.com/GlitchEnzo/NuGetForUnity)
-        2. Go to `Window > NuGet Package Manager`
-        3. Search for `Microsoft.CodeAnalysis`, select version 4.14.0, and install the package
-        4. Also install package `SQLitePCLRaw.core` and `SQLitePCLRaw.bundle_e_sqlite3`.
-        5. Go to `Player Settings > Scripting Define Symbols`
-        6. Add `USE_ROSLYN`
-        7. Restart Unity
+  **Method 1: NuGet for Unity (Recommended)**
+  1. Install [NuGetForUnity](https://github.com/GlitchEnzo/NuGetForUnity)
+  2. Go to `Window > NuGet Package Manager`
+  3. Search for `Microsoft.CodeAnalysis`, select version 4.14.0, and install the package
+  4. Also install package `SQLitePCLRaw.core` and `SQLitePCLRaw.bundle_e_sqlite3`.
+  5. Go to `Player Settings > Scripting Define Symbols`
+  6. Add `USE_ROSLYN`
+  7. Restart Unity
 
-        **Method 2: Manual DLL Installation**
-        1. Download Microsoft.CodeAnalysis.CSharp.dll and dependencies from [NuGet](https://www.nuget.org/packages/Microsoft.CodeAnalysis.CSharp/)
-        2. Place DLLs in `Assets/Plugins/` folder
-        3. Ensure .NET compatibility settings are correct
-        4. Add `USE_ROSLYN` to Scripting Define Symbols
-        5. Restart Unity
+  **Method 2: Manual DLL Installation**
+  1. Download Microsoft.CodeAnalysis.CSharp.dll and dependencies from [NuGet](https://www.nuget.org/packages/Microsoft.CodeAnalysis.CSharp/)
+  2. Place DLLs in `Assets/Plugins/` folder
+  3. Ensure .NET compatibility settings are correct
+  4. Add `USE_ROSLYN` to Scripting Define Symbols
+  5. Restart Unity
 
-        **Note:** Without Roslyn, script validation falls back to basic structural checks. Roslyn enables full C# compiler diagnostics with precise error reporting.</details>
+  **Note:** Without Roslyn, script validation falls back to basic structural checks. Roslyn enables full C# compiler diagnostics with precise error reporting.</details>
 
 ---
 ### 🌟 Step 1: Install the Unity Package
+
+#### To install via the Unity Asset Store
+
+1. In your browser, navigate to https://assetstore.unity.com/packages/tools/generative-ai/mcp-for-unity-ai-driven-development-329908
+2. Click `Add to My Assets`.
+3. In the Unity Editor, go to`Window > Package Manager`.
+4. Download and import the asset to your project
+
 
 #### To install via Git URL
 

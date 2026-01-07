@@ -87,7 +87,7 @@ namespace MCPForUnity.Editor.Windows
             
             if (visualTree == null)
             {
-                Debug.LogError("Failed to load EditorPrefsWindow.uxml template");
+                McpLog.Error("Failed to load EditorPrefsWindow.uxml template");
                 return;
             }
             
@@ -98,7 +98,7 @@ namespace MCPForUnity.Editor.Windows
             
             if (itemTemplate == null)
             {
-                Debug.LogError("Failed to load EditorPrefItem.uxml template");
+                McpLog.Error("Failed to load EditorPrefItem.uxml template");
                 return;
             }
             
@@ -251,7 +251,7 @@ namespace MCPForUnity.Editor.Windows
         {
             if (itemTemplate == null)
             {
-                Debug.LogError("Item template not loaded");
+                McpLog.Error("Item template not loaded");
                 return new VisualElement();
             }
             

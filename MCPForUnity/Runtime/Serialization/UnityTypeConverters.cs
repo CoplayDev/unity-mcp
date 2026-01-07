@@ -341,7 +341,7 @@ namespace MCPForUnity.Runtime.Serialization
 #else
              // Runtime deserialization is tricky without AssetDatabase/EditorUtility
              // Maybe log a warning and return null or existingValue?
-             Debug.LogWarning("UnityEngineObjectConverter cannot deserialize complex objects in non-Editor mode.");
+             McpLog.Warn("UnityEngineObjectConverter cannot deserialize complex objects in non-Editor mode.");
              // Skip the token to avoid breaking the reader
              if (reader.TokenType == JsonToken.StartObject) JObject.Load(reader);
              else if (reader.TokenType == JsonToken.String) reader.ReadAsString(); 

@@ -263,7 +263,7 @@ namespace MCPForUnity.Editor.Tools
                                    : new ErrorResponse("Validation failed.", result);
                     }
                 case "edit":
-                    Debug.LogWarning("manage_script.edit is deprecated; prefer apply_text_edits. Serving structured edit for backward compatibility.");
+                    McpLog.Warn("manage_script.edit is deprecated; prefer apply_text_edits. Serving structured edit for backward compatibility.");
                     var structEdits = @params["edits"] as JArray;
                     var options = @params["options"] as JObject;
                     return EditScript(fullPath, relativePath, name, structEdits, options);
@@ -353,7 +353,7 @@ namespace MCPForUnity.Editor.Tools
             else if (validationErrors != null && validationErrors.Length > 0)
             {
                 // Log warnings but don't block creation
-                Debug.LogWarning($"Script validation warnings for {name}:\n" + string.Join("\n", validationErrors));
+                McpLog.Warn($"Script validation warnings for {name}:\n" + string.Join("\n", validationErrors));
             }
 
             try
@@ -451,7 +451,7 @@ namespace MCPForUnity.Editor.Tools
             else if (validationErrors != null && validationErrors.Length > 0)
             {
                 // Log warnings but don't block update
-                Debug.LogWarning($"Script validation warnings for {name}:\n" + string.Join("\n", validationErrors));
+                McpLog.Warn($"Script validation warnings for {name}:\n" + string.Join("\n", validationErrors));
             }
 
             try
@@ -1405,7 +1405,7 @@ namespace MCPForUnity.Editor.Tools
                 if (!ValidateScriptSyntax(working, level, out var errors))
                     return new ErrorResponse("validation_failed", new { status = "validation_failed", diagnostics = errors ?? Array.Empty<string>() });
                 else if (errors != null && errors.Length > 0)
-                    Debug.LogWarning($"Script validation warnings for {name}:\n" + string.Join("\n", errors));
+                    McpLog.Warn($"Script validation warnings for {name}:\n" + string.Join("\n", errors));
 
                 // Atomic write with backup; schedule refresh
                 // Decide refresh behavior
@@ -2310,7 +2310,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"Could not load UnityEngine assembly: {ex.Message}");
+                    McpLog.Warn($"Could not load UnityEngine assembly: {ex.Message}");
                 }
 
 #if UNITY_EDITOR
@@ -2320,7 +2320,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"Could not load UnityEditor assembly: {ex.Message}");
+                    McpLog.Warn($"Could not load UnityEditor assembly: {ex.Message}");
                 }
 
                 // Get Unity project assemblies
@@ -2337,7 +2337,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"Could not load Unity project assemblies: {ex.Message}");
+                    McpLog.Warn($"Could not load Unity project assemblies: {ex.Message}");
                 }
 #endif
 
@@ -2349,7 +2349,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Failed to get compilation references: {ex.Message}");
+                McpLog.Error($"Failed to get compilation references: {ex.Message}");
                 return new System.Collections.Generic.List<MetadataReference>();
             }
         }

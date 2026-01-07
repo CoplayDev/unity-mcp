@@ -1,0 +1,166 @@
+.primary-colors
+{
+    /* Light - lighter */
+    background-color: rgb(220, 220, 220);
+    /* Light - middle */
+    background-color: rgb(200, 200, 200);
+    /* Light - darker */
+    background-color: rgb(180, 180, 180);
+
+    /* Dark - lighter */
+    background-color: rgb(78, 78, 78);
+    /* Dark - middle */
+    background-color: rgb(68, 68, 68);
+    /* Dark - darker */
+    background-color: rgb(58, 58, 58);
+
+    /* Border color - light */
+    border-color: rgb(200, 200, 200);
+    /* Border color - dark */
+    border-color: rgb(33, 33, 33);
+}
+
+/* Validator Description */
+
+.validator-description-hyperlink-button {
+    color: rgb(68, 113, 229);
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.validator-description-hyperlink-button:hover {
+    color: rgb(68, 133, 229);
+}
+
+.validator-description-hyperlink-button:active {
+    color: rgb(68, 93, 229);
+}
+
+/* Validator Settings */
+
+.validator-settings-selection-label-help-row > Image {
+    --unity-image: resource("d__Help@2x");
+}
+
+.validator-settings-selection-dropdown {
+    color: rgb(238, 238, 238);
+    background-color: rgb(88, 88, 88);
+
+    border-width: 1px;
+    border-radius: 3px;
+    border-color: rgb(36, 36, 36);
+}
+
+/* Validation Paths */
+
+.validator-paths-scroll-view {
+    border-width: 1px;
+    border-color: rgb(33, 33, 33);
+    background-color: rgb(58, 58, 58);
+}
+
+.validator-paths-scroll-view > * > .unity-scroll-view__vertical-scroller {
+    border-right-width: 0;
+}
+
+.validator-paths-path-row-input-field:hover {
+    background-color: rgb(78, 78, 78);
+}
+
+/* Tests List & Groups */
+
+.validator-test-list {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.validator-test-list-group-separator {
+    background-color: rgb(104, 104, 104);
+}
+
+.validator-test-list-group-expander {
+    border-width: 0;
+    border-color: rgba(0, 0, 0, 0);
+
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.validator-test-list-group-expander-arrow {
+    color: rgb(104, 104, 104);
+}
+
+.validator-test-list-group-expander-label {
+    color: rgb(255, 255, 255);
+    -unity-font-style: bold;
+}
+
+/* Validation Test */
+
+.validator-test-foldout {
+    border-width: 0;
+    border-radius: 0;
+    background-color: rgb(56, 56, 56);
+}
+
+.validator-test-foldout:hover {
+    background-color: rgb(68, 68, 68);
+}
+
+.validator-test-foldout:active {
+    background-color: rgb(48, 48, 48);
+}
+
+.validator-test-foldout-expanded {
+    background-color: rgb(68, 68, 68);
+}
+
+.validator-test-expander-arrow {
+    color: rgb(104, 104, 104);
+}
+
+.validator-test-content {
+    background-color: rgb(68, 68, 68);
+}
+
+.validator-test-content-textfield > .unity-base-field__input {
+    border-width: 0;
+    border-color: rgba(0, 0, 0, 0);
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.validator-test-content-result-messages {
+    border-left-width: 2px;
+    border-color: rgb(33, 33, 33);
+    background-color: rgb(58, 58, 58);
+}
+
+.validator-test-content-result-messages-pass {
+    border-color: rgb(40, 200, 40);
+}
+
+.validator-test-content-result-messages-warning {
+    border-color: rgb(200, 140, 40);
+}
+
+.validator-test-content-result-messages-fail {
+    border-color: rgb(200, 40, 40);
+}
+
+.validator-test-content-result-messages-content-button {
+    border-width: 0;
+    border-radius: 0;
+    
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.validator-test-content-result-messages-content-button:hover {
+    background-color: rgb(78, 78, 78);
+}
+
+.validator-test-content-result-messages-content-button:active {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.validator-test-content-result-messages-separator {
+    background-color: rgb(68, 68, 68);
+}

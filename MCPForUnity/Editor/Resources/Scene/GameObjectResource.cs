@@ -58,7 +58,7 @@ namespace MCPForUnity.Editor.Resources.Scene
             }
             catch (Exception e)
             {
-                Debug.LogError($"[GameObjectResource] Error getting GameObject: {e}");
+                McpLog.Error($"[GameObjectResource] Error getting GameObject: {e}");
                 return new ErrorResponse($"Error getting GameObject: {e.Message}");
             }
         }
@@ -199,7 +199,7 @@ namespace MCPForUnity.Editor.Resources.Scene
             }
             catch (Exception e)
             {
-                Debug.LogError($"[GameObjectComponentsResource] Error getting components: {e}");
+                McpLog.Error($"[GameObjectComponentsResource] Error getting components: {e}");
                 return new ErrorResponse($"Error getting components: {e.Message}");
             }
         }
@@ -276,7 +276,7 @@ namespace MCPForUnity.Editor.Resources.Scene
             }
             catch (Exception e)
             {
-                Debug.LogError($"[GameObjectComponentResource] Error getting component: {e}");
+                McpLog.Error($"[GameObjectComponentResource] Error getting component: {e}");
                 return new ErrorResponse($"Error getting component: {e.Message}");
             }
         }

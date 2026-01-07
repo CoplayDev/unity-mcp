@@ -597,7 +597,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 catch (Exception e)
                 {
-                    Debug.LogWarning($"[MCP] Could not parse '{paramName}' JSON string: {e.Message}");
+                    McpLog.Warn($"[MCP] Could not parse '{paramName}' JSON string: {e.Message}");
                 }
             }
         }

@@ -44,7 +44,7 @@ namespace MCPForUnity.Editor.Resources.Editor
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogWarning($"Could not get info for window {window.GetType().Name}: {ex.Message}");
+                        McpLog.Warn($"Could not get info for window {window.GetType().Name}: {ex.Message}");
                     }
                 }
 

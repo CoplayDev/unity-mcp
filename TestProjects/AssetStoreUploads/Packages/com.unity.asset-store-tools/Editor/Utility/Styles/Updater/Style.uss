@@ -1,0 +1,76 @@
+﻿.updater-loading-container {
+	flex-grow: 1;
+	align-items: center;
+	justify-content: center;
+}
+
+.updater-loading-container > Image {
+	width: 16px;
+	height: 16px;
+}
+
+.updater-info-container {
+	flex-grow: 1;
+	margin: 0 5px 5px 5px;
+}
+
+.updater-info-container-labels {
+	flex-grow: 1;
+	margin-bottom: 10px;
+	margin-top: 5px;
+}
+
+.updater-info-container-labels-description {
+	flex-grow: 0.5;
+	margin-bottom: 5px;
+	white-space: normal;
+	-unity-text-align: middle-left;
+}
+
+.updater-info-container-labels-row {
+	flex-direction: row;
+}
+
+.updater-info-container-labels-row-identifier {
+	-unity-font-style: bold;
+}
+
+.updater-info-container-buttons {
+	flex-direction: row;
+	margin-bottom: 5px;
+}
+
+.updater-info-container-buttons > Button {
+	flex-grow: 1;
+	flex-shrink: 1;
+	flex-basis: 100%;
+	height: 25px;
+}
+
+.updater-info-container-toggle {
+	align-self: flex-end;
+}
+
+.updater-info-container-toggle > Toggle > VisualElement > Label {
+	margin-left: 5px;
+}
+
+.updater-fail-container {
+	flex-grow: 1;
+	flex-direction: row;
+	margin: 0 5px 5px 5px;
+	justify-content: center;
+	align-items: center;
+}
+
+.updater-fail-container > Image {
+	flex-shrink: 0;
+	width: 36px;
+	height: 36px;
+	margin-right: 5px;
+}
+
+.updater-fail-container > Label {
+	flex-shrink: 1;
+	white-space: normal;
+}

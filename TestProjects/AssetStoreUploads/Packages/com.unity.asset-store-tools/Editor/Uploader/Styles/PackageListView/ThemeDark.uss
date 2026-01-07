@@ -1,0 +1,238 @@
+/* Package List Toolbar */
+
+.package-list-toolbar {
+    border-bottom-width: 1px;
+    border-color: rgb(33, 33, 33);
+    
+    background-color: rgb(68, 68, 68);
+}
+
+.package-sort-menu {
+    color: rgb(238, 238, 238);
+    
+    border-width: 1px;
+    border-radius: 3px;
+    border-color: rgb(36, 36, 36);
+    
+    background-color: rgb(88, 88, 88);
+}
+
+.package-sort-menu:hover {
+    background-color: rgb(103, 103, 103);
+}
+
+.package-sort-menu:active {
+    background-color: rgb(73, 73, 73);
+}
+
+/* Loading Spinner  */
+
+.loading-spinner-image {
+    --unity-image: resource("WaitSpin00");
+}
+
+/* Package Group */
+
+.package-group-expander-box {
+    border-width: 0;
+    border-color: rgba(33, 33, 33, 0);
+    
+    background-color: rgba(68, 68, 68, 0);
+}
+
+.package-group-expander {
+    color: rgb(104, 104, 104);
+}
+
+.package-group-label {
+    color: rgb(255, 255, 255);
+}
+
+.package-group-separator {
+    background-color: rgb(48, 48, 48);
+}
+
+.package-group-info-box {
+    border-width: 1px;
+    border-color: rgb(33, 33, 33);
+}
+
+.package-group-info-box > Image {
+    --unity-image: resource("console.infoicon@2x");
+}
+
+/* Package Element */
+
+.package-foldout-box {
+    border-width: 0;
+    border-radius: 0;
+    background-color: rgb(56, 56, 56);
+}
+
+.package-foldout-box:hover {
+    background-color: rgb(68, 68, 68);
+}
+
+.package-foldout-box-draft:active {
+    background-color: rgb(48, 48, 48);
+}
+
+.package-foldout-box-expanded {
+    background-color: rgb(68, 68, 68);
+}
+
+.package-expander {
+    color: rgb(104, 104, 104);
+}
+
+.package-image {
+    border-radius: 5px;
+    background-image: resource("Sprite Icon");
+}
+
+.package-label {
+    color: rgb(255, 255, 255);
+}
+
+.package-info {
+    color: rgb(200, 200, 200);
+}
+
+.package-open-in-browser-button {
+    border-width: 0;
+    border-radius: 0;
+
+    background-color: rgba(0, 0, 0, 0);
+    background-image: url("../../Icons/open-in-browser.png");
+
+    -unity-background-image-tint-color: rgb(200, 200, 200);
+}
+
+.package-open-in-browser-button:hover {
+    -unity-background-image-tint-color: rgb(255, 255, 255);
+}
+
+.package-open-in-browser-button:active {
+    -unity-background-image-tint-color: rgb(155, 155, 155);
+}
+
+.package-header-progress-bar > .unity-progress-bar__container > .unity-progress-bar__background {
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.package-header-progress-bar > .unity-progress-bar__container > .unity-progress-bar__background > .unity-progress-bar__progress {
+    background-image: none;
+    background-color: rgb(33, 150, 243);
+}
+
+/* Package Content Element */
+
+.package-content-element {
+    background-color: rgb(68, 68, 68);
+}
+
+.package-content-option-label-help-row > Image {
+    --unity-image: resource("d__Help@2x");
+}
+
+.package-content-option-dropdown {
+    color: rgb(238, 238, 238);
+    
+    border-width: 1px;
+    border-radius: 3px;
+    border-color: rgb(36, 36, 36);
+
+    background-color: rgb(88, 88, 88);
+}
+
+.package-content-option-dropdown:hover {
+    background-color: rgb(103, 103, 103);
+}
+
+/* MultiToggleSelection Element */
+
+.multi-toggle-box-scrollview {
+    border-width: 1px;
+    border-color: rgb(33, 33, 33);
+    background-color: rgb(58, 58, 58);
+}
+
+.multi-toggle-box-scrollview > * > .unity-scroll-view__vertical-scroller {
+    border-right-width: 0;
+}
+
+.multi-toggle-box-empty-label {
+    color: rgb(200, 200, 200);
+}
+
+.multi-toggle-box-toolbar {
+    border-width: 1px;
+    border-color: rgb(33, 33, 33);
+    background-color: rgb(58, 58, 58);
+}
+
+.multi-toggle-box-toolbar-filtering-box > ToolbarMenu {
+    color: rgb(188, 188, 188);
+
+    border-width: 1px;
+    border-radius: 3px;
+    border-color: rgb(36, 36, 36);
+
+    background-color: rgb(88, 88, 88);
+}
+
+/* Validation Element */
+
+.validation-result-box {
+    border-width: 1px;
+    border-color: rgb(33, 33, 33);
+}
+
+.validation-result-box > Image {
+    --unity-image: resource("console.infoicon@2x");
+}
+
+.validation-result-view-report-button {
+    color: rgb(68, 113, 229);
+    border-color: rgba(0, 0, 0, 0);
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.validation-result-view-report-button:hover {
+    color: rgb(68, 133, 229);
+}
+
+.validation-result-view-report-button:active {
+    color: rgb(68, 93, 229);
+}
+
+/* Uploading Element */
+
+.uploading-export-button {
+    color: rgb(220, 220, 220);
+    border-width: 1px;
+    border-color: rgb(33, 33, 33);
+}
+
+.uploading-upload-button {
+    color: rgb(220, 220, 220);
+    border-width: 1px;
+    border-color: rgb(33, 33, 33);
+}
+
+.uploading-progress-bar > .unity-progress-bar__container > .unity-progress-bar__background {
+    border-width: 0;
+    border-radius: 2px;
+}
+
+.uploading-progress-bar > .unity-progress-bar__container > .unity-progress-bar__background > .unity-progress-bar__progress {
+    background-image: none;
+    background-color: rgb(33, 150, 243);
+}
+
+.uploading-cancel-button {
+    color: rgb(220, 220, 220);
+    border-width: 1px;
+    border-color: rgb(33, 33, 33);
+}
