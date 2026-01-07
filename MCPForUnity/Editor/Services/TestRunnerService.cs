@@ -106,10 +106,9 @@ namespace MCPForUnity.Editor.Services
                 };
                 var settings = new ExecutionSettings(filter);
 
-                if (mode == TestMode.PlayMode)
-                {
-                    SaveDirtyScenesIfNeeded();
-                }
+                // Save dirty scenes for all test modes to prevent modal dialogs blocking MCP
+                // (Issue #525: EditMode tests were blocked by save dialog)
+                SaveDirtyScenesIfNeeded();
 
                 _testRunnerApi.Execute(settings);
 
@@ -331,7 +330,7 @@ namespace MCPForUnity.Editor.Services
                 {
                     if (string.IsNullOrEmpty(scene.path))
                     {
-                        McpLog.Warn($"[TestRunnerService] Skipping unsaved scene '{scene.name}': save it manually before running PlayMode tests.");
+                        McpLog.Warn($"[TestRunnerService] Skipping unsaved scene '{scene.name}': save it manually before running tests.");
                         continue;
                     }
                     try
