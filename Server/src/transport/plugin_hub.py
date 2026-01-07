@@ -45,6 +45,7 @@ class PluginHub(WebSocketEndpoint):
     KEEP_ALIVE_INTERVAL = 15
     SERVER_TIMEOUT = 30
     COMMAND_TIMEOUT = 30
+    FAST_FAIL_TIMEOUT = 10  # Short timeout for fast-fail commands to avoid Cursor's ~30s tool-call timeout
     # Fast-path commands should never block the client for long; return a retry hint instead.
     # This helps avoid the Cursor-side ~30s tool-call timeout when Unity is compiling/reloading
     # or is throttled while unfocused.
