@@ -997,6 +997,12 @@ namespace MCPForUnity.Editor.Tools
                         message = "Set Color.";
                         return true;
 
+                    case SerializedPropertyType.AnimationCurve:
+                        return TrySetAnimationCurve(prop, valueToken, out message);
+
+                    case SerializedPropertyType.Quaternion:
+                        return TrySetQuaternion(prop, valueToken, out message);
+
                     case SerializedPropertyType.Generic:
                         // Generic properties (structs/classes) should be handled above with JObject mapping
                         // If we get here, the value wasn't a JObject
@@ -1011,7 +1017,9 @@ namespace MCPForUnity.Editor.Tools
                         return false;
 
                     default:
-                        message = $"Unsupported SerializedPropertyType: {prop.propertyType}";
+                        message = $"Unsupported SerializedPropertyType: {prop.propertyType}. " +
+                                  "This type cannot be set via MCP patches. Consider editing the .asset file directly " +
+                                  "or using Unity's Inspector. For complex types, check if there's a supported alternative format.";
                         return false;
                 }
             }
@@ -1045,6 +1053,190 @@ namespace MCPForUnity.Editor.Tools
             }
             message = $"Unknown enum name '{s}'.";
             return false;
+        }
+
+        /// <summary>
+        /// Sets an AnimationCurve property from a JSON structure.
+        /// Expected format: { "keys": [ { "time": 0, "value": 0, "inSlope": 0, "outSlope": 2 }, ... ] }
+        /// or a simple array: [ { "time": 0, "value": 0 }, ... ]
+        /// </summary>
+        private static bool TrySetAnimationCurve(SerializedProperty prop, JToken valueToken, out string message)
+        {
+            message = null;
+
+            if (valueToken == null || valueToken.Type == JTokenType.Null)
+            {
+                // Set to empty curve
+                prop.animationCurveValue = new AnimationCurve();
+                message = "Set AnimationCurve to empty.";
+                return true;
+            }
+
+            JArray keysArray = null;
+
+            // Accept either { "keys": [...] } or just [...]
+            if (valueToken is JObject curveObj)
+            {
+                keysArray = curveObj["keys"] as JArray;
+                if (keysArray == null)
+                {
+                    message = "AnimationCurve object requires 'keys' array. Expected: { \"keys\": [ { \"time\": 0, \"value\": 0 }, ... ] }";
+                    return false;
+                }
+            }
+            else if (valueToken is JArray directArray)
+            {
+                keysArray = directArray;
+            }
+            else
+            {
+                message = "AnimationCurve requires object with 'keys' or array of keyframes. " +
+                          "Expected: { \"keys\": [ { \"time\": 0, \"value\": 0, \"inSlope\": 0, \"outSlope\": 0 }, ... ] }";
+                return false;
+            }
+
+            try
+            {
+                var curve = new AnimationCurve();
+                foreach (var keyToken in keysArray)
+                {
+                    if (keyToken is not JObject keyObj)
+                    {
+                        message = "Each keyframe must be an object with 'time' and 'value'.";
+                        return false;
+                    }
+
+                    float time = keyObj["time"]?.Value<float>() ?? 0f;
+                    float value = keyObj["value"]?.Value<float>() ?? 0f;
+                    float inSlope = keyObj["inSlope"]?.Value<float>() ?? keyObj["inTangent"]?.Value<float>() ?? 0f;
+                    float outSlope = keyObj["outSlope"]?.Value<float>() ?? keyObj["outTangent"]?.Value<float>() ?? 0f;
+
+                    var keyframe = new Keyframe(time, value, inSlope, outSlope);
+
+                    // Optional: weighted tangent mode (Unity 2018.1+)
+                    if (keyObj["weightedMode"] != null)
+                    {
+                        int weightedMode = keyObj["weightedMode"].Value<int>();
+                        keyframe.weightedMode = (WeightedMode)weightedMode;
+                    }
+                    if (keyObj["inWeight"] != null)
+                    {
+                        keyframe.inWeight = keyObj["inWeight"].Value<float>();
+                    }
+                    if (keyObj["outWeight"] != null)
+                    {
+                        keyframe.outWeight = keyObj["outWeight"].Value<float>();
+                    }
+
+                    curve.AddKey(keyframe);
+                }
+
+                prop.animationCurveValue = curve;
+                message = $"Set AnimationCurve with {keysArray.Count} keyframes.";
+                return true;
+            }
+            catch (Exception ex)
+            {
+                message = $"Failed to parse AnimationCurve: {ex.Message}";
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Sets a Quaternion property from JSON.
+        /// Accepts:
+        /// - [x, y, z] as Euler angles (degrees)
+        /// - [x, y, z, w] as raw quaternion components
+        /// - { "x": 0, "y": 0, "z": 0, "w": 1 } as raw quaternion
+        /// - { "euler": [x, y, z] } for explicit euler
+        /// </summary>
+        private static bool TrySetQuaternion(SerializedProperty prop, JToken valueToken, out string message)
+        {
+            message = null;
+
+            if (valueToken == null || valueToken.Type == JTokenType.Null)
+            {
+                prop.quaternionValue = Quaternion.identity;
+                message = "Set Quaternion to identity.";
+                return true;
+            }
+
+            try
+            {
+                if (valueToken is JArray arr)
+                {
+                    if (arr.Count == 3)
+                    {
+                        // Euler angles [x, y, z]
+                        var euler = new Vector3(
+                            arr[0].Value<float>(),
+                            arr[1].Value<float>(),
+                            arr[2].Value<float>()
+                        );
+                        prop.quaternionValue = Quaternion.Euler(euler);
+                        message = $"Set Quaternion from Euler({euler.x}, {euler.y}, {euler.z}).";
+                        return true;
+                    }
+                    else if (arr.Count == 4)
+                    {
+                        // Raw quaternion [x, y, z, w]
+                        prop.quaternionValue = new Quaternion(
+                            arr[0].Value<float>(),
+                            arr[1].Value<float>(),
+                            arr[2].Value<float>(),
+                            arr[3].Value<float>()
+                        );
+                        message = "Set Quaternion from [x, y, z, w].";
+                        return true;
+                    }
+                    else
+                    {
+                        message = "Quaternion array must have 3 elements (Euler) or 4 elements (x, y, z, w).";
+                        return false;
+                    }
+                }
+                else if (valueToken is JObject obj)
+                {
+                    // Check for explicit euler property
+                    if (obj["euler"] is JArray eulerArr && eulerArr.Count == 3)
+                    {
+                        var euler = new Vector3(
+                            eulerArr[0].Value<float>(),
+                            eulerArr[1].Value<float>(),
+                            eulerArr[2].Value<float>()
+                        );
+                        prop.quaternionValue = Quaternion.Euler(euler);
+                        message = $"Set Quaternion from euler: ({euler.x}, {euler.y}, {euler.z}).";
+                        return true;
+                    }
+
+                    // Object format { x, y, z, w }
+                    if (obj["x"] != null && obj["y"] != null && obj["z"] != null && obj["w"] != null)
+                    {
+                        prop.quaternionValue = new Quaternion(
+                            obj["x"].Value<float>(),
+                            obj["y"].Value<float>(),
+                            obj["z"].Value<float>(),
+                            obj["w"].Value<float>()
+                        );
+                        message = "Set Quaternion from { x, y, z, w }.";
+                        return true;
+                    }
+
+                    message = "Quaternion object must have { x, y, z, w } or { euler: [x, y, z] }.";
+                    return false;
+                }
+                else
+                {
+                    message = "Quaternion requires array [x,y,z] (Euler), [x,y,z,w] (raw), or object { x, y, z, w }.";
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                message = $"Failed to parse Quaternion: {ex.Message}";
+                return false;
+            }
         }
 
         private static bool TryResolveTarget(JToken targetToken, out UnityEngine.Object target, out string targetPath, out string targetGuid, out object error)
