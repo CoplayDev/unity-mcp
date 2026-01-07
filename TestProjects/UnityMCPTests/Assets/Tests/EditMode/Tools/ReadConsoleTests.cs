@@ -1,11 +1,9 @@
 using System;
-using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
-using UnityEditor;
 using UnityEngine;
 using MCPForUnity.Editor.Tools;
-using MCPForUnity.Editor.Helpers;
+using static MCPForUnityTests.Editor.TestUtilities;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -76,17 +74,6 @@ namespace MCPForUnityTests.Editor.Tools
                 }
             }
             Assert.IsTrue(found, $"The unique log message '{uniqueMessage}' was not found in retrieved logs.");
-        }
-
-        private static JObject ToJObject(object result)
-        {
-            if (result == null)
-            {
-                Assert.Fail("ReadConsole.HandleCommand returned null.");
-                return new JObject(); // Unreachable, but satisfies return type.
-            }
-
-            return result as JObject ?? JObject.FromObject(result);
         }
     }
 }

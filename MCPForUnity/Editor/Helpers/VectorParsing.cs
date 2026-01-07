@@ -98,6 +98,49 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
+        /// Parses a JToken (array or object) into a Vector4.
+        /// </summary>
+        /// <param name="token">The JSON token to parse</param>
+        /// <returns>The parsed Vector4 or null if parsing fails</returns>
+        public static Vector4? ParseVector4(JToken token)
+        {
+            if (token == null || token.Type == JTokenType.Null)
+                return null;
+
+            try
+            {
+                // Array format: [x, y, z, w]
+                if (token is JArray array && array.Count >= 4)
+                {
+                    return new Vector4(
+                        array[0].ToObject<float>(),
+                        array[1].ToObject<float>(),
+                        array[2].ToObject<float>(),
+                        array[3].ToObject<float>()
+                    );
+                }
+
+                // Object format: {x: 1, y: 2, z: 3, w: 4}
+                if (token is JObject obj && obj.ContainsKey("x") && obj.ContainsKey("y") && 
+                    obj.ContainsKey("z") && obj.ContainsKey("w"))
+                {
+                    return new Vector4(
+                        obj["x"].ToObject<float>(),
+                        obj["y"].ToObject<float>(),
+                        obj["z"].ToObject<float>(),
+                        obj["w"].ToObject<float>()
+                    );
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[VectorParsing] Failed to parse Vector4 from '{token}': {ex.Message}");
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// Parses a JToken (array or object) into a Quaternion.
         /// Supports both euler angles [x, y, z] and quaternion components [x, y, z, w].
         /// Note: Raw quaternion components are NOT normalized. Callers should normalize if needed
@@ -234,50 +277,6 @@ namespace MCPForUnity.Editor.Helpers
         /// Parses a JToken into a Color, returning the specified default if parsing fails.
         /// </summary>
         public static Color ParseColorOrDefault(JToken token, Color defaultValue) => ParseColor(token) ?? defaultValue;
-
-
-        /// <summary>
-        /// Parses a JToken (array or object) into a Vector4.
-        /// Added for ManageVFX refactoring.
-        /// </summary>
-        /// <param name="token">The JSON token to parse</param>
-        /// <returns>The parsed Vector4 or null if parsing fails</returns>
-        public static Vector4? ParseVector4(JToken token)
-        {
-            if (token == null || token.Type == JTokenType.Null)
-                return null;
-
-            try
-            {
-                // Array format: [x, y, z, w]
-                if (token is JArray array && array.Count >= 4)
-                {
-                    return new Vector4(
-                        array[0].ToObject<float>(),
-                        array[1].ToObject<float>(),
-                        array[2].ToObject<float>(),
-                        array[3].ToObject<float>()
-                    );
-                }
-
-                // Object format: {x: 1, y: 2, z: 3, w: 4}
-                if (token is JObject obj && obj.ContainsKey("x") && obj.ContainsKey("y") && obj.ContainsKey("z") && obj.ContainsKey("w"))
-                {
-                    return new Vector4(
-                        obj["x"].ToObject<float>(),
-                        obj["y"].ToObject<float>(),
-                        obj["z"].ToObject<float>(),
-                        obj["w"].ToObject<float>()
-                    );
-                }
-            }
-            catch (Exception ex)
-            {
-                McpLog.Warn($"[VectorParsing] Failed to parse Vector4 from '{token}': {ex.Message}");
-            }
-
-            return null;
-        }
 
         /// <summary>
         /// Parses a JToken into a Vector4, returning a default value if parsing fails.

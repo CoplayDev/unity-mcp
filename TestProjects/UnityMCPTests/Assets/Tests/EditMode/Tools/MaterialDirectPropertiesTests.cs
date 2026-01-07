@@ -5,6 +5,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using MCPForUnity.Editor.Tools;
+using static MCPForUnityTests.Editor.TestUtilities;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -57,16 +58,8 @@ namespace MCPForUnityTests.Editor.Tools
                 AssetDatabase.DeleteAsset(TempRoot);
             }
             
-            // Clean up parent Temp folder if it's empty
-            if (AssetDatabase.IsValidFolder("Assets/Temp"))
-            {
-                var remainingDirs = Directory.GetDirectories("Assets/Temp");
-                var remainingFiles = Directory.GetFiles("Assets/Temp");
-                if (remainingDirs.Length == 0 && remainingFiles.Length == 0)
-                {
-                    AssetDatabase.DeleteAsset("Assets/Temp");
-                }
-            }
+            // Clean up empty parent folders to avoid debris
+            CleanupEmptyParentFolders(TempRoot);
             
             AssetDatabase.Refresh();
         }
@@ -97,11 +90,6 @@ namespace MCPForUnityTests.Editor.Tools
             AssetDatabase.CreateAsset(tex, path);
             AssetDatabase.SaveAssets();
             return tex;
-        }
-
-        private static JObject ToJObject(object result)
-        {
-            return result as JObject ?? JObject.FromObject(result);
         }
 
         [Test]

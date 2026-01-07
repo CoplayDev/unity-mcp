@@ -5,9 +5,9 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.TestTools;
-using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Tools;
 using MCPForUnityTests.Editor.Tools.Fixtures;
+using static MCPForUnityTests.Editor.TestUtilities;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -41,10 +41,7 @@ namespace MCPForUnityTests.Editor.Tools
             // Create two Materials we can reference by guid/path.
             _matAPath = $"{TempRoot}/MatA_{Guid.NewGuid():N}.mat";
             _matBPath = $"{TempRoot}/MatB_{Guid.NewGuid():N}.mat";
-            var shader = Shader.Find("Universal Render Pipeline/Lit")
-                ?? Shader.Find("HDRP/Lit")
-                ?? Shader.Find("Standard")
-                ?? Shader.Find("Unlit/Color");
+            var shader = FindFallbackShader();
             Assert.IsNotNull(shader, "A fallback shader must be available for creating Material assets in tests.");
             AssetDatabase.CreateAsset(new Material(shader), _matAPath);
             AssetDatabase.CreateAsset(new Material(shader), _matBPath);
@@ -75,16 +72,8 @@ namespace MCPForUnityTests.Editor.Tools
                 AssetDatabase.DeleteAsset(_runRoot);
             }
 
-            // Clean up parent Temp folder if empty
-            if (AssetDatabase.IsValidFolder("Assets/Temp"))
-            {
-                var remainingDirs = System.IO.Directory.GetDirectories("Assets/Temp");
-                var remainingFiles = System.IO.Directory.GetFiles("Assets/Temp");
-                if (remainingDirs.Length == 0 && remainingFiles.Length == 0)
-                {
-                    AssetDatabase.DeleteAsset("Assets/Temp");
-                }
-            }
+            // Clean up empty parent folders to avoid debris
+            CleanupEmptyParentFolders(TempRoot);
 
             AssetDatabase.Refresh();
         }
@@ -311,50 +300,6 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsTrue(path!.StartsWith("Assets/Temp/ManageScriptableObjectTests/SlashProbe/Deep", StringComparison.Ordinal),
                 $"Expected sanitized Assets-rooted path, got: {path}");
             Assert.IsFalse(path.Contains("//", StringComparison.Ordinal), $"Path should not contain double slashes: {path}");
-        }
-
-        private static void EnsureFolder(string folderPath)
-        {
-            if (AssetDatabase.IsValidFolder(folderPath))
-                return;
-
-            // Only used for Assets/... paths in tests.
-            var sanitized = AssetPathUtility.SanitizeAssetPath(folderPath);
-            if (string.Equals(sanitized, "Assets", StringComparison.OrdinalIgnoreCase))
-                return;
-
-            var parts = sanitized.Split('/');
-            string current = "Assets";
-            for (int i = 1; i < parts.Length; i++)
-            {
-                var next = current + "/" + parts[i];
-                if (!AssetDatabase.IsValidFolder(next))
-                {
-                    AssetDatabase.CreateFolder(current, parts[i]);
-                }
-                current = next;
-            }
-        }
-
-        private static JObject ToJObject(object result)
-        {
-            return result as JObject ?? JObject.FromObject(result);
-        }
-
-        private static IEnumerator WaitForUnityReady(double timeoutSeconds = 30.0)
-        {
-            // Some EditMode tests trigger script compilation/domain reload. Tools like ManageScriptableObject
-            // intentionally return "compiling_or_reloading" during these windows. Wait until Unity is stable
-            // to make tests deterministic.
-            double start = EditorApplication.timeSinceStartup;
-            while (EditorApplication.isCompiling || EditorApplication.isUpdating)
-            {
-                if (EditorApplication.timeSinceStartup - start > timeoutSeconds)
-                {
-                    Assert.Fail($"Timed out waiting for Unity to finish compiling/updating (>{timeoutSeconds:0.0}s).");
-                }
-                yield return null; // yield to the editor loop so importing/compiling can actually progress
-            }
         }
     }
 }

@@ -69,4 +69,62 @@ def test_manage_scriptable_object_forwards_modify_params(monkeypatch):
     assert captured["params"]["patches"][0]["op"] == "array_resize"
 
 
+def test_manage_scriptable_object_forwards_dry_run_param(monkeypatch):
+    captured = {}
+
+    async def fake_async_send(cmd, params, **kwargs):
+        captured["cmd"] = cmd
+        captured["params"] = params
+        return {"success": True, "data": {"dryRun": True, "validationResults": []}}
+
+    monkeypatch.setattr(mod, "async_send_command_with_retry", fake_async_send)
+
+    ctx = DummyContext()
+    ctx.set_state("unity_instance", "UnityMCPTests@dummy")
+
+    result = asyncio.run(
+        mod.manage_scriptable_object(
+            ctx=ctx,
+            action="modify",
+            target='{"guid":"abc123"}',
+            patches=[{"propertyPath": "intValue", "op": "set", "value": 42}],
+            dry_run=True,
+        )
+    )
+
+    assert result["success"] is True
+    assert captured["cmd"] == "manage_scriptable_object"
+    assert captured["params"]["action"] == "modify"
+    assert captured["params"]["dryRun"] is True
+    assert captured["params"]["target"] == {"guid": "abc123"}
+
+
+def test_manage_scriptable_object_dry_run_string_coercion(monkeypatch):
+    """Test that dry_run accepts string 'true' and coerces to boolean."""
+    captured = {}
+
+    async def fake_async_send(cmd, params, **kwargs):
+        captured["cmd"] = cmd
+        captured["params"] = params
+        return {"success": True, "data": {"dryRun": True}}
+
+    monkeypatch.setattr(mod, "async_send_command_with_retry", fake_async_send)
+
+    ctx = DummyContext()
+    ctx.set_state("unity_instance", "UnityMCPTests@dummy")
+
+    result = asyncio.run(
+        mod.manage_scriptable_object(
+            ctx=ctx,
+            action="modify",
+            target={"guid": "xyz"},
+            patches=[],
+            dry_run="true",  # String instead of bool
+        )
+    )
+
+    assert result["success"] is True
+    assert captured["params"]["dryRun"] is True
+
+
 

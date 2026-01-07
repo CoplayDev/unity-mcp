@@ -4,6 +4,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using MCPForUnity.Editor.Tools;
+using static MCPForUnityTests.Editor.TestUtilities;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -35,11 +36,9 @@ namespace MCPForUnityTests.Editor.Tools
             {
                 AssetDatabase.DeleteAsset(TempRoot);
             }
-        }
 
-        private static JObject ToJObject(object result)
-        {
-            return result as JObject ?? JObject.FromObject(result);
+            // Clean up empty parent folders to avoid debris
+            CleanupEmptyParentFolders(TempRoot);
         }
 
         [Test]
