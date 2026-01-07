@@ -84,7 +84,7 @@ async def refresh_unity(
 
     # After readiness is restored, clear any external-dirty flag for this instance so future tools can proceed cleanly.
     try:
-        inst = unity_instance or await editor_state._infer_single_instance_id(ctx)
+        inst = unity_instance or await editor_state.infer_single_instance_id(ctx)
         if inst:
             external_changes_scanner.clear_dirty(inst)
     except Exception:

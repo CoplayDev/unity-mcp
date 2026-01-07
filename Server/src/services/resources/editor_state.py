@@ -125,7 +125,7 @@ def _in_pytest() -> bool:
     return bool(os.environ.get("PYTEST_CURRENT_TEST"))
 
 
-async def _infer_single_instance_id(ctx: Context) -> str | None:
+async def infer_single_instance_id(ctx: Context) -> str | None:
     """
     Best-effort: if exactly one Unity instance is connected, return its Name@hash id.
     This makes editor_state outputs self-describing even when no explicit active instance is set.
@@ -248,7 +248,7 @@ async def get_editor_state(ctx: Context) -> MCPResponse:
         if unity_instance:
             unity_section["instance_id"] = unity_instance
         else:
-            inferred = await _infer_single_instance_id(ctx)
+            inferred = await infer_single_instance_id(ctx)
             if inferred:
                 unity_section["instance_id"] = inferred
 
