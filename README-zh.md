@@ -97,8 +97,9 @@ MCP for Unity 使用两个组件连接您的工具：
 
 ### 前置要求
 
+如果你**不是**通过 Unity Asset Store 安装，则还需要安装以下内容：
+
   * **Python：** 版本 3.10 或更新。[下载 Python](https://www.python.org/downloads/)
-  * **Unity Hub 和编辑器：** 版本 2021.3 LTS 或更新。[下载 Unity](https://unity.com/download)
   * **uv（Python 工具链管理器）：**
       ```bash
       # macOS / Linux
@@ -109,33 +110,43 @@ MCP for Unity 使用两个组件连接您的工具：
 
       # 文档: https://docs.astral.sh/uv/getting-started/installation/
       ```
-      
+
+所有安装方式都需要以下内容：
+
+  * **Unity Hub 和编辑器：** 版本 2021.3 LTS 或更新。[下载 Unity](https://unity.com/download)
   * **MCP 客户端：** [Claude Desktop](https://claude.ai/download) | [Claude Code](https://github.com/anthropics/claude-code) | [Cursor](https://www.cursor.com/en/downloads) | [Visual Studio Code Copilot](https://code.visualstudio.com/docs/copilot/overview) | [Windsurf](https://windsurf.com) | 其他客户端可通过手动配置使用
 
-* <details> <summary><strong>[可选] Roslyn 用于高级脚本验证</strong></summary>
+<details> <summary><strong>[可选] Roslyn 用于高级脚本验证</strong></summary>
 
-    对于捕获未定义命名空间、类型和方法的**严格**验证级别：
+  对于捕获未定义命名空间、类型和方法的**严格**验证级别：
 
-    **方法 1：Unity 的 NuGet（推荐）**
-    1. 安装 [NuGetForUnity](https://github.com/GlitchEnzo/NuGetForUnity)
-    2. 前往 `Window > NuGet Package Manager`
-    3. 搜索 `Microsoft.CodeAnalysis`，选择版本 4.14.0 并安装包
-    4. 同时安装包 `SQLitePCLRaw.core` 和 `SQLitePCLRaw.bundle_e_sqlite3`。
-    5. 前往 `Player Settings > Scripting Define Symbols`
-    6. 添加 `USE_ROSLYN`
-    7. 重启 Unity
+  **方法 1：Unity 的 NuGet（推荐）**
+  1. 安装 [NuGetForUnity](https://github.com/GlitchEnzo/NuGetForUnity)
+  2. 前往 `Window > NuGet Package Manager`
+  3. 搜索 `Microsoft.CodeAnalysis`，选择版本 4.14.0 并安装包
+  4. 同时安装包 `SQLitePCLRaw.core` 和 `SQLitePCLRaw.bundle_e_sqlite3`。
+  5. 前往 `Player Settings > Scripting Define Symbols`
+  6. 添加 `USE_ROSLYN`
+  7. 重启 Unity
 
-    **方法 2：手动 DLL 安装**
-    1. 从 [NuGet](https://www.nuget.org/packages/Microsoft.CodeAnalysis.CSharp/) 下载 Microsoft.CodeAnalysis.CSharp.dll 和依赖项
-    2. 将 DLL 放置在 `Assets/Plugins/` 文件夹中
-    3. 确保 .NET 兼容性设置正确
-    4. 将 `USE_ROSLYN` 添加到脚本定义符号
-    5. 重启 Unity
+  **方法 2：手动 DLL 安装**
+  1. 从 [NuGet](https://www.nuget.org/packages/Microsoft.CodeAnalysis.CSharp/) 下载 Microsoft.CodeAnalysis.CSharp.dll 和依赖项
+  2. 将 DLL 放置在 `Assets/Plugins/` 文件夹中
+  3. 确保 .NET 兼容性设置正确
+  4. 将 `USE_ROSLYN` 添加到脚本定义符号
+  5. 重启 Unity
 
-    **注意：** 没有 Roslyn 时，脚本验证会回退到基本结构检查。Roslyn 启用完整的 C# 编译器诊断和精确错误报告。</details>
+  **注意：** 没有 Roslyn 时，脚本验证会回退到基本结构检查。Roslyn 启用完整的 C# 编译器诊断和精确错误报告。</details>
 
 ---
 ### 🌟 步骤 1：安装 Unity 包
+
+#### 通过 Unity Asset Store 安装
+
+1. 在浏览器中打开：https://assetstore.unity.com/packages/tools/generative-ai/mcp-for-unity-ai-driven-development-329908
+2. 点击 `Add to My Assets`。
+3. 在 Unity 编辑器中，前往 `Window > Package Manager`。
+4. 将该资源下载并导入到你的项目中
 
 #### 通过 Git URL 安装
 
@@ -150,7 +161,7 @@ MCP for Unity 使用两个组件连接您的工具：
 
 **需要锁定版本？** 使用带标签的 URL（更新时需卸载并重新安装）：
 ```
-https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v8.0.0
+https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v8.6.0
 ```
 
 #### 通过 OpenUPM 安装

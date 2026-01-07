@@ -1,0 +1,11 @@
+{
+  "name": "com.unity.asset-store-tools",
+  "displayName": "Asset Store Tools",
+  "version": "12.0.1",
+  "unity": "2019.4",
+  "description": "Whether you're a programmer, game designer, texture artist or 3D modeler, you're welcome to share your creations with everybody in the Unity developer community!",
+  "type": "tool",
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  }
+}

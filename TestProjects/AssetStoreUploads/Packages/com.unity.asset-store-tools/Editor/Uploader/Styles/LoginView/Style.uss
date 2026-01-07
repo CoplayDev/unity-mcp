@@ -1,0 +1,134 @@
+/* Logo */
+
+.asset-store-logo {
+    width: 90%;
+    height: 32px;
+
+    align-self: center;
+    
+    margin: 40px 0;
+
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+/* Cloud Login */
+
+.cloud-button-login {
+    align-self: center;
+
+    width: 75%;
+}
+
+.cloud-button-login-label {
+    -unity-text-align: middle-center;
+    white-space: normal;
+
+    min-height: 24px;
+    padding-right: 4px;
+}
+
+.cloud-label-or {
+    align-self: center;
+
+    -unity-text-align: middle-center;
+
+    margin: 10px 0;
+}
+
+/* Error Section */
+
+.error-container {
+    flex-direction: row;
+    flex-shrink: 0;
+    
+    align-self: center;
+ 
+    min-width: 300px;
+    max-width: 300px;
+
+    margin: 5px 0 5px 1px;
+}
+
+.error-container > Image {
+    flex-direction: row;
+
+    width: 32px;
+    height: 32px;
+    
+    margin: 5px 10px;
+}
+
+.error-container > Label {
+    flex-grow: 1;
+    flex-shrink: 1;
+    
+    -unity-text-align: middle-left;
+    white-space: normal;
+    
+    margin-right: 5px;
+    padding: 2px 0;
+}
+
+/* Credentials Login */
+
+.credentials-container {
+    align-self: center;
+    
+    width: 75%;
+    
+    padding: 15px;
+}
+
+.credentials-input-container {
+    align-self: center;
+
+    width: 100%;
+
+    margin: 5px 0;
+}
+
+.credentials-input-container > Label {
+    -unity-text-align: upper-left;
+    
+    margin: 2px 0;
+}
+
+.credentials-input-container > TextField {
+    height: 20px;
+    margin: 0 1px;
+}
+
+.credentials-button-login {
+    align-self: center;
+
+    width: 100%;
+    margin: 10px 0 15px 0;
+}
+
+.credentials-button-login-label {
+    -unity-text-align: middle-center;
+    white-space: normal;
+
+    min-height: 24px;
+    padding-right: 4px;
+}
+
+/* Help Section */
+
+.help-section-container {
+    flex-direction: row;
+
+    justify-content: space-between;
+    align-self: center;
+    
+    width: 75%;
+    margin: 5px 0;
+}
+
+.help-section-hyperlink-button {
+    margin: 0 10px;
+    padding: 0;
+
+    flex-shrink: 1;
+    white-space: normal;
+}

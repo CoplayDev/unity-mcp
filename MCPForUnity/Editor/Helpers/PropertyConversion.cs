@@ -1,6 +1,7 @@
 using System;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using MCPForUnity.Editor.Helpers;
 using UnityEditor;
 using UnityEngine;
 
@@ -24,7 +25,7 @@ namespace MCPForUnity.Editor.Helpers
             {
                 if (targetType.IsValueType && Nullable.GetUnderlyingType(targetType) == null)
                 {
-                    Debug.LogWarning($"[PropertyConversion] Cannot assign null to non-nullable value type {targetType.Name}. Returning default value.");
+                    McpLog.Warn($"[PropertyConversion] Cannot assign null to non-nullable value type {targetType.Name}. Returning default value.");
                     return Activator.CreateInstance(targetType);
                 }
                 return null;
@@ -37,7 +38,7 @@ namespace MCPForUnity.Editor.Helpers
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Error converting token to {targetType.FullName}: {ex.Message}\nToken: {token.ToString(Formatting.None)}");
+                McpLog.Error($"Error converting token to {targetType.FullName}: {ex.Message}\nToken: {token.ToString(Formatting.None)}");
                 throw;
             }
         }
@@ -82,7 +83,7 @@ namespace MCPForUnity.Editor.Helpers
             
             if (loadedAsset == null)
             {
-                Debug.LogWarning($"[PropertyConversion] Could not load asset of type {targetType.Name} from path: {assetPath}");
+                McpLog.Warn($"[PropertyConversion] Could not load asset of type {targetType.Name} from path: {assetPath}");
             }
             
             return loadedAsset;

@@ -64,7 +64,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (System.Exception ex)
             {
-                Debug.LogError($"[FindGameObjects] Error searching GameObjects: {ex.Message}");
+                McpLog.Error($"[FindGameObjects] Error searching GameObjects: {ex.Message}");
                 return new ErrorResponse($"Error searching GameObjects: {ex.Message}");
             }
         }

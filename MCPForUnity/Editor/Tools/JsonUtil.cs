@@ -1,3 +1,4 @@
+using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 
@@ -22,7 +23,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 catch (Newtonsoft.Json.JsonReaderException e)
                 {
-                    Debug.LogWarning($"[MCP] Could not parse '{paramName}' JSON string: {e.Message}");
+                    McpLog.Warn($"[MCP] Could not parse '{paramName}' JSON string: {e.Message}");
                 }
             }
         }

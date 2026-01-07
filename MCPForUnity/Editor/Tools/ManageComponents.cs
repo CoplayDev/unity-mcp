@@ -58,7 +58,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ManageComponents] Action '{action}' failed: {e}");
+                McpLog.Error($"[ManageComponents] Action '{action}' failed: {e}");
                 return new ErrorResponse($"Internal error processing action '{action}': {e.Message}");
             }
         }
@@ -303,7 +303,7 @@ namespace MCPForUnity.Editor.Tools
             
             if (errors.Count > 0)
             {
-                Debug.LogWarning($"[ManageComponents] Some properties failed to set on {component.GetType().Name}: {string.Join(", ", errors)}");
+                McpLog.Warn($"[ManageComponents] Some properties failed to set on {component.GetType().Name}: {string.Join(", ", errors)}");
             }
         }
 
@@ -321,7 +321,7 @@ namespace MCPForUnity.Editor.Tools
                 return null; // Success
             }
 
-            Debug.LogWarning($"[ManageComponents] {error}");
+            McpLog.Warn($"[ManageComponents] {error}");
             return error;
         }
 

@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using MCPForUnity.Editor.Tools;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using UnityEngine;
 using UnityEditor;
-using MCPForUnity.Editor.Tools;
+using UnityEngine;
 
 namespace MCPForUnity.Editor.Helpers
 {
@@ -63,7 +63,7 @@ namespace MCPForUnity.Editor.Helpers
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogWarning($"[MaterialOps] Failed to parse color for property '{propName}': {ex.Message}");
+                        McpLog.Warn($"[MaterialOps] Failed to parse color for property '{propName}': {ex.Message}");
                     }
                 }
             }
@@ -81,7 +81,7 @@ namespace MCPForUnity.Editor.Helpers
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"[MaterialOps] Failed to parse color array: {ex.Message}");
+                    McpLog.Warn($"[MaterialOps] Failed to parse color array: {ex.Message}");
                 }
             }
 
@@ -104,7 +104,7 @@ namespace MCPForUnity.Editor.Helpers
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogWarning($"[MaterialOps] Failed to set float property '{propName}': {ex.Message}");
+                        McpLog.Warn($"[MaterialOps] Failed to set float property '{propName}': {ex.Message}");
                     }
                 }
             }
@@ -123,7 +123,7 @@ namespace MCPForUnity.Editor.Helpers
                         // Use ResolvePropertyName to handle aliases even for structured texture names
                         string candidateName = string.IsNullOrEmpty(rawName) ? "_BaseMap" : rawName;
                         string targetProp = ResolvePropertyName(mat, candidateName);
-                        
+
                         if (!string.IsNullOrEmpty(targetProp) && mat.HasProperty(targetProp))
                         {
                             if (mat.GetTexture(targetProp) != newTex)
@@ -231,17 +231,17 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     if (material.HasProperty(propertyName))
                     {
-                        try { material.SetColor(propertyName, ParseColor(value, serializer)); return true; } 
-                        catch (Exception ex) 
-                        { 
+                        try { material.SetColor(propertyName, ParseColor(value, serializer)); return true; }
+                        catch (Exception ex)
+                        {
                             // Log at Debug level since we'll try other conversions
-                            Debug.Log($"[MaterialOps] SetColor attempt for '{propertyName}' failed: {ex.Message}"); 
+                            McpLog.Info($"[MaterialOps] SetColor attempt for '{propertyName}' failed: {ex.Message}");
                         }
 
-                        try { Vector4 vec = value.ToObject<Vector4>(serializer); material.SetVector(propertyName, vec); return true; } 
-                        catch (Exception ex) 
-                        { 
-                            Debug.Log($"[MaterialOps] SetVector (Vec4) attempt for '{propertyName}' failed: {ex.Message}"); 
+                        try { Vector4 vec = value.ToObject<Vector4>(serializer); material.SetVector(propertyName, vec); return true; }
+                        catch (Exception ex)
+                        {
+                            McpLog.Info($"[MaterialOps] SetVector (Vec4) attempt for '{propertyName}' failed: {ex.Message}");
                         }
                     }
                 }
@@ -249,10 +249,10 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     if (material.HasProperty(propertyName))
                     {
-                        try { material.SetColor(propertyName, ParseColor(value, serializer)); return true; } 
-                        catch (Exception ex) 
-                        { 
-                             Debug.Log($"[MaterialOps] SetColor (Vec3) attempt for '{propertyName}' failed: {ex.Message}"); 
+                        try { material.SetColor(propertyName, ParseColor(value, serializer)); return true; }
+                        catch (Exception ex)
+                        {
+                            McpLog.Info($"[MaterialOps] SetColor (Vec3) attempt for '{propertyName}' failed: {ex.Message}");
                         }
                     }
                 }
@@ -260,10 +260,10 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     if (material.HasProperty(propertyName))
                     {
-                        try { Vector2 vec = value.ToObject<Vector2>(serializer); material.SetVector(propertyName, vec); return true; } 
-                        catch (Exception ex) 
-                        { 
-                            Debug.Log($"[MaterialOps] SetVector (Vec2) attempt for '{propertyName}' failed: {ex.Message}"); 
+                        try { Vector2 vec = value.ToObject<Vector2>(serializer); material.SetVector(propertyName, vec); return true; }
+                        catch (Exception ex)
+                        {
+                            McpLog.Info($"[MaterialOps] SetVector (Vec2) attempt for '{propertyName}' failed: {ex.Message}");
                         }
                     }
                 }
@@ -273,10 +273,10 @@ namespace MCPForUnity.Editor.Helpers
                 if (!material.HasProperty(propertyName))
                     return false;
 
-                try { material.SetFloat(propertyName, value.ToObject<float>(serializer)); return true; } 
+                try { material.SetFloat(propertyName, value.ToObject<float>(serializer)); return true; }
                 catch (Exception ex)
                 {
-                     Debug.Log($"[MaterialOps] SetFloat attempt for '{propertyName}' failed: {ex.Message}");
+                    McpLog.Info($"[MaterialOps] SetFloat attempt for '{propertyName}' failed: {ex.Message}");
                 }
             }
             else if (value.Type == JTokenType.Boolean)
@@ -284,10 +284,10 @@ namespace MCPForUnity.Editor.Helpers
                 if (!material.HasProperty(propertyName))
                     return false;
 
-                try { material.SetFloat(propertyName, value.ToObject<bool>(serializer) ? 1f : 0f); return true; } 
+                try { material.SetFloat(propertyName, value.ToObject<bool>(serializer) ? 1f : 0f); return true; }
                 catch (Exception ex)
                 {
-                     Debug.Log($"[MaterialOps] SetFloat (bool) attempt for '{propertyName}' failed: {ex.Message}");
+                    McpLog.Info($"[MaterialOps] SetFloat (bool) attempt for '{propertyName}' failed: {ex.Message}");
                 }
             }
             else if (value.Type == JTokenType.String)
@@ -298,16 +298,16 @@ namespace MCPForUnity.Editor.Helpers
                     string path = value.ToString();
                     if (!string.IsNullOrEmpty(path) && path.Contains("/")) // Heuristic: paths usually have slashes
                     {
-                         // We need to handle texture assignment here. 
-                         // Since we don't have easy access to AssetDatabase here directly without using UnityEditor namespace (which is imported),
-                         // we can try to load it.
-                         var sanitizedPath = AssetPathUtility.SanitizeAssetPath(path);
-                         Texture tex = AssetDatabase.LoadAssetAtPath<Texture>(sanitizedPath);
-                         if (tex != null && material.HasProperty(propertyName))
-                         {
-                             material.SetTexture(propertyName, tex);
-                             return true;
-                         }
+                        // We need to handle texture assignment here. 
+                        // Since we don't have easy access to AssetDatabase here directly without using UnityEditor namespace (which is imported),
+                        // we can try to load it.
+                        var sanitizedPath = AssetPathUtility.SanitizeAssetPath(path);
+                        Texture tex = AssetDatabase.LoadAssetAtPath<Texture>(sanitizedPath);
+                        if (tex != null && material.HasProperty(propertyName))
+                        {
+                            material.SetTexture(propertyName, tex);
+                            return true;
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -315,10 +315,10 @@ namespace MCPForUnity.Editor.Helpers
                     McpLog.Warn($"SetTexture (string path) for '{propertyName}' failed: {ex.Message}");
                 }
             }
-            
+
             if (value.Type == JTokenType.Object)
             {
-                 try
+                try
                 {
                     Texture texture = value.ToObject<Texture>(serializer);
                     if (texture != null && material.HasProperty(propertyName))
@@ -333,7 +333,7 @@ namespace MCPForUnity.Editor.Helpers
                 }
             }
 
-            Debug.LogWarning(
+            McpLog.Warn(
                 $"[MaterialOps] Unsupported or failed conversion for material property '{propertyName}' from value: {value.ToString(Formatting.None)}"
             );
             return false;
@@ -382,14 +382,14 @@ namespace MCPForUnity.Editor.Helpers
                     throw new ArgumentException("Color array must have 3 or 4 elements.");
                 }
             }
-            
+
             try
             {
                 return token.ToObject<Color>(serializer);
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[MaterialOps] Failed to parse color from token: {ex.Message}");
+                McpLog.Warn($"[MaterialOps] Failed to parse color from token: {ex.Message}");
                 throw;
             }
         }

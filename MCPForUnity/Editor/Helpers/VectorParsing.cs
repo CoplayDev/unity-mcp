@@ -45,7 +45,7 @@ namespace MCPForUnity.Editor.Helpers
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[VectorParsing] Failed to parse Vector3 from '{token}': {ex.Message}");
+                McpLog.Warn($"[VectorParsing] Failed to parse Vector3 from '{token}': {ex.Message}");
             }
 
             return null;
@@ -91,7 +91,7 @@ namespace MCPForUnity.Editor.Helpers
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[VectorParsing] Failed to parse Vector2 from '{token}': {ex.Message}");
+                McpLog.Warn($"[VectorParsing] Failed to parse Vector2 from '{token}': {ex.Message}");
             }
 
             return null;
@@ -163,7 +163,7 @@ namespace MCPForUnity.Editor.Helpers
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[VectorParsing] Failed to parse Quaternion from '{token}': {ex.Message}");
+                McpLog.Warn($"[VectorParsing] Failed to parse Quaternion from '{token}': {ex.Message}");
             }
 
             return null;
@@ -219,7 +219,7 @@ namespace MCPForUnity.Editor.Helpers
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[VectorParsing] Failed to parse Color from '{token}': {ex.Message}");
+                McpLog.Warn($"[VectorParsing] Failed to parse Color from '{token}': {ex.Message}");
             }
 
             return null;
@@ -497,7 +497,7 @@ namespace MCPForUnity.Editor.Helpers
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[VectorParsing] Failed to parse Rect from '{token}': {ex.Message}");
+                McpLog.Warn($"[VectorParsing] Failed to parse Rect from '{token}': {ex.Message}");
             }
 
             return null;
@@ -523,7 +523,7 @@ namespace MCPForUnity.Editor.Helpers
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[VectorParsing] Failed to parse Bounds from '{token}': {ex.Message}");
+                McpLog.Warn($"[VectorParsing] Failed to parse Bounds from '{token}': {ex.Message}");
             }
 
             return null;
