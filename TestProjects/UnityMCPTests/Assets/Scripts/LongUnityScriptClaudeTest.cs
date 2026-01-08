@@ -68,8 +68,6 @@ public class LongUnityScriptClaudeTest : MonoBehaviour
         }
     }
 
-    // NL tests sometimes add comments above Update() as an anchor
-// Build marker OK
     private void Update()
     {
         if (reachOrigin == null) return;
@@ -757,19 +755,6 @@ private void ApplyBlend(Vector3 blend) // safe animation
     }
     private void Pad0240()
     {
-// Tail test A
-// Tail test B
-// Tail test C
-    // idempotency test marker
-
-        void TestHelper() { /* placeholder */ }
-        void IncrementCounter() { padAccumulator++; }
-        // end of test modifications
-        // path test marker A
-
-
-
-
     }
     private void Pad0241()
     {
