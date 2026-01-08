@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -122,3 +123,15 @@ jobs:
           gh release create "$TAG" \
             --title "v${NEW_VERSION}" \
             --generate-notes
+
+      - name: Trigger publish workflows
+        env:
+          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="v${NEW_VERSION}"
+
+          gh workflow run publish-docker.yml --ref "$TAG"
+          gh workflow run publish-pypi.yml --ref "$TAG"
