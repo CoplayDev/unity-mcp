@@ -51,6 +51,21 @@ uv run pytest tests/ -v -m integration
 uv run pytest tests/ -v -m unit
 ```
 
+### 代码覆盖率
+
+运行带覆盖率追踪的测试：
+
+```bash
+cd Server
+uv run pytest tests/ --cov --cov-report=html --cov-report=term
+
+# 查看 HTML 报告
+open htmlcov/index.html  # macOS
+xdg-open htmlcov/index.html  # Linux
+```
+
+覆盖率配置位于 `Server/pyproject.toml` 的 `[tool.coverage.*]` 部分。
+
 ## 🚀 可用的开发特性
 
 ### ✅ 开发部署脚本
