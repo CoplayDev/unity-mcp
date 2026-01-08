@@ -1,4 +1,4 @@
-name: Bump Version
+name: Release
 
 on:
   workflow_dispatch:
@@ -15,14 +15,16 @@ on:
 
 jobs:
   bump:
-    name: "Bump version and tag"
+    name: Bump version, tag, and create release
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      actions: write
+    outputs:
+      new_version: ${{ steps.compute.outputs.new_version }}
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -56,6 +58,15 @@ jobs:
           echo "New version: $NEW_VERSION"
           echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
           echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Compute tag
+        id: tag
+        env:
+          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "tag=v${NEW_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Update files to new version
         env:
@@ -95,11 +106,10 @@ jobs:
 
       - name: Create and push tag
         env:
-          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+          TAG: ${{ steps.tag.outputs.tag }}
         shell: bash
         run: |
           set -euo pipefail
-          TAG="v${NEW_VERSION}"
           echo "Preparing to create tag $TAG"
 
           if git ls-remote --tags origin | grep -q "refs/tags/$TAG$"; then
@@ -107,31 +117,58 @@ jobs:
             exit 0
           fi
 
-          git tag -a "$TAG" -m "Version ${NEW_VERSION}"
+          git tag -a "$TAG" -m "Version ${TAG#v}"
           git push origin "$TAG"
 
       - name: Create GitHub release
-        env:
-          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG="v${NEW_VERSION}"
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.tag }}
+          generate_release_notes: true
 
-          # Create release with auto-generated notes
-          gh release create "$TAG" \
-            --title "v${NEW_VERSION}" \
-            --generate-notes
+  publish_docker:
+    name: Publish Docker image
+    needs:
+      - bump
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.bump.outputs.tag }}
+          fetch-depth: 0
 
-      - name: Trigger publish workflows
-        env:
-          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG="v${NEW_VERSION}"
+      - name: Build and push Docker image
+        uses: ./.github/actions/publish-docker
+        with:
+          docker_username: ${{ secrets.DOCKER_USERNAME }}
+          docker_password: ${{ secrets.DOCKER_PASSWORD }}
+          image: ${{ secrets.DOCKER_USERNAME }}/mcp-for-unity-server
+          version: ${{ needs.bump.outputs.new_version }}
+          include_branch_tags: "false"
+          context: .
+          dockerfile: Server/Dockerfile
+          platforms: linux/amd64
 
-          gh workflow run publish-docker.yml --ref "$TAG"
-          gh workflow run publish-pypi.yml --ref "$TAG"
+  publish_pypi:
+    name: Publish Python distribution to PyPI
+    needs:
+      - bump
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mcpforunityserver
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.bump.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Build and publish
+        uses: ./.github/actions/publish-pypi
