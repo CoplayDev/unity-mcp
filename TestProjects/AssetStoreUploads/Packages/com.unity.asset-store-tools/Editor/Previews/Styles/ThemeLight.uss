@@ -1,0 +1,67 @@
+.primary-colors {
+    /* Light - lighter */
+    background-color: rgb(220, 220, 220);
+    /* Light - middle */
+    background-color: rgb(200, 200, 200);
+    /* Light - darker */
+    background-color: rgb(180, 180, 180);
+
+    /* Dark - lighter */
+    background-color: rgb(50, 50, 50);
+    /* Dark - middle */
+    background-color: rgb(28, 28, 28);
+    /* Dark - darker */
+    background-color: rgb(0, 0, 0);
+
+    /* Border color - light */
+    border-color: rgb(200, 200, 200);
+    /* Border color - dark */
+    border-color: rgb(33, 33, 33);
+}
+
+/* Asset Preview Description */
+
+.asset-preview-description-hyperlink-button {
+    color: rgb(68, 113, 229);
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.asset-preview-description-hyperlink-button:hover {
+    color: rgb(68, 133, 229);
+}
+
+.asset-preview-description-hyperlink-button:active {
+    color: rgb(68, 93, 229);
+}
+
+/* Asset Preview Settings */
+
+.preview-settings-selection-label-help-row > Image {
+    --unity-image: resource("_Help@2x");
+}
+
+.preview-settings-selection-dropdown {
+    color: rgb(9, 9, 9);
+    background-color: rgb(228, 228, 228);
+
+    border-width: 1px;
+    border-radius: 3px;
+    border-color: rgb(178, 178, 178);
+}
+
+/* Preview Paths */
+
+.preview-paths-scroll-view {
+    border-width: 1px;
+    border-color: rgb(33, 33, 33);
+    background-color: rgb(180, 180, 180);
+}
+
+.preview-paths-scroll-view > * > .unity-scroll-view__vertical-scroller {
+    border-right-width: 0;
+}
+
+.preview-paths-path-row-input-field:hover {
+    background-color: rgb(200, 200, 200);
+}

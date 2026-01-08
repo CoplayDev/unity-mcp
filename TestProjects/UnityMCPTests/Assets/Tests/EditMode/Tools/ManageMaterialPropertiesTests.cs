@@ -4,6 +4,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using MCPForUnity.Editor.Tools;
+using static MCPForUnityTests.Editor.TestUtilities;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -33,11 +34,9 @@ namespace MCPForUnityTests.Editor.Tools
             {
                 AssetDatabase.DeleteAsset(TempRoot);
             }
-        }
 
-        private static JObject ToJObject(object result)
-        {
-            return result as JObject ?? JObject.FromObject(result);
+            // Clean up empty parent folders to avoid debris
+            CleanupEmptyParentFolders(TempRoot);
         }
 
         [Test]
@@ -54,7 +53,7 @@ namespace MCPForUnityTests.Editor.Tools
 
             var result = ToJObject(ManageMaterial.HandleCommand(paramsObj));
 
-            Assert.AreEqual("success", result.Value<string>("status"), result.ToString());
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
             var mat = AssetDatabase.LoadAssetAtPath<Material>(_matPath);
             Assert.AreEqual(Color.red, mat.color);
         }
@@ -75,7 +74,7 @@ namespace MCPForUnityTests.Editor.Tools
 
             var result = ToJObject(ManageMaterial.HandleCommand(paramsObj));
 
-            Assert.AreEqual("success", result.Value<string>("status"), result.ToString());
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
             var mat = AssetDatabase.LoadAssetAtPath<Material>(_matPath);
             Assert.AreEqual(Color.green, mat.color);
         }
@@ -93,7 +92,7 @@ namespace MCPForUnityTests.Editor.Tools
 
             var result = ToJObject(ManageMaterial.HandleCommand(paramsObj));
 
-            Assert.AreEqual("success", result.Value<string>("status"));
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
         }
 
         [Test]
@@ -112,8 +111,8 @@ namespace MCPForUnityTests.Editor.Tools
 
             var result = ToJObject(ManageMaterial.HandleCommand(paramsObj));
 
-            Assert.AreEqual("error", result.Value<string>("status"));
-            string msg = result.Value<string>("message");
+            Assert.IsFalse(result.Value<bool>("success"));
+            string msg = result.Value<string>("error");
             
             // Verify we get exception details
             Assert.IsTrue(msg.Contains("Invalid JSON"), "Should mention Invalid JSON");
@@ -140,9 +139,9 @@ namespace MCPForUnityTests.Editor.Tools
             var result = ToJObject(ManageMaterial.HandleCommand(paramsObj));
             
             // We accept either success (ignored) or specific error, but not crash
-            // Assert.AreNotEqual("internal_error", result.Value<string>("status")); 
-            var status = result.Value<string>("status");
-            Assert.IsTrue(status == "success" || status == "error", $"Status should be success or error, got {status}"); 
+            // The new response format uses a bool "success" field
+            var success = result.Value<bool?>("success");
+            Assert.IsNotNull(success, "Response should have success field"); 
         }
     }
 }

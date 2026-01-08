@@ -1,0 +1,174 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: "Version bump type"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+        required: true
+
+jobs:
+  bump:
+    name: Bump version, tag, and create release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      new_version: ${{ steps.compute.outputs.new_version }}
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Compute new version
+        id: compute
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUMP="${{ inputs.version_bump }}"
+          CURRENT_VERSION=$(jq -r '.version' "MCPForUnity/package.json")
+          echo "Current version: $CURRENT_VERSION"
+
+          IFS='.' read -r MA MI PA <<< "$CURRENT_VERSION"
+          case "$BUMP" in
+            major)
+              ((MA+=1)); MI=0; PA=0
+              ;;
+            minor)
+              ((MI+=1)); PA=0
+              ;;
+            patch)
+              ((PA+=1))
+              ;;
+            *)
+              echo "Unknown version_bump: $BUMP" >&2
+              exit 1
+              ;;
+          esac
+
+          NEW_VERSION="$MA.$MI.$PA"
+          echo "New version: $NEW_VERSION"
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Compute tag
+        id: tag
+        env:
+          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "tag=v${NEW_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Update files to new version
+        env:
+          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Updating MCPForUnity/package.json to $NEW_VERSION"
+          jq ".version = \"${NEW_VERSION}\"" MCPForUnity/package.json > MCPForUnity/package.json.tmp
+          mv MCPForUnity/package.json.tmp MCPForUnity/package.json
+
+          echo "Updating Server/pyproject.toml to $NEW_VERSION"
+          sed -i '0,/^version = ".*"/s//version = "'"$NEW_VERSION"'"/' "Server/pyproject.toml"
+
+          echo "Updating Server/README.md version references to v$NEW_VERSION"
+          sed -i 's|git+https://github.com/CoplayDev/unity-mcp@v[0-9]\+\.[0-9]\+\.[0-9]\+#subdirectory=Server|git+https://github.com/CoplayDev/unity-mcp@v'"$NEW_VERSION"'#subdirectory=Server|g' Server/README.md
+
+      - name: Commit and push changes
+        env:
+          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add MCPForUnity/package.json "Server/pyproject.toml" Server/README.md
+          if git diff --cached --quiet; then
+            echo "No version changes to commit."
+          else
+            git commit -m "chore: bump version to ${NEW_VERSION}"
+          fi
+
+          BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          echo "Pushing to branch: $BRANCH"
+          git push origin "$BRANCH"
+
+      - name: Create and push tag
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Preparing to create tag $TAG"
+
+          if git ls-remote --tags origin | grep -q "refs/tags/$TAG$"; then
+            echo "Tag $TAG already exists on remote. Skipping tag creation."
+            exit 0
+          fi
+
+          git tag -a "$TAG" -m "Version ${TAG#v}"
+          git push origin "$TAG"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.tag }}
+          generate_release_notes: true
+
+  publish_docker:
+    name: Publish Docker image
+    needs:
+      - bump
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.bump.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Build and push Docker image
+        uses: ./.github/actions/publish-docker
+        with:
+          docker_username: ${{ secrets.DOCKER_USERNAME }}
+          docker_password: ${{ secrets.DOCKER_PASSWORD }}
+          image: ${{ secrets.DOCKER_USERNAME }}/mcp-for-unity-server
+          version: ${{ needs.bump.outputs.new_version }}
+          include_branch_tags: "false"
+          context: .
+          dockerfile: Server/Dockerfile
+          platforms: linux/amd64
+
+  publish_pypi:
+    name: Publish Python distribution to PyPI
+    needs:
+      - bump
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mcpforunityserver
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.bump.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Build and publish
+        uses: ./.github/actions/publish-pypi

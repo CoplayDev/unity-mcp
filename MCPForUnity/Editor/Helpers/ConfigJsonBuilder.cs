@@ -51,7 +51,9 @@ namespace MCPForUnity.Editor.Helpers
         private static void PopulateUnityNode(JObject unity, string uvPath, McpClient client, bool isVSCode)
         {
             // Get transport preference (default to HTTP)
-            bool useHttpTransport = client?.SupportsHttpTransport != false && EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool prefValue = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool clientSupportsHttp = client?.SupportsHttpTransport != false;
+            bool useHttpTransport = clientSupportsHttp && prefValue;
             string httpProperty = string.IsNullOrEmpty(client?.HttpUrlProperty) ? "url" : client.HttpUrlProperty;
             var urlPropsToRemove = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "url", "serverUrl" };
             urlPropsToRemove.Remove(httpProperty);
@@ -81,10 +83,7 @@ namespace MCPForUnity.Editor.Helpers
                 // Stdio mode: Use uvx command
                 var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
 
-                bool devForceRefresh = false;
-                try { devForceRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false); } catch { }
-
-                var toolArgs = BuildUvxArgs(fromUrl, packageName, devForceRefresh);
+                var toolArgs = BuildUvxArgs(fromUrl, packageName);
 
                 if (ShouldUseWindowsCmdShim(client))
                 {
@@ -152,13 +151,15 @@ namespace MCPForUnity.Editor.Helpers
             return created;
         }
 
-        private static IList<string> BuildUvxArgs(string fromUrl, string packageName, bool devForceRefresh)
+        private static IList<string> BuildUvxArgs(string fromUrl, string packageName)
         {
             // Dev mode: force a fresh install/resolution (avoids stale cached builds while iterating).
             // `--no-cache` is the key flag; `--refresh` ensures metadata is revalidated.
             // Keep ordering consistent with other uvx builders: dev flags first, then --from <url>, then package name.
             var args = new List<string>();
-            if (devForceRefresh)
+            
+            // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
+            if (AssetPathUtility.ShouldForceUvxRefresh())
             {
                 args.Add("--no-cache");
                 args.Add("--refresh");

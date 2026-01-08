@@ -1,0 +1,210 @@
+/* Asset Preview Description */
+
+.asset-preview-description {
+	flex-direction: column;
+    flex-shrink: 0;
+
+    margin: 10px 5px 2px 5px;
+    padding: 2px 4px;
+}
+
+.asset-preview-description-simple-container {
+	flex-direction: column;
+    flex-wrap: wrap;
+}
+
+.asset-preview-description-simple-label {
+	white-space: normal;
+}
+
+.asset-preview-description-hyperlink-button {
+	margin: 0;
+    padding: 0;
+    
+    align-self: flex-start;
+    cursor: link;
+}
+
+.asset-preview-description-show-button {
+	margin-top: 12px;
+}
+
+.asset-preview-description-hide-button {
+	margin-top: 12px;
+}
+
+.asset-preview-description-full-container {
+	margin-top: 12px;
+}
+
+.asset-preview-description-full-label {
+	white-space: normal;
+}
+
+/* Asset Preview Settings */
+
+.preview-settings {
+    flex-direction: column;
+    flex-shrink: 0;
+
+    margin: 0px 5px 2px 5px;
+    padding: 2px 4px;
+}
+
+.preview-settings-selection-row {
+    flex-direction: row;
+    flex-grow: 1;
+    
+    margin-top: 10px;
+    padding: 0 3px 0 2px;
+}
+
+.preview-settings-selection-label-help-row {
+    flex-direction: row;
+    flex-shrink: 1;
+    flex-grow: 0;
+
+    align-self: center;
+    align-items: center;
+    justify-content: flex-start;
+
+    width: 120px;
+}
+
+.preview-settings-selection-label-help-row > Label {
+    -unity-font-style: bold;
+}
+
+.preview-settings-selection-label-help-row > Image {
+    height: 16px;
+    width: 16px;
+}
+
+.preview-settings-selection-dropdown {
+    flex-grow: 1;
+    flex-shrink: 1;
+
+    align-self: stretch;
+
+    margin-right: 0;
+    margin-left: 3px;
+    padding: 1px 4px;
+}
+
+/* Preview Paths */
+
+.preview-paths {
+    flex-direction: column;
+    flex-grow: 1;
+    flex-shrink: 0;
+    
+    margin-bottom: 10px;
+    padding: 0;
+}
+
+.preview-paths-box {
+    flex-grow: 1;
+    flex-direction: column;
+}
+
+.preview-paths-scroll-view {
+    flex-grow: 1;
+    height: 100px;
+    margin-left: 3px;
+}
+
+.preview-paths-scroll-view > .unity-scroll-view__content-viewport
+{
+    margin-left: 1px;
+}
+
+.preview-paths-scroll-view > * > .unity-scroll-view__content-container
+{
+    padding: 0 0 0 0;
+}
+
+.preview-paths-scroll-view > * > .unity-scroll-view__vertical-scroller
+{
+    margin: -1px 0;
+}
+
+.preview-paths-scroll-view-bottom-row {
+    flex-direction: row-reverse;
+    margin: -1px 0 0 3px;
+}
+
+.preview-paths-add-button {
+    margin: 3px 0 0 0;
+    align-self: center;
+}
+
+.preview-paths-path-row {
+    flex-direction: row;
+    flex-grow: 1;
+
+    margin-top: 2px;
+    padding: 0 5px 0 2px;
+}
+
+.preview-paths-path-row-input-field {
+    flex-grow: 1;
+    flex-shrink: 1;
+
+    padding-left: 5px;
+
+    white-space: normal;
+    -unity-text-align: middle-left;
+}
+
+.preview-paths-path-row-remove-button {
+    width: 20px;
+    height: 20px;
+    margin-left: 2px;
+    margin-right: 1px;
+    padding: 1px 0 0 0;
+}
+
+/* Generate Button */
+
+.preview-generate-button {
+    align-self: stretch;
+    
+    height: 25px;
+    margin-left: 2px;
+}
+
+/* Asset Preview List Element */
+
+.preview-list {
+	margin-top: 10px;
+    flex-grow: 1;
+}
+
+.preview-list-image {
+    width: 140px;
+    height: 160px;
+    margin: 5px;
+    padding: 5px;
+    justify-content: space-between;
+}
+
+.preview-list-image:hover{
+    background-color: #444444;
+}
+
+.preview-list-image > Image {
+    flex-shrink: 0;
+    max-width: 100%;
+    max-height: 100%;
+    -unity-background-scale-mode: scale-to-fit;
+    align-self: center;
+}
+
+.preview-list-image > Label {
+    align-self: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+    padding: 0;
+    -unity-text-align: middle-center;
+}

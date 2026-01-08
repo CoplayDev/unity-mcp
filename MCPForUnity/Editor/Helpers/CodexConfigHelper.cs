@@ -17,22 +17,11 @@ namespace MCPForUnity.Editor.Helpers
     /// </summary>
     public static class CodexConfigHelper
     {
-        private static bool GetDevModeForceRefresh()
-        {
-            try
-            {
-                return EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static void AddDevModeArgs(TomlArray args, bool devForceRefresh)
+        private static void AddDevModeArgs(TomlArray args)
         {
             if (args == null) return;
-            if (!devForceRefresh) return;
+            // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
+            if (!AssetPathUtility.ShouldForceUvxRefresh()) return;
             args.Add(new TomlString { Value = "--no-cache" });
             args.Add(new TomlString { Value = "--refresh" });
         }
@@ -59,12 +48,11 @@ namespace MCPForUnity.Editor.Helpers
             {
                 // Stdio mode: Use command and args
                 var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
-                bool devForceRefresh = GetDevModeForceRefresh();
 
                 unityMCP["command"] = uvxPath;
 
                 var args = new TomlArray();
-                AddDevModeArgs(args, devForceRefresh);
+                AddDevModeArgs(args);
                 if (!string.IsNullOrEmpty(fromUrl))
                 {
                     args.Add(new TomlString { Value = "--from" });
@@ -209,12 +197,11 @@ namespace MCPForUnity.Editor.Helpers
             {
                 // Stdio mode: Use command and args
                 var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
-                bool devForceRefresh = GetDevModeForceRefresh();
 
                 unityMCP["command"] = new TomlString { Value = uvxPath };
 
                 var argsArray = new TomlArray();
-                AddDevModeArgs(argsArray, devForceRefresh);
+                AddDevModeArgs(argsArray);
                 if (!string.IsNullOrEmpty(fromUrl))
                 {
                     argsArray.Add(new TomlString { Value = "--from" });

@@ -5,120 +5,233 @@
 
 欢迎来到 MCP for Unity 开发环境！此目录包含简化 MCP for Unity 核心开发的工具和实用程序。
 
-## 🚀 可用开发功能
+## 🛠️ 开发环境搭建
+
+### 安装开发依赖
+
+如果你想贡献代码或运行测试，需要使用 `uv` 安装开发依赖：
+
+```bash
+# 进入 server 源码目录
+cd Server
+
+# 以 editable 模式安装，并包含 dev 依赖
+uv pip install -e ".[dev]"
+```
+
+这会安装：
+
+- **运行时依赖**：`httpx`, `fastmcp`, `mcp`, `pydantic`, `tomli`
+- **开发依赖**：`pytest`, `pytest-asyncio`
+
+### 运行测试
+
+```bash
+# 在 server 目录下
+cd Server
+uv run pytest tests/ -v
+```
+
+或者从仓库根目录执行：
+
+```bash
+# 使用 server 目录中的 uv
+cd Server && uv run pytest tests/ -v
+```
+
+只运行集成测试：
+
+```bash
+uv run pytest tests/ -v -m integration
+```
+
+只运行单元测试：
+
+```bash
+uv run pytest tests/ -v -m unit
+```
+
+## 🚀 可用的开发特性
 
 ### ✅ 开发部署脚本
-用于 MCP for Unity 核心更改的快速部署和测试工具。
+
+用于快速部署与测试 MCP for Unity 核心更改的工具。
+
+**Development Mode Toggle**：内置 Unity 编辑器开发特性（现在作为 Advanced Setting 提供）
+
+**Hot Reload System**：无需重启 Unity 的实时更新（Roslyn Runtime_Compilation Custom Tools）
+
+**Plugin Development Kit**：用于创建 MCP for Unity 扩展的工具（Custom Tools）
 
 ### 🔄 即将推出
-- **开发模式切换**：内置 Unity 编辑器开发功能
-- **热重载系统**：无需重启 Unity 的实时代码更新
-- **插件开发工具包**：用于创建自定义 MCP for Unity 扩展的工具
-- **自动化测试套件**：用于贡献的综合测试框架
-- **调试面板**：高级调试和监控工具
+
+- **自动化测试套件**：为贡献提供更完整的测试框架
+- **调试面板**：更高级的调试与监控工具
 
 ---
 
+## Advanced Settings（编辑器窗口）
+
+使用 MCP for Unity 编辑器窗口（Window > MCP for Unity），在 Settings 选项卡内打开 **Advanced Settings**，可以在开发期间覆盖工具路径、切换 server 源、并将本地包部署到项目中。
+
+![Advanced Settings](./images/advanced-setting.png)
+
+- **UV/UVX Path Override**：当系统 PATH 解析不正确时，可在 UI 中指定 `uv`/`uvx` 可执行文件路径（例如使用自定义安装）。清空后会回退到自动发现。
+- **Server Source Override**：为 Python server（`uvx --from <url> mcp-for-unity`）设置本地文件夹或 git URL。清空后使用默认打包版本。
+- **Dev Mode（强制全新安装 server）**：启用后，生成的 `uvx` 命令会在启动前添加 `--no-cache --refresh`。会更慢，但可避免在迭代 `Server/` 时误用旧缓存构建。
+- **Local Package Deployment**：选择本地 `MCPForUnity` 文件夹（必须包含 `Editor/` 与 `Runtime/`），点击 **Deploy to Project** 后会将其复制到当前已安装的 package 路径（来自 `Packages/manifest.json` / Package Manager）。会在 `Library/MCPForUnityDeployBackups` 下保存带时间戳的备份，点击 **Restore Last Backup** 可回滚最近一次部署。
+
+提示：
+
+- 部署/回滚后，Unity 会自动刷新脚本；若不确定，可重新打开 MCP window 并在 Advanced Settings 里确认目标路径标签。
+- 保持 source 与 target 不要混用（不要把 source 指向已经安装的 `PackageCache` 文件夹）。
+- 推荐使用被 gitignore 的工作目录进行快速迭代；部署流程只会复制 `Editor` 与 `Runtime`。
+
 ## 快速切换 MCP 包源
 
-从 unity-mcp 仓库运行，而不是从游戏的根目录。使用 `mcp_source.py` 在不同的 MCP for Unity 包源之间快速切换：
+从 unity-mcp 仓库运行，而不是从游戏的根目录。使用 `mcp_source.py` 可以在不同的 MCP for Unity 包源之间快速切换：
 
-**用法:**
+**用法：**
+
 ```bash
 python mcp_source.py [--manifest /path/to/manifest.json] [--repo /path/to/unity-mcp] [--choice 1|2|3]
 ```
 
-**选项:**
-- **1** 上游主分支 (CoplayDev/unity-mcp)
-- **2** 远程当前分支 (origin + branch)
-- **3** 本地工作区 (file: MCPForUnity)
+**选项：**
 
-切换后，打开包管理器并刷新以重新解析包。
+- **1** 上游 main（CoplayDev/unity-mcp）
+- **2** 远程当前分支（origin + branch）
+- **3** 本地工作区（file: MCPForUnity）
 
-## 多 Unity 实例路由
+切换后，打开 Package Manager 并 Refresh 以重新解析依赖。
 
-- 使用资源 `unity://instances` 查看所有已连接实例，复制资源返回的精确 `Name@hash`。
-- 当存在多个实例时，在调用任何工具/资源前先用 `set_active_instance(Name@hash)` 选择目标。
-- 如果未选择且连接了多个实例，服务器会返回错误并要求你先选择。
+## Development Deployment Scripts
 
-## 开发部署脚本
+这些部署脚本帮助你快速测试 MCP for Unity 核心代码的更改。
 
-这些部署脚本帮助您快速测试 MCP for Unity 核心代码的更改。
-
-## 脚本
+## Scripts
 
 ### `deploy-dev.bat`
-将您的开发代码部署到实际安装位置进行测试。
 
-**作用:**
-1. 将原始文件备份到带时间戳的文件夹
-2. 将 Unity Bridge 代码复制到 Unity 的包缓存
-3. 将 Python 服务器代码复制到 MCP 安装文件夹
+将你的开发代码部署到实际安装位置以便测试。
 
-**用法:**
+**它会做什么：**
+
+1. 将原始文件备份到一个带时间戳的文件夹
+2. 将 Unity Bridge 代码复制到 Unity 的 package cache
+3. 将 Python Server 代码复制到 MCP 安装目录
+
+**用法：**
+
 1. 运行 `deploy-dev.bat`
-2. 输入 Unity 包缓存路径（提供示例）
-3. 输入服务器路径（或使用默认：`%LOCALAPPDATA%\Programs\UnityMCP\UnityMcpServer\src`）
+2. 输入 Unity package cache 路径（脚本会给出示例）
+3. 输入 server 路径（或使用默认：`%LOCALAPPDATA%\Programs\UnityMCP\UnityMcpServer\src`）
 4. 输入备份位置（或使用默认：`%USERPROFILE%\Desktop\unity-mcp-backup`）
 
-**注意:** 开发部署跳过 `.venv`, `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.git`；减少变动并避免复制虚拟环境。
+**注意：** Dev deploy 会跳过 `.venv`, `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.git`；减少变动并避免复制虚拟环境。
 
 ### `restore-dev.bat`
+
 从备份恢复原始文件。
 
-**作用:**
-1. 列出可用的带时间戳的备份
-2. 允许您选择要恢复的备份
-3. 恢复 Unity Bridge 和 Python 服务器文件
+**它会做什么：**
+
+1. 列出所有带时间戳的备份
+2. 让你选择要恢复的备份
+3. 同时恢复 Unity Bridge 与 Python Server 文件
 
 ### `prune_tool_results.py`
-将对话 JSON 中的大型 `tool_result` 块压缩为简洁的单行摘要。
 
-**用法:**
+将对话 JSON 中体积很大的 `tool_result` 内容压缩为简洁的一行摘要。
+
+**用法：**
+
 ```bash
 python3 prune_tool_results.py < reports/claude-execution-output.json > reports/claude-execution-output.pruned.json
 ```
 
-脚本从 `stdin` 读取对话并将修剪版本写入 `stdout`，使日志更容易检查或存档。
+脚本从 `stdin` 读取对话并将裁剪版本输出到 `stdout`，使日志更容易检查或存档。
 
-这些默认设置在不影响基本信息的情况下大幅减少了令牌使用量。
+这些默认策略可以显著降低 token 使用量，同时保留关键的信息。
 
-## 查找 Unity 包缓存路径
+## 查找 Unity Package Cache 路径
 
-Unity 将 Git 包存储在版本或哈希文件夹下。期望类似于：
+Unity 会把 Git 包存储在一个“版本号或哈希”的文件夹下，例如：
+
 ```
 X:\UnityProject\Library\PackageCache\com.coplaydev.unity-mcp@<version-or-hash>
 ```
+
 示例（哈希）：
+
 ```
 X:\UnityProject\Library\PackageCache\com.coplaydev.unity-mcp@272123cfd97e
 
 ```
 
-可靠找到它：
-1. 打开 Unity 包管理器
-2. 选择"MCP for Unity"包
-3. 右键单击包并选择"在资源管理器中显示"
-4. 这将打开 Unity 为您的项目使用的确切缓存文件夹
+可靠的查找方式：
 
-注意：在最新版本中，Python 服务器源代码也打包在包内的 `Server` 下。这对于本地测试或将 MCP 客户端直接指向打包服务器很方便。
+1. 打开 Unity Package Manager
+2. 选择 “MCP for Unity” package
+3. 右键 package 并选择 “Show in Explorer”
+4. Unity 会打开该项目实际使用的 cache 文件夹
+
+注意：在近期版本中，Python server 的源码也会打包在该 package 内的 `Server` 目录下。这对本地测试或让 MCP client 直接指向打包 server 很有用。
+
+## Payload 大小与分页默认值（推荐）
+
+某些 Unity 工具调用可能返回*非常大的* JSON payload（例如深层级场景、带完整序列化属性的组件）。为避免 MCP 响应过大、以及 Unity 卡死/崩溃，建议优先使用 **分页 + 先摘要后细节** 的读法，仅在需要时再拉取完整属性。
+
+### `manage_scene(action="get_hierarchy")`
+
+- **默认行为**：返回根 GameObject（无 `parent`）或指定 `parent` 的直接子节点的 **分页摘要**。不会内联完整递归子树。
+- **分页参数**：
+  - **`page_size`**：默认 **50**，限制 **1..500**
+  - **`cursor`**：默认 **0**
+  - **`next_cursor`**：当还有更多结果时返回 **字符串**；完成时为 `null`
+- **其他安全阀**：
+  - **`max_nodes`**：默认 **1000**，限制 **1..5000**
+  - **`include_transform`**：默认 **false**
+
+### `manage_gameobject(action="get_components")`
+
+- **默认行为**：仅返回 **分页的组件元数据**（`typeName`, `instanceID`）。
+- **分页参数**：
+  - **`page_size`**：默认 **25**，限制 **1..200**
+  - **`cursor`**：默认 **0**
+  - **`max_components`**：默认 **50**，限制 **1..500**
+  - **`next_cursor`**：当还有更多结果时返回 **字符串**；完成时为 `null`
+- **按需读取属性**：
+  - **`include_properties`** 默认 **false**
+  - 当 `include_properties=true` 时，会启用保守的响应大小预算（约 **~250KB** JSON 文本），返回条数可能少于 `page_size`；使用 `next_cursor` 继续。
+
+### 实用默认值（我们在 prompts/tests 中的推荐）
+
+- **Hierarchy roots**：从 `page_size=50` 开始，根据 `next_cursor` 继续（大场景通常 1–2 次调用）。
+- **Children**：按 `parent` 分页，`page_size=10..50`（根据预期广度）。
+- **Components**：
+  - 先用 `include_properties=false` 且 `page_size=10..25`
+  - 需要完整属性时，用 `include_properties=true` 且保持较小 `page_size`（例如 **3..10**）来控制峰值 payload。
 
 ## MCP Bridge 压力测试
 
-按需压力测试实用程序通过多个并发客户端测试 MCP bridge，同时通过立即脚本编辑触发真实脚本重载（无需菜单调用）。
+一个按需的压力测试工具会用多个并发客户端测试 MCP bridge，同时通过“立即脚本编辑”触发真实的脚本 reload（无需菜单调用）。
 
 ### 脚本
+
 - `tools/stress_mcp.py`
 
-### 作用
+### 它做什么
+
 - 对 MCP for Unity bridge 启动 N 个 TCP 客户端（默认端口从 `~/.unity-mcp/unity-mcp-status-*.json` 自动发现）。
-- 发送轻量级帧 `ping` 保活以维持并发。
-- 并行地，使用 `manage_script.apply_text_edits` 向目标 C# 文件追加唯一标记注释：
-  - `options.refresh = "immediate"` 立即强制导入/编译（触发域重载），以及
-  - 从当前文件内容计算的 `precondition_sha256` 以避免漂移。
-- 使用 EOF 插入避免头部/`using` 保护编辑。
+- 发送轻量 framed `ping` 维持并发。
+- 同时，使用 `manage_script.apply_text_edits` 对目标 C# 文件在 EOF 追加唯一标记注释，并设置：
+  - `options.refresh = "immediate"` 来立即触发 import/compile（会引发 domain reload），以及
+  - 从当前文件内容计算 `precondition_sha256` 来避免漂移。
+- 使用 EOF 插入避免头部/`using` guard 的编辑。
 
 ### 用法（本地）
+
 ```bash
 # 推荐：使用测试项目中包含的大型脚本
 python3 tools/stress_mcp.py \
@@ -127,95 +240,121 @@ python3 tools/stress_mcp.py \
   --unity-file "TestProjects/UnityMCPTests/Assets/Scripts/LongUnityScriptClaudeTest.cs"
 ```
 
-标志：
-- `--project` Unity 项目路径（默认自动检测到包含的测试项目）
+### Flags
+
+- `--project` Unity 项目路径（默认自动检测到仓库自带的测试项目）
 - `--unity-file` 要编辑的 C# 文件（默认为长测试脚本）
 - `--clients` 并发客户端数量（默认 10）
 - `--duration` 运行秒数（默认 60）
 
 ### 预期结果
-- 重载过程中 Unity 编辑器不崩溃
-- 每次应用编辑后立即重载（无 `Assets/Refresh` 菜单调用）
-- 域重载期间可能发生一些暂时断开连接或少数失败调用；工具会重试并继续
-- 最后打印 JSON 摘要，例如：
+
+- Unity Editor 在 reload churn 下不崩溃
+- 每次应用编辑后立即 reload（无需 `Assets/Refresh` 菜单调用）
+- 在 domain reload 期间可能会有少量短暂断线或失败调用；工具会重试并继续
+- 最后输出 JSON 汇总，例如：
   - `{"port": 6400, "stats": {"pings": 28566, "applies": 69, "disconnects": 0, "errors": 0}}`
 
-### 注意事项和故障排除
-- 立即 vs 防抖：
-  - 工具设置 `options.refresh = "immediate"` 使更改立即编译。如果您只需要变动（不需要每次编辑确认），切换到防抖以减少重载中失败。
-- 需要前置条件：
-  - `apply_text_edits` 在较大文件上需要 `precondition_sha256`。工具首先读取文件以计算 SHA。
+### 说明与排障
+
+- Immediate vs debounced：
+  - 工具设置 `options.refresh = "immediate"` 让每次改动都立刻编译。如果你只想测试 churn（不关心每次确认），可以改成 debounced 来减少中途失败。
+- 需要 precondition：
+  - 对较大文件，`apply_text_edits` 需要 `precondition_sha256`。工具会先读文件计算 SHA。
 - 编辑位置：
-  - 为避免头部保护或复杂范围，工具在每个周期的 EOF 处追加单行标记。
-- 读取 API：
-  - bridge 当前支持 `manage_script.read` 进行文件读取。您可能看到弃用警告；对于此内部工具无害。
-- 暂时失败：
-  - 偶尔的 `apply_errors` 通常表示连接在回复过程中重载。编辑通常仍会应用；循环在下次迭代时继续。
+  - 为避免头部 guards 或复杂范围，工具每轮都在 EOF 追加一行 marker。
+- Read API：
+  - bridge 当前支持 `manage_script.read` 用于读文件。可能会看到弃用提示；对该内部工具无影响。
+- 瞬时失败：
+  - 偶尔出现 `apply_errors` 往往意味着连接在回包时发生 reload。通常编辑仍然已应用；循环会继续下一轮。
 
 ### CI 指导
-- 由于 Unity/编辑器要求和运行时变化，将此排除在默认 PR CI 之外。
-- 可选择在具有 Unity 功能的运行器上作为手动工作流或夜间作业运行。
+
+- 由于 Unity/editor 依赖与运行时波动，不建议把它放进默认 PR CI。
+- 可选择作为手动 workflow 或 nightly job 在支持 Unity 的 runner 上运行。
 
 ## CI 测试工作流（GitHub Actions）
 
-我们提供 CI 作业来对 Unity 测试项目运行自然语言编辑套件。它启动无头 Unity 容器并通过 MCP bridge 连接。要从您的 fork 运行，您需要以下 GitHub "secrets"：`ANTHROPIC_API_KEY` 和 Unity 凭据（通常是 `UNITY_EMAIL` + `UNITY_PASSWORD` 或 `UNITY_LICENSE` / `UNITY_SERIAL`）。这些在日志中被编辑所以永远不可见。
+我们提供 CI 作业来对 Unity 测试项目运行自然语言编辑套件：它会启动 headless Unity 容器并通过 MCP bridge 连接。要在 fork 上运行，你需要以下 GitHub Secrets：`ANTHROPIC_API_KEY` 以及 Unity 凭据（通常为 `UNITY_EMAIL` + `UNITY_PASSWORD` 或 `UNITY_LICENSE` / `UNITY_SERIAL`）。这些会在日志中被脱敏，因此不会泄露。
 
-***运行方法***
- - 触发：在仓库的 GitHub "Actions" 中，触发 `workflow dispatch`（`Claude NL/T Full Suite (Unity live)`）。
- - 镜像：`UNITY_IMAGE`（UnityCI）按标签拉取；作业在运行时解析摘要。日志已清理。
- - 执行：单次通过，立即按测试片段发射（严格的每个文件单个 `<testcase>`）。如果任何片段是裸 ID，占位符保护会快速失败。暂存（`reports/_staging`）被提升到 `reports/` 以减少部分写入。
- - 报告：JUnit 在 `reports/junit-nl-suite.xml`，Markdown 在 `reports/junit-nl-suite.md`。
- - 发布：JUnit 规范化为 `reports/junit-for-actions.xml` 并发布；工件上传 `reports/` 下的所有文件。
+***如何运行***
+
+- 触发：在 GitHub Actions 中手动触发 `workflow dispatch`（`Claude NL/T Full Suite (Unity live)`）。
+- 镜像：`UNITY_IMAGE`（UnityCI）使用 tag 拉取；作业会在运行时解析 digest。日志会被清理。
+- 执行：单次执行，每个测试生成一个片段（严格：每个文件只允许一个 `<testcase>`）。若任何片段只是裸 ID，会被占位符 guard 快速判失败。暂存目录（`reports/_staging`）会被提升到 `reports/` 以减少部分写入。
+- 报告：JUnit 输出到 `reports/junit-nl-suite.xml`，Markdown 输出到 `reports/junit-nl-suite.md`。
+- 发布：JUnit 会被规范化为 `reports/junit-for-actions.xml` 并发布；Artifacts 会上传 `reports/` 下的全部文件。
 
 ### 测试目标脚本
-- 仓库包含一个长的独立 C# 脚本，用于练习较大的编辑和窗口：
-  - `TestProjects/UnityMCPTests/Assets/Scripts/LongUnityScriptClaudeTest.cs`
-  在本地和 CI 中使用此文件来验证多编辑批次、锚插入和大型脚本上的窗口读取。
 
-### 调整测试/提示
-- 编辑 `.claude/prompts/nl-unity-suite-t.md` 来修改 NL/T 步骤。遵循约定：在 `reports/<TESTID>_results.xml` 下为每个测试发射一个 XML 片段，每个包含恰好一个以测试 ID 开头的 `name` 的 `<testcase>`。无序言/尾声或代码围栏。
-- 保持编辑最小且可逆；包含简洁证据。
+- 仓库包含一个很长且独立的 C# 脚本，用于验证大文件编辑与窗口读取：
+  - `TestProjects/UnityMCPTests/Assets/Scripts/LongUnityScriptClaudeTest.cs`
+  本地与 CI 都建议用它来测试多编辑批次、anchor insert、windowed read 等。
+
+### 调整 tests / prompts
+
+- 修改 `.claude/prompts/nl-unity-suite-t.md` 来调整 NL/T 步骤。遵循约定：每个测试在 `reports/<TESTID>_results.xml` 下生成一个 XML 片段，且每个片段恰好包含一个 `<testcase>`，其 `name` 必须以 test ID 开头。不要包含 prologue/epilogue 或代码围栏。
+- 保持改动最小、可回滚，并给出简洁证据。
 
 ### 运行套件
-1) 推送您的分支，然后从 Actions 标签手动运行工作流。
-2) 作业将报告写入 `reports/` 并上传工件。
-3) "JUnit Test Report" 检查总结结果；打开作业摘要查看完整 markdown。
+
+1) 推送你的分支，然后在 Actions 标签页手动运行 workflow。
+2) 作业把 reports 写入 `reports/` 并上传 artifacts。
+3) “JUnit Test Report” check 会汇总结果；打开 Job Summary 查看完整 Markdown。
 
 ### 查看结果
-- 作业摘要：GitHub Actions 标签中运行的内联 markdown 摘要
-- 检查：PR/提交上的"JUnit Test Report"。
-- 工件：`claude-nl-suite-artifacts` 包含 XML 和 MD。
+
+- Job Summary：Actions 中的内联 Markdown 汇总
+- Check：“JUnit Test Report”
+- Artifacts：`claude-nl-suite-artifacts`，包含 XML 与 MD
 
 ### MCP 连接调试
-- *在 MCP for Unity 窗口（编辑器内）启用调试日志* 以查看连接状态、自动设置结果和 MCP 客户端路径。它显示：
-  - bridge 启动/端口、客户端连接、严格帧协商和解析的帧
-  - 自动配置路径检测（Windows/macOS/Linux）、uv/claude 解析和显示的错误
-- 在 CI 中，如果启动失败，作业会尾随 Unity 日志（序列号/许可证/密码/令牌已编辑）并打印套接字/状态 JSON 诊断。
 
-## 工作流程
+- 在 MCP for Unity 窗口（Editor 内）*启用 debug logs*，可以看到连接状态、auto-setup 结果与 MCP client 路径，包括：
+  - bridge 启动/端口、client 连接、strict framing 协商、解析后的 frame
+  - auto-config 路径检测（Windows/macOS/Linux）、uv/claude 解析与错误提示
+- CI 中如启动失败，作业会 tail Unity 日志（serial/license/password/token 已脱敏），并打印 socket/status JSON 诊断。
 
-1. **进行更改** 到此目录中的源代码
-2. **部署** 使用 `deploy-dev.bat`
-3. **测试** 在 Unity 中（首先重启 Unity 编辑器）
-4. **迭代** - 根据需要重复步骤 1-3
-5. **恢复** 完成后使用 `restore-dev.bat` 恢复原始文件
+## Workflow
 
-## 故障排除
+1. **修改** 此目录中的源码
+2. **Deploy** 使用 `deploy-dev.bat`
+3. **在 Unity 中测试**（先重启 Unity Editor）
+4. **迭代** - 按需重复 1-3
+5. **Restore** 完成后用 `restore-dev.bat` 恢复原始文件
 
-### 运行 .bat 文件时出现"路径未找到"错误
-- 验证 Unity 包缓存路径是否正确
-- 检查是否实际安装了 MCP for Unity 包
-- 确保通过 MCP 客户端安装了服务器
+## Troubleshooting
 
-### "权限被拒绝"错误
-- 以管理员身份运行 cmd
-- 部署前关闭 Unity 编辑器
-- 部署前关闭任何 MCP 客户端
+### 运行 .bat 时出现 "Path not found"
 
-### "备份未找到"错误
-- 首先运行 `deploy-dev.bat` 创建初始备份
+- 确认 Unity package cache 路径正确
+- 确认 MCP for Unity package 已安装
+- 确认 server 已通过 MCP client 安装
+
+### 出现 "Permission denied"
+
+- 用管理员权限运行 cmd
+- 部署前关闭 Unity Editor
+- 部署前关闭所有 MCP client
+
+### 出现 "Backup not found"
+
+- 先运行 `deploy-dev.bat` 生成初始备份
 - 检查备份目录权限
-- 验证备份目录路径是否正确
+- 确认备份路径正确
 
 ### Windows uv 路径问题
-- 在 Windows 上测试 GUI 客户端时，优先选择 WinGet Links `uv.exe`；如果存在多个 `uv.exe`，使用"Choose `uv` Install Location"来固定 Links shim。
+
+- 在 Windows 上测试 GUI client 时，优先使用 WinGet Links 下的 `uv.exe`；若存在多个 `uv.exe`，可用 “Choose `uv` Install Location” 固定 Links shim。
+
+### Unity 退到后台时 Domain Reload Tests 卡住
+
+在测试过程中触发脚本编译（例如 `DomainReloadResilienceTests`）时，如果 Unity 不是前台窗口，测试可能会卡住。这是操作系统层面的限制——macOS 会限制后台应用的主线程，从而阻止编译完成。
+
+**Workarounds：**
+
+- 运行 domain reload tests 时保持 Unity 在前台
+- 在测试套件最开始运行它们（在 Unity 被切到后台之前）
+- 使用 `[Explicit]` 属性将其从默认运行中排除
+
+**注意：** MCP workflow 本身不受影响——socket 消息会给 Unity 提供外部刺激，使其即使在后台也保持响应。该限制主要影响 Unity 内部测试协程的等待。

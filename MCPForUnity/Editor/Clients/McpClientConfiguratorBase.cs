@@ -148,7 +148,7 @@ namespace MCPForUnity.Editor.Clients
                 bool matches = false;
                 if (args != null && args.Length > 0)
                 {
-                    string expectedUvxUrl = AssetPathUtility.GetMcpServerGitUrl();
+                    string expectedUvxUrl = AssetPathUtility.GetMcpServerPackageSource();
                     string configuredUvxUrl = McpConfigurationHelper.ExtractUvxUrl(args);
                     matches = !string.IsNullOrEmpty(configuredUvxUrl) &&
                               McpConfigurationHelper.PathsEqual(configuredUvxUrl, expectedUvxUrl);
@@ -250,7 +250,7 @@ namespace MCPForUnity.Editor.Clients
                     }
                     else if (args != null && args.Length > 0)
                     {
-                        string expected = AssetPathUtility.GetMcpServerGitUrl();
+                        string expected = AssetPathUtility.GetMcpServerPackageSource();
                         string configured = McpConfigurationHelper.ExtractUvxUrl(args);
                         matches = !string.IsNullOrEmpty(configured) &&
                                   McpConfigurationHelper.PathsEqual(configured, expected);
@@ -467,8 +467,8 @@ namespace MCPForUnity.Editor.Clients
             else
             {
                 var (uvxPath, gitUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
-                bool devForceRefresh = GetDevModeForceRefresh();
-                string devFlags = devForceRefresh ? "--no-cache --refresh " : string.Empty;
+                // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
+                string devFlags = AssetPathUtility.ShouldForceUvxRefresh() ? "--no-cache --refresh " : string.Empty;
                 args = $"mcp add --transport stdio UnityMCP -- \"{uvxPath}\" {devFlags}--from \"{gitUrl}\" {packageName}";
             }
 
@@ -585,22 +585,16 @@ namespace MCPForUnity.Editor.Clients
                 return "# Error: Configuration not available - check paths in Advanced Settings";
             }
 
-            string gitUrl = AssetPathUtility.GetMcpServerGitUrl();
-            bool devForceRefresh = GetDevModeForceRefresh();
-            string devFlags = devForceRefresh ? "--no-cache --refresh " : string.Empty;
+            string packageSource = AssetPathUtility.GetMcpServerPackageSource();
+            // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
+            string devFlags = AssetPathUtility.ShouldForceUvxRefresh() ? "--no-cache --refresh " : string.Empty;
 
             return "# Register the MCP server with Claude Code:\n" +
-                   $"claude mcp add --transport stdio UnityMCP -- \"{uvxPath}\" {devFlags}--from \"{gitUrl}\" mcp-for-unity\n\n" +
+                   $"claude mcp add --transport stdio UnityMCP -- \"{uvxPath}\" {devFlags}--from \"{packageSource}\" mcp-for-unity\n\n" +
                    "# Unregister the MCP server:\n" +
                    "claude mcp remove UnityMCP\n\n" +
                    "# List registered servers:\n" +
                    "claude mcp list # Only works when claude is run in the project's directory";
-        }
-
-        private static bool GetDevModeForceRefresh()
-        {
-            try { return EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false); }
-            catch { return false; }
         }
 
         public override IList<string> GetInstallationSteps() => new List<string>

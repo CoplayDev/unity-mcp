@@ -4,6 +4,7 @@ using UnityEngine.TestTools;
 using UnityEditor;
 using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Tools;
+using MCPForUnity.Editor.Tools.GameObjects;
 using System;
 using System.IO;
 using System.Text.RegularExpressions;

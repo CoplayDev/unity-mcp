@@ -11,7 +11,7 @@ from transport.unity_transport import _current_transport
 
 
 @mcp_for_unity_resource(
-    uri="unity://instances",
+    uri="mcpforunity://instances",
     name="unity_instances",
     description="Lists all running Unity Editor instances with their details."
 )

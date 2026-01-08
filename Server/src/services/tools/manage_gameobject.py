@@ -1,8 +1,10 @@
 import json
 import math
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
+
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
@@ -11,12 +13,86 @@ from services.tools.utils import coerce_bool, parse_json_payload, coerce_int
 from services.tools.preflight import preflight
 
 
+def _normalize_vector(value: Any, default: Any = None) -> list[float] | None:
+    """
+    Robustly normalize a vector parameter to [x, y, z] format.
+    Handles: list, tuple, JSON string, comma-separated string.
+    Returns None if parsing fails.
+    """
+    if value is None:
+        return default
+
+    # If already a list/tuple with 3 elements, convert to floats
+    if isinstance(value, (list, tuple)) and len(value) == 3:
+        try:
+            vec = [float(value[0]), float(value[1]), float(value[2])]
+            return vec if all(math.isfinite(n) for n in vec) else default
+        except (ValueError, TypeError):
+            return default
+
+    # Try parsing as JSON string
+    if isinstance(value, str):
+        parsed = parse_json_payload(value)
+        if isinstance(parsed, list) and len(parsed) == 3:
+            try:
+                vec = [float(parsed[0]), float(parsed[1]), float(parsed[2])]
+                return vec if all(math.isfinite(n) for n in vec) else default
+            except (ValueError, TypeError):
+                pass
+
+        # Handle legacy comma-separated strings "1,2,3" or "[1,2,3]"
+        s = value.strip()
+        if s.startswith("[") and s.endswith("]"):
+            s = s[1:-1]
+        parts = [p.strip() for p in (s.split(",") if "," in s else s.split())]
+        if len(parts) == 3:
+            try:
+                vec = [float(parts[0]), float(parts[1]), float(parts[2])]
+                return vec if all(math.isfinite(n) for n in vec) else default
+            except (ValueError, TypeError):
+                pass
+
+    return default
+
+
+def _normalize_component_properties(value: Any) -> tuple[dict[str, dict[str, Any]] | None, str | None]:
+    """
+    Robustly normalize component_properties to a dict.
+    Returns (parsed_dict, error_message). If error_message is set, parsed_dict is None.
+    """
+    if value is None:
+        return None, None
+
+    # Already a dict - validate structure
+    if isinstance(value, dict):
+        return value, None
+
+    # Try parsing as JSON string
+    if isinstance(value, str):
+        # Check for obviously invalid values
+        if value in ("[object Object]", "undefined", "null", ""):
+            return None, f"component_properties received invalid value: '{value}'. Expected a JSON object like {{\"ComponentName\": {{\"property\": value}}}}"
+
+        parsed = parse_json_payload(value)
+        if isinstance(parsed, dict):
+            return parsed, None
+
+        return None, f"component_properties must be a JSON object (dict), got string that parsed to {type(parsed).__name__}"
+
+    return None, f"component_properties must be a dict or JSON string, got {type(value).__name__}"
+
+
 @mcp_for_unity_tool(
-    description="Performs CRUD operations on GameObjects and components."
+    description="Performs CRUD operations on GameObjects. Actions: create, modify, delete, duplicate, move_relative. For finding GameObjects use find_gameobjects tool. For component operations use manage_components tool.",
+    annotations=ToolAnnotations(
+        title="Manage GameObject",
+        destructiveHint=True,
+    ),
 )
 async def manage_gameobject(
     ctx: Context,
-    action: Annotated[Literal["create", "modify", "delete", "find", "add_component", "remove_component", "set_component_property", "get_components", "get_component", "duplicate", "move_relative"], "Perform CRUD operations on GameObjects and components."] | None = None,
+    action: Annotated[Literal["create", "modify", "delete", "duplicate",
+                              "move_relative"], "Action to perform on GameObject."] | None = None,
     target: Annotated[str,
                       "GameObject identifier by name or path for modify/delete/component actions"] | None = None,
     search_method: Annotated[Literal["by_id", "by_name", "by_path", "by_tag", "by_layer", "by_component"],
@@ -27,12 +103,12 @@ async def manage_gameobject(
                    "Tag name - used for both 'create' (initial tag) and 'modify' (change tag)"] | None = None,
     parent: Annotated[str,
                       "Parent GameObject reference - used for both 'create' (initial parent) and 'modify' (change parent)"] | None = None,
-    position: Annotated[Union[list[float], str],
-                        "Position - [x,y,z] or string '[x,y,z]' for client compatibility"] | None = None,
-    rotation: Annotated[Union[list[float], str],
-                        "Rotation - [x,y,z] or string '[x,y,z]' for client compatibility"] | None = None,
-    scale: Annotated[Union[list[float], str],
-                     "Scale - [x,y,z] or string '[x,y,z]' for client compatibility"] | None = None,
+    position: Annotated[list[float],
+                        "Position as [x, y, z] array"] | None = None,
+    rotation: Annotated[list[float],
+                        "Rotation as [x, y, z] euler angles array"] | None = None,
+    scale: Annotated[list[float],
+                     "Scale as [x, y, z] array"] | None = None,
     components_to_add: Annotated[list[str],
                                  "List of component names to add"] | None = None,
     primitive_type: Annotated[str,
@@ -48,7 +124,7 @@ async def manage_gameobject(
     layer: Annotated[str, "Layer name"] | None = None,
     components_to_remove: Annotated[list[str],
                                     "List of component names to remove"] | None = None,
-    component_properties: Annotated[Union[dict[str, dict[str, Any]], str],
+    component_properties: Annotated[dict[str, dict[str, Any]],
                                     """Dictionary of component names to their properties to set. For example:
                                     `{"MyScript": {"otherObject": {"find": "Player", "method": "by_name"}}}` assigns GameObject
                                     `{"MyScript": {"playerHealth": {"find": "Player", "component": "HealthComponent"}}}` assigns Component
@@ -70,24 +146,28 @@ async def manage_gameobject(
     includeNonPublicSerialized: Annotated[bool | str,
                                           "Controls whether serialization of private [SerializeField] fields is included (accepts true/false or 'true'/'false')"] | None = None,
     # --- Paging/safety for get_components ---
-    page_size: Annotated[int | str, "Page size for get_components paging."] | None = None,
-    cursor: Annotated[int | str, "Opaque cursor for get_components paging (offset)."] | None = None,
-    max_components: Annotated[int | str, "Hard cap on returned components per request (safety)."] | None = None,
-    include_properties: Annotated[bool | str, "If true, include serialized component properties (bounded)."] | None = None,
+    page_size: Annotated[int | str,
+                         "Page size for get_components paging."] | None = None,
+    cursor: Annotated[int | str,
+                      "Opaque cursor for get_components paging (offset)."] | None = None,
+    max_components: Annotated[int | str,
+                              "Hard cap on returned components per request (safety)."] | None = None,
+    include_properties: Annotated[bool | str,
+                                  "If true, include serialized component properties (bounded)."] | None = None,
     # --- Parameters for 'duplicate' ---
     new_name: Annotated[str,
                         "New name for the duplicated object (default: SourceName_Copy)"] | None = None,
-    offset: Annotated[Union[list[float], str],
-                      "Offset from original/reference position - [x,y,z] or string '[x,y,z]'"] | None = None,
+    offset: Annotated[list[float],
+                      "Offset from original/reference position as [x, y, z] array"] | None = None,
     # --- Parameters for 'move_relative' ---
     reference_object: Annotated[str,
-                               "Reference object for relative movement (required for move_relative)"] | None = None,
+                                "Reference object for relative movement (required for move_relative)"] | None = None,
     direction: Annotated[Literal["left", "right", "up", "down", "forward", "back", "front", "backward", "behind"],
-                        "Direction for relative movement (e.g., 'right', 'up', 'forward')"] | None = None,
+                         "Direction for relative movement (e.g., 'right', 'up', 'forward')"] | None = None,
     distance: Annotated[float,
-                       "Distance to move in the specified direction (default: 1.0)"] | None = None,
+                        "Distance to move in the specified direction (default: 1.0)"] | None = None,
     world_space: Annotated[bool | str,
-                          "If True (default), use world space directions; if False, use reference object's local directions"] | None = None,
+                           "If True (default), use world space directions; if False, use reference object's local directions"] | None = None,
 ) -> dict[str, Any]:
     # Get active instance from session state
     # Removed session_state import
@@ -100,44 +180,16 @@ async def manage_gameobject(
     if action is None:
         return {
             "success": False,
-            "message": "Missing required parameter 'action'. Valid actions: create, modify, delete, find, add_component, remove_component, set_component_property, get_components, get_component, duplicate, move_relative"
+            "message": "Missing required parameter 'action'. Valid actions: create, modify, delete, duplicate, move_relative. For finding GameObjects use find_gameobjects tool. For component operations use manage_components tool."
         }
 
-    # Coercers to tolerate stringified booleans and vectors
-    def _coerce_vec(value, default=None):
-        if value is None:
-            return default
-        
-        # First try to parse if it's a string
-        val = parse_json_payload(value)
-        
-        def _to_vec3(parts):
-            try:
-                vec = [float(parts[0]), float(parts[1]), float(parts[2])]
-            except (ValueError, TypeError):
-                return default
-            return vec if all(math.isfinite(n) for n in vec) else default
-            
-        if isinstance(val, list) and len(val) == 3:
-            return _to_vec3(val)
-            
-        # Handle legacy comma-separated strings "1,2,3" that parse_json_payload doesn't handle (since they aren't JSON arrays)
-        if isinstance(val, str):
-            s = val.strip()
-            # minimal tolerant parse for "[x,y,z]" or "x,y,z"
-            if s.startswith("[") and s.endswith("]"):
-                s = s[1:-1]
-            # support "x,y,z" and "x y z"
-            parts = [p.strip()
-                     for p in (s.split(",") if "," in s else s.split())]
-            if len(parts) == 3:
-                return _to_vec3(parts)
-        return default
+    # --- Normalize vector parameters using robust helper ---
+    position = _normalize_vector(position)
+    rotation = _normalize_vector(rotation)
+    scale = _normalize_vector(scale)
+    offset = _normalize_vector(offset)
 
-    position = _coerce_vec(position, default=position)
-    rotation = _coerce_vec(rotation, default=rotation)
-    scale = _coerce_vec(scale, default=scale)
-    offset = _coerce_vec(offset, default=offset)
+    # --- Normalize boolean parameters ---
     save_as_prefab = coerce_bool(save_as_prefab)
     set_active = coerce_bool(set_active)
     find_all = coerce_bool(find_all)
@@ -146,36 +198,20 @@ async def manage_gameobject(
     includeNonPublicSerialized = coerce_bool(includeNonPublicSerialized)
     include_properties = coerce_bool(include_properties)
     world_space = coerce_bool(world_space, default=True)
-    # If coercion fails, omit these fields (None) rather than preserving invalid input.
+
+    # --- Normalize integer parameters ---
     page_size = coerce_int(page_size, default=None)
     cursor = coerce_int(cursor, default=None)
     max_components = coerce_int(max_components, default=None)
 
-    # Coerce 'component_properties' from JSON string to dict for client compatibility
-    component_properties = parse_json_payload(component_properties)
-    
-    # Ensure final type is a dict (object) if provided
-    if component_properties is not None and not isinstance(component_properties, dict):
-        return {"success": False, "message": "component_properties must be a JSON object (dict)."}
-        
+    # --- Normalize component_properties with detailed error handling ---
+    component_properties, comp_props_error = _normalize_component_properties(
+        component_properties)
+    if comp_props_error:
+        return {"success": False, "message": comp_props_error}
+
     try:
-        # Map tag to search_term when search_method is by_tag for backward compatibility
-        if action == "find" and search_method == "by_tag" and tag is not None and search_term is None:
-            search_term = tag
-
         # Validate parameter usage to prevent silent failures
-        if action == "find":
-            if name is not None:
-                return {
-                    "success": False,
-                    "message": "For 'find' action, use 'search_term' parameter, not 'name'. Remove 'name' parameter. Example: search_term='Player', search_method='by_name'"
-                }
-            if search_term is None:
-                return {
-                    "success": False,
-                    "message": "For 'find' action, 'search_term' parameter is required. Use search_term (not 'name') to specify what to find."
-                }
-
         if action in ["create", "modify"]:
             if search_term is not None:
                 return {

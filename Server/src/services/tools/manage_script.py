@@ -4,6 +4,7 @@ from typing import Annotated, Any, Literal
 from urllib.parse import urlparse, unquote
 
 from fastmcp import FastMCP, Context
+from mcp.types import ToolAnnotations
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
@@ -15,7 +16,7 @@ def _split_uri(uri: str) -> tuple[str, str]:
     """Split an incoming URI or path into (name, directory) suitable for Unity.
 
     Rules:
-    - unity://path/Assets/... → keep as Assets-relative (after decode/normalize)
+    - mcpforunity://path/Assets/... → keep as Assets-relative (after decode/normalize)
     - file://... → percent-decode, normalize, strip host and leading slashes,
         then, if any 'Assets' segment exists, return path relative to that 'Assets' root.
         Otherwise, fall back to original name/dir behavior.
@@ -23,8 +24,8 @@ def _split_uri(uri: str) -> tuple[str, str]:
         return relative to 'Assets'.
     """
     raw_path: str
-    if uri.startswith("unity://path/"):
-        raw_path = uri[len("unity://path/"):]
+    if uri.startswith("mcpforunity://path/"):
+        raw_path = uri[len("mcpforunity://path/"):]
     elif uri.startswith("file://"):
         parsed = urlparse(uri)
         host = (parsed.netloc or "").strip()
@@ -63,8 +64,9 @@ def _split_uri(uri: str) -> tuple[str, str]:
     return name, directory
 
 
-@mcp_for_unity_tool(description=(
-    """Apply small text edits to a C# script identified by URI.
+@mcp_for_unity_tool(
+    description=(
+        """Apply small text edits to a C# script identified by URI.
     IMPORTANT: This tool replaces EXACT character positions. Always verify content at target lines/columns BEFORE editing!
     RECOMMENDED WORKFLOW:
         1. First call resources/read with start_line/line_count to verify exact content
@@ -76,10 +78,15 @@ def _split_uri(uri: str) -> tuple[str, str]:
         - For pattern-based replacements, consider anchor operations in script_apply_edits
         - Lines, columns are 1-indexed
         - Tabs count as 1 column"""
-))
+    ),
+    annotations=ToolAnnotations(
+        title="Apply Text Edits",
+        destructiveHint=True,
+    ),
+)
 async def apply_text_edits(
     ctx: Context,
-    uri: Annotated[str, "URI of the script to edit under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
+    uri: Annotated[str, "URI of the script to edit under Assets/ directory, mcpforunity://path/Assets/... or file://... or Assets/..."],
     edits: Annotated[list[dict[str, Any]], "List of edits to apply to the script, i.e. a list of {startLine,startCol,endLine,endCol,newText} (1-indexed!)"],
     precondition_sha256: Annotated[str,
                                    "Optional SHA256 of the script to edit, used to prevent concurrent edits"] | None = None,
@@ -367,7 +374,13 @@ async def apply_text_edits(
     return {"success": False, "message": str(resp)}
 
 
-@mcp_for_unity_tool(description=("Create a new C# script at the given project path."))
+@mcp_for_unity_tool(
+    description="Create a new C# script at the given project path.",
+    annotations=ToolAnnotations(
+        title="Create Script",
+        destructiveHint=True,
+    ),
+)
 async def create_script(
     ctx: Context,
     path: Annotated[str, "Path under Assets/ to create the script at, e.g., 'Assets/Scripts/My.cs'"],
@@ -412,10 +425,16 @@ async def create_script(
     return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}
 
 
-@mcp_for_unity_tool(description=("Delete a C# script by URI or Assets-relative path."))
+@mcp_for_unity_tool(
+    description="Delete a C# script by URI or Assets-relative path.",
+    annotations=ToolAnnotations(
+        title="Delete Script",
+        destructiveHint=True,
+    ),
+)
 async def delete_script(
     ctx: Context,
-    uri: Annotated[str, "URI of the script to delete under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
+    uri: Annotated[str, "URI of the script to delete under Assets/ directory, mcpforunity://path/Assets/... or file://... or Assets/..."],
 ) -> dict[str, Any]:
     """Delete a C# script by URI."""
     unity_instance = get_unity_instance_from_context(ctx)
@@ -434,10 +453,16 @@ async def delete_script(
     return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}
 
 
-@mcp_for_unity_tool(description=("Validate a C# script and return diagnostics."))
+@mcp_for_unity_tool(
+    description="Validate a C# script and return diagnostics.",
+    annotations=ToolAnnotations(
+        title="Validate Script",
+        readOnlyHint=True,
+    ),
+)
 async def validate_script(
     ctx: Context,
-    uri: Annotated[str, "URI of the script to validate under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
+    uri: Annotated[str, "URI of the script to validate under Assets/ directory, mcpforunity://path/Assets/... or file://... or Assets/..."],
     level: Annotated[Literal['basic', 'standard'],
                      "Validation level"] = "basic",
     include_diagnostics: Annotated[bool,
@@ -475,14 +500,20 @@ async def validate_script(
     return resp if isinstance(resp, dict) else {"success": False, "message": str(resp)}
 
 
-@mcp_for_unity_tool(description=("Compatibility router for legacy script operations. Prefer apply_text_edits (ranges) or script_apply_edits (structured) for edits."))
+@mcp_for_unity_tool(
+    description="Compatibility router for legacy script operations. Prefer apply_text_edits (ranges) or script_apply_edits (structured) for edits. Read-only action: read. Modifying actions: create, delete.",
+    annotations=ToolAnnotations(
+        title="Manage Script",
+        destructiveHint=True,
+    ),
+)
 async def manage_script(
     ctx: Context,
     action: Annotated[Literal['create', 'read', 'delete'], "Perform CRUD operations on C# scripts."],
     name: Annotated[str, "Script name (no .cs extension)", "Name of the script to create"],
     path: Annotated[str, "Asset path (default: 'Assets/')", "Path under Assets/ to create the script at, e.g., 'Assets/Scripts/My.cs'"],
     contents: Annotated[str, "Contents of the script to create",
-                        "C# code for 'create'/'update'"] | None = None,
+                        "C# code for 'create' action"] | None = None,
     script_type: Annotated[str, "Script type (e.g., 'C#')",
                            "Type hint (e.g., 'MonoBehaviour')"] | None = None,
     namespace: Annotated[str, "Namespace for the script"] | None = None,
@@ -543,14 +574,20 @@ async def manage_script(
         }
 
 
-@mcp_for_unity_tool(description=(
-    """Get manage_script capabilities (supported ops, limits, and guards).
+@mcp_for_unity_tool(
+    description=(
+        """Get manage_script capabilities (supported ops, limits, and guards).
     Returns:
         - ops: list of supported structured ops
         - text_ops: list of supported text ops
         - max_edit_payload_bytes: server edit payload cap
         - guards: header/using guard enabled flag"""
-))
+    ),
+    annotations=ToolAnnotations(
+        title="Manage Script Capabilities",
+        readOnlyHint=True,
+    ),
+)
 async def manage_script_capabilities(ctx: Context) -> dict[str, Any]:
     await ctx.info("Processing manage_script_capabilities")
     try:
@@ -575,10 +612,16 @@ async def manage_script_capabilities(ctx: Context) -> dict[str, Any]:
         return {"success": False, "error": f"capabilities error: {e}"}
 
 
-@mcp_for_unity_tool(description="Get SHA256 and basic metadata for a Unity C# script without returning file contents")
+@mcp_for_unity_tool(
+    description="Get SHA256 and basic metadata for a Unity C# script without returning file contents",
+    annotations=ToolAnnotations(
+        title="Get SHA",
+        readOnlyHint=True,
+    ),
+)
 async def get_sha(
     ctx: Context,
-    uri: Annotated[str, "URI of the script to edit under Assets/ directory, unity://path/Assets/... or file://... or Assets/..."],
+    uri: Annotated[str, "URI of the script to edit under Assets/ directory, mcpforunity://path/Assets/... or file://... or Assets/..."],
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
     await ctx.info(

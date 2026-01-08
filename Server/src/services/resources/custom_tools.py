@@ -22,7 +22,7 @@ class CustomToolsResourceResponse(MCPResponse):
 
 
 @mcp_for_unity_resource(
-    uri="unity://custom-tools",
+    uri="mcpforunity://custom-tools",
     name="custom_tools",
     description="Lists custom tools available for the active Unity project.",
 )
@@ -31,7 +31,7 @@ async def get_custom_tools(ctx: Context) -> CustomToolsResourceResponse | MCPRes
     if not unity_instance:
         return MCPResponse(
             success=False,
-            message="No active Unity instance. Call set_active_instance with Name@hash from unity://instances.",
+            message="No active Unity instance. Call set_active_instance with Name@hash from mcpforunity://instances.",
         )
 
     project_id = resolve_project_id_for_unity_instance(unity_instance)

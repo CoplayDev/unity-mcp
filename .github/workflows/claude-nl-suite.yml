@@ -751,6 +751,75 @@ jobs:
             exit 1
           fi
 
+      # ---------- Run GO pass (GameObject API tests) ----------
+      - name: Run Claude GO pass
+        uses: anthropics/claude-code-base-action@beta
+        if: steps.detect.outputs.anthropic_ok == 'true' && steps.detect.outputs.unity_ok == 'true'
+        continue-on-error: true
+        env:
+          UNITY_MCP_DEFAULT_INSTANCE: ${{ env.UNITY_MCP_DEFAULT_INSTANCE }}
+        with:
+          use_node_cache: false
+          prompt_file: .claude/prompts/nl-gameobject-suite.md
+          mcp_config: .claude/mcp.json
+          settings: .claude/settings.json
+          allowed_tools: "mcp__unity,Edit(reports/**),MultiEdit(reports/**)"
+          disallowed_tools: "Bash,WebFetch,WebSearch,Task,TodoWrite,NotebookEdit,NotebookRead"
+          model: claude-haiku-4-5-20251001
+          fallback_model: claude-sonnet-4-5-20250929
+          append_system_prompt: |
+            You are running the GO pass (GameObject API tests) only.
+            Output requirements:
+            - Emit exactly 11 test fragments: GO-0, GO-1, GO-2, GO-3, GO-4, GO-5, GO-6, GO-7, GO-8, GO-9, GO-10.
+            - Write each fragment to reports/${ID}_results.xml (e.g., GO-0_results.xml).
+            - Prefer a single MultiEdit(reports/**) call that writes all eleven files in one batch.
+            - Do not emit any NL-* or T-* fragments.
+            Stop condition:
+            - After GO-10_results.xml is written, stop.
+          timeout_minutes: "20"
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Check GO coverage incomplete (pre-retry)
+        id: go_cov
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          for id in GO-0 GO-1 GO-2 GO-3 GO-4 GO-5 GO-6 GO-7 GO-8 GO-9 GO-10; do
+            if [[ ! -s "reports/${id}_results.xml" && ! -s "reports/_staging/${id}_results.xml" ]]; then
+              missing+=("$id")
+            fi
+          done
+          echo "missing=${#missing[@]}" >> "$GITHUB_OUTPUT"
+          if (( ${#missing[@]} )); then
+            echo "list=${missing[*]}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Retry GO pass (Sonnet) if incomplete
+        if: steps.go_cov.outputs.missing != '0'
+        uses: anthropics/claude-code-base-action@beta
+        with:
+          use_node_cache: false
+          prompt_file: .claude/prompts/nl-gameobject-suite.md
+          mcp_config: .claude/mcp.json
+          settings: .claude/settings.json
+          allowed_tools: "mcp__unity,Edit(reports/**),MultiEdit(reports/**)"
+          disallowed_tools: "Bash,WebFetch,WebSearch,Task,TodoWrite,NotebookEdit,NotebookRead"
+          model: claude-sonnet-4-5-20250929
+          fallback_model: claude-haiku-4-5-20251001
+          append_system_prompt: |
+            You are running the GO pass only.
+            Output requirements:
+            - Emit exactly 11 test fragments: GO-0, GO-1, GO-2, GO-3, GO-4, GO-5, GO-6, GO-7, GO-8, GO-9, GO-10.
+            - Write each fragment to reports/${ID}_results.xml (e.g., GO-0_results.xml).
+            - Prefer a single MultiEdit(reports/**) call that writes all eleven files in one batch.
+            - Do not emit any NL-* or T-* fragments.
+            Stop condition:
+            - After GO-10_results.xml is written, stop.
+          timeout_minutes: "20"
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+
       # (kept) Finalize staged report fragments (promote to reports/)
 
       # (removed duplicate) Finalize staged report fragments
@@ -796,6 +865,17 @@ jobs:
             ("T-H",  r"\b(T-?H|Validation\s*on\s*Modified)\b"),
             ("T-I",  r"\b(T-?I|Failure\s*Surface)\b"),
             ("T-J",  r"\b(T-?J|Idempotenc(y|e))\b"),
+            ("GO-0", r"\b(GO-?0|Hierarchy.*ComponentTypes)\b"),
+            ("GO-1", r"\b(GO-?1|Find\s*GameObjects\s*Tool)\b"),
+            ("GO-2", r"\b(GO-?2|GameObject\s*Resource)\b"),
+            ("GO-3", r"\b(GO-?3|Components\s*Resource)\b"),
+            ("GO-4", r"\b(GO-?4|Manage\s*Components)\b"),
+            ("GO-5", r"\b(GO-?5|Find.*by.*Name)\b"),
+            ("GO-6", r"\b(GO-?6|Find.*by.*Tag)\b"),
+            ("GO-7", r"\b(GO-?7|Single\s*Component)\b"),
+            ("GO-8", r"\b(GO-?8|Remove\s*Component)\b"),
+            ("GO-9", r"\b(GO-?9|Pagination)\b"),
+            ("GO-10", r"\b(GO-?10|Deprecation)\b"),
           ]
 
           def canon_name(name: str) -> str:
@@ -822,6 +902,9 @@ jobs:
             m = re.match(r'T-?([A-J])_results\.xml$', n, re.I)
             if m:
               return f"T-{m.group(1).upper()}"
+            m = re.match(r'GO-?(\d+)_results\.xml$', n, re.I)
+            if m:
+              return f"GO-{int(m.group(1))}"
             return None
 
           frags = list(sorted(Path("reports").glob("*_results.xml")))
@@ -837,7 +920,7 @@ jobs:
             # Prefer filename-derived ID; if name doesn't start with it, override
             if file_id:
               # Respect file's ID (prevents T-D being renamed to NL-3 by loose patterns)
-              title = re.sub(r'^\s*(NL-\d+|T-[A-Z])\s*[—–:\-]\s*', '', old).strip()
+              title = re.sub(r'^\s*(NL-\d+|T-[A-Z]|GO-\d+)\s*[—–:\-]\s*', '', old).strip()
               new = f"{file_id} — {title}" if title else file_id
             else:
               new = canon_name(old)
@@ -860,7 +943,7 @@ jobs:
           import re
           import shutil
 
-          DESIRED = ["NL-0","NL-1","NL-2","NL-3","NL-4","T-A","T-B","T-C","T-D","T-E","T-F","T-G","T-H","T-I","T-J"]
+          DESIRED = ["NL-0","NL-1","NL-2","NL-3","NL-4","T-A","T-B","T-C","T-D","T-E","T-F","T-G","T-H","T-I","T-J","GO-0","GO-1","GO-2","GO-3","GO-4","GO-5","GO-6","GO-7","GO-8","GO-9","GO-10"]
           seen = set()
           bad = set()
           def id_from_filename(p: Path):
@@ -871,6 +954,9 @@ jobs:
             m = re.match(r'T-?([A-J])_results\.xml$', n, re.I)
             if m:
               return f"T-{m.group(1).upper()}"
+            m = re.match(r'GO-?(\d+)_results\.xml$', n, re.I)
+            if m:
+              return f"GO-{int(m.group(1))}"
             return None
 
           for p in Path("reports").glob("*_results.xml"):
@@ -963,12 +1049,15 @@ jobs:
               m = re.match(r'T([A-J])_results\.xml$', n, re.I)
               if m:
                   return f"T-{m.group(1).upper()}"
+              m = re.match(r'GO(\d+)_results\.xml$', n, re.I)
+              if m:
+                  return f"GO-{int(m.group(1))}"
               return None
 
           def id_from_system_out(tc):
               so = tc.find('system-out')
               if so is not None and so.text:
-                  m = re.search(r'\b(NL-\d+|T-[A-Z])\b', so.text)
+                  m = re.search(r'\b(NL-\d+|T-[A-Z]|GO-\d+)\b', so.text)
                   if m:
                       return m.group(1)
               return None
@@ -1005,13 +1094,13 @@ jobs:
                   current_name = tc.get('name') or ''
                   tid = test_id or id_from_system_out(tc)
                   # Enforce filename-derived ID as prefix; repair names if needed
-                  if tid and not re.match(r'^\s*(NL-\d+|T-[A-Z])\b', current_name):
+                  if tid and not re.match(r'^\s*(NL-\d+|T-[A-Z]|GO-\d+)\b', current_name):
                       title = current_name.strip()
                       new_name = f'{tid} — {title}' if title else tid
                       tc.set('name', new_name)
                   elif tid and not re.match(rf'^\s*{re.escape(tid)}\b', current_name):
                       # Replace any wrong leading ID with the correct one
-                      title = re.sub(r'^\s*(NL-\d+|T-[A-Z])\s*[—–:\-]\s*', '', current_name).strip()
+                      title = re.sub(r'^\s*(NL-\d+|T-[A-Z]|GO-\d+)\s*[—–:\-]\s*', '', current_name).strip()
                       new_name = f'{tid} — {title}' if title else tid
                       tc.set('name', new_name)
                       renamed += 1
@@ -1061,12 +1150,12 @@ jobs:
 
           def id_from_case(tc):
               n = (tc.get('name') or '')
-              m = re.match(r'\s*(NL-\d+|T-[A-Z])\b', n)
+              m = re.match(r'\s*(NL-\d+|T-[A-Z]|GO-\d+)\b', n)
               if m:
                   return m.group(1)
               so = tc.find('system-out')
               if so is not None and so.text:
-                  m = re.search(r'\b(NL-\d+|T-[A-Z])\b', so.text)
+                  m = re.search(r'\b(NL-\d+|T-[A-Z]|GO-\d+)\b', so.text)
                   if m:
                       return m.group(1)
               return None
@@ -1080,7 +1169,7 @@ jobs:
                   id_status[tid] = ok
                   name_map[tid] = (tc.get('name') or tid)
 
-          desired = ['NL-0','NL-1','NL-2','NL-3','NL-4','T-A','T-B','T-C','T-D','T-E','T-F','T-G','T-H','T-I','T-J']
+          desired = ['NL-0','NL-1','NL-2','NL-3','NL-4','T-A','T-B','T-C','T-D','T-E','T-F','T-G','T-H','T-I','T-J','GO-0','GO-1','GO-2','GO-3','GO-4','GO-5','GO-6','GO-7','GO-8','GO-9','GO-10']
           default_titles = {
               'NL-0': 'Baseline State Capture',
               'NL-1': 'Core Method Operations',
@@ -1097,6 +1186,17 @@ jobs:
               'T-H': 'Validation on Modified',
               'T-I': 'Failure Surface',
               'T-J': 'Idempotency',
+              'GO-0': 'Hierarchy with ComponentTypes',
+              'GO-1': 'Find GameObjects Tool',
+              'GO-2': 'GameObject Resource Read',
+              'GO-3': 'Components Resource Read',
+              'GO-4': 'Manage Components Tool',
+              'GO-5': 'Find GameObjects by Name',
+              'GO-6': 'Find GameObjects by Tag',
+              'GO-7': 'Single Component Resource Read',
+              'GO-8': 'Remove Component',
+              'GO-9': 'Find with Pagination',
+              'GO-10': 'Deprecation Warnings',
           }
 
           def display_name(test_id: str) -> str:
@@ -1135,7 +1235,12 @@ jobs:
                       return (0, 999)
               if n.startswith('T-') and len(n) > 2:
                   return (1, ord(n[2]))
-              return (2, n)
+              if n.startswith('GO-'):
+                  try:
+                      return (2, int(n.split('-')[1]))
+                  except:
+                      return (2, 999)
+              return (3, n)
 
           MAX_CHARS = 2000
           seen = set()
@@ -1189,7 +1294,7 @@ jobs:
           from pathlib import Path
           import xml.etree.ElementTree as ET
 
-          desired = ['NL-0','NL-1','NL-2','NL-3','NL-4','T-A','T-B','T-C','T-D','T-E','T-F','T-G','T-H','T-I','T-J']
+          desired = ['NL-0','NL-1','NL-2','NL-3','NL-4','T-A','T-B','T-C','T-D','T-E','T-F','T-G','T-H','T-I','T-J','GO-0','GO-1','GO-2','GO-3','GO-4','GO-5','GO-6','GO-7','GO-8','GO-9','GO-10']
 
           junit_path = Path(os.environ.get('JUNIT_OUT', 'reports/junit-nl-suite.xml'))
           if not junit_path.exists():
@@ -1206,12 +1311,12 @@ jobs:
 
           def id_from_case(tc):
               name = (tc.get('name') or '').strip()
-              m = re.match(r'(NL-\d+|T-[A-Z])\b', name)
+              m = re.match(r'(NL-\d+|T-[A-Z]|GO-\d+)\b', name)
               if m:
                   return m.group(1)
               so = tc.find('system-out')
               if so is not None and so.text:
-                  m = re.search(r'\b(NL-\d+|T-[A-Z])\b', so.text)
+                  m = re.search(r'\b(NL-\d+|T-[A-Z]|GO-\d+)\b', so.text)
                   if m:
                       return m.group(1)
               return None

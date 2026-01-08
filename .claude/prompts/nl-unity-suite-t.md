@@ -2,15 +2,15 @@
 You are running inside CI for the `unity-mcp` repo. Use only the tools allowed by the workflow. Work autonomously; do not prompt the user. Do NOT spawn subagents.
 
 **Print this once, verbatim, early in the run:**
-AllowedTools: Write,mcp__unity__manage_editor,mcp__unity__list_resources,mcp__unity__read_resource,mcp__unity__apply_text_edits,mcp__unity__script_apply_edits,mcp__unity__validate_script,mcp__unity__find_in_file,mcp__unity__read_console,mcp__unity__get_sha
+AllowedTools: Write,mcp__UnityMCP__manage_editor,mcp__UnityMCP__list_resources,mcp__UnityMCP__read_resource,mcp__UnityMCP__apply_text_edits,mcp__UnityMCP__script_apply_edits,mcp__UnityMCP__validate_script,mcp__UnityMCP__find_in_file,mcp__UnityMCP__read_console,mcp__UnityMCP__get_sha
 
 ---
 
 ## Mission
 1) Pick target file (prefer):
-   - `unity://path/Assets/Scripts/LongUnityScriptClaudeTest.cs`
+   - `mcpforunity://path/Assets/Scripts/LongUnityScriptClaudeTest.cs`
 2) Execute T tests T-A..T-J in order using minimal, precise edits that build on the NL pass state.
-3) Validate each edit with `mcp__unity__validate_script(level:"standard")`.
+3) Validate each edit with `mcp__UnityMCP__validate_script(level:"standard")`.
 4) **Report**: write one `<testcase>` XML fragment per test to `reports/<TESTID>_results.xml`. Do **not** read or edit `$JUNIT_OUT`.
 
 **CRITICAL XML FORMAT REQUIREMENTS:**
@@ -37,7 +37,7 @@ AllowedTools: Write,mcp__unity__manage_editor,mcp__unity__list_resources,mcp__un
 ## Environment & Paths (CI)
 - Always pass: `project_root: "TestProjects/UnityMCPTests"` and `ctx: {}` on list/read/edit/validate.
 - **Canonical URIs only**:
-  - Primary: `unity://path/Assets/...` (never embed `project_root` in the URI)
+  - Primary: `mcpforunity://path/Assets/...` (never embed `project_root` in the URI)
   - Relative (when supported): `Assets/...`
 
 CI provides:
@@ -49,7 +49,7 @@ CI provides:
 ## Transcript Minimization Rules
 - Do not restate tool JSON; summarize in ≤ 2 short lines.
 - Never paste full file contents. For matches, include only the matched line and ±1 line.
-- Prefer `mcp__unity__find_in_file` for targeting; avoid `mcp__unity__read_resource` unless strictly necessary. If needed, limit to `head_bytes ≤ 256` or `tail_lines ≤ 10`.
+- Prefer `mcp__UnityMCP__find_in_file` for targeting; avoid `mcp__UnityMCP__read_resource` unless strictly necessary. If needed, limit to `head_bytes ≤ 256` or `tail_lines ≤ 10`.
 - Per‑test `system-out` ≤ 400 chars: brief status only (no SHA).
 - Console evidence: fetch the last 10 lines with `include_stacktrace:false` and include ≤ 3 lines in the fragment.
 - Avoid quoting multi‑line diffs; reference markers instead.
@@ -59,17 +59,17 @@ CI provides:
 ---
 
 ## Tool Mapping
-- **Anchors/regex/structured**: `mcp__unity__script_apply_edits`
+- **Anchors/regex/structured**: `mcp__UnityMCP__script_apply_edits`
   - Allowed ops: `anchor_insert`, `replace_method`, `insert_method`, `delete_method`, `regex_replace`
   - For `anchor_insert`, always set `"position": "before"` or `"after"`.
-- **Precise ranges / atomic batch**: `mcp__unity__apply_text_edits` (non‑overlapping ranges)
+- **Precise ranges / atomic batch**: `mcp__UnityMCP__apply_text_edits` (non‑overlapping ranges)
 STRICT OP GUARDRAILS
 - Do not use `anchor_replace`. Structured edits must be one of: `anchor_insert`, `replace_method`, `insert_method`, `delete_method`, `regex_replace`.
-- For multi‑spot textual tweaks in one operation, compute non‑overlapping ranges with `mcp__unity__find_in_file` and use `mcp__unity__apply_text_edits`.
+- For multi‑spot textual tweaks in one operation, compute non‑overlapping ranges with `mcp__UnityMCP__find_in_file` and use `mcp__UnityMCP__apply_text_edits`.
 
-- **Hash-only**: `mcp__unity__get_sha` — returns `{sha256,lengthBytes,lastModifiedUtc}` without file body
-- **Validation**: `mcp__unity__validate_script(level:"standard")`
-- **Dynamic targeting**: Use `mcp__unity__find_in_file` to locate current positions of methods/markers
+- **Hash-only**: `mcp__UnityMCP__get_sha` — returns `{sha256,lengthBytes,lastModifiedUtc}` without file body
+- **Validation**: `mcp__UnityMCP__validate_script(level:"standard")`
+- **Dynamic targeting**: Use `mcp__UnityMCP__find_in_file` to locate current positions of methods/markers
 
 ---
 
@@ -83,7 +83,7 @@ STRICT OP GUARDRAILS
 5. **Composability**: Tests demonstrate how operations work together in real workflows
 
 **State Tracking:**
-- Track file SHA after each test (`mcp__unity__get_sha`) and use it as a precondition
+- Track file SHA after each test (`mcp__UnityMCP__get_sha`) and use it as a precondition
   for `apply_text_edits` in T‑F/T‑G/T‑I to exercise `stale_file` semantics. Do not include SHA values in report fragments.
 - Use content signatures (method names, comment markers) to verify expected state
 - Validate structural integrity after each major change
@@ -100,14 +100,14 @@ STRICT OP GUARDRAILS
 - **Expected final state**: Return to State C (helper removed, other changes intact)
 
 ### Late-Test Editing Rule
-- When modifying a method body, use `mcp__unity__script_apply_edits`. If the method is expression-bodied (`=>`), convert it to a block or replace the whole method definition. After the edit, run `mcp__unity__validate_script` and rollback on error. Use `//` comments in inserted code.
+- When modifying a method body, use `mcp__UnityMCP__script_apply_edits`. If the method is expression-bodied (`=>`), convert it to a block or replace the whole method definition. After the edit, run `mcp__UnityMCP__validate_script` and rollback on error. Use `//` comments in inserted code.
 
 ### T-B. Method Body Interior Edit (Additive State D)
 **Goal**: Edit method interior without affecting structure, on modified file
 **Actions**:
 - Use `find_in_file` to locate current `HasTarget()` method (modified in NL-1)
 - Edit method body interior: change return statement to `return true; /* test modification */`
-- Validate with `mcp__unity__validate_script(level:"standard")` for consistency
+- Validate with `mcp__UnityMCP__validate_script(level:"standard")` for consistency
 - Verify edit succeeded and file remains balanced
 - **Expected final state**: State C + modified HasTarget() body
 
@@ -124,7 +124,7 @@ STRICT OP GUARDRAILS
 **Actions**:
 - Use smart anchor matching to find current class-ending brace (after NL-3 tail comments)
 - Insert permanent helper before class brace: `private void TestHelper() { /* placeholder */ }`
-- Validate with `mcp__unity__validate_script(level:"standard")`
+- Validate with `mcp__UnityMCP__validate_script(level:"standard")`
 - **IMMEDIATELY** write clean XML fragment to `reports/T-D_results.xml` (no extra text). The `<testcase name>` must start with `T-D`. Include brief evidence in `system-out`.
 - **Expected final state**: State E + TestHelper() method before class end
 
@@ -151,7 +151,7 @@ STRICT OP GUARDRAILS
 ### T-G. Path Normalization Test (No State Change)
 **Goal**: Verify URI forms work equivalently on modified file
 **Actions**:
-- Make identical edit using `unity://path/Assets/Scripts/LongUnityScriptClaudeTest.cs`
+- Make identical edit using `mcpforunity://path/Assets/Scripts/LongUnityScriptClaudeTest.cs`
 - Then using `Assets/Scripts/LongUnityScriptClaudeTest.cs` 
 - Second should return `stale_file`, retry with updated SHA
 - Verify both URI forms target same file
@@ -178,12 +178,12 @@ STRICT OP GUARDRAILS
 ### T-J. Idempotency on Modified File (Additive State I)
 **Goal**: Verify operations behave predictably when repeated
 **Actions**:
-- **Insert (structured)**: `mcp__unity__script_apply_edits` with:
+- **Insert (structured)**: `mcp__UnityMCP__script_apply_edits` with:
   `{"op":"anchor_insert","anchor":"// Tail test C","position":"after","text":"\n    // idempotency test marker"}`
 - **Insert again** (same op) → expect `no_op: true`.
 - **Remove (structured)**: `{"op":"regex_replace","pattern":"(?m)^\\s*// idempotency test marker\\r?\\n?","text":""}`
 - **Remove again** (same `regex_replace`) → expect `no_op: true`.
-- `mcp__unity__validate_script(level:"standard")`
+- `mcp__UnityMCP__validate_script(level:"standard")`
 - Perform a final console scan for errors/exceptions (errors only, up to 3); include "no errors" if none
 - **IMMEDIATELY** write clean XML fragment to `reports/T-J_results.xml` with evidence of both `no_op: true` outcomes and the console result. The `<testcase name>` must start with `T-J`.
 - **Expected final state**: State H + verified idempotent behavior

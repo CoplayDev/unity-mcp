@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 using MCPForUnity.Editor.Helpers; // For Response class
-using static MCPForUnity.Editor.Tools.ManageGameObject;
+using MCPForUnity.Editor.Tools;
 
 #if UNITY_6000_0_OR_NEWER
 using PhysicsMaterialType = UnityEngine.PhysicsMaterial;
@@ -74,7 +74,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 catch (Exception e)
                 {
-                    Debug.LogWarning($"[ManageAsset] Could not parse 'properties' JSON string: {e.Message}");
+                    McpLog.Warn($"[ManageAsset] Could not parse 'properties' JSON string: {e.Message}");
                 }
             }
 
@@ -119,7 +119,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ManageAsset] Action '{action}' failed for path '{path}': {e}");
+                McpLog.Error($"[ManageAsset] Action '{action}' failed for path '{path}': {e}");
                 return new ErrorResponse(
                     $"Internal error processing action '{action}' on '{path}': {e.Message}"
                 );
@@ -143,7 +143,7 @@ namespace MCPForUnity.Editor.Tools
                 // applying properties via reflection or specific methods, saving, then reimporting.
                 if (properties != null && properties.HasValues)
                 {
-                    Debug.LogWarning(
+                    McpLog.Warn(
                         "[ManageAsset.Reimport] Modifying importer properties before reimport is not fully implemented yet."
                     );
                     // AssetImporter importer = AssetImporter.GetAtPath(fullPath);
@@ -215,7 +215,7 @@ namespace MCPForUnity.Editor.Tools
 
                         if (propertiesForApply.HasValues)
                         {
-                            MaterialOps.ApplyProperties(mat, propertiesForApply, ManageGameObject.InputSerializer);
+                            MaterialOps.ApplyProperties(mat, propertiesForApply, UnityJsonSerializer.Instance);
                         }
                     }
                     AssetDatabase.CreateAsset(mat, fullPath);
@@ -376,7 +376,7 @@ namespace MCPForUnity.Editor.Tools
                             // Only warn about resolution failure if component also not found
                             if (targetComponent == null && !resolved)
                             {
-                                Debug.LogWarning(
+                                McpLog.Warn(
                                     $"[ManageAsset.ModifyAsset] Failed to resolve component '{componentName}' on '{gameObject.name}': {compError}"
                                 );
                             }
@@ -393,7 +393,7 @@ namespace MCPForUnity.Editor.Tools
                             else
                             {
                                 // Log a warning if a specified component couldn't be found
-                                Debug.LogWarning(
+                                McpLog.Warn(
                                     $"[ManageAsset.ModifyAsset] Component '{componentName}' not found on GameObject '{gameObject.name}' in asset '{fullPath}'. Skipping modification for this component."
                                 );
                             }
@@ -403,7 +403,7 @@ namespace MCPForUnity.Editor.Tools
                             // Log a warning if the structure isn't {"ComponentName": {"prop": value}}
                             // We could potentially try to apply this property directly to the GameObject here if needed,
                             // but the primary goal is component modification.
-                            Debug.LogWarning(
+                            McpLog.Warn(
                                 $"[ManageAsset.ModifyAsset] Property '{prop.Name}' for GameObject modification should have a JSON object value containing component properties. Value was: {prop.Value.Type}. Skipping."
                             );
                         }
@@ -418,14 +418,14 @@ namespace MCPForUnity.Editor.Tools
                 {
                     // Apply properties directly to the material. If this modifies, it sets modified=true.
                     // Use |= in case the asset was already marked modified by previous logic (though unlikely here)
-                    modified |= MaterialOps.ApplyProperties(material, properties, ManageGameObject.InputSerializer);
+                    modified |= MaterialOps.ApplyProperties(material, properties, UnityJsonSerializer.Instance);
                 }
                 // Example: Modifying a ScriptableObject (Use manage_scriptable_object instead!)
                 else if (asset is ScriptableObject so)
                 {
                     // Deprecated: Prefer manage_scriptable_object for robust patching.
                     // Kept for simple property setting fallback on existing assets if manage_scriptable_object isn't used.
-                    modified |= ApplyObjectProperties(so, properties); 
+                    modified |= ApplyObjectProperties(so, properties);
                 }
                 // Example: Modifying TextureImporter settings
                 else if (asset is Texture)
@@ -444,7 +444,7 @@ namespace MCPForUnity.Editor.Tools
                     }
                     else
                     {
-                        Debug.LogWarning($"Could not get TextureImporter for {fullPath}.");
+                        McpLog.Warn($"Could not get TextureImporter for {fullPath}.");
                     }
                 }
                 // TODO: Add modification logic for other common asset types (Models, AudioClips importers, etc.)
@@ -452,7 +452,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     // This block handles non-GameObject/Material/ScriptableObject/Texture assets.
                     // Attempts to apply properties directly to the asset itself.
-                    Debug.LogWarning(
+                    McpLog.Warn(
                         $"[ManageAsset.ModifyAsset] Asset type '{asset.GetType().Name}' at '{fullPath}' is not explicitly handled for component modification. Attempting generic property setting on the asset itself."
                     );
                     modified |= ApplyObjectProperties(asset, properties);
@@ -486,7 +486,7 @@ namespace MCPForUnity.Editor.Tools
             catch (Exception e)
             {
                 // Log the detailed error internally
-                Debug.LogError($"[ManageAsset] Action 'modify' failed for path '{path}': {e}");
+                McpLog.Error($"[ManageAsset] Action 'modify' failed for path '{path}': {e}");
                 // Return a user-friendly error message
                 return new ErrorResponse($"Failed to modify asset '{fullPath}': {e.Message}");
             }
@@ -648,7 +648,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     // Maybe the user provided a file path instead of a folder?
                     // We could search in the containing folder, or return an error.
-                    Debug.LogWarning(
+                    McpLog.Warn(
                         $"Search path '{folderScope[0]}' is not a valid folder. Searching entire project."
                     );
                     folderScope = null; // Search everywhere if path isn't a folder
@@ -671,7 +671,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 else
                 {
-                    Debug.LogWarning(
+                    McpLog.Warn(
                         $"Could not parse filterDateAfter: '{filterDateAfterStr}'. Expected ISO 8601 format."
                     );
                 }
@@ -816,7 +816,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception e)
             {
-                Debug.LogError(
+                McpLog.Error(
                     $"[ManageAsset.GetComponentsFromAsset] Error getting components for '{fullPath}': {e}"
                 );
                 return new ErrorResponse(
@@ -989,7 +989,7 @@ namespace MCPForUnity.Editor.Tools
                 System.Reflection.PropertyInfo propInfo = type.GetProperty(memberName, flags);
                 if (propInfo != null && propInfo.CanWrite)
                 {
-                    object convertedValue = ConvertJTokenToType(value, propInfo.PropertyType);
+                    object convertedValue = Helpers.PropertyConversion.TryConvertToType(value, propInfo.PropertyType);
                     if (
                         convertedValue != null
                         && !object.Equals(propInfo.GetValue(target), convertedValue)
@@ -1004,7 +1004,7 @@ namespace MCPForUnity.Editor.Tools
                     System.Reflection.FieldInfo fieldInfo = type.GetField(memberName, flags);
                     if (fieldInfo != null)
                     {
-                        object convertedValue = ConvertJTokenToType(value, fieldInfo.FieldType);
+                        object convertedValue = Helpers.PropertyConversion.TryConvertToType(value, fieldInfo.FieldType);
                         if (
                             convertedValue != null
                             && !object.Equals(fieldInfo.GetValue(target), convertedValue)
@@ -1018,95 +1018,12 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception ex)
             {
-                Debug.LogWarning(
+                McpLog.Warn(
                     $"[SetPropertyOrField] Failed to set '{memberName}' on {type.Name}: {ex.Message}"
                 );
             }
             return false;
         }
-
-        /// <summary>
-        /// Simple JToken to Type conversion for common Unity types and primitives.
-        /// </summary>
-        private static object ConvertJTokenToType(JToken token, Type targetType)
-        {
-            try
-            {
-                if (token == null || token.Type == JTokenType.Null)
-                    return null;
-
-                if (targetType == typeof(string))
-                    return token.ToObject<string>();
-                if (targetType == typeof(int))
-                    return token.ToObject<int>();
-                if (targetType == typeof(float))
-                    return token.ToObject<float>();
-                if (targetType == typeof(bool))
-                    return token.ToObject<bool>();
-                if (targetType == typeof(Vector2) && token is JArray arrV2 && arrV2.Count == 2)
-                    return new Vector2(arrV2[0].ToObject<float>(), arrV2[1].ToObject<float>());
-                if (targetType == typeof(Vector3) && token is JArray arrV3 && arrV3.Count == 3)
-                    return new Vector3(
-                        arrV3[0].ToObject<float>(),
-                        arrV3[1].ToObject<float>(),
-                        arrV3[2].ToObject<float>()
-                    );
-                if (targetType == typeof(Vector4) && token is JArray arrV4 && arrV4.Count == 4)
-                    return new Vector4(
-                        arrV4[0].ToObject<float>(),
-                        arrV4[1].ToObject<float>(),
-                        arrV4[2].ToObject<float>(),
-                        arrV4[3].ToObject<float>()
-                    );
-                if (targetType == typeof(Quaternion) && token is JArray arrQ && arrQ.Count == 4)
-                    return new Quaternion(
-                        arrQ[0].ToObject<float>(),
-                        arrQ[1].ToObject<float>(),
-                        arrQ[2].ToObject<float>(),
-                        arrQ[3].ToObject<float>()
-                    );
-                if (targetType == typeof(Color) && token is JArray arrC && arrC.Count >= 3) // Allow RGB or RGBA
-                    return new Color(
-                        arrC[0].ToObject<float>(),
-                        arrC[1].ToObject<float>(),
-                        arrC[2].ToObject<float>(),
-                        arrC.Count > 3 ? arrC[3].ToObject<float>() : 1.0f
-                    );
-                if (targetType.IsEnum)
-                    return Enum.Parse(targetType, token.ToString(), true); // Case-insensitive enum parsing
-
-                // Handle loading Unity Objects (Materials, Textures, etc.) by path
-                if (
-                    typeof(UnityEngine.Object).IsAssignableFrom(targetType)
-                    && token.Type == JTokenType.String
-                )
-                {
-                    string assetPath = AssetPathUtility.SanitizeAssetPath(token.ToString());
-                    UnityEngine.Object loadedAsset = AssetDatabase.LoadAssetAtPath(
-                        assetPath,
-                        targetType
-                    );
-                    if (loadedAsset == null)
-                    {
-                        Debug.LogWarning(
-                            $"[ConvertJTokenToType] Could not load asset of type {targetType.Name} from path: {assetPath}"
-                        );
-                    }
-                    return loadedAsset;
-                }
-
-                // Fallback: Try direct conversion (might work for other simple value types)
-                return token.ToObject(targetType);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning(
-                    $"[ConvertJTokenToType] Could not convert JToken '{token}' (type {token.Type}) to type '{targetType.Name}': {ex.Message}"
-                );
-                return null;
-            }
-        }
-
 
         // --- Data Serialization ---
 
@@ -1164,7 +1081,7 @@ namespace MCPForUnity.Editor.Tools
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogWarning(
+                        McpLog.Warn(
                             $"Failed to generate readable preview for '{path}': {ex.Message}. Preview might not be readable."
                         );
                         // Fallback: Try getting static preview if available?
@@ -1173,7 +1090,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 else
                 {
-                    Debug.LogWarning(
+                    McpLog.Warn(
                         $"Could not get asset preview for {path} (Type: {assetType?.Name}). Is it supported?"
                     );
                 }

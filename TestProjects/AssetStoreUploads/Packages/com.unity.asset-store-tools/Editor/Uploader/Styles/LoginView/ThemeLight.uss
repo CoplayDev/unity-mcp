@@ -1,0 +1,44 @@
+/* Logo */
+
+.asset-store-logo {
+    background-image: url("../../Icons/publisher-portal-light.png");
+}
+
+/* Cloud Login */
+
+.cloud-label-or {
+    color: rgb(28, 28, 28);
+}
+
+/* Error Section */
+
+.error-container {
+    background-color: rgb(212, 212, 212);
+}
+
+.error-container > Image {
+    --unity-image: resource("console.erroricon@2x");
+}
+
+/* Credentials Login */
+
+.credentials-container {
+    background-color: rgb(212, 212, 212);
+}
+
+/* Help Section */
+
+.help-section-hyperlink-button {
+    color: rgb(68, 113, 229);
+    border-color: rgba(0, 0, 0, 0);
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.help-section-hyperlink-button:hover {
+    color: rgb(68, 133, 229);
+    cursor: link;
+}
+
+.help-section-hyperlink-button:active {
+    color: rgb(68, 93, 229);
+}

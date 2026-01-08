@@ -38,9 +38,8 @@
                         <ui:Button name="browse-git-url-button" text="Select" class="icon-button" />
                         <ui:Button name="clear-git-url-button" text="Clear" class="icon-button" />
                     </ui:VisualElement>
-                    <ui:Label text="Examples:" class="help-text" style="margin-top: 5px;" />
-                    <ui:Label text="• Local: /Users/you/Projects/unity-mcp/Server" class="help-text" />
-                    <ui:Label text="• Remote: git+https://github.com/CoplayDev/unity-mcp@v6.3.0#subdirectory=Server" class="help-text" />
+                    <ui:Label text="Override example (default uses PyPI):" class="help-text" style="margin-top: 5px;" />
+                    <ui:Label text="• Local dev: /path/to/unity-mcp/Server" class="help-text" />
 
                     <ui:Label text="Dev Mode:" class="advanced-label" style="margin-top: 10px;" />
                     <ui:Label text="When enabled, generated uvx commands add '--no-cache --refresh' before launching (slower startup, but avoids stale cached builds while iterating on the Server)." class="help-text" />

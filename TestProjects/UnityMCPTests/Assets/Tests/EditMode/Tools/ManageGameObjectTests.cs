@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Tools;
+using MCPForUnity.Editor.Tools.GameObjects;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -70,81 +71,6 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
-        public void GetComponents_ReturnsPagedMetadataByDefault()
-        {
-            // Arrange
-            testGameObject.AddComponent<Rigidbody>();
-            testGameObject.AddComponent<BoxCollider>();
-
-            var p = new JObject
-            {
-                ["action"] = "get_components",
-                ["target"] = testGameObject.name,
-                ["searchMethod"] = "by_name",
-                ["pageSize"] = 2
-            };
-
-            // Act
-            var raw = ManageGameObject.HandleCommand(p);
-            var result = raw as JObject ?? JObject.FromObject(raw);
-
-            // Assert
-            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
-            var data = result["data"] as JObject;
-            Assert.IsNotNull(data, "Expected data payload object.");
-            Assert.AreEqual(false, data.Value<bool>("includeProperties"));
-
-            var items = data["items"] as JArray;
-            Assert.IsNotNull(items, "Expected items array.");
-            Assert.AreEqual(2, items.Count, "Expected exactly pageSize items.");
-
-            var first = items[0] as JObject;
-            Assert.IsNotNull(first, "Expected item to be an object.");
-            Assert.IsNotNull(first["typeName"]);
-            Assert.IsNotNull(first["instanceID"]);
-            Assert.IsNull(first["properties"], "Metadata response should not include heavy serialized properties by default.");
-        }
-
-        [Test]
-        public void GetComponents_CanIncludePropertiesButStillPages()
-        {
-            // Arrange
-            testGameObject.AddComponent<Rigidbody>();
-            testGameObject.AddComponent<BoxCollider>();
-
-            var p = new JObject
-            {
-                ["action"] = "get_components",
-                ["target"] = testGameObject.name,
-                ["searchMethod"] = "by_name",
-                ["pageSize"] = 2,
-                ["includeProperties"] = true
-            };
-
-            // Act
-            var raw = ManageGameObject.HandleCommand(p);
-            var result = raw as JObject ?? JObject.FromObject(raw);
-
-            // Assert
-            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
-            var data = result["data"] as JObject;
-            Assert.IsNotNull(data);
-            Assert.AreEqual(true, data.Value<bool>("includeProperties"));
-
-            var items = data["items"] as JArray;
-            Assert.IsNotNull(items);
-            Assert.IsTrue(items.Count > 0);
-
-            var first = items[0] as JObject;
-            Assert.IsNotNull(first);
-            Assert.IsNotNull(first["typeName"]);
-            Assert.IsNotNull(first["instanceID"]);
-
-            // Heuristic: property-including payload should have more than just typeName/instanceID.
-            Assert.Greater(first.Properties().Count(), 2, "Expected richer component payload when includeProperties=true.");
-        }
-
-        [Test]
         public void ComponentResolver_Integration_WorksWithRealComponents()
         {
             // Test that our ComponentResolver works with actual Unity components
@@ -197,7 +123,7 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.Contains("useGravity", properties, "Rigidbody should have useGravity property");
 
             // Test AI suggestions
-            var suggestions = ComponentResolver.GetAIPropertySuggestions("Use Gravity", properties);
+            var suggestions = ComponentResolver.GetFuzzyPropertySuggestions("Use Gravity", properties);
             Assert.Contains("useGravity", suggestions, "Should suggest useGravity for 'Use Gravity'");
         }
 
@@ -228,7 +154,7 @@ namespace MCPForUnityTests.Editor.Tools
 
             foreach (var (input, expected) in testCases)
             {
-                var suggestions = ComponentResolver.GetAIPropertySuggestions(input, testProperties);
+                var suggestions = ComponentResolver.GetFuzzyPropertySuggestions(input, testProperties);
                 Assert.Contains(expected, suggestions, $"Should suggest {expected} for input '{input}'");
             }
         }
@@ -238,13 +164,13 @@ namespace MCPForUnityTests.Editor.Tools
         {
             // This test verifies that error messages are helpful and contain suggestions
             var testProperties = new List<string> { "mass", "velocity", "drag", "useGravity" };
-            var suggestions = ComponentResolver.GetAIPropertySuggestions("weight", testProperties);
+            var suggestions = ComponentResolver.GetFuzzyPropertySuggestions("weight", testProperties);
 
             // Even if no perfect match, should return valid list
             Assert.IsNotNull(suggestions, "Should return valid suggestions list");
 
             // Test with completely invalid input
-            var badSuggestions = ComponentResolver.GetAIPropertySuggestions("xyz123invalid", testProperties);
+            var badSuggestions = ComponentResolver.GetFuzzyPropertySuggestions("xyz123invalid", testProperties);
             Assert.IsNotNull(badSuggestions, "Should handle invalid input gracefully");
         }
 
@@ -256,12 +182,12 @@ namespace MCPForUnityTests.Editor.Tools
 
             // First call - populate cache
             var startTime = System.DateTime.UtcNow;
-            var suggestions1 = ComponentResolver.GetAIPropertySuggestions(input, properties);
+            var suggestions1 = ComponentResolver.GetFuzzyPropertySuggestions(input, properties);
             var firstCallTime = (System.DateTime.UtcNow - startTime).TotalMilliseconds;
 
             // Second call - should use cache
             startTime = System.DateTime.UtcNow;
-            var suggestions2 = ComponentResolver.GetAIPropertySuggestions(input, properties);
+            var suggestions2 = ComponentResolver.GetFuzzyPropertySuggestions(input, properties);
             var secondCallTime = (System.DateTime.UtcNow - startTime).TotalMilliseconds;
 
             Assert.AreEqual(suggestions1.Count, suggestions2.Count, "Cached results should be identical");
@@ -390,8 +316,9 @@ namespace MCPForUnityTests.Editor.Tools
             };
 
             // Expect the error logs from the invalid property
-            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("Unexpected error converting token to UnityEngine.Vector3"));
-            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("SetProperty.*Failed to set 'velocity'"));
+            // Note: PropertyConversion logs "Error converting token to..." when conversion fails
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("Error converting token to UnityEngine.Vector3"));
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(@"\[SetProperty\].*Failed to set 'velocity'"));
             LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("Property 'velocity' not found"));
 
             // Act
@@ -631,136 +558,80 @@ namespace MCPForUnityTests.Editor.Tools
             UnityEngine.Object.DestroyImmediate(testObject);
         }
 
-        [Test]
-        public void AddComponent_StringArrayFormat_AppliesComponentProperties()
-        {
-            // Arrange - Create a GameObject to add component to
-            var testObject = new GameObject("AddComponentTestObject");
+        #region Prefab Asset Handling Tests
 
-            // Create params using string array format with top-level componentProperties
-            var addComponentParams = new JObject
+        [Test]
+        public void HandleCommand_WithPrefabPath_ReturnsGuidanceError_ForModifyAction()
+        {
+            // Arrange - Attempt to modify a prefab asset directly
+            var modifyParams = new JObject
             {
-                ["action"] = "add_component",
-                ["target"] = testObject.name,
-                ["search_method"] = "by_name",
-                ["componentsToAdd"] = new JArray { "Rigidbody" },
-                ["componentProperties"] = new JObject
-                {
-                    ["Rigidbody"] = new JObject
-                    {
-                        ["mass"] = 7.5f,
-                        ["useGravity"] = false,
-                        ["drag"] = 2.0f
-                    }
-                }
+                ["action"] = "modify",
+                ["target"] = "Assets/Prefabs/MyPrefab.prefab"
             };
 
             // Act
-            var result = ManageGameObject.HandleCommand(addComponentParams);
+            var result = ManageGameObject.HandleCommand(modifyParams);
 
-            // Assert - Verify component was added
-            var rigidbody = testObject.GetComponent<Rigidbody>();
-            Assert.IsNotNull(rigidbody, "Rigidbody component should be added to GameObject");
-
-            // Verify properties were set correctly during component creation
-            Assert.AreEqual(7.5f, rigidbody.mass, 0.001f,
-                "Mass should be set to 7.5 via componentProperties during add_component");
-            Assert.AreEqual(false, rigidbody.useGravity,
-                "UseGravity should be set to false via componentProperties during add_component");
-            Assert.AreEqual(2.0f, rigidbody.drag, 0.001f,
-                "Drag should be set to 2.0 via componentProperties during add_component");
-
-            // Verify result indicates success
-            Assert.IsNotNull(result, "Should return a result object");
-            var resultObj = result as JObject ?? JObject.FromObject(result);
-            Assert.IsTrue(resultObj.Value<bool>("success"),
-                "Result should indicate success when adding component with properties");
-
-            // Clean up
-            UnityEngine.Object.DestroyImmediate(testObject);
+            // Assert - Should return an error with guidance to use correct tools
+            Assert.IsNotNull(result, "Should return a result");
+            var errorResponse = result as MCPForUnity.Editor.Helpers.ErrorResponse;
+            Assert.IsNotNull(errorResponse, "Should return an ErrorResponse");
+            Assert.IsFalse(errorResponse.Success, "Should indicate failure");
+            Assert.That(errorResponse.Error, Does.Contain("prefab asset"), "Error should mention prefab asset");
+            Assert.That(errorResponse.Error, Does.Contain("manage_asset"), "Error should guide to manage_asset");
+            Assert.That(errorResponse.Error, Does.Contain("manage_prefabs"), "Error should guide to manage_prefabs");
         }
 
         [Test]
-        public void AddComponent_ObjectFormat_StillAppliesComponentProperties()
+        public void HandleCommand_WithPrefabPath_ReturnsGuidanceError_ForDeleteAction()
         {
-            // Arrange - Create a GameObject to add component to
-            var testObject = new GameObject("AddComponentObjectFormatTestObject");
-
-            // Create params using object array format (existing behavior)
-            var addComponentParams = new JObject
+            // Arrange - Attempt to delete a prefab asset directly
+            var deleteParams = new JObject
             {
-                ["action"] = "add_component",
-                ["target"] = testObject.name,
-                ["search_method"] = "by_name",
-                ["componentsToAdd"] = new JArray
-                {
-                    new JObject
-                    {
-                        ["typeName"] = "Rigidbody",
-                        ["properties"] = new JObject
-                        {
-                            ["mass"] = 3.5f,
-                            ["useGravity"] = true
-                        }
-                    }
-                }
+                ["action"] = "delete",
+                ["target"] = "Assets/Prefabs/SomePrefab.prefab"
             };
 
             // Act
-            var result = ManageGameObject.HandleCommand(addComponentParams);
+            var result = ManageGameObject.HandleCommand(deleteParams);
 
-            // Assert - Verify component was added
-            var rigidbody = testObject.GetComponent<Rigidbody>();
-            Assert.IsNotNull(rigidbody, "Rigidbody component should be added to GameObject");
-
-            // Verify properties were set correctly
-            Assert.AreEqual(3.5f, rigidbody.mass, 0.001f,
-                "Mass should be set to 3.5 via inline properties");
-            Assert.AreEqual(true, rigidbody.useGravity,
-                "UseGravity should be set to true via inline properties");
-
-            // Clean up
-            UnityEngine.Object.DestroyImmediate(testObject);
+            // Assert - Should return an error with guidance
+            Assert.IsNotNull(result, "Should return a result");
+            var errorResponse = result as MCPForUnity.Editor.Helpers.ErrorResponse;
+            Assert.IsNotNull(errorResponse, "Should return an ErrorResponse");
+            Assert.IsFalse(errorResponse.Success, "Should indicate failure");
+            Assert.That(errorResponse.Error, Does.Contain("prefab asset"), "Error should mention prefab asset");
         }
 
         [Test]
-        public void AddComponent_ComponentNameFormat_AppliesComponentProperties()
+        public void HandleCommand_WithPrefabPath_AllowsCreateAction()
         {
-            // Arrange - Create a GameObject to add component to
-            var testObject = new GameObject("AddComponentNameFormatTestObject");
-
-            // Create params using componentName format (existing behavior)
-            var addComponentParams = new JObject
+            // Arrange - Create (instantiate) from a prefab should be allowed
+            // Note: This will fail because the prefab doesn't exist, but the error should NOT be
+            // the prefab redirection error - it should be a "prefab not found" type error
+            var createParams = new JObject
             {
-                ["action"] = "add_component",
-                ["target"] = testObject.name,
-                ["search_method"] = "by_name",
-                ["componentName"] = "Rigidbody",
-                ["componentProperties"] = new JObject
-                {
-                    ["Rigidbody"] = new JObject
-                    {
-                        ["mass"] = 5.0f,
-                        ["drag"] = 1.5f
-                    }
-                }
+                ["action"] = "create",
+                ["prefab_path"] = "Assets/Prefabs/NonExistent.prefab",
+                ["name"] = "TestInstance"
             };
 
             // Act
-            var result = ManageGameObject.HandleCommand(addComponentParams);
+            var result = ManageGameObject.HandleCommand(createParams);
 
-            // Assert - Verify component was added
-            var rigidbody = testObject.GetComponent<Rigidbody>();
-            Assert.IsNotNull(rigidbody, "Rigidbody component should be added to GameObject");
-
-            // Verify properties were set correctly
-            Assert.AreEqual(5.0f, rigidbody.mass, 0.001f,
-                "Mass should be set to 5.0 via componentName format");
-            Assert.AreEqual(1.5f, rigidbody.drag, 0.001f,
-                "Drag should be set to 1.5 via componentName format");
-
-            // Clean up
-            UnityEngine.Object.DestroyImmediate(testObject);
+            // Assert - Should NOT return the prefab redirection error
+            // (It may fail for other reasons like prefab not found, but not due to redirection)
+            var errorResponse = result as MCPForUnity.Editor.Helpers.ErrorResponse;
+            if (errorResponse != null)
+            {
+                // If there's an error, it should NOT be the prefab asset guidance error
+                Assert.That(errorResponse.Error, Does.Not.Contain("Use 'manage_asset'"),
+                    "Create action should not be blocked by prefab check");
+            }
+            // If it's not an error, that's also fine (means create was allowed)
         }
+
+        #endregion
     }
 }

@@ -263,7 +263,7 @@ namespace MCPForUnity.Editor.Tools
                                    : new ErrorResponse("Validation failed.", result);
                     }
                 case "edit":
-                    Debug.LogWarning("manage_script.edit is deprecated; prefer apply_text_edits. Serving structured edit for backward compatibility.");
+                    McpLog.Warn("manage_script.edit is deprecated; prefer apply_text_edits. Serving structured edit for backward compatibility.");
                     var structEdits = @params["edits"] as JArray;
                     var options = @params["options"] as JObject;
                     return EditScript(fullPath, relativePath, name, structEdits, options);
@@ -282,7 +282,7 @@ namespace MCPForUnity.Editor.Tools
                             catch { lengthBytes = fi.Exists ? fi.Length : 0; }
                             var data = new
                             {
-                                uri = $"unity://path/{relativePath}",
+                                uri = $"mcpforunity://path/{relativePath}",
                                 path = relativePath,
                                 sha256 = sha,
                                 lengthBytes,
@@ -353,7 +353,7 @@ namespace MCPForUnity.Editor.Tools
             else if (validationErrors != null && validationErrors.Length > 0)
             {
                 // Log warnings but don't block creation
-                Debug.LogWarning($"Script validation warnings for {name}:\n" + string.Join("\n", validationErrors));
+                McpLog.Warn($"Script validation warnings for {name}:\n" + string.Join("\n", validationErrors));
             }
 
             try
@@ -372,7 +372,7 @@ namespace MCPForUnity.Editor.Tools
                     try { File.Delete(tmp); } catch { }
                 }
 
-                var uri = $"unity://path/{relativePath}";
+                var uri = $"mcpforunity://path/{relativePath}";
                 var ok = new SuccessResponse(
                     $"Script '{name}.cs' created successfully at '{relativePath}'.",
                     new { uri, scheduledRefresh = false }
@@ -401,7 +401,7 @@ namespace MCPForUnity.Editor.Tools
 
                 // Return both normal and encoded contents for larger files
                 bool isLarge = contents.Length > 10000; // If content is large, include encoded version
-                var uri = $"unity://path/{relativePath}";
+                var uri = $"mcpforunity://path/{relativePath}";
                 var responseData = new
                 {
                     uri,
@@ -451,7 +451,7 @@ namespace MCPForUnity.Editor.Tools
             else if (validationErrors != null && validationErrors.Length > 0)
             {
                 // Log warnings but don't block update
-                Debug.LogWarning($"Script validation warnings for {name}:\n" + string.Join("\n", validationErrors));
+                McpLog.Warn($"Script validation warnings for {name}:\n" + string.Join("\n", validationErrors));
             }
 
             try
@@ -481,7 +481,7 @@ namespace MCPForUnity.Editor.Tools
                 }
 
                 // Prepare success response BEFORE any operation that can trigger a domain reload
-                var uri = $"unity://path/{relativePath}";
+                var uri = $"mcpforunity://path/{relativePath}";
                 var ok = new SuccessResponse(
                     $"Script '{name}.cs' updated successfully at '{relativePath}'.",
                     new { uri, path = relativePath, scheduledRefresh = true }
@@ -704,7 +704,7 @@ namespace MCPForUnity.Editor.Tools
                     $"No-op: contents unchanged for '{relativePath}'.",
                     new
                     {
-                        uri = $"unity://path/{relativePath}",
+                        uri = $"mcpforunity://path/{relativePath}",
                         path = relativePath,
                         editsApplied = 0,
                         no_op = true,
@@ -805,7 +805,7 @@ namespace MCPForUnity.Editor.Tools
                     $"Applied {spans.Count} text edit(s) to '{relativePath}'.",
                     new
                     {
-                        uri = $"unity://path/{relativePath}",
+                        uri = $"mcpforunity://path/{relativePath}",
                         path = relativePath,
                         editsApplied = spans.Count,
                         sha256 = newSha,
@@ -1375,7 +1375,7 @@ namespace MCPForUnity.Editor.Tools
                         new
                         {
                             path = relativePath,
-                            uri = $"unity://path/{relativePath}",
+                            uri = $"mcpforunity://path/{relativePath}",
                             editsApplied = 0,
                             no_op = true,
                             sha256 = sameSha,
@@ -1405,7 +1405,7 @@ namespace MCPForUnity.Editor.Tools
                 if (!ValidateScriptSyntax(working, level, out var errors))
                     return new ErrorResponse("validation_failed", new { status = "validation_failed", diagnostics = errors ?? Array.Empty<string>() });
                 else if (errors != null && errors.Length > 0)
-                    Debug.LogWarning($"Script validation warnings for {name}:\n" + string.Join("\n", errors));
+                    McpLog.Warn($"Script validation warnings for {name}:\n" + string.Join("\n", errors));
 
                 // Atomic write with backup; schedule refresh
                 // Decide refresh behavior
@@ -1441,7 +1441,7 @@ namespace MCPForUnity.Editor.Tools
                     new
                     {
                         path = relativePath,
-                        uri = $"unity://path/{relativePath}",
+                        uri = $"mcpforunity://path/{relativePath}",
                         editsApplied = appliedCount,
                         scheduledRefresh = !immediate,
                         sha256 = newSha
@@ -2310,7 +2310,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"Could not load UnityEngine assembly: {ex.Message}");
+                    McpLog.Warn($"Could not load UnityEngine assembly: {ex.Message}");
                 }
 
 #if UNITY_EDITOR
@@ -2320,7 +2320,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"Could not load UnityEditor assembly: {ex.Message}");
+                    McpLog.Warn($"Could not load UnityEditor assembly: {ex.Message}");
                 }
 
                 // Get Unity project assemblies
@@ -2337,7 +2337,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"Could not load Unity project assemblies: {ex.Message}");
+                    McpLog.Warn($"Could not load Unity project assemblies: {ex.Message}");
                 }
 #endif
 
@@ -2349,7 +2349,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Failed to get compilation references: {ex.Message}");
+                McpLog.Error($"Failed to get compilation references: {ex.Message}");
                 return new System.Collections.Generic.List<MetadataReference>();
             }
         }
@@ -2637,8 +2637,8 @@ namespace MCPForUnity.Editor.Tools
         {
             if (string.IsNullOrEmpty(p)) return p;
             p = p.Replace('\\', '/').Trim();
-            if (p.StartsWith("unity://path/", StringComparison.OrdinalIgnoreCase))
-                p = p.Substring("unity://path/".Length);
+            if (p.StartsWith("mcpforunity://path/", StringComparison.OrdinalIgnoreCase))
+                p = p.Substring("mcpforunity://path/".Length);
             while (p.StartsWith("Assets/Assets/", StringComparison.OrdinalIgnoreCase))
                 p = p.Substring("Assets/".Length);
             if (!p.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))

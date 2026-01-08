@@ -91,14 +91,28 @@ namespace MCPForUnity.Editor.Tools
                 try
                 {
                     var result = await CommandRegistry.InvokeCommandAsync(toolName, commandParams).ConfigureAwait(true);
-                    invocationSuccessCount++;
+                    bool callSucceeded = DetermineCallSucceeded(result);
+                    if (callSucceeded)
+                    {
+                        invocationSuccessCount++;
+                    }
+                    else
+                    {
+                        invocationFailureCount++;
+                        anyCommandFailed = true;
+                    }
 
                     commandResults.Add(new
                     {
                         tool = toolName,
-                        callSucceeded = true,
+                        callSucceeded,
                         result
                     });
+
+                    if (!callSucceeded && failFast)
+                    {
+                        break;
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -132,6 +146,39 @@ namespace MCPForUnity.Editor.Tools
             return overallSuccess
                 ? new SuccessResponse("Batch execution completed.", data)
                 : new ErrorResponse("One or more commands failed.", data);
+        }
+
+        private static bool DetermineCallSucceeded(object result)
+        {
+            if (result == null)
+            {
+                return true;
+            }
+
+            if (result is IMcpResponse response)
+            {
+                return response.Success;
+            }
+
+            if (result is JObject obj)
+            {
+                var successToken = obj["success"];
+                if (successToken != null && successToken.Type == JTokenType.Boolean)
+                {
+                    return successToken.Value<bool>();
+                }
+            }
+
+            if (result is JToken token)
+            {
+                var successToken = token["success"];
+                if (successToken != null && successToken.Type == JTokenType.Boolean)
+                {
+                    return successToken.Value<bool>();
+                }
+            }
+
+            return true;
         }
 
         private static JObject NormalizeParameterKeys(JObject source)

@@ -15,6 +15,17 @@ namespace MCPForUnity.Editor.Helpers
     public static class AssetPathUtility
     {
         /// <summary>
+        /// Normalizes path separators to forward slashes without modifying the path structure.
+        /// Use this for non-asset paths (e.g., file system paths, relative directories).
+        /// </summary>
+        public static string NormalizeSeparators(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                return path;
+            return path.Replace('\\', '/');
+        }
+
+        /// <summary>
         /// Normalizes a Unity asset path by ensuring forward slashes are used and that it is rooted under "Assets/".
         /// </summary>
         public static string SanitizeAssetPath(string path)
@@ -24,7 +35,7 @@ namespace MCPForUnity.Editor.Helpers
                 return path;
             }
 
-            path = path.Replace('\\', '/');
+            path = NormalizeSeparators(path);
             if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
             {
                 return "Assets/" + path.TrimStart('/');
@@ -138,29 +149,37 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
-        /// Gets just the git URL part for the MCP server package
-        /// Checks for EditorPrefs override first, then falls back to package version
+        /// Gets the package source for the MCP server (used with uvx --from).
+        /// Checks for EditorPrefs override first (supports git URLs, file:// paths, etc.),
+        /// then falls back to PyPI package reference.
         /// </summary>
-        /// <returns>Git URL string, or empty string if version is unknown and no override</returns>
-        public static string GetMcpServerGitUrl()
+        /// <returns>Package source string for uvx --from argument</returns>
+        public static string GetMcpServerPackageSource()
         {
-            // Check for Git URL override first
-            string gitUrlOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
-            if (!string.IsNullOrEmpty(gitUrlOverride))
+            // Check for override first (supports git URLs, file:// paths, local paths)
+            string sourceOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
+            if (!string.IsNullOrEmpty(sourceOverride))
             {
-                return gitUrlOverride;
+                return sourceOverride;
             }
 
-            // Fall back to default package version
+            // Default to PyPI package (avoids Windows long path issues with git clone)
             string version = GetPackageVersion();
             if (version == "unknown")
             {
-                // Fall back to main repo without pinned version so configs remain valid in test scenarios
-                return "git+https://github.com/CoplayDev/unity-mcp#subdirectory=Server";
+                // Fall back to latest PyPI version so configs remain valid in test scenarios
+                return "mcpforunityserver";
             }
 
-            return $"git+https://github.com/CoplayDev/unity-mcp@v{version}#subdirectory=Server";
+            return $"mcpforunityserver=={version}";
         }
+
+        /// <summary>
+        /// Deprecated: Use GetMcpServerPackageSource() instead.
+        /// Kept for backwards compatibility.
+        /// </summary>
+        [System.Obsolete("Use GetMcpServerPackageSource() instead")]
+        public static string GetMcpServerGitUrl() => GetMcpServerPackageSource();
 
         /// <summary>
         /// Gets structured uvx command parts for different client configurations
@@ -169,10 +188,92 @@ namespace MCPForUnity.Editor.Helpers
         public static (string uvxPath, string fromUrl, string packageName) GetUvxCommandParts()
         {
             string uvxPath = MCPServiceLocator.Paths.GetUvxPath();
-            string fromUrl = GetMcpServerGitUrl();
+            string fromUrl = GetMcpServerPackageSource();
             string packageName = "mcp-for-unity";
 
             return (uvxPath, fromUrl, packageName);
+        }
+
+        /// <summary>
+        /// Determines whether uvx should use --no-cache --refresh flags.
+        /// Returns true if DevModeForceServerRefresh is enabled OR if the server URL is a local path.
+        /// Local paths (file:// or absolute) always need fresh builds to avoid stale uvx cache.
+        /// </summary>
+        public static bool ShouldForceUvxRefresh()
+        {
+            bool devForceRefresh = false;
+            try { devForceRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false); } catch { }
+
+            if (devForceRefresh)
+                return true;
+
+            // Auto-enable force refresh when using a local path override.
+            return IsLocalServerPath();
+        }
+
+        /// <summary>
+        /// Returns true if the server URL is a local path (file:// or absolute path).
+        /// </summary>
+        public static bool IsLocalServerPath()
+        {
+            string fromUrl = GetMcpServerPackageSource();
+            if (string.IsNullOrEmpty(fromUrl))
+                return false;
+
+            // Check for file:// protocol or absolute local path
+            return fromUrl.StartsWith("file://", StringComparison.OrdinalIgnoreCase) ||
+                   System.IO.Path.IsPathRooted(fromUrl);
+        }
+
+        /// <summary>
+        /// Gets the local server path if GitUrlOverride points to a local directory.
+        /// Returns null if not using a local path.
+        /// </summary>
+        public static string GetLocalServerPath()
+        {
+            if (!IsLocalServerPath())
+                return null;
+
+            string fromUrl = GetMcpServerPackageSource();
+            if (fromUrl.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+            {
+                // Strip file:// prefix
+                fromUrl = fromUrl.Substring(7);
+            }
+
+            return fromUrl;
+        }
+
+        /// <summary>
+        /// Cleans stale Python build artifacts from the local server path.
+        /// This is necessary because Python's build system doesn't remove deleted files from build/,
+        /// and the auto-discovery mechanism will pick up old .py files causing ghost resources/tools.
+        /// </summary>
+        /// <returns>True if cleaning was performed, false if not applicable or failed.</returns>
+        public static bool CleanLocalServerBuildArtifacts()
+        {
+            string localPath = GetLocalServerPath();
+            if (string.IsNullOrEmpty(localPath))
+                return false;
+
+            // Clean the build/ directory which can contain stale .py files
+            string buildPath = System.IO.Path.Combine(localPath, "build");
+            if (System.IO.Directory.Exists(buildPath))
+            {
+                try
+                {
+                    System.IO.Directory.Delete(buildPath, recursive: true);
+                    McpLog.Info($"Cleaned stale build artifacts from: {buildPath}");
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Warn($"Failed to clean build artifacts: {ex.Message}");
+                    return false;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>

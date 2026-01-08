@@ -47,42 +47,42 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
-        public void GetAIPropertySuggestions_ReturnsEmpty_ForNullInput()
+        public void GetFuzzyPropertySuggestions_ReturnsEmpty_ForNullInput()
         {
-            var suggestions = ComponentResolver.GetAIPropertySuggestions(null, sampleProperties);
+            var suggestions = ComponentResolver.GetFuzzyPropertySuggestions(null, sampleProperties);
 
             Assert.IsEmpty(suggestions, "Null input should return no suggestions");
         }
 
         [Test]
-        public void GetAIPropertySuggestions_ReturnsEmpty_ForEmptyInput()
+        public void GetFuzzyPropertySuggestions_ReturnsEmpty_ForEmptyInput()
         {
-            var suggestions = ComponentResolver.GetAIPropertySuggestions("", sampleProperties);
+            var suggestions = ComponentResolver.GetFuzzyPropertySuggestions("", sampleProperties);
 
             Assert.IsEmpty(suggestions, "Empty input should return no suggestions");
         }
 
         [Test]
-        public void GetAIPropertySuggestions_ReturnsEmpty_ForEmptyPropertyList()
+        public void GetFuzzyPropertySuggestions_ReturnsEmpty_ForEmptyPropertyList()
         {
-            var suggestions = ComponentResolver.GetAIPropertySuggestions("test", new List<string>());
+            var suggestions = ComponentResolver.GetFuzzyPropertySuggestions("test", new List<string>());
 
             Assert.IsEmpty(suggestions, "Empty property list should return no suggestions");
         }
 
         [Test]
-        public void GetAIPropertySuggestions_FindsExactMatch_AfterCleaning()
+        public void GetFuzzyPropertySuggestions_FindsExactMatch_AfterCleaning()
         {
-            var suggestions = ComponentResolver.GetAIPropertySuggestions("Max Reach Distance", sampleProperties);
+            var suggestions = ComponentResolver.GetFuzzyPropertySuggestions("Max Reach Distance", sampleProperties);
 
             Assert.Contains("maxReachDistance", suggestions, "Should find exact match after cleaning spaces");
             Assert.GreaterOrEqual(suggestions.Count, 1, "Should return at least one match for exact match");
         }
 
         [Test]
-        public void GetAIPropertySuggestions_FindsMultipleWordMatches()
+        public void GetFuzzyPropertySuggestions_FindsMultipleWordMatches()
         {
-            var suggestions = ComponentResolver.GetAIPropertySuggestions("max distance", sampleProperties);
+            var suggestions = ComponentResolver.GetFuzzyPropertySuggestions("max distance", sampleProperties);
 
             Assert.Contains("maxReachDistance", suggestions, "Should match maxReachDistance");
             Assert.Contains("maxHorizontalDistance", suggestions, "Should match maxHorizontalDistance");
@@ -90,54 +90,54 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
-        public void GetAIPropertySuggestions_FindsSimilarStrings_WithTypos()
+        public void GetFuzzyPropertySuggestions_FindsSimilarStrings_WithTypos()
         {
-            var suggestions = ComponentResolver.GetAIPropertySuggestions("movespeed", sampleProperties); // missing capital S
+            var suggestions = ComponentResolver.GetFuzzyPropertySuggestions("movespeed", sampleProperties); // missing capital S
 
             Assert.Contains("moveSpeed", suggestions, "Should find moveSpeed despite missing capital");
         }
 
         [Test]
-        public void GetAIPropertySuggestions_FindsSemanticMatches_ForCommonTerms()
+        public void GetFuzzyPropertySuggestions_FindsSemanticMatches_ForCommonTerms()
         {
-            var suggestions = ComponentResolver.GetAIPropertySuggestions("weight", sampleProperties);
+            var suggestions = ComponentResolver.GetFuzzyPropertySuggestions("weight", sampleProperties);
 
             // Note: Current algorithm might not find "mass" but should handle it gracefully
             Assert.IsNotNull(suggestions, "Should return valid suggestions list");
         }
 
         [Test]
-        public void GetAIPropertySuggestions_LimitsResults_ToReasonableNumber()
+        public void GetFuzzyPropertySuggestions_LimitsResults_ToReasonableNumber()
         {
             // Test with input that might match many properties
-            var suggestions = ComponentResolver.GetAIPropertySuggestions("m", sampleProperties);
+            var suggestions = ComponentResolver.GetFuzzyPropertySuggestions("m", sampleProperties);
 
             Assert.LessOrEqual(suggestions.Count, 3, "Should limit suggestions to 3 or fewer");
         }
 
         [Test]
-        public void GetAIPropertySuggestions_CachesResults()
+        public void GetFuzzyPropertySuggestions_CachesResults()
         {
             var input = "Max Reach Distance";
 
             // First call
-            var suggestions1 = ComponentResolver.GetAIPropertySuggestions(input, sampleProperties);
+            var suggestions1 = ComponentResolver.GetFuzzyPropertySuggestions(input, sampleProperties);
 
             // Second call should use cache (tested indirectly by ensuring consistency)
-            var suggestions2 = ComponentResolver.GetAIPropertySuggestions(input, sampleProperties);
+            var suggestions2 = ComponentResolver.GetFuzzyPropertySuggestions(input, sampleProperties);
 
             Assert.AreEqual(suggestions1.Count, suggestions2.Count, "Cached results should be consistent");
             CollectionAssert.AreEqual(suggestions1, suggestions2, "Cached results should be identical");
         }
 
         [Test]
-        public void GetAIPropertySuggestions_HandlesUnityNamingConventions()
+        public void GetFuzzyPropertySuggestions_HandlesUnityNamingConventions()
         {
             var unityStyleProperties = new List<string> { "isKinematic", "useGravity", "maxLinearVelocity" };
 
-            var suggestions1 = ComponentResolver.GetAIPropertySuggestions("is kinematic", unityStyleProperties);
-            var suggestions2 = ComponentResolver.GetAIPropertySuggestions("use gravity", unityStyleProperties);
-            var suggestions3 = ComponentResolver.GetAIPropertySuggestions("max linear velocity", unityStyleProperties);
+            var suggestions1 = ComponentResolver.GetFuzzyPropertySuggestions("is kinematic", unityStyleProperties);
+            var suggestions2 = ComponentResolver.GetFuzzyPropertySuggestions("use gravity", unityStyleProperties);
+            var suggestions3 = ComponentResolver.GetFuzzyPropertySuggestions("max linear velocity", unityStyleProperties);
 
             Assert.Contains("isKinematic", suggestions1, "Should handle 'is' prefix convention");
             Assert.Contains("useGravity", suggestions2, "Should handle 'use' prefix convention");
@@ -145,10 +145,10 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
-        public void GetAIPropertySuggestions_PrioritizesExactMatches()
+        public void GetFuzzyPropertySuggestions_PrioritizesExactMatches()
         {
             var properties = new List<string> { "speed", "moveSpeed", "maxSpeed", "speedMultiplier" };
-            var suggestions = ComponentResolver.GetAIPropertySuggestions("speed", properties);
+            var suggestions = ComponentResolver.GetFuzzyPropertySuggestions("speed", properties);
 
             Assert.IsNotEmpty(suggestions, "Should find suggestions");
             Assert.Contains("speed", suggestions, "Exact match should be included in results");
@@ -156,10 +156,10 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
-        public void GetAIPropertySuggestions_HandlesCaseInsensitive()
+        public void GetFuzzyPropertySuggestions_HandlesCaseInsensitive()
         {
-            var suggestions1 = ComponentResolver.GetAIPropertySuggestions("MAXREACHDISTANCE", sampleProperties);
-            var suggestions2 = ComponentResolver.GetAIPropertySuggestions("maxreachdistance", sampleProperties);
+            var suggestions1 = ComponentResolver.GetFuzzyPropertySuggestions("MAXREACHDISTANCE", sampleProperties);
+            var suggestions2 = ComponentResolver.GetFuzzyPropertySuggestions("maxreachdistance", sampleProperties);
 
             Assert.Contains("maxReachDistance", suggestions1, "Should handle uppercase input");
             Assert.Contains("maxReachDistance", suggestions2, "Should handle lowercase input");

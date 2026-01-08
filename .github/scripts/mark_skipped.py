@@ -24,7 +24,7 @@ PATTERNS = [
     r"^MCP resources list is empty$",
     r"No MCP resources detected",
     r"aggregator.*returned\s*\[\s*\]",
-    r"Unknown resource:\s*unity://",
+    r"Unknown resource:\s*mcpforunity://",
     r"Input should be a valid dictionary.*ctx",
     r"validation error .* ctx",
 ]

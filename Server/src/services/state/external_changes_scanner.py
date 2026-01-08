@@ -116,7 +116,8 @@ class ExternalChangesScanner:
             st.manifest_last_mtime_ns = None
             return []
 
-        mtime_ns = getattr(stat, "st_mtime_ns", int(stat.st_mtime * 1_000_000_000))
+        mtime_ns = getattr(stat, "st_mtime_ns", int(
+            stat.st_mtime * 1_000_000_000))
         if st.extra_roots is not None and st.manifest_last_mtime_ns == mtime_ns:
             return [Path(p) for p in st.extra_roots if p]
 
@@ -143,7 +144,7 @@ class ExternalChangesScanner:
             v = ver.strip()
             if not v.startswith("file:"):
                 continue
-            suffix = v[len("file:") :].strip()
+            suffix = v[len("file:"):].strip()
             # Handle file:///abs/path or file:/abs/path
             if suffix.startswith("///"):
                 candidate = Path("/" + suffix.lstrip("/"))
@@ -242,5 +243,3 @@ class ExternalChangesScanner:
 
 # Global singleton (simple, process-local)
 external_changes_scanner = ExternalChangesScanner()
-
-

@@ -20,7 +20,7 @@ namespace MCPForUnity.Editor.MenuItems
             }
         }
 
-        [MenuItem("Window/MCP For Unity/Setup Window", priority = 2)]
+        [MenuItem("Window/MCP For Unity/Local Setup Window", priority = 2)]
         public static void ShowSetupWindow()
         {
             SetupWindowService.ShowSetupWindow();

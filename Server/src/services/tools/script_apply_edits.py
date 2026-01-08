@@ -4,6 +4,7 @@ import re
 from typing import Annotated, Any, Union
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
@@ -228,7 +229,7 @@ def _normalize_script_locator(name: str, path: str) -> tuple[str, str]:
     - name = "SmartReach.cs", path = "Assets/Scripts/Interaction"
     - name = "Assets/Scripts/Interaction/SmartReach.cs", path = ""
     - path = "Assets/Scripts/Interaction/SmartReach.cs" (name empty)
-    - name or path using uri prefixes: unity://path/..., file://...
+    - name or path using uri prefixes: mcpforunity://path/..., file://...
     - accidental duplicates like "Assets/.../SmartReach.cs/SmartReach.cs"
 
     Returns (name_without_extension, directory_path_under_Assets).
@@ -237,8 +238,8 @@ def _normalize_script_locator(name: str, path: str) -> tuple[str, str]:
     p = (path or "").strip()
 
     def strip_prefix(s: str) -> str:
-        if s.startswith("unity://path/"):
-            return s[len("unity://path/"):]
+        if s.startswith("mcpforunity://path/"):
+            return s[len("mcpforunity://path/"):]
         if s.startswith("file://"):
             return s[len("file://"):]
         return s
@@ -309,8 +310,10 @@ def _err(code: str, message: str, *, expected: dict[str, Any] | None = None, rew
 # Natural-language parsing removed; clients should send structured edits.
 
 
-@mcp_for_unity_tool(name="script_apply_edits", description=(
-    """Structured C# edits (methods/classes) with safer boundaries - prefer this over raw text.
+@mcp_for_unity_tool(
+    name="script_apply_edits",
+    description=(
+        """Structured C# edits (methods/classes) with safer boundaries - prefer this over raw text.
     Best practices:
     - Prefer anchor_* ops for pattern-based insert/replace near stable markers
     - Use replace_method/delete_method for whole-method changes (keeps signatures balanced)
@@ -356,7 +359,12 @@ def _err(code: str, message: str, *, expected: dict[str, Any] | None = None, rew
     ],
     }
     ]"""
-))
+    ),
+    annotations=ToolAnnotations(
+        title="Script Apply Edits",
+        destructiveHint=True,
+    ),
+)
 async def script_apply_edits(
     ctx: Context,
     name: Annotated[str, "Name of the script to edit"],
@@ -372,7 +380,7 @@ async def script_apply_edits(
     unity_instance = get_unity_instance_from_context(ctx)
     await ctx.info(
         f"Processing script_apply_edits: {name} (unity_instance={unity_instance or 'default'})")
-        
+
     # Parse edits if they came as a stringified JSON
     edits = parse_json_payload(edits)
     if not isinstance(edits, list):

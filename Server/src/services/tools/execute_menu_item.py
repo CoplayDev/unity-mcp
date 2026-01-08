@@ -4,6 +4,7 @@ Defines the execute_menu_item tool for executing and reading Unity Editor menu i
 from typing import Annotated, Any
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
 
 from models import MCPResponse
 from services.registry import mcp_for_unity_tool
@@ -13,15 +14,17 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 
 
 @mcp_for_unity_tool(
-    description="Execute a Unity menu item by path."
+    description="Execute a Unity menu item by path.",
+    annotations=ToolAnnotations(
+        title="Execute Menu Item",
+        destructiveHint=True,
+    ),
 )
 async def execute_menu_item(
     ctx: Context,
     menu_path: Annotated[str,
                          "Menu path for 'execute' or 'exists' (e.g., 'File/Save Project')"] | None = None,
 ) -> MCPResponse:
-    # Get active instance from session state
-    # Removed session_state import
     unity_instance = get_unity_instance_from_context(ctx)
     params_dict: dict[str, Any] = {"menuPath": menu_path}
     params_dict = {k: v for k, v in params_dict.items() if v is not None}

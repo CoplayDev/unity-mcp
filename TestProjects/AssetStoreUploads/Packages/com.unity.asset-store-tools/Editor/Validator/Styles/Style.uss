@@ -1,0 +1,337 @@
+/* Validator Description */
+
+.validator-description {
+	flex-direction: column;
+    flex-shrink: 0;
+
+    margin: 10px 5px 2px 5px;
+    padding: 2px 4px;
+}
+
+.validator-description-simple-container {
+    flex-direction: column;
+    flex-wrap: wrap;
+}
+
+.validator-description-simple-label {
+    white-space: normal;
+}
+
+.validator-description-full-container {
+    margin-top: 12px;
+}
+
+.validator-description-full-label {
+    white-space: normal;
+    margin-bottom: 10px;
+}
+
+.validator-description-hyperlink-button {
+    margin: 0;
+    padding: 0;
+    
+    align-self: flex-start;
+    cursor: link;
+}
+
+.validator-description-show-button {
+    margin-top: 12px;
+}
+
+.validator-description-hide-button {
+    margin-top: 12px;
+}
+
+/* Validator Settings */
+
+.validator-settings {
+    flex-direction: column;
+    flex-shrink: 0;
+
+    margin: 0px 5px 2px 5px;
+    padding: 2px 4px;
+}
+
+.validator-settings-selection-row {
+    flex-direction: row;
+    flex-grow: 1;
+    
+    margin-top: 10px;
+    padding: 0 3px 0 2px;
+}
+
+.validator-settings-selection-label-help-row {
+    flex-direction: row;
+    flex-shrink: 1;
+    flex-grow: 0;
+
+    align-self: center;
+    align-items: center;
+    justify-content: flex-start;
+
+    width: 120px;
+}
+
+.validator-settings-selection-label-help-row > Label {
+    -unity-font-style: bold;
+}
+
+.validator-settings-selection-label-help-row > Image {
+    height: 16px;
+    width: 16px;
+}
+
+.validator-settings-selection-dropdown {
+    flex-grow: 1;
+    flex-shrink: 1;
+
+    align-self: stretch;
+
+    margin-right: 0;
+    margin-left: 3px;
+    padding: 1px 4px;
+}
+
+/* Validate Button */
+
+.validator-validate-button {
+    align-self: stretch;
+    
+    height: 25px;
+    margin-left: 2px;
+}
+
+/* Validation Paths */
+
+.validator-paths {
+    flex-direction: column;
+    flex-grow: 1;
+    flex-shrink: 0;
+    
+    margin-bottom: 10px;
+    padding: 0;
+}
+
+.validator-paths-box {
+    flex-grow: 1;
+    flex-direction: column;
+}
+
+.validator-paths-scroll-view {
+    flex-grow: 1;
+    height: 100px;
+    margin-left: 3px;
+}
+
+.validator-paths-scroll-view > .unity-scroll-view__content-viewport
+{
+    margin-left: 1px;
+}
+
+.validator-paths-scroll-view > * > .unity-scroll-view__content-container
+{
+    padding: 0 0 0 0;
+}
+
+.validator-paths-scroll-view > * > .unity-scroll-view__vertical-scroller
+{
+    margin: -1px 0;
+}
+
+.validator-paths-scroll-view-bottom-row {
+    flex-direction: row-reverse;
+    margin: -1px 0 0 3px;
+}
+
+.validator-paths-add-button {
+    margin: 3px 0 0 0;
+    align-self: center;
+}
+
+.validator-paths-path-row {
+    flex-direction: row;
+    flex-grow: 1;
+
+    margin-top: 2px;
+    padding: 0 5px 0 2px;
+}
+
+.validator-paths-path-row-input-field {
+    flex-grow: 1;
+    flex-shrink: 1;
+
+    padding-left: 5px;
+
+    white-space: normal;
+    -unity-text-align: middle-left;
+}
+
+.validator-paths-path-row-remove-button {
+    width: 20px;
+    height: 20px;
+    margin-left: 2px;
+    margin-right: 1px;
+    padding: 1px 0 0 0;
+}
+
+/* Tests List & Groups */
+
+.validator-test-list {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.validator-test-list-group-separator {
+    height: 2px;
+    margin: 5px 15px;
+}
+
+.validator-test-list-group {
+    overflow: hidden;
+}
+
+.validator-test-list-group-expander {
+    flex-direction: row;
+    flex-grow: 0;
+    flex-shrink: 0;
+
+    align-items: center;
+
+    min-width: 200px;
+    min-height: 30px;
+
+    margin: 10px -1px 2px -1px;
+}
+
+.validator-test-list-group-expander-arrow {
+    align-self: center;
+
+    width: 30px;
+    height: 30px;
+    
+    margin: 0;
+    padding: 0;
+}
+
+.validator-test-list-group-expander-image {
+    flex-shrink: 0;
+    flex-grow: 0;
+
+    width: 17px;
+    height: 17px;
+
+    margin: 0 7px 0 2px;
+}
+
+.validator-test-list-group-expander-label {
+    font-size: 14px;
+}
+
+.validator-test-list-group-content {
+    margin: -2px -2px -2px -2px;
+}
+
+/* Validation Test */
+
+.validator-test {
+    flex-direction: column;
+    flex-shrink: 0;
+    flex-grow: 0;
+
+    padding: 2px 0;
+}
+
+.validator-test-foldout {
+    flex-direction: row;
+    flex-grow: 1;
+    flex-shrink: 1;
+
+    align-items: center;
+    justify-content: space-between;
+
+    min-width: 200px;
+    min-height: 35px;
+
+    margin: 0;
+    padding: 5px 10px;
+}
+
+.validator-test-expander {
+    flex-direction: row;
+    flex-grow: 1;
+}
+
+.validator-test-expander-arrow {
+    font-size: 11px;
+    align-self: center;
+
+    width: 30px;
+    height: 30px;
+    
+    margin: 0;
+    padding: 0;
+}
+
+.validator-text-expander-label {
+    flex-grow: 1;
+    flex-shrink: 1;
+
+    -unity-text-align: middle-left;
+    -unity-font-style: bold;
+    white-space: normal;
+}
+
+.validator-test-expander-image {
+    flex-shrink: 0;
+    
+    width: 14px;
+    height: 14px;
+    
+    margin: 0 10px;
+}
+
+.validator-test-content {
+    flex-grow: 1;
+    flex-shrink: 0;
+
+    margin: 0;
+    padding: 5px 30px;
+}
+
+.validator-test-content-textfield {
+    white-space: normal;
+}
+
+.validator-test-content-result-messages {
+    flex-direction: column;
+    flex-shrink: 0;
+    flex-grow: 0;
+
+    margin: 10px 0 5px 0;
+    padding: 0 3px 3px 3px;
+}
+
+.validator-test-content-result-messages-content {
+    flex-basis: auto;
+    flex-direction: column;
+    
+    margin-top: 3px;
+}
+
+.validator-test-content-result-messages-content-button {
+    align-self: stretch;
+    
+    -unity-font-style: normal;
+    -unity-text-align: middle-left;
+
+    margin: 0;
+}
+
+.validator-test-content-result-messages-content-label {
+    white-space: normal;
+}
+
+.validator-test-content-result-messages-separator {
+    height: 3px;
+    margin: 5px -3px 0 -3px;
+}

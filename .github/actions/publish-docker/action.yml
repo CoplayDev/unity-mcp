@@ -1,0 +1,111 @@
+name: Publish Docker image
+description: Build and push the Docker image to Docker Hub
+inputs:
+  docker_username:
+    required: true
+    description: Docker Hub username
+  docker_password:
+    required: true
+    description: Docker Hub password
+  image:
+    required: true
+    description: Docker image name (e.g. user/repo)
+  version:
+    required: false
+    default: ""
+    description: Optional version string (e.g. 1.2.3). If provided, tags are computed from this version instead of the GitHub ref.
+  include_branch_tags:
+    required: false
+    default: "true"
+    description: Whether to also publish a branch tag when running on a branch ref (e.g. manual runs).
+  context:
+    required: false
+    default: .
+    description: Docker build context
+  dockerfile:
+    required: false
+    default: Server/Dockerfile
+    description: Path to Dockerfile
+  platforms:
+    required: false
+    default: linux/amd64
+    description: Target platforms
+runs:
+  using: composite
+  steps:
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ inputs.docker_username }}
+        password: ${{ inputs.docker_password }}
+
+    - name: Extract metadata (tags, labels) for Docker
+      id: meta
+      uses: docker/metadata-action@v5
+      if: ${{ inputs.version == '' && inputs.include_branch_tags == 'true' }}
+      with:
+        images: ${{ inputs.image }}
+        tags: |
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=ref,event=branch
+
+    - name: Extract metadata (tags, labels) for Docker
+      id: meta_nobranch
+      uses: docker/metadata-action@v5
+      if: ${{ inputs.version == '' && inputs.include_branch_tags != 'true' }}
+      with:
+        images: ${{ inputs.image }}
+        tags: |
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+
+    - name: Compute Docker tags from version
+      id: version_tags
+      if: ${{ inputs.version != '' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        IFS='.' read -r MA MI PA <<< "${{ inputs.version }}"
+        echo "major=$MA" >> "$GITHUB_OUTPUT"
+        echo "minor=$MI" >> "$GITHUB_OUTPUT"
+
+    - name: Extract metadata (tags, labels) for Docker
+      id: meta_version
+      uses: docker/metadata-action@v5
+      if: ${{ inputs.version != '' && inputs.include_branch_tags == 'true' }}
+      with:
+        images: ${{ inputs.image }}
+        tags: |
+          type=raw,value=v${{ inputs.version }}
+          type=raw,value=v${{ steps.version_tags.outputs.major }}.${{ steps.version_tags.outputs.minor }}
+          type=raw,value=v${{ steps.version_tags.outputs.major }}
+          type=ref,event=branch
+
+    - name: Extract metadata (tags, labels) for Docker
+      id: meta_version_nobranch
+      uses: docker/metadata-action@v5
+      if: ${{ inputs.version != '' && inputs.include_branch_tags != 'true' }}
+      with:
+        images: ${{ inputs.image }}
+        tags: |
+          type=raw,value=v${{ inputs.version }}
+          type=raw,value=v${{ steps.version_tags.outputs.major }}.${{ steps.version_tags.outputs.minor }}
+          type=raw,value=v${{ steps.version_tags.outputs.major }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v6
+      with:
+        context: ${{ inputs.context }}
+        file: ${{ inputs.dockerfile }}
+        platforms: ${{ inputs.platforms }}
+        push: true
+        tags: ${{ steps.meta.outputs.tags || steps.meta_nobranch.outputs.tags || steps.meta_version.outputs.tags || steps.meta_version_nobranch.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels || steps.meta_nobranch.outputs.labels || steps.meta_version.outputs.labels || steps.meta_version_nobranch.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max

@@ -5,6 +5,7 @@ from typing import Annotated, Any
 from urllib.parse import unquote, urlparse
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
@@ -16,7 +17,7 @@ def _split_uri(uri: str) -> tuple[str, str]:
     """Split an incoming URI or path into (name, directory) suitable for Unity.
 
     Rules:
-    - unity://path/Assets/... → keep as Assets-relative (after decode/normalize)
+    - mcpforunity://path/Assets/... → keep as Assets-relative (after decode/normalize)
     - file://... → percent-decode, normalize, strip host and leading slashes,
         then, if any 'Assets' segment exists, return path relative to that 'Assets' root.
         Otherwise, fall back to original name/dir behavior.
@@ -24,8 +25,8 @@ def _split_uri(uri: str) -> tuple[str, str]:
         return relative to 'Assets'.
     """
     raw_path: str
-    if uri.startswith("unity://path/"):
-        raw_path = uri[len("unity://path/"):]
+    if uri.startswith("mcpforunity://path/"):
+        raw_path = uri[len("mcpforunity://path/"):]
     elif uri.startswith("file://"):
         parsed = urlparse(uri)
         host = (parsed.netloc or "").strip()
@@ -64,14 +65,21 @@ def _split_uri(uri: str) -> tuple[str, str]:
     return name, directory
 
 
-@mcp_for_unity_tool(description="Searches a file with a regex pattern and returns line numbers and excerpts.")
+@mcp_for_unity_tool(
+    description="Searches a file with a regex pattern and returns line numbers and excerpts.",
+    annotations=ToolAnnotations(
+        title="Find in File",
+        readOnlyHint=True,
+    ),
+)
 async def find_in_file(
     ctx: Context,
     uri: Annotated[str, "The resource URI to search under Assets/ or file path form supported by read_resource"],
     pattern: Annotated[str, "The regex pattern to search for"],
     project_root: Annotated[str | None, "Optional project root path"] = None,
     max_results: Annotated[int, "Cap results to avoid huge payloads"] = 200,
-    ignore_case: Annotated[bool | str | None, "Case insensitive search"] = True,
+    ignore_case: Annotated[bool | str | None,
+                           "Case insensitive search"] = True,
 ) -> dict[str, Any]:
     # project_root is currently unused but kept for interface consistency
     unity_instance = get_unity_instance_from_context(ctx)
@@ -79,7 +87,7 @@ async def find_in_file(
         f"Processing find_in_file: {uri} (unity_instance={unity_instance or 'default'})")
 
     name, directory = _split_uri(uri)
-    
+
     # 1. Read file content via Unity
     read_resp = await send_with_unity_instance(
         async_send_command_with_retry,
@@ -103,7 +111,7 @@ async def find_in_file(
                 "utf-8")).decode("utf-8", "replace")
         except (ValueError, TypeError, base64.binascii.Error):
             contents = contents or ""
-    
+
     if contents is None:
         return {"success": False, "message": "Could not read file content."}
 
@@ -121,26 +129,26 @@ async def find_in_file(
     except re.error as e:
         return {"success": False, "message": f"Invalid regex pattern: {e}"}
 
-    # If the regex is not multiline specific (doesn't contain \n literal match logic), 
+    # If the regex is not multiline specific (doesn't contain \n literal match logic),
     # we could iterate lines. But users might use multiline regexes.
     # Let's search the whole content and map back to lines.
-    
+
     found = list(regex.finditer(contents))
-    
+
     results = []
     count = 0
-    
+
     for m in found:
         if count >= max_results:
             break
-        
+
         start_idx = m.start()
         end_idx = m.end()
-        
+
         # Calculate line number
         # Count newlines up to start_idx
         line_num = contents.count('\n', 0, start_idx) + 1
-        
+
         # Get line content for excerpt
         # Find start of line
         line_start = contents.rfind('\n', 0, start_idx) + 1
@@ -148,15 +156,15 @@ async def find_in_file(
         line_end = contents.find('\n', start_idx)
         if line_end == -1:
             line_end = len(contents)
-            
+
         line_content = contents[line_start:line_end]
-        
+
         # Create excerpt
         # We can just return the line content as excerpt
-        
+
         results.append({
             "line": line_num,
-            "content": line_content.strip(), # detailed match info?
+            "content": line_content.strip(),  # detailed match info?
             "match": m.group(0),
             "start": start_idx,
             "end": end_idx
@@ -171,4 +179,3 @@ async def find_in_file(
             "total_matches": len(found)
         }
     }
-

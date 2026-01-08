@@ -50,5 +50,3 @@ namespace MCPForUnity.Editor.Tools
         }
     }
 }
-
-

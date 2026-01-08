@@ -1,4 +1,5 @@
 from fastmcp import Context
+from mcp.types import ToolAnnotations
 from models.models import MCPResponse
 
 from services.custom_tool_service import (
@@ -12,13 +13,17 @@ from services.tools import get_unity_instance_from_context
 @mcp_for_unity_tool(
     name="execute_custom_tool",
     description="Execute a project-scoped custom tool registered by Unity.",
+    annotations=ToolAnnotations(
+        title="Execute Custom Tool",
+        destructiveHint=True,
+    ),
 )
 async def execute_custom_tool(ctx: Context, tool_name: str, parameters: dict | None = None) -> MCPResponse:
     unity_instance = get_unity_instance_from_context(ctx)
     if not unity_instance:
         return MCPResponse(
             success=False,
-            message="No active Unity instance. Call set_active_instance with Name@hash from unity://instances.",
+            message="No active Unity instance. Call set_active_instance with Name@hash from mcpforunity://instances.",
         )
 
     project_id = resolve_project_id_for_unity_instance(unity_instance)

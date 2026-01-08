@@ -32,13 +32,7 @@ class TestManageAssetJsonParsing:
             properties='{"shader": "Universal Render Pipeline/Lit", "color": [0, 0, 1, 1]}'
         )
 
-        # Verify JSON parsing was logged
-        assert any(
-            "manage_asset: coerced properties using centralized parser" in msg
-            for msg in ctx.log_info
-        )
-
-        # Verify the result
+        # Verify the result - JSON string was successfully parsed and passed to Unity
         assert result["success"] is True
         assert "Asset created successfully" in result["message"]
 
@@ -63,7 +57,7 @@ class TestManageAssetJsonParsing:
 
         # Verify behavior: parsing fails with a clear error
         assert result.get("success") is False
-        assert "failed to parse properties string" in result.get("message", "")
+        assert "properties must be" in result.get("message", "")
 
     @pytest.mark.asyncio
     async def test_properties_dict_unchanged(self, monkeypatch):

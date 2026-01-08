@@ -5,7 +5,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using MCPForUnity.Editor.Tools;
-using MCPForUnity.Editor.Helpers;
+using static MCPForUnityTests.Editor.TestUtilities;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -52,21 +52,8 @@ namespace MCPForUnityTests.Editor.Tools
                 AssetDatabase.DeleteAsset(TempRoot);
             }
             
-            // Clean up parent Temp folder if it's empty
-            if (AssetDatabase.IsValidFolder("Assets/Temp"))
-            {
-                var remainingDirs = Directory.GetDirectories("Assets/Temp");
-                var remainingFiles = Directory.GetFiles("Assets/Temp");
-                if (remainingDirs.Length == 0 && remainingFiles.Length == 0)
-                {
-                    AssetDatabase.DeleteAsset("Assets/Temp");
-                }
-            }
-        }
-
-        private static JObject ToJObject(object result)
-        {
-            return result as JObject ?? JObject.FromObject(result);
+            // Clean up empty parent folders to avoid debris
+            CleanupEmptyParentFolders(TempRoot);
         }
 
         [Test]
@@ -80,8 +67,8 @@ namespace MCPForUnityTests.Editor.Tools
                 ["color"] = new JArray(1f, 0f, 0f, 1f)
             };
             var resultBadPath = ToJObject(ManageMaterial.HandleCommand(paramsBadPath));
-            Assert.AreEqual("error", resultBadPath.Value<string>("status"));
-            StringAssert.Contains("Could not find material", resultBadPath.Value<string>("message"));
+            Assert.IsFalse(resultBadPath.Value<bool>("success"));
+            StringAssert.Contains("Could not find material", resultBadPath.Value<string>("error"));
 
             // 2. Bad color array (too short)
             var paramsBadColor = new JObject
@@ -91,8 +78,8 @@ namespace MCPForUnityTests.Editor.Tools
                 ["color"] = new JArray(1f) // Invalid
             };
             var resultBadColor = ToJObject(ManageMaterial.HandleCommand(paramsBadColor));
-            Assert.AreEqual("error", resultBadColor.Value<string>("status"));
-            StringAssert.Contains("Invalid color format", resultBadColor.Value<string>("message"));
+            Assert.IsFalse(resultBadColor.Value<bool>("success"));
+            StringAssert.Contains("Invalid color format", resultBadColor.Value<string>("error"));
 
              // 3. Bad slot index
              // Assign material first
@@ -108,8 +95,8 @@ namespace MCPForUnityTests.Editor.Tools
                 ["slot"] = 99
             };
             var resultBadSlot = ToJObject(ManageMaterial.HandleCommand(paramsBadSlot));
-            Assert.AreEqual("error", resultBadSlot.Value<string>("status"));
-            StringAssert.Contains("out of bounds", resultBadSlot.Value<string>("message"));
+            Assert.IsFalse(resultBadSlot.Value<bool>("success"));
+            StringAssert.Contains("out of bounds", resultBadSlot.Value<string>("error"));
         }
 
         [Test]
@@ -137,7 +124,7 @@ namespace MCPForUnityTests.Editor.Tools
             };
             
             var result = ToJObject(ManageMaterial.HandleCommand(paramsObj));
-            Assert.AreEqual("success", result.Value<string>("status"));
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
 
             // Assert
             // 1. Renderer has property block with Red
@@ -168,7 +155,7 @@ namespace MCPForUnityTests.Editor.Tools
                  ["materialPath"] = _matPath
              };
              var assignResult = ToJObject(ManageMaterial.HandleCommand(assignParams));
-             Assert.AreEqual("success", assignResult.Value<string>("status"));
+             Assert.IsTrue(assignResult.Value<bool>("success"), assignResult.ToString());
              
              // Verify assignment
              var renderer = _cube.GetComponent<Renderer>();
@@ -183,7 +170,7 @@ namespace MCPForUnityTests.Editor.Tools
                  ["color"] = new JArray(newColor.r, newColor.g, newColor.b, newColor.a)
              };
              var colorResult = ToJObject(ManageMaterial.HandleCommand(colorParams));
-             Assert.AreEqual("success", colorResult.Value<string>("status"));
+             Assert.IsTrue(colorResult.Value<bool>("success"), colorResult.ToString());
              
              // Verify color changed on renderer (because it's shared)
              var propName = renderer.sharedMaterial.HasProperty("_BaseColor") ? "_BaseColor" : "_Color";

@@ -416,7 +416,7 @@ namespace MCPForUnity.Editor.Services
             PersistToSessionState(force: true);
         }
 
-        public static TestJob GetJob(string jobId)
+        internal static TestJob GetJob(string jobId)
         {
             if (string.IsNullOrWhiteSpace(jobId))
             {
@@ -428,7 +428,7 @@ namespace MCPForUnity.Editor.Services
             }
         }
 
-        public static object ToSerializable(TestJob job, bool includeDetails, bool includeFailedTests)
+        internal static object ToSerializable(TestJob job, bool includeDetails, bool includeFailedTests)
         {
             if (job == null)
             {

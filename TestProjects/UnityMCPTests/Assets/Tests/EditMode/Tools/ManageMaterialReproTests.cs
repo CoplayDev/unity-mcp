@@ -4,6 +4,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using MCPForUnity.Editor.Tools;
+using static MCPForUnityTests.Editor.TestUtilities;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -35,11 +36,9 @@ namespace MCPForUnityTests.Editor.Tools
             {
                 AssetDatabase.DeleteAsset(TempRoot);
             }
-        }
 
-        private static JObject ToJObject(object result)
-        {
-            return result as JObject ?? JObject.FromObject(result);
+            // Clean up empty parent folders to avoid debris
+            CleanupEmptyParentFolders(TempRoot);
         }
 
         [Test]
@@ -61,10 +60,10 @@ namespace MCPForUnityTests.Editor.Tools
             var result = ToJObject(ManageMaterial.HandleCommand(paramsObj));
 
             // Assert
-            Assert.AreEqual("error", result.Value<string>("status"));
+            Assert.IsFalse(result.Value<bool>("success"));
             
             // We expect more detailed error message after fix
-            var message = result.Value<string>("message");
+            var message = result.Value<string>("error");
             Assert.IsTrue(message.StartsWith("Invalid JSON in properties"), "Message should start with prefix");
             Assert.AreNotEqual("Invalid JSON in properties", message, "Message should contain exception details");
         }

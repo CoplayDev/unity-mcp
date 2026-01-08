@@ -1,15 +1,16 @@
 """
 Defines the manage_asset tool for interacting with Unity assets.
 """
-import ast
 import asyncio
 import json
 from typing import Annotated, Any, Literal
 
 from fastmcp import Context
+from mcp.types import ToolAnnotations
+
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
-from services.tools.utils import parse_json_payload, coerce_int
+from services.tools.utils import parse_json_payload, coerce_int, normalize_properties
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 from services.tools.preflight import preflight
@@ -20,7 +21,11 @@ from services.tools.preflight import preflight
         "Performs asset operations (import, create, modify, delete, etc.) in Unity.\n\n"
         "Tip (payload safety): for `action=\"search\"`, prefer paging (`page_size`, `page_number`) and keep "
         "`generate_preview=false` (previews can add large base64 blobs)."
-    )
+    ),
+    annotations=ToolAnnotations(
+        title="Manage Asset",
+        destructiveHint=True,
+    ),
 )
 async def manage_asset(
     ctx: Context,
@@ -28,8 +33,8 @@ async def manage_asset(
     path: Annotated[str, "Asset path (e.g., 'Materials/MyMaterial.mat') or search scope (e.g., 'Assets')."],
     asset_type: Annotated[str,
                           "Asset type (e.g., 'Material', 'Folder') - required for 'create'. Note: For ScriptableObjects, use manage_scriptable_object."] | None = None,
-    properties: Annotated[dict[str, Any] | str,
-                          "Dictionary (or JSON string) of properties for 'create'/'modify'."] | None = None,
+    properties: Annotated[dict[str, Any],
+                          "Dictionary of properties for 'create'/'modify'. Keys are property names, values are property values."] | None = None,
     destination: Annotated[str,
                            "Target path for 'duplicate'/'move'."] | None = None,
     generate_preview: Annotated[bool,
@@ -54,46 +59,10 @@ async def manage_asset(
     if gate is not None:
         return gate.model_dump()
 
-    def _parse_properties_string(raw: str) -> tuple[dict[str, Any] | None, str | None]:
-        try:
-            parsed = json.loads(raw)
-            if not isinstance(parsed, dict):
-                return None, f"manage_asset: properties JSON must decode to a dictionary; received {type(parsed)}"
-            return parsed, "JSON"
-        except json.JSONDecodeError as json_err:
-            try:
-                parsed = ast.literal_eval(raw)
-                if not isinstance(parsed, dict):
-                    return None, f"manage_asset: properties string must evaluate to a dictionary; received {type(parsed)}"
-                return parsed, "Python literal"
-            except (ValueError, SyntaxError) as literal_err:
-                return None, f"manage_asset: failed to parse properties string. JSON error: {json_err}; literal_eval error: {literal_err}"
-
-    async def _normalize_properties(raw: dict[str, Any] | str | None) -> tuple[dict[str, Any] | None, str | None]:
-        if raw is None:
-            return {}, None
-        if isinstance(raw, dict):
-            await ctx.info(f"manage_asset: received properties as dict with keys: {list(raw.keys())}")
-            return raw, None
-        if isinstance(raw, str):
-            await ctx.info(f"manage_asset: received properties as string (first 100 chars): {raw[:100]}")
-            # Try our robust centralized parser first, then fallback to ast.literal_eval specific to manage_asset if needed
-            parsed = parse_json_payload(raw)
-            if isinstance(parsed, dict):
-                 await ctx.info("manage_asset: coerced properties using centralized parser")
-                 return parsed, None
-
-            # Fallback to original logic for ast.literal_eval which parse_json_payload avoids for safety/simplicity
-            parsed, source = _parse_properties_string(raw)
-            if parsed is None:
-                return None, source
-            await ctx.info(f"manage_asset: coerced properties from {source} string to dict")
-            return parsed, None
-        return None, f"manage_asset: properties must be a dict or JSON string; received {type(raw)}"
-
-    properties, parse_error = await _normalize_properties(properties)
+    # --- Normalize properties using robust module-level helper ---
+    properties, parse_error = normalize_properties(properties)
     if parse_error:
-        await ctx.error(parse_error)
+        await ctx.error(f"manage_asset: {parse_error}")
         return {"success": False, "message": parse_error}
 
     page_size = coerce_int(page_size)

@@ -23,7 +23,7 @@ class ProjectInfoResponse(MCPResponse):
 
 
 @mcp_for_unity_resource(
-    uri="unity://project/info",
+    uri="mcpforunity://project/info",
     name="project_info",
     description="Static project information including root path, Unity version, and platform. This data rarely changes."
 )

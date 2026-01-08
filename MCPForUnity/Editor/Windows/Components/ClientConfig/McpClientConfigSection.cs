@@ -84,6 +84,11 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
             }
 
             claudeCliPathRow.style.display = DisplayStyle.None;
+            
+            // Initialize the configuration display for the first selected client
+            UpdateClientStatus();
+            UpdateManualConfiguration();
+            UpdateClaudeCliPathVisibility();
         }
 
         private void RegisterCallbacks()

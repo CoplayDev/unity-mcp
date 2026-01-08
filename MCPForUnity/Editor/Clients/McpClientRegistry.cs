@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using MCPForUnity.Editor.Helpers;
 using UnityEditor;
 using UnityEngine;
 
@@ -47,7 +48,7 @@ namespace MCPForUnity.Editor.Clients
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"UnityMCP: Failed to instantiate configurator {type.Name}: {ex.Message}");
+                    McpLog.Warn($"UnityMCP: Failed to instantiate configurator {type.Name}: {ex.Message}");
                 }
             }
 

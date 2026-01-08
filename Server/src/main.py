@@ -30,7 +30,8 @@ try:  # pragma: no cover - startup safety guard
     )
     for _name in _typing_names:
         if not hasattr(builtins, _name) and hasattr(_typing, _name):
-            setattr(builtins, _name, getattr(_typing, _name))  # type: ignore[attr-defined]
+            # type: ignore[attr-defined]
+            setattr(builtins, _name, getattr(_typing, _name))
 except Exception:
     pass
 
@@ -234,10 +235,10 @@ mcp = FastMCP(
     instructions="""
 This server provides tools to interact with the Unity Game Engine Editor.
 
-I have a dynamic tool system. Always check the unity://custom-tools resource first to see what special capabilities are available for the current project.
+I have a dynamic tool system. Always check the mcpforunity://custom-tools resource first to see what special capabilities are available for the current project.
 
 Targeting Unity instances:
-- Use the resource unity://instances to list active Unity sessions (Name@hash).
+- Use the resource mcpforunity://instances to list active Unity sessions (Name@hash).
 - When multiple instances are connected, call set_active_instance with the exact Name@hash before using tools/resources. The server will error if multiple are connected and no active instance is set.
 
 Important Workflows:

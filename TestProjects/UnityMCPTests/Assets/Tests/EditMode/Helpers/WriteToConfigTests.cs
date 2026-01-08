@@ -21,9 +21,21 @@ namespace MCPForUnityTests.Editor.Helpers
         private string _fakeUvPath;
         private string _serverSrcDir;
 
+        // Save/restore original pref values (must happen BEFORE Assert.Ignore since TearDown still runs)
+        private bool _hadHttpTransport;
+        private bool _originalHttpTransport;
+        private bool _hadHttpUrl;
+        private string _originalHttpUrl;
+
         [SetUp]
         public void SetUp()
         {
+            // Save original pref values FIRST - TearDown runs even when test is ignored!
+            _hadHttpTransport = EditorPrefs.HasKey(UseHttpTransportPrefKey);
+            _originalHttpTransport = EditorPrefs.GetBool(UseHttpTransportPrefKey, true);
+            _hadHttpUrl = EditorPrefs.HasKey(HttpUrlPrefKey);
+            _originalHttpUrl = EditorPrefs.GetString(HttpUrlPrefKey, "");
+
             // Tests are designed for Linux/macOS runners. Skip on Windows due to ProcessStartInfo
             // restrictions when UseShellExecute=false for .cmd/.bat scripts.
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -62,8 +74,17 @@ namespace MCPForUnityTests.Editor.Helpers
             EditorPrefs.DeleteKey(EditorPrefKeys.ServerSrc);
             EditorPrefs.DeleteKey(EditorPrefKeys.LockCursorConfig);
             EditorPrefs.DeleteKey(EditorPrefKeys.AutoRegisterEnabled);
-            EditorPrefs.DeleteKey(UseHttpTransportPrefKey);
-            EditorPrefs.DeleteKey(HttpUrlPrefKey);
+
+            // Restore original pref values (don't delete if user had them set!)
+            if (_hadHttpTransport)
+                EditorPrefs.SetBool(UseHttpTransportPrefKey, _originalHttpTransport);
+            else
+                EditorPrefs.DeleteKey(UseHttpTransportPrefKey);
+
+            if (_hadHttpUrl)
+                EditorPrefs.SetString(HttpUrlPrefKey, _originalHttpUrl);
+            else
+                EditorPrefs.DeleteKey(HttpUrlPrefKey);
 
             // Remove temp files
             try { if (Directory.Exists(_tempRoot)) Directory.Delete(_tempRoot, true); } catch { }

@@ -1,5 +1,6 @@
 using System;
 using MCPForUnity.Editor.Helpers;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditorInternal;
@@ -31,6 +32,201 @@ namespace MCPForUnity.Editor.Services
         private const double MinUpdateIntervalSeconds = 0.25;
 
         private static JObject _cached;
+
+        private sealed class EditorStateSnapshot
+        {
+            [JsonProperty("schema_version")]
+            public string SchemaVersion { get; set; }
+
+            [JsonProperty("observed_at_unix_ms")]
+            public long ObservedAtUnixMs { get; set; }
+
+            [JsonProperty("sequence")]
+            public long Sequence { get; set; }
+
+            [JsonProperty("unity")]
+            public EditorStateUnity Unity { get; set; }
+
+            [JsonProperty("editor")]
+            public EditorStateEditor Editor { get; set; }
+
+            [JsonProperty("activity")]
+            public EditorStateActivity Activity { get; set; }
+
+            [JsonProperty("compilation")]
+            public EditorStateCompilation Compilation { get; set; }
+
+            [JsonProperty("assets")]
+            public EditorStateAssets Assets { get; set; }
+
+            [JsonProperty("tests")]
+            public EditorStateTests Tests { get; set; }
+
+            [JsonProperty("transport")]
+            public EditorStateTransport Transport { get; set; }
+        }
+
+        private sealed class EditorStateUnity
+        {
+            [JsonProperty("instance_id")]
+            public string InstanceId { get; set; }
+
+            [JsonProperty("unity_version")]
+            public string UnityVersion { get; set; }
+
+            [JsonProperty("project_id")]
+            public string ProjectId { get; set; }
+
+            [JsonProperty("platform")]
+            public string Platform { get; set; }
+
+            [JsonProperty("is_batch_mode")]
+            public bool? IsBatchMode { get; set; }
+        }
+
+        private sealed class EditorStateEditor
+        {
+            [JsonProperty("is_focused")]
+            public bool? IsFocused { get; set; }
+
+            [JsonProperty("play_mode")]
+            public EditorStatePlayMode PlayMode { get; set; }
+
+            [JsonProperty("active_scene")]
+            public EditorStateActiveScene ActiveScene { get; set; }
+        }
+
+        private sealed class EditorStatePlayMode
+        {
+            [JsonProperty("is_playing")]
+            public bool? IsPlaying { get; set; }
+
+            [JsonProperty("is_paused")]
+            public bool? IsPaused { get; set; }
+
+            [JsonProperty("is_changing")]
+            public bool? IsChanging { get; set; }
+        }
+
+        private sealed class EditorStateActiveScene
+        {
+            [JsonProperty("path")]
+            public string Path { get; set; }
+
+            [JsonProperty("guid")]
+            public string Guid { get; set; }
+
+            [JsonProperty("name")]
+            public string Name { get; set; }
+        }
+
+        private sealed class EditorStateActivity
+        {
+            [JsonProperty("phase")]
+            public string Phase { get; set; }
+
+            [JsonProperty("since_unix_ms")]
+            public long SinceUnixMs { get; set; }
+
+            [JsonProperty("reasons")]
+            public string[] Reasons { get; set; }
+        }
+
+        private sealed class EditorStateCompilation
+        {
+            [JsonProperty("is_compiling")]
+            public bool? IsCompiling { get; set; }
+
+            [JsonProperty("is_domain_reload_pending")]
+            public bool? IsDomainReloadPending { get; set; }
+
+            [JsonProperty("last_compile_started_unix_ms")]
+            public long? LastCompileStartedUnixMs { get; set; }
+
+            [JsonProperty("last_compile_finished_unix_ms")]
+            public long? LastCompileFinishedUnixMs { get; set; }
+
+            [JsonProperty("last_domain_reload_before_unix_ms")]
+            public long? LastDomainReloadBeforeUnixMs { get; set; }
+
+            [JsonProperty("last_domain_reload_after_unix_ms")]
+            public long? LastDomainReloadAfterUnixMs { get; set; }
+        }
+
+        private sealed class EditorStateAssets
+        {
+            [JsonProperty("is_updating")]
+            public bool? IsUpdating { get; set; }
+
+            [JsonProperty("external_changes_dirty")]
+            public bool? ExternalChangesDirty { get; set; }
+
+            [JsonProperty("external_changes_last_seen_unix_ms")]
+            public long? ExternalChangesLastSeenUnixMs { get; set; }
+
+            [JsonProperty("external_changes_dirty_since_unix_ms")]
+            public long? ExternalChangesDirtySinceUnixMs { get; set; }
+
+            [JsonProperty("external_changes_last_cleared_unix_ms")]
+            public long? ExternalChangesLastClearedUnixMs { get; set; }
+
+            [JsonProperty("refresh")]
+            public EditorStateRefresh Refresh { get; set; }
+        }
+
+        private sealed class EditorStateRefresh
+        {
+            [JsonProperty("is_refresh_in_progress")]
+            public bool? IsRefreshInProgress { get; set; }
+
+            [JsonProperty("last_refresh_requested_unix_ms")]
+            public long? LastRefreshRequestedUnixMs { get; set; }
+
+            [JsonProperty("last_refresh_finished_unix_ms")]
+            public long? LastRefreshFinishedUnixMs { get; set; }
+        }
+
+        private sealed class EditorStateTests
+        {
+            [JsonProperty("is_running")]
+            public bool? IsRunning { get; set; }
+
+            [JsonProperty("mode")]
+            public string Mode { get; set; }
+
+            [JsonProperty("current_job_id")]
+            public string CurrentJobId { get; set; }
+
+            [JsonProperty("started_unix_ms")]
+            public long? StartedUnixMs { get; set; }
+
+            [JsonProperty("started_by")]
+            public string StartedBy { get; set; }
+
+            [JsonProperty("last_run")]
+            public EditorStateLastRun LastRun { get; set; }
+        }
+
+        private sealed class EditorStateLastRun
+        {
+            [JsonProperty("finished_unix_ms")]
+            public long? FinishedUnixMs { get; set; }
+
+            [JsonProperty("result")]
+            public string Result { get; set; }
+
+            [JsonProperty("counts")]
+            public object Counts { get; set; }
+        }
+
+        private sealed class EditorStateTransport
+        {
+            [JsonProperty("unity_bridge_connected")]
+            public bool? UnityBridgeConnected { get; set; }
+
+            [JsonProperty("last_message_unix_ms")]
+            public long? LastMessageUnixMs { get; set; }
+        }
 
         static EditorStateCache()
         {
@@ -135,85 +331,88 @@ namespace MCPForUnity.Editor.Services
                 activityPhase = "playmode_transition";
             }
 
-            // Keep this as a plain JSON object for minimal friction with transports.
-            return JObject.FromObject(new
+            var snapshot = new EditorStateSnapshot
             {
-                schema_version = "unity-mcp/editor_state@2",
-                observed_at_unix_ms = _observedUnixMs,
-                sequence = _sequence,
-                unity = new
+                SchemaVersion = "unity-mcp/editor_state@2",
+                ObservedAtUnixMs = _observedUnixMs,
+                Sequence = _sequence,
+                Unity = new EditorStateUnity
                 {
-                    instance_id = (string)null,
-                    unity_version = Application.unityVersion,
-                    project_id = (string)null,
-                    platform = Application.platform.ToString(),
-                    is_batch_mode = Application.isBatchMode
+                    InstanceId = null,
+                    UnityVersion = Application.unityVersion,
+                    ProjectId = null,
+                    Platform = Application.platform.ToString(),
+                    IsBatchMode = Application.isBatchMode
                 },
-                editor = new
+                Editor = new EditorStateEditor
                 {
-                    is_focused = isFocused,
-                    play_mode = new
+                    IsFocused = isFocused,
+                    PlayMode = new EditorStatePlayMode
                     {
-                        is_playing = EditorApplication.isPlaying,
-                        is_paused = EditorApplication.isPaused,
-                        is_changing = EditorApplication.isPlayingOrWillChangePlaymode
+                        IsPlaying = EditorApplication.isPlaying,
+                        IsPaused = EditorApplication.isPaused,
+                        IsChanging = EditorApplication.isPlayingOrWillChangePlaymode
                     },
-                    active_scene = new
+                    ActiveScene = new EditorStateActiveScene
                     {
-                        path = scenePath,
-                        guid = sceneGuid,
-                        name = scene.name ?? string.Empty
+                        Path = scenePath,
+                        Guid = sceneGuid,
+                        Name = scene.name ?? string.Empty
                     }
                 },
-                activity = new
+                Activity = new EditorStateActivity
                 {
-                    phase = activityPhase,
-                    since_unix_ms = _observedUnixMs,
-                    reasons = new[] { reason }
+                    Phase = activityPhase,
+                    SinceUnixMs = _observedUnixMs,
+                    Reasons = new[] { reason }
                 },
-                compilation = new
+                Compilation = new EditorStateCompilation
                 {
-                    is_compiling = isCompiling,
-                    is_domain_reload_pending = _domainReloadPending,
-                    last_compile_started_unix_ms = _lastCompileStartedUnixMs,
-                    last_compile_finished_unix_ms = _lastCompileFinishedUnixMs,
-                    last_domain_reload_before_unix_ms = _domainReloadBeforeUnixMs,
-                    last_domain_reload_after_unix_ms = _domainReloadAfterUnixMs
+                    IsCompiling = isCompiling,
+                    IsDomainReloadPending = _domainReloadPending,
+                    LastCompileStartedUnixMs = _lastCompileStartedUnixMs,
+                    LastCompileFinishedUnixMs = _lastCompileFinishedUnixMs,
+                    LastDomainReloadBeforeUnixMs = _domainReloadBeforeUnixMs,
+                    LastDomainReloadAfterUnixMs = _domainReloadAfterUnixMs
                 },
-                assets = new
+                Assets = new EditorStateAssets
                 {
-                    is_updating = EditorApplication.isUpdating,
-                    external_changes_dirty = false,
-                    external_changes_last_seen_unix_ms = (long?)null,
-                    refresh = new
+                    IsUpdating = EditorApplication.isUpdating,
+                    ExternalChangesDirty = false,
+                    ExternalChangesLastSeenUnixMs = null,
+                    ExternalChangesDirtySinceUnixMs = null,
+                    ExternalChangesLastClearedUnixMs = null,
+                    Refresh = new EditorStateRefresh
                     {
-                        is_refresh_in_progress = false,
-                        last_refresh_requested_unix_ms = (long?)null,
-                        last_refresh_finished_unix_ms = (long?)null
+                        IsRefreshInProgress = false,
+                        LastRefreshRequestedUnixMs = null,
+                        LastRefreshFinishedUnixMs = null
                     }
                 },
-                tests = new
+                Tests = new EditorStateTests
                 {
-                    is_running = testsRunning,
-                    mode = testsMode,
-                    current_job_id = string.IsNullOrEmpty(currentJobId) ? null : currentJobId,
-                    started_unix_ms = TestRunStatus.StartedUnixMs,
-                    started_by = "unknown",
-                    last_run = TestRunStatus.FinishedUnixMs.HasValue
-                        ? new
+                    IsRunning = testsRunning,
+                    Mode = testsMode,
+                    CurrentJobId = string.IsNullOrEmpty(currentJobId) ? null : currentJobId,
+                    StartedUnixMs = TestRunStatus.StartedUnixMs,
+                    StartedBy = "unknown",
+                    LastRun = TestRunStatus.FinishedUnixMs.HasValue
+                        ? new EditorStateLastRun
                         {
-                            finished_unix_ms = TestRunStatus.FinishedUnixMs,
-                            result = "unknown",
-                            counts = (object)null
+                            FinishedUnixMs = TestRunStatus.FinishedUnixMs,
+                            Result = "unknown",
+                            Counts = null
                         }
                         : null
                 },
-                transport = new
+                Transport = new EditorStateTransport
                 {
-                    unity_bridge_connected = (bool?)null,
-                    last_message_unix_ms = (long?)null
+                    UnityBridgeConnected = null,
+                    LastMessageUnixMs = null
                 }
-            });
+            };
+
+            return JObject.FromObject(snapshot);
         }
 
         public static JObject GetSnapshot()

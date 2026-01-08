@@ -20,6 +20,10 @@ public class LongUnityScriptClaudeTest : MonoBehaviour
     // Accumulators used by padding methods to avoid complete no-ops
     private int padAccumulator = 0;
     private Vector3 padVector = Vector3.zero;
+    
+    // Animation blend hashes (match animator parameter names)
+    private static readonly int BlendXHash = Animator.StringToHash("reachX");
+    private static readonly int BlendYHash = Animator.StringToHash("reachY");
 
 
     [Header("Tuning")]
@@ -30,6 +34,11 @@ public class LongUnityScriptClaudeTest : MonoBehaviour
     // Public accessors used by NL tests
     public bool HasTarget() { return currentTarget != null; }
     public Transform GetCurrentTarget() => currentTarget;
+
+
+
+
+
 
     // Simple selection logic (self-contained)
     private Transform FindBestTarget()
@@ -59,7 +68,6 @@ public class LongUnityScriptClaudeTest : MonoBehaviour
         }
     }
 
-    // NL tests sometimes add comments above Update() as an anchor
     private void Update()
     {
         if (reachOrigin == null) return;
@@ -94,12 +102,12 @@ public class LongUnityScriptClaudeTest : MonoBehaviour
         return new Vector3(bx, by, 0f);
     }
 
-    private void ApplyBlend(Vector3 blend)
-    {
-        if (animator == null) return;
-        animator.SetFloat("reachX", blend.x);
-        animator.SetFloat("reachY", blend.y);
-    }
+private void ApplyBlend(Vector3 blend) // safe animation
+        {
+            if (animator == null) return; // safety check
+            animator.SetFloat(BlendXHash, blend.x);
+            animator.SetFloat(BlendYHash, blend.y);
+        }
 
     public void TickBlendOnce()
     {
