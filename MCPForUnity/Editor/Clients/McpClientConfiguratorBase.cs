@@ -148,7 +148,7 @@ namespace MCPForUnity.Editor.Clients
                 bool matches = false;
                 if (args != null && args.Length > 0)
                 {
-                    string expectedUvxUrl = AssetPathUtility.GetMcpServerGitUrl();
+                    string expectedUvxUrl = AssetPathUtility.GetMcpServerPackageSource();
                     string configuredUvxUrl = McpConfigurationHelper.ExtractUvxUrl(args);
                     matches = !string.IsNullOrEmpty(configuredUvxUrl) &&
                               McpConfigurationHelper.PathsEqual(configuredUvxUrl, expectedUvxUrl);
@@ -250,7 +250,7 @@ namespace MCPForUnity.Editor.Clients
                     }
                     else if (args != null && args.Length > 0)
                     {
-                        string expected = AssetPathUtility.GetMcpServerGitUrl();
+                        string expected = AssetPathUtility.GetMcpServerPackageSource();
                         string configured = McpConfigurationHelper.ExtractUvxUrl(args);
                         matches = !string.IsNullOrEmpty(configured) &&
                                   McpConfigurationHelper.PathsEqual(configured, expected);
@@ -585,12 +585,12 @@ namespace MCPForUnity.Editor.Clients
                 return "# Error: Configuration not available - check paths in Advanced Settings";
             }
 
-            string gitUrl = AssetPathUtility.GetMcpServerGitUrl();
+            string packageSource = AssetPathUtility.GetMcpServerPackageSource();
             // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
             string devFlags = AssetPathUtility.ShouldForceUvxRefresh() ? "--no-cache --refresh " : string.Empty;
 
             return "# Register the MCP server with Claude Code:\n" +
-                   $"claude mcp add --transport stdio UnityMCP -- \"{uvxPath}\" {devFlags}--from \"{gitUrl}\" mcp-for-unity\n\n" +
+                   $"claude mcp add --transport stdio UnityMCP -- \"{uvxPath}\" {devFlags}--from \"{packageSource}\" mcp-for-unity\n\n" +
                    "# Unregister the MCP server:\n" +
                    "claude mcp remove UnityMCP\n\n" +
                    "# List registered servers:\n" +

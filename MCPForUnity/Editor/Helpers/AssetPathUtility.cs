@@ -149,29 +149,37 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
-        /// Gets just the git URL part for the MCP server package
-        /// Checks for EditorPrefs override first, then falls back to package version
+        /// Gets the package source for the MCP server (used with uvx --from).
+        /// Checks for EditorPrefs override first (supports git URLs, file:// paths, etc.),
+        /// then falls back to PyPI package reference.
         /// </summary>
-        /// <returns>Git URL string, or empty string if version is unknown and no override</returns>
-        public static string GetMcpServerGitUrl()
+        /// <returns>Package source string for uvx --from argument</returns>
+        public static string GetMcpServerPackageSource()
         {
-            // Check for Git URL override first
-            string gitUrlOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
-            if (!string.IsNullOrEmpty(gitUrlOverride))
+            // Check for override first (supports git URLs, file:// paths, local paths)
+            string sourceOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
+            if (!string.IsNullOrEmpty(sourceOverride))
             {
-                return gitUrlOverride;
+                return sourceOverride;
             }
 
-            // Fall back to default package version
+            // Default to PyPI package (avoids Windows long path issues with git clone)
             string version = GetPackageVersion();
             if (version == "unknown")
             {
-                // Fall back to main repo without pinned version so configs remain valid in test scenarios
-                return "git+https://github.com/CoplayDev/unity-mcp#subdirectory=Server";
+                // Fall back to latest PyPI version so configs remain valid in test scenarios
+                return "mcpforunityserver";
             }
 
-            return $"git+https://github.com/CoplayDev/unity-mcp@v{version}#subdirectory=Server";
+            return $"mcpforunityserver=={version}";
         }
+
+        /// <summary>
+        /// Deprecated: Use GetMcpServerPackageSource() instead.
+        /// Kept for backwards compatibility.
+        /// </summary>
+        [System.Obsolete("Use GetMcpServerPackageSource() instead")]
+        public static string GetMcpServerGitUrl() => GetMcpServerPackageSource();
 
         /// <summary>
         /// Gets structured uvx command parts for different client configurations
@@ -180,7 +188,7 @@ namespace MCPForUnity.Editor.Helpers
         public static (string uvxPath, string fromUrl, string packageName) GetUvxCommandParts()
         {
             string uvxPath = MCPServiceLocator.Paths.GetUvxPath();
-            string fromUrl = GetMcpServerGitUrl();
+            string fromUrl = GetMcpServerPackageSource();
             string packageName = "mcp-for-unity";
 
             return (uvxPath, fromUrl, packageName);
@@ -208,7 +216,7 @@ namespace MCPForUnity.Editor.Helpers
         /// </summary>
         public static bool IsLocalServerPath()
         {
-            string fromUrl = GetMcpServerGitUrl();
+            string fromUrl = GetMcpServerPackageSource();
             if (string.IsNullOrEmpty(fromUrl))
                 return false;
 
@@ -226,7 +234,7 @@ namespace MCPForUnity.Editor.Helpers
             if (!IsLocalServerPath())
                 return null;
 
-            string fromUrl = GetMcpServerGitUrl();
+            string fromUrl = GetMcpServerPackageSource();
             if (fromUrl.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
             {
                 // Strip file:// prefix

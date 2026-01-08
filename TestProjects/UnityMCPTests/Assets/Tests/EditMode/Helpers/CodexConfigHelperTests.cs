@@ -248,7 +248,7 @@ namespace MCPForUnityTests.Editor.Helpers
             var thirdArg = (args[2] as TomlString).Value;
             
             Assert.AreEqual("--from", firstArg, "First arg should be --from");
-            Assert.IsTrue(secondArg.Contains("git+https://github.com/CoplayDev/unity-mcp"), "Second arg should be git URL");
+            Assert.IsTrue(secondArg.Contains("mcpforunityserver"), "Second arg should be PyPI package reference");
             Assert.AreEqual("mcp-for-unity", thirdArg, "Third arg should be mcp-for-unity");
 
             // Verify env.SystemRoot is present on Windows
@@ -313,7 +313,7 @@ namespace MCPForUnityTests.Editor.Helpers
             var thirdArg = (args[2] as TomlString).Value;
             
             Assert.AreEqual("--from", firstArg, "First arg should be --from");
-            Assert.IsTrue(secondArg.Contains("git+https://github.com/CoplayDev/unity-mcp"), "Second arg should be git URL");
+            Assert.IsTrue(secondArg.Contains("mcpforunityserver"), "Second arg should be PyPI package reference");
             Assert.AreEqual("mcp-for-unity", thirdArg, "Third arg should be mcp-for-unity");
 
             // Verify env is NOT present on non-Windows platforms
@@ -380,7 +380,7 @@ namespace MCPForUnityTests.Editor.Helpers
             var thirdArg = (args[2] as TomlString).Value;
             
             Assert.AreEqual("--from", firstArg, "First arg should be --from");
-            Assert.IsTrue(secondArg.Contains("git+https://github.com/CoplayDev/unity-mcp"), "Second arg should be git URL");
+            Assert.IsTrue(secondArg.Contains("mcpforunityserver"), "Second arg should be PyPI package reference");
             Assert.AreEqual("mcp-for-unity", thirdArg, "Third arg should be mcp-for-unity");
 
             // Verify env.SystemRoot is present on Windows
@@ -454,7 +454,7 @@ namespace MCPForUnityTests.Editor.Helpers
             var thirdArg = (args[2] as TomlString).Value;
             
             Assert.AreEqual("--from", firstArg, "First arg should be --from");
-            Assert.IsTrue(secondArg.Contains("git+https://github.com/CoplayDev/unity-mcp"), "Second arg should be git URL");
+            Assert.IsTrue(secondArg.Contains("mcpforunityserver"), "Second arg should be PyPI package reference");
             Assert.AreEqual("mcp-for-unity", thirdArg, "Third arg should be mcp-for-unity");
 
             // Verify env is NOT present on non-Windows platforms
