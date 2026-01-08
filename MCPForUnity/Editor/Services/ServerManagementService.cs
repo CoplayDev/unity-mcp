@@ -406,6 +406,9 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         public bool StartLocalHttpServer()
         {
+            /// Clean stale Python build artifacts when using a local dev server path
+            AssetPathUtility.CleanLocalServerBuildArtifacts();
+
             if (!TryGetLocalHttpServerCommandParts(out _, out _, out var displayCommand, out var error))
             {
                 EditorUtility.DisplayDialog(
@@ -1236,10 +1239,8 @@ namespace MCPForUnity.Editor.Services
                 return false;
             }
 
-            bool devForceRefresh = false;
-            try { devForceRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false); } catch { }
-
-            string devFlags = devForceRefresh ? "--no-cache --refresh " : string.Empty;
+            // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
+            string devFlags = AssetPathUtility.ShouldForceUvxRefresh() ? "--no-cache --refresh " : string.Empty;
             string args = string.IsNullOrEmpty(fromUrl)
                 ? $"{devFlags}{packageName} --transport http --http-url {httpUrl}"
                 : $"{devFlags}--from {fromUrl} {packageName} --transport http --http-url {httpUrl}";

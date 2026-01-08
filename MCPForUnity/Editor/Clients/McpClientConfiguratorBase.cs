@@ -467,8 +467,8 @@ namespace MCPForUnity.Editor.Clients
             else
             {
                 var (uvxPath, gitUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
-                bool devForceRefresh = GetDevModeForceRefresh();
-                string devFlags = devForceRefresh ? "--no-cache --refresh " : string.Empty;
+                // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
+                string devFlags = AssetPathUtility.ShouldForceUvxRefresh() ? "--no-cache --refresh " : string.Empty;
                 args = $"mcp add --transport stdio UnityMCP -- \"{uvxPath}\" {devFlags}--from \"{gitUrl}\" {packageName}";
             }
 
@@ -586,8 +586,8 @@ namespace MCPForUnity.Editor.Clients
             }
 
             string gitUrl = AssetPathUtility.GetMcpServerGitUrl();
-            bool devForceRefresh = GetDevModeForceRefresh();
-            string devFlags = devForceRefresh ? "--no-cache --refresh " : string.Empty;
+            // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
+            string devFlags = AssetPathUtility.ShouldForceUvxRefresh() ? "--no-cache --refresh " : string.Empty;
 
             return "# Register the MCP server with Claude Code:\n" +
                    $"claude mcp add --transport stdio UnityMCP -- \"{uvxPath}\" {devFlags}--from \"{gitUrl}\" mcp-for-unity\n\n" +
@@ -595,12 +595,6 @@ namespace MCPForUnity.Editor.Clients
                    "claude mcp remove UnityMCP\n\n" +
                    "# List registered servers:\n" +
                    "claude mcp list # Only works when claude is run in the project's directory";
-        }
-
-        private static bool GetDevModeForceRefresh()
-        {
-            try { return EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false); }
-            catch { return false; }
         }
 
         public override IList<string> GetInstallationSteps() => new List<string>

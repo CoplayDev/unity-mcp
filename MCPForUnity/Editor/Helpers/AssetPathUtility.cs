@@ -187,6 +187,88 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
+        /// Determines whether uvx should use --no-cache --refresh flags.
+        /// Returns true if DevModeForceServerRefresh is enabled OR if the server URL is a local path.
+        /// Local paths (file:// or absolute) always need fresh builds to avoid stale uvx cache.
+        /// </summary>
+        public static bool ShouldForceUvxRefresh()
+        {
+            bool devForceRefresh = false;
+            try { devForceRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false); } catch { }
+
+            if (devForceRefresh)
+                return true;
+
+            // Auto-enable force refresh when using a local path override.
+            return IsLocalServerPath();
+        }
+
+        /// <summary>
+        /// Returns true if the server URL is a local path (file:// or absolute path).
+        /// </summary>
+        public static bool IsLocalServerPath()
+        {
+            string fromUrl = GetMcpServerGitUrl();
+            if (string.IsNullOrEmpty(fromUrl))
+                return false;
+
+            // Check for file:// protocol or absolute local path
+            return fromUrl.StartsWith("file://", StringComparison.OrdinalIgnoreCase) ||
+                   System.IO.Path.IsPathRooted(fromUrl);
+        }
+
+        /// <summary>
+        /// Gets the local server path if GitUrlOverride points to a local directory.
+        /// Returns null if not using a local path.
+        /// </summary>
+        public static string GetLocalServerPath()
+        {
+            if (!IsLocalServerPath())
+                return null;
+
+            string fromUrl = GetMcpServerGitUrl();
+            if (fromUrl.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+            {
+                // Strip file:// prefix
+                fromUrl = fromUrl.Substring(7);
+            }
+
+            return fromUrl;
+        }
+
+        /// <summary>
+        /// Cleans stale Python build artifacts from the local server path.
+        /// This is necessary because Python's build system doesn't remove deleted files from build/,
+        /// and the auto-discovery mechanism will pick up old .py files causing ghost resources/tools.
+        /// </summary>
+        /// <returns>True if cleaning was performed, false if not applicable or failed.</returns>
+        public static bool CleanLocalServerBuildArtifacts()
+        {
+            string localPath = GetLocalServerPath();
+            if (string.IsNullOrEmpty(localPath))
+                return false;
+
+            // Clean the build/ directory which can contain stale .py files
+            string buildPath = System.IO.Path.Combine(localPath, "build");
+            if (System.IO.Directory.Exists(buildPath))
+            {
+                try
+                {
+                    System.IO.Directory.Delete(buildPath, recursive: true);
+                    McpLog.Info($"Cleaned stale build artifacts from: {buildPath}");
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Warn($"Failed to clean build artifacts: {ex.Message}");
+                    return false;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// Gets the package version from package.json
         /// </summary>
         /// <returns>Version string, or "unknown" if not found</returns>

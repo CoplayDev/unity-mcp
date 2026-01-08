@@ -155,6 +155,10 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 var selected = (TransportProtocol)evt.newValue;
                 bool useHttp = selected != TransportProtocol.Stdio;
                 EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, useHttp);
+                
+                // Clear any stale resume flags when user manually changes transport
+                try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeStdioAfterReload); } catch { }
+                try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeHttpAfterReload); } catch { }
 
                 if (useHttp)
                 {
@@ -274,7 +278,9 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             bool isRunning = bridgeService.IsRunning;
             bool showLocalServerControls = IsHttpLocalSelected();
             bool debugMode = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
-            bool stdioSelected = transportDropdown != null && (TransportProtocol)transportDropdown.value == TransportProtocol.Stdio;
+            // Use EditorPrefs as source of truth for stdio selection - more reliable after domain reload
+            // than checking the dropdown which may not be initialized yet
+            bool stdioSelected = !EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
 
             // Keep the Start/Stop Server button label in sync even when the session is not running
             // (e.g., orphaned server after a domain reload).
@@ -327,6 +333,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 statusIndicator.RemoveFromClassList("disconnected");
                 statusIndicator.AddToClassList("connected");
                 connectionToggleButton.text = "End Session";
+                connectionToggleButton.SetEnabled(true); // Re-enable in case it was disabled during resumption
                 
                 // Force the UI to reflect the actual port being used
                 unityPortField.value = bridgeService.CurrentPort.ToString();
@@ -334,12 +341,30 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             }
             else
             {
-                connectionStatusLabel.text = "No Session";
-                statusIndicator.RemoveFromClassList("connected");
-                statusIndicator.AddToClassList("disconnected");
-                connectionToggleButton.text = "Start Session";
+                // Check if we're resuming the stdio bridge after a domain reload.
+                // During this brief window, show "Resuming..." instead of "No Session" to avoid UI flicker.
+                bool isStdioResuming = stdioSelected 
+                    && EditorPrefs.GetBool(EditorPrefKeys.ResumeStdioAfterReload, false);
+
+                if (isStdioResuming)
+                {
+                    connectionStatusLabel.text = "Resuming...";
+                    // Keep the indicator in a neutral/transitional state
+                    statusIndicator.RemoveFromClassList("connected");
+                    statusIndicator.RemoveFromClassList("disconnected");
+                    connectionToggleButton.text = "Start Session";
+                    connectionToggleButton.SetEnabled(false);
+                }
+                else
+                {
+                    connectionStatusLabel.text = "No Session";
+                    statusIndicator.RemoveFromClassList("connected");
+                    statusIndicator.AddToClassList("disconnected");
+                    connectionToggleButton.text = "Start Session";
+                    connectionToggleButton.SetEnabled(true);
+                }
                 
-                unityPortField.SetEnabled(true);
+                unityPortField.SetEnabled(!isStdioResuming);
 
                 healthStatusLabel.text = HealthStatusUnknown;
                 healthIndicator.RemoveFromClassList("healthy");

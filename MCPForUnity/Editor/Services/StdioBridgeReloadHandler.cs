@@ -27,8 +27,9 @@ namespace MCPForUnity.Editor.Services
                 bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
                 // Check both TransportManager AND StdioBridgeHost directly, because CI starts via StdioBridgeHost
                 // bypassing TransportManager state.
-                bool isRunning = MCPServiceLocator.TransportManager.IsRunning(TransportMode.Stdio)
-                                 || StdioBridgeHost.IsRunning;
+                bool tmRunning = MCPServiceLocator.TransportManager.IsRunning(TransportMode.Stdio);
+                bool hostRunning = StdioBridgeHost.IsRunning;
+                bool isRunning = tmRunning || hostRunning;
                 bool shouldResume = !useHttp && isRunning;
 
                 if (shouldResume)
@@ -60,10 +61,12 @@ namespace MCPForUnity.Editor.Services
             bool resume = false;
             try
             {
-                resume = EditorPrefs.GetBool(EditorPrefKeys.ResumeStdioAfterReload, false);
+                bool resumeFlag = EditorPrefs.GetBool(EditorPrefKeys.ResumeStdioAfterReload, false);
                 bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
-                resume = resume && !useHttp;
-                if (resume)
+                resume = resumeFlag && !useHttp;
+
+                // If we're not going to resume, clear the flag immediately to avoid stuck "Resuming..." state
+                if (!resume)
                 {
                     EditorPrefs.DeleteKey(EditorPrefKeys.ResumeStdioAfterReload);
                 }
@@ -87,6 +90,13 @@ namespace MCPForUnity.Editor.Services
             var startTask = MCPServiceLocator.TransportManager.StartAsync(TransportMode.Stdio);
             startTask.ContinueWith(t =>
             {
+                // Clear the flag after attempting to start (success or failure).
+                // This prevents getting stuck in "Resuming..." state.
+                // We do this synchronously on the continuation thread - it's safe because
+                // EditorPrefs operations are thread-safe and any new reload will set the flag
+                // fresh in OnBeforeAssemblyReload before we get here.
+                try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeStdioAfterReload); } catch { }
+
                 if (t.IsFaulted)
                 {
                     var baseEx = t.Exception?.GetBaseException();
