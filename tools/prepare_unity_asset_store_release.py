@@ -129,7 +129,7 @@ def main() -> int:
         replace_once(
             http_util,
             r'private const string DefaultBaseUrl = "http://localhost:8080";',
-            'private const string DefaultBaseUrl = "https://mc-f51b526566384d86b44b59eb81097218.ecs.us-east-2.on.aws";',
+            'private const string DefaultBaseUrl = "https://mc-0cb5e1039f6b4499b473670f70662d29.ecs.us-east-2.on.aws/";',
         )
 
         # Default transport to HTTP Remote and persist inferred scope when missing
