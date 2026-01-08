@@ -29,9 +29,11 @@ namespace MCPForUnity.Editor.Tools.GameObjects
 
             // --- Try Instantiating Prefab First ---
             string originalPrefabPath = prefabPath;
-            if (!string.IsNullOrEmpty(prefabPath))
+            if (!saveAsPrefab && !string.IsNullOrEmpty(prefabPath))
             {
-                if (!prefabPath.Contains("/") && !prefabPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+                string extension = System.IO.Path.GetExtension(prefabPath);
+
+                if (!prefabPath.Contains("/") && (string.IsNullOrEmpty(extension) || extension.Equals(".prefab", StringComparison.OrdinalIgnoreCase)))
                 {
                     string prefabNameOnly = prefabPath;
                     McpLog.Info($"[ManageGameObject.Create] Searching for prefab named: '{prefabNameOnly}'");
@@ -51,10 +53,37 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                         McpLog.Info($"[ManageGameObject.Create] Found unique prefab at path: '{prefabPath}'");
                     }
                 }
-                else if (!prefabPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+                else if (prefabPath.Contains("/") && string.IsNullOrEmpty(extension))
                 {
-                    McpLog.Warn($"[ManageGameObject.Create] Provided prefabPath '{prefabPath}' does not end with .prefab. Assuming it's missing and appending.");
+                    McpLog.Warn($"[ManageGameObject.Create] Provided prefabPath '{prefabPath}' has no extension. Assuming it's a prefab and appending .prefab.");
                     prefabPath += ".prefab";
+                }
+                else if (!prefabPath.Contains("/") && !string.IsNullOrEmpty(extension) && !extension.Equals(".prefab", StringComparison.OrdinalIgnoreCase))
+                {
+                    string fileName = prefabPath;
+                    string fileNameWithoutExtension = System.IO.Path.GetFileNameWithoutExtension(fileName);
+                    McpLog.Info($"[ManageGameObject.Create] Searching for asset file named: '{fileName}'");
+
+                    string[] guids = AssetDatabase.FindAssets(fileNameWithoutExtension);
+                    var matches = guids
+                        .Select(g => AssetDatabase.GUIDToAssetPath(g))
+                        .Where(p => p.EndsWith("/" + fileName, StringComparison.OrdinalIgnoreCase) || p.Equals(fileName, StringComparison.OrdinalIgnoreCase))
+                        .ToArray();
+
+                    if (matches.Length == 0)
+                    {
+                        return new ErrorResponse($"Asset file '{fileName}' not found anywhere in the project.");
+                    }
+                    else if (matches.Length > 1)
+                    {
+                        string foundPaths = string.Join(", ", matches);
+                        return new ErrorResponse($"Multiple assets found matching file name '{fileName}': {foundPaths}. Please provide a more specific path.");
+                    }
+                    else
+                    {
+                        prefabPath = matches[0];
+                        McpLog.Info($"[ManageGameObject.Create] Found unique asset at path: '{prefabPath}'");
+                    }
                 }
 
                 GameObject prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
@@ -83,7 +112,7 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                 }
                 else
                 {
-                    McpLog.Warn($"[ManageGameObject.Create] Prefab asset not found at path: '{prefabPath}'. Will proceed to create new object if specified.");
+                    return new ErrorResponse($"Asset not found or not a GameObject at path: '{prefabPath}'.");
                 }
             }
 
