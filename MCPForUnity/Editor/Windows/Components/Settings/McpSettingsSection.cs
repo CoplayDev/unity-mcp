@@ -308,7 +308,8 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             string backupPath = deployService.GetLastBackupPath();
             if (deployService.HasBackup())
             {
-                deployBackupLabel.text = $"Last backup: {backupPath}";
+                // Use forward slashes to avoid backslash escape sequence issues in UI text
+                deployBackupLabel.text = $"Last backup: {backupPath?.Replace('\\', '/')}";
             }
             else
             {

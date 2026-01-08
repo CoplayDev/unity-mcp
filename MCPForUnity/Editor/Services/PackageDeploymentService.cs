@@ -69,9 +69,10 @@ namespace MCPForUnity.Editor.Services
         public string GetTargetDisplayPath()
         {
             string target = GetTargetPath();
-            return string.IsNullOrEmpty(target)
-                ? "Not found (check Packages/manifest.json)"
-                : target;
+            if (string.IsNullOrEmpty(target))
+                return "Not found (check Packages/manifest.json)";
+            // Use forward slashes to avoid backslash escape sequence issues in UI text
+            return target.Replace('\\', '/');
         }
 
         public string GetLastBackupPath()
