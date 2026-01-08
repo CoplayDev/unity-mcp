@@ -13,7 +13,7 @@ import transport.unity_transport as unity_transport
 from transport.legacy.unity_connection import async_send_command_with_retry
 
 
-class EditorStateV2Unity(BaseModel):
+class EditorStateUnity(BaseModel):
     instance_id: str | None = None
     unity_version: str | None = None
     project_id: str | None = None
@@ -21,31 +21,31 @@ class EditorStateV2Unity(BaseModel):
     is_batch_mode: bool | None = None
 
 
-class EditorStateV2PlayMode(BaseModel):
+class EditorStatePlayMode(BaseModel):
     is_playing: bool | None = None
     is_paused: bool | None = None
     is_changing: bool | None = None
 
 
-class EditorStateV2ActiveScene(BaseModel):
+class EditorStateActiveScene(BaseModel):
     path: str | None = None
     guid: str | None = None
     name: str | None = None
 
 
-class EditorStateV2Editor(BaseModel):
+class EditorStateEditor(BaseModel):
     is_focused: bool | None = None
-    play_mode: EditorStateV2PlayMode | None = None
-    active_scene: EditorStateV2ActiveScene | None = None
+    play_mode: EditorStatePlayMode | None = None
+    active_scene: EditorStateActiveScene | None = None
 
 
-class EditorStateV2Activity(BaseModel):
+class EditorStateActivity(BaseModel):
     phase: str | None = None
     since_unix_ms: int | None = None
     reasons: list[str] | None = None
 
 
-class EditorStateV2Compilation(BaseModel):
+class EditorStateCompilation(BaseModel):
     is_compiling: bool | None = None
     is_domain_reload_pending: bool | None = None
     last_compile_started_unix_ms: int | None = None
@@ -54,66 +54,66 @@ class EditorStateV2Compilation(BaseModel):
     last_domain_reload_after_unix_ms: int | None = None
 
 
-class EditorStateV2Refresh(BaseModel):
+class EditorStateRefresh(BaseModel):
     is_refresh_in_progress: bool | None = None
     last_refresh_requested_unix_ms: int | None = None
     last_refresh_finished_unix_ms: int | None = None
 
 
-class EditorStateV2Assets(BaseModel):
+class EditorStateAssets(BaseModel):
     is_updating: bool | None = None
     external_changes_dirty: bool | None = None
     external_changes_last_seen_unix_ms: int | None = None
     external_changes_dirty_since_unix_ms: int | None = None
     external_changes_last_cleared_unix_ms: int | None = None
-    refresh: EditorStateV2Refresh | None = None
+    refresh: EditorStateRefresh | None = None
 
 
-class EditorStateV2LastRun(BaseModel):
+class EditorStateLastRun(BaseModel):
     finished_unix_ms: int | None = None
     result: str | None = None
     counts: Any | None = None
 
 
-class EditorStateV2Tests(BaseModel):
+class EditorStateTests(BaseModel):
     is_running: bool | None = None
     mode: str | None = None
     current_job_id: str | None = None
     started_unix_ms: int | None = None
     started_by: str | None = None
-    last_run: EditorStateV2LastRun | None = None
+    last_run: EditorStateLastRun | None = None
 
 
-class EditorStateV2Transport(BaseModel):
+class EditorStateTransport(BaseModel):
     unity_bridge_connected: bool | None = None
     last_message_unix_ms: int | None = None
 
 
-class EditorStateV2Advice(BaseModel):
+class EditorStateAdvice(BaseModel):
     ready_for_tools: bool | None = None
     blocking_reasons: list[str] | None = None
     recommended_retry_after_ms: int | None = None
     recommended_next_action: str | None = None
 
 
-class EditorStateV2Staleness(BaseModel):
+class EditorStateStaleness(BaseModel):
     age_ms: int | None = None
     is_stale: bool | None = None
 
 
-class EditorStateV2Data(BaseModel):
+class EditorStateData(BaseModel):
     schema_version: str
     observed_at_unix_ms: int
     sequence: int
-    unity: EditorStateV2Unity | None = None
-    editor: EditorStateV2Editor | None = None
-    activity: EditorStateV2Activity | None = None
-    compilation: EditorStateV2Compilation | None = None
-    assets: EditorStateV2Assets | None = None
-    tests: EditorStateV2Tests | None = None
-    transport: EditorStateV2Transport | None = None
-    advice: EditorStateV2Advice | None = None
-    staleness: EditorStateV2Staleness | None = None
+    unity: EditorStateUnity | None = None
+    editor: EditorStateEditor | None = None
+    activity: EditorStateActivity | None = None
+    compilation: EditorStateCompilation | None = None
+    assets: EditorStateAssets | None = None
+    tests: EditorStateTests | None = None
+    transport: EditorStateTransport | None = None
+    advice: EditorStateAdvice | None = None
+    staleness: EditorStateStaleness | None = None
 
 
 def _now_unix_ms() -> int:
@@ -125,13 +125,12 @@ def _in_pytest() -> bool:
     return bool(os.environ.get("PYTEST_CURRENT_TEST"))
 
 
-async def _infer_single_instance_id(ctx: Context) -> str | None:
+async def infer_single_instance_id(ctx: Context) -> str | None:
     """
     Best-effort: if exactly one Unity instance is connected, return its Name@hash id.
     This makes editor_state outputs self-describing even when no explicit active instance is set.
     """
-    if _in_pytest():
-        return None
+    await ctx.info("If exactly one Unity instance is connected, return its Name@hash id.")
 
     try:
         transport = unity_transport._current_transport()
@@ -247,7 +246,7 @@ async def get_editor_state(ctx: Context) -> MCPResponse:
         if unity_instance:
             unity_section["instance_id"] = unity_instance
         else:
-            inferred = await _infer_single_instance_id(ctx)
+            inferred = await infer_single_instance_id(ctx)
             if inferred:
                 unity_section["instance_id"] = inferred
 
@@ -287,10 +286,10 @@ async def get_editor_state(ctx: Context) -> MCPResponse:
     state_v2 = _enrich_advice_and_staleness(state_v2)
 
     try:
-        if hasattr(EditorStateV2Data, "model_validate"):
-            validated = EditorStateV2Data.model_validate(state_v2)
+        if hasattr(EditorStateData, "model_validate"):
+            validated = EditorStateData.model_validate(state_v2)
         else:
-            validated = EditorStateV2Data.parse_obj(
+            validated = EditorStateData.parse_obj(
                 state_v2)  # type: ignore[attr-defined]
         data = validated.model_dump() if hasattr(
             validated, "model_dump") else validated.dict()

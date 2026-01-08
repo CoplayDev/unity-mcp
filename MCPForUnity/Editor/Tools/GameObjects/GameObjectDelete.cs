@@ -34,7 +34,7 @@ namespace MCPForUnity.Editor.Tools.GameObjects
             {
                 string message =
                     targets.Count == 1
-                        ? $"GameObject '{deletedObjects[0].GetType().GetProperty("name").GetValue(deletedObjects[0])}' deleted successfully."
+                        ? $"GameObject '{((dynamic)deletedObjects[0]).name}' deleted successfully."
                         : $"{deletedObjects.Count} GameObjects deleted successfully.";
                 return new SuccessResponse(message, deletedObjects);
             }

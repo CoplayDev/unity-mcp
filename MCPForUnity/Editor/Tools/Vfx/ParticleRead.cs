@@ -6,6 +6,84 @@ namespace MCPForUnity.Editor.Tools.Vfx
 {
     internal static class ParticleRead
     {
+        private static object SerializeAnimationCurve(AnimationCurve curve)
+        {
+            if (curve == null)
+            {
+                return null;
+            }
+
+            return new
+            {
+                keys = curve.keys.Select(k => new
+                {
+                    time = k.time,
+                    value = k.value,
+                    inTangent = k.inTangent,
+                    outTangent = k.outTangent
+                }).ToArray()
+            };
+        }
+
+        private static object SerializeMinMaxCurve(ParticleSystem.MinMaxCurve curve)
+        {
+            switch (curve.mode)
+            {
+                case ParticleSystemCurveMode.Constant:
+                    return new
+                    {
+                        mode = "constant",
+                        value = curve.constant
+                    };
+
+                case ParticleSystemCurveMode.TwoConstants:
+                    return new
+                    {
+                        mode = "two_constants",
+                        min = curve.constantMin,
+                        max = curve.constantMax
+                    };
+
+                case ParticleSystemCurveMode.Curve:
+                    return new
+                    {
+                        mode = "curve",
+                        multiplier = curve.curveMultiplier,
+                        keys = curve.curve.keys.Select(k => new
+                        {
+                            time = k.time,
+                            value = k.value,
+                            inTangent = k.inTangent,
+                            outTangent = k.outTangent
+                        }).ToArray()
+                    };
+
+                case ParticleSystemCurveMode.TwoCurves:
+                    return new
+                    {
+                        mode = "curve",
+                        multiplier = curve.curveMultiplier,
+                        keys = curve.curveMax.keys.Select(k => new
+                        {
+                            time = k.time,
+                            value = k.value,
+                            inTangent = k.inTangent,
+                            outTangent = k.outTangent
+                        }).ToArray(),
+                        originalMode = "two_curves",
+                        curveMin = SerializeAnimationCurve(curve.curveMin),
+                        curveMax = SerializeAnimationCurve(curve.curveMax)
+                    };
+
+                default:
+                    return new
+                    {
+                        mode = "constant",
+                        value = curve.constant
+                    };
+            }
+        }
+
         public static object GetInfo(JObject @params)
         {
             ParticleSystem ps = ParticleCommon.FindParticleSystem(@params);
@@ -32,17 +110,17 @@ namespace MCPForUnity.Editor.Tools.Vfx
                     {
                         duration = main.duration,
                         looping = main.loop,
-                        startLifetime = main.startLifetime.constant,
-                        startSpeed = main.startSpeed.constant,
-                        startSize = main.startSize.constant,
-                        gravityModifier = main.gravityModifier.constant,
+                        startLifetime = SerializeMinMaxCurve(main.startLifetime),
+                        startSpeed = SerializeMinMaxCurve(main.startSpeed),
+                        startSize = SerializeMinMaxCurve(main.startSize),
+                        gravityModifier = SerializeMinMaxCurve(main.gravityModifier),
                         simulationSpace = main.simulationSpace.ToString(),
                         maxParticles = main.maxParticles
                     },
                     emission = new
                     {
                         enabled = emission.enabled,
-                        rateOverTime = emission.rateOverTime.constant,
+                        rateOverTime = SerializeMinMaxCurve(emission.rateOverTime),
                         burstCount = emission.burstCount
                     },
                     shape = new

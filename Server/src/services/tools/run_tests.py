@@ -44,7 +44,7 @@ class RunTestsResult(BaseModel):
 class RunTestsStartData(BaseModel):
     job_id: str
     status: str
-    mode: str
+    mode: str | None = None
     include_details: bool | None = None
     include_failed_tests: bool | None = None
 

@@ -58,7 +58,7 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                     }
                     else
                     {
-                        McpLog.Warn($"[ManageGameObject.Duplicate] Parent '{parentToken}' not found. Keeping original parent.");
+                        McpLog.Warn($"[ManageGameObject.Duplicate] Parent '{parentToken}' not found. Object will remain at root level.");
                     }
                 }
             }
