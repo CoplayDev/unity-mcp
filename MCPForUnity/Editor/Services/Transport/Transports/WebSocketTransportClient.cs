@@ -682,16 +682,18 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 throw new InvalidOperationException($"Invalid MCP base URL: {baseUrl}");
             }
 
-            string scheme = httpUri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase) ? "wss" : "ws";
-            string builder = $"{scheme}://{httpUri.Authority}";
-            if (!string.IsNullOrEmpty(httpUri.AbsolutePath) && httpUri.AbsolutePath != "/")
+            // Replace 0.0.0.0 with localhost for client connections
+            // 0.0.0.0 is only valid for server binding, not client connections
+            string host = httpUri.Host == "0.0.0.0" ? "localhost" : httpUri.Host;
+
+            var builder = new UriBuilder(httpUri)
             {
-                builder += httpUri.AbsolutePath.TrimEnd('/');
-            }
+                Scheme = httpUri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase) ? "wss" : "ws",
+                Host = host,
+                Path = httpUri.AbsolutePath.TrimEnd('/') + "/hub/plugin"
+            };
 
-            builder += "/hub/plugin";
-
-            return new Uri(builder);
+            return builder.Uri;
         }
     }
 }
