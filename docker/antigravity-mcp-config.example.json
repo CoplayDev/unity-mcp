@@ -1,0 +1,13 @@
+{
+    "servers": {
+        "dockerMcp": {
+            "command": "docker",
+            "args": [
+                "mcp",
+                "gateway",
+                "run"
+            ],
+            "type": "stdio"
+        }
+    }
+}

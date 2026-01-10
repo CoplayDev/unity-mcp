@@ -1,0 +1,44 @@
+name: unity-mcp
+image: mcp/unity-mcp
+type: server
+meta:
+  category: gamedev
+  tags:
+    - unity
+    - gamedev
+    - automation
+    - ai
+    - game-engine
+about:
+  title: MCP for Unity
+  description: |
+    Control Unity Editor through AI assistants like Claude, Cursor, and VS Code Copilot.
+    Create scenes, manage assets, execute scripts, and automate workflows using natural language.
+    
+    Features:
+    - Manage GameObjects, scenes, materials, and assets
+    - Execute scripts and menu items
+    - Run tests and read console output
+    - Support for multiple Unity instances
+  icon: https://raw.githubusercontent.com/CoplayDev/unity-mcp/main/docs/images/logo.png
+source:
+  project: https://github.com/CoplayDev/unity-mcp
+  commit: 4c9beaffdefadee03c07f00eb3e3b6c5294fc99d
+config:
+  description: Configure Unity MCP Server connection settings
+  env:
+    - name: DISABLE_TELEMETRY
+      example: "true"
+      value: "{{unity-mcp.disable_telemetry}}"
+    - name: LOG_LEVEL
+      example: "INFO"
+      value: "{{unity-mcp.log_level}}"
+  parameters:
+    type: object
+    properties:
+      disable_telemetry:
+        type: string
+        description: Disable anonymous telemetry (true/false)
+      log_level:
+        type: string
+        description: Logging level (DEBUG, INFO, WARNING, ERROR)
