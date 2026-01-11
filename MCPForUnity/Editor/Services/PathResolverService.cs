@@ -154,39 +154,7 @@ namespace MCPForUnity.Editor.Services
         {
             string exeName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "uvx.exe" : "uvx";
 
-            string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            if (!string.IsNullOrEmpty(home))
-            {
-                yield return Path.Combine(home, ".local", "bin", exeName);
-                yield return Path.Combine(home, ".cargo", "bin", exeName);
-            }
-
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                yield return "/opt/homebrew/bin/" + exeName;
-                yield return "/usr/local/bin/" + exeName;
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                yield return "/usr/local/bin/" + exeName;
-                yield return "/usr/bin/" + exeName;
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-
-                if (!string.IsNullOrEmpty(localAppData))
-                {
-                    yield return Path.Combine(localAppData, "Programs", "uv", exeName);
-                }
-
-                if (!string.IsNullOrEmpty(programFiles))
-                {
-                    yield return Path.Combine(programFiles, "uv", exeName);
-                }
-            }
-
+            // Priority 1: User-configured PATH (most common scenario from official install scripts)
             string pathEnv = Environment.GetEnvironmentVariable("PATH");
             if (!string.IsNullOrEmpty(pathEnv))
             {
@@ -201,6 +169,42 @@ namespace MCPForUnity.Editor.Services
                         // Some PATH entries may already contain the file without extension
                         yield return Path.Combine(dir, "uvx");
                     }
+                }
+            }
+
+            // Priority 2: User directories
+            string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (!string.IsNullOrEmpty(home))
+            {
+                yield return Path.Combine(home, ".local", "bin", exeName);
+                yield return Path.Combine(home, ".cargo", "bin", exeName);
+            }
+
+            // Priority 3: System directories (platform-specific)
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                yield return "/opt/homebrew/bin/" + exeName;
+                yield return "/usr/local/bin/" + exeName;
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                yield return "/usr/local/bin/" + exeName;
+                yield return "/usr/bin/" + exeName;
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                // Priority 4: Windows-specific program directories
+                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+
+                if (!string.IsNullOrEmpty(localAppData))
+                {
+                    yield return Path.Combine(localAppData, "Programs", "uv", exeName);
+                }
+
+                if (!string.IsNullOrEmpty(programFiles))
+                {
+                    yield return Path.Combine(programFiles, "uv", exeName);
                 }
             }
         }
@@ -245,6 +249,125 @@ namespace MCPForUnity.Editor.Services
         public void ClearClaudeCliPathOverride()
         {
             EditorPrefs.DeleteKey(EditorPrefKeys.ClaudeCliPathOverride);
+        }
+
+        /// <summary>
+        /// Validates the provided uv executable by running "--version" and parsing the output.
+        /// </summary>
+        /// <param name="uvPath">Absolute or relative path to the uv/uvx executable.</param>
+        /// <param name="version">Parsed version string if successful.</param>
+        /// <returns>True when the executable runs and returns a uv version string.</returns>
+        public bool TryValidateUvExecutable(string uvPath, out string version)
+        {
+            version = null;
+
+            if (string.IsNullOrEmpty(uvPath))
+                return false;
+
+            try
+            {
+                // Check if the path is just a command name (no directory separator)
+                bool isBareCommand = !uvPath.Contains('/') && !uvPath.Contains('\\');
+                // McpLog.Debug($"TryValidateUvExecutable: path='{uvPath}', isBare={isBareCommand}");
+
+                ProcessStartInfo psi;
+                if (isBareCommand)
+                {
+                    // For bare commands like "uvx", use where/which to find full path first
+                    string fullPath = FindExecutableInPath(uvPath);
+                    if (string.IsNullOrEmpty(fullPath))
+                    {
+                        // McpLog.Debug($"TryValidateUvExecutable: Could not find '{uvPath}' in PATH");
+                        return false;
+                    }
+                    // McpLog.Debug($"TryValidateUvExecutable: Found full path: '{fullPath}'");
+                    uvPath = fullPath;
+                }
+
+                // Execute the command (full path)
+                psi = new ProcessStartInfo
+                {
+                    FileName = uvPath,
+                    Arguments = "--version",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                using var process = Process.Start(psi);
+                if (process == null)
+                    return false;
+
+
+                string output = process.StandardOutput.ReadToEnd().Trim();
+                string error = process.StandardError.ReadToEnd().Trim();
+                // wait for the process to exit with a timeout of 5000ms (5 seconds)
+                if (!process.WaitForExit(5000)) return false;
+
+                // McpLog.Debug($"TryValidateUvExecutable: exitCode={process.ExitCode}, stdout='{output}', stderr='{error}'");
+
+                // Check stdout first, then stderr (some tools output to stderr)
+                string versionOutput = !string.IsNullOrEmpty(output) ? output : error;
+
+                // uvx outputs "uvx x.y.z" or "uv x.y.z", extract version number
+                if (process.ExitCode == 0 &&
+                    (versionOutput.StartsWith("uv ") || versionOutput.StartsWith("uvx ")))
+                {
+                    // Extract version: "uvx 0.9.18 (hash date)" -> "0.9.18"
+                    int spaceIndex = versionOutput.IndexOf(' ');
+                    if (spaceIndex >= 0)
+                    {
+                        string afterCommand = versionOutput.Substring(spaceIndex + 1).Trim();
+                        // Version is up to the first space or parenthesis
+                        int parenIndex = afterCommand.IndexOf('(');
+                        version = parenIndex > 0
+                            ? afterCommand.Substring(0, parenIndex).Trim()
+                            : afterCommand.Split(' ')[0];
+                        // McpLog.Debug($"TryValidateUvExecutable: SUCCESS - version={version}");
+                        return true;
+                    }
+                }
+                // McpLog.Debug($"TryValidateUvExecutable: FAILED - exitCode={process.ExitCode}");
+            }
+            //catch (Exception ex)
+            catch
+            {
+                // McpLog.Debug($"TryValidateUvExecutable: EXCEPTION - {ex.Message}");
+            }
+
+            return false;
+        }
+
+        private string FindExecutableInPath(string commandName)
+        {
+            try
+            {
+                string exeName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && !commandName.EndsWith(".exe")
+                    ? commandName + ".exe"
+                    : commandName;
+
+                // First try EnumerateUvxCandidates which checks File.Exists
+                foreach (string candidate in EnumerateUvxCandidates())
+                {
+                    if (!string.IsNullOrEmpty(candidate) && File.Exists(candidate))
+                    {
+                        // Check if this candidate matches our command name
+                        string candidateName = Path.GetFileName(candidate);
+                        if (candidateName.Equals(exeName, StringComparison.OrdinalIgnoreCase) ||
+                            candidateName.Equals(commandName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return candidate;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore errors
+            }
+
+            return null;
         }
     }
 }

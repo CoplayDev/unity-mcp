@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using MCPForUnity.Editor.Dependencies.Models;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Services;
 
 namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 {
@@ -92,10 +93,18 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
 
         public override DependencyStatus DetectUv()
         {
-            var status = new DependencyStatus("uv Package Manager", isRequired: true)
+            // First, honor overrides and cross-platform resolution via the base implementation
+            var status = base.DetectUv();
+            if (status.IsAvailable)
             {
-                InstallationHint = GetUvInstallUrl()
-            };
+                return status;
+            }
+
+            // If the user configured an override path, keep the base result (failure typically means the override path is invalid)
+            if (MCPServiceLocator.Paths.HasUvxPathOverride)
+            {
+                return status;
+            }
 
             try
             {
@@ -107,6 +116,7 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
                     status.Version = version;
                     status.Path = fullPath;
                     status.Details = $"Found uv {version} in PATH";
+                    status.ErrorMessage = null;
                     return status;
                 }
 
@@ -120,6 +130,7 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
                         status.Version = version;
                         status.Path = fullPath;
                         status.Details = $"Found uv {version} in PATH";
+                        status.ErrorMessage = null;
                         return status;
                     }
                 }
@@ -217,11 +228,16 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
                 string output = process.StandardOutput.ReadToEnd().Trim();
                 process.WaitForExit(5000);
 
-                if (process.ExitCode == 0 && output.StartsWith("uv "))
+                if (process.ExitCode == 0 && (output.StartsWith("uv ") || output.StartsWith("uvx ")))
                 {
-                    version = output.Substring(3).Trim();
-                    fullPath = uvPath;
-                    return true;
+                    // Extract version: "uvx 0.9.18" -> "0.9.18"
+                    int spaceIndex = output.IndexOf(' ');
+                    if (spaceIndex >= 0)
+                    {
+                        version = output.Substring(spaceIndex + 1).Trim();
+                        fullPath = uvPath;
+                        return true;
+                    }
                 }
             }
             catch

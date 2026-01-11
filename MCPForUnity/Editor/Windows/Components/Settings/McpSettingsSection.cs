@@ -197,20 +197,15 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
 
             uvxPathStatus.RemoveFromClassList("valid");
             uvxPathStatus.RemoveFromClassList("invalid");
-            if (hasOverride)
+
+            string actualUvxPath = MCPServiceLocator.Paths.GetUvxPath();
+            if (MCPServiceLocator.Paths.TryValidateUvExecutable(actualUvxPath, out string version))
             {
-                if (!string.IsNullOrEmpty(uvxPath) && File.Exists(uvxPath))
-                {
-                    uvxPathStatus.AddToClassList("valid");
-                }
-                else
-                {
-                    uvxPathStatus.AddToClassList("invalid");
-                }
+                uvxPathStatus.AddToClassList("valid");
             }
             else
             {
-                uvxPathStatus.AddToClassList("valid");
+                uvxPathStatus.AddToClassList("invalid");
             }
 
             gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
