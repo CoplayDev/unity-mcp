@@ -197,8 +197,13 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
                     if (spaceIndex >= 0)
                     {
                         var remainder = output.Substring(spaceIndex + 1).Trim();
+                        int nextSpace = remainder.IndexOf(' ');
                         int parenIndex = remainder.IndexOf('(');
-                        version = parenIndex > 0 ? remainder.Substring(0, parenIndex).Trim() : remainder;
+                        int endIndex = Math.Min(
+                            nextSpace >= 0 ? nextSpace : int.MaxValue,
+                            parenIndex >= 0 ? parenIndex : int.MaxValue
+                        );
+                        version = endIndex < int.MaxValue ? remainder.Substring(0, endIndex).Trim() : remainder;
                         fullPath = command;
                         return true;
                     }

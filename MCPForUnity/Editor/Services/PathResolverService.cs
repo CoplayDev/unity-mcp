@@ -282,10 +282,13 @@ namespace MCPForUnity.Editor.Services
                     {
                         string afterCommand = versionOutput.Substring(spaceIndex + 1).Trim();
                         // Version is up to the first space or parenthesis
+                        int nextSpace = afterCommand.IndexOf(' ');
                         int parenIndex = afterCommand.IndexOf('(');
-                        version = parenIndex > 0
-                            ? afterCommand.Substring(0, parenIndex).Trim()
-                            : afterCommand.Split(' ')[0];
+                        int endIndex = Math.Min(
+                            nextSpace >= 0 ? nextSpace : int.MaxValue,
+                            parenIndex >= 0 ? parenIndex : int.MaxValue
+                        );
+                        version = endIndex < int.MaxValue ? afterCommand.Substring(0, endIndex).Trim() : afterCommand;
                         return true;
                     }
                 }
