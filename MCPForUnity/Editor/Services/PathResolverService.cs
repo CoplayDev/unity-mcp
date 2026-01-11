@@ -69,9 +69,9 @@ namespace MCPForUnity.Editor.Services
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // fall back to bare command
+                McpLog.Debug($"PathResolver error: {ex.Message}");
             }
 
             return null;
