@@ -21,112 +21,51 @@ namespace MCPForUnity.Editor.Services
 
         public string GetUvxPath()
         {
-            try
+            // Check override first - only validate if explicitly set
+            if (HasUvxPathOverride)
             {
                 string overridePath = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
-                if (!string.IsNullOrEmpty(overridePath))
+                // Validate the override - if invalid, don't fall back to discovery
+                if (TryValidateUvExecutable(overridePath, out string version))
                 {
                     return overridePath;
                 }
-            }
-            catch
-            {
-                // ignore EditorPrefs read errors and fall back to default command
-                McpLog.Debug("No uvx path override found, falling back to default command");
+                // Override is set but invalid - return null (no fallback)
+                return null;
             }
 
+            // No override set - try discovery (uvx first, then uv)
             string discovered = ResolveUvxFromSystem();
             if (!string.IsNullOrEmpty(discovered))
             {
                 return discovered;
             }
 
+            // Fallback to bare command
             return "uvx";
         }
 
-        public string GetClaudeCliPath()
-        {
-            try
-            {
-                string overridePath = EditorPrefs.GetString(EditorPrefKeys.ClaudeCliPathOverride, string.Empty);
-                if (!string.IsNullOrEmpty(overridePath) && File.Exists(overridePath))
-                {
-                    return overridePath;
-                }
-            }
-            catch { /* ignore */ }
-
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                string[] candidates = new[]
-                {
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "claude", "claude.exe"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "claude", "claude.exe"),
-                    "claude.exe"
-                };
-
-                foreach (var c in candidates)
-                {
-                    if (File.Exists(c)) return c;
-                }
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                string[] candidates = new[]
-                {
-                    "/opt/homebrew/bin/claude",
-                    "/usr/local/bin/claude",
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), ".local", "bin", "claude")
-                };
-
-                foreach (var c in candidates)
-                {
-                    if (File.Exists(c)) return c;
-                }
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                string[] candidates = new[]
-                {
-                    "/usr/bin/claude",
-                    "/usr/local/bin/claude",
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), ".local", "bin", "claude")
-                };
-
-                foreach (var c in candidates)
-                {
-                    if (File.Exists(c)) return c;
-                }
-            }
-
-            return null;
-        }
-
-        public bool IsPythonDetected()
-        {
-            return ExecPath.TryRun(
-                RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "python.exe" : "python3",
-                "--version",
-                null,
-                out _,
-                out _,
-                2000);
-        }
-
-        public bool IsClaudeCliDetected()
-        {
-            return !string.IsNullOrEmpty(GetClaudeCliPath());
-        }
-
+        /// <summary>
+        /// Resolves uv/uvx from system by trying both commands.
+        /// Returns the full path if found, null otherwise.
+        /// </summary>
         private static string ResolveUvxFromSystem()
         {
             try
             {
-                foreach (string candidate in EnumerateUvxCandidates())
+                // Try uvx first, then uv
+                string[] commandNames = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                    ? new[] { "uvx.exe", "uv.exe" }
+                    : new[] { "uvx", "uv" };
+
+                foreach (string commandName in commandNames)
                 {
-                    if (!string.IsNullOrEmpty(candidate) && File.Exists(candidate))
+                    foreach (string candidate in EnumerateUvxCandidates(commandName))
                     {
-                        return candidate;
+                        if (!string.IsNullOrEmpty(candidate) && File.Exists(candidate))
+                        {
+                            return candidate;
+                        }
                     }
                 }
             }
@@ -138,9 +77,12 @@ namespace MCPForUnity.Editor.Services
             return null;
         }
 
-        private static IEnumerable<string> EnumerateUvxCandidates()
+        /// <summary>
+        /// Enumerates candidate paths for uv/uvx executables.
+        /// </summary>
+        private static IEnumerable<string> EnumerateUvxCandidates(string commandName)
         {
-            string exeName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "uvx.exe" : "uvx";
+            string exeName = commandName;
 
             // Priority 1: User-configured PATH (most common scenario from official install scripts)
             string pathEnv = Environment.GetEnvironmentVariable("PATH");
@@ -152,10 +94,10 @@ namespace MCPForUnity.Editor.Services
                     string dir = rawDir.Trim();
                     yield return Path.Combine(dir, exeName);
 
-                    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && commandName.EndsWith(".exe"))
                     {
                         // Some PATH entries may already contain the file without extension
-                        yield return Path.Combine(dir, "uvx");
+                        yield return Path.Combine(dir, commandName.Replace(".exe", ""));
                     }
                 }
             }
@@ -195,6 +137,84 @@ namespace MCPForUnity.Editor.Services
                     yield return Path.Combine(programFiles, "uv", exeName);
                 }
             }
+        }
+
+        public string GetClaudeCliPath()
+        {
+            // Check override first - only validate if explicitly set
+            if (HasClaudeCliPathOverride)
+            {
+                string overridePath = EditorPrefs.GetString(EditorPrefKeys.ClaudeCliPathOverride, string.Empty);
+                // Validate the override - if invalid, don't fall back to discovery
+                if (File.Exists(overridePath))
+                {
+                    return overridePath;
+                }
+                // Override is set but invalid - return null (no fallback)
+                return null;
+            }
+
+            // No override - use platform-specific discovery
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                string[] candidates = new[]
+                {
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "claude", "claude.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "claude", "claude.exe"),
+                    "claude.exe"
+                };
+
+                foreach (var c in candidates)
+                {
+                    if (File.Exists(c)) return c;
+                }
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                string[] candidates = new[]
+                {
+                    "/opt/homebrew/bin/claude",
+                    "/usr/local/bin/claude",
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin", "claude")
+                };
+
+                foreach (var c in candidates)
+                {
+                    if (File.Exists(c)) return c;
+                }
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                string[] candidates = new[]
+                {
+                    "/usr/bin/claude",
+                    "/usr/local/bin/claude",
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin", "claude")
+                };
+
+                foreach (var c in candidates)
+                {
+                    if (File.Exists(c)) return c;
+                }
+            }
+
+            return null;
+        }
+
+        public bool IsPythonDetected()
+        {
+            return ExecPath.TryRun(
+                RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "python.exe" : "python3",
+                "--version",
+                null,
+                out _,
+                out _,
+                2000);
+        }
+
+        public bool IsClaudeCliDetected()
+        {
+            return !string.IsNullOrEmpty(GetClaudeCliPath());
         }
 
         public void SetUvxPathOverride(string path)
@@ -259,7 +279,7 @@ namespace MCPForUnity.Editor.Services
 
                 if (isBareCommand)
                 {
-                    // For bare commands like "uvx", use where/which to find full path first
+                    // For bare commands like "uvx" or "uv", use EnumerateCommandCandidates to find full path first
                     string fullPath = FindUvxExecutableInPath(uvPath);
                     if (string.IsNullOrEmpty(fullPath))
                         return false;
@@ -305,22 +325,12 @@ namespace MCPForUnity.Editor.Services
         {
             try
             {
-                string exeName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && !commandName.EndsWith(".exe")
-                    ? commandName + ".exe"
-                    : commandName;
-
-                // First try EnumerateUvxCandidates which checks File.Exists
-                foreach (string candidate in EnumerateUvxCandidates())
+                // Generic search for any command in PATH and common locations
+                foreach (string candidate in EnumerateCommandCandidates(commandName))
                 {
                     if (!string.IsNullOrEmpty(candidate) && File.Exists(candidate))
                     {
-                        // Check if this candidate matches our command name
-                        string candidateName = Path.GetFileName(candidate);
-                        if (candidateName.Equals(exeName, StringComparison.OrdinalIgnoreCase) ||
-                            candidateName.Equals(commandName, StringComparison.OrdinalIgnoreCase))
-                        {
-                            return candidate;
-                        }
+                        return candidate;
                     }
                 }
             }
@@ -330,6 +340,64 @@ namespace MCPForUnity.Editor.Services
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Enumerates candidate paths for a generic command name.
+        /// Searches PATH and common locations.
+        /// </summary>
+        private static IEnumerable<string> EnumerateCommandCandidates(string commandName)
+        {
+            string exeName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && !commandName.EndsWith(".exe")
+                ? commandName + ".exe"
+                : commandName;
+
+            // Search PATH first
+            string pathEnv = Environment.GetEnvironmentVariable("PATH");
+            if (!string.IsNullOrEmpty(pathEnv))
+            {
+                foreach (string rawDir in pathEnv.Split(Path.PathSeparator))
+                {
+                    if (string.IsNullOrWhiteSpace(rawDir)) continue;
+                    string dir = rawDir.Trim();
+                    yield return Path.Combine(dir, exeName);
+                }
+            }
+
+            // User-local binary directories
+            string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (!string.IsNullOrEmpty(home))
+            {
+                yield return Path.Combine(home, ".local", "bin", exeName);
+                yield return Path.Combine(home, ".cargo", "bin", exeName);
+            }
+
+            // System directories (platform-specific)
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                yield return "/opt/homebrew/bin/" + exeName;
+                yield return "/usr/local/bin/" + exeName;
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                yield return "/usr/local/bin/" + exeName;
+                yield return "/usr/bin/" + exeName;
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+
+                if (!string.IsNullOrEmpty(localAppData))
+                {
+                    yield return Path.Combine(localAppData, "Programs", "uv", exeName);
+                }
+
+                if (!string.IsNullOrEmpty(programFiles))
+                {
+                    yield return Path.Combine(programFiles, "uv", exeName);
+                }
+            }
         }
     }
 }

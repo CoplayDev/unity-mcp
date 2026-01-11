@@ -141,26 +141,25 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
 
             try
             {
-                var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                var pathAdditions = new[]
-                {
-                    "/usr/local/bin",
-                    "/usr/bin",
-                    "/bin",
-                    "/snap/bin",
-                    Path.Combine(homeDir, ".local", "bin")
-                };
-                string augmentedPath = string.Join(":", pathAdditions) + ":" + (Environment.GetEnvironmentVariable("PATH") ?? "");
+                string augmentedPath = BuildAugmentedPath();
 
-                if (!ExecPath.TryRun(pythonPath, "--version", null, out string stdout, out string stderr,
+                // First, try to resolve the absolute path for better UI/logging display
+                string commandToRun = pythonPath;
+                if (TryFindInPath(pythonPath, out string resolvedPath))
+                {
+                    commandToRun = resolvedPath;
+                }
+
+                if (!ExecPath.TryRun(commandToRun, "--version", null, out string stdout, out string stderr,
                     5000, augmentedPath))
                     return false;
 
-                string output = stdout.Trim();
+                // Check stdout first, then stderr (some Python distributions output to stderr)
+                string output = !string.IsNullOrWhiteSpace(stdout) ? stdout.Trim() : stderr.Trim();
                 if (output.StartsWith("Python "))
                 {
                     version = output.Substring(7);
-                    fullPath = pythonPath;
+                    fullPath = commandToRun;
 
                     if (TryParseVersion(version, out var major, out var minor))
                     {
@@ -183,8 +182,15 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
 
             try
             {
+                // First, try to resolve the absolute path for better UI/logging display
+                string commandToRun = command;
+                if (TryFindInPath(command, out string resolvedPath))
+                {
+                    commandToRun = resolvedPath;
+                }
+
                 // Use ExecPath.TryRun which properly handles async output reading and timeouts
-                if (!ExecPath.TryRun(command, "--version", null, out string stdout, out string stderr,
+                if (!ExecPath.TryRun(commandToRun, "--version", null, out string stdout, out string stderr,
                     5000, augmentedPath))
                     return false;
 
@@ -193,6 +199,7 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
                 if (output.StartsWith("uv ") || output.StartsWith("uvx "))
                 {
                     // Extract version: "uvx 0.9.18" -> "0.9.18"
+                    // Handle extra tokens: "uvx 0.9.18 extra" or "uvx 0.9.18 (build info)"
                     int spaceIndex = output.IndexOf(' ');
                     if (spaceIndex >= 0)
                     {
@@ -204,7 +211,7 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
                             parenIndex >= 0 ? parenIndex : int.MaxValue
                         );
                         version = endIndex < int.MaxValue ? remainder.Substring(0, endIndex).Trim() : remainder;
-                        fullPath = command;
+                        fullPath = commandToRun;
                         return true;
                     }
                 }
@@ -217,10 +224,13 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
             return false;
         }
 
-        private string BuildAugmentedPath()
+        protected string BuildAugmentedPath()
         {
-            string currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
-            return string.Join(":", GetPathAdditions()) + ":" + currentPath;
+            var additions = GetPathAdditions();
+            if (additions.Length == 0) return null;
+
+            // Only return the additions - ExecPath.TryRun will prepend to existing PATH
+            return string.Join(Path.PathSeparator, additions);
         }
 
         private string[] GetPathAdditions()
@@ -242,16 +252,7 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
 
             try
             {
-                var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                var pathAdditions = new[]
-                {
-                    "/usr/local/bin",
-                    "/usr/bin",
-                    "/bin",
-                    "/snap/bin",
-                    Path.Combine(homeDir, ".local", "bin")
-                };
-                string augmentedPath = string.Join(":", pathAdditions) + ":" + (Environment.GetEnvironmentVariable("PATH") ?? "");
+                string augmentedPath = BuildAugmentedPath();
 
                 if (!ExecPath.TryRun("/usr/bin/which", executable, null, out string stdout, out _, 3000, augmentedPath))
                     return false;

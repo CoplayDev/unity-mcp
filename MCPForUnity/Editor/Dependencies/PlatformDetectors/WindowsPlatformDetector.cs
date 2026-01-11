@@ -1,3 +1,8 @@
+/*
+    //Windows currently does not override DetectUv(), relying entirely on the base class. This is correct because:
+    //The PathResolverService already includes Windows-specific paths.
+    //There are no additional Windows-specific detection requirements.
+*/
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -147,15 +152,24 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             try
             {
                 string augmentedPath = BuildAugmentedPath();
+
+                // First, try to resolve the absolute path for better UI/logging display
+                string commandToRun = pythonPath;
+                if (TryFindInPath(pythonPath, out string resolvedPath))
+                {
+                    commandToRun = resolvedPath;
+                }
+
                 // Run 'python --version' to get the version
-                if (!ExecPath.TryRun(pythonPath, "--version", null, out string stdout, out string stderr, 5000, augmentedPath))
+                if (!ExecPath.TryRun(commandToRun, "--version", null, out string stdout, out string stderr, 5000, augmentedPath))
                     return false;
 
-                string output = stdout.Trim();
+                // Check stdout first, then stderr (some Python distributions output to stderr)
+                string output = !string.IsNullOrWhiteSpace(stdout) ? stdout.Trim() : stderr.Trim();
                 if (output.StartsWith("Python "))
                 {
                     version = output.Substring(7);
-                    fullPath = pythonPath;
+                    fullPath = commandToRun;
 
                     if (TryParseVersion(version, out var major, out var minor))
                     {
@@ -197,10 +211,13 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             return false;
         }
 
-        private string BuildAugmentedPath()
+        protected string BuildAugmentedPath()
         {
-            string currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
-            return string.Join(Path.PathSeparator, GetPathAdditions()) + Path.PathSeparator + currentPath;
+            var additions = GetPathAdditions();
+            if (additions.Length == 0) return null;
+
+            // Only return the additions - ExecPath.TryRun will prepend to existing PATH
+            return string.Join(Path.PathSeparator, additions);
         }
 
         private string[] GetPathAdditions()
@@ -239,7 +256,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             if (!string.IsNullOrEmpty(homeDir))
                 additions.Add(Path.Combine(homeDir, ".local", "bin"));
 
-            return additions.Where(Directory.Exists).ToArray();
+            return additions.ToArray();
         }
     }
 }
