@@ -239,9 +239,22 @@ namespace MCPForUnity.Editor.Helpers
                 };
                 string path = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
                 psi.EnvironmentVariables["PATH"] = string.IsNullOrEmpty(path) ? prependPath : (prependPath + Path.PathSeparator + path);
+
                 using var p = Process.Start(psi);
-                string output = p?.StandardOutput.ReadToEnd().Trim();
-                p?.WaitForExit(1500);
+                if (p == null) return null;
+
+                var so = new StringBuilder();
+                p.OutputDataReceived += (_, e) => { if (e.Data != null) so.AppendLine(e.Data); };
+                p.BeginOutputReadLine();
+
+                if (!p.WaitForExit(1500))
+                {
+                    try { p.Kill(); } catch { }
+                    return null;
+                }
+
+                p.WaitForExit();
+                string output = so.ToString().Trim();
                 return (!string.IsNullOrEmpty(output) && File.Exists(output)) ? output : null;
             }
             catch { return null; }
@@ -260,10 +273,22 @@ namespace MCPForUnity.Editor.Helpers
                     CreateNoWindow = true,
                 };
                 using var p = Process.Start(psi);
-                string first = p?.StandardOutput.ReadToEnd()
+                if (p == null) return null;
+
+                var so = new StringBuilder();
+                p.OutputDataReceived += (_, e) => { if (e.Data != null) so.AppendLine(e.Data); };
+                p.BeginOutputReadLine();
+
+                if (!p.WaitForExit(1500))
+                {
+                    try { p.Kill(); } catch { }
+                    return null;
+                }
+
+                p.WaitForExit();
+                string first = so.ToString()
                     .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
                     .FirstOrDefault();
-                p?.WaitForExit(1500);
                 return (!string.IsNullOrEmpty(first) && File.Exists(first)) ? first : null;
             }
             catch { return null; }

@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Dependencies.Models;
 using MCPForUnity.Editor.Helpers;
 
@@ -103,44 +106,26 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
             try
             {
-                var psi = new ProcessStartInfo
+                string augmentedPath = BuildAugmentedPath();
+                // Try to list installed python versions via uv
+                if (!ExecPath.TryRun("uv", "python list", null, out string stdout, out string stderr, 5000, augmentedPath))
+                    return false;
+
+                var lines = stdout.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var line in lines)
                 {
-                    FileName = "uv", // Assume uv is in path or user can't use this fallback
-                    Arguments = "python list",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
+                    if (line.Contains("<download available>")) continue;
 
-                using var process = Process.Start(psi);
-                if (process == null) return false;
-
-                string output = process.StandardOutput.ReadToEnd();
-                process.WaitForExit(5000);
-
-                if (process.ExitCode == 0 && !string.IsNullOrEmpty(output))
-                {
-                    var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                    foreach (var line in lines)
+                    var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length >= 2)
                     {
-                        // Look for installed python paths
-                        // Format is typically: <version> <path>
-                        // Skip lines with "<download available>"
-                        if (line.Contains("<download available>")) continue;
-
-                        // The path is typically the last part of the line
-                        var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                        if (parts.Length >= 2)
+                        string potentialPath = parts[parts.Length - 1];
+                        if (File.Exists(potentialPath) &&
+                            (potentialPath.EndsWith("python.exe") || potentialPath.EndsWith("python3.exe")))
                         {
-                            string potentialPath = parts[parts.Length - 1];
-                            if (File.Exists(potentialPath) && 
-                                (potentialPath.EndsWith("python.exe") || potentialPath.EndsWith("python3.exe")))
+                            if (TryValidatePython(potentialPath, out version, out fullPath))
                             {
-                                if (TryValidatePython(potentialPath, out version, out fullPath))
-                                {
-                                    return true;
-                                }
+                                return true;
                             }
                         }
                     }
@@ -161,28 +146,17 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
             try
             {
-                var psi = new ProcessStartInfo
+                string augmentedPath = BuildAugmentedPath();
+                // Run 'python --version' to get the version
+                if (!ExecPath.TryRun(pythonPath, "--version", null, out string stdout, out string stderr, 5000, augmentedPath))
+                    return false;
+
+                string output = stdout.Trim();
+                if (output.StartsWith("Python "))
                 {
-                    FileName = pythonPath,
-                    Arguments = "--version",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
-
-                using var process = Process.Start(psi);
-                if (process == null) return false;
-
-                string output = process.StandardOutput.ReadToEnd().Trim();
-                process.WaitForExit(5000);
-
-                if (process.ExitCode == 0 && output.StartsWith("Python "))
-                {
-                    version = output.Substring(7); // Remove "Python " prefix
+                    version = output.Substring(7);
                     fullPath = pythonPath;
 
-                    // Validate minimum version (Python 4+ or Python 3.10+)
                     if (TryParseVersion(version, out var major, out var minor))
                     {
                         return major > 3 || (major >= 3 && minor >= 10);
@@ -203,31 +177,16 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
             try
             {
-                var psi = new ProcessStartInfo
+                string augmentedPath = BuildAugmentedPath();
+                // Use 'where' command to find the executable in PATH
+                if (!ExecPath.TryRun("where", executable, null, out string stdout, out string stderr, 3000, augmentedPath))
+                    return false;
+
+                var lines = stdout.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                if (lines.Length > 0)
                 {
-                    FileName = "where",
-                    Arguments = executable,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
-
-                using var process = Process.Start(psi);
-                if (process == null) return false;
-
-                string output = process.StandardOutput.ReadToEnd().Trim();
-                process.WaitForExit(3000);
-
-                if (process.ExitCode == 0 && !string.IsNullOrEmpty(output))
-                {
-                    // Take the first result
-                    var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                    if (lines.Length > 0)
-                    {
-                        fullPath = lines[0].Trim();
-                        return File.Exists(fullPath);
-                    }
+                    fullPath = lines[0].Trim();
+                    return File.Exists(fullPath);
                 }
             }
             catch
@@ -236,6 +195,51 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             }
 
             return false;
+        }
+
+        private string BuildAugmentedPath()
+        {
+            string currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
+            return string.Join(Path.PathSeparator, GetPathAdditions()) + Path.PathSeparator + currentPath;
+        }
+
+        private string[] GetPathAdditions()
+        {
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+            var additions = new List<string>();
+
+            // uv common installation paths
+            if (!string.IsNullOrEmpty(localAppData))
+                additions.Add(Path.Combine(localAppData, "Programs", "uv"));
+            if (!string.IsNullOrEmpty(programFiles))
+                additions.Add(Path.Combine(programFiles, "uv"));
+
+            // npm global paths
+            if (!string.IsNullOrEmpty(appData))
+                additions.Add(Path.Combine(appData, "npm"));
+            if (!string.IsNullOrEmpty(localAppData))
+                additions.Add(Path.Combine(localAppData, "npm"));
+
+            // Python common paths
+            if (!string.IsNullOrEmpty(localAppData))
+                additions.Add(Path.Combine(localAppData, "Programs", "Python"));
+            if (!string.IsNullOrEmpty(programFiles))
+            {
+                additions.Add(Path.Combine(programFiles, "Python313"));
+                additions.Add(Path.Combine(programFiles, "Python312"));
+                additions.Add(Path.Combine(programFiles, "Python311"));
+                additions.Add(Path.Combine(programFiles, "Python310"));
+            }
+
+            // User scripts
+            if (!string.IsNullOrEmpty(homeDir))
+                additions.Add(Path.Combine(homeDir, ".local", "bin"));
+
+            return additions.Where(Directory.Exists).ToArray();
         }
     }
 }

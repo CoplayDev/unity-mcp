@@ -104,25 +104,13 @@ namespace MCPForUnity.Editor.Services
 
         public bool IsPythonDetected()
         {
-            try
-            {
-                var psi = new ProcessStartInfo
-                {
-                    FileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "python.exe" : "python3",
-                    Arguments = "--version",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
-                using var p = Process.Start(psi);
-                p.WaitForExit(2000);
-                return p.ExitCode == 0;
-            }
-            catch
-            {
-                return false;
-            }
+            return ExecPath.TryRun(
+                RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "python.exe" : "python3",
+                "--version",
+                null,
+                out _,
+                out _,
+                2000);
         }
 
         public bool IsClaudeCliDetected()
@@ -268,51 +256,25 @@ namespace MCPForUnity.Editor.Services
             {
                 // Check if the path is just a command name (no directory separator)
                 bool isBareCommand = !uvPath.Contains('/') && !uvPath.Contains('\\');
-                // McpLog.Debug($"TryValidateUvExecutable: path='{uvPath}', isBare={isBareCommand}");
 
-                ProcessStartInfo psi;
                 if (isBareCommand)
                 {
                     // For bare commands like "uvx", use where/which to find full path first
                     string fullPath = FindUvxExecutableInPath(uvPath);
                     if (string.IsNullOrEmpty(fullPath))
-                    {
-                        // McpLog.Debug($"TryValidateUvExecutable: Could not find '{uvPath}' in PATH");
                         return false;
-                    }
-                    // McpLog.Debug($"TryValidateUvExecutable: Found full path: '{fullPath}'");
                     uvPath = fullPath;
                 }
 
-                // Execute the command (full path)
-                psi = new ProcessStartInfo
-                {
-                    FileName = uvPath,
-                    Arguments = "--version",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
-
-                using var process = Process.Start(psi);
-                if (process == null)
+                // Use ExecPath.TryRun which properly handles async output reading and timeouts
+                if (!ExecPath.TryRun(uvPath, "--version", null, out string stdout, out string stderr, 5000))
                     return false;
 
-
-                string output = process.StandardOutput.ReadToEnd().Trim();
-                string error = process.StandardError.ReadToEnd().Trim();
-                // wait for the process to exit with a timeout of 5000ms (5 seconds)
-                if (!process.WaitForExit(5000)) return false;
-
-                // McpLog.Debug($"TryValidateUvExecutable: exitCode={process.ExitCode}, stdout='{output}', stderr='{error}'");
-
                 // Check stdout first, then stderr (some tools output to stderr)
-                string versionOutput = !string.IsNullOrEmpty(output) ? output : error;
+                string versionOutput = !string.IsNullOrWhiteSpace(stdout) ? stdout.Trim() : stderr.Trim();
 
                 // uvx outputs "uvx x.y.z" or "uv x.y.z", extract version number
-                if (process.ExitCode == 0 &&
-                    (versionOutput.StartsWith("uv ") || versionOutput.StartsWith("uvx ")))
+                if (versionOutput.StartsWith("uv ") || versionOutput.StartsWith("uvx "))
                 {
                     // Extract version: "uvx 0.9.18 (hash date)" -> "0.9.18"
                     int spaceIndex = versionOutput.IndexOf(' ');
@@ -324,16 +286,13 @@ namespace MCPForUnity.Editor.Services
                         version = parenIndex > 0
                             ? afterCommand.Substring(0, parenIndex).Trim()
                             : afterCommand.Split(' ')[0];
-                        // McpLog.Debug($"TryValidateUvExecutable: SUCCESS - version={version}");
                         return true;
                     }
                 }
-                // McpLog.Debug($"TryValidateUvExecutable: FAILED - exitCode={process.ExitCode}");
             }
-            //catch (Exception ex)
             catch
             {
-                // McpLog.Debug($"TryValidateUvExecutable: EXCEPTION - {ex.Message}");
+                // Ignore validation errors
             }
 
             return false;
