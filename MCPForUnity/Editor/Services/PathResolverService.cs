@@ -274,7 +274,7 @@ namespace MCPForUnity.Editor.Services
                 if (isBareCommand)
                 {
                     // For bare commands like "uvx", use where/which to find full path first
-                    string fullPath = FindExecutableInPath(uvPath);
+                    string fullPath = FindUvxExecutableInPath(uvPath);
                     if (string.IsNullOrEmpty(fullPath))
                     {
                         // McpLog.Debug($"TryValidateUvExecutable: Could not find '{uvPath}' in PATH");
@@ -339,7 +339,7 @@ namespace MCPForUnity.Editor.Services
             return false;
         }
 
-        private string FindExecutableInPath(string commandName)
+        private string FindUvxExecutableInPath(string commandName)
         {
             try
             {

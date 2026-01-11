@@ -110,6 +110,12 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
                 if (TryValidateUv("uv", out string version, out string fullPath) ||
                     TryValidateUv("uvx", out version, out fullPath))
                 {
+                    // If we validated via bare command, resolve to absolute path
+                    if (fullPath == "uv" && TryFindInPath("uv", out var resolvedUv))
+                        fullPath = resolvedUv;
+                    else if (fullPath == "uvx" && TryFindInPath("uvx", out var resolvedUvx))
+                        fullPath = resolvedUvx;
+
                     status.IsAvailable = true;
                     status.Version = version;
                     status.Path = fullPath;
@@ -223,17 +229,38 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
                 using var process = Process.Start(psi);
                 if (process == null) return false;
 
+                // Read both streams to avoid missing output when tools write version to stderr
+                string stdout = process.StandardOutput.ReadToEnd();
+                string stderr = process.StandardError.ReadToEnd();
 
-                string output = process.StandardOutput.ReadToEnd().Trim();
-                process.WaitForExit(5000);
+                // Respect timeout - check return value
+                if (!process.WaitForExit(5000))
+                    return false;
+
+                // Use stdout first, fallback to stderr (some tools output to stderr)
+                string output = string.IsNullOrWhiteSpace(stdout) ? stderr.Trim() : stdout.Trim();
 
                 if (process.ExitCode == 0 && (output.StartsWith("uv ") || output.StartsWith("uvx ")))
                 {
                     // Extract version: "uvx 0.9.18" -> "0.9.18"
+                    // Handle extra tokens: "uvx 0.9.18 (Homebrew 2025-01-01)" -> "0.9.18"
                     int spaceIndex = output.IndexOf(' ');
                     if (spaceIndex >= 0)
                     {
-                        version = output.Substring(spaceIndex + 1).Trim();
+                        var remainder = output.Substring(spaceIndex + 1).Trim();
+                        // Extract only the version number (up to next space or parenthesis)
+                        int nextSpace = remainder.IndexOf(' ');
+                        int parenIndex = remainder.IndexOf('(');
+                        int endIndex = -1;
+
+                        if (nextSpace >= 0 && parenIndex >= 0)
+                            endIndex = Math.Min(nextSpace, parenIndex);
+                        else if (nextSpace >= 0)
+                            endIndex = nextSpace;
+                        else if (parenIndex >= 0)
+                            endIndex = parenIndex;
+
+                        version = endIndex >= 0 ? remainder.Substring(0, endIndex).Trim() : remainder;
                         fullPath = uvPath;
                         return true;
                     }
