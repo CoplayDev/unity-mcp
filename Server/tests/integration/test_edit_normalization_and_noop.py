@@ -99,17 +99,6 @@ async def test_noop_evidence_shape(monkeypatch):
 async def test_atomic_multi_span_and_relaxed(monkeypatch):
     tools_text = setup_script_tools()
     apply_text = tools_text["apply_text_edits"]
-    tools_struct = DummyMCP()
-    # Import the tools module to trigger decorator registration
-    import services.tools.script_apply_edits
-    # Get the registered tools from the registry
-    from services.registry import get_registered_tools
-    tools = get_registered_tools()
-    # Add all script-related tools to our dummy MCP
-    for tool_info in tools:
-        tool_name = tool_info['name']
-        if any(keyword in tool_name for keyword in ['script_apply', 'apply_edits']):
-            tools_struct.tools[tool_name] = tool_info['func']
     # Fake send for read and write; verify atomic applyMode and validate=relaxed passes through
     sent = {}
 
