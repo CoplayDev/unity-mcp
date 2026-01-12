@@ -163,57 +163,7 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
 
                     if (TryParseVersion(version, out var major, out var minor))
                     {
-                        return major > 3 || (major >= 3 && minor >= 10);
-                    }
-                }
-            }
-            catch
-            {
-                // Ignore validation errors
-            }
-
-            return false;
-        }
-
-        private bool TryValidateUvWithPath(string command, string augmentedPath, out string version, out string fullPath)
-        {
-            version = null;
-            fullPath = null;
-
-            try
-            {
-                // First, try to resolve the absolute path for better UI/logging display
-                string commandToRun = command;
-                if (TryFindInPath(command, out string resolvedPath))
-                {
-                    commandToRun = resolvedPath;
-                }
-
-                // Use ExecPath.TryRun which properly handles async output reading and timeouts
-                if (!ExecPath.TryRun(commandToRun, "--version", null, out string stdout, out string stderr,
-                    5000, augmentedPath))
-                    return false;
-
-                string output = string.IsNullOrWhiteSpace(stdout) ? stderr.Trim() : stdout.Trim();
-
-                // uv/uvx outputs "uv x.y.z" or "uvx x.y.z"
-                if (output.StartsWith("uvx ") || output.StartsWith("uv "))
-                {
-                    // Extract version: "uv 0.9.18" -> "0.9.18"
-                    // Handle extra tokens: "uv 0.9.18 extra" or "uv 0.9.18 (build info)"
-                    int spaceIndex = output.IndexOf(' ');
-                    if (spaceIndex >= 0)
-                    {
-                        var remainder = output.Substring(spaceIndex + 1).Trim();
-                        int nextSpace = remainder.IndexOf(' ');
-                        int parenIndex = remainder.IndexOf('(');
-                        int endIndex = Math.Min(
-                            nextSpace >= 0 ? nextSpace : int.MaxValue,
-                            parenIndex >= 0 ? parenIndex : int.MaxValue
-                        );
-                        version = endIndex < int.MaxValue ? remainder.Substring(0, endIndex).Trim() : remainder;
-                        fullPath = commandToRun;
-                        return true;
+                        return major > 3 || (major == 3 && minor >= 10);
                     }
                 }
             }
@@ -247,7 +197,7 @@ Note: Make sure ~/.local/bin is in your PATH for user-local installations.";
             };
         }
 
-        private bool TryFindInPath(string executable, out string fullPath)
+        protected override bool TryFindInPath(string executable, out string fullPath)
         {
             fullPath = ExecPath.FindInPath(executable, BuildAugmentedPath());
             return !string.IsNullOrEmpty(fullPath);

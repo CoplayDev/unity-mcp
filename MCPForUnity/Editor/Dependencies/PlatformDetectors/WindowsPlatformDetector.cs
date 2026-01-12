@@ -125,7 +125,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                     status.IsAvailable = true;
                     status.Version = uvVersion;
                     status.Path = uvPath;
-                    status.Details = $"Found uv {uvVersion} at {uvPath}"; // 真实的路径反馈
+                    status.Details = $"Found uv {uvVersion} at {uvPath}";
                     return status;
                 }
 
@@ -150,54 +150,6 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             return status;
         }
 
-        private bool TryValidateUvWithPath(string command, string augmentedPath, out string version, out string fullPath)
-        {
-            version = null;
-            fullPath = null;
-
-            try
-            {
-                // First, try to resolve the absolute path for better UI/logging display
-                string commandToRun = command;
-                if (TryFindInPath(command, out string resolvedPath))
-                {
-                    commandToRun = resolvedPath;
-                }
-
-                // Use ExecPath.TryRun which properly handles async output reading and timeouts
-                if (!ExecPath.TryRun(commandToRun, "--version", null, out string stdout, out string stderr,
-                    5000, augmentedPath))
-                    return false;
-
-                string output = string.IsNullOrWhiteSpace(stdout) ? stderr.Trim() : stdout.Trim();
-
-                // uv/uvx outputs "uv x.y.z" or "uvx x.y.z"
-                if (output.StartsWith("uvx ") || output.StartsWith("uv "))
-                {
-                    // Extract version: "uv 0.9.18" -> "0.9.18"
-                    int spaceIndex = output.IndexOf(' ');
-                    if (spaceIndex >= 0)
-                    {
-                        var remainder = output.Substring(spaceIndex + 1).Trim();
-                        int nextSpace = remainder.IndexOf(' ');
-                        int parenIndex = remainder.IndexOf('(');
-                        int endIndex = Math.Min(
-                            nextSpace >= 0 ? nextSpace : int.MaxValue,
-                            parenIndex >= 0 ? parenIndex : int.MaxValue
-                        );
-                        version = endIndex < int.MaxValue ? remainder.Substring(0, endIndex).Trim() : remainder;
-                        fullPath = commandToRun;
-                        return true;
-                    }
-                }
-            }
-            catch
-            {
-                // Ignore validation errors
-            }
-
-            return false;
-        }
 
         private bool TryFindPythonViaUv(out string version, out string fullPath)
         {
@@ -268,7 +220,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
                     if (TryParseVersion(version, out var major, out var minor))
                     {
-                        return major > 3 || (major >= 3 && minor >= 10);
+                        return major > 3 || (major == 3 && minor >= 10);
                     }
                 }
             }
@@ -280,7 +232,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             return false;
         }
 
-        private bool TryFindInPath(string executable, out string fullPath)
+        protected override bool TryFindInPath(string executable, out string fullPath)
         {
             fullPath = ExecPath.FindInPath(executable, BuildAugmentedPath());
             return !string.IsNullOrEmpty(fullPath);
@@ -319,12 +271,19 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             // Python common paths
             if (!string.IsNullOrEmpty(localAppData))
                 additions.Add(Path.Combine(localAppData, "Programs", "Python"));
+            // Instead of hardcoded versions, enumerate existing directories
             if (!string.IsNullOrEmpty(programFiles))
             {
-                additions.Add(Path.Combine(programFiles, "Python313"));
-                additions.Add(Path.Combine(programFiles, "Python312"));
-                additions.Add(Path.Combine(programFiles, "Python311"));
-                additions.Add(Path.Combine(programFiles, "Python310"));
+                try
+                {
+                    var pythonDirs = Directory.GetDirectories(programFiles, "Python3*")
+                        .OrderByDescending(d => d); // Newest first
+                    foreach (var dir in pythonDirs)
+                    {
+                        additions.Add(dir);
+                    }
+                }
+                catch { /* Ignore if directory doesn't exist */ }
             }
 
             // User scripts

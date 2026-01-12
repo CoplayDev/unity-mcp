@@ -60,7 +60,7 @@ namespace MCPForUnity.Editor.Services
 
                 foreach (string commandName in commandNames)
                 {
-                    foreach (string candidate in EnumerateUvxCandidates(commandName))
+                    foreach (string candidate in EnumerateCommandCandidates(commandName))
                     {
                         if (!string.IsNullOrEmpty(candidate) && File.Exists(candidate))
                         {
@@ -77,69 +77,7 @@ namespace MCPForUnity.Editor.Services
             return null;
         }
 
-        /// <summary>
-        /// Enumerates candidate paths for uv/uvx executables.
-        /// </summary>
-        private static IEnumerable<string> EnumerateUvxCandidates(string commandName)
-        {
-            string exeName = commandName;
 
-            // Priority 1: User-configured PATH (most common scenario from official install scripts)
-            string pathEnv = Environment.GetEnvironmentVariable("PATH");
-            if (!string.IsNullOrEmpty(pathEnv))
-            {
-                foreach (string rawDir in pathEnv.Split(Path.PathSeparator))
-                {
-                    if (string.IsNullOrWhiteSpace(rawDir)) continue;
-                    string dir = rawDir.Trim();
-                    yield return Path.Combine(dir, exeName);
-
-                    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && commandName.EndsWith(".exe"))
-                    {
-                        // Some PATH entries may already contain the file without extension
-                        yield return Path.Combine(dir, commandName.Replace(".exe", ""));
-                    }
-                }
-            }
-
-            // Priority 2: User directories
-            string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            if (!string.IsNullOrEmpty(home))
-            {
-                yield return Path.Combine(home, ".local", "bin", exeName);
-                yield return Path.Combine(home, ".cargo", "bin", exeName);
-            }
-
-            // Priority 3: System directories (platform-specific)
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                yield return "/opt/homebrew/bin/" + exeName;
-                yield return "/usr/local/bin/" + exeName;
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                yield return "/usr/local/bin/" + exeName;
-                yield return "/usr/bin/" + exeName;
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                // Priority 4: Windows-specific program directories
-                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-
-                if (!string.IsNullOrEmpty(localAppData))
-                {
-                    yield return Path.Combine(localAppData, "Programs", "uv", exeName);
-                    // WinGet creates shim files in this location
-                    yield return Path.Combine(localAppData, "Microsoft", "WinGet", "Links", exeName);
-                }
-
-                if (!string.IsNullOrEmpty(programFiles))
-                {
-                    yield return Path.Combine(programFiles, "uv", exeName);
-                }
-            }
-        }
 
         public string GetClaudeCliPath()
         {
@@ -264,7 +202,7 @@ namespace MCPForUnity.Editor.Services
         /// <summary>
         /// Validates the provided uv executable by running "--version" and parsing the output.
         /// </summary>
-        /// <param name="uvPath">Absolute or relative path to the uv/uvx executable.</param>
+        /// <param name="uvxPath">Absolute or relative path to the uv/uvx executable.</param>
         /// <param name="version">Parsed version string if successful.</param>
         /// <returns>True when the executable runs and returns a uvx version string.</returns>
         public bool TryValidateUvxExecutable(string uvxPath, out string version)

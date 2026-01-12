@@ -1,5 +1,6 @@
 using System;
 using MCPForUnity.Editor.Dependencies.Models;
+using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
 
 namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
@@ -72,5 +73,54 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
             return false;
         }
+        // In PlatformDetectorBase.cs
+        protected bool TryValidateUvWithPath(string command, string augmentedPath, out string version, out string fullPath)
+        {
+            version = null;
+            fullPath = null;
+
+            try
+            {
+                string commandToRun = command;
+                if (TryFindInPath(command, out string resolvedPath))
+                {
+                    commandToRun = resolvedPath;
+                }
+
+                if (!ExecPath.TryRun(commandToRun, "--version", null, out string stdout, out string stderr,
+                    5000, augmentedPath))
+                    return false;
+
+                string output = string.IsNullOrWhiteSpace(stdout) ? stderr.Trim() : stdout.Trim();
+
+                if (output.StartsWith("uvx ") || output.StartsWith("uv "))
+                {
+                    int spaceIndex = output.IndexOf(' ');
+                    if (spaceIndex >= 0)
+                    {
+                        var remainder = output.Substring(spaceIndex + 1).Trim();
+                        int nextSpace = remainder.IndexOf(' ');
+                        int parenIndex = remainder.IndexOf('(');
+                        int endIndex = Math.Min(
+                            nextSpace >= 0 ? nextSpace : int.MaxValue,
+                            parenIndex >= 0 ? parenIndex : int.MaxValue
+                        );
+                        version = endIndex < int.MaxValue ? remainder.Substring(0, endIndex).Trim() : remainder;
+                        fullPath = commandToRun;
+                        return true;
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore validation errors
+            }
+
+            return false;
+        }
+        
+
+        // Add abstract method for subclasses to implement
+        protected abstract bool TryFindInPath(string executable, out string fullPath);
     }
 }
