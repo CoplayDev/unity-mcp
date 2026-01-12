@@ -12,11 +12,8 @@ using System.Text.RegularExpressions;
 namespace MCPForUnityTests.Editor.Tools
 {
     /// <summary>
-    /// Tests specifically for MCP tool parameter handling issues.
-    /// These tests focus on the actual problems we encountered:
-    /// 1. JSON parameter parsing in manage_asset and manage_gameobject tools
-    /// 2. Material creation with properties through MCP tools
-    /// 3. Material assignment through MCP tools
+    /// Tests for MCP tool parameter handling - JSON parsing in manage_asset and manage_gameobject tools.
+    /// Consolidated from multiple redundant tests into focused, non-overlapping test cases.
     /// </summary>
     public class MCPToolParameterTests
     {
@@ -35,7 +32,6 @@ namespace MCPForUnityTests.Editor.Tools
         private static void AssertShaderIsSupported(Shader s)
         {
             Assert.IsNotNull(s, "Shader should not be null");
-            // Accept common defaults across pipelines
             var name = s.name;
             bool ok = name == "Universal Render Pipeline/Lit"
                 || name == "HDRP/Lit"
@@ -44,89 +40,44 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsTrue(ok, $"Unexpected shader: {name}");
         }
 
+        private static void EnsureTempFolders()
+        {
+            if (!AssetDatabase.IsValidFolder("Assets/Temp"))
+                AssetDatabase.CreateFolder("Assets", "Temp");
+            if (!AssetDatabase.IsValidFolder(TempDir))
+                AssetDatabase.CreateFolder("Assets/Temp", "MCPToolParameterTests");
+            if (!AssetDatabase.IsValidFolder(TempLiveDir))
+                AssetDatabase.CreateFolder("Assets/Temp", "LiveTests");
+        }
+
         [TearDown]
         public void TearDown()
         {
-            // Clean up temp directories after each test
             if (AssetDatabase.IsValidFolder(TempDir))
-            {
                 AssetDatabase.DeleteAsset(TempDir);
-            }
-
             if (AssetDatabase.IsValidFolder(TempLiveDir))
-            {
                 AssetDatabase.DeleteAsset(TempLiveDir);
-            }
 
-            // Clean up parent Temp folder if it's empty
             if (AssetDatabase.IsValidFolder("Assets/Temp"))
             {
                 var remainingDirs = Directory.GetDirectories("Assets/Temp");
                 var remainingFiles = Directory.GetFiles("Assets/Temp");
                 if (remainingDirs.Length == 0 && remainingFiles.Length == 0)
-                {
                     AssetDatabase.DeleteAsset("Assets/Temp");
-                }
-            }
-        }
-        [Test]
-        public void Test_ManageAsset_ShouldAcceptJSONProperties()
-        {
-            // Arrange: create temp folder
-            if (!AssetDatabase.IsValidFolder("Assets/Temp"))
-            {
-                AssetDatabase.CreateFolder("Assets", "Temp");
-            }
-            if (!AssetDatabase.IsValidFolder(TempDir))
-            {
-                AssetDatabase.CreateFolder("Assets/Temp", "MCPToolParameterTests");
-            }
-
-            var matPath = $"{TempDir}/JsonMat_{Guid.NewGuid().ToString("N")}.mat";
-
-            // Build params with properties as a JSON string (to be coerced)
-            var p = new JObject
-            {
-                ["action"] = "create",
-                ["path"] = matPath,
-                ["assetType"] = "Material",
-                ["properties"] = "{\"shader\": \"Universal Render Pipeline/Lit\", \"color\": [0,0,1,1]}"
-            };
-
-            try
-            {
-                var raw = ManageAsset.HandleCommand(p);
-                var result = raw as JObject ?? JObject.FromObject(raw);
-                Assert.IsNotNull(result, "Handler should return a JObject result");
-                Assert.IsTrue(result!.Value<bool>("success"), result.ToString());
-
-                var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
-                Assert.IsNotNull(mat, "Material should be created at path");
-                AssertShaderIsSupported(mat.shader);
-                if (mat.HasProperty("_Color"))
-                {
-                    Assert.AreEqual(Color.blue, mat.GetColor("_Color"));
-                }
-            }
-            finally
-            {
-                if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(matPath) != null)
-                {
-                    AssetDatabase.DeleteAsset(matPath);
-                }
-                AssetDatabase.Refresh();
             }
         }
 
+        /// <summary>
+        /// Tests GameObject componentProperties JSON string coercion path.
+        /// Verifies material assignment via JSON string works correctly.
+        /// </summary>
         [Test]
-        public void Test_ManageGameObject_ShouldAcceptJSONComponentProperties()
+        public void ManageGameObject_JSONComponentProperties_AssignsMaterial()
         {
-            const string tempDir = "Assets/Temp/MCPToolParameterTests";
-            if (!AssetDatabase.IsValidFolder("Assets/Temp")) AssetDatabase.CreateFolder("Assets", "Temp");
-            if (!AssetDatabase.IsValidFolder(tempDir)) AssetDatabase.CreateFolder("Assets/Temp", "MCPToolParameterTests");
-            var matPath = $"{tempDir}/JsonMat_{Guid.NewGuid().ToString("N")}.mat";
+            EnsureTempFolders();
+            var matPath = $"{TempDir}/Mat_{Guid.NewGuid():N}.mat";
 
-            // Create a material first (object-typed properties)
+            // Create material with object-typed properties
             var createMat = new JObject
             {
                 ["action"] = "create",
@@ -160,7 +111,7 @@ namespace MCPForUnityTests.Editor.Tools
                 var result = raw as JObject ?? JObject.FromObject(raw);
                 Assert.IsTrue(result.Value<bool>("success"), result.ToString());
 
-                // Verify material assignment and shader on the GameObject's MeshRenderer
+                // Verify material assignment
                 var goVerify = GameObject.Find("MCPParamTestSphere");
                 Assert.IsNotNull(goVerify, "GameObject should exist");
                 var renderer = goVerify.GetComponent<MeshRenderer>();
@@ -175,367 +126,54 @@ namespace MCPForUnityTests.Editor.Tools
             {
                 var go = GameObject.Find("MCPParamTestSphere");
                 if (go != null) UnityEngine.Object.DestroyImmediate(go);
-                if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(matPath) != null) AssetDatabase.DeleteAsset(matPath);
-                AssetDatabase.Refresh();
-            }
-        }
-
-        [Test]
-        public void Test_JSONParsing_ShouldWorkInMCPTools()
-        {
-            const string tempDir = "Assets/Temp/MCPToolParameterTests";
-            if (!AssetDatabase.IsValidFolder("Assets/Temp")) AssetDatabase.CreateFolder("Assets", "Temp");
-            if (!AssetDatabase.IsValidFolder(tempDir)) AssetDatabase.CreateFolder("Assets/Temp", "MCPToolParameterTests");
-            var matPath = $"{tempDir}/JsonMat_{Guid.NewGuid().ToString("N")}.mat";
-
-            // manage_asset with JSON string properties (coercion path)
-            var createMat = new JObject
-            {
-                ["action"] = "create",
-                ["path"] = matPath,
-                ["assetType"] = "Material",
-                ["properties"] = "{\"shader\": \"Universal Render Pipeline/Lit\", \"color\": [0,0,1,1]}"
-            };
-            var createResRaw = ManageAsset.HandleCommand(createMat);
-            var createRes = createResRaw as JObject ?? JObject.FromObject(createResRaw);
-            Assert.IsTrue(createRes.Value<bool>("success"), createRes.ToString());
-
-            // Create sphere and assign material (object-typed componentProperties)
-            var go = new JObject { ["action"] = "create", ["name"] = "MCPParamJSONSphere", ["primitiveType"] = "Sphere" };
-            var goRes = ManageGameObject.HandleCommand(go);
-            var goObj = goRes as JObject ?? JObject.FromObject(goRes);
-            Assert.IsTrue(goObj.Value<bool>("success"), goObj.ToString());
-
-            try
-            {
-                var compJsonObj = new JObject { ["MeshRenderer"] = new JObject { ["sharedMaterial"] = matPath } };
-                var compJson = compJsonObj.ToString(Newtonsoft.Json.Formatting.None);
-                var modify = new JObject
-                {
-                    ["action"] = "modify",
-                    ["target"] = "MCPParamJSONSphere",
-                    ["searchMethod"] = "by_name",
-                    ["componentProperties"] = compJson
-                };
-                var modResRaw = ManageGameObject.HandleCommand(modify);
-                var modRes = modResRaw as JObject ?? JObject.FromObject(modResRaw);
-                Assert.IsTrue(modRes.Value<bool>("success"), modRes.ToString());
-
-                // Verify shader on created material
-                var createdMat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
-                Assert.IsNotNull(createdMat);
-                AssertShaderIsSupported(createdMat.shader);
-            }
-            finally
-            {
-                var goObj2 = GameObject.Find("MCPParamJSONSphere");
-                if (goObj2 != null) UnityEngine.Object.DestroyImmediate(goObj2);
-                if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(matPath) != null) AssetDatabase.DeleteAsset(matPath);
-                AssetDatabase.Refresh();
-            }
-        }
-
-        [Test]
-        public void Test_ManageAsset_JSONStringParsing_CreateMaterial()
-        {
-            // Test that JSON string properties are correctly parsed and applied
-            const string tempDir = "Assets/Temp/MCPToolParameterTests";
-            var matPath = $"{tempDir}/JsonStringTest_{Guid.NewGuid().ToString("N")}.mat";
-
-            var p = new JObject
-            {
-                ["action"] = "create",
-                ["path"] = matPath,
-                ["assetType"] = "Material",
-                ["properties"] = "{\"shader\": \"Universal Render Pipeline/Lit\", \"color\": [1,0,0,1]}"
-            };
-
-            try
-            {
-                var raw = ManageAsset.HandleCommand(p);
-                var result = raw as JObject ?? JObject.FromObject(raw);
-                Assert.IsNotNull(result, "Handler should return a JObject result");
-                Assert.IsTrue(result!.Value<bool>("success"), $"Create failed: {result}");
-
-                var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
-                Assert.IsNotNull(mat, "Material should be created at path");
-                AssertShaderIsSupported(mat.shader);
-                if (mat.HasProperty("_Color"))
-                {
-                    Assert.AreEqual(Color.red, mat.GetColor("_Color"), "Material should have red color");
-                }
-            }
-            finally
-            {
                 if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(matPath) != null)
-                {
                     AssetDatabase.DeleteAsset(matPath);
-                }
                 AssetDatabase.Refresh();
             }
         }
 
+        /// <summary>
+        /// Comprehensive end-to-end test covering all 10 property handling scenarios:
+        /// 1. Create material via JSON string
+        /// 2. Modify color and metallic (friendly names)
+        /// 3. Modify using structured float block
+        /// 4. Assign texture via direct prop alias
+        /// 5. Assign texture via structured block
+        /// 6. Create sphere and assign material via componentProperties JSON
+        /// 7. Use URP color alias key
+        /// 8. Invalid JSON handling (graceful degradation)
+        /// 9. Switch shader pipeline dynamically
+        /// 10. Mixed friendly and alias keys
+        /// </summary>
         [Test]
-        public void Test_ManageAsset_JSONStringParsing_ModifyMaterial()
+        public void EndToEnd_PropertyHandling_AllScenarios()
         {
-            // Test that JSON string properties work for modify operations
-            const string tempDir = "Assets/Temp/MCPToolParameterTests";
-            var matPath = $"{tempDir}/JsonStringModifyTest_{Guid.NewGuid().ToString("N")}.mat";
-
-            // First create a material
-            var createParams = new JObject
-            {
-                ["action"] = "create",
-                ["path"] = matPath,
-                ["assetType"] = "Material",
-                ["properties"] = "{\"shader\": \"Universal Render Pipeline/Lit\", \"color\": [0,1,0,1]}"
-            };
-
-            try
-            {
-                var createRaw = ManageAsset.HandleCommand(createParams);
-                var createResult = createRaw as JObject ?? JObject.FromObject(createRaw);
-                Assert.IsTrue(createResult!.Value<bool>("success"), "Create should succeed");
-
-                // Now modify with JSON string
-                var modifyParams = new JObject
-                {
-                    ["action"] = "modify",
-                    ["path"] = matPath,
-                    ["properties"] = "{\"color\": [0,0,1,1]}"
-                };
-
-                var modifyRaw = ManageAsset.HandleCommand(modifyParams);
-                var modifyResult = modifyRaw as JObject ?? JObject.FromObject(modifyRaw);
-                Assert.IsNotNull(modifyResult, "Modify should return a result");
-                Assert.IsTrue(modifyResult!.Value<bool>("success"), $"Modify failed: {modifyResult}");
-
-                var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
-                Assert.IsNotNull(mat, "Material should exist");
-                AssertShaderIsSupported(mat.shader);
-                if (mat.HasProperty("_Color"))
-                {
-                    Assert.AreEqual(Color.blue, mat.GetColor("_Color"), "Material should have blue color after modify");
-                }
-            }
-            finally
-            {
-                if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(matPath) != null)
-                {
-                    AssetDatabase.DeleteAsset(matPath);
-                }
-                AssetDatabase.Refresh();
-            }
-        }
-
-        [Test]
-        public void Test_ManageAsset_InvalidJSONString_HandledGracefully()
-        {
-            // Test that invalid JSON strings are handled gracefully
-            const string tempDir = "Assets/Temp/MCPToolParameterTests";
-            var matPath = $"{tempDir}/InvalidJsonTest_{Guid.NewGuid().ToString("N")}.mat";
-
-            var p = new JObject
-            {
-                ["action"] = "create",
-                ["path"] = matPath,
-                ["assetType"] = "Material",
-                ["properties"] = "{\"invalid\": json, \"missing\": quotes}" // Invalid JSON
-            };
-
-            try
-            {
-                LogAssert.Expect(LogType.Warning, new Regex("(failed to parse)|(Could not parse 'properties' JSON string)", RegexOptions.IgnoreCase));
-                var raw = ManageAsset.HandleCommand(p);
-                var result = raw as JObject ?? JObject.FromObject(raw);
-                // Should either succeed with defaults or fail gracefully
-                Assert.IsNotNull(result, "Handler should return a result");
-                // The result might be success (with defaults) or failure, both are acceptable
-            }
-            finally
-            {
-                if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(matPath) != null)
-                {
-                    AssetDatabase.DeleteAsset(matPath);
-                }
-                AssetDatabase.Refresh();
-            }
-        }
-
-        [Test]
-        public void Test_ManageAsset_JSONStringParsing_FloatProperty_Metallic_CreateAndModify()
-        {
-            // Validate float property handling via JSON string for create and modify
-            const string tempDir = "Assets/Temp/MCPToolParameterTests";
-            if (!AssetDatabase.IsValidFolder("Assets/Temp")) AssetDatabase.CreateFolder("Assets", "Temp");
-            if (!AssetDatabase.IsValidFolder(tempDir)) AssetDatabase.CreateFolder("Assets/Temp", "MCPToolParameterTests");
-            var matPath = $"{tempDir}/JsonFloatTest_{Guid.NewGuid().ToString("N")}.mat";
-
-            var createParams = new JObject
-            {
-                ["action"] = "create",
-                ["path"] = matPath,
-                ["assetType"] = "Material",
-                ["properties"] = "{\"shader\": \"Universal Render Pipeline/Lit\", \"metallic\": 0.75}"
-            };
-
-            try
-            {
-                var createRaw = ManageAsset.HandleCommand(createParams);
-                var createResult = createRaw as JObject ?? JObject.FromObject(createRaw);
-                Assert.IsTrue(createResult!.Value<bool>("success"), createResult.ToString());
-
-                var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
-                Assert.IsNotNull(mat, "Material should be created at path");
-                AssertShaderIsSupported(mat.shader);
-                if (mat.HasProperty("_Metallic"))
-                {
-                    Assert.AreEqual(0.75f, mat.GetFloat("_Metallic"), 1e-3f, "Metallic should be ~0.75 after create");
-                }
-
-                var modifyParams = new JObject
-                {
-                    ["action"] = "modify",
-                    ["path"] = matPath,
-                    ["properties"] = "{\"metallic\": 0.1}"
-                };
-
-                var modifyRaw = ManageAsset.HandleCommand(modifyParams);
-                var modifyResult = modifyRaw as JObject ?? JObject.FromObject(modifyRaw);
-                Assert.IsTrue(modifyResult!.Value<bool>("success"), modifyResult.ToString());
-
-                var mat2 = AssetDatabase.LoadAssetAtPath<Material>(matPath);
-                Assert.IsNotNull(mat2, "Material should still exist");
-                if (mat2.HasProperty("_Metallic"))
-                {
-                    Assert.AreEqual(0.1f, mat2.GetFloat("_Metallic"), 1e-3f, "Metallic should be ~0.1 after modify");
-                }
-            }
-            finally
-            {
-                if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(matPath) != null)
-                {
-                    AssetDatabase.DeleteAsset(matPath);
-                }
-                AssetDatabase.Refresh();
-            }
-        }
-
-        [Test]
-        public void Test_ManageAsset_JSONStringParsing_TextureAssignment_CreateAndModify()
-        {
-            // Uses flexible direct property assignment to set _BaseMap/_MainTex by path
-            const string tempDir = "Assets/Temp/MCPToolParameterTests";
-            if (!AssetDatabase.IsValidFolder("Assets/Temp")) AssetDatabase.CreateFolder("Assets", "Temp");
-            if (!AssetDatabase.IsValidFolder(tempDir)) AssetDatabase.CreateFolder("Assets/Temp", "MCPToolParameterTests");
-            var matPath = $"{tempDir}/JsonTexTest_{Guid.NewGuid().ToString("N")}.mat";
-            var texPath = "Assets/Temp/LiveTests/TempBaseTex.asset"; // created by GenTempTex
-
-            // Ensure the texture exists BEFORE creating the material so assignment succeeds during create
-            var preTex = AssetDatabase.LoadAssetAtPath<Texture>(texPath);
-            if (preTex == null)
-            {
-                if (!AssetDatabase.IsValidFolder("Assets/Temp")) AssetDatabase.CreateFolder("Assets", "Temp");
-                if (!AssetDatabase.IsValidFolder("Assets/Temp/LiveTests")) AssetDatabase.CreateFolder("Assets/Temp", "LiveTests");
-                var tex2D = new Texture2D(4, 4, TextureFormat.RGBA32, false);
-                var pixels = new Color[16];
-                for (int i = 0; i < pixels.Length; i++) pixels[i] = Color.white;
-                tex2D.SetPixels(pixels);
-                tex2D.Apply();
-                AssetDatabase.CreateAsset(tex2D, texPath);
-                AssetDatabase.SaveAssets();
-                AssetDatabase.Refresh();
-            }
-
-            var createParams = new JObject
-            {
-                ["action"] = "create",
-                ["path"] = matPath,
-                ["assetType"] = "Material",
-                ["properties"] = new JObject
-                {
-                    ["shader"] = "Universal Render Pipeline/Lit",
-                    ["_BaseMap"] = texPath // resolves to _BaseMap or _MainTex internally
-                }
-            };
-
-            try
-            {
-                var createRaw = ManageAsset.HandleCommand(createParams);
-                var createResult = createRaw as JObject ?? JObject.FromObject(createRaw);
-                Assert.IsTrue(createResult!.Value<bool>("success"), createResult.ToString());
-
-                var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
-                Assert.IsNotNull(mat, "Material should be created at path");
-                AssertShaderIsSupported(mat.shader);
-                var tex = AssetDatabase.LoadAssetAtPath<Texture>(texPath);
-                if (tex == null)
-                {
-                    // Create a tiny white texture if missing to make the test self-sufficient
-                    if (!AssetDatabase.IsValidFolder("Assets/Temp")) AssetDatabase.CreateFolder("Assets", "Temp");
-                    if (!AssetDatabase.IsValidFolder("Assets/Temp/LiveTests")) AssetDatabase.CreateFolder("Assets/Temp", "LiveTests");
-                    var tex2D = new Texture2D(4, 4, TextureFormat.RGBA32, false);
-                    var pixels = new Color[16];
-                    for (int i = 0; i < pixels.Length; i++) pixels[i] = Color.white;
-                    tex2D.SetPixels(pixels);
-                    tex2D.Apply();
-                    AssetDatabase.CreateAsset(tex2D, texPath);
-                    AssetDatabase.SaveAssets();
-                    AssetDatabase.Refresh();
-                    tex = AssetDatabase.LoadAssetAtPath<Texture>(texPath);
-                }
-                Assert.IsNotNull(tex, "Test texture should exist");
-                // Verify either _BaseMap or _MainTex holds the texture
-                bool hasTexture = (mat.HasProperty("_BaseMap") && mat.GetTexture("_BaseMap") == tex)
-                    || (mat.HasProperty("_MainTex") && mat.GetTexture("_MainTex") == tex);
-                Assert.IsTrue(hasTexture, "Material should reference the assigned texture");
-
-                // Modify by changing to same texture via alternate alias key
-                var modifyParams = new JObject
-                {
-                    ["action"] = "modify",
-                    ["path"] = matPath,
-                    ["properties"] = new JObject { ["_MainTex"] = texPath }
-                };
-                var modifyRaw = ManageAsset.HandleCommand(modifyParams);
-                var modifyResult = modifyRaw as JObject ?? JObject.FromObject(modifyRaw);
-                Assert.IsTrue(modifyResult!.Value<bool>("success"), modifyResult.ToString());
-
-                var mat2 = AssetDatabase.LoadAssetAtPath<Material>(matPath);
-                Assert.IsNotNull(mat2);
-                bool hasTexture2 = (mat2.HasProperty("_BaseMap") && mat2.GetTexture("_BaseMap") == tex)
-                    || (mat2.HasProperty("_MainTex") && mat2.GetTexture("_MainTex") == tex);
-                Assert.IsTrue(hasTexture2, "Material should keep the assigned texture after modify");
-            }
-            finally
-            {
-                if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(matPath) != null)
-                {
-                    AssetDatabase.DeleteAsset(matPath);
-                }
-                AssetDatabase.Refresh();
-            }
-        }
-
-        [Test]
-        public void Test_EndToEnd_PropertyHandling_AllScenarios()
-        {
-            // Comprehensive end-to-end test of all 10 property handling scenarios
-            const string tempDir = "Assets/Temp/LiveTests";
-            if (!AssetDatabase.IsValidFolder("Assets/Temp")) AssetDatabase.CreateFolder("Assets", "Temp");
-            if (!AssetDatabase.IsValidFolder(tempDir)) AssetDatabase.CreateFolder("Assets/Temp", "LiveTests");
+            EnsureTempFolders();
 
             string guidSuffix = Guid.NewGuid().ToString("N").Substring(0, 8);
-            string matPath = $"{tempDir}/Mat_{guidSuffix}.mat";
-            string texPath = $"{tempDir}/TempBaseTex.asset";
+            string matPath = $"{TempLiveDir}/Mat_{guidSuffix}.mat";
+            string texPath = $"{TempLiveDir}/TempBaseTex_{guidSuffix}.asset";
             string sphereName = $"LiveSphere_{guidSuffix}";
-            string badJsonPath = $"{tempDir}/BadJson_{guidSuffix}.mat";
+            string badJsonPath = $"{TempLiveDir}/BadJson_{guidSuffix}.mat";
 
-            // Ensure clean state from previous runs
+            // Ensure clean state
             var preSphere = GameObject.Find(sphereName);
             if (preSphere != null) UnityEngine.Object.DestroyImmediate(preSphere);
-            if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(matPath) != null) AssetDatabase.DeleteAsset(matPath);
-            if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(badJsonPath) != null) AssetDatabase.DeleteAsset(badJsonPath);
+            if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(matPath) != null)
+                AssetDatabase.DeleteAsset(matPath);
+            if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(badJsonPath) != null)
+                AssetDatabase.DeleteAsset(badJsonPath);
+            if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(texPath) != null)
+                AssetDatabase.DeleteAsset(texPath);
+
+            // Create test texture for texture-dependent scenarios (4, 5, 10)
+            var tex = new Texture2D(4, 4, TextureFormat.RGBA32, false);
+            var pixels = new Color[16];
+            for (int i = 0; i < pixels.Length; i++) pixels[i] = Color.white;
+            tex.SetPixels(pixels);
+            tex.Apply();
+            AssetDatabase.CreateAsset(tex, texPath);
+            AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
             try
@@ -553,11 +191,10 @@ namespace MCPForUnityTests.Editor.Tools
                 Assert.IsTrue(createResult.Value<bool>("success"), $"Test 1 failed: {createResult}");
                 var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
                 Assert.IsNotNull(mat, "Material should be created");
-                var expectedRed = Color.red;
                 if (mat.HasProperty("_BaseColor"))
-                    Assert.AreEqual(expectedRed, mat.GetColor("_BaseColor"), "Test 1: _BaseColor should be red");
+                    Assert.AreEqual(Color.red, mat.GetColor("_BaseColor"), "Test 1: _BaseColor should be red");
                 else if (mat.HasProperty("_Color"))
-                    Assert.AreEqual(expectedRed, mat.GetColor("_Color"), "Test 1: _Color should be red");
+                    Assert.AreEqual(Color.red, mat.GetColor("_Color"), "Test 1: _Color should be red");
                 else
                     Assert.Inconclusive("Material has neither _BaseColor nor _Color");
 
@@ -577,8 +214,6 @@ namespace MCPForUnityTests.Editor.Tools
                     Assert.AreEqual(expectedCyan, mat.GetColor("_BaseColor"), "Test 2: _BaseColor should be cyan");
                 else if (mat.HasProperty("_Color"))
                     Assert.AreEqual(expectedCyan, mat.GetColor("_Color"), "Test 2: _Color should be cyan");
-                else
-                    Assert.Inconclusive("Material has neither _BaseColor nor _Color");
                 Assert.AreEqual(0.6f, mat.GetFloat("_Metallic"), 0.001f, "Test 2: Metallic should be 0.6");
 
                 // 3. Modify using structured float block
@@ -597,46 +232,30 @@ namespace MCPForUnityTests.Editor.Tools
                 mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
                 Assert.AreEqual(0.1f, mat.GetFloat("_Metallic"), 0.001f, "Test 3: Metallic should be 0.1");
 
-                // 4. Assign texture via direct prop alias (skip if texture doesn't exist)
-                if (AssetDatabase.LoadAssetAtPath<Texture>(texPath) != null)
+                // 4. Assign texture via direct prop alias
+                var modify3 = new JObject
                 {
-                    var modify3 = new JObject
-                    {
-                        ["action"] = "modify",
-                        ["path"] = matPath,
-                        ["properties"] = "{\"_BaseMap\":\"" + texPath + "\"}"
-                    };
-                    var modifyRaw3 = ManageAsset.HandleCommand(modify3);
-                    var modifyResult3 = modifyRaw3 as JObject ?? JObject.FromObject(modifyRaw3);
-                    Assert.IsTrue(modifyResult3.Value<bool>("success"), $"Test 4 failed: {modifyResult3}");
-                    Debug.Log("Test 4: Texture assignment successful");
-                }
-                else
-                {
-                    Debug.LogWarning("Test 4: Skipped - texture not found at " + texPath);
-                }
+                    ["action"] = "modify",
+                    ["path"] = matPath,
+                    ["properties"] = "{\"_BaseMap\":\"" + texPath + "\"}"
+                };
+                var modifyRaw3 = ManageAsset.HandleCommand(modify3);
+                var modifyResult3 = modifyRaw3 as JObject ?? JObject.FromObject(modifyRaw3);
+                Assert.IsTrue(modifyResult3.Value<bool>("success"), $"Test 4 failed: {modifyResult3}");
 
-                // 5. Assign texture via structured block (skip if texture doesn't exist)
-                if (AssetDatabase.LoadAssetAtPath<Texture>(texPath) != null)
+                // 5. Assign texture via structured block
+                var modify4 = new JObject
                 {
-                    var modify4 = new JObject
+                    ["action"] = "modify",
+                    ["path"] = matPath,
+                    ["properties"] = new JObject
                     {
-                        ["action"] = "modify",
-                        ["path"] = matPath,
-                        ["properties"] = new JObject
-                        {
-                            ["texture"] = new JObject { ["name"] = "_MainTex", ["path"] = texPath }
-                        }
-                    };
-                    var modifyRaw4 = ManageAsset.HandleCommand(modify4);
-                    var modifyResult4 = modifyRaw4 as JObject ?? JObject.FromObject(modifyRaw4);
-                    Assert.IsTrue(modifyResult4.Value<bool>("success"), $"Test 5 failed: {modifyResult4}");
-                    Debug.Log("Test 5: Structured texture assignment successful");
-                }
-                else
-                {
-                    Debug.LogWarning("Test 5: Skipped - texture not found at " + texPath);
-                }
+                        ["texture"] = new JObject { ["name"] = "_MainTex", ["path"] = texPath }
+                    }
+                };
+                var modifyRaw4 = ManageAsset.HandleCommand(modify4);
+                var modifyResult4 = modifyRaw4 as JObject ?? JObject.FromObject(modifyRaw4);
+                Assert.IsTrue(modifyResult4.Value<bool>("success"), $"Test 5 failed: {modifyResult4}");
 
                 // 6. Create sphere and assign material via componentProperties JSON string
                 var createSphere = new JObject
@@ -680,15 +299,9 @@ namespace MCPForUnityTests.Editor.Tools
                 mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
                 Color expectedColor = new Color(0.2f, 0.8f, 0.3f, 1f);
                 if (mat.HasProperty("_BaseColor"))
-                {
-                    Color actualColor = mat.GetColor("_BaseColor");
-                    AssertColorsEqual(expectedColor, actualColor, "Test 7: _BaseColor should be set");
-                }
+                    AssertColorsEqual(expectedColor, mat.GetColor("_BaseColor"), "Test 7: _BaseColor should be set");
                 else if (mat.HasProperty("_Color"))
-                {
-                    Color actualColor = mat.GetColor("_Color");
-                    AssertColorsEqual(expectedColor, actualColor, "Test 7: Fallback _Color should be set");
-                }
+                    AssertColorsEqual(expectedColor, mat.GetColor("_Color"), "Test 7: Fallback _Color should be set");
 
                 // 8. Invalid JSON should warn (don't fail)
                 var invalidJson = new JObject
@@ -701,9 +314,7 @@ namespace MCPForUnityTests.Editor.Tools
                 LogAssert.Expect(LogType.Warning, new Regex("(failed to parse)|(Could not parse 'properties' JSON string)", RegexOptions.IgnoreCase));
                 var invalidRaw = ManageAsset.HandleCommand(invalidJson);
                 var invalidResult = invalidRaw as JObject ?? JObject.FromObject(invalidRaw);
-                // Should either succeed with defaults or fail gracefully
                 Assert.IsNotNull(invalidResult, "Test 8: Should return a result");
-                Debug.Log($"Test 8: Invalid JSON handled - {invalidResult!["success"]}");
 
                 // 9. Switch shader pipeline dynamically
                 var modify6 = new JObject
@@ -718,7 +329,9 @@ namespace MCPForUnityTests.Editor.Tools
                 mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
                 Assert.AreEqual("Standard", mat.shader.name, "Test 9: Shader should be Standard");
                 var c9 = mat.GetColor("_Color");
-                Assert.IsTrue(Mathf.Abs(c9.r - 1f) < 0.02f && Mathf.Abs(c9.g - 1f) < 0.02f && Mathf.Abs(c9.b - 0f) < 0.02f, "Test 9: Color should be near yellow");
+                // Looser tolerance (0.02) for shader-switched colors due to color space conversion differences
+                Assert.IsTrue(Mathf.Abs(c9.r - 1f) < 0.02f && Mathf.Abs(c9.g - 1f) < 0.02f && Mathf.Abs(c9.b - 0f) < 0.02f,
+                    "Test 9: Color should be near yellow");
 
                 // 10. Mixed friendly and alias keys in one go
                 var modify7 = new JObject
@@ -729,7 +342,7 @@ namespace MCPForUnityTests.Editor.Tools
                     {
                         ["metallic"] = 0.8,
                         ["smoothness"] = 0.3,
-                        ["albedo"] = texPath // Texture path if exists
+                        ["albedo"] = texPath
                     }
                 };
                 var modifyRaw7 = ManageAsset.HandleCommand(modify7);
@@ -738,19 +351,19 @@ namespace MCPForUnityTests.Editor.Tools
                 mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
                 Assert.AreEqual(0.8f, mat.GetFloat("_Metallic"), 0.001f, "Test 10: Metallic should be 0.8");
                 Assert.AreEqual(0.3f, mat.GetFloat("_Glossiness"), 0.001f, "Test 10: Smoothness should be 0.3");
-
-                Debug.Log("All 10 end-to-end property handling tests completed successfully!");
             }
             finally
             {
-                // Cleanup
                 var sphere = GameObject.Find(sphereName);
                 if (sphere != null) UnityEngine.Object.DestroyImmediate(sphere);
-                if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(matPath) != null) AssetDatabase.DeleteAsset(matPath);
-                if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(badJsonPath) != null) AssetDatabase.DeleteAsset(badJsonPath);
+                if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(matPath) != null)
+                    AssetDatabase.DeleteAsset(matPath);
+                if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(badJsonPath) != null)
+                    AssetDatabase.DeleteAsset(badJsonPath);
+                if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(texPath) != null)
+                    AssetDatabase.DeleteAsset(texPath);
                 AssetDatabase.Refresh();
             }
         }
-
     }
 }

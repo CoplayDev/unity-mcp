@@ -1,34 +1,11 @@
 import pytest
 
-from .test_helpers import DummyContext
-
-
-class DummyMCP:
-    def __init__(self): self.tools = {}
-
-    def tool(self, *args, **kwargs):
-        def deco(fn): self.tools[fn.__name__] = fn; return fn
-        return deco
-
-
-def setup_tools():
-    mcp = DummyMCP()
-    # Import the tools module to trigger decorator registration
-    import services.tools.manage_script
-    # Get the registered tools from the registry
-    from services.registry import get_registered_tools
-    tools = get_registered_tools()
-    # Add all script-related tools to our dummy MCP
-    for tool_info in tools:
-        tool_name = tool_info['name']
-        if any(keyword in tool_name for keyword in ['script', 'apply_text', 'create_script', 'delete_script', 'validate_script', 'get_sha']):
-            mcp.tools[tool_name] = tool_info['func']
-    return mcp.tools
+from .test_helpers import DummyContext, DummyMCP, setup_script_tools
 
 
 @pytest.mark.asyncio
 async def test_normalizes_lsp_and_index_ranges(monkeypatch):
-    tools = setup_tools()
+    tools = setup_script_tools()
     apply = tools["apply_text_edits"]
     calls = []
 
@@ -88,7 +65,7 @@ async def test_normalizes_lsp_and_index_ranges(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_noop_evidence_shape(monkeypatch):
-    tools = setup_tools()
+    tools = setup_script_tools()
     apply = tools["apply_text_edits"]
     # Route response from Unity indicating no-op
 
@@ -120,19 +97,8 @@ async def test_noop_evidence_shape(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_atomic_multi_span_and_relaxed(monkeypatch):
-    tools_text = setup_tools()
+    tools_text = setup_script_tools()
     apply_text = tools_text["apply_text_edits"]
-    tools_struct = DummyMCP()
-    # Import the tools module to trigger decorator registration
-    import services.tools.script_apply_edits
-    # Get the registered tools from the registry
-    from services.registry import get_registered_tools
-    tools = get_registered_tools()
-    # Add all script-related tools to our dummy MCP
-    for tool_info in tools:
-        tool_name = tool_info['name']
-        if any(keyword in tool_name for keyword in ['script_apply', 'apply_edits']):
-            tools_struct.tools[tool_name] = tool_info['func']
     # Fake send for read and write; verify atomic applyMode and validate=relaxed passes through
     sent = {}
 

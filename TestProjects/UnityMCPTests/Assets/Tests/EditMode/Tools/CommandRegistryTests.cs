@@ -43,11 +43,13 @@ namespace MCPForUnityTests.Editor.Tools
 
             foreach (var toolName in expectedTools)
             {
-                Assert.DoesNotThrow(() =>
-                {
-                    var handler = CommandRegistry.GetHandler(toolName);
-                    Assert.IsNotNull(handler, $"Handler for '{toolName}' should not be null");
-                }, $"Expected tool '{toolName}' to be auto-registered");
+                var handler = CommandRegistry.GetHandler(toolName);
+                Assert.IsNotNull(handler, $"Handler for '{toolName}' should not be null");
+
+                // Verify the handler is actually callable (returns a result, not throws)
+                var emptyParams = new Newtonsoft.Json.Linq.JObject();
+                var result = handler(emptyParams);
+                Assert.IsNotNull(result, $"Handler for '{toolName}' should return a result even for empty params");
             }
         }
     }

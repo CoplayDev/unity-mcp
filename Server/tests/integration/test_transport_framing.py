@@ -201,21 +201,3 @@ def test_zero_length_payload_heartbeat():
         conn.disconnect()
 
 
-@pytest.mark.skip(reason="TODO: oversized payload should disconnect")
-def test_oversized_payload_rejected():
-    pass
-
-
-@pytest.mark.skip(reason="TODO: partial header/payload triggers timeout and disconnect")
-def test_partial_frame_timeout():
-    pass
-
-
-@pytest.mark.skip(reason="TODO: concurrency test with parallel tool invocations")
-def test_parallel_invocations_no_interleaving():
-    pass
-
-
-@pytest.mark.skip(reason="TODO: reconnection after drop mid-command")
-def test_reconnect_mid_command():
-    pass

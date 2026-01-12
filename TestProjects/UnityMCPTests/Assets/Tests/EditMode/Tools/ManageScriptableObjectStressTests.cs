@@ -163,7 +163,7 @@ namespace MCPForUnityTests.Editor.Tools
         #region Out of Bounds Test - Auto-Grow Arrays
 
         [Test]
-        public void OutOfBounds_SetElementBeyondArraySize_ShouldFailWithoutAutoGrow()
+        public void AutoGrow_SetElementBeyondArraySize_AutoResizesArray()
         {
             // Create an ArrayStressSO first
             var createResult = ToJObject(ManageScriptableObject.HandleCommand(new JObject
@@ -171,7 +171,7 @@ namespace MCPForUnityTests.Editor.Tools
                 ["action"] = "create",
                 ["typeName"] = "ArrayStressSO",
                 ["folderPath"] = _runRoot,
-                ["assetName"] = "OutOfBounds",
+                ["assetName"] = "AutoGrow",
                 ["overwrite"] = true
             }));
             Assert.IsTrue(createResult.Value<bool>("success"), createResult.ToString());
@@ -180,7 +180,7 @@ namespace MCPForUnityTests.Editor.Tools
             var guid = createResult["data"]?["guid"]?.ToString();
             _createdAssets.Add(path);
 
-            // Try to set element at index 99 (array starts with 3 elements)
+            // Set element at index 99 (array starts with 3 elements) - should auto-grow
             var modifyResult = ToJObject(ManageScriptableObject.HandleCommand(new JObject
             {
                 ["action"] = "modify",
@@ -196,16 +196,19 @@ namespace MCPForUnityTests.Editor.Tools
                 }
             }));
 
-            // Document current behavior: this should fail without auto-grow
-            // After hardening, this should succeed
             var patchResults = modifyResult["data"]?["results"] as JArray;
             Assert.IsNotNull(patchResults);
-            
+
             bool patchOk = patchResults[0]?.Value<bool>("ok") ?? false;
-            Debug.Log($"[OutOfBounds] Setting [99] on 3-element array: ok={patchOk}, message={patchResults[0]?["message"]}");
-            
-            // Current expected behavior: fails with "Property not found"
-            // After Phase 1.2 (auto-resize): should succeed
+            Assert.IsTrue(patchOk, $"Auto-grow should succeed: {patchResults[0]?["message"]}");
+
+            // Verify the array was resized and value was set
+            var asset = AssetDatabase.LoadAssetAtPath<ArrayStressSO>(path);
+            Assert.IsNotNull(asset);
+            Assert.GreaterOrEqual(asset.floatArray.Length, 100, "Array should have been auto-grown to at least 100 elements");
+            Assert.AreEqual(42.0f, asset.floatArray[99], 0.01f, "Value at index 99 should be set");
+
+            Debug.Log($"[AutoGrow] Array auto-resized to {asset.floatArray.Length} elements, value at [99] = {asset.floatArray[99]}");
         }
 
         #endregion
@@ -213,7 +216,7 @@ namespace MCPForUnityTests.Editor.Tools
         #region Friendly Path Syntax Test
 
         [Test]
-        public void FriendlySyntax_BracketNotation_ShouldBeNormalized()
+        public void FriendlySyntax_BracketNotation_IsNormalized()
         {
             // Create asset first
             var createResult = ToJObject(ManageScriptableObject.HandleCommand(new JObject
@@ -225,7 +228,6 @@ namespace MCPForUnityTests.Editor.Tools
                 ["overwrite"] = true,
                 ["patches"] = new JArray
                 {
-                    // Resize first using proper syntax
                     new JObject { ["propertyPath"] = "floatArray.Array.size", ["op"] = "array_resize", ["value"] = 5 }
                 }
             }));
@@ -235,7 +237,7 @@ namespace MCPForUnityTests.Editor.Tools
             var guid = createResult["data"]?["guid"]?.ToString();
             _createdAssets.Add(path);
 
-            // Try using friendly syntax: floatArray[2] instead of floatArray.Array.data[2]
+            // Use friendly syntax: floatArray[2] instead of floatArray.Array.data[2]
             var modifyResult = ToJObject(ManageScriptableObject.HandleCommand(new JObject
             {
                 ["action"] = "modify",
@@ -244,7 +246,7 @@ namespace MCPForUnityTests.Editor.Tools
                 {
                     new JObject
                     {
-                        ["propertyPath"] = "floatArray[2]",  // Friendly syntax!
+                        ["propertyPath"] = "floatArray[2]",  // Friendly syntax - gets normalized to floatArray.Array.data[2]
                         ["op"] = "set",
                         ["value"] = 123.456f
                     }
@@ -255,10 +257,14 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsNotNull(patchResults);
 
             bool patchOk = patchResults[0]?.Value<bool>("ok") ?? false;
-            Debug.Log($"[FriendlySyntax] Using floatArray[2] syntax: ok={patchOk}, message={patchResults[0]?["message"]}");
+            Assert.IsTrue(patchOk, $"Friendly bracket syntax should be normalized: {patchResults[0]?["message"]}");
 
-            // Current expected behavior: fails with "Property not found: floatArray[2]"
-            // After Phase 1.1 (path normalization): should succeed
+            // Verify the value was actually set
+            var asset = AssetDatabase.LoadAssetAtPath<ArrayStressSO>(path);
+            Assert.IsNotNull(asset);
+            Assert.AreEqual(123.456f, asset.floatArray[2], 0.001f, "Value at index 2 should be set via friendly syntax");
+
+            Debug.Log($"[FriendlySyntax] floatArray[2] = {asset.floatArray[2]} (set via friendly bracket notation)");
         }
 
         #endregion
@@ -569,10 +575,10 @@ namespace MCPForUnityTests.Editor.Tools
 
         #endregion
 
-        #region Bulk Array Mapping Test (Phase 3 feature)
+        #region Bulk Array Mapping Test
 
         [Test]
-        public void BulkArrayMapping_PassArrayAsValue()
+        public void BulkArrayMapping_SetsEntireArrayFromJArray()
         {
             var createResult = ToJObject(ManageScriptableObject.HandleCommand(new JObject
             {
@@ -588,7 +594,7 @@ namespace MCPForUnityTests.Editor.Tools
             var guid = createResult["data"]?["guid"]?.ToString();
             _createdAssets.Add(path);
 
-            // Try to set the entire intArray using a JArray value directly
+            // Set the entire intArray using a JArray value directly
             var modifyResult = ToJObject(ManageScriptableObject.HandleCommand(new JObject
             {
                 ["action"] = "modify",
@@ -599,7 +605,7 @@ namespace MCPForUnityTests.Editor.Tools
                     {
                         ["propertyPath"] = "intArray",
                         ["op"] = "set",
-                        ["value"] = new JArray(1, 2, 3, 4, 5)  // Bulk array!
+                        ["value"] = new JArray(1, 2, 3, 4, 5)  // Bulk array mapping
                     }
                 }
             }));
@@ -608,16 +614,20 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsNotNull(patchResults);
 
             bool patchOk = patchResults[0]?.Value<bool>("ok") ?? false;
-            string message = patchResults[0]?["message"]?.ToString() ?? "";
-            Debug.Log($"[BulkArrayMapping] Setting intArray to [1,2,3,4,5]: ok={patchOk}, message={message}");
+            Assert.IsTrue(patchOk, $"Bulk array mapping should succeed: {patchResults[0]?["message"]}");
 
-            // Current expected behavior: likely fails with unsupported type
-            // After Phase 3.1 (bulk array mapping): should succeed
+            // Verify the array was set correctly
+            var asset = AssetDatabase.LoadAssetAtPath<ComplexStressSO>(path);
+            Assert.IsNotNull(asset);
+            Assert.AreEqual(5, asset.intArray.Length, "Array should have 5 elements");
+            CollectionAssert.AreEqual(new[] { 1, 2, 3, 4, 5 }, asset.intArray, "Array contents should match");
+
+            Debug.Log($"[BulkArrayMapping] intArray = [{string.Join(", ", asset.intArray)}]");
         }
 
         #endregion
 
-        #region GUID Shorthand Test (Phase 4 feature)
+        #region GUID Shorthand Test
 
         [Test]
         public void GuidShorthand_PassPlainGuidString()
@@ -666,7 +676,7 @@ namespace MCPForUnityTests.Editor.Tools
 
         #endregion
 
-        #region Dry Run Test (Phase 5 feature)
+        #region Dry Run Test
 
         [Test]
         public void DryRun_ValidatePatchesWithoutApplying()

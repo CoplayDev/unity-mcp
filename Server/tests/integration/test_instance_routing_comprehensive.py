@@ -154,24 +154,6 @@ class TestInstanceRoutingToolCategories:
 
         return ctx
 
-    @pytest.mark.parametrize("tool_category,tool_names", [
-        ("GameObject", ["manage_gameobject"]),
-        ("Asset", ["manage_asset"]),
-        ("Scene", ["manage_scene"]),
-        ("Editor", ["manage_editor"]),
-        ("Console", ["read_console"]),
-        ("Menu", ["execute_menu_item"]),
-        ("Shader", ["manage_shader"]),
-        ("Prefab", ["manage_prefabs"]),
-        ("Tests", ["run_tests"]),
-        ("Script", ["create_script", "delete_script",
-         "apply_text_edits", "script_apply_edits"]),
-        ("Resources", ["unity_instances", "menu_items", "tests"]),
-    ])
-    def test_tool_category_respects_active_instance(self, tool_category, tool_names):
-        """All tool categories must respect set_active_instance."""
-        # This is a specification test - individual tools need separate implementation tests
-        pass  # Placeholder for category-level test
 
 
 class TestInstanceRoutingHTTP:
