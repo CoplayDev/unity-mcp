@@ -1,8 +1,3 @@
-/*
-    //Windows currently does not override DetectUv(), relying entirely on the base class. This is correct because:
-    //The PathResolverService already includes Windows-specific paths.
-    //There are no additional Windows-specific detection requirements.
-*/
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -12,6 +7,7 @@ using System.Runtime.InteropServices;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Dependencies.Models;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Services;
 
 namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 {
@@ -104,6 +100,105 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 3. MCP Server: Will be installed automatically by MCP for Unity Bridge";
         }
 
+        public override DependencyStatus DetectUv()
+        {
+            // First, honor overrides and cross-platform resolution via the base implementation
+            var status = base.DetectUv();
+            if (status.IsAvailable)
+            {
+                return status;
+            }
+
+            // If the user configured an override path, keep the base result (failure typically means the override path is invalid)
+            if (MCPServiceLocator.Paths.HasUvxPathOverride)
+            {
+                return status;
+            }
+
+            try
+            {
+                string augmentedPath = BuildAugmentedPath();
+
+                // try to find uv
+                if (TryValidateUvWithPath("uv.exe", augmentedPath, out string uvVersion, out string uvPath))
+                {
+                    status.IsAvailable = true;
+                    status.Version = uvVersion;
+                    status.Path = uvPath;
+                    status.Details = $"Found uv {uvVersion} at {uvPath}"; // 真实的路径反馈
+                    return status;
+                }
+
+                // try to find uvx
+                if (TryValidateUvWithPath("uvx.exe", augmentedPath, out string uvxVersion, out string uvxPath))
+                {
+                    status.IsAvailable = true;
+                    status.Version = uvxVersion;
+                    status.Path = uvxPath;
+                    status.Details = $"Found uvx {uvxVersion} at {uvxPath} (fallback)";
+                    return status;
+                }
+
+                status.ErrorMessage = "uv not found in PATH";
+                status.Details = "Install uv package manager and ensure it's added to PATH.";
+            }
+            catch (Exception ex)
+            {
+                status.ErrorMessage = $"Error detecting uv: {ex.Message}";
+            }
+
+            return status;
+        }
+
+        private bool TryValidateUvWithPath(string command, string augmentedPath, out string version, out string fullPath)
+        {
+            version = null;
+            fullPath = null;
+
+            try
+            {
+                // First, try to resolve the absolute path for better UI/logging display
+                string commandToRun = command;
+                if (TryFindInPath(command, out string resolvedPath))
+                {
+                    commandToRun = resolvedPath;
+                }
+
+                // Use ExecPath.TryRun which properly handles async output reading and timeouts
+                if (!ExecPath.TryRun(commandToRun, "--version", null, out string stdout, out string stderr,
+                    5000, augmentedPath))
+                    return false;
+
+                string output = string.IsNullOrWhiteSpace(stdout) ? stderr.Trim() : stdout.Trim();
+
+                // uv/uvx outputs "uv x.y.z" or "uvx x.y.z"
+                if (output.StartsWith("uvx ") || output.StartsWith("uv "))
+                {
+                    // Extract version: "uv 0.9.18" -> "0.9.18"
+                    int spaceIndex = output.IndexOf(' ');
+                    if (spaceIndex >= 0)
+                    {
+                        var remainder = output.Substring(spaceIndex + 1).Trim();
+                        int nextSpace = remainder.IndexOf(' ');
+                        int parenIndex = remainder.IndexOf('(');
+                        int endIndex = Math.Min(
+                            nextSpace >= 0 ? nextSpace : int.MaxValue,
+                            parenIndex >= 0 ? parenIndex : int.MaxValue
+                        );
+                        version = endIndex < int.MaxValue ? remainder.Substring(0, endIndex).Trim() : remainder;
+                        fullPath = commandToRun;
+                        return true;
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore validation errors
+            }
+
+            return false;
+        }
+
         private bool TryFindPythonViaUv(out string version, out string fullPath)
         {
             version = null;
@@ -112,8 +207,8 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             try
             {
                 string augmentedPath = BuildAugmentedPath();
-                // Try to list installed python versions via uv
-                if (!ExecPath.TryRun("uv", "python list", null, out string stdout, out string stderr, 5000, augmentedPath))
+                // Try to list installed python versions via uvx
+                if (!ExecPath.TryRun("uvx", "python list", null, out string stdout, out string stderr, 5000, augmentedPath))
                     return false;
 
                 var lines = stdout.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
@@ -187,28 +282,8 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
         private bool TryFindInPath(string executable, out string fullPath)
         {
-            fullPath = null;
-
-            try
-            {
-                string augmentedPath = BuildAugmentedPath();
-                // Use 'where' command to find the executable in PATH
-                if (!ExecPath.TryRun("where", executable, null, out string stdout, out string stderr, 3000, augmentedPath))
-                    return false;
-
-                var lines = stdout.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                if (lines.Length > 0)
-                {
-                    fullPath = lines[0].Trim();
-                    return File.Exists(fullPath);
-                }
-            }
-            catch
-            {
-                // Ignore errors
-            }
-
-            return false;
+            fullPath = ExecPath.FindInPath(executable, BuildAugmentedPath());
+            return !string.IsNullOrEmpty(fullPath);
         }
 
         protected string BuildAugmentedPath()

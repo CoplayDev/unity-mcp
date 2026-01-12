@@ -67,6 +67,6 @@ namespace MCPForUnity.Editor.Services
         /// <param name="uvPath">Absolute or relative path to the uv/uvx executable.</param>
         /// <param name="version">Parsed version string if successful.</param>
         /// <returns>True when the executable runs and returns a uv version string.</returns>
-        bool TryValidateUvExecutable(string uvPath, out string version);
+        bool TryValidateUvxExecutable(string uvPath, out string version);
     }
 }

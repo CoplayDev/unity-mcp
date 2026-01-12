@@ -20,7 +20,7 @@
                 <ui:VisualElement class="advanced-settings-content">
                     <ui:Label text="Path Overrides (leave empty for auto-detection):" class="advanced-label" />
                     <ui:VisualElement class="override-row">
-                        <ui:Label text="UV Path:" class="override-label" />
+                        <ui:Label text="UVX Path:" class="override-label" />
                         <ui:VisualElement class="status-indicator-small" name="uv-path-status" />
                     </ui:VisualElement>
                     <ui:VisualElement class="path-override-controls">

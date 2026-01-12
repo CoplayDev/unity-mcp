@@ -26,7 +26,7 @@ namespace MCPForUnity.Editor.Services
             {
                 string overridePath = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
                 // Validate the override - if invalid, don't fall back to discovery
-                if (TryValidateUvExecutable(overridePath, out string version))
+                if (TryValidateUvxExecutable(overridePath, out string version))
                 {
                     return overridePath;
                 }
@@ -130,6 +130,8 @@ namespace MCPForUnity.Editor.Services
                 if (!string.IsNullOrEmpty(localAppData))
                 {
                     yield return Path.Combine(localAppData, "Programs", "uv", exeName);
+                    // WinGet creates shim files in this location
+                    yield return Path.Combine(localAppData, "Microsoft", "WinGet", "Links", exeName);
                 }
 
                 if (!string.IsNullOrEmpty(programFiles))
@@ -264,39 +266,39 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         /// <param name="uvPath">Absolute or relative path to the uv/uvx executable.</param>
         /// <param name="version">Parsed version string if successful.</param>
-        /// <returns>True when the executable runs and returns a uv version string.</returns>
-        public bool TryValidateUvExecutable(string uvPath, out string version)
+        /// <returns>True when the executable runs and returns a uvx version string.</returns>
+        public bool TryValidateUvxExecutable(string uvxPath, out string version)
         {
             version = null;
 
-            if (string.IsNullOrEmpty(uvPath))
+            if (string.IsNullOrEmpty(uvxPath))
                 return false;
 
             try
             {
                 // Check if the path is just a command name (no directory separator)
-                bool isBareCommand = !uvPath.Contains('/') && !uvPath.Contains('\\');
+                bool isBareCommand = !uvxPath.Contains('/') && !uvxPath.Contains('\\');
 
                 if (isBareCommand)
                 {
                     // For bare commands like "uvx" or "uv", use EnumerateCommandCandidates to find full path first
-                    string fullPath = FindUvxExecutableInPath(uvPath);
+                    string fullPath = FindUvxExecutableInPath(uvxPath);
                     if (string.IsNullOrEmpty(fullPath))
                         return false;
-                    uvPath = fullPath;
+                    uvxPath = fullPath;
                 }
 
                 // Use ExecPath.TryRun which properly handles async output reading and timeouts
-                if (!ExecPath.TryRun(uvPath, "--version", null, out string stdout, out string stderr, 5000))
+                if (!ExecPath.TryRun(uvxPath, "--version", null, out string stdout, out string stderr, 5000))
                     return false;
 
                 // Check stdout first, then stderr (some tools output to stderr)
                 string versionOutput = !string.IsNullOrWhiteSpace(stdout) ? stdout.Trim() : stderr.Trim();
 
-                // uvx outputs "uvx x.y.z" or "uv x.y.z", extract version number
-                if (versionOutput.StartsWith("uv ") || versionOutput.StartsWith("uvx "))
+                // uv/uvx outputs "uv x.y.z" or "uvx x.y.z", extract version number
+                if (versionOutput.StartsWith("uvx ") || versionOutput.StartsWith("uv "))
                 {
-                    // Extract version: "uvx 0.9.18 (hash date)" -> "0.9.18"
+                    // Extract version: "uv 0.9.18 (hash date)" -> "0.9.18"
                     int spaceIndex = versionOutput.IndexOf(' ');
                     if (spaceIndex >= 0)
                     {
@@ -391,6 +393,8 @@ namespace MCPForUnity.Editor.Services
                 if (!string.IsNullOrEmpty(localAppData))
                 {
                     yield return Path.Combine(localAppData, "Programs", "uv", exeName);
+                    // WinGet creates shim files in this location
+                    yield return Path.Combine(localAppData, "Microsoft", "WinGet", "Links", exeName);
                 }
 
                 if (!string.IsNullOrEmpty(programFiles))

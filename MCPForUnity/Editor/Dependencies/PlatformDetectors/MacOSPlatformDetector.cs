@@ -194,10 +194,11 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
 
                 string output = string.IsNullOrWhiteSpace(stdout) ? stderr.Trim() : stdout.Trim();
 
-                if (output.StartsWith("uv ") || output.StartsWith("uvx "))
+                // uv/uvx outputs "uv x.y.z" or "uvx x.y.z"
+                if (output.StartsWith("uvx ") || output.StartsWith("uv "))
                 {
-                    // Extract version: "uvx 0.9.18" -> "0.9.18"
-                    // Handle extra tokens: "uvx 0.9.18 extra" or "uvx 0.9.18 (build info)"
+                    // Extract version: "uv 0.9.18" -> "0.9.18"
+                    // Handle extra tokens: "uv 0.9.18 extra" or "uv 0.9.18 (build info)"
                     int spaceIndex = output.IndexOf(' ');
                     if (spaceIndex >= 0)
                     {
@@ -246,28 +247,8 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
 
         private bool TryFindInPath(string executable, out string fullPath)
         {
-            fullPath = null;
-
-            try
-            {
-                string augmentedPath = BuildAugmentedPath();
-
-                if (!ExecPath.TryRun("/usr/bin/which", executable, null, out string stdout, out _, 3000, augmentedPath))
-                    return false;
-
-                string output = stdout.Trim();
-                if (!string.IsNullOrEmpty(output) && File.Exists(output))
-                {
-                    fullPath = output;
-                    return true;
-                }
-            }
-            catch
-            {
-                // Ignore errors
-            }
-
-            return false;
+            fullPath = ExecPath.FindInPath(executable, BuildAugmentedPath());
+            return !string.IsNullOrEmpty(fullPath);
         }
     }
 }

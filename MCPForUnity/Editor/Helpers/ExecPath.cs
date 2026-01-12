@@ -62,7 +62,7 @@ namespace MCPForUnity.Editor.Helpers
                     Path.Combine(localAppData, "npm", "claude.ps1"),
                 };
                 foreach (string c in candidates) { if (File.Exists(c)) return c; }
-                string fromWhere = Where("claude.exe") ?? Where("claude.cmd") ?? Where("claude.ps1") ?? Where("claude");
+                string fromWhere = FindInPathWindows("claude.exe") ?? FindInPathWindows("claude.cmd") ?? FindInPathWindows("claude.ps1") ?? FindInPathWindows("claude");
                 if (!string.IsNullOrEmpty(fromWhere)) return fromWhere;
 #endif
                 return null;
@@ -197,9 +197,9 @@ namespace MCPForUnity.Editor.Helpers
 
                 using var process = new Process { StartInfo = psi, EnableRaisingEvents = false };
 
-                var so = new StringBuilder();
+                var sb = new StringBuilder();
                 var se = new StringBuilder();
-                process.OutputDataReceived += (_, e) => { if (e.Data != null) so.AppendLine(e.Data); };
+                process.OutputDataReceived += (_, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
                 process.ErrorDataReceived += (_, e) => { if (e.Data != null) se.AppendLine(e.Data); };
 
                 if (!process.Start()) return false;
@@ -216,7 +216,7 @@ namespace MCPForUnity.Editor.Helpers
                 // Ensure async buffers are flushed
                 process.WaitForExit();
 
-                stdout = so.ToString();
+                stdout = sb.ToString();
                 stderr = se.ToString();
                 return process.ExitCode == 0;
             }
@@ -224,6 +224,21 @@ namespace MCPForUnity.Editor.Helpers
             {
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Cross-platform path lookup. Uses 'where' on Windows, 'which' on macOS/Linux.
+        /// Returns the full path if found, null otherwise.
+        /// </summary>
+        internal static string FindInPath(string executable, string extraPathPrepend = null)
+        {
+#if UNITY_EDITOR_WIN
+            return FindInPathWindows(executable);
+#elif UNITY_EDITOR_OSX || UNITY_EDITOR_LINUX
+            return Which(executable, extraPathPrepend ?? string.Empty);
+#else
+            return null;
+#endif
         }
 
 #if UNITY_EDITOR_OSX || UNITY_EDITOR_LINUX
@@ -262,7 +277,7 @@ namespace MCPForUnity.Editor.Helpers
 #endif
 
 #if UNITY_EDITOR_WIN
-        private static string Where(string exe)
+        private static string FindInPathWindows(string exe)
         {
             try
             {

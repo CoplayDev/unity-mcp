@@ -27,26 +27,26 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             try
             {
                 // Get uv path from PathResolverService (respects override)
-                string uvPath = MCPServiceLocator.Paths.GetUvxPath();
+                string uvxPath = MCPServiceLocator.Paths.GetUvxPath();
 
                 // Verify uv executable and get version
-                if (MCPServiceLocator.Paths.TryValidateUvExecutable(uvPath, out string version))
+                if (MCPServiceLocator.Paths.TryValidateUvxExecutable(uvxPath, out string version))
                 {
                     status.IsAvailable = true;
                     status.Version = version;
-                    status.Path = uvPath;
+                    status.Path = uvxPath;
                     status.Details = MCPServiceLocator.Paths.HasUvxPathOverride
                         ? $"Found uv {version} (override path)"
                         : $"Found uv {version} in system path";
                     return status;
                 }
 
-                status.ErrorMessage = "uv not found";
+                status.ErrorMessage = "uvx not found";
                 status.Details = "Install uv package manager or configure path override in Advanced Settings.";
             }
             catch (Exception ex)
             {
-                status.ErrorMessage = $"Error detecting uv: {ex.Message}";
+                status.ErrorMessage = $"Error detecting uvx: {ex.Message}";
             }
 
             return status;
