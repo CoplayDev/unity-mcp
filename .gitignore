@@ -58,7 +58,3 @@ reports/
 
 # Local testing harness
 scripts/local-test/
-
-*.meta
-
-**/*.meta
