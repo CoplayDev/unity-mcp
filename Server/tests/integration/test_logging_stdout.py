@@ -18,11 +18,6 @@ if SRC is None:
     )
 
 
-@pytest.mark.skip(reason="TODO: ensure server logs only to stderr and rotating file")
-def test_no_stdout_output_from_tools():
-    pass
-
-
 def test_no_print_statements_in_codebase():
     """Ensure no stray print/sys.stdout writes remain in server source."""
     offenders = []

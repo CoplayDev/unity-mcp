@@ -37,7 +37,10 @@ namespace MCPForUnityTests.Editor.Tools
             var result = ManageGameObject.HandleCommand(null);
 
             Assert.IsNotNull(result, "Should return a result object");
-            // Note: Actual error checking would need access to Response structure
+            // Verify the result indicates an error state
+            var errorResponse = result as MCPForUnity.Editor.Helpers.ErrorResponse;
+            Assert.IsNotNull(errorResponse, "Should return an ErrorResponse for null params");
+            Assert.IsFalse(errorResponse.Success, "Success should be false for null params");
         }
 
         [Test]
@@ -47,6 +50,10 @@ namespace MCPForUnityTests.Editor.Tools
             var result = ManageGameObject.HandleCommand(emptyParams);
 
             Assert.IsNotNull(result, "Should return a result object for empty params");
+            // Verify the result indicates an error state (missing required action)
+            var errorResponse = result as MCPForUnity.Editor.Helpers.ErrorResponse;
+            Assert.IsNotNull(errorResponse, "Should return an ErrorResponse for empty params");
+            Assert.IsFalse(errorResponse.Success, "Success should be false for empty params");
         }
 
         [Test]
