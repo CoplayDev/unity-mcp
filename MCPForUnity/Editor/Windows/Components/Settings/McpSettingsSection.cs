@@ -198,11 +198,11 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             uvxPathStatus.RemoveFromClassList("valid");
             uvxPathStatus.RemoveFromClassList("invalid");
 
-            // 只在设置了 override 时显示状态
             if (hasOverride)
             {
+                // Override mode: validate the override path
                 string overridePath = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
-                if (pathService.TryValidateUvxExecutable(overridePath, out string version))
+                if (pathService.TryValidateUvxExecutable(overridePath, out _))
                 {
                     uvxPathStatus.AddToClassList("valid");
                 }
@@ -211,8 +211,19 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
                     uvxPathStatus.AddToClassList("invalid");
                 }
             }
-
-            // if not override， Draw did not find status
+            else
+            {
+                // PATH mode: validate system uvx
+                string systemUvxPath = pathService.GetUvxPath();
+                if (!string.IsNullOrEmpty(systemUvxPath) && pathService.TryValidateUvxExecutable(systemUvxPath, out _))
+                {
+                    uvxPathStatus.AddToClassList("valid");
+                }
+                else
+                {
+                    uvxPathStatus.AddToClassList("invalid");
+                }
+            }
 
             gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
             devModeForceRefreshToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
