@@ -160,7 +160,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             {
                 string augmentedPath = BuildAugmentedPath();
                 // Try to list installed python versions via uvx
-                if (!ExecPath.TryRun("uvx", "python list", null, out string stdout, out string stderr, 5000, augmentedPath))
+                if (!ExecPath.TryRun("uv", "python list", null, out string stdout, out string stderr, 5000, augmentedPath))
                     return false;
 
                 var lines = stdout.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
