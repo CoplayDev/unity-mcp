@@ -14,7 +14,6 @@ import platform
 import shutil
 import subprocess
 import time
-from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +125,8 @@ if ($unity) {
 }
 '''
         else:
-            # Try to find window by title
+            # Try to find window by title - escape special PowerShell characters
+            safe_title = window_title.replace("'", "''").replace("`", "``")
             script = f'''
 Add-Type @"
 using System;
@@ -138,7 +138,7 @@ public class Win32 {{
     public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 }}
 "@
-$proc = Get-Process | Where-Object {{$_.MainWindowTitle -eq "{window_title}"}} | Select-Object -First 1
+$proc = Get-Process | Where-Object {{$_.MainWindowTitle -eq '{safe_title}'}} | Select-Object -First 1
 if ($proc) {{
     [Win32]::ShowWindow($proc.MainWindowHandle, 9)
     [Win32]::SetForegroundWindow($proc.MainWindowHandle)
@@ -313,7 +313,6 @@ def should_nudge(
         return True  # No updates yet, might be stuck at start
 
     if current_time_ms is None:
-        import time
         current_time_ms = int(time.time() * 1000)
 
     time_since_update_ms = current_time_ms - last_update_unix_ms
