@@ -318,38 +318,134 @@ namespace MCPForUnity.Runtime.Serialization
 #if UNITY_EDITOR
             if (reader.TokenType == JsonToken.String)
             {
+                string strValue = reader.Value.ToString();
+
+                // Check if it looks like a GUID (32 hex chars, optionally with hyphens)
+                if (IsValidGuid(strValue))
+                {
+                    string path = UnityEditor.AssetDatabase.GUIDToAssetPath(strValue.Replace("-", "").ToLowerInvariant());
+                    if (!string.IsNullOrEmpty(path))
+                    {
+                        var asset = UnityEditor.AssetDatabase.LoadAssetAtPath(path, objectType);
+                        if (asset != null) return asset;
+                    }
+                    UnityEngine.Debug.LogWarning($"[UnityEngineObjectConverter] Could not load asset with GUID '{strValue}' as type '{objectType.Name}'.");
+                    return null;
+                }
+
                 // Assume it's an asset path
-                string path = reader.Value.ToString();
-                return UnityEditor.AssetDatabase.LoadAssetAtPath(path, objectType);
+                var loadedAsset = UnityEditor.AssetDatabase.LoadAssetAtPath(strValue, objectType);
+                if (loadedAsset == null)
+                {
+                    UnityEngine.Debug.LogWarning($"[UnityEngineObjectConverter] Could not load asset at path '{strValue}' as type '{objectType.Name}'.");
+                }
+                return loadedAsset;
             }
 
             if (reader.TokenType == JsonToken.StartObject)
             {
                 JObject jo = JObject.Load(reader);
+
+                // Try to resolve by GUID first (for assets like ScriptableObjects, Materials, etc.)
+                if (jo.TryGetValue("guid", out JToken guidToken) && guidToken.Type == JTokenType.String)
+                {
+                    string guid = guidToken.ToString().Replace("-", "").ToLowerInvariant();
+                    string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+                    if (!string.IsNullOrEmpty(path))
+                    {
+                        var asset = UnityEditor.AssetDatabase.LoadAssetAtPath(path, objectType);
+                        if (asset != null) return asset;
+                    }
+                    UnityEngine.Debug.LogWarning($"[UnityEngineObjectConverter] Could not load asset with GUID '{guidToken}' as type '{objectType.Name}'.");
+                    return null;
+                }
+
+                // Try to resolve by instanceID
                 if (jo.TryGetValue("instanceID", out JToken idToken) && idToken.Type == JTokenType.Integer)
                 {
                     int instanceId = idToken.ToObject<int>();
                     UnityEngine.Object obj = UnityEditor.EditorUtility.InstanceIDToObject(instanceId);
-                    if (obj != null && objectType.IsAssignableFrom(obj.GetType()))
+                    if (obj != null)
                     {
-                        return obj;
-                    }
-                }
-                // Could potentially try finding by name as a fallback if ID lookup fails/isn't present
-                // but that's less reliable.
-            }
-#else
-             // Runtime deserialization is tricky without AssetDatabase/EditorUtility
-             // Maybe log a warning and return null or existingValue?
-             UnityEngine.Debug.LogWarning("UnityEngineObjectConverter cannot deserialize complex objects in non-Editor mode.");
-             // Skip the token to avoid breaking the reader
-             if (reader.TokenType == JsonToken.StartObject) JObject.Load(reader);
-             else if (reader.TokenType == JsonToken.String) reader.ReadAsString(); 
-             // Return null or existing value, depending on desired behavior
-             return existingValue; 
-#endif
+                        // Direct type match
+                        if (objectType.IsAssignableFrom(obj.GetType()))
+                        {
+                            return obj;
+                        }
 
-            throw new JsonSerializationException($"Unexpected token type '{reader.TokenType}' when deserializing UnityEngine.Object");
+                        // Special case: expecting Transform but got GameObject - get its transform
+                        if (objectType == typeof(Transform) && obj is GameObject go)
+                        {
+                            return go.transform;
+                        }
+
+                        // Special case: expecting a Component type but got GameObject - try to get the component
+                        if (typeof(Component).IsAssignableFrom(objectType) && obj is GameObject gameObj)
+                        {
+                            var component = gameObj.GetComponent(objectType);
+                            if (component != null)
+                            {
+                                return component;
+                            }
+                            UnityEngine.Debug.LogWarning($"[UnityEngineObjectConverter] GameObject '{gameObj.name}' (ID: {instanceId}) does not have a '{objectType.Name}' component.");
+                            return null;
+                        }
+
+                        // Type mismatch with no automatic conversion available
+                        UnityEngine.Debug.LogWarning($"[UnityEngineObjectConverter] Instance ID {instanceId} resolved to '{obj.GetType().Name}' but expected '{objectType.Name}'.");
+                        return null;
+                    }
+                    // Instance ID lookup failed - this can happen if the object was destroyed or ID is stale
+                    string objectName = jo.TryGetValue("name", out JToken nameToken) ? nameToken.ToString() : "unknown";
+                    UnityEngine.Debug.LogWarning($"[UnityEngineObjectConverter] Could not resolve instance ID {instanceId} (name: '{objectName}') to a valid {objectType.Name}. The object may have been destroyed or the ID is stale.");
+                    return null;
+                }
+
+                // Check if there's an asset path in the object
+                if (jo.TryGetValue("path", out JToken pathToken) && pathToken.Type == JTokenType.String)
+                {
+                    string path = pathToken.ToString();
+                    var asset = UnityEditor.AssetDatabase.LoadAssetAtPath(path, objectType);
+                    if (asset != null)
+                    {
+                        return asset;
+                    }
+                    UnityEngine.Debug.LogWarning($"[UnityEngineObjectConverter] Could not load asset at path '{path}' as type '{objectType.Name}'.");
+                    return null;
+                }
+
+                // Object format not recognized
+                UnityEngine.Debug.LogWarning($"[UnityEngineObjectConverter] JSON object missing 'instanceID', 'guid', or 'path' field for {objectType.Name} deserialization. Object: {jo.ToString(Formatting.None)}");
+                return null;
+            }
+
+            // Unexpected token type
+            UnityEngine.Debug.LogWarning($"[UnityEngineObjectConverter] Unexpected token type '{reader.TokenType}' when deserializing {objectType.Name}. Expected Null, String, or Object.");
+            return null;
+#else
+            // Runtime deserialization is tricky without AssetDatabase/EditorUtility
+            UnityEngine.Debug.LogWarning("UnityEngineObjectConverter cannot deserialize complex objects in non-Editor mode.");
+            // Skip the current token to avoid breaking the reader state
+            reader.Skip();
+            // Return existing value since we can't deserialize without Editor APIs
+            return existingValue;
+#endif
+        }
+
+        /// <summary>
+        /// Checks if a string looks like a valid GUID (32 hex chars, with or without hyphens).
+        /// </summary>
+        private static bool IsValidGuid(string str)
+        {
+            if (string.IsNullOrEmpty(str)) return false;
+            string normalized = str.Replace("-", "");
+            if (normalized.Length != 32) return false;
+            foreach (char c in normalized)
+            {
+                if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
+                    return false;
+            }
+            return true;
         }
     }
 }

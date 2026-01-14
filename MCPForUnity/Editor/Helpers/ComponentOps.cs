@@ -197,11 +197,12 @@ namespace MCPForUnity.Editor.Helpers
                 }
             }
 
-            // Try non-public serialized fields - check both original and normalized names
-            BindingFlags privateFlags = BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.IgnoreCase;
-            fieldInfo = type.GetField(propertyName, privateFlags) 
-                     ?? type.GetField(normalizedName, privateFlags);
-            if (fieldInfo != null && fieldInfo.GetCustomAttribute<SerializeField>() != null)
+            // Try non-public serialized fields - traverse inheritance hierarchy
+            // Type.GetField() with NonPublic only finds fields declared directly on that type,
+            // so we need to walk up the inheritance chain manually
+            fieldInfo = FindSerializedFieldInHierarchy(type, propertyName)
+                     ?? FindSerializedFieldInHierarchy(type, normalizedName);
+            if (fieldInfo != null)
             {
                 try
                 {
@@ -252,13 +253,22 @@ namespace MCPForUnity.Editor.Helpers
                 }
             }
 
-            // Include private [SerializeField] fields
-            foreach (var field in componentType.GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
+            // Include private [SerializeField] fields - traverse inheritance hierarchy
+            // Type.GetFields with NonPublic only returns fields declared directly on that type,
+            // so we need to walk up the chain to find inherited private serialized fields
+            var seenFieldNames = new HashSet<string>(members); // Avoid duplicates with public fields
+            Type currentType = componentType;
+            while (currentType != null && currentType != typeof(object))
             {
-                if (field.GetCustomAttribute<SerializeField>() != null)
+                foreach (var field in currentType.GetFields(BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly))
                 {
-                    members.Add(field.Name);
+                    if (field.GetCustomAttribute<SerializeField>() != null && !seenFieldNames.Contains(field.Name))
+                    {
+                        members.Add(field.Name);
+                        seenFieldNames.Add(field.Name);
+                    }
                 }
+                currentType = currentType.BaseType;
             }
 
             members.Sort();
@@ -266,6 +276,37 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         // --- Private Helpers ---
+
+        /// <summary>
+        /// Searches for a non-public [SerializeField] field through the entire inheritance hierarchy.
+        /// Type.GetField() with NonPublic only returns fields declared directly on that type,
+        /// so this method walks up the chain to find inherited private serialized fields.
+        /// </summary>
+        private static FieldInfo FindSerializedFieldInHierarchy(Type type, string fieldName)
+        {
+            if (type == null || string.IsNullOrEmpty(fieldName))
+                return null;
+
+            BindingFlags privateFlags = BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly;
+            Type currentType = type;
+
+            // Walk up the inheritance chain
+            while (currentType != null && currentType != typeof(object))
+            {
+                // Search for the field on this specific type (case-insensitive)
+                foreach (var field in currentType.GetFields(privateFlags))
+                {
+                    if (string.Equals(field.Name, fieldName, StringComparison.OrdinalIgnoreCase) &&
+                        field.GetCustomAttribute<SerializeField>() != null)
+                    {
+                        return field;
+                    }
+                }
+                currentType = currentType.BaseType;
+            }
+
+            return null;
+        }
 
         private static string CheckPhysicsConflict(GameObject target, Type componentType)
         {
