@@ -110,6 +110,15 @@ namespace MCPForUnity.Editor.Services
                 // (Issue #525: EditMode tests were blocked by save dialog)
                 SaveDirtyScenesIfNeeded();
 
+                // Apply no-throttling preemptively for PlayMode tests. This ensures Unity
+                // isn't throttled during the Play mode transition (which requires multiple
+                // editor frames). Without this, unfocused Unity may never reach RunStarted
+                // where throttling would normally be disabled.
+                if (mode == TestMode.PlayMode)
+                {
+                    TestRunnerNoThrottle.ApplyNoThrottlingPreemptive();
+                }
+
                 _testRunnerApi.Execute(settings);
 
                 runTask = _runCompletionSource.Task;
