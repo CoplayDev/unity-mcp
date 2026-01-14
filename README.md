@@ -439,8 +439,13 @@ Your privacy matters to us. All telemetry is optional and designed to respect yo
 
 ## Troubleshooting ❓
 
-<details>  
-<summary><strong>Click to view common issues and fixes...</strong></summary>  
+<details>
+<summary><strong>Click to view common issues and fixes...</strong></summary>
+
+- **Focus Permission Request (macOS/Windows/Linux):**
+    - When running PlayMode tests with Unity in the background, MCP for Unity may temporarily switch focus to Unity to prevent OS-level throttling from stalling tests.
+    - On **macOS**, you may be prompted to grant accessibility/automation permissions for your terminal or IDE to control window focus.
+    - This is normal behavior to ensure tests complete reliably when Unity is not the active window.
 
 - **Unity Bridge Not Running/Connecting:**
     - Ensure Unity Editor is open.
