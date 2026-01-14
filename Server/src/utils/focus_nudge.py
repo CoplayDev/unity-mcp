@@ -247,7 +247,7 @@ async def nudge_unity_focus(
     # Rate limit nudges
     now = time.monotonic()
     if not force and (now - _last_nudge_time) < _MIN_NUDGE_INTERVAL_S:
-        logger.debug("Skipping nudge - too soon since last nudge")
+        logger.info("Skipping nudge - too soon since last nudge")
         return False
 
     # Get current frontmost app
@@ -274,8 +274,10 @@ async def nudge_unity_focus(
 
     # Return focus to original app
     if original_app and original_app != "Unity":
-        _focus_app(original_app)
-        logger.debug(f"Returned focus to {original_app}")
+        if _focus_app(original_app):
+            logger.info(f"Returned focus to {original_app}")
+        else:
+            logger.warning(f"Failed to return focus to {original_app}")
 
     return True
 

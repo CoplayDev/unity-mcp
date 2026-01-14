@@ -231,8 +231,10 @@ async def get_test_job(
                 current_time_ms=current_time_ms,
                 stall_threshold_ms=10_000,  # 10 seconds without progress
             ):
-                logger.info(f"Test job {job_id} appears stalled (unfocused Unity), nudging focus...")
-                await nudge_unity_focus(focus_duration_s=0.5)
+                logger.info(f"Test job {job_id} appears stalled (unfocused Unity), attempting nudge...")
+                nudged = await nudge_unity_focus(focus_duration_s=0.5)
+                if nudged:
+                    logger.info(f"Test job {job_id} nudge completed")
 
             # Check timeout
             remaining = deadline - asyncio.get_event_loop().time()

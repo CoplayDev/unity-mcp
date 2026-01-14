@@ -5,9 +5,9 @@ import pytest
 
 
 # locate server src dynamically to avoid hardcoded layout assumptions
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]  # tests/integration -> tests -> Server
 candidates = [
-    ROOT / "Server",
+    ROOT / "src",
 ]
 SRC = next((p for p in candidates if p.exists()), None)
 if SRC is None:
