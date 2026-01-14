@@ -55,10 +55,13 @@ async def refresh_unity(
     # interpret that as a hard failure (#503-style loops).
     if isinstance(response, dict) and not response.get("success", True):
         hint = response.get("hint")
-        err = (response.get("error") or response.get("message") or "")
+        err = (response.get("error") or response.get("message") or "").lower()
         reason = _extract_response_reason(response)
-        is_retryable = (hint == "retry") or (
-            "disconnected" in str(err).lower())
+        is_retryable = (
+            hint == "retry"
+            or "disconnected" in err
+            or "could not connect" in err  # Connection failed during domain reload
+        )
         if (not wait_for_ready) or (not is_retryable):
             return MCPResponse(**response)
         if reason not in {"reloading", "no_unity_session"}:
