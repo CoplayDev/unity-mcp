@@ -11,8 +11,6 @@ on:
 
 jobs:
   testAllModes:
-    # Guard: only run on upstream repo; skip on forks
-    if: github.repository_owner == 'CoplayDev'
     name: Test in ${{ matrix.testMode }}
     runs-on: ubuntu-latest
     strategy:
@@ -30,6 +28,26 @@ jobs:
         with:
           lfs: true
 
+      - name: Detect Unity license secrets
+        id: detect
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        run: |
+          set -e
+          if [ -n "$UNITY_LICENSE" ] || { [ -n "$UNITY_EMAIL" ] && [ -n "$UNITY_PASSWORD" ] && [ -n "$UNITY_SERIAL" ]; }; then
+            echo "unity_ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "unity_ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip Unity tests (missing license secrets)
+        if: steps.detect.outputs.unity_ok != 'true'
+        run: |
+          echo "Unity license secrets missing; skipping Unity tests."
+
       - uses: actions/cache@v4
         with:
           path: ${{ matrix.projectPath }}/Library
@@ -40,12 +58,14 @@ jobs:
 
       # Run domain reload tests first (they're [Explicit] so need explicit category)
       - name: Run domain reload tests
+        if: steps.detect.outputs.unity_ok == 'true'
         uses: game-ci/unity-test-runner@v4
         id: domain-tests
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
         with:
           projectPath: ${{ matrix.projectPath }}
           unityVersion: ${{ matrix.unityVersion }}
@@ -53,19 +73,21 @@ jobs:
           customParameters: -testCategory domain_reload
 
       - name: Run tests
+        if: steps.detect.outputs.unity_ok == 'true'
         uses: game-ci/unity-test-runner@v4
         id: tests
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
         with:
           projectPath: ${{ matrix.projectPath }}
           unityVersion: ${{ matrix.unityVersion }}
           testMode: ${{ matrix.testMode }}
 
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.detect.outputs.unity_ok == 'true'
         with:
           name: Test results for ${{ matrix.testMode }}
           path: ${{ steps.tests.outputs.artifactsPath }}

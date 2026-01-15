@@ -34,7 +34,7 @@ jobs:
         run: |
           set -e
           if [ -n "$ANTHROPIC_API_KEY" ]; then echo "anthropic_ok=true" >> "$GITHUB_OUTPUT"; else echo "anthropic_ok=false" >> "$GITHUB_OUTPUT"; fi
-          if [ -n "$UNITY_LICENSE" ] || { [ -n "$UNITY_EMAIL" ] && [ -n "$UNITY_PASSWORD" ]; }; then
+          if [ -n "$UNITY_LICENSE" ] || { [ -n "$UNITY_EMAIL" ] && [ -n "$UNITY_PASSWORD" ] && [ -n "$UNITY_SERIAL" ]; }; then
             echo "unity_ok=true" >> "$GITHUB_OUTPUT"
           else
             echo "unity_ok=false" >> "$GITHUB_OUTPUT"
@@ -76,7 +76,7 @@ jobs:
           set -eu
           use_ulf=false; use_ebl=false
           [[ -n "${UNITY_LICENSE:-}" ]] && use_ulf=true
-          [[ -n "${UNITY_EMAIL:-}" && -n "${UNITY_PASSWORD:-}" ]] && use_ebl=true
+          [[ -n "${UNITY_EMAIL:-}" && -n "${UNITY_PASSWORD:-}" && -n "${UNITY_SERIAL:-}" ]] && use_ebl=true
           echo "use_ulf=$use_ulf" >> "$GITHUB_OUTPUT"
           echo "use_ebl=$use_ebl" >> "$GITHUB_OUTPUT"
           echo "has_serial=$([[ -n "${UNITY_SERIAL:-}" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
