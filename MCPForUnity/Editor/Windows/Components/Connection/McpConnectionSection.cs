@@ -1,5 +1,4 @@
 using System;
-using System.Net.Sockets;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
@@ -531,7 +530,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             try
             {
                 // Check if a local server is running.
-            bool serverRunning = IsHttpLocalSelected() && MCPServiceLocator.Server.IsLocalHttpServerReachable();
+                bool serverRunning = IsHttpLocalSelected() && MCPServiceLocator.Server.IsLocalHttpServerReachable();
 
                 if (serverRunning)
                 {
