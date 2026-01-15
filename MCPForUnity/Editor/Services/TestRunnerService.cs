@@ -110,6 +110,15 @@ namespace MCPForUnity.Editor.Services
                 // (Issue #525: EditMode tests were blocked by save dialog)
                 SaveDirtyScenesIfNeeded();
 
+                // Apply no-throttling preemptively for PlayMode tests. This ensures Unity
+                // isn't throttled during the Play mode transition (which requires multiple
+                // editor frames). Without this, unfocused Unity may never reach RunStarted
+                // where throttling would normally be disabled.
+                if (mode == TestMode.PlayMode)
+                {
+                    TestRunnerNoThrottle.ApplyNoThrottlingPreemptive();
+                }
+
                 _testRunnerApi.Execute(settings);
 
                 runTask = _runCompletionSource.Task;
@@ -184,17 +193,24 @@ namespace MCPForUnity.Editor.Services
 
         public void RunFinished(ITestResultAdaptor result)
         {
-            if (_runCompletionSource == null)
-            {
-                return;
-            }
-
+            // Always create payload and clean up job state, even if _runCompletionSource is null.
+            // This handles domain reload scenarios (e.g., PlayMode tests) where the TestRunnerService
+            // is recreated and _runCompletionSource is lost, but TestJobManager state persists via
+            // SessionState and the Test Runner still delivers the RunFinished callback.
             var payload = TestRunResult.Create(result, _leafResults);
-            _runCompletionSource.TrySetResult(payload);
-            _runCompletionSource = null;
+
+            // Clean up state regardless of _runCompletionSource - these methods safely handle
+            // the case where no MCP job exists (e.g., manual test runs via Unity UI).
             TestRunStatus.MarkFinished();
             TestJobManager.OnRunFinished();
             TestJobManager.FinalizeCurrentJobFromRunFinished(payload);
+
+            // Report result to awaiting caller if we have a completion source
+            if (_runCompletionSource != null)
+            {
+                _runCompletionSource.TrySetResult(payload);
+                _runCompletionSource = null;
+            }
         }
 
         public void TestStarted(ITestAdaptor test)

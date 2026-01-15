@@ -178,6 +178,26 @@ namespace MCPForUnity.Editor.Services
                     {
                         _currentJobId = null;
                     }
+
+                    // Detect and clean up stale "running" jobs that were orphaned by domain reload.
+                    // After a domain reload, TestRunStatus resets to not-running, but _currentJobId
+                    // may still be set. If the job hasn't been updated recently, it's likely orphaned.
+                    if (!string.IsNullOrEmpty(_currentJobId) && Jobs.TryGetValue(_currentJobId, out var currentJob))
+                    {
+                        if (currentJob.Status == TestJobStatus.Running)
+                        {
+                            long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                            long staleCutoffMs = 5 * 60 * 1000; // 5 minutes
+                            if (now - currentJob.LastUpdateUnixMs > staleCutoffMs)
+                            {
+                                McpLog.Warn($"[TestJobManager] Clearing stale job {_currentJobId} (last update {(now - currentJob.LastUpdateUnixMs) / 1000}s ago)");
+                                currentJob.Status = TestJobStatus.Failed;
+                                currentJob.Error = "Job orphaned after domain reload";
+                                currentJob.FinishedUnixMs = now;
+                                _currentJobId = null;
+                            }
+                        }
+                    }
                 }
             }
             catch (Exception ex)

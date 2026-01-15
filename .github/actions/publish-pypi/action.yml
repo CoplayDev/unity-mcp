@@ -16,6 +16,7 @@ runs:
       working-directory: ./Server
 
     - name: Publish distribution to PyPI
-      uses: pypa/gh-action-pypi-publish@release/v1
+      # Pin to v1.12.4 to avoid Docker container name issue with uppercase repo names in v1.13.0+
+      uses: pypa/gh-action-pypi-publish@v1.12.4
       with:
         packages-dir: Server/dist/

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import time
 from typing import Annotated, Any, Literal
 
 from fastmcp import Context
@@ -14,6 +16,9 @@ from services.tools import get_unity_instance_from_context
 from services.tools.preflight import preflight
 import transport.unity_transport as unity_transport
 from transport.legacy.unity_connection import async_send_command_with_retry
+from utils.focus_nudge import nudge_unity_focus, should_nudge
+
+logger = logging.getLogger(__name__)
 
 
 class RunTestsSummary(BaseModel):
@@ -195,28 +200,48 @@ async def get_test_job(
     if wait_timeout and wait_timeout > 0:
         deadline = asyncio.get_event_loop().time() + wait_timeout
         poll_interval = 2.0  # Poll Unity every 2 seconds
-        
+
         while True:
             response = await _fetch_status()
-            
+
             if not isinstance(response, dict):
                 return MCPResponse(success=False, error=str(response))
-            
+
             if not response.get("success", True):
                 return MCPResponse(**response)
-            
+
             # Check if tests are done
             data = response.get("data", {})
             status = data.get("status", "")
             if status in ("succeeded", "failed", "cancelled"):
                 return GetTestJobResponse(**response)
-            
+
+            # Check if Unity needs a focus nudge to make progress
+            # This handles OS-level throttling (e.g., macOS App Nap) that can
+            # stall PlayMode tests when Unity is in the background.
+            progress = data.get("progress", {})
+            editor_is_focused = progress.get("editor_is_focused", True)
+            last_update_unix_ms = data.get("last_update_unix_ms")
+            current_time_ms = int(time.time() * 1000)
+
+            if should_nudge(
+                status=status,
+                editor_is_focused=editor_is_focused,
+                last_update_unix_ms=last_update_unix_ms,
+                current_time_ms=current_time_ms,
+                stall_threshold_ms=10_000,  # 10 seconds without progress
+            ):
+                logger.info(f"Test job {job_id} appears stalled (unfocused Unity), attempting nudge...")
+                nudged = await nudge_unity_focus(focus_duration_s=0.5)
+                if nudged:
+                    logger.info(f"Test job {job_id} nudge completed")
+
             # Check timeout
             remaining = deadline - asyncio.get_event_loop().time()
             if remaining <= 0:
                 # Timeout reached, return current status
                 return GetTestJobResponse(**response)
-            
+
             # Wait before next poll (but don't exceed remaining time)
             await asyncio.sleep(min(poll_interval, remaining))
     

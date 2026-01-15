@@ -170,5 +170,21 @@ jobs:
           ref: ${{ needs.bump.outputs.tag }}
           fetch-depth: 0
 
-      - name: Build and publish
-        uses: ./.github/actions/publish-pypi
+      # Inlined from .github/actions/publish-pypi to avoid nested composite action issue
+      # with pypa/gh-action-pypi-publish (see https://github.com/pypa/gh-action-pypi-publish/issues/338)
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+          enable-cache: true
+          cache-dependency-glob: "Server/uv.lock"
+
+      - name: Build a binary wheel and a source tarball
+        shell: bash
+        run: uv build
+        working-directory: ./Server
+
+      - name: Publish distribution to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: Server/dist/

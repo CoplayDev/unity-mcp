@@ -178,7 +178,7 @@ All installations require these:
 
 **Need a stable/fixed version?** Use a tagged URL instead (updates require uninstalling and re-installing):
 ```
-https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v8.6.0
+https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v9.0.3
 ```
 
 #### To install via OpenUPM
@@ -205,7 +205,7 @@ HTTP transport is enabled out of the box. The Unity window can launch the FastMC
 You can also start the server yourself from a terminal—useful for CI or when you want to see raw logs:
 
 ```bash
-uvx --from "git+https://github.com/CoplayDev/unity-mcp@v8.6.0#subdirectory=Server" mcp-for-unity --transport http --http-url http://localhost:8080
+uvx --from "git+https://github.com/CoplayDev/unity-mcp@v9.0.3#subdirectory=Server" mcp-for-unity --transport http --http-url http://localhost:8080
 ```
 
 Keep the process running while clients are connected.
@@ -439,8 +439,13 @@ Your privacy matters to us. All telemetry is optional and designed to respect yo
 
 ## Troubleshooting ❓
 
-<details>  
-<summary><strong>Click to view common issues and fixes...</strong></summary>  
+<details>
+<summary><strong>Click to view common issues and fixes...</strong></summary>
+
+- **Focus Permission Request (macOS/Windows/Linux):**
+    - When running PlayMode tests with Unity in the background, MCP for Unity may temporarily switch focus to Unity to prevent OS-level throttling from stalling tests.
+    - On **macOS**, you may be prompted to grant accessibility/automation permissions for your terminal or IDE to control window focus.
+    - This is normal behavior to ensure tests complete reliably when Unity is not the active window.
 
 - **Unity Bridge Not Running/Connecting:**
     - Ensure Unity Editor is open.

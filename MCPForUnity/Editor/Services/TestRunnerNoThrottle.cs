@@ -73,6 +73,17 @@ namespace MCPForUnity.Editor.Services
 
         #endregion
 
+        /// <summary>
+        /// Apply no-throttling preemptively before tests start.
+        /// Call this before Execute() for PlayMode tests to ensure Unity isn't throttled
+        /// during the Play mode transition (before RunStarted fires).
+        /// </summary>
+        public static void ApplyNoThrottlingPreemptive()
+        {
+            SetTestRunActive(true);
+            ApplyNoThrottling();
+        }
+
         private static void ApplyNoThrottling()
         {
             if (!AreSettingsCaptured())
