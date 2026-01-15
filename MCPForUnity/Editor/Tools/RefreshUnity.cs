@@ -94,7 +94,8 @@ namespace MCPForUnity.Editor.Tools
             // The EditorApplication.update polling in WaitForUnityReadyAsync doesn't survive
             // domain reloads properly in Unity 6, causing infinite compilation loops.
             // When compilation is requested, return immediately and let client poll editor_state.
-            if (waitForReady && !compileRequested)
+            bool actuallyWaited = waitForReady && !compileRequested;
+            if (actuallyWaited)
             {
                 try
                 {
@@ -126,7 +127,7 @@ namespace MCPForUnity.Editor.Tools
                 refresh_triggered = refreshTriggered,
                 compile_requested = compileRequested,
                 resulting_state = resultingState,
-                hint = waitForReady
+                hint = actuallyWaited
                     ? "Unity refresh completed; editor should be ready."
                     : "If Unity enters compilation/domain reload, poll editor_state until ready_for_tools is true."
             });
