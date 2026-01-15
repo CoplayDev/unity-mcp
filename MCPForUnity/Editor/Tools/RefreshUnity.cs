@@ -94,7 +94,9 @@ namespace MCPForUnity.Editor.Tools
             {
                 try
                 {
-                    await WaitForUnityReadyAsync(TimeSpan.FromSeconds(DefaultWaitTimeoutSeconds)).ConfigureAwait(true);
+                    await WaitForUnityReadyAsync(
+                        TimeSpan.FromSeconds(DefaultWaitTimeoutSeconds),
+                        allowNudge: !compileRequested).ConfigureAwait(true);
                 }
                 catch (TimeoutException)
                 {
@@ -126,7 +128,7 @@ namespace MCPForUnity.Editor.Tools
             });
         }
 
-        private static Task WaitForUnityReadyAsync(TimeSpan timeout)
+        private static Task WaitForUnityReadyAsync(TimeSpan timeout, bool allowNudge)
         {
             var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             var start = DateTime.UtcNow;
@@ -165,8 +167,11 @@ namespace MCPForUnity.Editor.Tools
             }
 
             EditorApplication.update += Tick;
-            // Nudge Unity to pump once in case update is throttled.
-            try { EditorApplication.QueuePlayerLoopUpdate(); } catch { }
+            if (allowNudge)
+            {
+                // Nudge Unity to pump once in case update is throttled.
+                try { EditorApplication.QueuePlayerLoopUpdate(); } catch { }
+            }
             return tcs.Task;
         }
     }
