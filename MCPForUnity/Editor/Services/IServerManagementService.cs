@@ -36,6 +36,12 @@ namespace MCPForUnity.Editor.Services
         bool IsLocalHttpServerRunning();
 
         /// <summary>
+        /// Fast reachability check: returns true if a local TCP listener is accepting connections
+        /// for the configured local URL/port (used for UI state without process inspection).
+        /// </summary>
+        bool IsLocalHttpServerReachable();
+
+        /// <summary>
         /// Attempts to get the command that will be executed when starting the local HTTP server
         /// </summary>
         /// <param name="command">The command that will be executed when available</param>

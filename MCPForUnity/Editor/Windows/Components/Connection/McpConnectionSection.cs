@@ -482,14 +482,14 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             bool canStartLocalServer = httpLocalSelected && MCPServiceLocator.Server.IsLocalUrl();
             bool localServerRunning = false;
 
-            // Avoid running expensive port/PID checks every UI tick.
+            // Avoid running expensive port/PID checks every UI tick; use a fast socket probe for UI state.
             if (httpLocalSelected)
             {
                 double now = EditorApplication.timeSinceStartup;
                 if ((now - lastLocalServerRunningPollTime) > 0.75f || httpServerToggleInProgress)
                 {
                     lastLocalServerRunningPollTime = now;
-                    lastLocalServerRunning = MCPServiceLocator.Server.IsLocalHttpServerRunning();
+                    lastLocalServerRunning = MCPServiceLocator.Server.IsLocalHttpServerReachable();
                 }
                 localServerRunning = lastLocalServerRunning;
             }
@@ -531,7 +531,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             try
             {
                 // Check if a local server is running.
-                bool serverRunning = IsHttpLocalSelected() && MCPServiceLocator.Server.IsLocalHttpServerRunning();
+            bool serverRunning = IsHttpLocalSelected() && MCPServiceLocator.Server.IsLocalHttpServerReachable();
 
                 if (serverRunning)
                 {
@@ -591,7 +591,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 var delay = attempt < 6 ? shortDelay : longDelay;
 
                 // Check if server is actually accepting connections
-                bool serverDetected = MCPServiceLocator.Server.IsLocalHttpServerRunning();
+                bool serverDetected = MCPServiceLocator.Server.IsLocalHttpServerReachable();
 
                 if (serverDetected)
                 {
