@@ -1,6 +1,6 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
     <Style src="Components/Common.uss" />
-    <Style src="TimelineEditorWindow.uss" />
+    <Style src="ActionTraceEditorWindow.uss" />
 
     <ui:VisualElement name="root-container" class="root-container">
         <!-- 工具栏 -->

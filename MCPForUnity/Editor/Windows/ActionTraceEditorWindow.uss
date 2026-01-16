@@ -149,9 +149,7 @@
     border-bottom-color: #3a3a3a;
 }
 
-.detail-row:last-child {
-    border-bottom-width: 0;
-}
+/* .detail-row:last-child - Unity USS doesn't support :last-child pseudo-class */
 
 /* 详情标签 */
 .detail-label {
@@ -205,12 +203,8 @@
     --unity-list-view-alternating-row-background-color: #3d3d3d;
 }
 
-/* 滚动条样式 */
-.detail-scroll-view::-unity-scroll-view,
-.event-list::-unity-scroll-view {
-    border-right-width: 8px;
-    border-right-color: #1e1e1e;
-}
+/* 滚动条样式 - Unity USS doesn't support ::-unity-scroll-view pseudo-element */
+/* .detail-scroll-view, .event-list scrollbar styling not available in USS */
 
 /* 搜索框样式 */
 ToolbarSearchField {
