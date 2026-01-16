@@ -168,6 +168,43 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     ScheduleInitRetry();
                 }
             };
+
+            // CRITICAL FIX: Stop listener BEFORE domain reload to prevent zombie listeners
+            // Domain reload does NOT trigger EditorApplication.quitting, so we must
+            // explicitly stop here. This prevents the old domain's listener from
+            // remaining bound to the port after the new domain loads.
+            try
+            {
+                var assemblyReloadEventsType = Type.GetType("UnityEditor.AssemblyReloadEvents, UnityEditor");
+                if (assemblyReloadEventsType != null)
+                {
+                    var beforeAssemblyReloadEvent = assemblyReloadEventsType.GetEvent("beforeAssemblyReload");
+                    if (beforeAssemblyReloadEvent != null)
+                    {
+                        beforeAssemblyReloadEvent.AddEventHandler(null, new System.Action(OnBeforeAssemblyReload));
+                        if (IsDebugEnabled())
+                            McpLog.Info("[StdioBridgeHost] Registered beforeAssemblyReload handler");
+                    }
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Called immediately before Unity performs a domain reload (script compilation).
+        /// This is CRITICAL for preventing zombie listeners because EditorApplication.quitting
+        /// is NOT triggered during domain reload.
+        /// </summary>
+        private static void OnBeforeAssemblyReload()
+        {
+            if (IsDebugEnabled())
+                McpLog.Info("[StdioBridgeHost] beforeAssemblyReload: stopping listener to prevent zombie");
+
+            // Mark as reloading in heartbeat status file
+            WriteHeartbeat(true, "domain_reload");
+
+            // Stop the listener BEFORE domain reload
+            Stop();
         }
 
         private static void InitializeAfterCompilation()
@@ -278,6 +315,85 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             return false;
         }
 
+        /// <summary>
+        /// Detects and attempts to cleanup zombie listeners from previous Unity sessions.
+        /// After domain reload, the old listener may still be bound to the port even though
+        /// our static fields are reset. This method probes the port and closes zombie connections.
+        /// </summary>
+        private static void CleanupZombieListeners(int port)
+        {
+            try
+            {
+                // Try to detect if there's a listener on the port that doesn't respond to handshake
+                using (var testClient = new TcpClient())
+                {
+                    try
+                    {
+                        // Try quick connect with short timeout
+                        var connectTask = testClient.ConnectAsync(IPAddress.Loopback, port);
+                        if (connectTask.Wait(500) && testClient.Connected)
+                        {
+                            // Connection succeeded - try to receive handshake
+                            testClient.ReceiveTimeout = 500;
+                            var stream = testClient.GetStream();
+                            byte[] buffer = new byte[256];
+
+                            // Try to read handshake
+                            int bytesRead = stream.Read(buffer, 0, buffer.Length);
+                            string response = System.Text.Encoding.ASCII.GetString(buffer, 0, bytesRead);
+
+                            // If we get the expected handshake, it's a healthy listener
+                            if (response.Contains("FRAMING=1") || response.Contains("WELCOME"))
+                            {
+                                if (IsDebugEnabled())
+                                    McpLog.Info($"[Cleanup] Port {port}: healthy MCP listener detected");
+                                testClient.Close();
+                                return; // Healthy listener, don't cleanup
+                            }
+
+                            // If we get here, connection succeeded but no proper handshake
+                            // This is likely a zombie listener - close the connection
+                            if (IsDebugEnabled())
+                                McpLog.Warn($"[Cleanup] Port {port}: zombie listener detected (no handshake), attempting cleanup");
+
+                            testClient.Close();
+
+                            // Give the zombie listener a moment to release the port
+                            Thread.Sleep(100);
+
+                            // Try a few more times to force the zombie to release
+                            for (int i = 0; i < 5; i++)
+                            {
+                                using (var forceClient = new TcpClient())
+                                {
+                                    try
+                                    {
+                                        if (forceClient.ConnectAsync(IPAddress.Loopback, port).Wait(200))
+                                        {
+                                            forceClient.Close();
+                                        }
+                                    }
+                                    catch { }
+                                }
+                                Thread.Sleep(50);
+                            }
+                        }
+                    }
+                    catch (SocketException)
+                    {
+                        // Port not in use - no cleanup needed
+                        if (IsDebugEnabled())
+                            McpLog.Info($"[Cleanup] Port {port}: not in use");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (IsDebugEnabled())
+                    McpLog.Debug($"[Cleanup] Error during zombie cleanup: {ex.Message}");
+            }
+        }
+
         public static void Start()
         {
             lock (startStopLock)
@@ -293,9 +409,12 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
                 Stop();
 
+                // Get the port and cleanup any zombie listeners before starting
+                currentUnityPort = PortManager.GetPortWithFallback();
+                CleanupZombieListeners(currentUnityPort);
+
                 try
                 {
-                    currentUnityPort = PortManager.GetPortWithFallback();
 
                     LogBreadcrumb("Start");
 
@@ -389,16 +508,17 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         {
             var newListener = new TcpListener(IPAddress.Loopback, port);
 #if !UNITY_EDITOR_OSX
-            newListener.Server.SetSocketOption(
-                SocketOptionLevel.Socket,
-                SocketOptionName.ReuseAddress,
-                true
-            );
+            // NOTE: We do NOT set ReuseAddress=true to prevent zombie listeners from domain reload.
+            // Without SO_REUSEADDRESS, if an old listener is still bound, the new bind will fail
+            // with AddressAlreadyInUse, and the retry logic will wait for the OS to clean up the old socket.
+            // This is safer than allowing multiple listeners on the same port (zombie problem).
+            // macOS still needs ReuseAddress for proper domain reload behavior.
 #endif
 #if UNITY_EDITOR_WIN
             try
             {
-                newListener.ExclusiveAddressUse = false;
+                // Explicitly enable exclusive address use to prevent multiple bindings
+                newListener.ExclusiveAddressUse = true;
             }
             catch { }
 #endif
@@ -440,6 +560,16 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 {
                     McpLog.Error($"Error stopping StdioBridgeHost: {ex.Message}");
                 }
+            }
+
+            // Clear the resume flag when stopping for reasons other than domain reload.
+            // This prevents the UI from getting stuck showing "Resuming..." when a client disconnects.
+            // We skip clearing during assembly reloads since OnBeforeAssemblyReload sets the flag
+            // and OnAfterAssemblyReload expects it to still be set.
+            bool isReloading = EditorApplication.isCompiling;
+            if (!isReloading)
+            {
+                try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeStdioAfterReload); } catch { }
             }
 
             TcpClient[] toClose;

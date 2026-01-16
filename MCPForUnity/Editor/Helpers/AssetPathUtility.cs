@@ -158,8 +158,10 @@ namespace MCPForUnity.Editor.Helpers
         {
             // Check for override first (supports git URLs, file:// paths, local paths)
             string sourceOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
+            McpLog.Info($"[DEBUG] GitUrlOverride key: '{EditorPrefKeys.GitUrlOverride}', value: '{sourceOverride}'");
             if (!string.IsNullOrEmpty(sourceOverride))
             {
+                McpLog.Info($"[DEBUG] Using override: {sourceOverride}");
                 return sourceOverride;
             }
 

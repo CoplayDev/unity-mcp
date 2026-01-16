@@ -1,0 +1,38 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+    <Style src="Components/Common.uss" />
+    <Style src="TimelineEditorWindow.uss" />
+
+    <ui:VisualElement name="root-container" class="root-container">
+        <!-- 工具栏 -->
+        <uie:Toolbar name="toolbar">
+            <uie:ToolbarMenu name="filter-menu" text="Filter" />
+            <uie:ToolbarSearchField name="search-field" />
+            <uie:ToolbarToggle name="importance-toggle" text="Badges" />
+            <uie:ToolbarToggle name="context-toggle" text="Context" />
+            <uie:ToolbarSpacer flex="true" />
+            <uie:ToolbarButton name="settings-button" text="Settings" />
+            <uie:ToolbarButton name="refresh-button" text="Refresh" />
+            <uie:ToolbarButton name="clear-button" text="Clear" />
+        </uie:Toolbar>
+
+        <!-- 主内容区 -->
+        <ui:VisualElement name="main-content" class="main-content">
+            <!-- 事件列表 -->
+            <ui:VisualElement name="event-list-container" class="event-list-container">
+                <ui:ListView name="event-list" class="event-list" />
+            </ui:VisualElement>
+
+            <!-- 详情面板 -->
+            <ui:ScrollView name="detail-scroll-view" class="detail-scroll-view">
+                <ui:Label text="Select an event to view details" class="detail-placeholder" name="detail-placeholder" />
+            </ui:ScrollView>
+        </ui:VisualElement>
+
+        <!-- 状态栏 -->
+        <ui:VisualElement name="status-bar" class="status-bar">
+            <ui:Label name="count-label" class="status-label" />
+            <uie:ToolbarSpacer flex="true" />
+            <ui:Label name="status-label" class="status-label" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

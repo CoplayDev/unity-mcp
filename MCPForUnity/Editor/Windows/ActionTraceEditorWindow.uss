@@ -1,0 +1,236 @@
+/* ========================================
+   Timeline Editor Window Styles
+   Compatible with Unity 2022.3.62+
+   ======================================== */
+
+/* 根容器 */
+.root-container {
+    flex-direction: column;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+/* 主内容区 */
+.main-content {
+    flex-direction: row;
+    flex-grow: 1;
+    padding: 4px;
+    overflow: hidden;
+}
+
+/* 事件列表容器 */
+.event-list-container {
+    flex: 1;
+    min-width: 450px;
+    border-right-width: 1px;
+    border-right-color: #333333;
+    padding-right: 4px;
+    overflow: hidden;
+}
+
+/* 事件列表 */
+.event-list {
+    flex-grow: 1;
+    height: 100%;
+}
+
+/* ListView 样式覆盖 */
+.event-list > .unity-list-view__item {
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    border-bottom-width: 1px;
+    border-bottom-color: #2a2a2a;
+    background-color: #393939;
+    min-height: 32px;
+}
+
+.event-list > .unity-list-view__item:hover {
+    background-color: #474747;
+}
+
+.event-list > .unity-list-view__item.selected {
+    background-color: #485a7c;
+}
+
+.event-list > .unity-list-view__item.selected:hover {
+    background-color: #53668a;
+}
+
+/* 事件项样式 */
+.event-item {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0;
+    border-radius: 3px;
+}
+
+.event-item.has-context {
+    border-left-width: 3px;
+    border-left-color: #4a90e2;
+}
+
+/* 事件时间 */
+.event-time {
+    -unity-font-style: bold;
+    font-size: 11px;
+    color: #999999;
+    min-width: 75px;
+    margin-right: 12px;
+}
+
+/* 事件类型 */
+.event-type {
+    -unity-font-style: bold;
+    font-size: 12px;
+    min-width: 140px;
+    margin-right: 12px;
+    color: #a0c0e0;
+}
+
+/* 事件摘要 */
+.event-summary {
+    flex: 1;
+    font-size: 12px;
+    color: #cccccc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-right: 12px;
+}
+
+/* 重要性徽章 */
+.importance-badge {
+    font-size: 9px;
+    -unity-font-style: bold;
+    padding-left: 6px;
+    padding-right: 6px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+    border-radius: 3px;
+    color: white;
+    min-width: 50px;
+    text-align: center;
+}
+
+/* 详情滚动视图 */
+.detail-scroll-view {
+    flex: 1;
+    min-width: 350px;
+    max-width: 500px;
+    padding-left: 8px;
+    padding-right: 8px;
+    background-color: #2d2d2d;
+    border-left-width: 1px;
+    border-left-color: #333333;
+}
+
+.detail-placeholder {
+    color: #666666;
+    font-size: 14px;
+    text-align: middle-center;
+    padding-top: 50%;
+}
+
+/* 详情容器 */
+.detail-container {
+    flex-direction: column;
+    padding: 12px;
+}
+
+/* 详情行 */
+.detail-row {
+    flex-direction: row;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom-width: 1px;
+    border-bottom-color: #3a3a3a;
+}
+
+.detail-row:last-child {
+    border-bottom-width: 0;
+}
+
+/* 详情标签 */
+.detail-label {
+    -unity-font-style: bold;
+    font-size: 11px;
+    color: #888888;
+    min-width: 100px;
+    margin-right: 12px;
+}
+
+/* 详情值 */
+.detail-value {
+    font-size: 11px;
+    color: #e0e0e0;
+    flex: 1;
+    word-wrap: normal;
+    overflow-wrap: break-word;
+    white-space: normal;
+}
+
+/* 详情标题 */
+.detail-header {
+    -unity-font-style: bold;
+    font-size: 13px;
+    color: #4a90e2;
+    margin-top: 16px;
+    margin-bottom: 12px;
+    padding-bottom: 4px;
+    border-bottom-width: 2px;
+    border-bottom-color: #4a90e2;
+}
+
+/* 状态栏 */
+.status-bar {
+    flex-direction: row;
+    align-items: center;
+    padding: 6px 12px;
+    background-color: #2d2d2d;
+    border-top-width: 1px;
+    border-top-color: #333333;
+    min-height: 24px;
+}
+
+.status-label {
+    font-size: 11px;
+    color: #999999;
+}
+
+/* ListView 交替行背景 */
+.event-list {
+    --unity-list-view-alternating-row-background-color: #3d3d3d;
+}
+
+/* 滚动条样式 */
+.detail-scroll-view::-unity-scroll-view,
+.event-list::-unity-scroll-view {
+    border-right-width: 8px;
+    border-right-color: #1e1e1e;
+}
+
+/* 搜索框样式 */
+ToolbarSearchField {
+    width: 180px;
+    min-width: 150px;
+}
+
+/* Toggle 样式 */
+ToolbarToggle {
+    margin-right: 4px;
+    min-width: 70px;
+}
+
+/* 按钮样式 */
+ToolbarButton {
+    min-width: 70px;
+    margin-left: 4px;
+}
+
+/* 菜单样式 */
+ToolbarMenu {
+    min-width: 70px;
+}
