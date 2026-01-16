@@ -48,15 +48,24 @@ namespace MCPForUnity.Editor.ActionTrace.Core
         public int MergeWindowMs = 100;
 
         /// <summary>
-        /// Maximum number of events to keep in the store.
+        /// Soft limit for number of events to keep in the store.
+        ///
+        /// Actual storage allows up to 1.5x this value as a buffer, allowing
+        /// you to adjust this setting without immediately losing old events.
+        ///
+        /// Example: MaxEvents=800 means:
+        ///   - Normal operation: target ~800 events
+        ///   - Hard limit: trims at 1200 events
+        ///   - Estimated size: ~240 KB at 800 events
         /// </summary>
-        public int MaxEvents = 1000;
+        public int MaxEvents = 800;
 
         /// <summary>
         /// Number of "hot" events to keep with full payload.
-        /// Older events are dehydrated (payload = null).
+        /// Older events are dehydrated (payload = null) to save space.
+        /// Recommended: 10-20% of MaxEvents.
         /// </summary>
-        public int HotEventCount = 100;
+        public int HotEventCount = 150;
 
         /// <summary>
         /// Enable event merging for high-frequency events.
