@@ -75,7 +75,7 @@ def _coerce_int_list(value) -> list[int] | None:
 )
 async def add_action_trace_note(
     ctx: Context,
-    note: Annotated[str, "The note text to record. Should be concise and informative (e.g., '完成玩家移动系统的重构，速度从 5 提升到 8')."],
+    note: Annotated[str, "The note text to record. Should be concise and informative (e.g., 'Completed player movement system refactor, increased speed from 5 to 8')."],
     intent: Annotated[str, "The intent/category of the note (e.g., 'refactoring', 'bugfix', 'feature', 'optimization')."] | None = None,
     agent_id: Annotated[str, "Identifier for the AI agent writing the note (e.g., 'claude-opus-4.5', 'gpt-4'). Defaults to 'unknown'."] | None = None,
     agent_model: Annotated[str, "Model version (optional, for detailed tracking)."] | None = None,
@@ -99,10 +99,10 @@ async def add_action_trace_note(
     - If context is empty, new IDs will be auto-generated
 
     Use Cases:
-    1. Task completion: "完成玩家移动系统的重构，速度从 5 提升到 8"
-    2. Decision recording: "决定使用对象池模式来管理子弹实例"
-    3. Bug explanation: "修复了光照贴图在运行时未更新的问题"
-    4. Design rationale: "使用 State Machine 而非简单枚举，方便扩展新状态"
+    1. Task completion: "Completed player movement system refactor, speed increased from 5 to 8"
+    2. Decision recording: "Decided to use object pool pattern for bullet management"
+    3. Bug explanation: "Fixed lightmap not updating at runtime issue"
+    4. Design rationale: "Using State Machine instead of simple enum for easier state extension"
 
     Returns:
         Success response with recorded sequence number and metadata.
@@ -167,8 +167,8 @@ def set_task_context(task_id: str, conversation_id: str = "") -> None:
         set_task_context("refactor-player", "session-2024-01-15")
 
         # All subsequent notes will automatically use these IDs
-        await add_action_trace_note(ctx, note="第一步：修改 PlayerController")
-        await add_action_trace_note(ctx, note="第二步：提升移动速度到 8")
+        await add_action_trace_note(ctx, note="Step 1: Modified PlayerController")
+        await add_action_trace_note(ctx, note="Step 2: Increased movement speed to 8")
         ```
     """
     _current_task_id.set(task_id)

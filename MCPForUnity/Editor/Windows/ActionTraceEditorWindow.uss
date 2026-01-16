@@ -3,14 +3,12 @@
    Compatible with Unity 2022.3.62+
    ======================================== */
 
-/* 根容器 */
 .root-container {
     flex-direction: column;
     flex-grow: 1;
     overflow: hidden;
 }
 
-/* 主内容区 */
 .main-content {
     flex-direction: row;
     flex-grow: 1;
@@ -18,7 +16,6 @@
     overflow: hidden;
 }
 
-/* 事件列表容器 */
 .event-list-container {
     flex: 1;
     min-width: 450px;
@@ -28,13 +25,11 @@
     overflow: hidden;
 }
 
-/* 事件列表 */
 .event-list {
     flex-grow: 1;
     height: 100%;
 }
 
-/* ListView 样式覆盖 */
 .event-list > .unity-list-view__item {
     padding-left: 8px;
     padding-right: 8px;
@@ -58,7 +53,6 @@
     background-color: #53668a;
 }
 
-/* 事件项样式 */
 .event-item {
     flex-direction: row;
     align-items: center;
@@ -72,7 +66,6 @@
     border-left-color: #4a90e2;
 }
 
-/* 事件时间 */
 .event-time {
     -unity-font-style: bold;
     font-size: 11px;
@@ -81,7 +74,6 @@
     margin-right: 12px;
 }
 
-/* 事件类型 */
 .event-type {
     -unity-font-style: bold;
     font-size: 12px;
@@ -90,7 +82,6 @@
     color: #a0c0e0;
 }
 
-/* 事件摘要 */
 .event-summary {
     flex: 1;
     font-size: 12px;
@@ -101,7 +92,6 @@
     margin-right: 12px;
 }
 
-/* 重要性徽章 */
 .importance-badge {
     font-size: 9px;
     -unity-font-style: bold;
@@ -115,7 +105,6 @@
     text-align: center;
 }
 
-/* 详情滚动视图 */
 .detail-scroll-view {
     flex: 1;
     min-width: 350px;
@@ -134,13 +123,11 @@
     padding-top: 50%;
 }
 
-/* 详情容器 */
 .detail-container {
     flex-direction: column;
     padding: 12px;
 }
 
-/* 详情行 */
 .detail-row {
     flex-direction: row;
     margin-bottom: 10px;
@@ -149,9 +136,6 @@
     border-bottom-color: #3a3a3a;
 }
 
-/* .detail-row:last-child - Unity USS doesn't support :last-child pseudo-class */
-
-/* 详情标签 */
 .detail-label {
     -unity-font-style: bold;
     font-size: 11px;
@@ -160,7 +144,6 @@
     margin-right: 12px;
 }
 
-/* 详情值 */
 .detail-value {
     font-size: 11px;
     color: #e0e0e0;
@@ -170,7 +153,6 @@
     white-space: normal;
 }
 
-/* 详情标题 */
 .detail-header {
     -unity-font-style: bold;
     font-size: 13px;
@@ -182,7 +164,6 @@
     border-bottom-color: #4a90e2;
 }
 
-/* 状态栏 */
 .status-bar {
     flex-direction: row;
     align-items: center;
@@ -198,33 +179,26 @@
     color: #999999;
 }
 
-/* ListView 交替行背景 */
 .event-list {
     --unity-list-view-alternating-row-background-color: #3d3d3d;
 }
 
-/* 滚动条样式 - Unity USS doesn't support ::-unity-scroll-view pseudo-element */
-/* .detail-scroll-view, .event-list scrollbar styling not available in USS */
 
-/* 搜索框样式 */
 ToolbarSearchField {
     width: 180px;
     min-width: 150px;
 }
 
-/* Toggle 样式 */
 ToolbarToggle {
     margin-right: 4px;
     min-width: 70px;
 }
 
-/* 按钮样式 */
 ToolbarButton {
     min-width: 70px;
     margin-left: 4px;
 }
 
-/* 菜单样式 */
 ToolbarMenu {
     min-width: 70px;
 }
