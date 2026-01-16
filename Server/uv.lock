@@ -915,6 +915,7 @@ name = "mcpforunityserver"
 version = "9.0.3"
 source = { editable = "." }
 dependencies = [
+    { name = "click" },
     { name = "fastapi" },
     { name = "fastmcp" },
     { name = "httpx" },
@@ -933,6 +934,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "click", specifier = ">=8.1.0" },
     { name = "fastapi", specifier = ">=0.104.0" },
     { name = "fastmcp", specifier = "==2.14.1" },
     { name = "httpx", specifier = ">=0.27.2" },
