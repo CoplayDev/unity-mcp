@@ -183,3 +183,80 @@ async def test_read_console_paging(monkeypatch):
     assert len(resp["data"]["items"]) == 5
     assert resp["data"]["truncated"] is False
     assert resp["data"]["nextCursor"] is None
+
+
+@pytest.mark.asyncio
+async def test_read_console_types_json_string(monkeypatch):
+    """Test that read_console handles types parameter as JSON string (fixes issue #561)."""
+    tools = setup_tools()
+    read_console = tools["read_console"]
+
+    captured = {}
+
+    async def fake_send_with_unity_instance(_send_fn, _unity_instance, _command_type, params, **_kwargs):
+        captured["params"] = params
+        return {
+            "success": True,
+            "data": {"lines": [{"level": "error", "message": "test error"}]},
+        }
+
+    import services.tools.read_console as read_console_mod
+    monkeypatch.setattr(
+        read_console_mod,
+        "send_with_unity_instance",
+        fake_send_with_unity_instance,
+    )
+
+    # Test with types as JSON string (the problematic case from issue #561)
+    resp = await read_console(ctx=DummyContext(), action="get", types='["error", "warning", "all"]')
+    assert resp["success"] is True
+    # Verify types was parsed correctly and sent as a list
+    assert isinstance(captured["params"]["types"], list)
+    assert captured["params"]["types"] == ["error", "warning", "all"]
+    
+    # Test case normalization to lowercase
+    captured.clear()
+    resp = await read_console(ctx=DummyContext(), action="get", types='["ERROR", "Warning", "LOG"]')
+    assert resp["success"] is True
+    assert captured["params"]["types"] == ["error", "warning", "log"]
+
+    # Test with types as actual list (should still work)
+    captured.clear()
+    resp = await read_console(ctx=DummyContext(), action="get", types=["error", "warning"])
+    assert resp["success"] is True
+    assert isinstance(captured["params"]["types"], list)
+    assert captured["params"]["types"] == ["error", "warning"]
+
+
+@pytest.mark.asyncio
+async def test_read_console_types_validation(monkeypatch):
+    """Test that read_console validates types entries and rejects invalid values."""
+    tools = setup_tools()
+    read_console = tools["read_console"]
+
+    captured = {}
+
+    async def fake_send_with_unity_instance(_send_fn, _unity_instance, _command_type, params, **_kwargs):
+        captured["params"] = params
+        return {"success": True, "data": {"lines": []}}
+
+    import services.tools.read_console as read_console_mod
+    monkeypatch.setattr(
+        read_console_mod,
+        "send_with_unity_instance",
+        fake_send_with_unity_instance,
+    )
+
+    # Invalid entry in list should return a clear error and not send.
+    captured.clear()
+    resp = await read_console(ctx=DummyContext(), action="get", types='["error", "nope"]')
+    assert resp["success"] is False
+    assert "invalid types entry" in resp["message"]
+    assert captured == {}
+
+    # Non-string entry should return a clear error and not send.
+    captured.clear()
+    resp = await read_console(ctx=DummyContext(), action="get", types='[1, "error"]')
+    assert resp["success"] is False
+    assert "types entries must be strings" in resp["message"]
+    assert captured == {}

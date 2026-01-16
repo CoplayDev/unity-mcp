@@ -34,7 +34,7 @@ jobs:
         run: |
           set -e
           if [ -n "$ANTHROPIC_API_KEY" ]; then echo "anthropic_ok=true" >> "$GITHUB_OUTPUT"; else echo "anthropic_ok=false" >> "$GITHUB_OUTPUT"; fi
-          if [ -n "$UNITY_LICENSE" ] || { [ -n "$UNITY_EMAIL" ] && [ -n "$UNITY_PASSWORD" ]; }; then
+          if [ -n "$UNITY_LICENSE" ] || { [ -n "$UNITY_EMAIL" ] && [ -n "$UNITY_PASSWORD" ] && [ -n "$UNITY_SERIAL" ]; }; then
             echo "unity_ok=true" >> "$GITHUB_OUTPUT"
           else
             echo "unity_ok=false" >> "$GITHUB_OUTPUT"
@@ -76,7 +76,7 @@ jobs:
           set -eu
           use_ulf=false; use_ebl=false
           [[ -n "${UNITY_LICENSE:-}" ]] && use_ulf=true
-          [[ -n "${UNITY_EMAIL:-}" && -n "${UNITY_PASSWORD:-}" ]] && use_ebl=true
+          [[ -n "${UNITY_EMAIL:-}" && -n "${UNITY_PASSWORD:-}" && -n "${UNITY_SERIAL:-}" ]] && use_ebl=true
           echo "use_ulf=$use_ulf" >> "$GITHUB_OUTPUT"
           echo "use_ebl=$use_ebl" >> "$GITHUB_OUTPUT"
           echo "has_serial=$([[ -n "${UNITY_SERIAL:-}" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
@@ -97,16 +97,20 @@ jobs:
             printf "%s" "$UNITY_LICENSE" > "$f"
           fi
           chmod 600 "$f" || true
-          # If someone pasted an entitlement XML into UNITY_LICENSE by mistake, re-home it:
-          if head -c 100 "$f" | grep -qi '<\?xml'; then
-            mkdir -p "$RUNNER_TEMP/unity-config/Unity/licenses"
-            mv "$f" "$RUNNER_TEMP/unity-config/Unity/licenses/UnityEntitlementLicense.xml"
-            echo "ok=false" >> "$GITHUB_OUTPUT"
-          elif grep -qi '<Signature>' "$f"; then
+          # Detect ULF first; it is XML and includes a <Signature> element.
+          if grep -qi '<Signature>' "$f"; then
             # provide it in the standard local-share path too
             cp -f "$f" "$RUNNER_TEMP/unity-local/Unity/Unity_lic.ulf"
+            echo "License source: ULF (Signature found)"
             echo "ok=true" >> "$GITHUB_OUTPUT"
+          # If someone pasted an entitlement XML into UNITY_LICENSE by mistake, re-home it:
+          elif grep -qi 'Entitlement|entitlement' "$f"; then
+            mkdir -p "$RUNNER_TEMP/unity-config/Unity/licenses"
+            mv "$f" "$RUNNER_TEMP/unity-config/Unity/licenses/UnityEntitlementLicense.xml"
+            echo "License source: Entitlement XML (re-homed)"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
           else
+            echo "License source: Unknown format (no ULF Signature or Entitlement markers)"
             echo "ok=false" >> "$GITHUB_OUTPUT"
           fi
 

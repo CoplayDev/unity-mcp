@@ -8,7 +8,7 @@ from mcp.types import ToolAnnotations
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
-from services.tools.utils import coerce_int, coerce_bool
+from services.tools.utils import coerce_int, coerce_bool, parse_json_payload
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 
@@ -31,7 +31,8 @@ async def read_console(
     action: Annotated[Literal['get', 'clear'],
                       "Get or clear the Unity Editor console. Defaults to 'get' if omitted."] | None = None,
     types: Annotated[list[Literal['error', 'warning',
-                                  'log', 'all']], "Message types to get"] | None = None,
+                                  'log', 'all']] | str,
+                     "Message types to get (accepts list or JSON string)"] | None = None,
     count: Annotated[int | str,
                      "Max messages to return in non-paging mode (accepts int or string, e.g., 5 or '5'). Ignored when paging with page_size/cursor."] | None = None,
     filter_text: Annotated[str, "Text filter for messages"] | None = None,
@@ -51,7 +52,42 @@ async def read_console(
     unity_instance = get_unity_instance_from_context(ctx)
     # Set defaults if values are None
     action = action if action is not None else 'get'
-    types = types if types is not None else ['error', 'warning', 'log']
+    
+    # Parse types if it's a JSON string (handles client compatibility issue #561)
+    if isinstance(types, str):
+        types = parse_json_payload(types)
+    # Validate types is a list after parsing
+    if types is not None and not isinstance(types, list):
+        return {
+            "success": False,
+            "message": (
+                f"types must be a list, got {type(types).__name__}. "
+                "If passing as JSON string, use format: '[\"error\", \"warning\"]'"
+            )
+        }
+    if types is not None:
+        allowed_types = {"error", "warning", "log", "all"}
+        normalized_types = []
+        for entry in types:
+            if not isinstance(entry, str):
+                return {
+                    "success": False,
+                    "message": f"types entries must be strings, got {type(entry).__name__}"
+                }
+            normalized = entry.strip().lower()
+            if normalized not in allowed_types:
+                return {
+                    "success": False,
+                    "message": (
+                        f"invalid types entry '{entry}'. "
+                        f"Allowed values: {sorted(allowed_types)}"
+                    )
+                }
+            normalized_types.append(normalized)
+        types = normalized_types
+    else:
+        types = ['error', 'warning', 'log']
+    
     format = format if format is not None else 'plain'
     # Coerce booleans defensively (strings like 'true'/'false')
 
