@@ -60,5 +60,18 @@ namespace MCPForUnity.Editor.Services
         /// Gets whether a Claude CLI path override is active
         /// </summary>
         bool HasClaudeCliPathOverride { get; }
+
+        /// <summary>
+        /// Gets whether the uvx path used a fallback from override to system path
+        /// </summary>
+        bool HasUvxPathFallback { get; }
+
+        /// <summary>
+        /// Validates the provided uv executable by running "--version" and parsing the output.
+        /// </summary>
+        /// <param name="uvPath">Absolute or relative path to the uv/uvx executable.</param>
+        /// <param name="version">Parsed version string if successful.</param>
+        /// <returns>True when the executable runs and returns a uv version string.</returns>
+        bool TryValidateUvxExecutable(string uvPath, out string version);
     }
 }

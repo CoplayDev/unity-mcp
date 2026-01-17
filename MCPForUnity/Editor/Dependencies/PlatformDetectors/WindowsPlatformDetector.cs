@@ -1,9 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Dependencies.Models;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Services;
 
 namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 {
@@ -96,6 +100,58 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 3. MCP Server: Will be installed automatically by MCP for Unity Bridge";
         }
 
+        public override DependencyStatus DetectUv()
+        {
+            // First, honor overrides and cross-platform resolution via the base implementation
+            var status = base.DetectUv();
+            if (status.IsAvailable)
+            {
+                return status;
+            }
+
+            // If the user configured an override path but fallback was not used, keep the base result
+            // (failure typically means the override path is invalid and no system fallback found)
+            if (MCPServiceLocator.Paths.HasUvxPathOverride && !MCPServiceLocator.Paths.HasUvxPathFallback)
+            {
+                return status;
+            }
+
+            try
+            {
+                string augmentedPath = BuildAugmentedPath();
+
+                // try to find uv
+                if (TryValidateUvWithPath("uv.exe", augmentedPath, out string uvVersion, out string uvPath))
+                {
+                    status.IsAvailable = true;
+                    status.Version = uvVersion;
+                    status.Path = uvPath;
+                    status.Details = $"Found uv {uvVersion} at {uvPath}";
+                    return status;
+                }
+
+                // try to find uvx
+                if (TryValidateUvWithPath("uvx.exe", augmentedPath, out string uvxVersion, out string uvxPath))
+                {
+                    status.IsAvailable = true;
+                    status.Version = uvxVersion;
+                    status.Path = uvxPath;
+                    status.Details = $"Found uvx {uvxVersion} at {uvxPath} (fallback)";
+                    return status;
+                }
+
+                status.ErrorMessage = "uv not found in PATH";
+                status.Details = "Install uv package manager and ensure it's added to PATH.";
+            }
+            catch (Exception ex)
+            {
+                status.ErrorMessage = $"Error detecting uv: {ex.Message}";
+            }
+
+            return status;
+        }
+
+
         private bool TryFindPythonViaUv(out string version, out string fullPath)
         {
             version = null;
@@ -103,44 +159,26 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
             try
             {
-                var psi = new ProcessStartInfo
+                string augmentedPath = BuildAugmentedPath();
+                // Try to list installed python versions via uvx
+                if (!ExecPath.TryRun("uv", "python list", null, out string stdout, out string stderr, 5000, augmentedPath))
+                    return false;
+
+                var lines = stdout.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var line in lines)
                 {
-                    FileName = "uv", // Assume uv is in path or user can't use this fallback
-                    Arguments = "python list",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
+                    if (line.Contains("<download available>")) continue;
 
-                using var process = Process.Start(psi);
-                if (process == null) return false;
-
-                string output = process.StandardOutput.ReadToEnd();
-                process.WaitForExit(5000);
-
-                if (process.ExitCode == 0 && !string.IsNullOrEmpty(output))
-                {
-                    var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                    foreach (var line in lines)
+                    var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length >= 2)
                     {
-                        // Look for installed python paths
-                        // Format is typically: <version> <path>
-                        // Skip lines with "<download available>"
-                        if (line.Contains("<download available>")) continue;
-
-                        // The path is typically the last part of the line
-                        var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                        if (parts.Length >= 2)
+                        string potentialPath = parts[parts.Length - 1];
+                        if (File.Exists(potentialPath) &&
+                            (potentialPath.EndsWith("python.exe") || potentialPath.EndsWith("python3.exe")))
                         {
-                            string potentialPath = parts[parts.Length - 1];
-                            if (File.Exists(potentialPath) && 
-                                (potentialPath.EndsWith("python.exe") || potentialPath.EndsWith("python3.exe")))
+                            if (TryValidatePython(potentialPath, out version, out fullPath))
                             {
-                                if (TryValidatePython(potentialPath, out version, out fullPath))
-                                {
-                                    return true;
-                                }
+                                return true;
                             }
                         }
                     }
@@ -161,31 +199,29 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
             try
             {
-                var psi = new ProcessStartInfo
+                string augmentedPath = BuildAugmentedPath();
+
+                // First, try to resolve the absolute path for better UI/logging display
+                string commandToRun = pythonPath;
+                if (TryFindInPath(pythonPath, out string resolvedPath))
                 {
-                    FileName = pythonPath,
-                    Arguments = "--version",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
+                    commandToRun = resolvedPath;
+                }
 
-                using var process = Process.Start(psi);
-                if (process == null) return false;
+                // Run 'python --version' to get the version
+                if (!ExecPath.TryRun(commandToRun, "--version", null, out string stdout, out string stderr, 5000, augmentedPath))
+                    return false;
 
-                string output = process.StandardOutput.ReadToEnd().Trim();
-                process.WaitForExit(5000);
-
-                if (process.ExitCode == 0 && output.StartsWith("Python "))
+                // Check stdout first, then stderr (some Python distributions output to stderr)
+                string output = !string.IsNullOrWhiteSpace(stdout) ? stdout.Trim() : stderr.Trim();
+                if (output.StartsWith("Python "))
                 {
-                    version = output.Substring(7); // Remove "Python " prefix
-                    fullPath = pythonPath;
+                    version = output.Substring(7);
+                    fullPath = commandToRun;
 
-                    // Validate minimum version (Python 4+ or Python 3.10+)
                     if (TryParseVersion(version, out var major, out var minor))
                     {
-                        return major > 3 || (major >= 3 && minor >= 10);
+                        return major > 3 || (major == 3 && minor >= 10);
                     }
                 }
             }
@@ -197,45 +233,65 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             return false;
         }
 
-        private bool TryFindInPath(string executable, out string fullPath)
+        protected override bool TryFindInPath(string executable, out string fullPath)
         {
-            fullPath = null;
+            fullPath = ExecPath.FindInPath(executable, BuildAugmentedPath());
+            return !string.IsNullOrEmpty(fullPath);
+        }
 
-            try
+        protected string BuildAugmentedPath()
+        {
+            var additions = GetPathAdditions();
+            if (additions.Length == 0) return null;
+
+            // Only return the additions - ExecPath.TryRun will prepend to existing PATH
+            return string.Join(Path.PathSeparator, additions);
+        }
+
+        private string[] GetPathAdditions()
+        {
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+            var additions = new List<string>();
+
+            // uv common installation paths
+            if (!string.IsNullOrEmpty(localAppData))
+                additions.Add(Path.Combine(localAppData, "Programs", "uv"));
+            if (!string.IsNullOrEmpty(programFiles))
+                additions.Add(Path.Combine(programFiles, "uv"));
+
+            // npm global paths
+            if (!string.IsNullOrEmpty(appData))
+                additions.Add(Path.Combine(appData, "npm"));
+            if (!string.IsNullOrEmpty(localAppData))
+                additions.Add(Path.Combine(localAppData, "npm"));
+
+            // Python common paths
+            if (!string.IsNullOrEmpty(localAppData))
+                additions.Add(Path.Combine(localAppData, "Programs", "Python"));
+            // Instead of hardcoded versions, enumerate existing directories
+            if (!string.IsNullOrEmpty(programFiles))
             {
-                var psi = new ProcessStartInfo
+                try
                 {
-                    FileName = "where",
-                    Arguments = executable,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
-
-                using var process = Process.Start(psi);
-                if (process == null) return false;
-
-                string output = process.StandardOutput.ReadToEnd().Trim();
-                process.WaitForExit(3000);
-
-                if (process.ExitCode == 0 && !string.IsNullOrEmpty(output))
-                {
-                    // Take the first result
-                    var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                    if (lines.Length > 0)
+                    var pythonDirs = Directory.GetDirectories(programFiles, "Python3*")
+                        .OrderByDescending(d => d); // Newest first
+                    foreach (var dir in pythonDirs)
                     {
-                        fullPath = lines[0].Trim();
-                        return File.Exists(fullPath);
+                        additions.Add(dir);
                     }
                 }
-            }
-            catch
-            {
-                // Ignore errors
+                catch { /* Ignore if directory doesn't exist */ }
             }
 
-            return false;
+            // User scripts
+            if (!string.IsNullOrEmpty(homeDir))
+                additions.Add(Path.Combine(homeDir, ".local", "bin"));
+
+            return additions.ToArray();
         }
     }
 }

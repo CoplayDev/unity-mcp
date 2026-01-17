@@ -2,8 +2,10 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Dependencies.Models;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Services;
 
 namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 {
@@ -90,36 +92,34 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
 
         public override DependencyStatus DetectUv()
         {
-            var status = new DependencyStatus("uv Package Manager", isRequired: true)
+            // First, honor overrides and cross-platform resolution via the base implementation
+            var status = base.DetectUv();
+            if (status.IsAvailable)
             {
-                InstallationHint = GetUvInstallUrl()
-            };
+                return status;
+            }
+
+            // If the user configured an override path but fallback was not used, keep the base result
+            // (failure typically means the override path is invalid and no system fallback found)
+            if (MCPServiceLocator.Paths.HasUvxPathOverride && !MCPServiceLocator.Paths.HasUvxPathFallback)
+            {
+                return status;
+            }
 
             try
             {
-                // Try running uv/uvx directly with augmented PATH
-                if (TryValidateUv("uv", out string version, out string fullPath) ||
-                    TryValidateUv("uvx", out version, out fullPath))
+                string augmentedPath = BuildAugmentedPath();
+
+                // Try uv first, then uvx, using ExecPath.TryRun for proper timeout handling
+                if (TryValidateUvWithPath("uv", augmentedPath, out string version, out string fullPath) ||
+                    TryValidateUvWithPath("uvx", augmentedPath, out version, out fullPath))
                 {
                     status.IsAvailable = true;
                     status.Version = version;
                     status.Path = fullPath;
                     status.Details = $"Found uv {version} in PATH";
+                    status.ErrorMessage = null;
                     return status;
-                }
-
-                // Fallback: use which with augmented PATH
-                if (TryFindInPath("uv", out string pathResult) ||
-                    TryFindInPath("uvx", out pathResult))
-                {
-                    if (TryValidateUv(pathResult, out version, out fullPath))
-                    {
-                        status.IsAvailable = true;
-                        status.Version = version;
-                        status.Path = fullPath;
-                        status.Details = $"Found uv {version} in PATH";
-                        return status;
-                    }
                 }
 
                 status.ErrorMessage = "uv not found in PATH";
@@ -140,44 +140,29 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
 
             try
             {
-                var psi = new ProcessStartInfo
+                string augmentedPath = BuildAugmentedPath();
+
+                // First, try to resolve the absolute path for better UI/logging display
+                string commandToRun = pythonPath;
+                if (TryFindInPath(pythonPath, out string resolvedPath))
                 {
-                    FileName = pythonPath,
-                    Arguments = "--version",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
+                    commandToRun = resolvedPath;
+                }
 
-                // Set PATH to include common locations
-                var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                var pathAdditions = new[]
+                if (!ExecPath.TryRun(commandToRun, "--version", null, out string stdout, out string stderr,
+                    5000, augmentedPath))
+                    return false;
+
+                // Check stdout first, then stderr (some Python distributions output to stderr)
+                string output = !string.IsNullOrWhiteSpace(stdout) ? stdout.Trim() : stderr.Trim();
+                if (output.StartsWith("Python "))
                 {
-                    "/opt/homebrew/bin",
-                    "/usr/local/bin",
-                    "/usr/bin",
-                    Path.Combine(homeDir, ".local", "bin")
-                };
+                    version = output.Substring(7);
+                    fullPath = commandToRun;
 
-                string currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
-                psi.EnvironmentVariables["PATH"] = string.Join(":", pathAdditions) + ":" + currentPath;
-
-                using var process = Process.Start(psi);
-                if (process == null) return false;
-
-                string output = process.StandardOutput.ReadToEnd().Trim();
-                process.WaitForExit(5000);
-
-                if (process.ExitCode == 0 && output.StartsWith("Python "))
-                {
-                    version = output.Substring(7); // Remove "Python " prefix
-                    fullPath = pythonPath;
-
-                    // Validate minimum version (Python 4+ or Python 3.10+)
                     if (TryParseVersion(version, out var major, out var minor))
                     {
-                        return major > 3 || (major >= 3 && minor >= 10);
+                        return major > 3 || (major == 3 && minor >= 10);
                     }
                 }
             }
@@ -189,52 +174,13 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
             return false;
         }
 
-        private bool TryValidateUv(string uvPath, out string version, out string fullPath)
+        protected string BuildAugmentedPath()
         {
-            version = null;
-            fullPath = null;
+            var additions = GetPathAdditions();
+            if (additions.Length == 0) return null;
 
-            try
-            {
-                var psi = new ProcessStartInfo
-                {
-                    FileName = uvPath,
-                    Arguments = "--version",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
-
-                var augmentedPath = BuildAugmentedPath();
-                psi.EnvironmentVariables["PATH"] = augmentedPath;
-
-                using var process = Process.Start(psi);
-                if (process == null) return false;
-
-                string output = process.StandardOutput.ReadToEnd().Trim();
-                process.WaitForExit(5000);
-
-                if (process.ExitCode == 0 && output.StartsWith("uv "))
-                {
-                    version = output.Substring(3).Trim();
-                    fullPath = uvPath;
-                    return true;
-                }
-            }
-            catch
-            {
-                // Ignore validation errors
-            }
-
-            return false;
-        }
-
-        private string BuildAugmentedPath()
-        {
-            var pathAdditions = GetPathAdditions();
-            string currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
-            return string.Join(":", pathAdditions) + ":" + currentPath;
+            // Only return the additions - ExecPath.TryRun will prepend to existing PATH
+            return string.Join(Path.PathSeparator, additions);
         }
 
         private string[] GetPathAdditions()
@@ -250,54 +196,10 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
             };
         }
 
-        private bool TryFindInPath(string executable, out string fullPath)
+        protected override bool TryFindInPath(string executable, out string fullPath)
         {
-            fullPath = null;
-
-            try
-            {
-                var psi = new ProcessStartInfo
-                {
-                    FileName = "/usr/bin/which",
-                    Arguments = executable,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
-
-                // Enhance PATH for Unity's GUI environment
-                var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                var pathAdditions = new[]
-                {
-                    "/opt/homebrew/bin",
-                    "/usr/local/bin",
-                    "/usr/bin",
-                    "/bin",
-                    Path.Combine(homeDir, ".local", "bin")
-                };
-
-                string currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
-                psi.EnvironmentVariables["PATH"] = string.Join(":", pathAdditions) + ":" + currentPath;
-
-                using var process = Process.Start(psi);
-                if (process == null) return false;
-
-                string output = process.StandardOutput.ReadToEnd().Trim();
-                process.WaitForExit(3000);
-
-                if (process.ExitCode == 0 && !string.IsNullOrEmpty(output) && File.Exists(output))
-                {
-                    fullPath = output;
-                    return true;
-                }
-            }
-            catch
-            {
-                // Ignore errors
-            }
-
-            return false;
+            fullPath = ExecPath.FindInPath(executable, BuildAugmentedPath());
+            return !string.IsNullOrEmpty(fullPath);
         }
     }
 }
