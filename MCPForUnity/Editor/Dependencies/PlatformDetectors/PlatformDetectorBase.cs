@@ -63,16 +63,6 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             return status;
         }
 
-        public string GetDetails(DependencyStatus status)
-        {
-            if(status.IsAvailable)
-            {
-                return "Using override uvx path.";
-            }
-            
-            return "Using system uvx path.";
-        }
-
 
         protected bool TryParseVersion(string version, out int major, out int minor)
         {
