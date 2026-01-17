@@ -134,8 +134,9 @@ namespace MCPForUnity.Editor.ActionTrace.Core
                     new GUIContent("Storage Settings", "Controls event storage and memory management"));
 
                 EditorGUILayout.HelpBox(
-                    $"MaxEvents: Soft limit target (allows 1.5x buffer)\n" +
-                    $"HotEventCount: Events with full payload\n" +
+                    $"MaxEvents: Soft limit (hard limit = MaxEvents × 2, range: 100-5000)\n" +
+                    $"HotEventCount: Events kept in memory with full payload\n" +
+                    $"ContextMappings: MaxEvents × 2 (e.g., 800→1600, 5000→10000)\n" +
                     $"Est. Memory: {settings.GetEstimatedMemoryUsageString()}",
                     MessageType.None);
             }

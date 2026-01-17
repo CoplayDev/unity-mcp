@@ -57,6 +57,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private static int mainThreadId;
         private static int currentUnityPort = 6400;
         private static bool isAutoConnectMode = false;
+        private static volatile bool _isReloading = false;  // Explicit flag for domain reload state
         private const ulong MaxFrameBytes = 64UL * 1024 * 1024;
         private const int FrameIOTimeoutMs = 30000;
 
@@ -200,11 +201,16 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             if (IsDebugEnabled())
                 McpLog.Info("[StdioBridgeHost] beforeAssemblyReload: stopping listener to prevent zombie");
 
-            // Mark as reloading in heartbeat status file
-            WriteHeartbeat(true, "domain_reload");
+            // Set explicit reload flag BEFORE calling Stop()
+            // This ensures Stop() knows we're in a domain reload, even if
+            // EditorApplication.isCompiling isn't true yet (timing issue)
+            _isReloading = true;
 
             // Stop the listener BEFORE domain reload
             Stop();
+
+            // Write heartbeat status AFTER Stop() so it won't be immediately deleted
+            WriteHeartbeat(true, "domain_reload");
         }
 
         private static void InitializeAfterCompilation()
@@ -315,85 +321,6 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             return false;
         }
 
-        /// <summary>
-        /// Detects and attempts to cleanup zombie listeners from previous Unity sessions.
-        /// After domain reload, the old listener may still be bound to the port even though
-        /// our static fields are reset. This method probes the port and closes zombie connections.
-        /// </summary>
-        private static void CleanupZombieListeners(int port)
-        {
-            try
-            {
-                // Try to detect if there's a listener on the port that doesn't respond to handshake
-                using (var testClient = new TcpClient())
-                {
-                    try
-                    {
-                        // Try quick connect with short timeout
-                        var connectTask = testClient.ConnectAsync(IPAddress.Loopback, port);
-                        if (connectTask.Wait(500) && testClient.Connected)
-                        {
-                            // Connection succeeded - try to receive handshake
-                            testClient.ReceiveTimeout = 500;
-                            var stream = testClient.GetStream();
-                            byte[] buffer = new byte[256];
-
-                            // Try to read handshake
-                            int bytesRead = stream.Read(buffer, 0, buffer.Length);
-                            string response = System.Text.Encoding.ASCII.GetString(buffer, 0, bytesRead);
-
-                            // If we get the expected handshake, it's a healthy listener
-                            if (response.Contains("FRAMING=1") || response.Contains("WELCOME"))
-                            {
-                                if (IsDebugEnabled())
-                                    McpLog.Info($"[Cleanup] Port {port}: healthy MCP listener detected");
-                                testClient.Close();
-                                return; // Healthy listener, don't cleanup
-                            }
-
-                            // If we get here, connection succeeded but no proper handshake
-                            // This is likely a zombie listener - close the connection
-                            if (IsDebugEnabled())
-                                McpLog.Warn($"[Cleanup] Port {port}: zombie listener detected (no handshake), attempting cleanup");
-
-                            testClient.Close();
-
-                            // Give the zombie listener a moment to release the port
-                            Thread.Sleep(100);
-
-                            // Try a few more times to force the zombie to release
-                            for (int i = 0; i < 5; i++)
-                            {
-                                using (var forceClient = new TcpClient())
-                                {
-                                    try
-                                    {
-                                        if (forceClient.ConnectAsync(IPAddress.Loopback, port).Wait(200))
-                                        {
-                                            forceClient.Close();
-                                        }
-                                    }
-                                    catch { }
-                                }
-                                Thread.Sleep(50);
-                            }
-                        }
-                    }
-                    catch (SocketException)
-                    {
-                        // Port not in use - no cleanup needed
-                        if (IsDebugEnabled())
-                            McpLog.Info($"[Cleanup] Port {port}: not in use");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                if (IsDebugEnabled())
-                    McpLog.Debug($"[Cleanup] Error during zombie cleanup: {ex.Message}");
-            }
-        }
-
         public static void Start()
         {
             lock (startStopLock)
@@ -409,9 +336,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
                 Stop();
 
-                // Get the port and cleanup any zombie listeners before starting
+                // Get the port before starting
                 currentUnityPort = PortManager.GetPortWithFallback();
-                CleanupZombieListeners(currentUnityPort);
 
                 try
                 {
@@ -565,8 +491,9 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             // Clear the resume flag when stopping for reasons other than domain reload.
             // This prevents the UI from getting stuck showing "Resuming..." when a client disconnects.
             // We skip clearing during assembly reloads since OnBeforeAssemblyReload sets the flag
-            // and OnAfterAssemblyReload expects it to still be set.
-            bool isReloading = EditorApplication.isCompiling;
+            // and expects it to still be set after the domain reload.
+            // Check BOTH the explicit reload flag and isCompiling to handle timing edge cases.
+            bool isReloading = _isReloading || EditorApplication.isCompiling;
             if (!isReloading)
             {
                 try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeStdioAfterReload); } catch { }
@@ -591,23 +518,29 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             try { EditorApplication.update -= ProcessCommands; } catch { }
             try { EditorApplication.quitting -= Stop; } catch { }
 
-            try
+            // Delete status file only if NOT reloading
+            // During domain reload, the status file must remain so Python server can detect
+            // the reloading state and return "retry" hint to clients
+            if (!isReloading)
             {
-                string dir = Environment.GetEnvironmentVariable("UNITY_MCP_STATUS_DIR");
-                if (string.IsNullOrWhiteSpace(dir))
+                try
                 {
-                    dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".unity-mcp");
+                    string dir = Environment.GetEnvironmentVariable("UNITY_MCP_STATUS_DIR");
+                    if (string.IsNullOrWhiteSpace(dir))
+                    {
+                        dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".unity-mcp");
+                    }
+                    string statusFile = Path.Combine(dir, $"unity-mcp-status-{ComputeProjectHash(Application.dataPath)}.json");
+                    if (File.Exists(statusFile))
+                    {
+                        File.Delete(statusFile);
+                        if (IsDebugEnabled()) McpLog.Info($"Deleted status file: {statusFile}");
+                    }
                 }
-                string statusFile = Path.Combine(dir, $"unity-mcp-status-{ComputeProjectHash(Application.dataPath)}.json");
-                if (File.Exists(statusFile))
+                catch (Exception ex)
                 {
-                    File.Delete(statusFile);
-                    if (IsDebugEnabled()) McpLog.Info($"Deleted status file: {statusFile}");
+                    if (IsDebugEnabled()) McpLog.Warn($"Failed to delete status file: {ex.Message}");
                 }
-            }
-            catch (Exception ex)
-            {
-                if (IsDebugEnabled()) McpLog.Warn($"Failed to delete status file: {ex.Message}");
             }
 
             if (IsDebugEnabled()) McpLog.Info("StdioBridgeHost stopped.");

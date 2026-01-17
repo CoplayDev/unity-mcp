@@ -126,7 +126,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
 
                 // Record the SelectionPropertyModified event
                 // McpLog.Debug($"[SelectionPropertyTracker] MATCH! Recording event for {target.name}.{propertyPath}");
-                RecordSelectionPropertyModified(undoMod, target, propertyPath);
+                RecordSelectionPropertyModified(undoMod, target, targetGlobalId, propertyPath);
             }
 
             return modifications;
@@ -135,7 +135,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
         /// <summary>
         /// Records a SelectionPropertyModified event to the ActionTrace EventStore.
         /// </summary>
-        private static void RecordSelectionPropertyModified(UndoPropertyModification undoMod, UnityEngine.Object target, string propertyPath)
+        private static void RecordSelectionPropertyModified(UndoPropertyModification undoMod, UnityEngine.Object target, string targetGlobalId, string propertyPath)
         {
             var currentValue = GetCurrentValueFromUndoMod(undoMod);
             var prevValue = GetPreviousValueFromUndoMod(undoMod);
@@ -150,6 +150,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 ["value_type"] = GetPropertyTypeName(currentValue),
                 ["selection_context"] = new Dictionary<string, object>
                 {
+                    ["selection_id"] = _currentSelectionGlobalId,
                     ["selection_name"] = _currentSelectionName,
                     ["selection_type"] = _currentSelectionType,
                     ["selection_path"] = _currentSelectionPath ?? string.Empty
@@ -160,7 +161,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 sequence: 0,
                 timestampUnixMs: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                 type: EventTypes.SelectionPropertyModified,
-                targetId: _currentSelectionGlobalId,
+                targetId: targetGlobalId,
                 payload: payload
             );
 

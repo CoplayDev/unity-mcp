@@ -13,7 +13,8 @@ namespace MCPForUnity.Editor.ActionTrace.Core
     [Serializable]
     public sealed class FilteringSettings
     {
-        [Tooltip("Minimum importance threshold. Events below this value will not be recorded. 0.0=all, 0.4=medium+, 0.7=high+")]
+        [Range(0f, 1f)]
+        [Tooltip("Minimum importance threshold (0.0-1.0). Events below this value will not be recorded. 0.0=all, 0.4=medium+, 0.7=high+")]
         public float MinImportanceForRecording = 0.4f;
 
         [Tooltip("Bypass importance filter - Disabled for now to avoid excessive data volume")]
@@ -36,10 +37,12 @@ namespace MCPForUnity.Editor.ActionTrace.Core
         [Tooltip("Enable event merging. High-frequency events will be merged within the time window.")]
         public bool EnableEventMerging = true;
 
-        [Tooltip("Event merging time window (milliseconds).")]
+        [Range(0, 5000)]
+        [Tooltip("Event merging time window (0-5000ms). High-frequency events within this window are merged.")]
         public int MergeWindowMs = 100;
 
-        [Tooltip("Transaction aggregation time window (milliseconds). Events within the window are grouped into the same logical transaction.")]
+        [Range(100, 10000)]
+        [Tooltip("Transaction aggregation time window (100-10000ms). Events within this window are grouped into the same logical transaction.")]
         public int TransactionWindowMs = 2000;
     }
 
@@ -50,10 +53,12 @@ namespace MCPForUnity.Editor.ActionTrace.Core
     [Serializable]
     public sealed class StorageSettings
     {
-        [Tooltip("Soft limit: target number of events to store. Actually allows 1.5x as buffer.")]
+        [Range(100, 5000)]
+        [Tooltip("Soft limit: target event count (100-5000). ContextMappings = MaxEvents × 2 (e.g., 1000→2000, 5000→10000).")]
         public int MaxEvents = 800;
 
-        [Tooltip("Number of hot events to retain with full payload. Older events will be dehydrated (Payload=null).")]
+        [Range(10, 1000)]
+        [Tooltip("Number of hot events (10-1000) to retain with full payload. Older events will be dehydrated (Payload=null).")]
         public int HotEventCount = 150;
 
         [Tooltip("Minimum number of events to keep when auto-cleaning.")]
@@ -245,23 +250,12 @@ namespace MCPForUnity.Editor.ActionTrace.Core
         {
             var issues = new List<string>();
 
-            if (Filtering.MinImportanceForRecording < 0 || Filtering.MinImportanceForRecording > 1)
-                issues.Add("MinImportanceForRecording must be between 0 and 1");
+            // Note: MinImportanceForRecording, MergeWindowMs, TransactionWindowMs, HotEventCount
+            // are now constrained by Range attributes in Inspector.
 
-            if (Storage.MaxEvents < 100)
-                issues.Add("MaxEvents should be at least 100");
-
+            // Dynamic validation: HotEventCount should not exceed MaxEvents (runtime check)
             if (Storage.HotEventCount > Storage.MaxEvents)
                 issues.Add("HotEventCount should not exceed MaxEvents");
-
-            if (Storage.HotEventCount < 10)
-                issues.Add("HotEventCount should be at least 10");
-
-            if (Merging.MergeWindowMs < 0)
-                issues.Add("MergeWindowMs cannot be negative");
-
-            if (Merging.TransactionWindowMs < 100)
-                issues.Add("TransactionWindowMs should be at least 100ms");
 
             return issues;
         }

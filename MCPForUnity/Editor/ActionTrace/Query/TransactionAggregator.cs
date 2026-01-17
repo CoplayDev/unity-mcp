@@ -116,12 +116,9 @@ namespace MCPForUnity.Editor.ActionTrace.Query
             string firstTool = GetTriggeredByTool(first);
             string currentTool = GetTriggeredByTool(current);
 
-            if (!string.IsNullOrEmpty(currentTool) &&
-                !string.IsNullOrEmpty(firstTool))
-            {
-                if (currentTool != firstTool)
-                    return true; // Different tool → split
-            }
+            // Split if tools differ (including null vs non-null for symmetry)
+            if (currentTool != firstTool)
+                return true; // Different tool → split
 
             // ========== Priority 3: Time window (user operations) ==========
             // If no ToolId information, use configured time window

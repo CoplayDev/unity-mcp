@@ -101,16 +101,12 @@ namespace MCPForUnity.Editor.ActionTrace.Helpers
         /// </summary>
         public static object GetPreviousValue(UndoPropertyModification undoMod)
         {
-            // Try direct 'previousValue' property first
-            var result = GetNestedValue(undoMod, "previousValue");
+            // Try 'previousValue.value' (nested structure) first - matches GetCurrentValue pattern
+            var result = GetNestedValue(undoMod, "previousValue.value");
             if (result != null) return result;
 
-            // Try 'previousValue.value' (nested structure)
-            result = GetNestedValue(undoMod, "previousValue.value");
-            if (result != null) return result;
-
-            // Some Unity versions use 'propertyModification.value.before'
-            return GetNestedValue(undoMod, "propertyModification.value.before");
+            // Fallback to direct 'previousValue' property
+            return GetNestedValue(undoMod, "previousValue");
         }
     }
 }

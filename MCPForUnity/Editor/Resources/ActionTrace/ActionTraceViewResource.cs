@@ -201,6 +201,9 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
 
             var eventsWithContext = EventStore.QueryWithContext(limit, sinceSequence);
 
+            // P1.2 Task-Level Filtering: Apply task_id and conversation_id filters
+            eventsWithContext = ApplyTaskFiltersToEventWithContext(eventsWithContext, taskId, conversationId);
+
             // Apply semantics if requested
             if (includeSemantics)
             {
@@ -464,6 +467,10 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
                 if (e.Type != EventTypes.AINote)
                     return true;
 
+                // Guard against dehydrated events (null payload)
+                if (e.Payload == null)
+                    return false; // Can't match filters without payload
+
                 // Check task_id filter
                 if (!string.IsNullOrEmpty(taskId))
                 {
@@ -507,6 +514,10 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
                 if (p.Event.Type != EventTypes.AINote)
                     return true;
 
+                // Guard against dehydrated events (null payload)
+                if (p.Event.Payload == null)
+                    return false; // Can't match filters without payload
+
                 if (!string.IsNullOrEmpty(taskId))
                 {
                     if (p.Event.Payload.TryGetValue("task_id", out var taskVal))
@@ -525,6 +536,61 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
                     if (p.Event.Payload.TryGetValue("conversation_id", out var convVal))
                     {
                         if (convVal?.ToString() != conversationId)
+                            return false;
+                    }
+                }
+
+                return true;
+            }).ToList();
+        }
+
+        /// <summary>
+        /// P1.2: Apply task filters to events with context tuples.
+        /// Filters AINote events by matching task_id and conversation_id in payload.
+        /// </summary>
+        private static IReadOnlyList<(EditorEvent Event, ContextMapping Context)> ApplyTaskFiltersToEventWithContext(
+            IReadOnlyList<(EditorEvent Event, ContextMapping Context)> eventsWithContext,
+            string taskId,
+            string conversationId)
+        {
+            // If no filters specified, return original list
+            if (string.IsNullOrEmpty(taskId) && string.IsNullOrEmpty(conversationId))
+                return eventsWithContext;
+
+            return eventsWithContext.Where(x =>
+            {
+                var e = x.Event;
+
+                // Only AINote events have task_id and conversation_id
+                if (e.Type != EventTypes.AINote)
+                    return true;
+
+                // Guard against dehydrated events (null payload)
+                if (e.Payload == null)
+                    return false; // Can't match filters without payload
+
+                // Check task_id filter
+                if (!string.IsNullOrEmpty(taskId))
+                {
+                    if (e.Payload.TryGetValue("task_id", out var taskVal))
+                    {
+                        string eventTaskId = taskVal?.ToString();
+                        if (eventTaskId != taskId)
+                            return false;
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+
+                // Check conversation_id filter
+                if (!string.IsNullOrEmpty(conversationId))
+                {
+                    if (e.Payload.TryGetValue("conversation_id", out var convVal))
+                    {
+                        string eventConvId = convVal?.ToString();
+                        if (eventConvId != conversationId)
                             return false;
                     }
                 }

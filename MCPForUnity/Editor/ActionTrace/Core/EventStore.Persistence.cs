@@ -148,8 +148,8 @@ namespace MCPForUnity.Editor.ActionTrace.Core
         {
             var settings = ActionTraceSettings.Instance;
             int maxEvents = settings?.Storage.MaxEvents ?? 800;
-            int hardLimit = maxEvents + (maxEvents / 2);  // 1.5x buffer
-            int maxContextMappings = MaxContextMappings;
+            int hardLimit = maxEvents * 2;  // 2x buffer
+            int maxContextMappings = GetMaxContextMappings();
 
             lock (_queryLock)
             {
@@ -171,7 +171,7 @@ namespace MCPForUnity.Editor.ActionTrace.Core
                         $"(was {_events.Count + removeCount}, now {maxEvents}, hard limit was {hardLimit})");
                 }
 
-                // Trim context mappings if over limit
+                // Trim context mappings if over limit (dynamic based on maxEvents setting)
                 if (_contextMappings.Count > maxContextMappings)
                 {
                     int removeCount = _contextMappings.Count - maxContextMappings;

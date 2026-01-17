@@ -11,7 +11,17 @@ namespace MCPForUnity.Editor.ActionTrace.Core
     /// </summary>
     public static partial class EventStore
     {
-        private const int MaxContextMappings = 2000;
+        /// <summary>
+        /// Calculates the maximum number of context mappings to store.
+        /// Dynamic: 2x the maxEvents setting (supports multi-agent collaboration).
+        /// When maxEvents is 5000 (max), this yields 10000 context mappings.
+        /// </summary>
+        private static int GetMaxContextMappings()
+        {
+            var settings = ActionTraceSettings.Instance;
+            int maxEvents = settings?.Storage.MaxEvents ?? 800;
+            return maxEvents * 2;  // 2x ratio
+        }
 
         /// <summary>
         /// Add a context mapping for an event.
@@ -44,10 +54,11 @@ namespace MCPForUnity.Editor.ActionTrace.Core
 
                 _contextMappings.Add(mapping);
 
-                // Trim oldest mappings if over limit
-                if (_contextMappings.Count > MaxContextMappings)
+                // Trim oldest mappings if over limit (dynamic based on maxEvents setting)
+                int maxContextMappings = GetMaxContextMappings();
+                if (_contextMappings.Count > maxContextMappings)
                 {
-                    int removeCount = _contextMappings.Count - MaxContextMappings;
+                    int removeCount = _contextMappings.Count - maxContextMappings;
                     _contextMappings.RemoveRange(0, removeCount);
                 }
             }
