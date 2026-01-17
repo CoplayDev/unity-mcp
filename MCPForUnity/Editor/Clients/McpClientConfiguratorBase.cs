@@ -42,7 +42,7 @@ namespace MCPForUnity.Editor.Clients
             string uvx = MCPServiceLocator.Paths.GetUvxPath();
             if (string.IsNullOrEmpty(uvx))
             {
-                throw new InvalidOperationException("uv not found. Install uv/uvx or set the override in Advanced Settings.");
+                throw new InvalidOperationException("uvx not found. Install uv/uvx or set the override in Advanced Settings.");
             }
             return uvx;
         }

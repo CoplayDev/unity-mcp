@@ -32,5 +32,11 @@ namespace MCPForUnity.Editor.MenuItems
         {
             EditorPrefsWindow.ShowWindow();
         }
+
+        [MenuItem("Window/MCP For Unity/ActionTrace", priority = 4)]
+        public static void ShowActionTraceWindow()
+        {
+            ActionTraceEditorWindow.ShowWindow();
+        }
     }
 }

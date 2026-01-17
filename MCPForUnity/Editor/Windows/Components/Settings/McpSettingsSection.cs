@@ -197,9 +197,12 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
 
             uvxPathStatus.RemoveFromClassList("valid");
             uvxPathStatus.RemoveFromClassList("invalid");
+
             if (hasOverride)
             {
-                if (!string.IsNullOrEmpty(uvxPath) && File.Exists(uvxPath))
+                // Override mode: validate the override path
+                string overridePath = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
+                if (pathService.TryValidateUvxExecutable(overridePath, out _))
                 {
                     uvxPathStatus.AddToClassList("valid");
                 }
@@ -210,7 +213,16 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             }
             else
             {
-                uvxPathStatus.AddToClassList("valid");
+                // PATH mode: validate system uvx
+                string systemUvxPath = pathService.GetUvxPath();
+                if (!string.IsNullOrEmpty(systemUvxPath) && pathService.TryValidateUvxExecutable(systemUvxPath, out _))
+                {
+                    uvxPathStatus.AddToClassList("valid");
+                }
+                else
+                {
+                    uvxPathStatus.AddToClassList("invalid");
+                }
             }
 
             gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");

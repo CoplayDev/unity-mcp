@@ -25,7 +25,31 @@ namespace MCPForUnity.Editor.Tools
     [McpForUnityTool("manage_asset", AutoRegister = false)]
     public static class ManageAsset
     {
-        // --- Main Handler ---
+        // ========================================================================
+        // ActionTrace Integration (Low-Coupling Event Callbacks)
+        // ========================================================================
+        /// <summary>
+        /// Callback raised when an asset is modified. External systems (like ActionTrace)
+        /// can subscribe to this to track changes without tight coupling.
+        ///
+        /// Parameters: (assetPath, assetType, changesDictionary)
+        /// - changesDictionary: property path -> {old, new} values
+        /// </summary>
+        public static event Action<string, string, IReadOnlyDictionary<string, object>> OnAssetModified;
+
+        /// <summary>
+        /// Callback raised when an asset is created.
+        /// </summary>
+        public static event Action<string, string> OnAssetCreated;
+
+        /// <summary>
+        /// Callback raised when an asset is deleted.
+        /// </summary>
+        public static event Action<string, string> OnAssetDeleted;
+
+        // ========================================================================
+        // Main Handler
+        // ========================================================================
 
         // Define the list of valid actions
         private static readonly List<string> ValidActions = new List<string>
@@ -264,6 +288,10 @@ namespace MCPForUnity.Editor.Tools
                 }
 
                 AssetDatabase.SaveAssets();
+
+                // === ActionTrace Integration: Notify subscribers (low-coupling) ===
+                OnAssetCreated?.Invoke(fullPath, assetType);
+
                 // AssetDatabase.Refresh(); // CreateAsset often handles refresh
                 return new SuccessResponse(
                     $"Asset '{fullPath}' created successfully.",
@@ -466,6 +494,14 @@ namespace MCPForUnity.Editor.Tools
                     EditorUtility.SetDirty(asset);
                     // Save all modified assets to disk.
                     AssetDatabase.SaveAssets();
+
+                    // === ActionTrace Integration: Notify subscribers (low-coupling) ===
+                    OnAssetModified?.Invoke(
+                        fullPath,
+                        asset.GetType().FullName,
+                        properties.ToObject<Dictionary<string, object>>()
+                    );
+
                     // Refresh might be needed in some edge cases, but SaveAssets usually covers it.
                     // AssetDatabase.Refresh();
                     return new SuccessResponse(
@@ -500,11 +536,17 @@ namespace MCPForUnity.Editor.Tools
             if (!AssetExists(fullPath))
                 return new ErrorResponse($"Asset not found at path: {fullPath}");
 
+            // Capture asset type before deletion (for ActionTrace callback)
+            string assetType = AssetDatabase.GetMainAssetTypeAtPath(fullPath)?.FullName ?? "Unknown";
+
             try
             {
                 bool success = AssetDatabase.DeleteAsset(fullPath);
                 if (success)
                 {
+                    // === ActionTrace Integration: Notify subscribers (low-coupling) ===
+                    OnAssetDeleted?.Invoke(fullPath, assetType);
+
                     // AssetDatabase.Refresh(); // DeleteAsset usually handles refresh
                     return new SuccessResponse($"Asset '{fullPath}' deleted successfully.");
                 }
