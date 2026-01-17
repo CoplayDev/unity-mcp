@@ -190,25 +190,58 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             var pathService = MCPServiceLocator.Paths;
 
             bool hasOverride = pathService.HasUvxPathOverride;
+            bool hasFallback = pathService.HasUvxPathFallback;
             string uvxPath = hasOverride ? pathService.GetUvxPath() : null;
-            uvxPathOverride.value = hasOverride
-                ? (uvxPath ?? "(override set but invalid)")
-                : "uvx (uses PATH)";
 
-            uvxPathStatus.RemoveFromClassList("valid");
-            uvxPathStatus.RemoveFromClassList("invalid");
-
+            // Determine display text based on override and fallback status
             if (hasOverride)
             {
-                // Override mode: validate the override path
-                string overridePath = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
-                if (pathService.TryValidateUvxExecutable(overridePath, out _))
+                if (hasFallback)
                 {
-                    uvxPathStatus.AddToClassList("valid");
+                    // Override path invalid, using system fallback
+                    string overridePath = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
+                    uvxPathOverride.value = $"Invalid override path: {overridePath} (fallback to uvx path) {uvxPath}";
+                }
+                else if (!string.IsNullOrEmpty(uvxPath))
+                {
+                    // Override path valid
+                    uvxPathOverride.value = uvxPath;
                 }
                 else
                 {
-                    uvxPathStatus.AddToClassList("invalid");
+                    // Override set but invalid, no fallback available
+                    string overridePath = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
+                    uvxPathOverride.value = $"Invalid override path: {overridePath}, no uv found";
+                }
+            }
+            else
+            {
+                uvxPathOverride.value = "uvx (uses PATH)";
+            }
+
+            uvxPathStatus.RemoveFromClassList("valid");
+            uvxPathStatus.RemoveFromClassList("invalid");
+            uvxPathStatus.RemoveFromClassList("warning");
+
+            if (hasOverride)
+            {
+                if (hasFallback)
+                {
+                    // Using fallback - show as warning (yellow)
+                    uvxPathStatus.AddToClassList("warning");
+                }
+                else
+                {
+                    // Override mode: validate the override path
+                    string overridePath = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
+                    if (pathService.TryValidateUvxExecutable(overridePath, out _))
+                    {
+                        uvxPathStatus.AddToClassList("valid");
+                    }
+                    else
+                    {
+                        uvxPathStatus.AddToClassList("invalid");
+                    }
                 }
             }
             else

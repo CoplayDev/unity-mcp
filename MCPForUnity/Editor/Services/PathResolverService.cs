@@ -16,21 +16,34 @@ namespace MCPForUnity.Editor.Services
     /// </summary>
     public class PathResolverService : IPathResolverService
     {
+        private bool _hasUvxPathFallback;
+
         public bool HasUvxPathOverride => !string.IsNullOrEmpty(EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, null));
         public bool HasClaudeCliPathOverride => !string.IsNullOrEmpty(EditorPrefs.GetString(EditorPrefKeys.ClaudeCliPathOverride, null));
+        public bool HasUvxPathFallback => _hasUvxPathFallback;
 
         public string GetUvxPath()
         {
+            // Reset fallback flag at the start of each resolution
+            _hasUvxPathFallback = false;
+
             // Check override first - only validate if explicitly set
             if (HasUvxPathOverride)
             {
                 string overridePath = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
-                // Validate the override - if invalid, don't fall back to discovery
+                // Validate the override - if invalid, fall back to system discovery
                 if (TryValidateUvxExecutable(overridePath, out string version))
                 {
                     return overridePath;
                 }
-                // Override is set but invalid - return null (no fallback)
+                // Override is set but invalid - fall back to system discovery
+                string fallbackPath = ResolveUvxFromSystem();
+                if (!string.IsNullOrEmpty(fallbackPath))
+                {
+                    _hasUvxPathFallback = true;
+                    return fallbackPath;
+                }
+                // Return null to indicate override is invalid and no system fallback found
                 return null;
             }
 
