@@ -181,10 +181,20 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
 
             if (EnableDefaultFilters)
             {
-                rules.AddRange(DefaultRules.Where(r => r.Enabled));
+                // Manual loop instead of LINQ Where to avoid allocation in hot path
+                foreach (var rule in DefaultRules)
+                {
+                    if (rule.Enabled)
+                        rules.Add(rule);
+                }
             }
 
-            rules.AddRange(CustomRules.Where(r => r.Enabled));
+            // Manual loop instead of LINQ Where to avoid allocation in hot path
+            foreach (var rule in CustomRules)
+            {
+                if (rule.Enabled)
+                    rules.Add(rule);
+            }
 
             // Sort by priority descending (higher priority first)
             rules.Sort((a, b) => b.Priority.CompareTo(a.Priority));
@@ -369,8 +379,16 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
         public static string GetDiagnosticInfo()
         {
             var rules = Settings.GetActiveRules();
-            int blockRules = rules.Count(r => r.Action == FilterAction.Block);
-            int allowRules = rules.Count(r => r.Action == FilterAction.Allow);
+            int blockRules = 0;
+            int allowRules = 0;
+            // Manual count instead of LINQ Count to avoid allocation
+            foreach (var rule in rules)
+            {
+                if (rule.Action == FilterAction.Block)
+                    blockRules++;
+                else if (rule.Action == FilterAction.Allow)
+                    allowRules++;
+            }
 
             return $"EventFilter Configuration:\n" +
                    $"  - Default Filters: {(Settings.EnableDefaultFilters ? "Enabled" : "Disabled")}\n" +

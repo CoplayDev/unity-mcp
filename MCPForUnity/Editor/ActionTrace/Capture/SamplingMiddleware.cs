@@ -34,7 +34,6 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
         // State
         // Thread-safe dictionary to prevent race conditions in multi-threaded scenarios
         private static readonly ConcurrentDictionary<string, PendingSample> _pendingSamples = new();
-        private static readonly List<string> _expiredKeys = new();
         private static long _lastCleanupTime;
         private static long _lastFlushCheckTime;
 
@@ -74,8 +73,8 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
             _lastFlushCheckTime = nowMs;
 
             var toRecord = new List<PendingSample>();
-            _expiredKeys.Clear();
 
+            // Directly remove expired entries without intermediate list
             foreach (var kvp in _pendingSamples)
             {
                 // Check if this key has a debounce strategy configured
@@ -88,16 +87,11 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                         if (nowMs - kvp.Value.TimestampMs > strategy.WindowMs)
                         {
                             toRecord.Add(kvp.Value);
-                            _expiredKeys.Add(kvp.Key);
+                            // Remove immediately while iterating (TryRemove is safe)
+                            _pendingSamples.TryRemove(kvp.Key, out _);
                         }
                     }
                 }
-            }
-
-            // Remove flushed entries
-            foreach (var key in _expiredKeys)
-            {
-                _pendingSamples.TryRemove(key, out _);
             }
 
             // Record the trailing events
@@ -203,10 +197,20 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 // If still over limit after cleanup, force remove oldest entry
                 if (_pendingSamples.Count >= MaxSampleCache)
                 {
-                    var oldest = _pendingSamples.OrderBy(kvp => kvp.Value.TimestampMs).FirstOrDefault();
-                    if (!string.IsNullOrEmpty(oldest.Key))
+                    // Manual loop to find oldest entry (avoid LINQ allocation in hot path)
+                    string oldestKey = null;
+                    long oldestTimestamp = long.MaxValue;
+                    foreach (var kvp in _pendingSamples)
                     {
-                        _pendingSamples.TryRemove(oldest.Key, out _);
+                        if (kvp.Value.TimestampMs < oldestTimestamp)
+                        {
+                            oldestTimestamp = kvp.Value.TimestampMs;
+                            oldestKey = kvp.Key;
+                        }
+                    }
+                    if (!string.IsNullOrEmpty(oldestKey))
+                    {
+                        _pendingSamples.TryRemove(oldestKey, out _);
                     }
                 }
             }
@@ -250,19 +254,13 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
         /// </summary>
         private static void CleanupExpiredSamples(long nowMs)
         {
-            _expiredKeys.Clear();
-
+            // Directly remove expired samples without intermediate list
             foreach (var kvp in _pendingSamples)
             {
                 if (nowMs - kvp.Value.TimestampMs > CleanupAgeMs)
                 {
-                    _expiredKeys.Add(kvp.Key);
+                    _pendingSamples.TryRemove(kvp.Key, out _);
                 }
-            }
-
-            foreach (var key in _expiredKeys)
-            {
-                _pendingSamples.TryRemove(key, out _);
             }
         }
 
@@ -272,7 +270,12 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
         /// </summary>
         public static List<EditorEvent> FlushPending()
         {
-            var result = _pendingSamples.Values.Select(p => p.Event).ToList();
+            // Manual loop instead of LINQ Select to avoid allocation
+            var result = new List<EditorEvent>(_pendingSamples.Count);
+            foreach (var kvp in _pendingSamples)
+            {
+                result.Add(kvp.Value.Event);
+            }
             _pendingSamples.Clear();
             return result;
         }

@@ -59,6 +59,8 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
             EditorSceneManager.sceneSaving += OnSceneSaving;
             EditorSceneManager.sceneSaved += OnSceneSaved;
             EditorSceneManager.sceneOpened += OnSceneOpened;
+            EditorSceneManager.sceneLoaded += OnSceneLoaded;
+            EditorSceneManager.sceneUnloaded += OnSceneUnloaded;
             EditorSceneManager.newSceneCreated += OnNewSceneCreated;
 
             // ========== Build Events ==========
@@ -299,6 +301,28 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
             };
 
             RecordEvent(EventTypes.NewSceneCreated, targetId, payload);
+        }
+
+        /// <summary>
+        /// Called when a scene is loaded (after load operation completes).
+        /// Resets GameObject tracking to clear stale data from previous scenes.
+        /// This fixes the issue where GameObjectCreated events were missed after scene switches.
+        /// </summary>
+        private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            // Reset tracking to clear stale data from previous scenes
+            GameObjectTrackingHelper.Reset();
+            GameObjectTrackingHelper.InitializeTracking();
+        }
+
+        /// <summary>
+        /// Called when a scene is unloaded.
+        /// Resets GameObject tracking before scene unloads.
+        /// </summary>
+        private static void OnSceneUnloaded(Scene scene)
+        {
+            // Reset tracking before clearing the scene
+            GameObjectTrackingHelper.Reset();
         }
 
         #endregion

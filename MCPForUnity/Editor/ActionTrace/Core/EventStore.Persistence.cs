@@ -20,26 +20,53 @@ namespace MCPForUnity.Editor.ActionTrace.Core
         private static bool _isLoaded;
         private static bool _saveScheduled;     // Prevents duplicate delayCall registrations
 
+
+        /// <summary>
+        /// Persistent state schema for EventStore.
+        /// </summary>
+        private class EventStoreState
+        {
+            public int SchemaVersion { get; set; } = CurrentSchemaVersion;
+            public long SequenceCounter { get; set; }
+            public List<EditorEvent> Events { get; set; }
+            public List<ContextMapping> ContextMappings { get; set; }
+        }
+
         /// <summary>
         /// Schedule a deferred save via delayCall.
         /// Multiple rapid calls result in a single save (coalesced).
+        /// Thread-safe: uses lock to protect _saveScheduled flag.
         /// </summary>
         private static void ScheduleSave()
         {
-            // Only schedule if not already scheduled (prevents callback queue bloat)
-            if (_saveScheduled)
-                return;
+            // Use lock to prevent race conditions with _saveScheduled
+            lock (_queryLock)
+            {
+                // Only schedule if not already scheduled (prevents callback queue bloat)
+                if (_saveScheduled)
+                    return;
 
-            _saveScheduled = true;
+                _saveScheduled = true;
+            }
 
             // Use delayCall to coalesce multiple saves into one
             EditorApplication.delayCall += () =>
             {
-                _saveScheduled = false;
-                if (_isDirty)
+                bool wasDirty;
+                lock (_queryLock)
+                {
+                    _saveScheduled = false;
+                    wasDirty = _isDirty;
+                    if (_isDirty)
+                    {
+                        _isDirty = false;
+                    }
+                }
+
+                // Perform save outside lock to avoid holding lock during I/O
+                if (wasDirty)
                 {
                     SaveToStorage();
-                    _isDirty = false;
                 }
             };
         }
@@ -56,6 +83,7 @@ namespace MCPForUnity.Editor.ActionTrace.Core
                 _notifyScheduled = false;
             }
             _saveScheduled = false;
+            _lastDehydratedCount = -1;  // Reset dehydration optimization marker
         }
 
         /// <summary>
@@ -72,16 +100,18 @@ namespace MCPForUnity.Editor.ActionTrace.Core
                 if (state != null)
                 {
                     // Schema version check for migration support
+                    // Note: We assume forward compatibility - newer data can be loaded by older code
                     if (state.SchemaVersion > CurrentSchemaVersion)
                     {
                         McpLog.Warn(
-                            $"[EventStore] Stored schema version {state.SchemaVersion} is newer " +
-                            $"than current version {CurrentSchemaVersion}. Data may not load correctly.");
+                            $"[EventStore] Loading data from newer schema version {state.SchemaVersion} " +
+                            $"(current is {CurrentSchemaVersion}). Assuming forward compatibility.");
                     }
                     else if (state.SchemaVersion < CurrentSchemaVersion)
                     {
                         McpLog.Info(
-                            $"[EventStore] Migrating data from schema version {state.SchemaVersion} to {CurrentSchemaVersion}");
+                            $"[EventStore] Data from schema version {state.SchemaVersion} will be " +
+                            $"resaved with current version {CurrentSchemaVersion}.");
                     }
 
                     _sequenceCounter = state.SequenceCounter;
@@ -102,7 +132,7 @@ namespace MCPForUnity.Editor.ActionTrace.Core
             }
             catch (Exception ex)
             {
-                McpLog.Warn($"[EventStore] Failed to load from storage: {ex.Message}");
+                McpLog.Error($"[EventStore] Failed to load from storage: {ex.Message}\n{ex.StackTrace}");
             }
             finally
             {
@@ -168,19 +198,9 @@ namespace MCPForUnity.Editor.ActionTrace.Core
             }
             catch (Exception ex)
             {
-                McpLog.Warn($"[EventStore] Failed to save to storage: {ex.Message}");
+                McpLog.Error($"[EventStore] Failed to save to storage: {ex.Message}\n{ex.StackTrace}");
             }
         }
 
-        /// <summary>
-        /// Persistent state schema for EventStore.
-        /// </summary>
-        private class EventStoreState
-        {
-            public int SchemaVersion { get; set; } = CurrentSchemaVersion;
-            public long SequenceCounter { get; set; }
-            public List<EditorEvent> Events { get; set; }
-            public List<ContextMapping> ContextMappings { get; set; }
-        }
     }
 }

@@ -52,6 +52,7 @@ namespace MCPForUnity.Editor.ActionTrace.Core
         private static EditorEvent _lastRecordedEvent;
         private static long _lastRecordedTime;
         private static bool _isDirty;
+        private static int _lastDehydratedCount = -1;  // Optimizes dehydration trigger
 
         /// <summary>
         /// Event raised when a new event is recorded.
@@ -123,10 +124,11 @@ namespace MCPForUnity.Editor.ActionTrace.Core
                 _lastRecordedEvent = evtWithSequence;
                 _lastRecordedTime = @event.TimestampUnixMs;
 
-                // Auto-dehydrate old events
-                if (_events.Count > hotEventCount)
+                // Auto-dehydrate old events (optimized: only when count changes)
+                if (_events.Count > hotEventCount && _events.Count != _lastDehydratedCount)
                 {
                     DehydrateOldEvents(hotEventCount);
+                    _lastDehydratedCount = _events.Count;
                 }
 
                 // Trim oldest events if over limit
@@ -141,9 +143,11 @@ namespace MCPForUnity.Editor.ActionTrace.Core
                     _events.RemoveRange(0, removeCount);
                     _contextMappings.RemoveAll(m => removedSequences.Contains(m.EventSequence));
                 }
+
+                // Mark dirty inside lock for thread safety
+                _isDirty = true;
             }
 
-            _isDirty = true;
             ScheduleSave();
 
             // Batch notification
@@ -245,6 +249,7 @@ namespace MCPForUnity.Editor.ActionTrace.Core
             // Reset merge tracking and pending notifications
             _lastRecordedEvent = null;
             _lastRecordedTime = 0;
+            _lastDehydratedCount = -1;
             lock (_pendingNotifications)
             {
                 _pendingNotifications.Clear();
