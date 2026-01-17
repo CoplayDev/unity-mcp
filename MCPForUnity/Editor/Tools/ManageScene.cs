@@ -490,8 +490,21 @@ namespace MCPForUnity.Editor.Tools
         {
             try
             {
-                try { McpLog.Info("[ManageScene] get_hierarchy: querying EditorSceneManager.GetActiveScene", always: false); } catch { }
-                Scene activeScene = EditorSceneManager.GetActiveScene();
+                // Check Prefab Stage first
+                var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                Scene activeScene;
+                
+                if (prefabStage != null)
+                {
+                    activeScene = prefabStage.scene;
+                    try { McpLog.Info("[ManageScene] get_hierarchy: using Prefab Stage scene", always: false); } catch { }
+                }
+                else
+                {
+                    try { McpLog.Info("[ManageScene] get_hierarchy: querying EditorSceneManager.GetActiveScene", always: false); } catch { }
+                    activeScene = EditorSceneManager.GetActiveScene();
+                }
+                
                 try { McpLog.Info($"[ManageScene] get_hierarchy: got scene valid={activeScene.IsValid()} loaded={activeScene.isLoaded} name='{activeScene.name}'", always: false); } catch { }
                 if (!activeScene.IsValid() || !activeScene.isLoaded)
                 {
