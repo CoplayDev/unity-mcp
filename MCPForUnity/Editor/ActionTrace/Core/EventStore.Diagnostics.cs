@@ -36,8 +36,8 @@ namespace MCPForUnity.Editor.ActionTrace.Core
             lock (_queryLock)
             {
                 var settings = ActionTraceSettings.Instance;
-                int hotEventCount = settings?.HotEventCount ?? 100;
-                int maxEvents = settings?.MaxEvents ?? 800;
+                int hotEventCount = settings?.Storage.HotEventCount ?? 100;
+                int maxEvents = settings?.Storage.MaxEvents ?? 800;
 
                 int totalEvents = _events.Count;
                 int hotEvents = Math.Min(totalEvents, hotEventCount);

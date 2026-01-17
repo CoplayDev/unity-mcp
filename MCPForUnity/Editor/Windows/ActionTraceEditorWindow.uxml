@@ -9,6 +9,7 @@
             <uie:ToolbarSearchField name="search-field" />
             <uie:ToolbarToggle name="importance-toggle" text="Badges" />
             <uie:ToolbarToggle name="context-toggle" text="Context" />
+            <uie:ToolbarMenu name="sort-menu" text="Sort: Time" />
             <uie:ToolbarSpacer flex="true" />
             <uie:ToolbarButton name="settings-button" text="Settings" />
             <uie:ToolbarButton name="refresh-button" text="Refresh" />

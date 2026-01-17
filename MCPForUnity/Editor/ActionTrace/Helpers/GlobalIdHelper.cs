@@ -182,7 +182,10 @@ namespace MCPForUnity.Editor.ActionTrace.Core
 #if UNITY_2020_3_OR_NEWER
             if (GlobalObjectId.TryParse(globalIdStr, out var globalId))
             {
-                return $"[{globalId.identifierType} {globalId.assetGUID.ToString().Substring(0, 8)}...]";
+                var guidStr = globalId.assetGUID.ToString();
+                return guidStr.Length >= 8
+                    ? $"[{globalId.identifierType} {guidStr.Substring(0, 8)}...]"
+                    : $"[{globalId.identifierType} {guidStr}]";
             }
 #endif
 

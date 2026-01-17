@@ -11,7 +11,7 @@ namespace MCPForUnity.Editor.Tools
     /// This is a convenience wrapper around ActionTraceViewResource that provides
     /// a cleaner "get_action_trace" tool name for AI consumption.
     /// </summary>
-    [McpForUnityTool("get_action_trace")]
+    [McpForUnityTool("get_action_trace", Description = "Queries the ActionTrace for editor events with filtering options")]
     public static class GetActionTraceTool
     {
         /// <summary>

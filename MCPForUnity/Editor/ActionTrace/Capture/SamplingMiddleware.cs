@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using MCPForUnity.Editor.ActionTrace.Core;
+using UnityEditor;
 
 namespace MCPForUnity.Editor.ActionTrace.Capture
 {
@@ -22,17 +23,90 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
     /// - GlobalIdHelper.ToGlobalIdString() for stable keys
     /// - EditorEvent payload for event metadata
     /// </summary>
+    [InitializeOnLoad]
     public static class SamplingMiddleware
     {
         // Configuration
         private const int MaxSampleCache = 128;          // Max pending samples before forced cleanup
         private const long CleanupAgeMs = 2000;          // Cleanup samples older than 2 seconds
+        private const long FlushCheckIntervalMs = 200;   // Check for expired debounce samples every 200ms
 
         // State
         // Thread-safe dictionary to prevent race conditions in multi-threaded scenarios
         private static readonly ConcurrentDictionary<string, PendingSample> _pendingSamples = new();
         private static readonly List<string> _expiredKeys = new();
         private static long _lastCleanupTime;
+        private static long _lastFlushCheckTime;
+
+        /// <summary>
+        /// Initializes the sampling middleware and schedules periodic flush checks.
+        /// </summary>
+        static SamplingMiddleware()
+        {
+            ScheduleFlushCheck();
+        }
+
+        /// <summary>
+        /// Schedules a periodic flush check using delayCall.
+        /// This ensures Debounce modes emit trailing events after their windows expire.
+        /// </summary>
+        private static void ScheduleFlushCheck()
+        {
+            EditorApplication.delayCall += () =>
+            {
+                FlushExpiredDebounceSamples();
+                ScheduleFlushCheck();
+            };
+        }
+
+        /// <summary>
+        /// Flushes debounce samples whose windows have expired.
+        /// This ensures Debounce/DebounceByKey modes emit the trailing event.
+        /// </summary>
+        private static void FlushExpiredDebounceSamples()
+        {
+            long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+            // Only check periodically to avoid performance impact
+            if (nowMs - _lastFlushCheckTime < FlushCheckIntervalMs)
+                return;
+
+            _lastFlushCheckTime = nowMs;
+
+            var toRecord = new List<PendingSample>();
+            _expiredKeys.Clear();
+
+            foreach (var kvp in _pendingSamples)
+            {
+                // Check if this key has a debounce strategy configured
+                if (SamplingConfig.Strategies.TryGetValue(kvp.Value.Event.Type, out var strategy))
+                {
+                    // Only process Debounce/DebounceByKey modes
+                    if (strategy.Mode == SamplingMode.Debounce || strategy.Mode == SamplingMode.DebounceByKey)
+                    {
+                        // If window has expired, this sample should be recorded
+                        if (nowMs - kvp.Value.TimestampMs > strategy.WindowMs)
+                        {
+                            toRecord.Add(kvp.Value);
+                            _expiredKeys.Add(kvp.Key);
+                        }
+                    }
+                }
+            }
+
+            // Remove flushed entries
+            foreach (var key in _expiredKeys)
+            {
+                _pendingSamples.TryRemove(key, out _);
+            }
+
+            // Record the trailing events
+            foreach (var sample in toRecord)
+            {
+                // Record directly to EventStore without going through ShouldRecord again
+                EventStore.Record(sample.Event);
+            }
+        }
 
         /// <summary>
         /// Determines whether an event should be recorded based on configured sampling strategies.
@@ -144,6 +218,12 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 TimestampMs = nowMs
             };
 
+            // For Debounce modes, don't record immediately - wait for window to expire
+            // This prevents duplicate recording: first event here, trailing event in FlushExpiredDebounceSamples
+            if (strategy.Mode == SamplingMode.Debounce || strategy.Mode == SamplingMode.DebounceByKey)
+                return false;
+
+            // For Throttle mode, record the first event immediately
             return true;
         }
 

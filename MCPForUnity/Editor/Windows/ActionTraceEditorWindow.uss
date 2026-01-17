@@ -70,7 +70,7 @@
     -unity-font-style: bold;
     font-size: 11px;
     color: #999999;
-    min-width: 75px;
+    min-width: 95px;
     margin-right: 12px;
 }
 
@@ -201,4 +201,19 @@ ToolbarButton {
 
 ToolbarMenu {
     min-width: 70px;
+}
+
+/* 排序按钮样式 */
+ToolbarMenu[name="sort-menu"] {
+    min-width: 110px;
+}
+
+/* 排序按钮菜单项选中指示 */
+ToolbarMenu[name="sort-menu"] > .unity-toolbar-menu__item {
+    flex-grow: 1;
+}
+
+/* 选中状态的菜单项 */
+ToolbarMenu[name="sort-menu"] > .unity-toolbar-menu__item.checked {
+    background-color: #3a3a3a;
 }

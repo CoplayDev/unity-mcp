@@ -74,13 +74,13 @@ namespace MCPForUnity.Editor.ActionTrace.Core
                     // Schema version check for migration support
                     if (state.SchemaVersion > CurrentSchemaVersion)
                     {
-                        UnityEngine.Debug.LogWarning(
+                        McpLog.Warn(
                             $"[EventStore] Stored schema version {state.SchemaVersion} is newer " +
                             $"than current version {CurrentSchemaVersion}. Data may not load correctly.");
                     }
                     else if (state.SchemaVersion < CurrentSchemaVersion)
                     {
-                        UnityEngine.Debug.Log(
+                        McpLog.Info(
                             $"[EventStore] Migrating data from schema version {state.SchemaVersion} to {CurrentSchemaVersion}");
                     }
 
@@ -102,7 +102,7 @@ namespace MCPForUnity.Editor.ActionTrace.Core
             }
             catch (Exception ex)
             {
-                UnityEngine.Debug.LogWarning($"[EventStore] Failed to load from storage: {ex.Message}");
+                McpLog.Warn($"[EventStore] Failed to load from storage: {ex.Message}");
             }
             finally
             {
@@ -117,7 +117,7 @@ namespace MCPForUnity.Editor.ActionTrace.Core
         private static void TrimToMaxEventsLimit()
         {
             var settings = ActionTraceSettings.Instance;
-            int maxEvents = settings?.MaxEvents ?? 800;
+            int maxEvents = settings?.Storage.MaxEvents ?? 800;
             int hardLimit = maxEvents + (maxEvents / 2);  // 1.5x buffer
             int maxContextMappings = MaxContextMappings;
 
@@ -137,7 +137,7 @@ namespace MCPForUnity.Editor.ActionTrace.Core
                     // Cascade delete context mappings
                     _contextMappings.RemoveAll(m => removedSequences.Contains(m.EventSequence));
 
-                    UnityEngine.Debug.Log($"[EventStore] Trimmed {removeCount} old events " +
+                    McpLog.Info($"[EventStore] Trimmed {removeCount} old events " +
                         $"(was {_events.Count + removeCount}, now {maxEvents}, hard limit was {hardLimit})");
                 }
 
@@ -168,7 +168,7 @@ namespace MCPForUnity.Editor.ActionTrace.Core
             }
             catch (Exception ex)
             {
-                UnityEngine.Debug.LogWarning($"[EventStore] Failed to save to storage: {ex.Message}");
+                McpLog.Warn($"[EventStore] Failed to save to storage: {ex.Message}");
             }
         }
 

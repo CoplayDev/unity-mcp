@@ -101,26 +101,16 @@ namespace MCPForUnity.Editor.ActionTrace.Query
         {
             // Get transaction window from settings, with fallback to default
             var settings = ActionTraceSettings.Instance;
-            long transactionWindowMs = settings?.TransactionWindowMs ?? DefaultTransactionWindowMs;
+            long transactionWindowMs = settings?.Merging.TransactionWindowMs ?? DefaultTransactionWindowMs;
 
             // Extract ToolCallId from Payload (if exists)
             string firstToolCallId = GetToolCallId(first);
             string currentToolCallId = GetToolCallId(current);
 
             // ========== Priority 1: ToolCallId boundary ==========
-            // If both events have ToolCallId and they differ, mandatory split
-            if (!string.IsNullOrEmpty(currentToolCallId) &&
-                !string.IsNullOrEmpty(firstToolCallId))
-            {
-                if (currentToolCallId != firstToolCallId)
-                    return true; // Different tool call → split
-            }
-            // If current has ToolCallId but first doesn't, check if it's same tool
-            else if (!string.IsNullOrEmpty(currentToolCallId))
-            {
-                // Current event starts a new tool call → split
-                return true;
-            }
+            // Split if tool call IDs differ (including null vs non-null for symmetry)
+            if (currentToolCallId != firstToolCallId)
+                return true; // Different tool call → split
 
             // ========== Priority 2: TriggeredByTool boundary ==========
             string firstTool = GetTriggeredByTool(first);

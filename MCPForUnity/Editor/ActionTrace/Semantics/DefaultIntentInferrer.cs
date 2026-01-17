@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using MCPForUnity.Editor.ActionTrace.Core;
 
@@ -18,6 +19,9 @@ namespace MCPForUnity.Editor.ActionTrace.Semantics
             // For dehydrated events (Payload is null), intent cannot be inferred, return null
             if (evt.Payload == null)
                 return null;
+
+            // Normalize null to empty list for safe enumeration in helper methods
+            surrounding ??= Array.Empty<EditorEvent>();
 
             return evt.Type switch
             {
@@ -137,7 +141,7 @@ namespace MCPForUnity.Editor.ActionTrace.Semantics
             int count = 0;
             foreach (var e in surrounding)
             {
-                if (e.Type == "HierarchyChanged") count++;
+                if (e.Type == EventTypes.HierarchyChanged) count++;
                 if (count >= 3) return true;
             }
             return false;

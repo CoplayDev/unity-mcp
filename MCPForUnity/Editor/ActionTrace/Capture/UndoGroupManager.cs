@@ -1,6 +1,7 @@
 using System;
 using UnityEditor;
 using MCPForUnity.Editor.ActionTrace.Helpers;
+using MCPForUnity.Editor.Helpers;
 
 namespace MCPForUnity.Editor.ActionTrace.Capture
 {
@@ -51,7 +52,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
         {
             if (string.IsNullOrEmpty(toolName))
             {
-                UnityEngine.Debug.LogWarning("[UndoGroupManager] BeginToolCall called with null toolName");
+                McpLog.Warn("[UndoGroupManager] BeginToolCall called with null toolName");
                 toolName = "AI Operation";
             }
 
@@ -65,7 +66,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
             _currentToolCallId = toolCallId;
             _isInToolCall = true;
 
-            UnityEngine.Debug.Log($"[UndoGroupManager] BeginToolCall: {toolName} (group {_currentUndoGroupStart})");
+            McpLog.Info($"[UndoGroupManager] BeginToolCall: {toolName} (group {_currentUndoGroupStart})");
         }
 
         /// <summary>
@@ -83,7 +84,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
         {
             if (!_isInToolCall)
             {
-                UnityEngine.Debug.LogWarning("[UndoGroupManager] EndToolCall called without matching BeginToolCall");
+                McpLog.Warn("[UndoGroupManager] EndToolCall called without matching BeginToolCall");
                 return;
             }
 
@@ -92,7 +93,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 // Collapse all Undo operations since BeginToolCall into one group
                 Undo.CollapseUndoOperations(_currentUndoGroupStart);
 
-                UnityEngine.Debug.Log($"[UndoGroupManager] EndToolCall: {_currentToolName} (collapsed from group {_currentUndoGroupStart})");
+                McpLog.Info($"[UndoGroupManager] EndToolCall: {_currentToolName} (collapsed from group {_currentUndoGroupStart})");
             }
 
             // Reset state
@@ -136,7 +137,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
             if (!_isInToolCall)
                 return;
 
-            UnityEngine.Debug.LogWarning($"[UndoGroupManager] AbortToolCall: {_currentToolName} (group {_currentUndoGroupStart})");
+            McpLog.Warn($"[UndoGroupManager] AbortToolCall: {_currentToolName} (group {_currentUndoGroupStart})");
 
             // Reset state without collapsing
             _currentToolName = null;

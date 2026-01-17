@@ -1,111 +1,238 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
+using UnityEngine;
+using UnityEditor;
 
 namespace MCPForUnity.Editor.ActionTrace.Capture
 {
+    /// <summary>
+    /// Rule-based filter configuration for event filtering.
+    /// Rules are evaluated in order; first match wins.
+    /// </summary>
+    [Serializable]
+    public sealed class FilterRule
+    {
+        public string Name;
+        public bool Enabled = true;
+
+        [Tooltip("Rule type: Prefix=Directory prefix match, Extension=File extension, Regex=Regular expression, GameObject=GameObject name")]
+        public RuleType Type;
+
+        [Tooltip("Pattern to match (e.g., 'Library/', '.meta', '.*\\.tmp$')")]
+        public string Pattern;
+
+        [Tooltip("Action when matched: Block=Filter out, Allow=Allow through")]
+        public FilterAction Action = FilterAction.Block;
+
+        [Tooltip("Priority for conflict resolution. Higher values evaluated first.")]
+        public int Priority;
+
+        [NonSerialized]
+        private Regex _cachedRegex;
+
+        private Regex GetRegex()
+        {
+            if (_cachedRegex != null) return _cachedRegex;
+            if (!string.IsNullOrEmpty(Pattern))
+            {
+                try
+                {
+                    _cachedRegex = new Regex(Pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase);
+                }
+                catch
+                {
+                    // Invalid regex, return null
+                }
+            }
+            return _cachedRegex;
+        }
+
+        public bool Matches(string path, string gameObjectName)
+        {
+            if (string.IsNullOrEmpty(Pattern)) return false;
+
+            return Type switch
+            {
+                RuleType.Prefix => path?.StartsWith(Pattern, StringComparison.OrdinalIgnoreCase) == true,
+                RuleType.Extension => path?.EndsWith(Pattern, StringComparison.OrdinalIgnoreCase) == true,
+                RuleType.Regex => GetRegex()?.IsMatch(path ?? "") == true,
+                RuleType.GameObject => GetRegex()?.IsMatch(gameObjectName ?? "") == true
+                                    || gameObjectName?.Equals(Pattern, StringComparison.OrdinalIgnoreCase) == true,
+                _ => false
+            };
+        }
+
+        public void InvalidateCache()
+        {
+            _cachedRegex = null;
+        }
+    }
+
+    /// <summary>
+    /// Types of filter rules.
+    /// </summary>
+    public enum RuleType
+    {
+        Prefix,      // Directory prefix matching (fast)
+        Extension,   // File extension matching (fast)
+        Regex,       // Full regex pattern (slow, flexible)
+        GameObject   // GameObject name matching
+    }
+
+    /// <summary>
+    /// Filter action when a rule matches.
+    /// </summary>
+    public enum FilterAction
+    {
+        Block,   // Filter out the event
+        Allow    // Allow the event through
+    }
+
+    /// <summary>
+    /// Configurable event filter settings.
+    /// Stored as part of ActionTraceSettings for persistence.
+    /// </summary>
+    [Serializable]
+    public sealed class EventFilterSettings
+    {
+        [Tooltip("Custom filter rules. Evaluated in priority order.")]
+        public List<FilterRule> CustomRules = new();
+
+        [Tooltip("Enable default junk filters (Library/, Temp/, etc.)")]
+        public bool EnableDefaultFilters = true;
+
+        [Tooltip("Enable special handling for .meta files")]
+        public bool EnableMetaFileHandling = true;
+
+        [Tooltip("Minimum GameObject name length to avoid filtering unnamed objects")]
+        public int MinGameObjectNameLength = 2;
+
+        /// <summary>
+        /// Get default built-in filter rules.
+        /// These are always active when EnableDefaultFilters is true.
+        /// </summary>
+        public static readonly List<FilterRule> DefaultRules = new()
+        {
+            new() { Name = "Library Directory", Type = RuleType.Prefix, Pattern = "Library/", Action = FilterAction.Block, Priority = 100 },
+            new() { Name = "Temp Directory", Type = RuleType.Prefix, Pattern = "Temp/", Action = FilterAction.Block, Priority = 100 },
+            new() { Name = "obj Directory", Type = RuleType.Prefix, Pattern = "obj/", Action = FilterAction.Block, Priority = 100 },
+            new() { Name = "Logs Directory", Type = RuleType.Prefix, Pattern = "Logs/", Action = FilterAction.Block, Priority = 100 },
+            new() { Name = "__pycache__", Type = RuleType.Regex, Pattern = @"__pycache__", Action = FilterAction.Block, Priority = 100 },
+            new() { Name = ".git Directory", Type = RuleType.Prefix, Pattern = ".git/", Action = FilterAction.Block, Priority = 100 },
+            new() { Name = ".vs Directory", Type = RuleType.Prefix, Pattern = ".vs/", Action = FilterAction.Block, Priority = 100 },
+            new() { Name = ".pyc Files", Type = RuleType.Extension, Pattern = ".pyc", Action = FilterAction.Block, Priority = 90 },
+            new() { Name = ".pyo Files", Type = RuleType.Extension, Pattern = ".pyo", Action = FilterAction.Block, Priority = 90 },
+            new() { Name = ".tmp Files", Type = RuleType.Extension, Pattern = ".tmp", Action = FilterAction.Block, Priority = 90 },
+            new() { Name = ".temp Files", Type = RuleType.Extension, Pattern = ".temp", Action = FilterAction.Block, Priority = 90 },
+            new() { Name = ".cache Files", Type = RuleType.Extension, Pattern = ".cache", Action = FilterAction.Block, Priority = 90 },
+            new() { Name = ".bak Files", Type = RuleType.Extension, Pattern = ".bak", Action = FilterAction.Block, Priority = 90 },
+            new() { Name = ".swp Files", Type = RuleType.Extension, Pattern = ".swp", Action = FilterAction.Block, Priority = 90 },
+            new() { Name = ".DS_Store", Type = RuleType.Extension, Pattern = ".DS_Store", Action = FilterAction.Block, Priority = 90 },
+            new() { Name = "Thumbs.db", Type = RuleType.Extension, Pattern = "Thumbs.db", Action = FilterAction.Block, Priority = 90 },
+            new() { Name = ".csproj Files", Type = RuleType.Extension, Pattern = ".csproj", Action = FilterAction.Block, Priority = 80 },
+            new() { Name = ".sln Files", Type = RuleType.Extension, Pattern = ".sln", Action = FilterAction.Block, Priority = 80 },
+            new() { Name = ".suo Files", Type = RuleType.Extension, Pattern = ".suo", Action = FilterAction.Block, Priority = 80 },
+            new() { Name = ".user Files", Type = RuleType.Extension, Pattern = ".user", Action = FilterAction.Block, Priority = 80 },
+            new() { Name = "Unnamed GameObjects", Type = RuleType.Regex, Pattern = @"^GameObject\d+$", Action = FilterAction.Block, Priority = 70 },
+            new() { Name = "Generated Colliders", Type = RuleType.Regex, Pattern = @"^Collider\d+$", Action = FilterAction.Block, Priority = 70 },
+            new() { Name = "EditorOnly Objects", Type = RuleType.Prefix, Pattern = "EditorOnly", Action = FilterAction.Block, Priority = 70 },
+        };
+
+        /// <summary>
+        /// Add a new custom rule.
+        /// </summary>
+        public FilterRule AddRule(string name, RuleType type, string pattern, FilterAction action, int priority = 50)
+        {
+            var rule = new FilterRule
+            {
+                Name = name,
+                Type = type,
+                Pattern = pattern,
+                Action = action,
+                Priority = priority,
+                Enabled = true
+            };
+            CustomRules.Add(rule);
+            return rule;
+        }
+
+        /// <summary>
+        /// Remove a rule by name.
+        /// </summary>
+        public bool RemoveRule(string name)
+        {
+            var rule = CustomRules.Find(r => r.Name == name);
+            if (rule != null)
+            {
+                CustomRules.Remove(rule);
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Get all active rules (default + custom, sorted by priority).
+        /// </summary>
+        public List<FilterRule> GetActiveRules()
+        {
+            var rules = new List<FilterRule>();
+
+            if (EnableDefaultFilters)
+            {
+                rules.AddRange(DefaultRules.Where(r => r.Enabled));
+            }
+
+            rules.AddRange(CustomRules.Where(r => r.Enabled));
+
+            // Sort by priority descending (higher priority first)
+            rules.Sort((a, b) => b.Priority.CompareTo(a.Priority));
+
+            return rules;
+        }
+    }
+
     /// <summary>
     /// First line of defense: Capture-layer blacklist to filter out system junk.
     ///
     /// Philosophy: Blacklist at capture layer = "Record everything EXCEPT known garbage"
     /// - Preserves serendipity: AI can see unexpected but important changes
-    /// - Protects memory: Prevents EventStore from filling with 29000 junk entries
+    /// - Protects memory: Prevents EventStore from filling with junk entries
     ///
-    /// Filtered patterns:
-    /// - Python cache: __pycache__, *.pyc
-    /// - Unity internals: Library/, Temp/, obj/, .csproj files
-    /// - Temporary files: *.tmp, ~$*, .DS_Store
-    /// - Build artifacts: *.meta (for non-essential assets)
-    ///
-    /// Usage: Call EventFilter.IsJunkPath(path) before recording events.
+    /// The filter now supports configurable rules via EventFilterSettings.
+    /// Default rules are always applied unless explicitly disabled.
+    /// Custom rules can be added for project-specific filtering.
     /// </summary>
     public static class EventFilter
     {
-        // ========== Blacklist Patterns ==========
+        private static EventFilterSettings _settings;
 
         /// <summary>
-        /// Directory prefixes that are always filtered (fast path check).
-        /// Checked before regex for performance.
+        /// Current filter settings.
+        /// If null, default settings will be used.
         /// </summary>
-        private static readonly HashSet<string> JunkDirectoryPrefixes = new(StringComparer.OrdinalIgnoreCase)
+        public static EventFilterSettings Settings
         {
-            "Library/",
-            "Temp/",
-            "obj/",
-            "Logs/",
-            "UserSettings/",
-            "__pycache__/",
-            ".git/",
-            ".vs/",
-            "bin/",
-            "debug/"
-        };
+            get => _settings ??= new EventFilterSettings();
+            set => _settings = value;
+        }
 
         /// <summary>
-        /// File extension blacklist (fast path check).
-        /// Extensions with leading dot (e.g., ".pyc")
+        /// Reset to default settings.
         /// </summary>
-        private static readonly HashSet<string> JunkExtensions = new(StringComparer.OrdinalIgnoreCase)
+        public static void ResetToDefaults()
         {
-            // Python cache
-            ".pyc",
-            ".pyo",
-            ".pyd",
-
-            // Temporary files
-            ".tmp",
-            ".temp",
-            ".cache",
-            ".bak",
-            ".swp",
-            "~$",
-
-            // OS-specific
-            ".DS_Store",
-            "Thumbs.db",
-            "desktop.ini",
-
-            // Build artifacts (Unity-specific)
-            ".csproj",
-            ".sln",
-            ".suo",
-            ".user",
-            ".pidb",
-            ".booproj"
-        };
-
-        /// <summary>
-        /// Regex patterns for complex junk path matching.
-        /// Used when prefix/extension checks aren't enough.
-        /// </summary>
-        private static readonly List<Regex> JunkPatterns = new()
-        {
-            // Python cache directories (any nested __pycache__)
-            new Regex(@"__pycache__", RegexOptions.Compiled),
-
-            // IDE temp files (editor recovery files)
-            new Regex(@"~\$.*", RegexOptions.Compiled),
-
-            // Unity Library subdirectories (deep nested junk)
-            new Regex(@"Library/[^/]+/.*", RegexOptions.Compiled),
-
-            // Build artifacts with specific patterns
-            new Regex(@".*\.Assembly-CSharp[^/]*\.dll$", RegexOptions.Compiled),
-            new Regex(@".*\.Unity\.Editor\.dll$", RegexOptions.Compiled),
-
-            // Temp directories anywhere in path
-            new Regex(@".*/Temp/.*", RegexOptions.Compiled | RegexOptions.IgnoreCase)
-        };
+            _settings = new EventFilterSettings();
+        }
 
         // ========== Public API ==========
 
         /// <summary>
         /// Determines if a given path should be filtered as junk.
         ///
-        /// Uses a tiered checking strategy for performance:
-        /// 1. Fast prefix check (string StartsWith)
-        /// 2. Fast extension check (string EndsWith)
-        /// 3. Regex pattern match (only if needed)
+        /// Uses configured rules, evaluated in priority order.
+        /// First matching rule decides the outcome.
         ///
         /// Returns: true if the path should be filtered out, false otherwise.
         /// </summary>
@@ -114,96 +241,79 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
             if (string.IsNullOrEmpty(path))
                 return false;
 
-            // Fast path 1: Directory prefix check
-            foreach (var prefix in JunkDirectoryPrefixes)
+            var rules = Settings.GetActiveRules();
+
+            foreach (var rule in rules)
             {
-                if (path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                    return true;
+                if (rule.Matches(path, null))
+                {
+                    return rule.Action == FilterAction.Block;
+                }
             }
 
-            // Fast path 2: File extension check
-            foreach (var ext in JunkExtensions)
-            {
-                if (path.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
-
-            // Slow path: Regex pattern match
-            foreach (var pattern in JunkPatterns)
-            {
-                if (pattern.IsMatch(path))
-                    return true;
-            }
-
-            return false;
+            return false; // Default: allow through
         }
 
         /// <summary>
         /// Checks if an asset path should generate an event.
-        /// This is a wrapper around IsJunkPath with additional logic for assets.
-        ///
-        /// Asset-specific filtering:
-        /// - .meta files are filtered UNLESS they're for prefabs/scenes (important assets)
-        /// - Resources folder assets are never filtered
+        /// This includes additional logic for assets beyond path filtering.
         /// </summary>
         public static bool ShouldTrackAsset(string assetPath)
         {
             if (string.IsNullOrEmpty(assetPath))
-                return true; // Default to tracking for safety
+                return true;
 
             // Check base junk filter
             if (IsJunkPath(assetPath))
                 return false;
 
             // Special handling for .meta files
-            if (assetPath.EndsWith(".meta", StringComparison.OrdinalIgnoreCase))
+            if (Settings.EnableMetaFileHandling && assetPath.EndsWith(".meta", StringComparison.OrdinalIgnoreCase))
             {
-                // Track .meta for important asset types
-                string basePath = assetPath.Substring(0, assetPath.Length - 5); // Remove ".meta"
+                string basePath = assetPath.Substring(0, assetPath.Length - 5);
 
-                // Track if it's a prefab or scene
+                // Track .meta for important asset types
                 if (basePath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase) ||
                     basePath.EndsWith(".unity", StringComparison.OrdinalIgnoreCase))
                 {
                     return true;
                 }
 
-                // Skip .meta for everything else
-                return false;
+                return false; // Skip .meta for everything else
             }
 
-            // Never filter assets in Resources folder (user-accessible at runtime)
+            // Never filter assets in Resources folder
             if (assetPath.Contains("/Resources/", StringComparison.OrdinalIgnoreCase))
                 return true;
 
-            return true; // Default: track the asset
+            return true;
         }
 
         /// <summary>
         /// Checks if a GameObject name should be filtered.
-        /// Unity creates many internal GameObjects that are rarely interesting.
-        ///
-        /// Filtered patterns:
-        /// - "Collider" + number (generated colliders)
-        /// - "GameObject" + number (unnamed objects)
-        /// - Unity editor internals
         /// </summary>
         public static bool IsJunkGameObject(string name)
         {
             if (string.IsNullOrEmpty(name))
                 return false;
 
-            // Unity-generated colliders
-            if (Regex.IsMatch(name, @"^Collider\d+$", RegexOptions.IgnoreCase))
+            // Check minimum length
+            if (name.Length < Settings.MinGameObjectNameLength)
                 return true;
 
-            // Unnamed GameObjects
-            if (Regex.IsMatch(name, @"^GameObject\d+$", RegexOptions.IgnoreCase))
-                return true;
+            var rules = Settings.GetActiveRules();
 
-            // Editor-only objects
-            if (name.StartsWith("EditorOnly", StringComparison.OrdinalIgnoreCase))
-                return true;
+            foreach (var rule in rules)
+            {
+                // Only check GameObject-specific rules
+                if (rule.Type == RuleType.GameObject || rule.Type == RuleType.Regex)
+                {
+                    if (rule.Matches(null, name))
+                    {
+                        return rule.Action == FilterAction.Block;
+                    }
+                }
+            }
 
             return false;
         }
@@ -211,51 +321,109 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
         // ========== Runtime Configuration ==========
 
         /// <summary>
-        /// Adds a custom junk directory prefix at runtime.
-        /// Useful for project-specific filtering rules.
+        /// Adds a custom filter rule at runtime.
+        /// </summary>
+        public static FilterRule AddRule(string name, RuleType type, string pattern, FilterAction action, int priority = 50)
+        {
+            return Settings.AddRule(name, type, pattern, action, priority);
+        }
+
+        /// <summary>
+        /// Adds a junk directory prefix at runtime.
         /// </summary>
         public static void AddJunkDirectoryPrefix(string prefix)
         {
-            if (!string.IsNullOrEmpty(prefix))
-                JunkDirectoryPrefixes.Add(prefix);
+            AddRule($"Custom: {prefix}", RuleType.Prefix, prefix, FilterAction.Block, 50);
         }
 
         /// <summary>
-        /// Adds a custom junk file extension at runtime.
+        /// Adds a junk file extension at runtime.
         /// </summary>
         public static void AddJunkExtension(string extension)
         {
-            if (!string.IsNullOrEmpty(extension))
-            {
-                string ext = extension.StartsWith(".") ? extension : $".{extension}";
-                JunkExtensions.Add(ext);
-            }
+            string ext = extension.StartsWith(".") ? extension : $".{extension}";
+            AddRule($"Custom: {ext}", RuleType.Extension, ext, FilterAction.Block, 50);
         }
 
         /// <summary>
-        /// Adds a custom regex pattern for junk path matching.
+        /// Adds a regex pattern for junk matching at runtime.
         /// </summary>
         public static void AddJunkPattern(string regexPattern)
         {
-            if (!string.IsNullOrEmpty(regexPattern))
-            {
-                JunkPatterns.Add(new Regex(regexPattern, RegexOptions.Compiled));
-            }
+            AddRule($"Custom Regex: {regexPattern}", RuleType.Regex, regexPattern, FilterAction.Block, 50);
+        }
+
+        /// <summary>
+        /// Allow a specific path pattern (create an allow rule).
+        /// </summary>
+        public static void AllowPath(string pattern, int priority = 60)
+        {
+            AddRule($"Allow: {pattern}", RuleType.Regex, pattern, FilterAction.Allow, priority);
         }
 
         // ========== Diagnostic Info ==========
 
         /// <summary>
         /// Gets diagnostic information about the filter configuration.
-        /// Useful for debugging and ensuring filters are working as expected.
         /// </summary>
         public static string GetDiagnosticInfo()
         {
+            var rules = Settings.GetActiveRules();
+            int blockRules = rules.Count(r => r.Action == FilterAction.Block);
+            int allowRules = rules.Count(r => r.Action == FilterAction.Allow);
+
             return $"EventFilter Configuration:\n" +
-                   $"  - Directory Prefixes: {JunkDirectoryPrefixes.Count}\n" +
-                   $"  - Junk Extensions: {JunkExtensions.Count}\n" +
-                   $"  - Regex Patterns: {JunkPatterns.Count}\n" +
-                   $"  - Total Checks: 3-tier (prefix → extension → regex)";
+                   $"  - Default Filters: {(Settings.EnableDefaultFilters ? "Enabled" : "Disabled")}\n" +
+                   $"  - Meta File Handling: {(Settings.EnableMetaFileHandling ? "Enabled" : "Disabled")}\n" +
+                   $"  - Total Rules: {rules.Count}\n" +
+                   $"  - Block Rules: {blockRules}\n" +
+                   $"  - Allow Rules: {allowRules}\n" +
+                   $"  - Custom Rules: {Settings.CustomRules.Count}";
+        }
+
+        /// <summary>
+        /// Test a path against all rules and return the result.
+        /// Useful for debugging filter behavior.
+        /// </summary>
+        public static (bool filtered, FilterRule matchingRule) TestPath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                return (false, null);
+
+            var rules = Settings.GetActiveRules();
+
+            foreach (var rule in rules)
+            {
+                if (rule.Matches(path, null))
+                {
+                    return (rule.Action == FilterAction.Block, rule);
+                }
+            }
+
+            return (false, null);
+        }
+
+        /// <summary>
+        /// Get all rules that would match a given path.
+        /// </summary>
+        public static List<(FilterRule rule, bool wouldBlock)> GetMatchingRules(string path)
+        {
+            var result = new List<(FilterRule, bool)>();
+
+            if (string.IsNullOrEmpty(path))
+                return result;
+
+            var rules = Settings.GetActiveRules();
+
+            foreach (var rule in rules)
+            {
+                if (rule.Matches(path, null))
+                {
+                    result.Add((rule, rule.Action == FilterAction.Block));
+                }
+            }
+
+            return result;
         }
     }
 }

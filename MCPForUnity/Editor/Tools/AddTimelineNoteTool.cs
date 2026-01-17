@@ -26,7 +26,7 @@ namespace MCPForUnity.Editor.Tools
     ///   "related_sequences": [100, 101, 102]
     /// }
     /// </summary>
-    [McpForUnityTool("add_action_trace_note")]
+    [McpForUnityTool("add_action_trace_note", Description = "Adds AI notes/annotations to the ActionTrace for task tracking")]
     public static class AddActionTraceNoteTool
     {
         /// <summary>

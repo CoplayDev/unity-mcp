@@ -26,6 +26,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
     /// - GlobalIdHelper.ToGlobalIdString() for stable object IDs
     /// - UnityJsonSerializer.Instance for Unity type serialization
     /// </summary>
+    [InitializeOnLoad]
     public static class PropertyChangeTracker
     {
         // Configuration

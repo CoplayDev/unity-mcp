@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using UnityEditor;
 using UnityEngine;
+using MCPForUnity.Editor.Helpers;
 
 namespace MCPForUnity.Editor.ActionTrace.VCS
 {
@@ -85,7 +86,7 @@ namespace MCPForUnity.Editor.ActionTrace.VCS
             }
             catch (System.Exception ex)
             {
-                UnityEngine.Debug.LogWarning($"[VcsContextProvider] Failed to query Git status: {ex.Message}");
+                McpLog.Warn($"[VcsContextProvider] Failed to query Git status: {ex.Message}");
                 // Fall back to default context
                 _currentContext = VcsContext.CreateDefault();
             }
@@ -187,10 +188,27 @@ namespace MCPForUnity.Editor.ActionTrace.VCS
                     var outputTask = System.Threading.Tasks.Task.Run(() => process.StandardOutput.ReadToEnd());
                     var errorTask = System.Threading.Tasks.Task.Run(() => process.StandardError.ReadToEnd());
 
-                    process.WaitForExit();
+                    // Add timeout protection (5 seconds) to prevent editor freeze
+                    if (!process.WaitForExit(5000))
+                    {
+                        // Timeout exceeded - kill the process
+                        try
+                        {
+                            process.Kill();
+                            // Wait for process to actually exit after Kill
+                            process.WaitForExit(1000);
+                        }
+                        catch { }
+                        McpLog.Warn("[VcsContextProvider] Git command timeout after 5 seconds");
+                        return null;
+                    }
 
-                    // Wait for both read tasks to complete
-                    System.Threading.Tasks.Task.WaitAll(outputTask, errorTask);
+                    // Wait for both read tasks to complete (with short timeout to avoid hanging)
+                    if (!System.Threading.Tasks.Task.WaitAll(new[] { outputTask, errorTask }, 1000))
+                    {
+                        McpLog.Warn("[VcsContextProvider] Git output read timeout");
+                        return null;
+                    }
 
                     var output = outputTask.Result;
                     var error = errorTask.Result;
@@ -198,7 +216,7 @@ namespace MCPForUnity.Editor.ActionTrace.VCS
                     // Log if there is error output
                     if (!string.IsNullOrEmpty(error))
                     {
-                        UnityEngine.Debug.LogWarning($"[VcsContextProvider] Git error: {error.Trim()}");
+                        McpLog.Warn($"[VcsContextProvider] Git error: {error.Trim()}");
                     }
 
                     return output.Trim();
@@ -206,7 +224,7 @@ namespace MCPForUnity.Editor.ActionTrace.VCS
             }
             catch (System.Exception ex)
             {
-                UnityEngine.Debug.LogWarning($"[VcsContextProvider] Git command failed: {ex.Message}");
+                McpLog.Warn($"[VcsContextProvider] Git command failed: {ex.Message}");
                 return null;
             }
         }
@@ -282,12 +300,6 @@ namespace MCPForUnity.Editor.ActionTrace.VCS
         /// </summary>
         public bool IsDirty { get; set; }
 
-        // Cached dictionary to prevent repeated allocations
-        private Dictionary<string, object> _cachedDictionary;
-        private string _lastCachedCommitId;
-        private string _lastCachedBranch;
-        private bool _lastCachedIsDirty;
-
         /// <summary>
         /// Creates a default Vcs context for non-Git repositories.
         /// </summary>
@@ -303,33 +315,16 @@ namespace MCPForUnity.Editor.ActionTrace.VCS
 
         /// <summary>
         /// Converts this context to a dictionary for event payload injection.
-        /// Uses caching to prevent repeated allocations (called on every event record).
+        /// Returns a new dictionary on each call to prevent unintended mutations.
         /// </summary>
         public Dictionary<string, object> ToDictionary()
         {
-            // Check if cache is valid (no fields changed since last call)
-            if (_cachedDictionary != null &&
-                _lastCachedCommitId == CommitId &&
-                _lastCachedBranch == Branch &&
-                _lastCachedIsDirty == IsDirty)
-            {
-                return _cachedDictionary;
-            }
-
-            // Cache is invalid or doesn't exist - create new dictionary
-            _cachedDictionary = new Dictionary<string, object>
+            return new Dictionary<string, object>
             {
                 ["commit_id"] = CommitId,
                 ["branch"] = Branch,
                 ["is_dirty"] = IsDirty
             };
-
-            // Update cache validation fields
-            _lastCachedCommitId = CommitId;
-            _lastCachedBranch = Branch;
-            _lastCachedIsDirty = IsDirty;
-
-            return _cachedDictionary;
         }
     }
 }

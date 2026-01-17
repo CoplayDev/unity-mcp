@@ -1,11 +1,17 @@
 using System;
 using MCPForUnity.Editor.ActionTrace.Core;
+using UnityEngine;
 
 namespace MCPForUnity.Editor.ActionTrace.Semantics
 {
     /// <summary>
     /// Default implementation of event importance scoring.
-    /// Scores are based on event type and payload characteristics.
+    /// Scores are based on event type metadata, with special handling for payload-based adjustments.
+    ///
+    /// Scoring priority:
+    /// 1. Metadata.DefaultImportance (configured in EventTypes.Metadata)
+    /// 2. Payload-based adjustments (Script, Scene, Prefab detection)
+    /// 3. Dehydrated events (Payload is null) → 0.1f
     /// </summary>
     public sealed class DefaultEventScorer : IEventScorer
     {
@@ -20,80 +26,61 @@ namespace MCPForUnity.Editor.ActionTrace.Semantics
         /// Calculate importance score for an event.
         /// Higher scores indicate more significant events.
         ///
-        /// Scoring strategy (L3 Semantic Whitelist):
-        /// - Critical (1.0): Build failures, AI notes, critical errors
-        /// - High (0.7-0.9): Scripts, Scenes, Component operations, Property changes
-        /// - Medium (0.4-0.6): GameObject operations, Asset imports
-        /// - Low (0.1-0.3): Hierarchy changes, Play mode toggles
-        ///
-        /// Default behavior: get_action_Trace only returns events with score >= 0.4 (medium+)
-        /// unless include_low_importance=true is specified.
+        /// Scoring strategy:
+        /// - Uses EventTypes.Metadata.Get() for base score
+        /// - Applies payload-based adjustments for assets (Script=+0.4, Scene=+0.2, Prefab=+0.3)
+        /// - Dehydrated events return 0.1f
         /// </summary>
         public float Score(EditorEvent evt)
         {
-            // For dehydrated events (Payload is null), use a low default score
+            // Dehydrated events (Payload is null) use low default score
             if (evt.Payload == null)
                 return 0.1f;
 
-            return evt.Type switch
-            {
-                // ========== Critical (1.0) ==========
-                // Build failures and AI annotations are top priority
-                EventTypes.BuildFailed => 1.0f,
-                EventTypes.ScriptCompilationFailed => 1.0f,
-                "AINote" => 1.0f,  // AI-written notes are always critical
+            // Get base score from metadata
+            var meta = EventTypes.Metadata.Get(evt.Type);
+            float baseScore = meta.DefaultImportance;
 
-                // ========== High (0.7-0.9) ==========
-                // Scripts and Scenes are project structure changes
-                EventTypes.AssetCreated or EventTypes.AssetImported when IsScript(evt) => 0.9f,
-                EventTypes.AssetCreated or EventTypes.AssetImported when IsScene(evt) => 0.7f,
-                EventTypes.AssetCreated or EventTypes.AssetImported when IsPrefab(evt) => 0.8f,
+            // Special case: AINote is always critical
+            if (evt.Type == "AINote")
+                return 1.0f;
 
-                // Component and Property modifications (direct user actions)
-                EventTypes.ComponentRemoved => 0.7f,
-                EventTypes.SelectionPropertyModified => 0.7f,  // Selected object property changes are high priority
-                EventTypes.PropertyModified => 0.6f,  // P0 property-level tracking
-                EventTypes.ComponentAdded => 0.6f,
+            // Apply payload-based adjustments for asset events
+            float adjustment = GetPayloadAdjustment(evt);
+            return Mathf.Clamp01(baseScore + adjustment);
+        }
 
-                // Scene operations
-                EventTypes.SceneSaved => 0.8f,
-                EventTypes.SceneSaving => 0.5f,  // Scene saving in progress
-                EventTypes.SceneOpened => 0.7f,
-                EventTypes.NewSceneCreated => 0.6f,  // New scene creation
+        /// <summary>
+        /// Calculate score adjustment based on payload content.
+        /// Used to boost/reduce scores for specific asset types.
+        /// </summary>
+        private static float GetPayloadAdjustment(EditorEvent evt)
+        {
+            if (evt.Payload == null)
+                return 0f;
 
-                // Build operations (success is important but less than failure)
-                EventTypes.BuildStarted => 0.9f,
-                EventTypes.BuildCompleted => 1.0f,
+            // Asset type adjustments (only for AssetCreated/AssetImported)
+            bool isAssetEvent = evt.Type == EventTypes.AssetCreated ||
+                               evt.Type == EventTypes.AssetImported;
 
-                // Destructive asset operations (high importance)
-                EventTypes.AssetDeleted => 0.8f,  // Permanent deletion is critical
+            if (!isAssetEvent)
+                return 0f;
 
-                // ========== Medium (0.4-0.6) ==========
-                // GameObject operations (structure changes)
-                EventTypes.GameObjectDestroyed => 0.6f,
-                EventTypes.GameObjectCreated => 0.5f,
-                EventTypes.AssetCreated or EventTypes.AssetImported => 0.5f,
-                EventTypes.AssetModified => 0.4f,  // Asset content changes
-                EventTypes.ScriptCompiled => 0.4f,
+            if (IsScript(evt))
+                return 0.4f;  // Scripts are high priority
+            if (IsScene(evt))
+                return 0.2f;
+            if (IsPrefab(evt))
+                return 0.3f;
 
-                // ========== Low (0.1-0.3) ==========
-                // Hierarchy changes are noise (happen very frequently)
-                EventTypes.HierarchyChanged => 0.2f,
-                EventTypes.SelectionChanged => 0.1f,  // Selection changes happen very frequently
-                EventTypes.AssetMoved => 0.3f,  // Moving assets within project
-                EventTypes.PlayModeChanged => 0.3f,
-
-                // Default low importance for unknown types
-                _ => 0.1f
-            };
+            return 0f;
         }
 
         private static bool IsScript(EditorEvent e)
         {
-            if (e.Payload == null) return false;
             if (e.Payload.TryGetValue("extension", out var ext))
                 return ext.ToString() == ".cs";
-            if (e.Payload.TryGetValue("type", out var type))
+            if (e.Payload.TryGetValue("asset_type", out var type))
                 return type.ToString()?.Contains("Script") == true ||
                        type.ToString()?.Contains("MonoScript") == true;
             return false;
@@ -101,20 +88,18 @@ namespace MCPForUnity.Editor.ActionTrace.Semantics
 
         private static bool IsScene(EditorEvent e)
         {
-            if (e.Payload == null) return false;
             if (e.Payload.TryGetValue("extension", out var ext))
                 return ext.ToString() == ".unity";
-            if (e.Payload.TryGetValue("type", out var type))
+            if (e.Payload.TryGetValue("asset_type", out var type))
                 return type.ToString()?.Contains("Scene") == true;
             return false;
         }
 
         private static bool IsPrefab(EditorEvent e)
         {
-            if (e.Payload == null) return false;
             if (e.Payload.TryGetValue("extension", out var ext))
                 return ext.ToString() == ".prefab";
-            if (e.Payload.TryGetValue("type", out var type))
+            if (e.Payload.TryGetValue("asset_type", out var type))
                 return type.ToString()?.Contains("Prefab") == true;
             return false;
         }

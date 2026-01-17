@@ -34,7 +34,7 @@ namespace MCPForUnity.Editor.ActionTrace.Core
                 return false;
 
             var settings = ActionTraceSettings.Instance;
-            int mergeWindowMs = settings?.MergeWindowMs ?? 100;
+            int mergeWindowMs = settings?.Merging.MergeWindowMs ?? 100;
 
             // Time window check
             long timeDelta = evt.TimestampUnixMs - _lastRecordedTime;
@@ -66,7 +66,9 @@ namespace MCPForUnity.Editor.ActionTrace.Core
         /// Updates the last event's timestamp and end_value (if applicable).
         /// IMPORTANT: This method must only be called while holding _queryLock.
         /// </summary>
-        private static void MergeWithLastEventLocked(EditorEvent evt)
+        /// <param name="evt">The new event to merge (without sequence number)</param>
+        /// <param name="evtWithSequence">The event with assigned sequence number (for updating _lastRecordedEvent)</param>
+        private static void MergeWithLastEventLocked(EditorEvent evt, EditorEvent evtWithSequence)
         {
             if (_lastRecordedEvent == null)
                 return;
@@ -74,7 +76,13 @@ namespace MCPForUnity.Editor.ActionTrace.Core
             // Update timestamp to reflect the most recent activity
             _lastRecordedTime = evt.TimestampUnixMs;
 
-            // For property modification events, update the end_value
+            // Update the last event in the list
+            // CRITICAL: Always update _events[lastEventIndex] to maintain consistency with _lastRecordedEvent
+            int lastEventIndex = _events.Count - 1;
+            if (lastEventIndex < 0)
+                return;
+
+            // For events with payload, update with merged payload
             if (evt.Payload != null && _lastRecordedEvent.Payload != null)
             {
                 var newPayload = new Dictionary<string, object>(_lastRecordedEvent.Payload);
@@ -96,20 +104,30 @@ namespace MCPForUnity.Editor.ActionTrace.Core
                 }
                 newPayload["merge_count"] = mergeCount;
 
-                // Update the last event's payload (requires creating new EditorEvent)
-                int lastEventIndex = _events.Count - 1;
-                if (lastEventIndex >= 0)
-                {
-                    _events[lastEventIndex] = new EditorEvent(
-                        sequence: _lastRecordedEvent.Sequence,
-                        timestampUnixMs: evt.TimestampUnixMs,
-                        type: _lastRecordedEvent.Type,
-                        targetId: _lastRecordedEvent.TargetId,
-                        payload: newPayload
-                    );
-                    _lastRecordedEvent = _events[lastEventIndex];
-                }
+                // Update the last event with merged payload
+                _events[lastEventIndex] = new EditorEvent(
+                    sequence: _lastRecordedEvent.Sequence,
+                    timestampUnixMs: evt.TimestampUnixMs,
+                    type: _lastRecordedEvent.Type,
+                    targetId: _lastRecordedEvent.TargetId,
+                    payload: newPayload
+                );
             }
+            else
+            {
+                // For dehydrated events or non-property-modification events,
+                // update timestamp and keep existing payload
+                _events[lastEventIndex] = new EditorEvent(
+                    sequence: _lastRecordedEvent.Sequence,
+                    timestampUnixMs: evt.TimestampUnixMs,
+                    type: _lastRecordedEvent.Type,
+                    targetId: _lastRecordedEvent.TargetId,
+                    payload: _lastRecordedEvent.Payload
+                );
+            }
+
+            // Update _lastRecordedEvent to reference the merged event from the list
+            _lastRecordedEvent = _events[lastEventIndex];
 
             // Schedule save since we modified the last event
             _isDirty = true;

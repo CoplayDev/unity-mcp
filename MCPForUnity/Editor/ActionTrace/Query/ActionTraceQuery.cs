@@ -121,7 +121,10 @@ namespace MCPForUnity.Editor.ActionTrace.Query
                 var displaySummary = evt.GetSummary();
                 var displaySummaryLower = (displaySummary ?? string.Empty).ToLowerInvariant();
                 var displayTargetIdLower = (evt.TargetId ?? string.Empty).ToLowerInvariant();
-                var displayTime = DateTimeOffset.FromUnixTimeMilliseconds(evt.TimestampUnixMs).ToString("HH:mm:ss");
+
+                // Format as local time including date: MM-dd HH:mm
+                var localTime = DateTimeOffset.FromUnixTimeMilliseconds(evt.TimestampUnixMs).ToLocalTime();
+                var displayTime = localTime.ToString("MM-dd HH:mm");
                 var displaySequence = evt.Sequence.ToString();
 
                 // Precompute colors
@@ -176,7 +179,10 @@ namespace MCPForUnity.Editor.ActionTrace.Query
                 var displaySummary = evt.GetSummary();
                 var displaySummaryLower = (displaySummary ?? string.Empty).ToLowerInvariant();
                 var displayTargetIdLower = (evt.TargetId ?? string.Empty).ToLowerInvariant();
-                var displayTime = DateTimeOffset.FromUnixTimeMilliseconds(evt.TimestampUnixMs).ToString("HH:mm:ss");
+
+                // Format as local time including date: MM-dd HH:mm
+                var localTime = DateTimeOffset.FromUnixTimeMilliseconds(evt.TimestampUnixMs).ToLocalTime();
+                var displayTime = localTime.ToString("MM-dd HH:mm");
                 var displaySequence = evt.Sequence.ToString();
 
                 // Precompute colors

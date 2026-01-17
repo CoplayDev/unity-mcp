@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using MCPForUnity.Editor.ActionTrace.Core;
+using MCPForUnity.Editor.Helpers;
 using UnityEngine;
 
 namespace MCPForUnity.Editor.ActionTrace.Capture
@@ -18,19 +19,36 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
     /// Usage:
     ///   ActionTraceEventEmitter.EmitComponentAdded(component);
     ///   ActionTraceEventEmitter.EmitAssetImported(assetPath, assetType);
+    ///   ActionTraceEventEmitter.Emit("CustomEvent", targetId, payload);
     /// </summary>
     public static class ActionTraceEventEmitter
     {
         /// <summary>
+        /// Generic event emission method.
+        /// Use this for custom events or when a specific EmitXxx method doesn't exist.
+        ///
+        /// Usage:
+        ///   Emit("MyCustomEvent", "target123", new Dictionary<string, object> { ["key"] = "value" });
+        /// </summary>
+        public static void Emit(string eventType, string targetId, Dictionary<string, object> payload)
+        {
+            EmitEvent(eventType, targetId ?? "Unknown", payload);
+        }
+
+        /// <summary>
         /// Emit a component added event.
+        /// Uses GlobalIdHelper for cross-session stable target IDs.
         /// </summary>
         public static void EmitComponentAdded(Component component)
         {
             if (component == null)
             {
-                Debug.LogWarning("[ActionTraceEventEmitter] Attempted to emit ComponentAdded with null component");
+                McpLog.Warn("[ActionTraceEventEmitter] Attempted to emit ComponentAdded with null component");
                 return;
             }
+
+            // Use GlobalIdHelper for cross-session stable ID
+            string globalId = GlobalIdHelper.ToGlobalIdString(component);
 
             var payload = new Dictionary<string, object>
             {
@@ -38,19 +56,23 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 ["game_object"] = component.gameObject?.name ?? "Unknown"
             };
 
-            EmitEvent(EventTypes.ComponentAdded, component.GetInstanceID().ToString(), payload);
+            EmitEvent(EventTypes.ComponentAdded, globalId, payload);
         }
 
         /// <summary>
         /// Emit a component removed event.
+        /// Uses GlobalIdHelper for cross-session stable target IDs.
         /// </summary>
         public static void EmitComponentRemoved(Component component)
         {
             if (component == null)
             {
-                Debug.LogWarning("[ActionTraceEventEmitter] Attempted to emit ComponentRemoved with null component");
+                McpLog.Warn("[ActionTraceEventEmitter] Attempted to emit ComponentRemoved with null component");
                 return;
             }
+
+            // Use GlobalIdHelper for cross-session stable ID
+            string globalId = GlobalIdHelper.ToGlobalIdString(component);
 
             var payload = new Dictionary<string, object>
             {
@@ -58,19 +80,23 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 ["game_object"] = component.gameObject?.name ?? "Unknown"
             };
 
-            EmitEvent(EventTypes.ComponentRemoved, component.GetInstanceID().ToString(), payload);
+            EmitEvent(EventTypes.ComponentRemoved, globalId, payload);
         }
 
         /// <summary>
         /// Emit a GameObject created event.
+        /// Uses GlobalIdHelper for cross-session stable target IDs.
         /// </summary>
         public static void EmitGameObjectCreated(GameObject gameObject)
         {
             if (gameObject == null)
             {
-                Debug.LogWarning("[ActionTraceEventEmitter] Attempted to emit GameObjectCreated with null GameObject");
+                McpLog.Warn("[ActionTraceEventEmitter] Attempted to emit GameObjectCreated with null GameObject");
                 return;
             }
+
+            // Use GlobalIdHelper for cross-session stable ID
+            string globalId = GlobalIdHelper.ToGlobalIdString(gameObject);
 
             var payload = new Dictionary<string, object>
             {
@@ -78,11 +104,44 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 ["instance_id"] = gameObject.GetInstanceID()
             };
 
-            EmitEvent(EventTypes.GameObjectCreated, gameObject.GetInstanceID().ToString(), payload);
+            EmitEvent(EventTypes.GameObjectCreated, globalId, payload);
         }
 
         /// <summary>
         /// Emit a GameObject destroyed event.
+        /// Uses GlobalIdHelper for cross-session stable target IDs.
+        ///
+        /// Call this before the GameObject is destroyed:
+        ///   EmitGameObjectDestroyed(gameObject);  // Preferred
+        ///   EmitGameObjectDestroyed(globalId, name);  // Alternative
+        /// </summary>
+        public static void EmitGameObjectDestroyed(GameObject gameObject)
+        {
+            if (gameObject == null)
+            {
+                McpLog.Warn("[ActionTraceEventEmitter] Attempted to emit GameObjectDestroyed with null GameObject");
+                return;
+            }
+
+            // Use GlobalIdHelper for cross-session stable ID
+            string globalId = GlobalIdHelper.ToGlobalIdString(gameObject);
+
+            var payload = new Dictionary<string, object>
+            {
+                ["name"] = gameObject.name,
+                ["instance_id"] = gameObject.GetInstanceID()
+            };
+
+            EmitEvent(EventTypes.GameObjectDestroyed, globalId, payload);
+        }
+
+        /// <summary>
+        /// Emit a GameObject destroyed event (alternative overload for when only instanceId is available).
+        /// This overload is used when GameObject is already destroyed or unavailable.
+        ///
+        /// Priority:
+        /// 1. Use EmitGameObjectDestroyed(GameObject) when GameObject is available - provides stable GlobalId
+        /// 2. This fallback when only instanceId is known - ID may not be cross-session stable
         /// </summary>
         public static void EmitGameObjectDestroyed(int instanceId, string name)
         {
@@ -92,6 +151,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 ["instance_id"] = instanceId
             };
 
+            // Fallback: use InstanceID when GameObject is unavailable (not cross-session stable)
             EmitEvent(EventTypes.GameObjectDestroyed, instanceId.ToString(), payload);
         }
 
@@ -123,37 +183,49 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
 
         /// <summary>
         /// Emit a scene saving event.
+        /// Uses Asset:{path} format for cross-session stable target IDs.
         /// </summary>
         public static void EmitSceneSaving(string sceneName, string path)
         {
+            // Use scene path as stable identifier (Asset: prefix for consistency with GlobalIdHelper)
+            string targetId = string.IsNullOrEmpty(path) ? sceneName : $"Asset:{path}";
+
             var payload = new Dictionary<string, object>
             {
                 ["scene_name"] = sceneName,
                 ["path"] = path
             };
 
-            EmitEvent(EventTypes.SceneSaving, sceneName, payload);
+            EmitEvent(EventTypes.SceneSaving, targetId, payload);
         }
 
         /// <summary>
         /// Emit a scene saved event.
+        /// Uses Asset:{path} format for cross-session stable target IDs.
         /// </summary>
         public static void EmitSceneSaved(string sceneName, string path)
         {
+            // Use scene path as stable identifier (Asset: prefix for consistency with GlobalIdHelper)
+            string targetId = string.IsNullOrEmpty(path) ? sceneName : $"Asset:{path}";
+
             var payload = new Dictionary<string, object>
             {
                 ["scene_name"] = sceneName,
                 ["path"] = path
             };
 
-            EmitEvent(EventTypes.SceneSaved, sceneName, payload);
+            EmitEvent(EventTypes.SceneSaved, targetId, payload);
         }
 
         /// <summary>
         /// Emit a scene opened event.
+        /// Uses Asset:{path} format for cross-session stable target IDs.
         /// </summary>
         public static void EmitSceneOpened(string sceneName, string path, string mode)
         {
+            // Use scene path as stable identifier (Asset: prefix for consistency with GlobalIdHelper)
+            string targetId = string.IsNullOrEmpty(path) ? sceneName : $"Asset:{path}";
+
             var payload = new Dictionary<string, object>
             {
                 ["scene_name"] = sceneName,
@@ -161,7 +233,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 ["mode"] = mode
             };
 
-            EmitEvent(EventTypes.SceneOpened, sceneName, payload);
+            EmitEvent(EventTypes.SceneOpened, targetId, payload);
         }
 
         /// <summary>
@@ -179,14 +251,17 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
 
         /// <summary>
         /// Emit an asset imported event.
+        /// Uses Asset:{path} format for cross-session stable target IDs.
         /// </summary>
         public static void EmitAssetImported(string assetPath, string assetType = null)
         {
             if (string.IsNullOrEmpty(assetPath))
             {
-                Debug.LogWarning("[ActionTraceEventEmitter] Attempted to emit AssetImported with null or empty path");
+                McpLog.Warn("[ActionTraceEventEmitter] Attempted to emit AssetImported with null or empty path");
                 return;
             }
+
+            string targetId = $"Asset:{assetPath}";
 
             var payload = new Dictionary<string, object>
             {
@@ -204,19 +279,22 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 payload["asset_type"] = DetectAssetType(assetPath);
             }
 
-            EmitEvent(EventTypes.AssetImported, assetPath, payload);
+            EmitEvent(EventTypes.AssetImported, targetId, payload);
         }
 
         /// <summary>
         /// Emit an asset deleted event.
+        /// Uses Asset:{path} format for cross-session stable target IDs.
         /// </summary>
         public static void EmitAssetDeleted(string assetPath)
         {
             if (string.IsNullOrEmpty(assetPath))
             {
-                Debug.LogWarning("[ActionTraceEventEmitter] Attempted to emit AssetDeleted with null or empty path");
+                McpLog.Warn("[ActionTraceEventEmitter] Attempted to emit AssetDeleted with null or empty path");
                 return;
             }
+
+            string targetId = $"Asset:{assetPath}";
 
             var payload = new Dictionary<string, object>
             {
@@ -224,19 +302,22 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 ["extension"] = System.IO.Path.GetExtension(assetPath)
             };
 
-            EmitEvent(EventTypes.AssetDeleted, assetPath, payload);
+            EmitEvent(EventTypes.AssetDeleted, targetId, payload);
         }
 
         /// <summary>
         /// Emit an asset moved event.
+        /// Uses Asset:{toPath} format for cross-session stable target IDs.
         /// </summary>
         public static void EmitAssetMoved(string fromPath, string toPath)
         {
             if (string.IsNullOrEmpty(toPath))
             {
-                Debug.LogWarning("[ActionTraceEventEmitter] Attempted to emit AssetMoved with null or empty destination path");
+                McpLog.Warn("[ActionTraceEventEmitter] Attempted to emit AssetMoved with null or empty destination path");
                 return;
             }
+
+            string targetId = $"Asset:{toPath}";
 
             var payload = new Dictionary<string, object>
             {
@@ -245,7 +326,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 ["extension"] = System.IO.Path.GetExtension(toPath)
             };
 
-            EmitEvent(EventTypes.AssetMoved, toPath, payload);
+            EmitEvent(EventTypes.AssetMoved, targetId, payload);
         }
 
         /// <summary>
@@ -327,14 +408,17 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
 
         /// <summary>
         /// Emit an asset modified event via MCP tool (manage_asset).
+        /// Uses Asset:{path} format for cross-session stable target IDs.
         /// </summary>
         public static void EmitAssetModified(string assetPath, string assetType, IReadOnlyDictionary<string, object> changes)
         {
             if (string.IsNullOrEmpty(assetPath))
             {
-                Debug.LogWarning("[ActionTraceEventEmitter] AssetModified with null path");
+                McpLog.Warn("[ActionTraceEventEmitter] AssetModified with null path");
                 return;
             }
+
+            string targetId = $"Asset:{assetPath}";
 
             var payload = new Dictionary<string, object>
             {
@@ -344,19 +428,22 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 ["source"] = "mcp_tool"  // Indicates this change came from an MCP tool call
             };
 
-            EmitEvent(EventTypes.AssetModified, assetPath, payload);
+            EmitEvent(EventTypes.AssetModified, targetId, payload);
         }
 
         /// <summary>
         /// Emit an asset created event via MCP tool (manage_asset).
+        /// Uses Asset:{path} format for cross-session stable target IDs.
         /// </summary>
         public static void EmitAssetCreated(string assetPath, string assetType)
         {
             if (string.IsNullOrEmpty(assetPath))
             {
-                Debug.LogWarning("[ActionTraceEventEmitter] AssetCreated with null path");
+                McpLog.Warn("[ActionTraceEventEmitter] AssetCreated with null path");
                 return;
             }
+
+            string targetId = $"Asset:{assetPath}";
 
             var payload = new Dictionary<string, object>
             {
@@ -365,19 +452,22 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 ["source"] = "mcp_tool"
             };
 
-            EmitEvent(EventTypes.AssetCreated, assetPath, payload);
+            EmitEvent(EventTypes.AssetCreated, targetId, payload);
         }
 
         /// <summary>
         /// Emit an asset deleted event via MCP tool (manage_asset).
+        /// Uses Asset:{path} format for cross-session stable target IDs.
         /// </summary>
         public static void EmitAssetDeleted(string assetPath, string assetType)
         {
             if (string.IsNullOrEmpty(assetPath))
             {
-                Debug.LogWarning("[ActionTraceEventEmitter] AssetDeleted with null path");
+                McpLog.Warn("[ActionTraceEventEmitter] AssetDeleted with null path");
                 return;
             }
+
+            string targetId = $"Asset:{assetPath}";
 
             var payload = new Dictionary<string, object>
             {
@@ -386,7 +476,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 ["source"] = "mcp_tool"
             };
 
-            EmitEvent(EventTypes.AssetDeleted, assetPath, payload);
+            EmitEvent(EventTypes.AssetDeleted, targetId, payload);
         }
 
         /// <summary>
@@ -409,7 +499,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[ActionTraceEventEmitter] Failed to emit {eventType} event: {ex.Message}");
+                McpLog.Warn($"[ActionTraceEventEmitter] Failed to emit {eventType} event: {ex.Message}");
             }
         }
 

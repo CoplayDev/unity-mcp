@@ -70,16 +70,26 @@ namespace MCPForUnity.Editor.ActionTrace.Core
         /// Returns:
         /// - New sequence number for newly recorded events
         /// - Existing sequence number when events are merged
-        /// - -1 when event is rejected by importance filter
+        /// - -1 when event is rejected by filters
+        ///
+        /// Note: Set ActionTraceSettings.BypassImportanceFilter = true to record all events
+        /// regardless of importance score (useful for complete timeline view).
         /// </summary>
         public static long Record(EditorEvent @event)
         {
-            // Apply importance filter at store level
             var settings = ActionTraceSettings.Instance;
-            if (settings != null)
+
+            // Apply disabled event types filter (hard filter, cannot be bypassed)
+            if (settings != null && IsEventTypeDisabled(@event.Type, settings.Filtering.DisabledEventTypes))
+            {
+                return -1;
+            }
+
+            // Apply importance filter at store level (unless bypassed in Settings)
+            if (settings != null && !settings.Filtering.BypassImportanceFilter)
             {
                 float importance = DefaultEventScorer.Instance.Score(@event);
-                if (importance < settings.MinImportanceForRecording)
+                if (importance < settings.Filtering.MinImportanceForRecording)
                 {
                     return -1;
                 }
@@ -95,23 +105,23 @@ namespace MCPForUnity.Editor.ActionTrace.Core
                 payload: @event.Payload
             );
 
-            // Store reference for merge detection (used in EventStore.Merging.cs)
-            _lastRecordedEvent = evtWithSequence;
-            _lastRecordedTime = @event.TimestampUnixMs;
-
-            int hotEventCount = settings?.HotEventCount ?? 100;
-            int maxEvents = settings?.MaxEvents ?? 800;
+            int hotEventCount = settings?.Storage.HotEventCount ?? 100;
+            int maxEvents = settings?.Storage.MaxEvents ?? 800;
 
             lock (_queryLock)
             {
                 // Check if this event should be merged with the last one
-                if (settings?.EnableEventMerging != false && ShouldMergeWithLast(@event))
+                if (settings?.Merging.EnableEventMerging != false && ShouldMergeWithLast(@event))
                 {
-                    MergeWithLastEventLocked(@event);
+                    MergeWithLastEventLocked(@event, evtWithSequence);
                     return _lastRecordedEvent.Sequence;
                 }
 
                 _events.Add(evtWithSequence);
+
+                // Update merge tracking AFTER merge check and add to prevent self-merge
+                _lastRecordedEvent = evtWithSequence;
+                _lastRecordedTime = @event.TimestampUnixMs;
 
                 // Auto-dehydrate old events
                 if (_events.Count > hotEventCount)
@@ -231,6 +241,16 @@ namespace MCPForUnity.Editor.ActionTrace.Core
                 _contextMappings.Clear();
                 _sequenceCounter = 0;
             }
+
+            // Reset merge tracking and pending notifications
+            _lastRecordedEvent = null;
+            _lastRecordedTime = 0;
+            lock (_pendingNotifications)
+            {
+                _pendingNotifications.Clear();
+                _notifyScheduled = false;
+            }
+
             SaveToStorage();
         }
 
@@ -271,6 +291,22 @@ namespace MCPForUnity.Editor.ActionTrace.Core
             {
                 EventRecorded?.Invoke(evt);
             }
+        }
+
+        /// <summary>
+        /// Check if an event type is disabled in settings.
+        /// </summary>
+        private static bool IsEventTypeDisabled(string eventType, string[] disabledTypes)
+        {
+            if (disabledTypes == null || disabledTypes.Length == 0)
+                return false;
+
+            foreach (string disabled in disabledTypes)
+            {
+                if (string.Equals(eventType, disabled, StringComparison.Ordinal))
+                    return true;
+            }
+            return false;
         }
     }
 }

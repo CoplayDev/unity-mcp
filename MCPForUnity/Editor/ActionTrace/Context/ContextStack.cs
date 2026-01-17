@@ -88,8 +88,8 @@ namespace MCPForUnity.Editor.ActionTrace.Context
             stack.Push(context);
 
 #if DEBUG
-            UnityEngine.Debug.Log(
-                $"[ContextStack] Push context {context.ContextId} on thread {_threadId}, depth: {stack.Count}");
+                McpLog.Info(
+                    $"[ContextStack] Push context {context.ContextId} on thread {_threadId}, depth: {stack.Count}");
 #endif
 
             return new ContextDisposable(context);
@@ -105,7 +105,7 @@ namespace MCPForUnity.Editor.ActionTrace.Context
             if (stack.Count == 0)
             {
 #if DEBUG
-                UnityEngine.Debug.LogWarning(
+                McpLog.Warn(
                     $"[ContextStack] Pop on empty stack (thread {_threadId}, expected {expectedContext?.ContextId})");
 #endif
                 return false;
@@ -117,7 +117,7 @@ namespace MCPForUnity.Editor.ActionTrace.Context
                 stack.Pop();
 
 #if DEBUG
-                UnityEngine.Debug.Log(
+                McpLog.Info(
                     $"[ContextStack] Pop context {expectedContext.ContextId} on thread {_threadId}, remaining depth: {stack.Count}");
 #endif
 
@@ -127,7 +127,7 @@ namespace MCPForUnity.Editor.ActionTrace.Context
             // Stack mismatch - this indicates a programming error
             // Improvement: Only remove mismatched context, preserve valid ones
             var currentThreadId = Thread.CurrentThread.ManagedThreadId;
-            var stackSnapshot = string.Join(", ", stack.Select(c => c.ContextId.ToString().Substring(0, 8)));
+            var stackSnapshot = string.Join(", ", stack.Select(c => SafeGetShortId(c.ContextId)));
 
             // Try to find and remove the mismatched context
             var tempStack = new Stack<OperationContext>();
@@ -152,7 +152,7 @@ namespace MCPForUnity.Editor.ActionTrace.Context
 
             if (!found)
             {
-                UnityEngine.Debug.LogWarning(
+                McpLog.Warn(
                     $"[ContextStack] Expected context {expectedContext.ContextId} not found on thread {currentThreadId}\n" +
                     $"  Stack snapshot: [{stackSnapshot}]\n" +
                     $"  No changes made to stack.");
@@ -231,9 +231,18 @@ namespace MCPForUnity.Editor.ActionTrace.Context
             stack.Clear();
 
 #if DEBUG
-            UnityEngine.Debug.Log(
-                $"[ContextStack] Cleared stack on thread {Thread.CurrentThread.ManagedThreadId}");
+                McpLog.Info(
+                    $"[ContextStack] Cleared stack on thread {Thread.CurrentThread.ManagedThreadId}");
 #endif
+        }
+
+        /// <summary>
+        /// Safely extracts a short ID from a Guid, preventing null/empty exceptions.
+        /// </summary>
+        private static string SafeGetShortId(Guid guid)
+        {
+            var str = guid.ToString();
+            return str.Length >= 8 ? str.Substring(0, 8) : str;
         }
 
         /// <summary>

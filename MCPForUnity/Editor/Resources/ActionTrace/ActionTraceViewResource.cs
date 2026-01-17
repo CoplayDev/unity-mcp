@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.Remoting.Contexts;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.ActionTrace.Context;
 using MCPForUnity.Editor.ActionTrace.Core;
@@ -12,6 +11,26 @@ using static MCPForUnity.Editor.ActionTrace.Query.ActionTraceQuery;
 
 namespace MCPForUnity.Editor.Resources.ActionTrace
 {
+    /// <summary>
+    /// Response wrapper constants for ActionTraceView.
+    /// Ensures consistent schema versioning across all response types.
+    /// </summary>
+    internal static class ResponseSchemas
+    {
+        public const string Basic = "action_trace_view@1";
+        public const string WithContext = "action_trace_view@2";
+        public const string WithSemantics = "action_trace_view@3";
+        public const string Aggregated = "action_trace_view@4";
+    }
+
+    /// <summary>
+    /// Event type constants for filtering.
+    /// </summary>
+    internal static class EventTypes
+    {
+        public const string AINote = "AINote";
+    }
+
     /// <summary>
     /// MCP resource for querying the action trace of editor events.
     ///
@@ -91,6 +110,9 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
         {
             var events = EventStore.Query(limit, sinceSequence);
 
+            // Apply disabled event types filter
+            events = ApplyDisabledTypesFilter(events);
+
             // L3 Semantic Whitelist: Filter by importance
             var scorer = new DefaultEventScorer();
             var filteredEvents = events
@@ -106,12 +128,12 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
                 timestamp_unix_ms = e.TimestampUnixMs,
                 type = e.Type,
                 target_id = e.TargetId,
-                summary = EventSummarizer.Summarize(e)
+                summary = e.GetSummary()
             }).ToArray();
 
             return new SuccessResponse("Retrieved ActionTrace events.", new
             {
-                schema_version = "action_trace_view@1",
+                schema_version = ResponseSchemas.Basic,
                 events = eventItems,
                 total_count = eventItems.Length,
                 current_sequence = EventStore.CurrentSequence
@@ -126,6 +148,10 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
         private static object QueryWithSemanticsOnly(int limit, long? sinceSequence, float minImportance, string taskId, string conversationId)
         {
             var rawEvents = EventStore.Query(limit, sinceSequence);
+
+            // Apply disabled event types filter
+            rawEvents = ApplyDisabledTypesFilter(rawEvents);
+
             var query = new ActionTraceQuery();
             var projected = query.Project(rawEvents);
 
@@ -143,7 +169,7 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
                 timestamp_unix_ms = p.Event.TimestampUnixMs,
                 type = p.Event.Type,
                 target_id = p.Event.TargetId,
-                summary = EventSummarizer.Summarize(p.Event),
+                summary = p.Event.GetSummary(),
                 importance_score = p.ImportanceScore,
                 importance_category = p.ImportanceCategory,
                 inferred_intent = p.InferredIntent
@@ -151,7 +177,7 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
 
             return new SuccessResponse("Retrieved ActionTrace events with semantics.", new
             {
-                schema_version = "action_trace_view@3",
+                schema_version = ResponseSchemas.WithSemantics,
                 events = eventItems,
                 total_count = eventItems.Length,
                 current_sequence = EventStore.CurrentSequence
@@ -181,6 +207,9 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
                 var query = new ActionTraceQuery();
                 var projected = query.ProjectWithContext(eventsWithContext);
 
+                // Apply disabled event types filter
+                projected = ApplyDisabledTypesFilterToProjected(projected);
+
                 // L3 Semantic Whitelist: Filter by importance
                 var filtered = projected
                     .Where(p => p.ImportanceScore >= minImportance)
@@ -197,7 +226,7 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
                         timestamp_unix_ms = p.Event.TimestampUnixMs,
                         type = p.Event.Type,
                         target_id = p.Event.TargetId,
-                        summary = EventSummarizer.Summarize(p.Event),
+                        summary = p.Event.GetSummary(),
                         has_context = hasContext,
                         context = hasContext ? new { context_id = contextId } : null,
                         importance_score = p.ImportanceScore,
@@ -208,7 +237,7 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
 
                 return new SuccessResponse("Retrieved ActionTrace events with context and semantics.", new
                 {
-                    schema_version = "action_trace_view@3",
+                    schema_version = ResponseSchemas.WithSemantics,
                     events = events,
                     total_count = events.Length,
                     current_sequence = EventStore.CurrentSequence,
@@ -217,6 +246,16 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
             }
             else
             {
+                // Apply disabled event types filter first
+                var settings = ActionTraceSettings.Instance;
+                var disabledTypes = settings != null ? settings.Filtering.DisabledEventTypes : null;
+                if (disabledTypes != null && disabledTypes.Length > 0)
+                {
+                    eventsWithContext = eventsWithContext
+                        .Where(x => !IsEventTypeDisabled(x.Event.Type, disabledTypes))
+                        .ToList();
+                }
+
                 // Context only response - apply importance filter manually
                 var scorer = new DefaultEventScorer();
                 var filtered = eventsWithContext
@@ -234,7 +273,7 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
                         timestamp_unix_ms = x.Event.TimestampUnixMs,
                         type = x.Event.Type,
                         target_id = x.Event.TargetId,
-                        summary = EventSummarizer.Summarize(x.Event),
+                        summary = x.Event.GetSummary(),
                         has_context = hasContext,
                         context = hasContext ? new { context_id = contextId } : null
                     };
@@ -242,13 +281,63 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
 
                 return new SuccessResponse("Retrieved ActionTrace events with context.", new
                 {
-                    schema_version = "action_trace_view@2",
+                    schema_version = ResponseSchemas.WithContext,
                     events = events,
                     total_count = events.Length,
                     current_sequence = EventStore.CurrentSequence,
                     context_mapping_count = EventStore.ContextMappingCount
                 });
             }
+        }
+
+        /// <summary>
+        /// P1.1: Query with transaction aggregation.
+        ///
+        /// Returns AtomicOperation list instead of raw events.
+        /// Reduces token consumption by grouping related events.
+        ///
+        /// From ActionTrace-enhancements.md line 294-300:
+        /// "summary_only=True 时返回 AtomicOperation 列表而非原始事件"
+        /// </summary>
+        private static object QueryAggregated(int limit, long? sinceSequence, float minImportance, string taskId, string conversationId)
+        {
+            // Step 1: Query raw events
+            var events = EventStore.Query(limit, sinceSequence);
+
+            // Step 2: Apply disabled event types filter
+            events = ApplyDisabledTypesFilter(events);
+
+            // Step 3: Apply importance filter (L3 Semantic Whitelist)
+            var scorer = new DefaultEventScorer();
+            var filteredEvents = events
+                .Where(e => scorer.Score(e) >= minImportance)
+                .ToList();
+
+            // Step 4: Apply task-level filtering (P1.2)
+            filteredEvents = ApplyTaskFilters(filteredEvents, taskId, conversationId);
+
+            // Step 4: Aggregate into transactions
+            var operations = TransactionAggregator.Aggregate(filteredEvents);
+
+            // Step 5: Project to response format
+            var eventItems = operations.Select(op => new
+            {
+                start_sequence = op.StartSequence,
+                end_sequence = op.EndSequence,
+                summary = op.Summary,
+                event_count = op.EventCount,
+                duration_ms = op.DurationMs,
+                tool_call_id = op.ToolCallId,
+                triggered_by_tool = op.TriggeredByTool
+            }).ToArray();
+
+            return new SuccessResponse($"Retrieved {eventItems.Length} aggregated operations.", new
+            {
+                schema_version = ResponseSchemas.Aggregated,
+                events = eventItems,
+                total_count = eventItems.Length,
+                current_sequence = EventStore.CurrentSequence
+            });
         }
 
         private static int GetLimit(JObject @params)
@@ -372,8 +461,8 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
             return events.Where(e =>
             {
                 // Only AINote events have task_id and conversation_id
-                if (e.Type != "AINote")
-                    return true;  // Keep non-AINote events
+                if (e.Type != EventTypes.AINote)
+                    return true;
 
                 // Check task_id filter
                 if (!string.IsNullOrEmpty(taskId))
@@ -382,11 +471,11 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
                     {
                         string eventTaskId = taskVal?.ToString();
                         if (eventTaskId != taskId)
-                            return false;  // Filter out: task_id doesn't match
+                            return false;
                     }
                     else
                     {
-                        return false;  // Filter out: AINote without task_id
+                        return false;
                     }
                 }
 
@@ -397,11 +486,11 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
                     {
                         string eventConvId = convVal?.ToString();
                         if (eventConvId != conversationId)
-                            return false;  // Filter out: conversation_id doesn't match
+                            return false;
                     }
                 }
 
-                return true;  // Keep: passed all filters
+                return true;
             }).ToList();
         }
 
@@ -415,7 +504,7 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
 
             return projected.Where(p =>
             {
-                if (p.Event.Type != "AINote")
+                if (p.Event.Type != EventTypes.AINote)
                     return true;
 
                 if (!string.IsNullOrEmpty(taskId))
@@ -445,45 +534,6 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
         }
 
         /// <summary>
-        /// P1.2: Apply task filters to EventWithContext list.
-        /// </summary>
-        private static List<(EditorEvent Event, ContextMapping Context)> ApplyTaskFiltersToEventWithContext(List<(EditorEvent Event, ContextMapping Context)> eventsWithContext, string taskId, string conversationId)
-        {
-            if (string.IsNullOrEmpty(taskId) && string.IsNullOrEmpty(conversationId))
-                return eventsWithContext;
-
-            return eventsWithContext.Where(x =>
-            {
-                if (x.Event.Type != "AINote")
-                    return true;
-
-                if (!string.IsNullOrEmpty(taskId))
-                {
-                    if (x.Event.Payload.TryGetValue("task_id", out var taskVal))
-                    {
-                        if (taskVal?.ToString() != taskId)
-                            return false;
-                    }
-                    else
-                    {
-                        return false;
-                    }
-                }
-
-                if (!string.IsNullOrEmpty(conversationId))
-                {
-                    if (x.Event.Payload.TryGetValue("conversation_id", out var convVal))
-                    {
-                        if (convVal?.ToString() != conversationId)
-                            return false;
-                    }
-                }
-
-                return true;
-            }).ToList();
-        }
-
-        /// <summary>
         /// P1.1: Parse summary_only parameter.
         /// </summary>
         private static bool GetSummaryOnly(JObject @params)
@@ -500,50 +550,49 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
         }
 
         /// <summary>
-        /// P1.1: Query with transaction aggregation.
-        ///
-        /// Returns AtomicOperation list instead of raw events.
-        /// Reduces token consumption by grouping related events.
-        ///
-        /// From ActionTrace-enhancements.md line 294-300:
-        /// "summary_only=True 时返回 AtomicOperation 列表而非原始事件"
+        /// Filter out disabled event types from the event list.
+        /// This ensures that events recorded before a type was disabled are also filtered out.
         /// </summary>
-        private static object QueryAggregated(int limit, long? sinceSequence, float minImportance, string taskId, string conversationId)
+        private static IReadOnlyList<EditorEvent> ApplyDisabledTypesFilter(IReadOnlyList<EditorEvent> events)
         {
-            // Step 1: Query raw events
-            var events = EventStore.Query(limit, sinceSequence);
+            var settings = ActionTraceSettings.Instance;
+            if (settings == null)
+                return events;
 
-            // Step 2: Apply importance filter (L3 Semantic Whitelist)
-            var scorer = new DefaultEventScorer();
-            var filteredEvents = events
-                .Where(e => scorer.Score(e) >= minImportance)
-                .ToList();
+            var disabledTypes = settings.Filtering.DisabledEventTypes;
+            if (disabledTypes == null || disabledTypes.Length == 0)
+                return events;
 
-            // Step 3: Apply task-level filtering (P1.2)
-            filteredEvents = ApplyTaskFilters(filteredEvents, taskId, conversationId);
+            return events.Where(e => !IsEventTypeDisabled(e.Type, disabledTypes)).ToList();
+        }
 
-            // Step 4: Aggregate into transactions
-            var operations = TransactionAggregator.Aggregate(filteredEvents);
-
-            // Step 5: Project to response format
-            var eventItems = operations.Select(op => new
+        /// <summary>
+        /// Check if an event type is in the disabled types list.
+        /// </summary>
+        private static bool IsEventTypeDisabled(string eventType, string[] disabledTypes)
+        {
+            foreach (string disabled in disabledTypes)
             {
-                start_sequence = op.StartSequence,
-                end_sequence = op.EndSequence,
-                summary = op.Summary,
-                event_count = op.EventCount,
-                duration_ms = op.DurationMs,
-                tool_call_id = op.ToolCallId,
-                triggered_by_tool = op.TriggeredByTool
-            }).ToArray();
+                if (string.Equals(eventType, disabled, StringComparison.Ordinal))
+                    return true;
+            }
+            return false;
+        }
 
-            return new SuccessResponse($"Retrieved {eventItems.Length} aggregated operations.", new
-            {
-                schema_version = "action_trace_view@4",
-                events = eventItems,
-                total_count = eventItems.Length,
-                current_sequence = EventStore.CurrentSequence
-            });
+        /// <summary>
+        /// Filter out disabled event types from projected events.
+        /// </summary>
+        private static IReadOnlyList<ActionTraceViewItem> ApplyDisabledTypesFilterToProjected(IReadOnlyList<ActionTraceViewItem> projected)
+        {
+            var settings = ActionTraceSettings.Instance;
+            if (settings == null)
+                return projected;
+
+            var disabledTypes = settings.Filtering.DisabledEventTypes;
+            if (disabledTypes == null || disabledTypes.Length == 0)
+                return projected;
+
+            return projected.Where(p => !IsEventTypeDisabled(p.Event.Type, disabledTypes)).ToList();
         }
     }
 }

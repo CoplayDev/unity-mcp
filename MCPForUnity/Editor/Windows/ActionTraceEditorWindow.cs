@@ -11,6 +11,17 @@ using UnityEngine.UIElements;
 
 namespace MCPForUnity.Editor.Windows
 {
+    /// <summary>
+    /// 排序模式：控制事件列表的排序方式
+    /// </summary>
+    public enum SortMode
+    {
+        /// <summary>纯时间排序（最新优先）- 给用户查看记录</summary>
+        ByTimeDesc,
+        /// <summary>AI 视角排序 - 先按时间再按重要性分组</summary>
+        AIFiltered
+    }
+
     public sealed class ActionTraceEditorWindow : EditorWindow
     {
         #region Constants
@@ -30,6 +41,7 @@ namespace MCPForUnity.Editor.Windows
             public const string ImportanceToggle = "importance-toggle";
             public const string ContextToggle = "context-toggle";
             public const string FilterMenu = "filter-menu";
+            public const string SortMenu = "sort-menu";
             public const string SettingsButton = "settings-button";
             public const string RefreshButton = "refresh-button";
             public const string ClearButton = "clear-button";
@@ -61,6 +73,7 @@ namespace MCPForUnity.Editor.Windows
         private ToolbarToggle _importanceToggle;
         private ToolbarToggle _contextToggle;
         private ToolbarMenu _filterMenu;
+        private ToolbarMenu _sortMenu;
         private ToolbarButton _settingsButton;
         private ToolbarButton _refreshButton;
         private ToolbarButton _clearButton;
@@ -73,6 +86,7 @@ namespace MCPForUnity.Editor.Windows
         private float _minImportance;
         private bool _showSemantics;
         private bool _showContext;
+        private SortMode _sortMode = SortMode.ByTimeDesc;
 
         private double _lastRefreshTime;
 
@@ -100,7 +114,11 @@ namespace MCPForUnity.Editor.Windows
             SetupToolbar();
 
             _actionTraceQuery = new ActionTraceQuery();
-            _minImportance = ActionTraceSettings.Instance?.MinImportanceForRecording ?? 0.4f;
+            _minImportance = ActionTraceSettings.Instance?.Filtering.MinImportanceForRecording ?? 0.4f;
+
+            // Always record all events, filter at query time based on mode
+            if (ActionTraceSettings.Instance != null)
+                ActionTraceSettings.Instance.Filtering.BypassImportanceFilter = true;
 
             RefreshEvents();
             UpdateStatus();
@@ -154,6 +172,7 @@ namespace MCPForUnity.Editor.Windows
             _importanceToggle = rootVisualElement.Q<ToolbarToggle>(UINames.ImportanceToggle);
             _contextToggle = rootVisualElement.Q<ToolbarToggle>(UINames.ContextToggle);
             _filterMenu = rootVisualElement.Q<ToolbarMenu>(UINames.FilterMenu);
+            _sortMenu = rootVisualElement.Q<ToolbarMenu>(UINames.SortMenu);
             _settingsButton = rootVisualElement.Q<ToolbarButton>(UINames.SettingsButton);
             _refreshButton = rootVisualElement.Q<ToolbarButton>(UINames.RefreshButton);
             _clearButton = rootVisualElement.Q<ToolbarButton>(UINames.ClearButton);
@@ -227,10 +246,17 @@ namespace MCPForUnity.Editor.Windows
                 RefreshEvents();
             });
 
-            _filterMenu?.menu.AppendAction("AI Can See", _ => SetImportanceFromSettings());
-            _filterMenu?.menu.AppendAction("Low+", _ => SetImportance(0f));
-            _filterMenu?.menu.AppendAction("Medium+", _ => SetImportance(0.4f));
-            _filterMenu?.menu.AppendAction("High+", _ => SetImportance(0.7f));
+            // Filter 菜单：添加 All 选项
+            _filterMenu?.menu.AppendAction("All", a => SetImportance(0f));
+            _filterMenu?.menu.AppendAction("/", a => { });
+            _filterMenu?.menu.AppendAction("AI Can See", a => SetImportanceFromSettings());
+            _filterMenu?.menu.AppendAction("Low+", a => SetImportance(0f));
+            _filterMenu?.menu.AppendAction("Medium+", a => SetImportance(0.4f));
+            _filterMenu?.menu.AppendAction("High+", a => SetImportance(0.7f));
+
+            // 排序菜单
+            _sortMenu?.menu.AppendAction("By Time (Newest)", a => SetSortMode(SortMode.ByTimeDesc));
+            _sortMenu?.menu.AppendAction("AI Filtered", a => SetSortMode(SortMode.AIFiltered));
 
             _settingsButton?.RegisterCallback<ClickEvent>(_ => OnSettingsClicked());
             _refreshButton?.RegisterCallback<ClickEvent>(_ => OnRefreshClicked());
@@ -246,8 +272,34 @@ namespace MCPForUnity.Editor.Windows
         private void SetImportanceFromSettings()
         {
             var settings = ActionTraceSettings.Instance;
-            _minImportance = settings != null ? settings.MinImportanceForRecording : 0.4f;
+            _minImportance = settings != null ? settings.Filtering.MinImportanceForRecording : 0.4f;
             RefreshEvents();
+        }
+
+        private void SetSortMode(SortMode mode)
+        {
+            _sortMode = mode;
+
+            // Always record all events, filter at query time based on mode
+            // This allows both modes to access complete historical data
+            if (ActionTraceSettings.Instance != null)
+                ActionTraceSettings.Instance.Filtering.BypassImportanceFilter = true;
+
+            UpdateSortButtonText();
+            RefreshEvents();
+        }
+
+        private void UpdateSortButtonText()
+        {
+            if (_sortMenu == null) return;
+
+            string text = _sortMode switch
+            {
+                SortMode.ByTimeDesc => "Sort: Time",
+                SortMode.AIFiltered => "Sort: AI",
+                _ => "Sort: ?"
+            };
+            _sortMenu.text = text;
         }
 
         private void OnRefreshClicked()
@@ -278,6 +330,9 @@ namespace MCPForUnity.Editor.Windows
                 ? _actionTraceQuery.ProjectWithContext(EventStore.QueryWithContext(DefaultQueryLimit))
                 : _actionTraceQuery.Project(EventStore.Query(DefaultQueryLimit));
 
+            // 应用排序
+            source = ApplySorting(source);
+
             _currentEvents.Clear();
             _currentEvents.AddRange(source.Where(FilterEvent));
 
@@ -285,9 +340,26 @@ namespace MCPForUnity.Editor.Windows
             UpdateStatus();
         }
 
+        /// <summary>
+        /// 应用当前排序模式到事件列表
+        /// </summary>
+        private IEnumerable<ActionTraceQuery.ActionTraceViewItem> ApplySorting(IEnumerable<ActionTraceQuery.ActionTraceViewItem> source)
+        {
+            return _sortMode switch
+            {
+                SortMode.ByTimeDesc => source.OrderByDescending(e => e.Event.TimestampUnixMs),
+                SortMode.AIFiltered => source
+                    .OrderByDescending(e => e.Event.TimestampUnixMs)
+                    .ThenByDescending(e => e.ImportanceScore),
+                _ => source
+            };
+        }
+
         private bool FilterEvent(ActionTraceQuery.ActionTraceViewItem e)
         {
-            if (e.ImportanceScore < _minImportance)
+            // ByTime 模式：显示所有记录（包括 low 重要性）
+            // AI Filtered 模式：应用重要性过滤（AI 视角）
+            if (_sortMode == SortMode.AIFiltered && e.ImportanceScore < _minImportance)
                 return false;
 
             if (!string.IsNullOrEmpty(_searchText))

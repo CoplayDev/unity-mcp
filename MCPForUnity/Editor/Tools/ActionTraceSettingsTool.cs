@@ -34,19 +34,19 @@ namespace MCPForUnity.Editor.Tools
                     schema_version = "action_trace_settings@1",
 
                     // Event filtering
-                    min_importance_for_recording = settings.MinImportanceForRecording,
-                    disabled_event_types = settings.DisabledEventTypes,
+                    min_importance_for_recording = settings.Filtering.MinImportanceForRecording,
+                    disabled_event_types = settings.Filtering.DisabledEventTypes,
 
                     // Event merging
-                    enable_event_merging = settings.EnableEventMerging,
-                    merge_window_ms = settings.MergeWindowMs,
+                    enable_event_merging = settings.Merging.EnableEventMerging,
+                    merge_window_ms = settings.Merging.MergeWindowMs,
 
                     // Storage limits
-                    max_events = settings.MaxEvents,
-                    hot_event_count = settings.HotEventCount,
+                    max_events = settings.Storage.MaxEvents,
+                    hot_event_count = settings.Storage.HotEventCount,
 
                     // Transaction aggregation
-                    transaction_window_ms = settings.TransactionWindowMs,
+                    transaction_window_ms = settings.Merging.TransactionWindowMs,
 
                     // Current store state
                     current_sequence = EventStore.CurrentSequence,
