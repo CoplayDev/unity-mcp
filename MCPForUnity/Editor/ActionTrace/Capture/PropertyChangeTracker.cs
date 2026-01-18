@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
 using UnityEditor;
-using UnityEngine;
-using Newtonsoft.Json;
 using MCPForUnity.Editor.ActionTrace.Core;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.ActionTrace.Helpers;
@@ -17,14 +15,15 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
     /// PropertyModified events to the ActionTrace EventStore.
     ///
     /// Key features:
-    /// - Uses EditorApplication.update for consistent periodic flushing
+    /// - Uses EditorApplication.update for periodic flushing (safe on domain reload)
     /// - Object pooling to reduce GC pressure
     /// - Cache size limits to prevent unbounded memory growth
     /// - Cross-session stable IDs via GlobalIdHelper
     ///
     /// Reuses existing Helpers:
     /// - GlobalIdHelper.ToGlobalIdString() for stable object IDs
-    /// - UnityJsonSerializer.Instance for Unity type serialization
+    /// - PropertyFormatter for property value formatting
+    /// - UndoReflectionHelper for Undo reflection logic
     /// </summary>
     [InitializeOnLoad]
     public static class PropertyChangeTracker
@@ -49,24 +48,30 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
         }
 
         /// <summary>
-        /// Schedules a delayed flush check using delayCall.
-        /// This is more efficient than per-frame update checks, as it only runs when needed.
+        /// Schedules periodic flush checks using EditorApplication.update.
+        /// FlushCheck is called every frame but only processes when debounce window expires.
         /// </summary>
         private static void ScheduleNextFlush()
         {
-            EditorApplication.delayCall += () =>
+            // Use EditorApplication.update instead of delayCall to avoid infinite recursion
+            // This ensures the callback is properly cleaned up on domain reload
+            EditorApplication.update -= FlushCheck;
+            EditorApplication.update += FlushCheck;
+        }
+
+        /// <summary>
+        /// Periodic flush check called by EditorApplication.update.
+        /// Only performs flush when the debounce window has expired.
+        /// </summary>
+        private static void FlushCheck()
+        {
+            var currentTime = EditorApplication.timeSinceStartup * 1000;
+
+            if (currentTime - _lastFlushTime >= DebounceWindowMs)
             {
-                var currentTime = EditorApplication.timeSinceStartup * 1000;
-
-                if (currentTime - _lastFlushTime >= DebounceWindowMs)
-                {
-                    FlushPendingChanges();
-                    _lastFlushTime = currentTime;
-                }
-
-                // Reschedule for next check
-                ScheduleNextFlush();
-            };
+                FlushPendingChanges();
+                _lastFlushTime = currentTime;
+            }
         }
 
         /// <summary>
@@ -83,18 +88,16 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
             {
                 // UndoPropertyModification contains the PropertyModification and value changes
                 // Try to extract target and property path
-                var target = GetTargetFromUndoMod(undoMod);
+                var target = UndoReflectionHelper.GetTarget(undoMod);
                 if (target == null)
                     continue;
 
-                var propertyPath = GetPropertyPathFromUndoMod(undoMod);
+                var propertyPath = UndoReflectionHelper.GetPropertyPath(undoMod);
                 if (string.IsNullOrEmpty(propertyPath))
                     continue;
 
                 // Filter out Unity internal properties
-                if (propertyPath.StartsWith("m_Script") ||
-                    propertyPath.StartsWith("m_EditorClassIdentifier") ||
-                    propertyPath.StartsWith("m_ObjectHideFlags"))
+                if (PropertyFormatter.IsInternalProperty(propertyPath))
                 {
                     continue;
                 }
@@ -107,14 +110,14 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 string uniqueKey = $"{globalId}:{propertyPath}";
 
                 // Get the current value (not the path)
-                var currentValue = GetCurrentValueFromUndoMod(undoMod);
+                var currentValue = UndoReflectionHelper.GetCurrentValue(undoMod);
 
                 // Check if we already have a pending change for this property
                 if (_pendingChanges.TryGetValue(uniqueKey, out var pending))
                 {
                     // Update existing pending change
                     // Note: Must reassign to dictionary since PendingPropertyChange is a struct
-                    pending.EndValue = FormatPropertyValue(currentValue);
+                    pending.EndValue = PropertyFormatter.FormatPropertyValue(currentValue);
                     pending.ChangeCount++;
                     pending.LastUpdateMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                     _pendingChanges[uniqueKey] = pending;
@@ -135,10 +138,10 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                     change.ComponentType = target.GetType().Name;
                     change.PropertyPath = propertyPath;
                     // Record the start value from the previous value reported by Undo system
-                    var prev = GetPreviousValueFromUndoMod(undoMod);
-                    change.StartValue = FormatPropertyValue(prev);
-                    change.EndValue = FormatPropertyValue(currentValue);
-                    change.PropertyType = GetPropertyTypeName(currentValue);
+                    var prev = UndoReflectionHelper.GetPreviousValue(undoMod);
+                    change.StartValue = PropertyFormatter.FormatPropertyValue(prev);
+                    change.EndValue = PropertyFormatter.FormatPropertyValue(currentValue);
+                    change.PropertyType = PropertyFormatter.GetPropertyTypeName(currentValue);
                     change.ChangeCount = 1;
                     change.LastUpdateMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
@@ -147,102 +150,6 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
             }
 
             return modifications;
-        }
-
-        #region UndoPropertyModification Helpers (via UndoReflectionHelper)
-
-        /// <summary>
-        /// Extracts the previous value from an UndoPropertyModification.
-        /// Uses shared UndoReflectionHelper for reflection logic.
-        /// </summary>
-        private static object GetPreviousValueFromUndoMod(UndoPropertyModification undoMod)
-        {
-            return UndoReflectionHelper.GetPreviousValue(undoMod);
-        }
-
-        /// <summary>
-        /// Extracts the target object from an UndoPropertyModification.
-        /// Uses shared UndoReflectionHelper for reflection logic.
-        /// </summary>
-        private static UnityEngine.Object GetTargetFromUndoMod(UndoPropertyModification undoMod)
-        {
-            return UndoReflectionHelper.GetTarget(undoMod);
-        }
-
-        /// <summary>
-        /// Extracts the property path from an UndoPropertyModification.
-        /// Uses shared UndoReflectionHelper for reflection logic.
-        /// </summary>
-        private static string GetPropertyPathFromUndoMod(UndoPropertyModification undoMod)
-        {
-            return UndoReflectionHelper.GetPropertyPath(undoMod);
-        }
-
-        /// <summary>
-        /// Extracts the current value from an UndoPropertyModification.
-        /// Uses shared UndoReflectionHelper for reflection logic.
-        /// </summary>
-        private static object GetCurrentValueFromUndoMod(UndoPropertyModification undoMod)
-        {
-            return UndoReflectionHelper.GetCurrentValue(undoMod);
-        }
-
-        #endregion
-
-        /// <summary>
-        /// Formats a property value for JSON storage.
-        ///
-        /// Reuses existing Helpers:
-        /// - UnityJsonSerializer.Instance for Vector3, Color, Quaternion, etc.
-        /// </summary>
-        private static string FormatPropertyValue(object value)
-        {
-            if (value == null)
-                return "null";
-
-            try
-            {
-                // Use UnityJsonSerializer for proper Unity type serialization
-                using (var writer = new System.IO.StringWriter())
-                {
-                    UnityJsonSerializer.Instance.Serialize(writer, value);
-                    return writer.ToString();
-                }
-            }
-            catch (Exception)
-            {
-                // Fallback to ToString() if serialization fails
-                return value.ToString();
-            }
-        }
-
-        /// <summary>
-        /// Gets the type name of a property value for the event payload.
-        /// </summary>
-        private static string GetPropertyTypeName(object value)
-        {
-            if (value == null)
-                return "null";
-
-            Type type = value.GetType();
-
-            // Use friendly names for common Unity types
-            if (type == typeof(float) || type == typeof(int) || type == typeof(double))
-                return "Number";
-            if (type == typeof(bool))
-                return "Boolean";
-            if (type == typeof(string))
-                return "String";
-            if (type == typeof(Vector2) || type == typeof(Vector3) || type == typeof(Vector4))
-                return type.Name;
-            if (type == typeof(Quaternion))
-                return "Quaternion";
-            if (type == typeof(Color))
-                return "Color";
-            if (type == typeof(Rect))
-                return "Rect";
-
-            return type.Name;
         }
 
         /// <summary>

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
-using Newtonsoft.Json;
 using MCPForUnity.Editor.ActionTrace.Core;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.ActionTrace.Helpers;
@@ -103,7 +102,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
 
             foreach (var undoMod in modifications)
             {
-                var target = GetTargetFromUndoMod(undoMod);
+                var target = UndoReflectionHelper.GetTarget(undoMod);
                 if (target == null)
                 {
                     continue;
@@ -116,12 +115,12 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 if (!isMatch)
                     continue;
 
-                var propertyPath = GetPropertyPathFromUndoMod(undoMod);
+                var propertyPath = UndoReflectionHelper.GetPropertyPath(undoMod);
                 if (string.IsNullOrEmpty(propertyPath))
                     continue;
 
                 // Filter out Unity internal properties
-                if (IsInternalProperty(propertyPath))
+                if (PropertyFormatter.IsInternalProperty(propertyPath))
                     continue;
 
                 // Record the SelectionPropertyModified event
@@ -137,17 +136,17 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
         /// </summary>
         private static void RecordSelectionPropertyModified(UndoPropertyModification undoMod, UnityEngine.Object target, string targetGlobalId, string propertyPath)
         {
-            var currentValue = GetCurrentValueFromUndoMod(undoMod);
-            var prevValue = GetPreviousValueFromUndoMod(undoMod);
+            var currentValue = UndoReflectionHelper.GetCurrentValue(undoMod);
+            var prevValue = UndoReflectionHelper.GetPreviousValue(undoMod);
 
             var payload = new Dictionary<string, object>
             {
                 ["target_name"] = target.name,
                 ["component_type"] = target.GetType().Name,
                 ["property_path"] = propertyPath,
-                ["start_value"] = FormatPropertyValue(prevValue),
-                ["end_value"] = FormatPropertyValue(currentValue),
-                ["value_type"] = GetPropertyTypeName(currentValue),
+                ["start_value"] = PropertyFormatter.FormatPropertyValue(prevValue),
+                ["end_value"] = PropertyFormatter.FormatPropertyValue(currentValue),
+                ["value_type"] = PropertyFormatter.GetPropertyTypeName(currentValue),
                 ["selection_context"] = new Dictionary<string, object>
                 {
                     ["selection_id"] = _currentSelectionGlobalId,
@@ -168,45 +167,6 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
             EventStore.Record(evt);
         }
 
-        #region UndoPropertyModification Helpers (via UndoReflectionHelper)
-
-        /// <summary>
-        /// Extracts the target object from UndoPropertyModification.
-        /// Uses shared UndoReflectionHelper for reflection logic.
-        /// </summary>
-        private static UnityEngine.Object GetTargetFromUndoMod(UndoPropertyModification undoMod)
-        {
-            return UndoReflectionHelper.GetTarget(undoMod);
-        }
-
-        /// <summary>
-        /// Extracts the property path from UndoPropertyModification.
-        /// Uses shared UndoReflectionHelper for reflection logic.
-        /// </summary>
-        private static string GetPropertyPathFromUndoMod(UndoPropertyModification undoMod)
-        {
-            return UndoReflectionHelper.GetPropertyPath(undoMod);
-        }
-
-        /// <summary>
-        /// Extracts the current value from UndoPropertyModification.
-        /// Uses shared UndoReflectionHelper for reflection logic.
-        /// </summary>
-        private static object GetCurrentValueFromUndoMod(UndoPropertyModification undoMod)
-        {
-            return UndoReflectionHelper.GetCurrentValue(undoMod);
-        }
-
-        /// <summary>
-        /// Extracts the previous value from UndoPropertyModification.
-        /// Uses shared UndoReflectionHelper for reflection logic.
-        /// </summary>
-        private static object GetPreviousValueFromUndoMod(UndoPropertyModification undoMod)
-        {
-            return UndoReflectionHelper.GetPreviousValue(undoMod);
-        }
-
-        #endregion
 
         /// <summary>
         /// Checks if the modified target matches the current selection.
@@ -229,72 +189,6 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
             return false;
         }
 
-        #region Property Formatting Helpers
-
-        /// <summary>
-        /// Checks if a property is a Unity internal property that should be ignored.
-        /// </summary>
-        private static bool IsInternalProperty(string propertyPath)
-        {
-            if (string.IsNullOrEmpty(propertyPath))
-                return false;
-
-            return propertyPath.StartsWith("m_Script") ||
-                   propertyPath.StartsWith("m_EditorClassIdentifier") ||
-                   propertyPath.StartsWith("m_ObjectHideFlags");
-        }
-
-        /// <summary>
-        /// Formats a property value for JSON storage.
-        /// Reuses UnityJsonSerializer.Instance for proper Unity type serialization.
-        /// </summary>
-        private static string FormatPropertyValue(object value)
-        {
-            if (value == null)
-                return "null";
-
-            try
-            {
-                using (var writer = new System.IO.StringWriter())
-                {
-                    UnityJsonSerializer.Instance.Serialize(writer, value);
-                    return writer.ToString();
-                }
-            }
-            catch (Exception)
-            {
-                return value.ToString();
-            }
-        }
-
-        /// <summary>
-        /// Gets the type name of a property value for the event payload.
-        /// </summary>
-        private static string GetPropertyTypeName(object value)
-        {
-            if (value == null)
-                return "null";
-
-            Type type = value.GetType();
-
-            if (type == typeof(float) || type == typeof(int) || type == typeof(double))
-                return "Number";
-            if (type == typeof(bool))
-                return "Boolean";
-            if (type == typeof(string))
-                return "String";
-            if (type == typeof(Vector2) || type == typeof(Vector3) || type == typeof(Vector4))
-                return type.Name;
-            if (type == typeof(Quaternion))
-                return "Quaternion";
-            if (type == typeof(Color))
-                return "Color";
-            if (type == typeof(Rect))
-                return "Rect";
-
-            return type.Name;
-        }
-
         /// <summary>
         /// Gets the full Hierarchy path for a GameObject.
         /// Example: "Level1/Player/Arm/Hand"
@@ -315,7 +209,5 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
 
             return path;
         }
-
-        #endregion
     }
 }

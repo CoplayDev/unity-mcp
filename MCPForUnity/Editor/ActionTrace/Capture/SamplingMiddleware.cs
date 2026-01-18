@@ -46,16 +46,16 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
         }
 
         /// <summary>
-        /// Schedules a periodic flush check using delayCall.
+        /// Schedules a periodic flush check using EditorApplication.update.
         /// This ensures Debounce modes emit trailing events after their windows expire.
+        /// Using update instead of delayCall to avoid infinite recursion.
         /// </summary>
         private static void ScheduleFlushCheck()
         {
-            EditorApplication.delayCall += () =>
-            {
-                FlushExpiredDebounceSamples();
-                ScheduleFlushCheck();
-            };
+            // Use EditorApplication.update instead of delayCall to avoid infinite recursion
+            // This ensures the callback is properly cleaned up on domain reload
+            EditorApplication.update -= FlushExpiredDebounceSamples;
+            EditorApplication.update += FlushExpiredDebounceSamples;
         }
 
         /// <summary>
