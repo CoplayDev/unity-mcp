@@ -36,9 +36,19 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                     status.IsAvailable = true;
                     status.Version = version;
                     status.Path = uvxPath;
-                    status.Details = MCPServiceLocator.Paths.HasUvxPathOverride
-                        ? $"Found uv {version} (override path)"
-                        : $"Found uv {version} in system path";
+
+                    // Check if we used fallback from override to system path
+                    if (MCPServiceLocator.Paths.HasUvxPathFallback)
+                    {
+                        status.Details = $"Found uv {version} (fallback to system path)";
+                        status.ErrorMessage = "Override path not found, using system path";
+                    }
+                    else
+                    {
+                        status.Details = MCPServiceLocator.Paths.HasUvxPathOverride
+                            ? $"Found uv {version} (override path)"
+                            : $"Found uv {version} in system path";
+                    }
                     return status;
                 }
 
@@ -52,6 +62,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
             return status;
         }
+
 
         protected bool TryParseVersion(string version, out int major, out int minor)
         {

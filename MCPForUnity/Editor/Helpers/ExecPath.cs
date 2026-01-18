@@ -233,7 +233,7 @@ namespace MCPForUnity.Editor.Helpers
         internal static string FindInPath(string executable, string extraPathPrepend = null)
         {
 #if UNITY_EDITOR_WIN
-            return FindInPathWindows(executable);
+            return FindInPathWindows(executable, extraPathPrepend);
 #elif UNITY_EDITOR_OSX || UNITY_EDITOR_LINUX
             return Which(executable, extraPathPrepend ?? string.Empty);
 #else
@@ -277,16 +277,27 @@ namespace MCPForUnity.Editor.Helpers
 #endif
 
 #if UNITY_EDITOR_WIN
-        private static string FindInPathWindows(string exe)
+        private static string FindInPathWindows(string exe, string extraPathPrepend = null)
         {
             try
             {
+                string currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+                string effectivePath = string.IsNullOrEmpty(extraPathPrepend)
+                    ? currentPath
+                    : (string.IsNullOrEmpty(currentPath) ? extraPathPrepend : extraPathPrepend + Path.PathSeparator + currentPath);
+
                 var psi = new ProcessStartInfo("where", exe)
                 {
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
+                    RedirectStandardError = true,
                     CreateNoWindow = true,
                 };
+                if (!string.IsNullOrEmpty(effectivePath))
+                {
+                    psi.EnvironmentVariables["PATH"] = effectivePath;
+                }
+
                 using var p = Process.Start(psi);
                 if (p == null) return null;
 

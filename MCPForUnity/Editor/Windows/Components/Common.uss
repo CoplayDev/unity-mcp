@@ -175,6 +175,10 @@
     background-color: rgba(200, 50, 50, 1);
 }
 
+.status-indicator-small.warning {
+    background-color: rgba(255, 200, 0, 1);
+}
+
 /* Buttons */
 .action-button {
     min-width: 80px;
