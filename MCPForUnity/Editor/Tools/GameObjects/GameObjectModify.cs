@@ -14,7 +14,15 @@ namespace MCPForUnity.Editor.Tools.GameObjects
     {
         internal static object Handle(JObject @params, JToken targetToken, string searchMethod)
         {
-            GameObject targetGo = ManageGameObjectCommon.FindObjectInternal(targetToken, searchMethod);
+            // When setActive=true is specified, we need to search for inactive objects
+            // otherwise we can't find an inactive object to activate it
+            JObject findParams = null;
+            if (@params["setActive"]?.ToObject<bool?>() == true)
+            {
+                findParams = new JObject { ["searchInactive"] = true };
+            }
+            
+            GameObject targetGo = ManageGameObjectCommon.FindObjectInternal(targetToken, searchMethod, findParams);
             if (targetGo == null)
             {
                 return new ErrorResponse($"Target GameObject ('{targetToken}') not found using method '{searchMethod ?? "default"}'.");
