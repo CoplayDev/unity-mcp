@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -265,7 +266,7 @@ namespace MCPForUnity.Editor.Services
             if (now - _lastUpdateTimeSinceStartup < MinUpdateIntervalSeconds)
             {
                 // Still update on compilation edge transitions to keep timestamps meaningful.
-                bool isCompiling = EditorApplication.isCompiling;
+                bool isCompiling = GetActualIsCompiling();
                 if (isCompiling == _lastIsCompiling)
                 {
                     return;
@@ -289,7 +290,7 @@ namespace MCPForUnity.Editor.Services
             _sequence++;
             _observedUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-            bool isCompiling = EditorApplication.isCompiling;
+            bool isCompiling = GetActualIsCompiling();
             if (isCompiling && !_lastIsCompiling)
             {
                 _lastCompileStartedUnixMs = _observedUnixMs;
@@ -426,6 +427,42 @@ namespace MCPForUnity.Editor.Services
                 }
                 return (JObject)_cached.DeepClone();
             }
+        }
+
+        /// <summary>
+        /// Returns the actual compilation state, working around a known Unity quirk where
+        /// EditorApplication.isCompiling can return false positives in Play mode.
+        /// See: https://github.com/CoplayDev/unity-mcp/issues/549
+        /// </summary>
+        private static bool GetActualIsCompiling()
+        {
+            // If EditorApplication.isCompiling is false, Unity is definitely not compiling
+            if (!EditorApplication.isCompiling)
+            {
+                return false;
+            }
+
+            // In Play mode, EditorApplication.isCompiling can have false positives.
+            // Double-check with CompilationPipeline.isCompiling via reflection.
+            if (EditorApplication.isPlaying)
+            {
+                try
+                {
+                    Type pipeline = Type.GetType("UnityEditor.Compilation.CompilationPipeline, UnityEditor");
+                    var prop = pipeline?.GetProperty("isCompiling", BindingFlags.Public | BindingFlags.Static);
+                    if (prop != null)
+                    {
+                        return (bool)prop.GetValue(null);
+                    }
+                }
+                catch
+                {
+                    // If reflection fails, fall back to EditorApplication.isCompiling
+                }
+            }
+
+            // Outside Play mode or if reflection failed, trust EditorApplication.isCompiling
+            return true;
         }
     }
 }
