@@ -413,14 +413,22 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
             if (!isLocalHttpUrl)
             {
-                httpServerCommandField.value = string.Empty;
-                httpServerCommandField.tooltip = string.Empty;
+                httpServerCommandField.value = "<Invalid Localhost URL>";
+                httpServerCommandField.tooltip = "The command cannot be generated because the URL is not a local address.";
+                httpServerCommandSection.EnableInClassList("invalid-url", true);
                 if (httpServerCommandHint != null)
                 {
-                    httpServerCommandHint.text = "HTTP Local requires a localhost URL (localhost/127.0.0.1/0.0.0.0/::1).";
+                    httpServerCommandHint.text = "⚠ HTTP Local requires a localhost URL (localhost/127.0.0.1/0.0.0.0/::1).";
+                    httpServerCommandHint.AddToClassList("error");
                 }
                 copyHttpServerCommandButton?.SetEnabled(false);
                 return;
+            }
+
+            httpServerCommandSection.EnableInClassList("invalid-url", false);
+            if (httpServerCommandHint != null)
+            {
+                httpServerCommandHint.RemoveFromClassList("error");
             }
 
             if (MCPServiceLocator.Server.TryGetLocalHttpServerCommand(out var command, out var error))

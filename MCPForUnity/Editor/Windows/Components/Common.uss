@@ -437,6 +437,11 @@
     margin-bottom: 4px;
 }
 
+.help-text.error {
+    color: rgba(255, 80, 80, 1);
+    -unity-font-style: bold;
+}
+
 .path-override-controls {
     flex-direction: row;
     align-items: center;
