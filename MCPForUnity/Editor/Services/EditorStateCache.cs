@@ -32,6 +32,15 @@ namespace MCPForUnity.Editor.Services
         private const double MinUpdateIntervalSeconds = 0.25;
 
         private static JObject _cached;
+        private static JObject _cachedClone;
+        private static long _cachedSequence;
+
+        // State tracking to detect when snapshot actually changes
+        private static string _lastTrackedScenePath;
+        private static bool? _lastTrackedIsFocused;
+        private static bool? _lastTrackedIsPlaying;
+        private static bool? _lastTrackedIsUpdating;
+        private static string _lastTrackedActivityPhase;
 
         private sealed class EditorStateSnapshot
         {
@@ -286,7 +295,6 @@ namespace MCPForUnity.Editor.Services
 
         private static JObject BuildSnapshot(string reason)
         {
-            _sequence++;
             _observedUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
             bool isCompiling = EditorApplication.isCompiling;
@@ -308,6 +316,8 @@ namespace MCPForUnity.Editor.Services
             var testsMode = TestRunStatus.Mode?.ToString();
             string currentJobId = TestJobManager.CurrentJobId;
             bool isFocused = InternalEditorUtility.isApplicationActive;
+            bool isPlaying = EditorApplication.isPlaying;
+            bool isUpdating = EditorApplication.isUpdating;
 
             var activityPhase = "idle";
             if (testsRunning)
@@ -322,7 +332,7 @@ namespace MCPForUnity.Editor.Services
             {
                 activityPhase = "domain_reload";
             }
-            else if (EditorApplication.isUpdating)
+            else if (isUpdating)
             {
                 activityPhase = "asset_import";
             }
@@ -330,6 +340,26 @@ namespace MCPForUnity.Editor.Services
             {
                 activityPhase = "playmode_transition";
             }
+
+            // Only increment sequence if something actually changed.
+            // This prevents unnecessary DeepClone() calls in GetSnapshot() when state is idle.
+            bool hasChanges = _lastTrackedScenePath != scenePath
+                || _lastTrackedIsFocused != isFocused
+                || _lastTrackedIsPlaying != isPlaying
+                || _lastTrackedIsUpdating != isUpdating
+                || _lastTrackedActivityPhase != activityPhase;
+
+            if (hasChanges)
+            {
+                _sequence++;
+            }
+
+            // Update tracked state
+            _lastTrackedScenePath = scenePath;
+            _lastTrackedIsFocused = isFocused;
+            _lastTrackedIsPlaying = isPlaying;
+            _lastTrackedIsUpdating = isUpdating;
+            _lastTrackedActivityPhase = activityPhase;
 
             var snapshot = new EditorStateSnapshot
             {
@@ -424,7 +454,17 @@ namespace MCPForUnity.Editor.Services
                 {
                     _cached = BuildSnapshot("rebuild");
                 }
-                return (JObject)_cached.DeepClone();
+
+                // Cache the cloned version to avoid allocating a new JObject on every GetSnapshot call.
+                // This fixes the GC spikes that occurred when uvx server polled editor state frequently.
+                // Only regenerate the clone when _cached changes (detected via sequence number).
+                if (_cachedClone == null || _cachedSequence != _sequence)
+                {
+                    _cachedClone = (JObject)_cached.DeepClone();
+                    _cachedSequence = _sequence;
+                }
+
+                return _cachedClone;
             }
         }
     }

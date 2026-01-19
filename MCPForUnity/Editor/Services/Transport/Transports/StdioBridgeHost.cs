@@ -821,6 +821,14 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 List<(string id, QueuedCommand command)> work;
                 lock (lockObj)
                 {
+                    // Early exit: if no commands queued, don't allocate a list. This prevents
+                    // the memory allocations that occur every frame, which trigger GC every ~1 second
+                    // and cause the 28ms stuttering reported in GitHub issue #577.
+                    if (commandQueue.Count == 0)
+                    {
+                        return;
+                    }
+
                     work = new List<(string, QueuedCommand)>(commandQueue.Count);
                     foreach (var kvp in commandQueue)
                     {

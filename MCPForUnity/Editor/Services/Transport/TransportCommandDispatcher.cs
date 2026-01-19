@@ -72,13 +72,11 @@ namespace MCPForUnity.Editor.Services.Transport
 
             EnsureInitialised();
 
-            // Always keep the update hook installed so commands arriving from background
-            // websocket tasks don't depend on a background-thread event subscription.
-            if (!updateHooked)
-            {
-                updateHooked = true;
-                EditorApplication.update += ProcessQueue;
-            }
+            // Note: We no longer permanently hook the update. Commands are woken via:
+            // 1. RequestMainThreadPump() -> SynchronizationContext.Post() [guaranteed to be called when commands arrive]
+            // 2. EditorApplication.QueuePlayerLoopUpdate() [nudges Unity to run immediately]
+            // 3. EditorApplication.update hook [re-added as needed by ProcessQueue]
+            // This prevents the 28ms/1sec GC pressure from allocating List objects every frame while idle.
         }
 
         /// <summary>
@@ -211,9 +209,13 @@ namespace MCPForUnity.Editor.Services.Transport
 
         private static void UnhookUpdateIfIdle()
         {
-            // Intentionally no-op: keep update hook installed so background commands always process.
-            // This avoids "must focus Unity to re-establish contact" edge cases.
-            return;
+            // Only unhook if there are no pending commands. RequestMainThreadPump() guarantees
+            // re-hooking via SynchronizationContext.Post + QueuePlayerLoopUpdate when commands arrive.
+            if (Pending.Count == 0 && updateHooked)
+            {
+                updateHooked = false;
+                EditorApplication.update -= ProcessQueue;
+            }
         }
 
         private static void ProcessQueue()
@@ -229,6 +231,15 @@ namespace MCPForUnity.Editor.Services.Transport
 
             lock (PendingLock)
             {
+                // Early exit: if no pending commands, don't allocate a list. This prevents
+                // the memory allocations that occur every frame, which trigger GC every ~1 second
+                // and cause the 28ms stuttering reported in GitHub issue #577.
+                if (Pending.Count == 0)
+                {
+                    UnhookUpdateIfIdle();
+                    return;
+                }
+
                 ready = new List<(string, PendingCommand)>(Pending.Count);
                 foreach (var kvp in Pending)
                 {

@@ -234,13 +234,15 @@ namespace MCPForUnity.Editor.Windows
 
         private void OnEnable()
         {
-            EditorApplication.update += OnEditorUpdate;
+            // No longer hook EditorApplication.update - it was calling UpdateConnectionStatus() every frame,
+            // which made expensive network socket checks (IsLocalHttpServerReachable) 60+ times per second.
+            // Connection status now updates only on explicit events (user actions, bridge state changes).
             OpenWindows.Add(this);
         }
 
         private void OnDisable()
         {
-            EditorApplication.update -= OnEditorUpdate;
+            // OnEditorUpdate hook was removed; see OnEnable comments.
             OpenWindows.Remove(this);
             guiCreated = false;
             toolsLoaded = false;
@@ -253,14 +255,6 @@ namespace MCPForUnity.Editor.Windows
                 return;
 
             RefreshAllData();
-        }
-
-        private void OnEditorUpdate()
-        {
-            if (rootVisualElement == null || rootVisualElement.childCount == 0)
-                return;
-
-            connectionSection?.UpdateConnectionStatus();
         }
 
         private void RefreshAllData()
