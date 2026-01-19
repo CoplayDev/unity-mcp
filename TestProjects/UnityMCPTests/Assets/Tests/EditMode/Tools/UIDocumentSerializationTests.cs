@@ -124,6 +124,7 @@ namespace MCPForUnityTests.Editor.Tools
 
         /// <summary>
         /// Test that UIDocument serialization includes expected properties.
+        /// Verifies the structure matches Camera special handling (typeName, instanceID, properties).
         /// </summary>
         [Test]
         [Timeout(10000)]
@@ -150,13 +151,29 @@ namespace MCPForUnityTests.Editor.Tools
             var resultDict = result as Dictionary<string, object>;
             Assert.IsNotNull(resultDict, "Result should be a dictionary");
             
-            // Check for expected keys
+            // Check for expected top-level keys (matches Camera special handling structure)
             Assert.IsTrue(resultDict.ContainsKey("typeName"), "Should contain typeName");
             Assert.IsTrue(resultDict.ContainsKey("instanceID"), "Should contain instanceID");
+            Assert.IsTrue(resultDict.ContainsKey("properties"), "Should contain properties");
             
             // Verify type name
             Assert.AreEqual("UnityEngine.UIElements.UIDocument", resultDict["typeName"], 
                 "typeName should be UIDocument");
+            
+            // Verify properties dict contains expected keys
+            var properties = resultDict["properties"] as Dictionary<string, object>;
+            Assert.IsNotNull(properties, "properties should be a dictionary");
+            Assert.IsTrue(properties.ContainsKey("panelSettings"), "Should have panelSettings");
+            Assert.IsTrue(properties.ContainsKey("visualTreeAsset"), "Should have visualTreeAsset");
+            Assert.IsTrue(properties.ContainsKey("sortingOrder"), "Should have sortingOrder");
+            Assert.IsTrue(properties.ContainsKey("enabled"), "Should have enabled");
+            Assert.IsTrue(properties.ContainsKey("_note"), "Should have _note about skipped rootVisualElement");
+            
+            // Verify asset references use consistent structure (name, instanceID, assetPath)
+            var panelSettingsRef = properties["panelSettings"] as Dictionary<string, object>;
+            Assert.IsNotNull(panelSettingsRef, "panelSettings should be serialized as dictionary");
+            Assert.IsTrue(panelSettingsRef.ContainsKey("name"), "panelSettings should have name");
+            Assert.IsTrue(panelSettingsRef.ContainsKey("instanceID"), "panelSettings should have instanceID");
         }
 
         /// <summary>

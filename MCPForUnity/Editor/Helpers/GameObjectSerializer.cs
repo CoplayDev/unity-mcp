@@ -115,6 +115,32 @@ namespace MCPForUnity.Editor.Helpers
         // --- End Metadata Caching ---
 
         /// <summary>
+        /// Serializes a UnityEngine.Object reference to a dictionary with name, instanceID, and assetPath.
+        /// Used for consistent serialization of asset references in special-case component handlers.
+        /// </summary>
+        /// <param name="obj">The Unity object to serialize</param>
+        /// <param name="includeAssetPath">Whether to include the asset path (default true)</param>
+        /// <returns>A dictionary with the object's reference info, or null if obj is null</returns>
+        private static Dictionary<string, object> SerializeAssetReference(UnityEngine.Object obj, bool includeAssetPath = true)
+        {
+            if (obj == null) return null;
+            
+            var result = new Dictionary<string, object>
+            {
+                { "name", obj.name },
+                { "instanceID", obj.GetInstanceID() }
+            };
+            
+            if (includeAssetPath)
+            {
+                var assetPath = AssetDatabase.GetAssetPath(obj);
+                result["assetPath"] = string.IsNullOrEmpty(assetPath) ? null : assetPath;
+            }
+            
+            return result;
+        }
+
+        /// <summary>
         /// Creates a serializable representation of a Component, attempting to serialize
         /// public properties and fields using reflection, with caching and control over non-public fields.
         /// </summary>
@@ -233,20 +259,7 @@ namespace MCPForUnity.Editor.Helpers
                     if (panelSettingsProp != null)
                     {
                         var panelSettings = panelSettingsProp.GetValue(c) as UnityEngine.Object;
-                        if (panelSettings != null)
-                        {
-                            var assetPath = AssetDatabase.GetAssetPath(panelSettings);
-                            uiDocProperties["panelSettings"] = new Dictionary<string, object>
-                            {
-                                { "name", panelSettings.name },
-                                { "instanceID", panelSettings.GetInstanceID() },
-                                { "assetPath", string.IsNullOrEmpty(assetPath) ? null : assetPath }
-                            };
-                        }
-                        else
-                        {
-                            uiDocProperties["panelSettings"] = null;
-                        }
+                        uiDocProperties["panelSettings"] = SerializeAssetReference(panelSettings);
                     }
 
                     // Get visualTreeAsset reference safely (the UXML file)
@@ -254,20 +267,7 @@ namespace MCPForUnity.Editor.Helpers
                     if (visualTreeAssetProp != null)
                     {
                         var visualTreeAsset = visualTreeAssetProp.GetValue(c) as UnityEngine.Object;
-                        if (visualTreeAsset != null)
-                        {
-                            var assetPath = AssetDatabase.GetAssetPath(visualTreeAsset);
-                            uiDocProperties["visualTreeAsset"] = new Dictionary<string, object>
-                            {
-                                { "name", visualTreeAsset.name },
-                                { "instanceID", visualTreeAsset.GetInstanceID() },
-                                { "assetPath", string.IsNullOrEmpty(assetPath) ? null : assetPath }
-                            };
-                        }
-                        else
-                        {
-                            uiDocProperties["visualTreeAsset"] = null;
-                        }
+                        uiDocProperties["visualTreeAsset"] = SerializeAssetReference(visualTreeAsset);
                     }
 
                     // Get sortingOrder safely
@@ -284,23 +284,12 @@ namespace MCPForUnity.Editor.Helpers
                         uiDocProperties["enabled"] = enabledProp.GetValue(c);
                     }
 
-                    // Get parentUI reference safely
+                    // Get parentUI reference safely (no asset path needed - it's a scene reference)
                     var parentUIProp = componentType.GetProperty("parentUI");
                     if (parentUIProp != null)
                     {
                         var parentUI = parentUIProp.GetValue(c) as UnityEngine.Object;
-                        if (parentUI != null)
-                        {
-                            uiDocProperties["parentUI"] = new Dictionary<string, object>
-                            {
-                                { "name", parentUI.name },
-                                { "instanceID", parentUI.GetInstanceID() }
-                            };
-                        }
-                        else
-                        {
-                            uiDocProperties["parentUI"] = null;
-                        }
+                        uiDocProperties["parentUI"] = SerializeAssetReference(parentUI, includeAssetPath: false);
                     }
 
                     // NOTE: rootVisualElement is intentionally skipped - it contains circular
@@ -312,14 +301,12 @@ namespace MCPForUnity.Editor.Helpers
                     McpLog.Warn($"[GetComponentData] Error reading UIDocument properties: {e.Message}");
                 }
 
+                // Return structure matches Camera special handling (typeName, instanceID, properties)
                 return new Dictionary<string, object>
                 {
                     { "typeName", componentType.FullName },
                     { "instanceID", c.GetInstanceID() },
-                    { "properties", uiDocProperties },
-                    { "name", c.name },
-                    { "tag", c.tag },
-                    { "gameObjectInstanceID", c.gameObject?.GetInstanceID() ?? 0 }
+                    { "properties", uiDocProperties }
                 };
             }
             // --- End Special handling for UIDocument ---
