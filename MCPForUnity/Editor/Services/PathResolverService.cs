@@ -55,7 +55,7 @@ namespace MCPForUnity.Editor.Services
             }
 
             // Fallback to bare command
-            return "uvx";
+            return null;
         }
 
         /// <summary>

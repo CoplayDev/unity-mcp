@@ -90,6 +90,34 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
         }
 
+        public override bool InstallUv()
+        {
+            try
+            {
+                McpLog.Info("Attempting to install uv package manager via curl...");
+
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "/bin/sh",
+                    Arguments = "-c \"curl -LsSf https://astral.sh/uv/install.sh | sh\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = false
+                };
+
+                using var process = System.Diagnostics.Process.Start(psi);
+                if (process == null) return false;
+
+                process.WaitForExit(60000);
+
+                return process.ExitCode == 0;
+            }
+            catch (Exception ex)
+            {
+                McpLog.Error($"Failed to install uv: {ex.Message}");
+                return false;
+            }
+        }
+
         public override DependencyStatus DetectUv()
         {
             // First, honor overrides and cross-platform resolution via the base implementation

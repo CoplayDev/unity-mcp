@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Dependencies;
 using MCPForUnity.Editor.Helpers;
 using UnityEditor;
 using UnityEngine;
@@ -409,6 +410,47 @@ namespace MCPForUnity.Editor.Services
         {
             /// Clean stale Python build artifacts when using a local dev server path
             AssetPathUtility.CleanLocalServerBuildArtifacts();
+
+            // Check if uv is installed, and offer to install if missing.
+            var detector = DependencyManager.GetCurrentPlatformDetector();
+            var uvStatus = detector.DetectUv();
+            if (!uvStatus.IsAvailable)
+            {
+                if (EditorUtility.DisplayDialog(
+                    "uv Package Manager Missing",
+                    "The 'uv' package manager is required to run the local MCP server, but it was not found in your PATH.\n\n" +
+                    "Would you like to attempt an automatic installation now?",
+                    "Install uv",
+                    "Cancel"))
+                {
+                    if (detector.InstallUv())
+                    {
+                        // Re-check after installation
+                        uvStatus = detector.DetectUv();
+                        if (!uvStatus.IsAvailable)
+                        {
+                            EditorUtility.DisplayDialog(
+                                "Installation Incomplete",
+                                "uv was installed, but it is not yet detected in the current process PATH. " +
+                                "You may need to restart Unity for the changes to take effect.",
+                                "OK");
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        EditorUtility.DisplayDialog(
+                            "Installation Failed",
+                            "Failed to automatically install uv. Please install it manually:\n\n" + detector.GetUvInstallUrl(),
+                            "OK");
+                        return false;
+                    }
+                }
+                else
+                {
+                    return false;
+                }
+            }
 
             if (!TryGetLocalHttpServerCommandParts(out _, out _, out var displayCommand, out var error))
             {

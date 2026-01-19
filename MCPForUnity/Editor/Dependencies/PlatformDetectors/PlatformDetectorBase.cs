@@ -18,6 +18,11 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
         public abstract string GetUvInstallUrl();
         public abstract string GetInstallationRecommendations();
 
+        public virtual bool InstallUv()
+        {
+            return false;
+        }
+
         public virtual DependencyStatus DetectUv()
         {
             var status = new DependencyStatus("uv Package Manager", isRequired: true)

@@ -44,6 +44,7 @@
                     <ui:VisualElement class="install-links-row">
                         <ui:Button name="open-python-link-button" text="Open Python Install Page" class="secondary-button install-link-button" />
                         <ui:Button name="open-uv-link-button" text="Open UV Install Page" class="secondary-button install-link-button" />
+                        <ui:Button name="auto-install-uv-button" text="Install UV Automatically" class="action-button install-link-button" />
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
