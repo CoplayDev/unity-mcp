@@ -32,12 +32,12 @@
 In Unity: `Window > Package Manager > + > Add package from git URL...`
 
 > [!TIP]
-> ```
+> ```text
 > https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity
 > ```
 
 **Need a stable/fixed version?** Use a tagged URL (requires uninstall to update):
-```
+```text
 https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v9.0.3
 ```
 
@@ -60,7 +60,7 @@ openupm add com.coplaydev.unity-mcp
 2. Click **Start Server** (launches HTTP server on `localhost:8080`)
 3. Select your MCP Client from the dropdown and click **Configure**
 4. Look for 🟢 "Connected ✓"
-5. **Connect your client:** Cursor/Windsurf/Antigravity have an MCP toggle in settings -- turn it on. Others like Claude Code and Claude Desktop should connect automatically once you configure them in the Unity MCP window.
+5. **Connect your client:** Some clients (Cursor, Windsurf, Antigravity) require enabling an MCP toggle in settings, while others (Claude Desktop, Claude Code) auto-connect after configuration.
 
 **That's it!** Try a prompt like: *"Create a red, blue and yellow cube"* or *"Build a simple player controller"*
 
@@ -161,6 +161,16 @@ For **Strict** validation that catches undefined namespaces, types, and methods:
 3. Also install `SQLitePCLRaw.core` and `SQLitePCLRaw.bundle_e_sqlite3`
 4. Add `USE_ROSLYN` to `Player Settings > Scripting Define Symbols`
 5. Restart Unity
+
+<details>
+<summary>Manual DLL installation (if NuGetForUnity isn't available)</summary>
+
+1. Download `Microsoft.CodeAnalysis.CSharp.dll` and dependencies from [NuGet](https://www.nuget.org/packages/Microsoft.CodeAnalysis.CSharp/)
+2. Place DLLs in `Assets/Plugins/` folder
+3. Ensure .NET compatibility settings are correct
+4. Add `USE_ROSLYN` to Scripting Define Symbols
+5. Restart Unity
+</details>
 </details>
 
 <details>
