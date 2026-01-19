@@ -169,6 +169,10 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsTrue(properties.ContainsKey("enabled"), "Should have enabled");
             Assert.IsTrue(properties.ContainsKey("_note"), "Should have _note about skipped rootVisualElement");
             
+            // CRITICAL: Verify rootVisualElement is NOT included (this is the fix for Issue #585)
+            Assert.IsFalse(properties.ContainsKey("rootVisualElement"), 
+                "Should NOT include rootVisualElement - it causes circular reference loops");
+            
             // Verify asset references use consistent structure (name, instanceID, assetPath)
             var panelSettingsRef = properties["panelSettings"] as Dictionary<string, object>;
             Assert.IsNotNull(panelSettingsRef, "panelSettings should be serialized as dictionary");

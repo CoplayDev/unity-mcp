@@ -115,6 +115,22 @@ namespace MCPForUnity.Editor.Helpers
         // --- End Metadata Caching ---
 
         /// <summary>
+        /// Checks if a type is or derives from a type with the specified full name.
+        /// Used to detect special-case components including their subclasses.
+        /// </summary>
+        private static bool IsOrDerivedFrom(Type type, string baseTypeFullName)
+        {
+            Type current = type;
+            while (current != null)
+            {
+                if (current.FullName == baseTypeFullName)
+                    return true;
+                current = current.BaseType;
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Serializes a UnityEngine.Object reference to a dictionary with name, instanceID, and assetPath.
         /// Used for consistent serialization of asset references in special-case component handlers.
         /// </summary>
@@ -248,7 +264,8 @@ namespace MCPForUnity.Editor.Helpers
 
             // --- Special handling for UIDocument to avoid infinite loops from VisualElement hierarchy (Issue #585) ---
             // UIDocument.rootVisualElement contains circular parent/child references that cause infinite serialization loops.
-            if (componentType.FullName == "UnityEngine.UIElements.UIDocument")
+            // Use IsOrDerivedFrom to also catch subclasses of UIDocument.
+            if (IsOrDerivedFrom(componentType, "UnityEngine.UIElements.UIDocument"))
             {
                 var uiDocProperties = new Dictionary<string, object>();
 
