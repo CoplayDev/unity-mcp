@@ -490,8 +490,21 @@ namespace MCPForUnity.Editor.Tools
         {
             try
             {
-                try { McpLog.Info("[ManageScene] get_hierarchy: querying EditorSceneManager.GetActiveScene", always: false); } catch { }
-                Scene activeScene = EditorSceneManager.GetActiveScene();
+                // Check Prefab Stage first
+                var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                Scene activeScene;
+                
+                if (prefabStage != null)
+                {
+                    activeScene = prefabStage.scene;
+                    try { McpLog.Info("[ManageScene] get_hierarchy: using Prefab Stage scene", always: false); } catch { }
+                }
+                else
+                {
+                    try { McpLog.Info("[ManageScene] get_hierarchy: querying EditorSceneManager.GetActiveScene", always: false); } catch { }
+                    activeScene = EditorSceneManager.GetActiveScene();
+                }
+                
                 try { McpLog.Info($"[ManageScene] get_hierarchy: got scene valid={activeScene.IsValid()} loaded={activeScene.isLoaded} name='{activeScene.name}'", always: false); } catch { }
                 if (!activeScene.IsValid() || !activeScene.isLoaded)
                 {
@@ -599,7 +612,16 @@ namespace MCPForUnity.Editor.Tools
             // Path-based find (e.g., "Root/Child/GrandChild")
             if (s.Contains("/"))
             {
-                try { return GameObject.Find(s); } catch { }
+                try
+                {
+                    var ids = GameObjectLookup.SearchGameObjects("by_path", s, includeInactive: true, maxResults: 1);
+                    if (ids.Count > 0)
+                    {
+                        var byPath = GameObjectLookup.FindById(ids[0]);
+                        if (byPath != null) return byPath;
+                    }
+                }
+                catch { }
             }
 
             // Name-based find (first match, includes inactive)
