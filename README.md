@@ -180,6 +180,11 @@ For **Strict** validation that catches undefined namespaces, types, and methods:
 * **Server Not Starting:** Verify `uv --version` works, check the terminal for errors
 * **Client Not Connecting:** Ensure the HTTP server is running and the URL matches your config
 
+**Detailed setup guides:**
+* [Fix Unity MCP and Cursor, VSCode & Windsurf](https://github.com/CoplayDev/unity-mcp/wiki/1.-Fix-Unity-MCP-and-Cursor,-VSCode-&-Windsurf) — uv/Python installation, PATH issues
+* [Fix Unity MCP and Claude Code](https://github.com/CoplayDev/unity-mcp/wiki/2.-Fix-Unity-MCP-and-Claude-Code) — Claude CLI installation
+* [Common Setup Problems](https://github.com/CoplayDev/unity-mcp/wiki/3.-Common-Setup-Problems) — macOS dyld errors, FAQ
+
 Still stuck? [Open an Issue](https://github.com/CoplayDev/unity-mcp/issues) or [Join Discord](https://discord.gg/y4p8KfzrN4)
 </details>
 
