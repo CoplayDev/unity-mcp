@@ -220,6 +220,110 @@ namespace MCPForUnity.Editor.Helpers
             }
             // --- End Special handling for Camera ---
 
+            // --- Special handling for UIDocument to avoid infinite loops from VisualElement hierarchy (Issue #585) ---
+            // UIDocument.rootVisualElement contains circular parent/child references that cause infinite serialization loops.
+            if (componentType.FullName == "UnityEngine.UIElements.UIDocument")
+            {
+                var uiDocProperties = new Dictionary<string, object>();
+
+                try
+                {
+                    // Get panelSettings reference safely
+                    var panelSettingsProp = componentType.GetProperty("panelSettings");
+                    if (panelSettingsProp != null)
+                    {
+                        var panelSettings = panelSettingsProp.GetValue(c) as UnityEngine.Object;
+                        if (panelSettings != null)
+                        {
+                            var assetPath = AssetDatabase.GetAssetPath(panelSettings);
+                            uiDocProperties["panelSettings"] = new Dictionary<string, object>
+                            {
+                                { "name", panelSettings.name },
+                                { "instanceID", panelSettings.GetInstanceID() },
+                                { "assetPath", string.IsNullOrEmpty(assetPath) ? null : assetPath }
+                            };
+                        }
+                        else
+                        {
+                            uiDocProperties["panelSettings"] = null;
+                        }
+                    }
+
+                    // Get visualTreeAsset reference safely (the UXML file)
+                    var visualTreeAssetProp = componentType.GetProperty("visualTreeAsset");
+                    if (visualTreeAssetProp != null)
+                    {
+                        var visualTreeAsset = visualTreeAssetProp.GetValue(c) as UnityEngine.Object;
+                        if (visualTreeAsset != null)
+                        {
+                            var assetPath = AssetDatabase.GetAssetPath(visualTreeAsset);
+                            uiDocProperties["visualTreeAsset"] = new Dictionary<string, object>
+                            {
+                                { "name", visualTreeAsset.name },
+                                { "instanceID", visualTreeAsset.GetInstanceID() },
+                                { "assetPath", string.IsNullOrEmpty(assetPath) ? null : assetPath }
+                            };
+                        }
+                        else
+                        {
+                            uiDocProperties["visualTreeAsset"] = null;
+                        }
+                    }
+
+                    // Get sortingOrder safely
+                    var sortingOrderProp = componentType.GetProperty("sortingOrder");
+                    if (sortingOrderProp != null)
+                    {
+                        uiDocProperties["sortingOrder"] = sortingOrderProp.GetValue(c);
+                    }
+
+                    // Get enabled state (from Behaviour base class)
+                    var enabledProp = componentType.GetProperty("enabled");
+                    if (enabledProp != null)
+                    {
+                        uiDocProperties["enabled"] = enabledProp.GetValue(c);
+                    }
+
+                    // Get parentUI reference safely
+                    var parentUIProp = componentType.GetProperty("parentUI");
+                    if (parentUIProp != null)
+                    {
+                        var parentUI = parentUIProp.GetValue(c) as UnityEngine.Object;
+                        if (parentUI != null)
+                        {
+                            uiDocProperties["parentUI"] = new Dictionary<string, object>
+                            {
+                                { "name", parentUI.name },
+                                { "instanceID", parentUI.GetInstanceID() }
+                            };
+                        }
+                        else
+                        {
+                            uiDocProperties["parentUI"] = null;
+                        }
+                    }
+
+                    // NOTE: rootVisualElement is intentionally skipped - it contains circular
+                    // parent/child references that cause infinite serialization loops
+                    uiDocProperties["_note"] = "rootVisualElement skipped to prevent circular reference loops";
+                }
+                catch (Exception e)
+                {
+                    McpLog.Warn($"[GetComponentData] Error reading UIDocument properties: {e.Message}");
+                }
+
+                return new Dictionary<string, object>
+                {
+                    { "typeName", componentType.FullName },
+                    { "instanceID", c.GetInstanceID() },
+                    { "properties", uiDocProperties },
+                    { "name", c.name },
+                    { "tag", c.tag },
+                    { "gameObjectInstanceID", c.gameObject?.GetInstanceID() ?? 0 }
+                };
+            }
+            // --- End Special handling for UIDocument ---
+
             var data = new Dictionary<string, object>
             {
                 { "typeName", componentType.FullName },
