@@ -1,0 +1,82 @@
+# MCPB Ignore File
+# This bundle uses uvx pattern - package downloaded from PyPI at runtime
+# Only manifest.json, icon.png, README.md, and LICENSE are needed
+
+# Server source code (downloaded via uvx from PyPI)
+Server/
+
+# Unity Client plugin (separate installation)
+MCPForUnity/
+
+# Test projects
+TestProjects/
+
+# Documentation folder
+docs/
+
+# Custom Tools (shipped separately)
+CustomTools/
+
+# Development scripts at root
+scripts/
+tools/
+
+# Claude skill zip (separate distribution)
+claude_skill_unity.zip
+
+# Development batch files
+deploy-dev.bat
+restore-dev.bat
+
+# Test files at root
+test_unity_socket_framing.py
+mcp_source.py
+prune_tool_results.py
+
+# Docker
+docker-compose.yml
+.dockerignore
+Dockerfile
+
+# Chinese README (keep English only)
+README-zh.md
+
+# GitHub and CI
+.github/
+.claude/
+
+# IDE
+.vscode/
+.idea/
+
+# Python artifacts
+*.pyc
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env*
+*.local
+.venv/
+venv/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Package management
+uv.lock
+poetry.lock
+requirements*.txt
+pyproject.toml
+
+# Logs and temp
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
