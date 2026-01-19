@@ -156,9 +156,7 @@ namespace MCPForUnity.Editor.Helpers
                 var allObjects = GetAllSceneObjects(includeInactive);
                 foreach (var go in allObjects)
                 {
-                    if (go == null) continue;
-                    var goPath = GetGameObjectPath(go);
-                    if (goPath == path || goPath.EndsWith("/" + path))
+                    if (MatchesPath(go, path))
                     {
                         yield return go.GetInstanceID();
                     }
@@ -175,9 +173,7 @@ namespace MCPForUnity.Editor.Helpers
                 var allObjects = GetAllSceneObjects(true);
                 foreach (var go in allObjects)
                 {
-                    if (go == null) continue;
-                    var goPath = GetGameObjectPath(go);
-                    if (goPath == path || goPath.EndsWith("/" + path))
+                    if (MatchesPath(go, path))
                     {
                         yield return go.GetInstanceID();
                     }
@@ -332,6 +328,18 @@ namespace MCPForUnity.Editor.Helpers
         public static Type FindComponentType(string typeName)
         {
             return UnityTypeResolver.ResolveComponent(typeName);
+        }
+
+        /// <summary>
+        /// Checks whether a GameObject matches a path or trailing path segment.
+        /// </summary>
+        internal static bool MatchesPath(GameObject go, string path)
+        {
+            if (go == null || string.IsNullOrEmpty(path))
+                return false;
+
+            var goPath = GetGameObjectPath(go);
+            return goPath == path || goPath.EndsWith("/" + path);
         }
 
         /// <summary>

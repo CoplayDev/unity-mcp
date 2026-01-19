@@ -5,6 +5,7 @@ using System.Linq;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Tools;
 using Newtonsoft.Json.Linq;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -91,16 +92,24 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                     }
                     else
                     {
-                        // In Prefab Stage, GameObject.Find() doesn't work, need to search manually
-                        var allObjects = GetAllSceneObjects(searchInactive);
-                        foreach (var go in allObjects)
+                        var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                        if (prefabStage != null || searchInactive)
                         {
-                            if (go == null) continue;
-                            var goPath = GameObjectLookup.GetGameObjectPath(go);
-                            if (goPath == searchTerm || goPath.EndsWith("/" + searchTerm))
+                            // In Prefab Stage, GameObject.Find() doesn't work, need to search manually
+                            var allObjects = GetAllSceneObjects(searchInactive);
+                            foreach (var go in allObjects)
                             {
-                                results.Add(go);
+                                if (GameObjectLookup.MatchesPath(go, searchTerm))
+                                {
+                                    results.Add(go);
+                                }
                             }
+                        }
+                        else
+                        {
+                            var found = GameObject.Find(searchTerm);
+                            if (found != null)
+                                results.Add(found);
                         }
                     }
                     break;
@@ -173,9 +182,7 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                     var allObjectsForPath = GetAllSceneObjects(true);
                     GameObject objByPath = allObjectsForPath.FirstOrDefault(go =>
                     {
-                        if (go == null) return false;
-                        var goPath = GameObjectLookup.GetGameObjectPath(go);
-                        return goPath == searchTerm || goPath.EndsWith("/" + searchTerm);
+                        return GameObjectLookup.MatchesPath(go, searchTerm);
                     });
                     if (objByPath != null)
                     {

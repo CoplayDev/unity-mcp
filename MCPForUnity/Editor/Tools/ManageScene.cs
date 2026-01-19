@@ -612,7 +612,16 @@ namespace MCPForUnity.Editor.Tools
             // Path-based find (e.g., "Root/Child/GrandChild")
             if (s.Contains("/"))
             {
-                try { return GameObject.Find(s); } catch { }
+                try
+                {
+                    var ids = GameObjectLookup.SearchGameObjects("by_path", s, includeInactive: true, maxResults: 1);
+                    if (ids.Count > 0)
+                    {
+                        var byPath = GameObjectLookup.FindById(ids[0]);
+                        if (byPath != null) return byPath;
+                    }
+                }
+                catch { }
             }
 
             // Name-based find (first match, includes inactive)
