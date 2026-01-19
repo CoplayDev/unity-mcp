@@ -162,15 +162,15 @@ For **Strict** validation that catches undefined namespaces, types, and methods:
 4. Add `USE_ROSLYN` to `Player Settings > Scripting Define Symbols`
 5. Restart Unity
 
-<details>
-<summary>Manual DLL installation (if NuGetForUnity isn't available)</summary>
+  <details>
+  <summary>Manual DLL installation (if NuGetForUnity isn't available)</summary>
 
-1. Download `Microsoft.CodeAnalysis.CSharp.dll` and dependencies from [NuGet](https://www.nuget.org/packages/Microsoft.CodeAnalysis.CSharp/)
-2. Place DLLs in `Assets/Plugins/` folder
-3. Ensure .NET compatibility settings are correct
-4. Add `USE_ROSLYN` to Scripting Define Symbols
-5. Restart Unity
-</details>
+  1. Download `Microsoft.CodeAnalysis.CSharp.dll` and dependencies from [NuGet](https://www.nuget.org/packages/Microsoft.CodeAnalysis.CSharp/)
+  2. Place DLLs in `Assets/Plugins/` folder
+  3. Ensure .NET compatibility settings are correct
+  4. Add `USE_ROSLYN` to Scripting Define Symbols
+  5. Restart Unity
+  </details>
 </details>
 
 <details>
