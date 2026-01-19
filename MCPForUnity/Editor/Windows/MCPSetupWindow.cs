@@ -167,16 +167,6 @@ namespace MCPForUnity.Editor.Windows
             if (uvDep != null)
             {
                 UpdateDependencyStatus(uvIndicator, uvVersion, uvDetails, uvDep);
-                
-                // Show/hide installation buttons for uv
-                openUvLinkButton.style.display = uvDep.IsAvailable ? DisplayStyle.None : DisplayStyle.Flex;
-                autoInstallUvButton.style.display = uvDep.IsAvailable ? DisplayStyle.None : DisplayStyle.Flex;
-            }
-
-            // Update Python buttons visibility
-            if (pythonDep != null)
-            {
-                openPythonLinkButton.style.display = pythonDep.IsAvailable ? DisplayStyle.None : DisplayStyle.Flex;
             }
 
             // Update overall status
