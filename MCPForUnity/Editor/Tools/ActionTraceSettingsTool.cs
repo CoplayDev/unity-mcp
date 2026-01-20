@@ -1,6 +1,7 @@
 using System;
 using MCPForUnity.Editor.Helpers;
-using MCPForUnity.Editor.ActionTrace.Core;
+using MCPForUnity.Editor.ActionTrace.Core.Settings;
+using MCPForUnity.Editor.ActionTrace.Core.Store;
 using Newtonsoft.Json.Linq;
 
 namespace MCPForUnity.Editor.Tools

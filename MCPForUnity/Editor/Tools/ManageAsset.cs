@@ -32,8 +32,8 @@ namespace MCPForUnity.Editor.Tools
         /// Callback raised when an asset is modified. External systems (like ActionTrace)
         /// can subscribe to this to track changes without tight coupling.
         ///
-        /// Parameters: (assetPath, assetType, changesDictionary)
-        /// - changesDictionary: property path -> {old, new} values
+        /// Parameters: (assetPath, assetType, propertiesDictionary)
+        /// - propertiesDictionary: property path -> new value (patch-only; no old/new diff)
         /// </summary>
         public static event Action<string, string, IReadOnlyDictionary<string, object>> OnAssetModified;
 

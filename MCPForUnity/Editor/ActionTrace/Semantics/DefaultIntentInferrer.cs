@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using MCPForUnity.Editor.ActionTrace.Core;
+using MCPForUnity.Editor.ActionTrace.Core.Models;
 
 namespace MCPForUnity.Editor.ActionTrace.Semantics
 {
@@ -69,43 +70,43 @@ namespace MCPForUnity.Editor.ActionTrace.Semantics
 
         private static bool IsScript(EditorEvent e)
         {
-            if (e.Payload.TryGetValue("extension", out var ext))
+            if (e.Payload.TryGetValue("extension", out var ext) && ext != null)
                 return ext.ToString() == ".cs";
-            if (e.Payload.TryGetValue("component_type", out var type))
+            if (e.Payload.TryGetValue("component_type", out var type) && type != null)
                 return type.ToString()?.Contains("MonoBehaviour") == true;
             return false;
         }
 
         private static bool IsScene(EditorEvent e)
         {
-            if (e.Payload.TryGetValue("extension", out var ext))
+            if (e.Payload.TryGetValue("extension", out var ext) && ext != null)
                 return ext.ToString() == ".unity";
             return false;
         }
 
         private static bool IsPrefab(EditorEvent e)
         {
-            if (e.Payload.TryGetValue("extension", out var ext))
+            if (e.Payload.TryGetValue("extension", out var ext) && ext != null)
                 return ext.ToString() == ".prefab";
             return false;
         }
 
         private static bool IsTexture(EditorEvent e)
         {
-            if (e.Payload.TryGetValue("extension", out var ext))
+            if (e.Payload.TryGetValue("extension", out var ext) && ext != null)
             {
                 var extStr = ext.ToString();
                 return extStr == ".png" || extStr == ".jpg" || extStr == ".jpeg" ||
                        extStr == ".psd" || extStr == ".tga" || extStr == ".exr";
             }
-            if (e.Payload.TryGetValue("type", out var type))
+            if (e.Payload.TryGetValue("type", out var type) && type != null)
                 return type.ToString()?.Contains("Texture") == true;
             return false;
         }
 
         private static bool IsAudio(EditorEvent e)
         {
-            if (e.Payload.TryGetValue("extension", out var ext))
+            if (e.Payload.TryGetValue("extension", out var ext) && ext != null)
             {
                 var extStr = ext.ToString();
                 return extStr == ".wav" || extStr == ".mp3" || extStr == ".ogg" ||
@@ -116,7 +117,7 @@ namespace MCPForUnity.Editor.ActionTrace.Semantics
 
         private static bool IsRigidBody(EditorEvent e)
         {
-            if (e.Payload.TryGetValue("component_type", out var type))
+            if (e.Payload.TryGetValue("component_type", out var type) && type != null)
             {
                 var typeStr = type.ToString();
                 return typeStr == "Rigidbody" || typeStr == "Rigidbody2D";
@@ -126,7 +127,7 @@ namespace MCPForUnity.Editor.ActionTrace.Semantics
 
         private static bool IsCollider(EditorEvent e)
         {
-            if (e.Payload.TryGetValue("component_type", out var type))
+            if (e.Payload.TryGetValue("component_type", out var type) && type != null)
             {
                 var typeStr = type.ToString();
                 return typeStr?.Contains("Collider") == true;

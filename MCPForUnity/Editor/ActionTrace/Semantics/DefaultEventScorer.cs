@@ -1,5 +1,6 @@
 using System;
 using MCPForUnity.Editor.ActionTrace.Core;
+using MCPForUnity.Editor.ActionTrace.Core.Models;
 using UnityEngine;
 
 namespace MCPForUnity.Editor.ActionTrace.Semantics

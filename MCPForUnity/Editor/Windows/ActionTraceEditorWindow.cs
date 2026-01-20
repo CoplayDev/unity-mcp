@@ -3,24 +3,26 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using MCPForUnity.Editor.Helpers;
-using MCPForUnity.Editor.ActionTrace.Core;
-using MCPForUnity.Editor.ActionTrace.Query;
+using MCPForUnity.Editor.ActionTrace.Core.Store;
+using MCPForUnity.Editor.ActionTrace.Analysis.Query;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 using MCPForUnity.Editor.ActionTrace.Context;
+using MCPForUnity.Editor.ActionTrace.Core.Settings;
+using static MCPForUnity.Editor.ActionTrace.Analysis.Query.ActionTraceQuery;
 
-namespace MCPForUnity.Editor.Windows
+namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 {
     /// <summary>
-    /// 排序模式：控制事件列表的排序方式
+    /// Sort mode: controls how the event list is sorted
     /// </summary>
     public enum SortMode
     {
-        /// <summary>纯时间排序（最新优先）- 给用户查看记录</summary>
+        /// <summary>Pure time sorting (newest first) - for users viewing records</summary>
         ByTimeDesc,
-        /// <summary>AI 视角排序 - 先按时间再按重要性分组</summary>
+        /// <summary>AI perspective sorting - grouped by time then importance</summary>
         AIFiltered
     }
 
@@ -157,6 +159,9 @@ namespace MCPForUnity.Editor.Windows
         private readonly List<ActionTraceQuery.ActionTraceViewItem> _currentEvents = new();
         private ActionTraceQuery _actionTraceQuery;
 
+        // Track previous BypassImportanceFilter value to restore on window close
+        private bool? _previousBypassImportanceFilter;
+
         private string _searchText = string.Empty;
         private float _minImportance;
         private bool _showSemantics;
@@ -200,8 +205,12 @@ namespace MCPForUnity.Editor.Windows
             _minImportance = ActionTraceSettings.Instance?.Filtering.MinImportanceForRecording ?? 0.4f;
 
             // Always record all events, filter at query time based on mode
+            // Save current value and enable bypass for this window
             if (ActionTraceSettings.Instance != null)
+            {
+                _previousBypassImportanceFilter = ActionTraceSettings.Instance.Filtering.BypassImportanceFilter;
                 ActionTraceSettings.Instance.Filtering.BypassImportanceFilter = true;
+            }
 
             RefreshEvents();
             UpdateStatus();
@@ -441,7 +450,7 @@ namespace MCPForUnity.Editor.Windows
             _filterMenu?.menu.AppendAction("Medium+", a => SetImportance(0.4f));
             _filterMenu?.menu.AppendAction("High+", a => SetImportance(0.7f));
 
-            // 排序菜单
+            // Sort menu
             _sortMenu?.menu.AppendAction("By Time (Newest)", a => SetSortMode(SortMode.ByTimeDesc));
             _sortMenu?.menu.AppendAction("AI Filtered", a => SetSortMode(SortMode.AIFiltered));
 
@@ -837,11 +846,11 @@ namespace MCPForUnity.Editor.Windows
 
         private void RefreshEvents()
         {
-            IEnumerable<ActionTraceQuery.ActionTraceViewItem> source = _showContext
+            IEnumerable<ActionTraceViewItem> source = _showContext
                 ? _actionTraceQuery.ProjectWithContext(EventStore.QueryWithContext(DefaultQueryLimit))
                 : _actionTraceQuery.Project(EventStore.Query(DefaultQueryLimit));
 
-            // 应用排序
+            // Apply sorting
             source = ApplySorting(source);
 
             var filtered = source.Where(FilterEvent).ToList();
@@ -936,8 +945,8 @@ namespace MCPForUnity.Editor.Windows
 
         private bool FilterEvent(ActionTraceQuery.ActionTraceViewItem e)
         {
-            // ByTime 模式：显示所有记录（包括 low 重要性）
-            // AI Filtered 模式：应用重要性过滤（AI 视角）
+            // ByTime mode: show all records (including low importance)
+            // AI Filtered mode: apply importance filter (AI perspective)
             if (_sortMode == SortMode.AIFiltered && e.ImportanceScore < _minImportance)
                 return false;
 
@@ -1057,6 +1066,12 @@ namespace MCPForUnity.Editor.Windows
         private void OnDisable()
         {
             EditorApplication.update -= OnEditorUpdate;
+
+            // Restore the previous BypassImportanceFilter value
+            if (ActionTraceSettings.Instance != null && _previousBypassImportanceFilter.HasValue)
+            {
+                ActionTraceSettings.Instance.Filtering.BypassImportanceFilter = _previousBypassImportanceFilter.Value;
+            }
         }
 
         private void OnEditorUpdate()

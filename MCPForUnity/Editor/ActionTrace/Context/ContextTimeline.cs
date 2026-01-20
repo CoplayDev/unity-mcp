@@ -1,7 +1,8 @@
 using UnityEditor;
-using MCPForUnity.Editor.ActionTrace.Core;
+using MCPForUnity.Editor.ActionTrace.Core.Store;
 using System;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.ActionTrace.Core.Models;
 
 namespace MCPForUnity.Editor.ActionTrace.Context
 {
@@ -24,7 +25,7 @@ namespace MCPForUnity.Editor.ActionTrace.Context
         {
             // Subscribe to event recording
             // EventStore already uses delayCall, so this won't cause re-entrancy
-            Core.EventStore.EventRecorded += OnEventRecorded;
+            EventStore.EventRecorded += OnEventRecorded;
         }
 
         /// <summary>
@@ -45,7 +46,7 @@ namespace MCPForUnity.Editor.ActionTrace.Context
                     );
 
                     // Store in EventStore's side-table
-                    Core.EventStore.AddContextMapping(mapping);
+                    EventStore.AddContextMapping(mapping);
                 }
             }
             catch (System.Exception ex)
@@ -62,7 +63,7 @@ namespace MCPForUnity.Editor.ActionTrace.Context
         public static void Associate(long eventSequence, Guid contextId)
         {
             var mapping = new ContextMapping(eventSequence, contextId);
-            Core.EventStore.AddContextMapping(mapping);
+            EventStore.AddContextMapping(mapping);
         }
 
         /// <summary>
@@ -71,7 +72,7 @@ namespace MCPForUnity.Editor.ActionTrace.Context
         /// </summary>
         public static void DisassociateContext(Guid contextId)
         {
-            Core.EventStore.RemoveContextMappings(contextId);
+            EventStore.RemoveContextMappings(contextId);
         }
     }
 }

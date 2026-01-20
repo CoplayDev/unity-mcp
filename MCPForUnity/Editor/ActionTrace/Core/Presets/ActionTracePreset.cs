@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace MCPForUnity.Editor.ActionTrace.Core
+namespace MCPForUnity.Editor.ActionTrace.Core.Presets
 {
     /// <summary>
     /// Preset configurations for ActionTrace settings.

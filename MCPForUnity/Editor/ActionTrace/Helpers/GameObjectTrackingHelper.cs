@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using UnityEngine.Assertions;
-using MCPForUnity.Editor.ActionTrace.Core;
+using MCPForUnity.Editor.ActionTrace.Core.Models;
 
 namespace MCPForUnity.Editor.ActionTrace.Helpers
 {
@@ -25,8 +25,34 @@ namespace MCPForUnity.Editor.ActionTrace.Helpers
         private static readonly HashSet<int> _previousInstanceIds = new(256);
         private static bool _hasInitialized;
 
-        // Cache for the main thread ID to validate thread safety
-        private static readonly int MainThreadId = System.Threading.Thread.CurrentThread.ManagedThreadId;
+        // Cache for the main thread ID to validate thread safety.
+        // Lazily initialized on first access to ensure correct capture.
+        private static int _mainThreadId = -1;
+
+        private static int MainThreadId
+        {
+            get
+            {
+                if (_mainThreadId < 0)
+                {
+                    // Initialize on first access; Unity's InitializeOnLoadMethod
+                    // ensures this is called from the main thread during editor startup.
+                    _mainThreadId = System.Threading.Thread.CurrentThread.ManagedThreadId;
+                }
+                return _mainThreadId;
+            }
+        }
+
+        /// <summary>
+        /// Ensures MainThreadId is captured on the main thread during editor initialization.
+        /// Unity guarantees InitializeOnLoadMethod runs on the main thread after domain reload.
+        /// </summary>
+        [InitializeOnLoadMethod]
+        private static void EnsureMainThreadIdCaptured()
+        {
+            // Force capture on main thread during editor initialization
+            _ = MainThreadId;
+        }
 
         /// <summary>
         /// Initializes tracking by capturing all existing GameObject instance IDs.
