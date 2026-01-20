@@ -3,24 +3,26 @@ using System.Collections.Generic;
 using System.Linq;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.ActionTrace.Context;
-using MCPForUnity.Editor.ActionTrace.Core;
-using MCPForUnity.Editor.ActionTrace.Query;
-using MCPForUnity.Editor.ActionTrace.Semantics;
+using MCPForUnity.Editor.ActionTrace.Core.Settings;
+using MCPForUnity.Editor.ActionTrace.Core.Store;
+using MCPForUnity.Editor.ActionTrace.Analysis.Query;
+using MCPForUnity.Editor.ActionTrace.Analysis.Summarization;
 using Newtonsoft.Json.Linq;
-using static MCPForUnity.Editor.ActionTrace.Query.ActionTraceQuery;
+using static MCPForUnity.Editor.ActionTrace.Analysis.Query.ActionTraceQuery;
+using MCPForUnity.Editor.ActionTrace.Core.Models;
+using MCPForUnity.Editor.ActionTrace.Semantics;
 
 namespace MCPForUnity.Editor.Resources.ActionTrace
 {
     /// <summary>
     /// Response wrapper constants for ActionTraceView.
-    /// Ensures consistent schema versioning across all response types.
+    /// Simplified schema: Basic, WithSemantics, Aggregated.
     /// </summary>
     internal static class ResponseSchemas
     {
         public const string Basic = "action_trace_view@1";
-        public const string WithContext = "action_trace_view@2";
-        public const string WithSemantics = "action_trace_view@3";
-        public const string Aggregated = "action_trace_view@4";
+        public const string WithSemantics = "action_trace_view@2";
+        public const string Aggregated = "action_trace_view@3";
     }
 
     /// <summary>
@@ -39,11 +41,12 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
     /// Parameters:
     ///   - limit: Maximum number of events to return (default: 50)
     ///   - since_sequence: Only return events after this sequence number
-    ///   - include_context: If true, include context associations (default: false)
     ///   - include_semantics: If true, include importance, category, intent (default: false)
     ///   - min_importance: Minimum importance score to include (default: "medium")
     ///                       Options: "low" (0.0+), "medium" (0.4+), "high" (0.7+), "critical" (0.9+)
-    ///   - source: Filter by operation source: "ai", "human", "system" (optional)
+    ///   - summary_only: If true, return aggregated transactions instead of raw events (default: false)
+    ///   - task_id: Filter events by task ID (for AINote events)
+    ///   - conversation_id: Filter events by conversation ID (for AINote events)
     ///
     /// L3 Semantic Whitelist:
     /// By default, only events with importance >= 0.4 (medium+) are returned.
@@ -58,14 +61,12 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
             {
                 int limit = GetLimit(@params);
                 long? sinceSequence = GetSinceSequence(@params);
-                bool includeContext = GetIncludeContext(@params);
                 bool includeSemantics = GetIncludeSemantics(@params);
-                string sourceFilter = GetSourceFilter(@params);
 
                 // L3 Semantic Whitelist: Parse minimum importance threshold
                 float minImportance = GetMinImportance(@params);
 
-                // P1.2 Task-Level Filtering: Parse task and conversation IDs
+                // Task-level filtering: Parse task_id and conversation_id
                 string taskId = GetTaskId(@params);
                 string conversationId = GetConversationId(@params);
 
@@ -79,19 +80,12 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
                 }
 
                 // Decide query mode based on parameters
-                bool useContextQuery = includeContext || !string.IsNullOrEmpty(sourceFilter);
-
-                if (useContextQuery)
-                {
-                    return QueryWithContext(limit, sinceSequence, sourceFilter, includeSemantics, minImportance, taskId, conversationId);
-                }
-
                 if (includeSemantics)
                 {
                     return QueryWithSemanticsOnly(limit, sinceSequence, minImportance, taskId, conversationId);
                 }
 
-                // Basic query without context or semantics (apply importance filter anyway)
+                // Basic query without semantics (apply importance filter anyway)
                 return QueryBasic(limit, sinceSequence, minImportance, taskId, conversationId);
             }
             catch (Exception ex)
@@ -102,9 +96,9 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
         }
 
         /// <summary>
-        /// Basic query without context or semantics
+        /// Basic query without semantics.
         /// Applies L3 importance filter by default (medium+ importance).
-        /// P1.2: Supports task_id and conversation_id filtering.
+        /// Supports task_id and conversation_id filtering.
         /// </summary>
         private static object QueryBasic(int limit, long? sinceSequence, float minImportance, string taskId, string conversationId)
         {
@@ -119,7 +113,7 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
                 .Where(e => scorer.Score(e) >= minImportance)
                 .ToList();
 
-            // P1.2 Task-Level Filtering: Filter by task_id and conversation_id
+            // Apply task-level filtering
             filteredEvents = ApplyTaskFilters(filteredEvents, taskId, conversationId);
 
             var eventItems = filteredEvents.Select(e => new
@@ -141,9 +135,9 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
         }
 
         /// <summary>
-        /// Query with semantics but without context
+        /// Query with semantics.
         /// Applies L3 importance filter by default.
-        /// P1.2: Supports task_id and conversation_id filtering.
+        /// Supports task_id and conversation_id filtering.
         /// </summary>
         private static object QueryWithSemanticsOnly(int limit, long? sinceSequence, float minImportance, string taskId, string conversationId)
         {
@@ -160,7 +154,7 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
                 .Where(p => p.ImportanceScore >= minImportance)
                 .ToList();
 
-            // P1.2 Task-Level Filtering: Filter by task_id and conversation_id
+            // Apply task-level filtering
             filtered = ApplyTaskFiltersToProjected(filtered, taskId, conversationId);
 
             var eventItems = filtered.Select(p => new
@@ -185,122 +179,11 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
         }
 
         /// <summary>
-        /// Query with context and optional semantics
-        /// Note: Source filtering requires persistent OperationContext storage.
-        /// </summary>
-        private static object QueryWithContext(int limit, long? sinceSequence, string sourceFilter, bool includeSemantics, float minImportance, string taskId, string conversationId)
-        {
-            // Check if source filter is requested (requires persistent context storage)
-            if (!string.IsNullOrEmpty(sourceFilter))
-            {
-                return new ErrorResponse(
-                    "Source filtering requires persistent OperationContext storage. " +
-                    "The 'source' parameter is not yet supported."
-                );
-            }
-
-            var eventsWithContext = EventStore.QueryWithContext(limit, sinceSequence);
-
-            // P1.2 Task-Level Filtering: Apply task_id and conversation_id filters
-            eventsWithContext = ApplyTaskFiltersToEventWithContext(eventsWithContext, taskId, conversationId);
-
-            // Apply semantics if requested
-            if (includeSemantics)
-            {
-                var query = new ActionTraceQuery();
-                var projected = query.ProjectWithContext(eventsWithContext);
-
-                // Apply disabled event types filter
-                projected = ApplyDisabledTypesFilterToProjected(projected);
-
-                // L3 Semantic Whitelist: Filter by importance
-                var filtered = projected
-                    .Where(p => p.ImportanceScore >= minImportance)
-                    .ToList();
-
-                var events = filtered.Select(p =>
-                {
-                    var hasContext = p.Context != null;
-                    var contextId = hasContext ? p.Context.ContextId.ToString() : null;
-
-                    return new
-                    {
-                        sequence = p.Event.Sequence,
-                        timestamp_unix_ms = p.Event.TimestampUnixMs,
-                        type = p.Event.Type,
-                        target_id = p.Event.TargetId,
-                        summary = p.Event.GetSummary(),
-                        has_context = hasContext,
-                        context = hasContext ? new { context_id = contextId } : null,
-                        importance_score = p.ImportanceScore,
-                        importance_category = p.ImportanceCategory,
-                        inferred_intent = p.InferredIntent
-                    };
-                }).ToArray();
-
-                return new SuccessResponse("Retrieved ActionTrace events with context and semantics.", new
-                {
-                    schema_version = ResponseSchemas.WithSemantics,
-                    events = events,
-                    total_count = events.Length,
-                    current_sequence = EventStore.CurrentSequence,
-                    context_mapping_count = EventStore.ContextMappingCount
-                });
-            }
-            else
-            {
-                // Apply disabled event types filter first
-                var settings = ActionTraceSettings.Instance;
-                var disabledTypes = settings != null ? settings.Filtering.DisabledEventTypes : null;
-                if (disabledTypes != null && disabledTypes.Length > 0)
-                {
-                    eventsWithContext = eventsWithContext
-                        .Where(x => !IsEventTypeDisabled(x.Event.Type, disabledTypes))
-                        .ToList();
-                }
-
-                // Context only response - apply importance filter manually
-                var scorer = new DefaultEventScorer();
-                var filtered = eventsWithContext
-                    .Where(x => scorer.Score(x.Event) >= minImportance)
-                    .ToList();
-
-                var events = filtered.Select(x =>
-                {
-                    var hasContext = x.Context != null;
-                    var contextId = hasContext ? x.Context.ContextId.ToString() : null;
-
-                    return new
-                    {
-                        sequence = x.Event.Sequence,
-                        timestamp_unix_ms = x.Event.TimestampUnixMs,
-                        type = x.Event.Type,
-                        target_id = x.Event.TargetId,
-                        summary = x.Event.GetSummary(),
-                        has_context = hasContext,
-                        context = hasContext ? new { context_id = contextId } : null
-                    };
-                }).ToArray();
-
-                return new SuccessResponse("Retrieved ActionTrace events with context.", new
-                {
-                    schema_version = ResponseSchemas.WithContext,
-                    events = events,
-                    total_count = events.Length,
-                    current_sequence = EventStore.CurrentSequence,
-                    context_mapping_count = EventStore.ContextMappingCount
-                });
-            }
-        }
-
-        /// <summary>
-        /// P1.1: Query with transaction aggregation.
+        /// Query with transaction aggregation.
         ///
         /// Returns AtomicOperation list instead of raw events.
         /// Reduces token consumption by grouping related events.
-        ///
-        /// From ActionTrace-enhancements.md line 294-300:
-        /// "summary_only=True 时返回 AtomicOperation 列表而非原始事件"
+        /// Supports task_id and conversation_id filtering.
         /// </summary>
         private static object QueryAggregated(int limit, long? sinceSequence, float minImportance, string taskId, string conversationId)
         {
@@ -316,13 +199,13 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
                 .Where(e => scorer.Score(e) >= minImportance)
                 .ToList();
 
-            // Step 4: Apply task-level filtering (P1.2)
+            // Step 4: Apply task-level filtering
             filteredEvents = ApplyTaskFilters(filteredEvents, taskId, conversationId);
 
-            // Step 4: Aggregate into transactions
+            // Step 5: Aggregate into transactions
             var operations = TransactionAggregator.Aggregate(filteredEvents);
 
-            // Step 5: Project to response format
+            // Step 6: Project to response format
             var eventItems = operations.Select(op => new
             {
                 start_sequence = op.StartSequence,
@@ -361,25 +244,6 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
                 return since;
             }
             return null;
-        }
-
-        private static bool GetIncludeContext(JObject @params)
-        {
-            var includeToken = @params["include_context"] ?? @params["includeContext"];
-            if (includeToken != null)
-            {
-                if (bool.TryParse(includeToken.ToString(), out bool include))
-                {
-                    return include;
-                }
-            }
-            return false;
-        }
-
-        private static string GetSourceFilter(JObject @params)
-        {
-            var sourceToken = @params["source"] ?? @params["operation_source"];
-            return sourceToken?.ToString();
         }
 
         private static bool GetIncludeSemantics(JObject @params)
@@ -545,61 +409,6 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
         }
 
         /// <summary>
-        /// P1.2: Apply task filters to events with context tuples.
-        /// Filters AINote events by matching task_id and conversation_id in payload.
-        /// </summary>
-        private static IReadOnlyList<(EditorEvent Event, ContextMapping Context)> ApplyTaskFiltersToEventWithContext(
-            IReadOnlyList<(EditorEvent Event, ContextMapping Context)> eventsWithContext,
-            string taskId,
-            string conversationId)
-        {
-            // If no filters specified, return original list
-            if (string.IsNullOrEmpty(taskId) && string.IsNullOrEmpty(conversationId))
-                return eventsWithContext;
-
-            return eventsWithContext.Where(x =>
-            {
-                var e = x.Event;
-
-                // Only AINote events have task_id and conversation_id
-                if (e.Type != EventTypes.AINote)
-                    return true;
-
-                // Guard against dehydrated events (null payload)
-                if (e.Payload == null)
-                    return false; // Can't match filters without payload
-
-                // Check task_id filter
-                if (!string.IsNullOrEmpty(taskId))
-                {
-                    if (e.Payload.TryGetValue("task_id", out var taskVal))
-                    {
-                        string eventTaskId = taskVal?.ToString();
-                        if (eventTaskId != taskId)
-                            return false;
-                    }
-                    else
-                    {
-                        return false;
-                    }
-                }
-
-                // Check conversation_id filter
-                if (!string.IsNullOrEmpty(conversationId))
-                {
-                    if (e.Payload.TryGetValue("conversation_id", out var convVal))
-                    {
-                        string eventConvId = convVal?.ToString();
-                        if (eventConvId != conversationId)
-                            return false;
-                    }
-                }
-
-                return true;
-            }).ToList();
-        }
-
-        /// <summary>
         /// P1.1: Parse summary_only parameter.
         /// </summary>
         private static bool GetSummaryOnly(JObject @params)
@@ -643,22 +452,6 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
                     return true;
             }
             return false;
-        }
-
-        /// <summary>
-        /// Filter out disabled event types from projected events.
-        /// </summary>
-        private static IReadOnlyList<ActionTraceViewItem> ApplyDisabledTypesFilterToProjected(IReadOnlyList<ActionTraceViewItem> projected)
-        {
-            var settings = ActionTraceSettings.Instance;
-            if (settings == null)
-                return projected;
-
-            var disabledTypes = settings.Filtering.DisabledEventTypes;
-            if (disabledTypes == null || disabledTypes.Length == 0)
-                return projected;
-
-            return projected.Where(p => !IsEventTypeDisabled(p.Event.Type, disabledTypes)).ToList();
         }
     }
 }

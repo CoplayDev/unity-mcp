@@ -1,111 +1,18 @@
 using System;
-using UnityEditor.SceneManagement;
+using MCPForUnity.Editor.ActionTrace.Sources.EventArgs;
+using MCPForUnity.Editor.Helpers;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace MCPForUnity.Editor.Hooks
 {
-    #region Event Arguments
-
-    /// <summary>
-    /// Base class for all hook event arguments.
-    /// Follows .NET conventions (similar to EventArgs).
-    /// </summary>
-    public abstract class HookEventArgs
-    {
-        /// <summary>
-        /// Timestamp when the event occurred.
-        /// </summary>
-        public DateTimeOffset Timestamp { get; } = DateTimeOffset.UtcNow;
-    }
-
-    #region Compilation Args
-
-    /// <summary>
-    /// Arguments for script compilation events.
-    /// </summary>
-    public class ScriptCompilationArgs : HookEventArgs
-    {
-        /// <summary>Number of scripts compiled (optional)</summary>
-        public int? ScriptCount { get; set; }
-
-        /// <summary>Compilation duration in milliseconds (optional)</summary>
-        public long? DurationMs { get; set; }
-    }
-
-    /// <summary>
-    /// Arguments for script compilation failure events.
-    /// </summary>
-    public class ScriptCompilationFailedArgs : ScriptCompilationArgs
-    {
-        /// <summary>Number of compilation errors</summary>
-        public int ErrorCount { get; set; }
-    }
-
-    #endregion
-
-    #region Scene Args
-
-    /// <summary>
-    /// Arguments for scene open events.
-    /// </summary>
-    public class SceneOpenArgs : HookEventArgs
-    {
-        /// <summary>Mode used to open the scene (optional)</summary>
-        public OpenSceneMode? Mode { get; set; }
-    }
-
-    /// <summary>
-    /// Arguments for new scene creation events.
-    /// </summary>
-    public class NewSceneArgs : HookEventArgs
-    {
-        /// <summary>Scene setup configuration (optional)</summary>
-        public NewSceneSetup? Setup { get; set; }
-
-        /// <summary>New scene mode (optional)</summary>
-        public NewSceneMode? Mode { get; set; }
-    }
-
-    #endregion
-
-    #region Build Args
-
-    /// <summary>
-    /// Arguments for build completion events.
-    /// </summary>
-    public class BuildArgs : HookEventArgs
-    {
-        /// <summary>Build platform name (optional)</summary>
-        public string Platform { get; set; }
-
-        /// <summary>Build output location (optional)</summary>
-        public string Location { get; set; }
-
-        /// <summary>Build duration in milliseconds (optional)</summary>
-        public long? DurationMs { get; set; }
-
-        /// <summary>Output size in bytes (optional, only on success)</summary>
-        public ulong? SizeBytes { get; set; }
-
-        /// <summary>Whether the build succeeded</summary>
-        public bool Success { get; set; }
-
-        /// <summary>Build summary/error message (optional)</summary>
-        public string Summary { get; set; }
-    }
-
-    #endregion
-
-    #endregion
-
     /// <summary>
     /// Built-in hook system providing subscription points for all common Unity editor events.
     /// Other systems can subscribe to these events without directly monitoring Unity callbacks.
     ///
     /// Event Design:
     /// - Simple events: Use for basic notifications (backward compatible)
-    /// - Detailed events: Include additional context via Args classes
+    /// - Detailed events: Include additional context via Args classes (defined in HookEventArgs.cs)
     ///
     /// Usage:
     /// <code>
@@ -120,231 +27,428 @@ namespace MCPForUnity.Editor.Hooks
     {
         #region Compilation Events
 
-        /// <summary>
-        /// Fired when script compilation completes successfully.
-        /// </summary>
         public static event Action OnScriptCompiled;
-
-        /// <summary>
-        /// Fired when script compilation completes with detailed information.
-        /// </summary>
         public static event Action<ScriptCompilationArgs> OnScriptCompiledDetailed;
-
-        /// <summary>
-        /// Fired when script compilation fails.
-        /// Parameter: error count
-        /// </summary>
         public static event Action<int> OnScriptCompilationFailed;
-
-        /// <summary>
-        /// Fired when script compilation fails with detailed information.
-        /// </summary>
         public static event Action<ScriptCompilationFailedArgs> OnScriptCompilationFailedDetailed;
 
         #endregion
 
         #region Scene Events
 
-        /// <summary>
-        /// Fired after a scene is saved.
-        /// Parameter: the scene that was saved
-        /// </summary>
         public static event Action<Scene> OnSceneSaved;
-
-        /// <summary>
-        /// Fired when a scene is opened.
-        /// Parameter: the scene that was opened
-        /// </summary>
         public static event Action<Scene> OnSceneOpened;
-
-        /// <summary>
-        /// Fired when a scene is opened with detailed information.
-        /// </summary>
         public static event Action<Scene, SceneOpenArgs> OnSceneOpenedDetailed;
-
-        /// <summary>
-        /// Fired when a new scene is created.
-        /// Parameter: the newly created scene
-        /// </summary>
         public static event Action<Scene> OnNewSceneCreated;
-
-        /// <summary>
-        /// Fired when a new scene is created with detailed information.
-        /// </summary>
         public static event Action<Scene, NewSceneArgs> OnNewSceneCreatedDetailed;
-
-        /// <summary>
-        /// Fired after a scene is loaded (after load operation completes).
-        /// Parameter: the loaded scene
-        /// </summary>
         public static event Action<Scene> OnSceneLoaded;
-
-        /// <summary>
-        /// Fired when a scene is unloaded.
-        /// Parameter: the scene being unloaded
-        /// </summary>
         public static event Action<Scene> OnSceneUnloaded;
 
         #endregion
 
         #region Play Mode Events
 
-        /// <summary>
-        /// Fired when play mode state changes.
-        /// Parameter: true if entering play mode, false if exiting
-        /// </summary>
         public static event Action<bool> OnPlayModeChanged;
 
         #endregion
 
         #region Hierarchy Events
 
-        /// <summary>
-        /// Fired when the hierarchy changes (with debouncing).
-        /// </summary>
         public static event Action OnHierarchyChanged;
-
-        /// <summary>
-        /// Fired when a GameObject is created.
-        /// Parameter: the created GameObject
-        /// </summary>
         public static event Action<GameObject> OnGameObjectCreated;
-
-        /// <summary>
-        /// Fired when a GameObject is destroyed.
-        /// Parameter: the destroyed GameObject (if still available)
-        /// </summary>
         public static event Action<GameObject> OnGameObjectDestroyed;
+        public static event Action<GameObjectDestroyedArgs> OnGameObjectDestroyedDetailed;
 
         #endregion
 
         #region Selection Events
 
-        /// <summary>
-        /// Fired when the selection changes.
-        /// Parameter: the currently selected GameObject (null if nothing selected)
-        /// </summary>
         public static event Action<GameObject> OnSelectionChanged;
 
         #endregion
 
         #region Project Events
 
-        /// <summary>
-        /// Fired when the project changes (asset import/delete, etc).
-        /// </summary>
         public static event Action OnProjectChanged;
-
-        /// <summary>
-        /// Fired when assets are imported.
-        /// </summary>
         public static event Action OnAssetImported;
-
-        /// <summary>
-        /// Fired when assets are deleted.
-        /// </summary>
         public static event Action OnAssetDeleted;
 
         #endregion
 
         #region Build Events
 
-        /// <summary>
-        /// Fired when a build completes.
-        /// Parameter: true if build succeeded, false if failed
-        /// </summary>
         public static event Action<bool> OnBuildCompleted;
-
-        /// <summary>
-        /// Fired when a build completes with detailed information.
-        /// </summary>
         public static event Action<BuildArgs> OnBuildCompletedDetailed;
 
         #endregion
 
         #region Editor State Events
 
-        /// <summary>
-        /// Fired every editor update frame (similar to Update in MonoBehaviour).
-        /// </summary>
         public static event Action OnEditorUpdate;
-
-        /// <summary>
-        /// Fired when the editor is idle (no ongoing operations).
-        /// </summary>
         public static event Action OnEditorIdle;
 
         #endregion
 
         #region Component Events
 
-        /// <summary>
-        /// Fired when a component is added to a GameObject.
-        /// Parameter: the added component
-        /// </summary>
         public static event Action<Component> OnComponentAdded;
+        public static event Action<Component> OnComponentRemoved;
+        public static event Action<ComponentRemovedArgs> OnComponentRemovedDetailed;
 
         #endregion
 
-        #region Internal Notification API (for UnityEventHooks only)
+        #region Internal Notification API
 
-        // ========== Simple Notifications ==========
+        // P1 Fix: Exception handling - prevent subscriber errors from breaking the invocation chain
+        // This ensures that a misbehaving subscriber doesn't prevent other subscribers from receiving notifications
         internal static void NotifyScriptCompiled()
         {
-            OnScriptCompiled?.Invoke();
+            var handler = OnScriptCompiled;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try
+                {
+                    ((Action)subscriber)();
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Warn($"[HookRegistry] OnScriptCompiled subscriber threw exception: {ex.Message}");
+                }
+            }
         }
 
         internal static void NotifyScriptCompiledDetailed(ScriptCompilationArgs args)
         {
-            OnScriptCompiledDetailed?.Invoke(args);
+            var handler = OnScriptCompiledDetailed;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try
+                {
+                    ((Action<ScriptCompilationArgs>)subscriber)(args);
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Warn($"[HookRegistry] OnScriptCompiledDetailed subscriber threw exception: {ex.Message}");
+                }
+            }
         }
 
         internal static void NotifyScriptCompilationFailed(int errorCount)
         {
-            OnScriptCompilationFailed?.Invoke(errorCount);
+            var handler = OnScriptCompilationFailed;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try
+                {
+                    ((Action<int>)subscriber)(errorCount);
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Warn($"[HookRegistry] OnScriptCompilationFailed subscriber threw exception: {ex.Message}");
+                }
+            }
         }
 
         internal static void NotifyScriptCompilationFailedDetailed(ScriptCompilationFailedArgs args)
         {
-            OnScriptCompilationFailedDetailed?.Invoke(args);
+            var handler = OnScriptCompilationFailedDetailed;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try
+                {
+                    ((Action<ScriptCompilationFailedArgs>)subscriber)(args);
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Warn($"[HookRegistry] OnScriptCompilationFailedDetailed subscriber threw exception: {ex.Message}");
+                }
+            }
         }
 
-        internal static void NotifySceneSaved(Scene scene) => OnSceneSaved?.Invoke(scene);
+        // Apply same exception handling pattern to other notification methods
+        internal static void NotifySceneSaved(Scene scene)
+        {
+            var handler = OnSceneSaved;
+            if (handler == null) return;
 
-        internal static void NotifySceneOpened(Scene scene) => OnSceneOpened?.Invoke(scene);
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action<Scene>)subscriber)(scene); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnSceneSaved subscriber threw exception: {ex.Message}"); }
+            }
+        }
+
+        internal static void NotifySceneOpened(Scene scene)
+        {
+            var handler = OnSceneOpened;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action<Scene>)subscriber)(scene); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnSceneOpened subscriber threw exception: {ex.Message}"); }
+            }
+        }
 
         internal static void NotifySceneOpenedDetailed(Scene scene, SceneOpenArgs args)
         {
-            OnSceneOpenedDetailed?.Invoke(scene, args);
+            var handler = OnSceneOpenedDetailed;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action<Scene, SceneOpenArgs>)subscriber)(scene, args); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnSceneOpenedDetailed subscriber threw exception: {ex.Message}"); }
+            }
         }
 
-        internal static void NotifyNewSceneCreated(Scene scene) => OnNewSceneCreated?.Invoke(scene);
+        internal static void NotifyNewSceneCreated(Scene scene)
+        {
+            var handler = OnNewSceneCreated;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action<Scene>)subscriber)(scene); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnNewSceneCreated subscriber threw exception: {ex.Message}"); }
+            }
+        }
 
         internal static void NotifyNewSceneCreatedDetailed(Scene scene, NewSceneArgs args)
         {
-            OnNewSceneCreatedDetailed?.Invoke(scene, args);
+            var handler = OnNewSceneCreatedDetailed;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action<Scene, NewSceneArgs>)subscriber)(scene, args); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnNewSceneCreatedDetailed subscriber threw exception: {ex.Message}"); }
+            }
         }
 
-        internal static void NotifySceneLoaded(Scene scene) => OnSceneLoaded?.Invoke(scene);
-        internal static void NotifySceneUnloaded(Scene scene) => OnSceneUnloaded?.Invoke(scene);
-        internal static void NotifyPlayModeChanged(bool isPlaying) => OnPlayModeChanged?.Invoke(isPlaying);
-        internal static void NotifyHierarchyChanged() => OnHierarchyChanged?.Invoke();
-        internal static void NotifyGameObjectCreated(GameObject gameObject) => OnGameObjectCreated?.Invoke(gameObject);
-        internal static void NotifyGameObjectDestroyed(GameObject gameObject) => OnGameObjectDestroyed?.Invoke(gameObject);
-        internal static void NotifySelectionChanged(GameObject gameObject) => OnSelectionChanged?.Invoke(gameObject);
-        internal static void NotifyProjectChanged() => OnProjectChanged?.Invoke();
-        internal static void NotifyAssetImported() => OnAssetImported?.Invoke();
-        internal static void NotifyAssetDeleted() => OnAssetDeleted?.Invoke();
-        internal static void NotifyBuildCompleted(bool success) => OnBuildCompleted?.Invoke(success);
+        internal static void NotifySceneLoaded(Scene scene)
+        {
+            var handler = OnSceneLoaded;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action<Scene>)subscriber)(scene); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnSceneLoaded subscriber threw exception: {ex.Message}"); }
+            }
+        }
+
+        internal static void NotifySceneUnloaded(Scene scene)
+        {
+            var handler = OnSceneUnloaded;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action<Scene>)subscriber)(scene); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnSceneUnloaded subscriber threw exception: {ex.Message}"); }
+            }
+        }
+
+        internal static void NotifyPlayModeChanged(bool isPlaying)
+        {
+            var handler = OnPlayModeChanged;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action<bool>)subscriber)(isPlaying); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnPlayModeChanged subscriber threw exception: {ex.Message}"); }
+            }
+        }
+
+        internal static void NotifyHierarchyChanged()
+        {
+            var handler = OnHierarchyChanged;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action)subscriber)(); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnHierarchyChanged subscriber threw exception: {ex.Message}"); }
+            }
+        }
+
+        internal static void NotifyGameObjectCreated(GameObject gameObject)
+        {
+            var handler = OnGameObjectCreated;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action<GameObject>)subscriber)(gameObject); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnGameObjectCreated subscriber threw exception: {ex.Message}"); }
+            }
+        }
+
+        internal static void NotifyGameObjectDestroyed(GameObject gameObject)
+        {
+            var handler = OnGameObjectDestroyed;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action<GameObject>)subscriber)(gameObject); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnGameObjectDestroyed subscriber threw exception: {ex.Message}"); }
+            }
+        }
+
+        internal static void NotifyGameObjectDestroyedDetailed(GameObjectDestroyedArgs args)
+        {
+            var handler = OnGameObjectDestroyedDetailed;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action<GameObjectDestroyedArgs>)subscriber)(args); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnGameObjectDestroyedDetailed subscriber threw exception: {ex.Message}"); }
+            }
+        }
+
+        internal static void NotifySelectionChanged(GameObject gameObject)
+        {
+            var handler = OnSelectionChanged;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action<GameObject>)subscriber)(gameObject); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnSelectionChanged subscriber threw exception: {ex.Message}"); }
+            }
+        }
+
+        internal static void NotifyProjectChanged()
+        {
+            var handler = OnProjectChanged;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action)subscriber)(); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnProjectChanged subscriber threw exception: {ex.Message}"); }
+            }
+        }
+
+        internal static void NotifyAssetImported()
+        {
+            var handler = OnAssetImported;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action)subscriber)(); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnAssetImported subscriber threw exception: {ex.Message}"); }
+            }
+        }
+
+        internal static void NotifyAssetDeleted()
+        {
+            var handler = OnAssetDeleted;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action)subscriber)(); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnAssetDeleted subscriber threw exception: {ex.Message}"); }
+            }
+        }
+
+        internal static void NotifyBuildCompleted(bool success)
+        {
+            var handler = OnBuildCompleted;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action<bool>)subscriber)(success); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnBuildCompleted subscriber threw exception: {ex.Message}"); }
+            }
+        }
 
         internal static void NotifyBuildCompletedDetailed(BuildArgs args)
         {
-            OnBuildCompletedDetailed?.Invoke(args);
+            var handler = OnBuildCompletedDetailed;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action<BuildArgs>)subscriber)(args); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnBuildCompletedDetailed subscriber threw exception: {ex.Message}"); }
+            }
         }
 
-        internal static void NotifyEditorUpdate() => OnEditorUpdate?.Invoke();
-        internal static void NotifyEditorIdle() => OnEditorIdle?.Invoke();
-        internal static void NotifyComponentAdded(Component component) => OnComponentAdded?.Invoke(component);
+        internal static void NotifyEditorUpdate()
+        {
+            var handler = OnEditorUpdate;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action)subscriber)(); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnEditorUpdate subscriber threw exception: {ex.Message}"); }
+            }
+        }
+
+        internal static void NotifyEditorIdle()
+        {
+            var handler = OnEditorIdle;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action)subscriber)(); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnEditorIdle subscriber threw exception: {ex.Message}"); }
+            }
+        }
+
+        internal static void NotifyComponentAdded(Component component)
+        {
+            var handler = OnComponentAdded;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action<Component>)subscriber)(component); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnComponentAdded subscriber threw exception: {ex.Message}"); }
+            }
+        }
+
+        internal static void NotifyComponentRemoved(Component component)
+        {
+            var handler = OnComponentRemoved;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action<Component>)subscriber)(component); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnComponentRemoved subscriber threw exception: {ex.Message}"); }
+            }
+        }
+
+        internal static void NotifyComponentRemovedDetailed(ComponentRemovedArgs args)
+        {
+            var handler = OnComponentRemovedDetailed;
+            if (handler == null) return;
+
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try { ((Action<ComponentRemovedArgs>)subscriber)(args); }
+                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnComponentRemovedDetailed subscriber threw exception: {ex.Message}"); }
+            }
+        }
 
         #endregion
     }

@@ -137,7 +137,7 @@ namespace MCPForUnity.Editor.ActionTrace.Core
                 {
                     Category = EventCategory.Component,
                     DefaultImportance = 0.7f,
-                    SummaryTemplate = "Removed {component_type} from {game_object} (GameObject:{target_id})",
+                    SummaryTemplate = "Removed {component_type} from {name} (GameObject:{target_id})",
                 },
                 [SelectionPropertyModified] = new EventMetadata
                 {
@@ -151,7 +151,7 @@ namespace MCPForUnity.Editor.ActionTrace.Core
                 {
                     Category = EventCategory.Component,
                     DefaultImportance = 0.6f,
-                    SummaryTemplate = "Added {component_type} to {game_object} (GameObject:{target_id})",
+                    SummaryTemplate = "Added {component_type} to {name} (GameObject:{target_id})",
                 },
                 [PropertyModified] = new EventMetadata
                 {

@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 using System.Threading;
-using MCPForUnity.Editor.ActionTrace.Core;
+using MCPForUnity.Editor.ActionTrace.Core.Models;
+using MCPForUnity.Editor.ActionTrace.Core.Store;
 
 namespace MCPForUnity.Editor.ActionTrace.Context
 {
@@ -23,6 +24,7 @@ namespace MCPForUnity.Editor.ActionTrace.Context
         private readonly long _startTimestampMs;
         private readonly List<ToolCallScope> _childScopes;
         private readonly ToolCallScope _parentScope;
+        private readonly int _createdThreadId;  // Track thread where scope was created
 
         private long _endTimestampMs;
         private bool _isCompleted;
@@ -104,10 +106,11 @@ namespace MCPForUnity.Editor.ActionTrace.Context
             _childScopes = new List<ToolCallScope>();
             _startTimestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             _parentScope = Current;
+            _createdThreadId = Thread.CurrentThread.ManagedThreadId;
 
             CallId = GenerateCallId();
 
-            // Push to stack
+            // Push to stack (only if on the same thread as creation)
             _scopeStack.Value.Push(this);
 
             // Notify parent
@@ -279,10 +282,29 @@ namespace MCPForUnity.Editor.ActionTrace.Context
                 Complete();
             }
 
-            // Pop from stack
-            if (_scopeStack.Value.Count > 0 && _scopeStack.Value.Peek() == this)
+            // Pop from stack (only if on the same thread as creation)
+            // This prevents stack leaks when ExecuteAsync disposes on a different thread
+            int currentThreadId = Thread.CurrentThread.ManagedThreadId;
+            if (currentThreadId == _createdThreadId)
             {
-                _scopeStack.Value.Pop();
+                // Same thread: safe to pop from stack
+                if (_scopeStack.Value.Count > 0 && _scopeStack.Value.Peek() == this)
+                {
+                    _scopeStack.Value.Pop();
+                }
+            }
+            else
+            {
+                // Different thread: schedule cleanup on the original thread
+                // Note: This is a best-effort cleanup. In most cases, the scope
+                // will be properly cleaned up when the original thread processes its stack.
+                EditorApplication.delayCall += () =>
+                {
+                    if (_scopeStack.Value.Count > 0 && _scopeStack.Value.Peek() == this)
+                    {
+                        _scopeStack.Value.Pop();
+                    }
+                };
             }
 
             _isDisposed = true;
@@ -467,6 +489,7 @@ namespace MCPForUnity.Editor.ActionTrace.Context
 
         /// <summary>
         /// Execute an async function within a tool call scope.
+        /// The scope is disposed when the async operation completes or faults.
         /// </summary>
         public static System.Threading.Tasks.Task<T> ExecuteAsync<T>(
             string toolName,
@@ -480,15 +503,23 @@ namespace MCPForUnity.Editor.ActionTrace.Context
 
             return task.ContinueWith(t =>
             {
-                if (t.IsFaulted)
+                try
                 {
-                    scope.Fail(t.Exception?.Message ?? "Async faulted");
-                    throw t.Exception ?? new Exception("Async task faulted");
+                    if (t.IsFaulted)
+                    {
+                        scope.Fail(t.Exception?.Message ?? "Async faulted");
+                        throw t.Exception ?? new Exception("Async task faulted");
+                    }
+                    else
+                    {
+                        scope.Complete(t.Result?.ToString() ?? "");
+                        return t.Result;
+                    }
                 }
-                else
+                finally
                 {
-                    scope.Complete(t.Result?.ToString() ?? "");
-                    return t.Result;
+                    // Always dispose to prevent stack leak
+                    scope.Dispose();
                 }
             }, System.Threading.Tasks.TaskScheduler.Default);
         }

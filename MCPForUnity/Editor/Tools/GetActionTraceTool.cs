@@ -10,8 +10,12 @@ namespace MCPForUnity.Editor.Tools
     ///
     /// This is a convenience wrapper around ActionTraceViewResource that provides
     /// a cleaner "get_action_trace" tool name for AI consumption.
+    ///
+    /// Aligned with simplified schema (Basic, WithSemantics, Aggregated).
+    /// Removed unsupported parameters: event_types, include_payload, include_context
+    /// Added summary_only for transaction aggregation mode.
     /// </summary>
-    [McpForUnityTool("get_action_trace", Description = "Queries the ActionTrace for editor events with filtering options")]
+    [McpForUnityTool("get_action_trace", Description = "Query Unity editor action trace (operation history). Returns events with optional semantic analysis or aggregated transactions.")]
     public static class GetActionTraceTool
     {
         /// <summary>
@@ -28,43 +32,32 @@ namespace MCPForUnity.Editor.Tools
             /// <summary>
             /// Only return events after this sequence number (for incremental queries)
             /// </summary>
-            [ToolParameter("Only return events after this sequence number", Required = false)]
+            [ToolParameter("Only return events after this sequence number (for incremental queries)", Required = false)]
             public long? SinceSequence { get; set; }
-
-            /// <summary>
-            /// Filter by event types (e.g., ["GameObjectCreated", "ComponentAdded"])
-            /// </summary>
-            [ToolParameter("Filter by event types", Required = false)]
-            public string[] EventTypes { get; set; }
-
-            /// <summary>
-            /// Whether to include full event payload (default: true)
-            /// </summary>
-            [ToolParameter("Whether to include full event payload", Required = false, DefaultValue = "true")]
-            public bool IncludePayload { get; set; } = true;
-
-            /// <summary>
-            /// Whether to include context associations (default: false)
-            /// </summary>
-            [ToolParameter("Whether to include context associations", Required = false, DefaultValue = "false")]
-            public bool IncludeContext { get; set; } = false;
 
             /// <summary>
             /// Whether to include semantic analysis results (importance, category, intent)
             /// </summary>
-            [ToolParameter("Whether to include semantic analysis results", Required = false, DefaultValue = "false")]
+            [ToolParameter("Whether to include semantic analysis (importance, category, intent)", Required = false, DefaultValue = "false")]
             public bool IncludeSemantics { get; set; } = false;
 
             /// <summary>
             /// Minimum importance level (low/medium/high/critical)
+            /// Default: medium - filters out low-importance noise like HierarchyChanged
             /// </summary>
-            [ToolParameter("Minimum importance level", Required = false, DefaultValue = "medium")]
+            [ToolParameter("Minimum importance level (low/medium/high/critical)", Required = false, DefaultValue = "medium")]
             public string MinImportance { get; set; } = "medium";
 
             /// <summary>
-            /// Filter by task ID
+            /// Return aggregated transactions instead of raw events (reduces token usage)
             /// </summary>
-            [ToolParameter("Filter by task ID", Required = false)]
+            [ToolParameter("Return aggregated transactions instead of raw events (reduces token usage)", Required = false, DefaultValue = "false")]
+            public bool SummaryOnly { get; set; } = false;
+
+            /// <summary>
+            /// Filter by task ID (only show events associated with this task)
+            /// </summary>
+            [ToolParameter("Filter by task ID (for multi-agent scenarios)", Required = false)]
             public string TaskId { get; set; }
 
             /// <summary>

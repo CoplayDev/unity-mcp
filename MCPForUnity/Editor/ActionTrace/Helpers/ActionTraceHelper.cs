@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using UnityEditor;
+using MCPForUnity.Editor.ActionTrace.Core.Models;
 
 namespace MCPForUnity.Editor.ActionTrace.Helpers
 {
@@ -12,6 +13,20 @@ namespace MCPForUnity.Editor.ActionTrace.Helpers
     /// </summary>
     public static class ActionTraceHelper
     {
+        /// <summary>
+        /// Extracts a string value from event Payload by key.
+        /// Returns defaultValue (null) if not present or value is null.
+        /// </summary>
+        public static string GetPayloadString(this EditorEvent evt, string key, string defaultValue = null)
+        {
+            if (evt.Payload == null)
+                return defaultValue;
+
+            if (evt.Payload.TryGetValue(key, out var value))
+                return value?.ToString();
+
+            return defaultValue;
+        }
         /// <summary>
         /// Formats a tool name for display.
         /// Converts snake_case to Title Case.
