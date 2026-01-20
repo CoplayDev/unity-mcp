@@ -136,7 +136,7 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
         private double _lastRefreshTime;
         private ActionTraceQuery.ActionTraceViewItem _selectedItem;
 
-        // 性能优化：缓存
+        // Performance optimization: cache
         private int _lastEventStoreCount = -1;
         private readonly Dictionary<string, string> _iconCache = new();
         private readonly StringBuilder _stringBuilder = new();
@@ -323,7 +323,7 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
             var item = _currentEvents[index];
 
-            // 性能优化：只更新变化的内容
+            // Performance optimization: only update changed content
             var timeLabel = element.Q<Label>("time");
             if (timeLabel.text != item.DisplayTime)
                 timeLabel.text = item.DisplayTime;
@@ -735,7 +735,7 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
         {
             if (string.IsNullOrEmpty(input)) return "";
 
-            // 性能优化：使用 StringBuilder 避免多次 Replace 产生的中间字符串
+            // Performance optimization: use StringBuilder to avoid intermediate strings from multiple Replace calls
             var sb = _stringBuilder;
             sb.Clear();
             sb.EnsureCapacity(input.Length * 2);
@@ -829,13 +829,13 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
         private void RefreshEvents()
         {
-            // 性能优化：检查是否有新事件
+            // Performance optimization: check if there are new events
             int currentStoreCount = EventStore.Count;
             if (currentStoreCount == _lastEventStoreCount && 
                 _currentEvents.Count > 0 && 
                 string.IsNullOrEmpty(_searchText))
             {
-                // 没有新事件且无搜索条件，跳过刷新
+                // No new events and no search criteria, skip refresh
                 return;
             }
             _lastEventStoreCount = currentStoreCount;
@@ -846,7 +846,7 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
             source = ApplySorting(source);
 
-            // 性能优化：使用预分配的列表
+            // Performance optimization: use pre-allocated list
             var filtered = new List<ActionTraceViewItem>(DefaultQueryLimit);
             foreach (var item in source)
             {
@@ -1102,7 +1102,7 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
         private void OnEditorUpdate()
         {
-            // 性能优化：使用时间间隔控制刷新频率
+            // Performance optimization: use time interval to control refresh rate
             if (_isScheduledRefreshActive && 
                 EditorApplication.timeSinceStartup - _lastRefreshTime > RefreshInterval)
             {

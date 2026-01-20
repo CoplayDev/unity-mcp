@@ -20,7 +20,7 @@ namespace MCPForUnity.Editor.Tools
     ///
     /// Example payload:
     /// {
-    ///   "note": "完成玩家移动系统的重构，速度从 5 提升到 8",
+    ///   "note": "Completed player movement system refactor, speed increased from 5 to 8",
     ///   "agent_id": "ChatGLM 1337",
     ///   "intent": "refactoring",
     ///   "task_id": "task-abc123",

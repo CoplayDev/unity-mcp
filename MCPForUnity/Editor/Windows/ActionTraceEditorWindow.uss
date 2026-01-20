@@ -3,7 +3,7 @@
    Enhanced UI Design with improved aesthetics
    ======================================== */
 
-/* ===== 根容器 ===== */
+/* ===== Root Container ===== */
 .root-container {
     flex-direction: column;
     flex-grow: 1;
@@ -11,7 +11,7 @@
     background-color: #252525;
 }
 
-/* ===== 顶部标题栏 ===== */
+/* ===== Top Title Bar ===== */
 .header-bar {
     flex-direction: row;
     align-items: center;
@@ -44,7 +44,7 @@
     -unity-text-align: middle-center;
 }
 
-/* ===== 工具栏区域 ===== */
+/* ===== Toolbar Area ===== */
 .main-toolbar {
     flex-direction: row;
     align-items: center;
@@ -71,21 +71,21 @@
     align-items: center;
 }
 
-/* 工具栏分组 - ToolbarSpacer 样式通过 UXML 设置，USS 中不需要定义 */
+/* Toolbar grouping - ToolbarSpacer styles are set via UXML, no need to define in USS */
 
-/* 搜索框扩展 */
+/* Search field expansion */
 .search-field-expanded {
     width: 200px;
     min-width: 180px;
 }
 
-/* 显示开关 */
+/* Display toggle */
 .display-toggle {
     margin-right: 4px;
     min-width: 70px;
 }
 
-/* 自动刷新容器 */
+/* Auto refresh container */
 .auto-refresh-container {
     flex-direction: row;
     align-items: center;
@@ -111,7 +111,7 @@
     min-width: 30px;
 }
 
-/* 操作按钮 */
+/* Action buttons */
 .action-btn {
     min-width: 70px;
     margin-left: 4px;
@@ -135,7 +135,7 @@
     background-color: #6a3a3a;
 }
 
-/* ===== 筛选摘要条 ===== */
+/* ===== Filter Summary Bar ===== */
 .filter-summary-bar {
     flex-direction: row;
     align-items: center;
@@ -160,14 +160,14 @@
     border-radius: 3px;
 }
 
-/* ===== 主内容区 ===== */
+/* ===== Main Content Area ===== */
 .main-content {
     flex-direction: row;
     flex-grow: 1;
     overflow: hidden;
 }
 
-/* ===== 事件列表容器 ===== */
+/* ===== Event List Container ===== */
 .event-list-container {
     flex: 1;
     min-width: 400px;
@@ -177,7 +177,7 @@
     overflow: hidden;
 }
 
-/* 事件列表标题 */
+/* Event list header */
 .event-list-header {
     flex-direction: row;
     align-items: center;
@@ -208,7 +208,7 @@
     border-radius: 12px;
 }
 
-/* 事件列表 */
+/* Event list */
 .event-list {
     flex-grow: 1;
     background-color: #282828;
@@ -239,12 +239,12 @@
     background-color: #455a6a;
 }
 
-/* 交替行背景 */
+/* Alternating row background */
 .event-list {
     --unity-list-view-alternating-row-background-color: #333333;
 }
 
-/* ===== 事件列表项 ===== */
+/* ===== Event List Item ===== */
 .event-item {
     flex-direction: column;
     align-items: flex-start;
@@ -256,14 +256,14 @@
     background-color: transparent;
 }
 
-/* 主行：时间、图标、类型、摘要 */
+/* Main row: time, icon, type, summary */
 .event-item-main-row {
     flex-direction: row;
     align-items: center;
     width: 100%;
 }
 
-/* 次行：额外信息（选中时显示） */
+/* Detail row: additional info (shown when selected) */
 .event-item-detail-row {
     flex-direction: column;
     margin-left: 95px;
@@ -277,7 +277,7 @@
     margin-bottom: 2px;
 }
 
-/* 徽章行 */
+/* Badges row */
 .event-item-badges {
     flex-direction: row;
     align-items: center;
@@ -296,7 +296,7 @@
     -unity-font-style: bold;
 }
 
-/* 时间 */
+/* Time */
 .event-time {
     font-size: 11px;
     -unity-font-style: bold;
@@ -305,14 +305,14 @@
     margin-right: 10px;
 }
 
-/* 类型图标 */
+/* Type icon */
 .event-type-icon {
     font-size: 14px;
     min-width: 20px;
     margin-right: 6px;
 }
 
-/* 类型标签 */
+/* Type label */
 .event-type {
     font-size: 12px;
     -unity-font-style: bold;
@@ -321,7 +321,7 @@
     color: #a0c0e0;
 }
 
-/* 事件类型颜色 - 使用类选择器 */
+/* Event type colors - using class selectors */
 .event-type--ASSET-CHANGE { color: #4fc3f7; }
 .event-type--COMPILATION { color: #fff176; }
 .event-type--PROPERTY-EDIT { color: #ba68c8; }
@@ -331,7 +331,7 @@
 .event-type--BUILD-START { color: #64b5f6; }
 .event-type--ERROR { color: #e57373; }
 
-/* 摘要 */
+/* Summary */
 .event-summary {
     flex: 1;
     font-size: 12px;
@@ -341,7 +341,7 @@
     text-overflow: ellipsis;
 }
 
-/* 重要性徽章 - 使用类选择器 */
+/* Importance badge - using class selectors */
 .importance-badge {
     font-size: 9px;
     -unity-font-style: bold;
@@ -371,7 +371,7 @@
     background-color: #d32f2f;
 }
 
-/* 上下文指示器 */
+/* Context indicator */
 .context-indicator {
     font-size: 11px;
     margin-left: 4px;
@@ -382,7 +382,7 @@
 .context-indicator.context-source--AI { color: #2196f3; }
 .context-indicator.context-source--System { color: #9e9e9e; }
 
-/* ===== 空状态 ===== */
+/* ===== Empty State ===== */
 .empty-state,
 .no-results-state {
     flex-direction: column;
@@ -442,7 +442,7 @@
     margin-bottom: 20px;
 }
 
-/* ===== 详情面板 ===== */
+/* ===== Detail Panel ===== */
 .detail-scroll-view {
     flex: 1;
     min-width: 320px;
@@ -466,7 +466,7 @@
     padding: 12px;
 }
 
-/* 详情分组 */
+/* Detail section */
 .detail-section {
     flex-direction: column;
     margin-bottom: 16px;
@@ -536,7 +536,7 @@
     margin-bottom: 6px;
 }
 
-/* 详情操作按钮 */
+/* Detail action buttons */
 .detail-actions {
     flex-direction: row;
     justify-content: space-between;
@@ -553,7 +553,7 @@
     min-height: 26px;
 }
 
-/* 重要性进度条 */
+/* Importance progress bar */
 .importance-bar-container {
     flex-direction: row;
     align-items: center;
@@ -579,7 +579,7 @@
     border-radius: 3px;
 }
 
-/* Importance bar fill - 使用类选择器 */
+/* Importance bar fill - using class selectors */
 .importance-bar-fill--high { background-color: #e53935; }
 .importance-bar-fill--medium { background-color: #fb8c00; }
 .importance-bar-fill--low { background-color: #757575; }
@@ -593,7 +593,7 @@
     min-width: 45px;
 }
 
-/* ===== 状态栏 ===== */
+/* ===== Status Bar ===== */
 .status-bar {
     flex-direction: row;
     align-items: center;
@@ -630,7 +630,7 @@
     opacity: 1;
 }
 
-/* ===== 时间分组 ===== */
+/* ===== Time Grouping ===== */
 .time-group-header {
     flex-direction: row;
     align-items: center;
@@ -658,8 +658,8 @@
     border-radius: 8px;
 }
 
-/* ===== 响应式布局 ===== */
-/* 小窗口适配 - 使用类选择器替代不支持的@media */
+/* ===== Responsive Layout ===== */
+/* Small window adaptation - using class selectors instead of unsupported @media */
 .compact-layout .event-list-container {
     min-width: 300px;
 }
@@ -682,7 +682,7 @@
     font-size: 10px;
 }
 
-/* ===== 工具栏元素样式 ===== */
+/* ===== Toolbar Element Styles ===== */
 ToolbarSearchField {
     width: 180px;
     min-width: 150px;
@@ -706,7 +706,7 @@ ToolbarMenu {
     min-width: 75px;
 }
 
-/* ===== 高亮颜色变量 ===== */
+/* ===== Accent Color Variables ===== */
 :root {
     --accent-primary: #4a90e2;
     --accent-secondary: #64b5f6;

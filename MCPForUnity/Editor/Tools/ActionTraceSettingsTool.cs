@@ -10,7 +10,7 @@ namespace MCPForUnity.Editor.Tools
     /// MCP tool for querying ActionTrace system settings.
     ///
     /// Returns the current configuration of the ActionTrace system,
-    /// allowing Python端 to access live settings instead of hardcoded defaults.
+    /// allowing Python side to access live settings instead of hardcoded defaults.
     /// </summary>
     [McpForUnityTool("get_action_trace_settings")]
     public static class ActionTraceSettingsTool

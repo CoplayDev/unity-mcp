@@ -3,15 +3,15 @@
     <Style src="ActionTraceEditorWindow.uss" />
 
     <ui:VisualElement name="root-container" class="root-container">
-        <!-- 顶部标题栏 -->
+        <!-- Top title bar -->
         <ui:VisualElement name="header-bar" class="header-bar">
             <ui:Label text="ActionTrace" class="window-title" />
             <ui:Label name="event-count-badge" class="event-count-badge" text="0" />
         </ui:VisualElement>
 
-        <!-- 主工具栏 - 分为三个区域 -->
+        <!-- Main toolbar - divided into three sections -->
         <uie:Toolbar name="toolbar" class="main-toolbar">
-            <!-- 主要操作区 -->
+            <!-- Primary actions section -->
             <ui:VisualElement name="toolbar-primary" class="toolbar-primary">
                 <uie:ToolbarSearchField name="search-field" class="search-field-expanded" />
                 <uie:ToolbarMenu name="filter-menu" text="Filter" class="toolbar-menu-primary" />
@@ -20,7 +20,7 @@
 
             <uie:ToolbarSpacer flex="true" />
 
-            <!-- 显示选项区 -->
+            <!-- Display options section -->
             <ui:VisualElement name="toolbar-display" class="toolbar-display">
                 <uie:ToolbarToggle name="importance-toggle" text="Badges" class="display-toggle" />
                 <uie:ToolbarToggle name="context-toggle" text="Context" class="display-toggle" />
@@ -30,7 +30,7 @@
                 </ui:VisualElement>
             </ui:VisualElement>
 
-            <!-- 操作按钮区 -->
+            <!-- Action buttons section -->
             <ui:VisualElement name="toolbar-actions" class="toolbar-actions">
                 <uie:ToolbarButton name="export-button" text="Export" class="action-btn" />
                 <uie:ToolbarButton name="settings-button" text="Settings" class="action-btn" />
@@ -39,26 +39,26 @@
             </ui:VisualElement>
         </uie:Toolbar>
 
-        <!-- 筛选摘要条（可选显示） -->
+        <!-- Filter summary bar (optionally displayed) -->
         <ui:VisualElement name="filter-summary-bar" class="filter-summary-bar" style="display: none;">
             <ui:Label name="filter-summary-text" class="filter-summary-text" />
             <uie:ToolbarButton name="clear-filters-button" text="Close" class="clear-filters-btn" />
         </ui:VisualElement>
 
-        <!-- 主内容区 - 两栏布局 -->
+        <!-- Main content area - two-column layout -->
         <ui:VisualElement name="main-content" class="main-content">
-            <!-- 左侧：事件时间线 -->
+            <!-- Left: Event timeline -->
             <ui:VisualElement name="event-list-container" class="event-list-container">
-                <!-- 事件列表标题 -->
+                <!-- Event list header -->
                 <ui:VisualElement name="event-list-header" class="event-list-header">
                     <ui:Label text="Event Timeline" class="section-title" />
                     <ui:Label name="event-list-count" class="event-list-count" />
                 </ui:VisualElement>
 
-                <!-- 事件列表 -->
+                <!-- Event list -->
                 <ui:ListView name="event-list" class="event-list" />
 
-                <!-- 空状态占位 -->
+                <!-- Empty state placeholder -->
                 <ui:VisualElement name="empty-state" class="empty-state" style="display: none;">
                     <ui:VisualElement class="empty-state-icon">
                         <ui:Label text="📋" class="empty-state-emoji" />
@@ -72,7 +72,7 @@
                     <ui:Label text="Tip: ActionTrace captures asset changes, property edits, script compilation, and more" class="empty-state-tip" />
                 </ui:VisualElement>
 
-                <!-- 无结果状态 -->
+                <!-- No results state -->
                 <ui:VisualElement name="no-results-state" class="no-results-state" style="display: none;">
                     <ui:VisualElement class="empty-state-icon">
                         <ui:Label text="🔍" class="empty-state-emoji" />
@@ -85,22 +85,22 @@
                 </ui:VisualElement>
             </ui:VisualElement>
 
-            <!-- 右侧：详情面板 -->
+            <!-- Right: Detail panel -->
             <ui:ScrollView name="detail-scroll-view" class="detail-scroll-view">
-                <!-- 默认占位提示 -->
+                <!-- Default placeholder hint -->
                 <ui:Label text="Select an event to view details" class="detail-placeholder" name="detail-placeholder" />
 
-                <!-- 详情内容容器（动态填充） -->
+                <!-- Detail content container (dynamically populated) -->
                 <ui:VisualElement name="detail-content" class="detail-content" style="display: none;" />
 
-                <!-- 详情操作按钮 -->
+                <!-- Detail action buttons -->
                 <ui:VisualElement name="detail-actions" class="detail-actions" style="display: none;">
                     <uie:ToolbarButton name="copy-summary-button" text="Copy Summary" class="detail-action-btn" />
                 </ui:VisualElement>
             </ui:ScrollView>
         </ui:VisualElement>
 
-        <!-- 底部状态栏 -->
+        <!-- Bottom status bar -->
         <ui:VisualElement name="status-bar" class="status-bar">
             <ui:VisualElement class="status-item">
                 <ui:Label text="Events:" class="status-label" />
