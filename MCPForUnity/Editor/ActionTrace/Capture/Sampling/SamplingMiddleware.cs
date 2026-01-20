@@ -208,17 +208,24 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                     // Manual loop to find oldest entry (avoid LINQ allocation in hot path)
                     string oldestKey = null;
                     long oldestTimestamp = long.MaxValue;
+                    PendingSample oldestSample = default;
                     foreach (var kvp in _pendingSamples)
                     {
                         if (kvp.Value.TimestampMs < oldestTimestamp)
                         {
                             oldestTimestamp = kvp.Value.TimestampMs;
                             oldestKey = kvp.Key;
+                            oldestSample = kvp.Value;
                         }
                     }
-                    if (!string.IsNullOrEmpty(oldestKey))
+                    if (!string.IsNullOrEmpty(oldestKey) && _pendingSamples.TryRemove(oldestKey, out var removedSample))
                     {
-                        _pendingSamples.TryRemove(oldestKey, out _);
+                        // Record evicted debounce samples to prevent data loss
+                        if (SamplingConfig.Strategies.TryGetValue(removedSample.Event.Type, out var evictedStrategy) &&
+                            (evictedStrategy.Mode == SamplingMode.Debounce || evictedStrategy.Mode == SamplingMode.DebounceByKey))
+                        {
+                            EventStore.Record(removedSample.Event);
+                        }
                     }
                 }
             }
