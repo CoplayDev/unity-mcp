@@ -228,14 +228,23 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
             _unity_connection_pool.disconnect_all()
         logger.info("MCP for Unity Server shut down")
 
-# Initialize MCP server
-mcp = FastMCP(
-    name="mcp-for-unity-server",
-    lifespan=server_lifespan,
-    instructions="""
+
+def _build_instructions(project_scoped_tools: bool) -> str:
+    if project_scoped_tools:
+        custom_tools_note = (
+            "I have a dynamic tool system. Always check the mcpforunity://custom-tools resource first "
+            "to see what special capabilities are available for the current project."
+        )
+    else:
+        custom_tools_note = (
+            "Custom tools are registered as standard tools when Unity connects. "
+            "No project-scoped custom tools resource is available."
+        )
+
+    return f"""
 This server provides tools to interact with the Unity Game Engine Editor.
 
-I have a dynamic tool system. Always check the mcpforunity://custom-tools resource first to see what special capabilities are available for the current project.
+{custom_tools_note}
 
 Targeting Unity instances:
 - Use the resource mcpforunity://instances to list active Unity sessions (Name@hash).
@@ -282,46 +291,54 @@ Payload sizing & paging (important):
   - Use paging (`page_size`, `page_number`) and keep `page_size` modest (e.g. **25-50**) to avoid token-heavy responses.
   - Keep `generate_preview=false` unless you explicitly need thumbnails (previews may include large base64 payloads).
 """
-)
-
-custom_tool_service = CustomToolService(mcp)
 
 
-@mcp.custom_route("/health", methods=["GET"])
-async def health_http(_: Request) -> JSONResponse:
-    return JSONResponse({
-        "status": "healthy",
-        "timestamp": time.time(),
-        "message": "MCP for Unity server is running"
-    })
+def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
+    mcp = FastMCP(
+        name="mcp-for-unity-server",
+        lifespan=server_lifespan,
+        instructions=_build_instructions(project_scoped_tools),
+    )
 
+    global custom_tool_service
+    custom_tool_service = CustomToolService(
+        mcp, project_scoped_tools=project_scoped_tools)
 
-@mcp.custom_route("/plugin/sessions", methods=["GET"])
-async def plugin_sessions_route(_: Request) -> JSONResponse:
-    data = await PluginHub.get_sessions()
-    return JSONResponse(data.model_dump())
+    @mcp.custom_route("/health", methods=["GET"])
+    async def health_http(_: Request) -> JSONResponse:
+        return JSONResponse({
+            "status": "healthy",
+            "timestamp": time.time(),
+            "message": "MCP for Unity server is running"
+        })
 
+    @mcp.custom_route("/plugin/sessions", methods=["GET"])
+    async def plugin_sessions_route(_: Request) -> JSONResponse:
+        data = await PluginHub.get_sessions()
+        return JSONResponse(data.model_dump())
 
-# Initialize and register middleware for session-based Unity instance routing
-# Using the singleton getter ensures we use the same instance everywhere
-unity_middleware = get_unity_instance_middleware()
-mcp.add_middleware(unity_middleware)
-logger.info("Registered Unity instance middleware for session-based routing")
+    # Initialize and register middleware for session-based Unity instance routing
+    # Using the singleton getter ensures we use the same instance everywhere
+    unity_middleware = get_unity_instance_middleware()
+    mcp.add_middleware(unity_middleware)
+    logger.info("Registered Unity instance middleware for session-based routing")
 
-# Mount plugin websocket hub at /hub/plugin when HTTP transport is active
-existing_routes = [
-    route for route in mcp._get_additional_http_routes()
-    if isinstance(route, WebSocketRoute) and route.path == "/hub/plugin"
-]
-if not existing_routes:
-    mcp._additional_http_routes.append(
-        WebSocketRoute("/hub/plugin", PluginHub))
+    # Mount plugin websocket hub at /hub/plugin when HTTP transport is active
+    existing_routes = [
+        route for route in mcp._get_additional_http_routes()
+        if isinstance(route, WebSocketRoute) and route.path == "/hub/plugin"
+    ]
+    if not existing_routes:
+        mcp._additional_http_routes.append(
+            WebSocketRoute("/hub/plugin", PluginHub))
 
-# Register all tools
-register_all_tools(mcp)
+    # Register all tools
+    register_all_tools(mcp, project_scoped_tools=project_scoped_tools)
 
-# Register all resources
-register_all_resources(mcp)
+    # Register all resources
+    register_all_resources(mcp, project_scoped_tools=project_scoped_tools)
+
+    return mcp
 
 
 def main():
@@ -408,6 +425,11 @@ Examples:
         help="Optional path where the server will write its PID on startup. "
              "Used by Unity to stop the exact process it launched when running in a terminal."
     )
+    parser.add_argument(
+        "--project-scoped-tools",
+        action="store_true",
+        help="Keep custom tools scoped to the active Unity project and enable the custom tools resource."
+    )
 
     args = parser.parse_args()
 
@@ -449,12 +471,18 @@ Examples:
             logger.warning(
                 "Failed to write pidfile '%s': %s", args.pidfile, exc)
 
+    project_scoped_tools = args.project_scoped_tools or os.environ.get(
+        "UNITY_MCP_PROJECT_SCOPED_TOOLS", "").lower() in ("1", "true", "yes", "on")
+    os.environ["UNITY_MCP_PROJECT_SCOPED_TOOLS"] = "1" if project_scoped_tools else "0"
+
     if args.http_url != "http://localhost:8080":
         logger.info(f"HTTP URL set to: {http_url}")
     if args.http_host:
         logger.info(f"HTTP host override: {http_host}")
     if args.http_port:
         logger.info(f"HTTP port override: {http_port}")
+
+    mcp = create_mcp_server(project_scoped_tools)
 
     # Determine transport mode
     if transport_mode == 'http':

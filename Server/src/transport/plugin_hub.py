@@ -315,6 +315,15 @@ class PluginHub(WebSocketEndpoint):
         logger.info(
             f"Registered {len(payload.tools)} tools for session {session_id}")
 
+        try:
+            from services.custom_tool_service import CustomToolService
+
+            service = CustomToolService.get_instance()
+            service.register_global_tools(payload.tools)
+        except Exception as exc:
+            logger.debug(
+                "Skipping global custom tool registration: %s", exc)
+
     async def _handle_command_result(self, payload: CommandResultMessage) -> None:
         cls = type(self)
         lock = cls._lock
