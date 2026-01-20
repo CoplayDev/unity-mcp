@@ -107,11 +107,21 @@ namespace MCPForUnity.Editor.ActionTrace.Core.Settings
         private static ActionTraceSettings _instance;
 
         // ========== Layered Settings ==========
-        // Headers are rendered by ActionTraceSettingsEditor, not here.
 
+        [Header("Event Filtering")]
+        [Tooltip("Controls which events are recorded based on importance and type")]
         public FilteringSettings Filtering = new();
+
+        [Header("Event Merging")]
+        [Tooltip("Controls how high-frequency events are combined")]
         public MergingSettings Merging = new();
+
+        [Header("Storage & Memory")]
+        [Tooltip("Controls event storage limits and memory management")]
         public StorageSettings Storage = new();
+
+        [Header("Event Sampling")]
+        [Tooltip("Controls high-frequency event sampling to prevent event storms")]
         public SamplingSettings Sampling = new();
 
         // ========== Runtime State ==========
@@ -224,7 +234,6 @@ namespace MCPForUnity.Editor.ActionTrace.Core.Settings
             EditorUtility.SetDirty(this);
             AssetDatabase.SaveAssets();
             _isDirty = false;
-            McpLog.Info("[ActionTraceSettings] Settings saved");
         }
 
         /// <summary>

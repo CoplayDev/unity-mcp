@@ -231,7 +231,7 @@ namespace MCPForUnity.Editor.ActionTrace.Analysis.Context
         /// </summary>
         public string SummarizeEvents(IReadOnlyList<EditorEvent> events, int startIdx, int count)
         {
-            if (events == null || startIdx < 0 || startIdx >= events.Count)
+            if (events == null || startIdx < 0 || startIdx >= events.Count || count <= 0)
                 return string.Empty;
 
             int endIdx = Math.Min(startIdx + count, events.Count);

@@ -15,14 +15,9 @@ using static MCPForUnity.Editor.ActionTrace.Analysis.Query.ActionTraceQuery;
 
 namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 {
-    /// <summary>
-    /// Sort mode: controls how the event list is sorted
-    /// </summary>
     public enum SortMode
     {
-        /// <summary>Pure time sorting (newest first) - for users viewing records</summary>
         ByTimeDesc,
-        /// <summary>AI perspective sorting - grouped by time then importance</summary>
         AIFiltered
     }
 
@@ -34,13 +29,9 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
         private const double RefreshInterval = 1.0;
         private const int DefaultQueryLimit = 200;
 
-        // UI Element Names
         private static class UINames
         {
-            // Header
             public const string EventCountBadge = "event-count-badge";
-
-            // Toolbar
             public const string SearchField = "search-field";
             public const string FilterMenu = "filter-menu";
             public const string SortMenu = "sort-menu";
@@ -51,54 +42,40 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
             public const string SettingsButton = "settings-button";
             public const string RefreshButton = "refresh-button";
             public const string ClearButton = "clear-button";
-
-            // Filter Summary
             public const string FilterSummaryBar = "filter-summary-bar";
             public const string FilterSummaryText = "filter-summary-text";
             public const string ClearFiltersButton = "clear-filters-button";
-
-            // Event List
             public const string EventList = "event-list";
             public const string EventListHeader = "event-list-header";
             public const string EventListCount = "event-list-count";
             public const string EmptyState = "empty-state";
             public const string NoResultsState = "no-results-state";
             public const string NoResultsFilters = "no-results-filters";
-
-            // Detail Panel
             public const string DetailScrollView = "detail-scroll-view";
             public const string DetailPlaceholder = "detail-placeholder";
             public const string DetailContent = "detail-content";
             public const string DetailActions = "detail-actions";
             public const string CopySummaryButton = "copy-summary-button";
-
-            // Status Bar
             public const string CountLabel = "count-label";
             public const string StatusLabel = "status-label";
             public const string ModeLabel = "mode-label";
             public const string RefreshIndicator = "refresh-indicator";
         }
 
-        // USS Class Names
         private static class Classes
         {
-            // Event Item
             public const string EventItem = "event-item";
             public const string EventItemMainRow = "event-item-main-row";
             public const string EventItemDetailRow = "event-item-detail-row";
             public const string EventItemDetailText = "event-item-detail-text";
             public const string EventItemBadges = "event-item-badges";
             public const string EventItemBadge = "event-item-badge";
-
-            // Event Components
             public const string EventTime = "event-time";
             public const string EventTypeIcon = "event-type-icon";
             public const string EventType = "event-type";
             public const string EventSummary = "event-summary";
             public const string ImportanceBadge = "importance-badge";
             public const string ContextIndicator = "context-indicator";
-
-            // Detail Panel
             public const string DetailSection = "detail-section";
             public const string DetailSectionHeader = "detail-section-header";
             public const string DetailRow = "detail-row";
@@ -115,10 +92,8 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
         #endregion
 
-        // UI Elements - Header
+        // UI Elements
         private Label _eventCountBadge;
-
-        // UI Elements - Toolbar
         private ToolbarSearchField _searchField;
         private ToolbarMenu _filterMenu;
         private ToolbarMenu _sortMenu;
@@ -129,27 +104,19 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
         private ToolbarButton _settingsButton;
         private ToolbarButton _refreshButton;
         private ToolbarButton _clearButton;
-
-        // UI Elements - Filter Summary
         private VisualElement _filterSummaryBar;
         private Label _filterSummaryText;
         private ToolbarButton _clearFiltersButton;
-
-        // UI Elements - Event List
         private ListView _eventListView;
         private Label _eventListCountLabel;
         private VisualElement _emptyState;
         private VisualElement _noResultsState;
         private Label _noResultsFiltersLabel;
-
-        // UI Elements - Detail Panel
         private ScrollView _detailScrollView;
         private Label _detailPlaceholder;
         private VisualElement _detailContent;
         private VisualElement _detailActions;
         private ToolbarButton _copySummaryButton;
-
-        // UI Elements - Status Bar
         private Label _countLabel;
         private Label _statusLabel;
         private Label _modeLabel;
@@ -158,8 +125,6 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
         // Data
         private readonly List<ActionTraceQuery.ActionTraceViewItem> _currentEvents = new();
         private ActionTraceQuery _actionTraceQuery;
-
-        // Track previous BypassImportanceFilter value to restore on window close
         private bool? _previousBypassImportanceFilter;
 
         private string _searchText = string.Empty;
@@ -170,6 +135,12 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
         private double _lastRefreshTime;
         private ActionTraceQuery.ActionTraceViewItem _selectedItem;
+
+        // 性能优化：缓存
+        private int _lastEventStoreCount = -1;
+        private readonly Dictionary<string, string> _iconCache = new();
+        private readonly StringBuilder _stringBuilder = new();
+        private bool _isScheduledRefreshActive;
 
         #region Window Management
 
@@ -204,8 +175,6 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
             _actionTraceQuery = new ActionTraceQuery();
             _minImportance = ActionTraceSettings.Instance?.Filtering.MinImportanceForRecording ?? 0.4f;
 
-            // Always record all events, filter at query time based on mode
-            // Save current value and enable bypass for this window
             if (ActionTraceSettings.Instance != null)
             {
                 _previousBypassImportanceFilter = ActionTraceSettings.Instance.Filtering.BypassImportanceFilter;
@@ -218,7 +187,6 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
         private VisualTreeAsset LoadUxmlAsset()
         {
-            // Try loading by name first (simplest approach)
             var guids = AssetDatabase.FindAssets($"{UxmlName} t:VisualTreeAsset");
             if (guids?.Length > 0)
             {
@@ -227,7 +195,6 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
                 if (asset != null) return asset;
             }
 
-            // Fallback: try package-relative path
             var basePath = AssetPathUtility.GetMcpPackageRootPath();
             if (!string.IsNullOrEmpty(basePath))
             {
@@ -255,10 +222,7 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
         private void SetupReferences()
         {
-            // Header
             _eventCountBadge = rootVisualElement.Q<Label>(UINames.EventCountBadge);
-
-            // Toolbar
             _searchField = rootVisualElement.Q<ToolbarSearchField>(UINames.SearchField);
             _filterMenu = rootVisualElement.Q<ToolbarMenu>(UINames.FilterMenu);
             _sortMenu = rootVisualElement.Q<ToolbarMenu>(UINames.SortMenu);
@@ -269,27 +233,19 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
             _settingsButton = rootVisualElement.Q<ToolbarButton>(UINames.SettingsButton);
             _refreshButton = rootVisualElement.Q<ToolbarButton>(UINames.RefreshButton);
             _clearButton = rootVisualElement.Q<ToolbarButton>(UINames.ClearButton);
-
-            // Filter Summary
             _filterSummaryBar = rootVisualElement.Q<VisualElement>(UINames.FilterSummaryBar);
             _filterSummaryText = rootVisualElement.Q<Label>(UINames.FilterSummaryText);
             _clearFiltersButton = rootVisualElement.Q<ToolbarButton>(UINames.ClearFiltersButton);
-
-            // Event List
             _eventListView = rootVisualElement.Q<ListView>(UINames.EventList);
             _eventListCountLabel = rootVisualElement.Q<Label>(UINames.EventListCount);
             _emptyState = rootVisualElement.Q<VisualElement>(UINames.EmptyState);
             _noResultsState = rootVisualElement.Q<VisualElement>(UINames.NoResultsState);
             _noResultsFiltersLabel = rootVisualElement.Q<Label>(UINames.NoResultsFilters);
-
-            // Detail Panel
             _detailScrollView = rootVisualElement.Q<ScrollView>(UINames.DetailScrollView);
             _detailPlaceholder = rootVisualElement.Q<Label>(UINames.DetailPlaceholder);
             _detailContent = rootVisualElement.Q<VisualElement>(UINames.DetailContent);
             _detailActions = rootVisualElement.Q<VisualElement>(UINames.DetailActions);
             _copySummaryButton = rootVisualElement.Q<ToolbarButton>(UINames.CopySummaryButton);
-
-            // Status Bar
             _countLabel = rootVisualElement.Q<Label>(UINames.CountLabel);
             _statusLabel = rootVisualElement.Q<Label>(UINames.StatusLabel);
             _modeLabel = rootVisualElement.Q<Label>(UINames.ModeLabel);
@@ -300,126 +256,150 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
         {
             _eventListView.itemsSource = _currentEvents;
             _eventListView.selectionType = SelectionType.Single;
-            // Use fixed height for better performance
-            // Items will be clipped if content overflows, but this provides consistent layout
             _eventListView.fixedItemHeight = 60;
+            _eventListView.virtualizationMethod = CollectionVirtualizationMethod.FixedHeight;
 
-            _eventListView.makeItem = () =>
+            _eventListView.makeItem = MakeListItem;
+            _eventListView.bindItem = BindListItem;
+            _eventListView.selectionChanged += OnSelectionChanged;
+        }
+
+        private VisualElement MakeListItem()
+        {
+            var root = new VisualElement();
+            root.AddToClassList(Classes.EventItem);
+
+            var mainRow = new VisualElement();
+            mainRow.AddToClassList(Classes.EventItemMainRow);
+
+            var time = new Label { name = "time" };
+            time.AddToClassList(Classes.EventTime);
+            mainRow.Add(time);
+
+            var typeIcon = new Label { name = "type-icon" };
+            typeIcon.AddToClassList(Classes.EventTypeIcon);
+            mainRow.Add(typeIcon);
+
+            var type = new Label { name = "type" };
+            type.AddToClassList(Classes.EventType);
+            mainRow.Add(type);
+
+            var summary = new Label { name = "summary" };
+            summary.AddToClassList(Classes.EventSummary);
+            mainRow.Add(summary);
+
+            root.Add(mainRow);
+
+            var detailRow = new VisualElement { name = "detail-row" };
+            detailRow.AddToClassList(Classes.EventItemDetailRow);
+            detailRow.style.display = DisplayStyle.None;
+
+            var detailText = new Label { name = "detail-text" };
+            detailText.AddToClassList(Classes.EventItemDetailText);
+            detailRow.Add(detailText);
+
+            root.Add(detailRow);
+
+            var badgesRow = new VisualElement { name = "badges-row" };
+            badgesRow.AddToClassList(Classes.EventItemBadges);
+            badgesRow.style.display = DisplayStyle.None;
+
+            var importanceBadge = new Label { name = "importance-badge" };
+            importanceBadge.AddToClassList(Classes.ImportanceBadge);
+            badgesRow.Add(importanceBadge);
+
+            var contextIndicator = new Label { name = "context-indicator" };
+            contextIndicator.AddToClassList(Classes.ContextIndicator);
+            badgesRow.Add(contextIndicator);
+
+            root.Add(badgesRow);
+
+            return root;
+        }
+
+        private void BindListItem(VisualElement element, int index)
+        {
+            if (index < 0 || index >= _currentEvents.Count) return;
+
+            var item = _currentEvents[index];
+
+            // 性能优化：只更新变化的内容
+            var timeLabel = element.Q<Label>("time");
+            if (timeLabel.text != item.DisplayTime)
+                timeLabel.text = item.DisplayTime;
+
+            var typeIcon = element.Q<Label>("type-icon");
+            var iconText = GetEventTypeIconCached(item.Event.Type);
+            if (typeIcon.text != iconText)
+                typeIcon.text = iconText;
+
+            var typeLabel = element.Q<Label>("type");
+            if (typeLabel.text != item.Event.Type)
             {
-                var root = new VisualElement();
-                root.AddToClassList(Classes.EventItem);
-
-                // Main row: time, icon, type, summary
-                var mainRow = new VisualElement();
-                mainRow.AddToClassList(Classes.EventItemMainRow);
-
-                var time = new Label { name = "time" };
-                time.AddToClassList(Classes.EventTime);
-                mainRow.Add(time);
-
-                var typeIcon = new Label { name = "type-icon" };
-                typeIcon.AddToClassList(Classes.EventTypeIcon);
-                mainRow.Add(typeIcon);
-
-                var type = new Label { name = "type" };
-                type.AddToClassList(Classes.EventType);
-                mainRow.Add(type);
-
-                var summary = new Label { name = "summary" };
-                summary.AddToClassList(Classes.EventSummary);
-                mainRow.Add(summary);
-
-                root.Add(mainRow);
-
-                // Detail row (hidden by default, shown when selected)
-                var detailRow = new VisualElement { name = "detail-row" };
-                detailRow.AddToClassList(Classes.EventItemDetailRow);
-                detailRow.style.display = DisplayStyle.None;
-
-                var detailText = new Label { name = "detail-text" };
-                detailText.AddToClassList(Classes.EventItemDetailText);
-                detailRow.Add(detailText);
-
-                root.Add(detailRow);
-
-                // Badges row (hidden by default)
-                var badgesRow = new VisualElement { name = "badges-row" };
-                badgesRow.AddToClassList(Classes.EventItemBadges);
-                badgesRow.style.display = DisplayStyle.None;
-
-                var importanceBadge = new Label { name = "importance-badge" };
-                importanceBadge.AddToClassList(Classes.ImportanceBadge);
-                badgesRow.Add(importanceBadge);
-
-                var contextIndicator = new Label { name = "context-indicator" };
-                contextIndicator.AddToClassList(Classes.ContextIndicator);
-                badgesRow.Add(contextIndicator);
-
-                root.Add(badgesRow);
-
-                return root;
-            };
-
-            _eventListView.bindItem = (element, index) =>
-            {
-                var item = _currentEvents[index];
-
-                // Main row
-                element.Q<Label>("time").text = item.DisplayTime;
-
-                var typeIcon = element.Q<Label>("type-icon");
-                typeIcon.text = GetEventTypeIcon(item.Event.Type);
-
-                var typeLabel = element.Q<Label>("type");
                 typeLabel.text = item.Event.Type;
-                // Add event-specific class for styling
                 typeLabel.ClearClassList();
                 typeLabel.AddToClassList(Classes.EventType);
                 typeLabel.AddToClassList($"{Classes.EventType}--{SanitizeClassName(item.Event.Type)}");
+            }
 
-                element.Q<Label>("summary").text = item.DisplaySummary;
+            var summaryLabel = element.Q<Label>("summary");
+            if (summaryLabel.text != item.DisplaySummary)
+                summaryLabel.text = item.DisplaySummary;
 
-                // Detail row - show target info if available
-                var detailRow = element.Q<VisualElement>("detail-row");
-                var detailText = element.Q<Label>("detail-text");
+            var detailRow = element.Q<VisualElement>("detail-row");
+            var detailText = element.Q<Label>("detail-text");
 
-                if (detailRow != null && detailText != null)
+            if (detailRow != null && detailText != null)
+            {
+                bool showDetail = _eventListView.selectedIndex == index || !string.IsNullOrEmpty(item.Event.TargetId);
+                var targetDisplay = showDetail ? DisplayStyle.Flex : DisplayStyle.None;
+                if (detailRow.style.display != targetDisplay)
+                    detailRow.style.display = targetDisplay;
+                
+                if (!string.IsNullOrEmpty(item.Event.TargetId))
                 {
-                    // Show detail row for selected items or when target info is available
-                    bool showDetail = _eventListView.selectedIndex == index || !string.IsNullOrEmpty(item.Event.TargetId);
-                    detailRow.style.display = showDetail ? DisplayStyle.Flex : DisplayStyle.None;
-                    detailText.text = !string.IsNullOrEmpty(item.Event.TargetId) ? $"Target: {item.Event.TargetId}" : "";
+                    var targetText = $"Target: {item.Event.TargetId}";
+                    if (detailText.text != targetText)
+                        detailText.text = targetText;
                 }
+            }
 
-                // Badges row
-                var badgesRow = element.Q<VisualElement>("badges-row");
-                var badge = element.Q<Label>("importance-badge");
-                var contextIndicator = element.Q<Label>("context-indicator");
+            var badgesRow = element.Q<VisualElement>("badges-row");
+            var badge = element.Q<Label>("importance-badge");
+            var contextIndicator = element.Q<Label>("context-indicator");
 
-                if (badgesRow != null && badge != null)
+            if (badgesRow != null && badge != null)
+            {
+                var badgesDisplay = _showSemantics ? DisplayStyle.Flex : DisplayStyle.None;
+                if (badgesRow.style.display != badgesDisplay)
+                    badgesRow.style.display = badgesDisplay;
+
+                var categoryUpper = item.ImportanceCategory.ToUpperInvariant();
+                if (badge.text != categoryUpper)
                 {
-                    badgesRow.style.display = _showSemantics ? DisplayStyle.Flex : DisplayStyle.None;
-
-                    badge.text = item.ImportanceCategory.ToUpperInvariant();
-                    // Add importance-specific class for styling
+                    badge.text = categoryUpper;
                     badge.ClearClassList();
                     badge.AddToClassList(Classes.ImportanceBadge);
                     badge.AddToClassList($"{Classes.ImportanceBadge}--{item.ImportanceCategory.ToLowerInvariant()}");
                 }
+            }
 
-                // Show context indicator if context mapping exists
-                // Note: Full context details (Source, AgentId) are not persisted, only ContextId
-                if (contextIndicator != null)
+            if (contextIndicator != null)
+            {
+                var hasContext = item.Context != null;
+                var contextDisplay = hasContext ? DisplayStyle.Flex : DisplayStyle.None;
+                if (contextIndicator.style.display != contextDisplay)
                 {
-                    contextIndicator.style.display = item.Context != null ? DisplayStyle.Flex : DisplayStyle.None;
-                    if (item.Context != null)
+                    contextIndicator.style.display = contextDisplay;
+                    if (hasContext && contextIndicator.text != "🔗")
                     {
-                        contextIndicator.text = "🔗"; // Generic context indicator
+                        contextIndicator.text = "🔗";
+                        contextIndicator.ClearClassList();
+                        contextIndicator.AddToClassList(Classes.ContextIndicator);
+                        contextIndicator.AddToClassList("context-source--System");
                     }
                 }
-            };
-
-            _eventListView.selectionChanged += OnSelectionChanged;
+            }
         }
 
         private void SetupToolbar()
@@ -442,7 +422,6 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
                 RefreshEvents();
             });
 
-            // Filter 菜单
             _filterMenu?.menu.AppendAction("All", a => SetImportance(0f));
             _filterMenu?.menu.AppendAction("/", a => { });
             _filterMenu?.menu.AppendAction("AI Can See", a => SetImportanceFromSettings());
@@ -450,18 +429,13 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
             _filterMenu?.menu.AppendAction("Medium+", a => SetImportance(0.4f));
             _filterMenu?.menu.AppendAction("High+", a => SetImportance(0.7f));
 
-            // Sort menu
             _sortMenu?.menu.AppendAction("By Time (Newest)", a => SetSortMode(SortMode.ByTimeDesc));
             _sortMenu?.menu.AppendAction("AI Filtered", a => SetSortMode(SortMode.AIFiltered));
 
-            // 导出按钮
             _exportButton?.RegisterCallback<ClickEvent>(_ => OnExportClicked());
-
             _settingsButton?.RegisterCallback<ClickEvent>(_ => OnSettingsClicked());
             _refreshButton?.RegisterCallback<ClickEvent>(_ => OnRefreshClicked());
             _clearButton?.RegisterCallback<ClickEvent>(_ => OnClearClicked());
-
-            // 清除筛选按钮
             _clearFiltersButton?.RegisterCallback<ClickEvent>(_ => OnClearFiltersClicked());
         }
 
@@ -496,13 +470,12 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
         private void BuildDetailPanel(ActionTraceQuery.ActionTraceViewItem item)
         {
-            // Overview Section
             AddDetailSection("EVENT OVERVIEW", section =>
             {
                 var header = new VisualElement();
                 header.AddToClassList(Classes.DetailSectionHeader);
 
-                var icon = new Label { text = GetEventTypeIcon(item.Event.Type) };
+                var icon = new Label { text = GetEventTypeIconCached(item.Event.Type) };
                 icon.AddToClassList("detail-type-icon");
                 header.Add(icon);
 
@@ -519,13 +492,11 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
                 }
             });
 
-            // Summary
             AddDetailSection("SUMMARY", section =>
             {
                 AddDetailRow(section, "Description", item.DisplaySummary);
             });
 
-            // Target Information (if available)
             if (!string.IsNullOrEmpty(item.Event.TargetId))
             {
                 AddDetailSection("TARGET INFORMATION", section =>
@@ -534,7 +505,6 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
                 });
             }
 
-            // Semantics (if available)
             if (item.ImportanceScore > 0 || !string.IsNullOrEmpty(item.ImportanceCategory))
             {
                 AddDetailSection("SEMANTICS", section =>
@@ -548,8 +518,6 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
                 });
             }
 
-            // Context (if available)
-            // Note: ContextMapping only stores ContextId, full OperationContext is not persisted
             if (item.Context != null)
             {
                 AddDetailSection("CONTEXT", section =>
@@ -559,7 +527,6 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
                 });
             }
 
-            // Metadata
             AddDetailSection("METADATA", section =>
             {
                 AddDetailRow(section, "Type", item.Event.Type);
@@ -616,7 +583,6 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
             var fill = new VisualElement();
             fill.AddToClassList(Classes.ImportanceBarFill);
             fill.style.width = Length.Percent(score * 100);
-            // Add category-specific class for styling
             fill.AddToClassList($"{Classes.ImportanceBarFill}--{category.ToLowerInvariant()}");
             bar.Add(fill);
 
@@ -655,7 +621,7 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
             try
             {
-                var json = StringBuilderToJson();
+                var json = BuildJsonExport();
                 System.IO.File.WriteAllText(path, json);
                 Debug.Log($"[ActionTrace] Saved {_currentEvents.Count} events to {path}");
             }
@@ -672,7 +638,7 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
             try
             {
-                var csv = StringBuilderToCsv();
+                var csv = BuildCsvExport();
                 System.IO.File.WriteAllText(path, csv);
                 Debug.Log($"[ActionTrace] Saved {_currentEvents.Count} events to {path}");
             }
@@ -682,94 +648,112 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
             }
         }
 
-        private string StringBuilderToJson()
+        private string BuildJsonExport()
         {
-            var sb = new StringBuilder();
-            sb.AppendLine("{");
-            sb.AppendLine($"  \"exportTime\": \"{DateTime.Now:O}\",");
-            sb.AppendLine($"  \"totalEvents\": {_currentEvents.Count},");
-            sb.AppendLine("  \"events\": [");
+            _stringBuilder.Clear();
+            _stringBuilder.AppendLine("{");
+            _stringBuilder.AppendLine($"  \"exportTime\": \"{DateTime.Now:O}\",");
+            _stringBuilder.AppendLine($"  \"totalEvents\": {_currentEvents.Count},");
+            _stringBuilder.AppendLine("  \"events\": [");
 
             for (int i = 0; i < _currentEvents.Count; i++)
             {
                 var e = _currentEvents[i];
-                sb.AppendLine("    {");
-                sb.AppendLine($"      \"sequence\": {e.Event.Sequence},");
-                sb.AppendLine($"      \"type\": \"{SanitizeJson(e.Event.Type)}\",");
-                sb.AppendLine($"      \"timestamp\": {e.Event.TimestampUnixMs},");
-                sb.AppendLine($"      \"displayTime\": \"{SanitizeJson(e.DisplayTime)}\",");
-                sb.AppendLine($"      \"summary\": \"{SanitizeJson(e.DisplaySummary)}\",");
+                _stringBuilder.AppendLine("    {");
+                _stringBuilder.AppendLine($"      \"sequence\": {e.Event.Sequence},");
+                _stringBuilder.AppendLine($"      \"type\": \"{SanitizeJson(e.Event.Type)}\",");
+                _stringBuilder.AppendLine($"      \"timestamp\": {e.Event.TimestampUnixMs},");
+                _stringBuilder.AppendLine($"      \"displayTime\": \"{SanitizeJson(e.DisplayTime)}\",");
+                _stringBuilder.AppendLine($"      \"summary\": \"{SanitizeJson(e.DisplaySummary)}\",");
 
                 if (!string.IsNullOrEmpty(e.Event.TargetId))
-                    sb.AppendLine($"      \"targetId\": \"{SanitizeJson(e.Event.TargetId)}\",");
+                    _stringBuilder.AppendLine($"      \"targetId\": \"{SanitizeJson(e.Event.TargetId)}\",");
                 else
-                    sb.AppendLine($"      \"targetId\": null,");
+                    _stringBuilder.AppendLine($"      \"targetId\": null,");
 
-                sb.AppendLine($"      \"importanceScore\": {e.ImportanceScore:F2},");
-                sb.AppendLine($"      \"importanceCategory\": \"{SanitizeJson(e.ImportanceCategory)}\"");
+                _stringBuilder.AppendLine($"      \"importanceScore\": {e.ImportanceScore:F2},");
+                _stringBuilder.AppendLine($"      \"importanceCategory\": \"{SanitizeJson(e.ImportanceCategory)}\"");
 
                 if (!string.IsNullOrEmpty(e.InferredIntent))
-                    sb.AppendLine($"      ,\"inferredIntent\": \"{SanitizeJson(e.InferredIntent)}\"");
+                    _stringBuilder.AppendLine($"      ,\"inferredIntent\": \"{SanitizeJson(e.InferredIntent)}\"");
 
                 if (e.Event.Payload != null && e.Event.Payload.Count > 0)
                 {
-                    sb.AppendLine("      ,\"payload\": {");
+                    _stringBuilder.AppendLine("      ,\"payload\": {");
                     var payloadKeys = e.Event.Payload.Keys.ToList();
                     for (int j = 0; j < payloadKeys.Count; j++)
                     {
                         var key = payloadKeys[j];
                         var value = e.Event.Payload[key];
                         var valueStr = value?.ToString() ?? "null";
-                        sb.AppendLine($"        \"{SanitizeJson(key)}\": \"{SanitizeJson(valueStr)}\"{(j < payloadKeys.Count - 1 ? "," : "")}");
+                        _stringBuilder.AppendLine($"        \"{SanitizeJson(key)}\": \"{SanitizeJson(valueStr)}\"{(j < payloadKeys.Count - 1 ? "," : "")}");
                     }
-                    sb.AppendLine("      }");
+                    _stringBuilder.AppendLine("      }");
                 }
 
-                sb.Append(i < _currentEvents.Count - 1 ? "    }," : "    }");
+                _stringBuilder.Append(i < _currentEvents.Count - 1 ? "    }," : "    }");
                 if (i < _currentEvents.Count - 1)
-                    sb.AppendLine();
+                    _stringBuilder.AppendLine();
             }
 
-            sb.AppendLine();
-            sb.AppendLine("  ]");
-            sb.AppendLine("}");
+            _stringBuilder.AppendLine();
+            _stringBuilder.AppendLine("  ]");
+            _stringBuilder.AppendLine("}");
 
-            return sb.ToString();
+            return _stringBuilder.ToString();
         }
 
-        private string StringBuilderToCsv()
+        private string BuildCsvExport()
         {
-            var sb = new StringBuilder();
+            _stringBuilder.Clear();
+            _stringBuilder.AppendLine("Sequence,Time,Type,Summary,Target,Importance,Category,Intent");
 
-            // Header
-            sb.AppendLine("Sequence,Time,Type,Summary,Target,Importance,Category,Intent");
-
-            // Data rows
             foreach (var e in _currentEvents)
             {
-                var line = $"{e.Event.Sequence}," +
-                         $"\"{SanitizeCsv(e.DisplayTime)}\"," +
-                         $"\"{SanitizeCsv(e.Event.Type)}\"," +
-                         $"\"{SanitizeCsv(e.DisplaySummary)}\"," +
-                         $"\"{SanitizeCsv(e.Event.TargetId ?? "")}\"," +
-                         $"{e.ImportanceScore:F2}," +
-                         $"\"{SanitizeCsv(e.ImportanceCategory)}\"," +
-                         $"\"{SanitizeCsv(e.InferredIntent ?? "")}\"";
-
-                sb.AppendLine(line);
+                _stringBuilder.Append(e.Event.Sequence);
+                _stringBuilder.Append(",\"");
+                _stringBuilder.Append(SanitizeCsv(e.DisplayTime));
+                _stringBuilder.Append("\",\"");
+                _stringBuilder.Append(SanitizeCsv(e.Event.Type));
+                _stringBuilder.Append("\",\"");
+                _stringBuilder.Append(SanitizeCsv(e.DisplaySummary));
+                _stringBuilder.Append("\",\"");
+                _stringBuilder.Append(SanitizeCsv(e.Event.TargetId ?? ""));
+                _stringBuilder.Append("\",");
+                _stringBuilder.Append(e.ImportanceScore.ToString("F2"));
+                _stringBuilder.Append(",\"");
+                _stringBuilder.Append(SanitizeCsv(e.ImportanceCategory));
+                _stringBuilder.Append("\",\"");
+                _stringBuilder.Append(SanitizeCsv(e.InferredIntent ?? ""));
+                _stringBuilder.AppendLine("\"");
             }
 
-            return sb.ToString();
+            return _stringBuilder.ToString();
         }
 
         private string SanitizeJson(string input)
         {
             if (string.IsNullOrEmpty(input)) return "";
-            return input.Replace("\\", "\\\\")
-                        .Replace("\"", "\\\"")
-                        .Replace("\n", "\\n")
-                        .Replace("\r", "\\r")
-                        .Replace("\t", "\\t");
+
+            // 性能优化：使用 StringBuilder 避免多次 Replace 产生的中间字符串
+            var sb = _stringBuilder;
+            sb.Clear();
+            sb.EnsureCapacity(input.Length * 2);
+
+            foreach (char c in input)
+            {
+                switch (c)
+                {
+                    case '\\': sb.Append("\\\\"); break;
+                    case '\"': sb.Append("\\\""); break;
+                    case '\n': sb.Append("\\n"); break;
+                    case '\r': sb.Append("\\r"); break;
+                    case '\t': sb.Append("\\t"); break;
+                    default: sb.Append(c); break;
+                }
+            }
+
+            return sb.ToString();
         }
 
         private string SanitizeCsv(string input)
@@ -809,6 +793,7 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
         {
             EventStore.Clear();
             _currentEvents.Clear();
+            _lastEventStoreCount = 0;
             _eventListView.RefreshItems();
             _detailScrollView.Clear();
             UpdateStatus();
@@ -846,14 +831,31 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
         private void RefreshEvents()
         {
+            // 性能优化：检查是否有新事件
+            int currentStoreCount = EventStore.Count;
+            if (currentStoreCount == _lastEventStoreCount && 
+                _currentEvents.Count > 0 && 
+                string.IsNullOrEmpty(_searchText))
+            {
+                // 没有新事件且无搜索条件，跳过刷新
+                return;
+            }
+            _lastEventStoreCount = currentStoreCount;
+
             IEnumerable<ActionTraceViewItem> source = _showContext
                 ? _actionTraceQuery.ProjectWithContext(EventStore.QueryWithContext(DefaultQueryLimit))
                 : _actionTraceQuery.Project(EventStore.Query(DefaultQueryLimit));
 
-            // Apply sorting
             source = ApplySorting(source);
 
-            var filtered = source.Where(FilterEvent).ToList();
+            // 性能优化：使用预分配的列表
+            var filtered = new List<ActionTraceViewItem>(DefaultQueryLimit);
+            foreach (var item in source)
+            {
+                if (FilterEvent(item))
+                    filtered.Add(item);
+            }
+
             _currentEvents.Clear();
             _currentEvents.AddRange(filtered);
 
@@ -867,24 +869,20 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
         {
             bool hasEvents = _currentEvents.Count > 0;
 
-            // Show/hide list and states
             _eventListView.style.display = hasEvents ? DisplayStyle.Flex : DisplayStyle.None;
 
-            // Determine which state to show
             bool hasFilters = !string.IsNullOrEmpty(_searchText) || _minImportance > 0;
 
             if (!hasEvents)
             {
                 if (hasFilters)
                 {
-                    // No results
                     _noResultsState.style.display = DisplayStyle.Flex;
                     _emptyState.style.display = DisplayStyle.None;
                     UpdateNoResultsText();
                 }
                 else
                 {
-                    // Empty state
                     _emptyState.style.display = DisplayStyle.Flex;
                     _noResultsState.style.display = DisplayStyle.None;
                 }
@@ -898,13 +896,22 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
         private void UpdateNoResultsText()
         {
-            var filters = new List<string>();
+            _stringBuilder.Clear();
             if (!string.IsNullOrEmpty(_searchText))
-                filters.Add($"Search: \"{_searchText}\"");
+            {
+                _stringBuilder.Append("Search: \"");
+                _stringBuilder.Append(_searchText);
+                _stringBuilder.Append("\"");
+            }
             if (_minImportance > 0)
-                filters.Add($"Importance: ≥{_minImportance:F2}");
+            {
+                if (_stringBuilder.Length > 0)
+                    _stringBuilder.Append("\n");
+                _stringBuilder.Append("Importance: ≥");
+                _stringBuilder.Append(_minImportance.ToString("F2"));
+            }
 
-            _noResultsFiltersLabel.text = string.Join("\n", filters);
+            _noResultsFiltersLabel.text = _stringBuilder.ToString();
         }
 
         private void UpdateFilterSummary()
@@ -917,13 +924,31 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
             {
                 _filterSummaryBar.style.display = DisplayStyle.Flex;
 
-                var parts = new List<string>();
-                if (!string.IsNullOrEmpty(_searchText))
-                    parts.Add($"search: \"{_searchText}\"");
-                if (_minImportance > 0)
-                    parts.Add($"importance: {_minImportance:F2}+");
+                _stringBuilder.Clear();
+                _stringBuilder.Append("Active filters: ");
 
-                _filterSummaryText.text = $"Active filters: {string.Join(", ", parts)} | Showing {_currentEvents.Count} events";
+                bool first = true;
+                if (!string.IsNullOrEmpty(_searchText))
+                {
+                    _stringBuilder.Append("search: \"");
+                    _stringBuilder.Append(_searchText);
+                    _stringBuilder.Append("\"");
+                    first = false;
+                }
+                if (_minImportance > 0)
+                {
+                    if (!first)
+                        _stringBuilder.Append(", ");
+                    _stringBuilder.Append("importance: ");
+                    _stringBuilder.Append(_minImportance.ToString("F2"));
+                    _stringBuilder.Append("+");
+                }
+
+                _stringBuilder.Append(" | Showing ");
+                _stringBuilder.Append(_currentEvents.Count);
+                _stringBuilder.Append(" events");
+
+                _filterSummaryText.text = _stringBuilder.ToString();
             }
             else
             {
@@ -945,8 +970,6 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
         private bool FilterEvent(ActionTraceQuery.ActionTraceViewItem e)
         {
-            // ByTime mode: show all records (including low importance)
-            // AI Filtered mode: apply importance filter (AI perspective)
             if (_sortMode == SortMode.AIFiltered && e.ImportanceScore < _minImportance)
                 return false;
 
@@ -977,7 +1000,6 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
         {
             _sortMode = mode;
 
-            // Always record all events, filter at query time based on mode
             if (ActionTraceSettings.Instance != null)
                 ActionTraceSettings.Instance.Filtering.BypassImportanceFilter = true;
 
@@ -1025,9 +1047,12 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
         #region Utility Methods
 
-        private string GetEventTypeIcon(string eventType)
+        private string GetEventTypeIconCached(string eventType)
         {
-            return eventType switch
+            if (_iconCache.TryGetValue(eventType, out var icon))
+                return icon;
+
+            icon = eventType switch
             {
                 "ASSET_CHANGE" => "📝",
                 "COMPILATION" => "⚙️",
@@ -1039,6 +1064,9 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
                 "ERROR" => "⚠️",
                 _ => "•"
             };
+
+            _iconCache[eventType] = icon;
+            return icon;
         }
 
         private string FormatBytes(int bytes)
@@ -1050,7 +1078,6 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
         private string SanitizeClassName(string eventType)
         {
-            // Replace underscores and spaces with hyphens, remove special chars
             return eventType?.Replace("_", "-").Replace(" ", "-") ?? "unknown";
         }
 
@@ -1061,13 +1088,14 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
         private void OnEnable()
         {
             EditorApplication.update += OnEditorUpdate;
+            _isScheduledRefreshActive = true;
         }
 
         private void OnDisable()
         {
             EditorApplication.update -= OnEditorUpdate;
+            _isScheduledRefreshActive = false;
 
-            // Restore the previous BypassImportanceFilter value
             if (ActionTraceSettings.Instance != null && _previousBypassImportanceFilter.HasValue)
             {
                 ActionTraceSettings.Instance.Filtering.BypassImportanceFilter = _previousBypassImportanceFilter.Value;
@@ -1076,7 +1104,9 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
         private void OnEditorUpdate()
         {
-            if (EditorApplication.timeSinceStartup - _lastRefreshTime > RefreshInterval)
+            // 性能优化：使用时间间隔控制刷新频率
+            if (_isScheduledRefreshActive && 
+                EditorApplication.timeSinceStartup - _lastRefreshTime > RefreshInterval)
             {
                 _lastRefreshTime = EditorApplication.timeSinceStartup;
                 RefreshEvents();

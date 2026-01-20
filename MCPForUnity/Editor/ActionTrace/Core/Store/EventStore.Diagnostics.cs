@@ -16,6 +16,9 @@ namespace MCPForUnity.Editor.ActionTrace.Core.Store
         /// </summary>
         private static void DehydrateOldEvents(int hotEventCount)
         {
+            // Clamp to non-negative to prevent negative iteration
+            hotEventCount = Math.Max(0, hotEventCount);
+
             lock (_queryLock)
             {
                 // Find events that need dehydration (not already dehydrated and beyond hot count)
@@ -40,8 +43,8 @@ namespace MCPForUnity.Editor.ActionTrace.Core.Store
             lock (_queryLock)
             {
                 var settings = ActionTraceSettings.Instance;
-                int hotEventCount = settings?.Storage.HotEventCount ?? 100;
-                int maxEvents = settings?.Storage.MaxEvents ?? 800;
+                int hotEventCount = settings != null ? settings.Storage.HotEventCount : 100;
+                int maxEvents = settings != null ? settings.Storage.MaxEvents : 800;
 
                 int totalEvents = _events.Count;
                 int hotEvents = Math.Min(totalEvents, hotEventCount);
@@ -53,6 +56,10 @@ namespace MCPForUnity.Editor.ActionTrace.Core.Store
 
                 foreach (var evt in _events)
                 {
+                    // Skip null entries (DehydrateOldEvents can leave nulls)
+                    if (evt == null)
+                        continue;
+
                     if (evt.IsDehydrated)
                         dehydratedCount++;
                     else if (evt.Payload != null)

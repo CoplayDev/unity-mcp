@@ -84,12 +84,21 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
         /// </summary>
         private static void SaveProcessedAssets()
         {
-            if (_cachedProcessedAssets == null || _cachedProcessedAssets.Count == 0)
+            if (_cachedProcessedAssets == null)
                 return;
 
             try
             {
                 string cachePath = GetCacheFilePath();
+
+                // If cache is empty, delete the cache file to persist the cleared state
+                if (_cachedProcessedAssets.Count == 0)
+                {
+                    if (System.IO.File.Exists(cachePath))
+                        System.IO.File.Delete(cachePath);
+                    return;
+                }
+
                 string json = Newtonsoft.Json.JsonConvert.SerializeObject(_cachedProcessedAssets.ToArray());
                 var dir = System.IO.Path.GetDirectoryName(cachePath);
                 if (!string.IsNullOrEmpty(dir) && !System.IO.Directory.Exists(dir))
@@ -187,6 +196,8 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 if (!_processedAssetsInSession.Add(assetPath))
                     continue;
 
+                hasChanges = true;  // Mark that we added a new entry
+
                 // L1 Blacklist: Skip junk assets
                 if (!EventFilter.ShouldTrackAsset(assetPath))
                     continue;
@@ -209,6 +220,8 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 // L0 Deduplication: Skip if already processed in this session
                 if (!_processedAssetsInSession.Add(movedAssets[i]))
                     continue;
+
+                hasChanges = true;  // Mark that we added a new entry
 
                 var fromPath = i < movedFromAssetPaths.Length ? movedFromAssetPaths[i] : "";
 

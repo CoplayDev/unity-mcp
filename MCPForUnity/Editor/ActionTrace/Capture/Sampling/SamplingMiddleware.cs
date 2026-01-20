@@ -125,11 +125,17 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 evt.Type == EventTypes.AssetMoved ||
                 evt.Type == EventTypes.AssetDeleted)
             {
-                // For asset events, check the path (stored in TargetId or payload)
-                string assetPath = evt.TargetId;
-                if (string.IsNullOrEmpty(assetPath) && evt.Payload != null && evt.Payload.TryGetValue("path", out var pathVal))
+                // For asset events, check the path (prefer payload, fallback to TargetId)
+                string assetPath = null;
+                if (evt.Payload != null && evt.Payload.TryGetValue("path", out var pathVal))
                 {
                     assetPath = pathVal?.ToString();
+                }
+
+                // Fallback to TargetId and strip "Asset:" prefix if present
+                if (string.IsNullOrEmpty(assetPath) && !string.IsNullOrEmpty(evt.TargetId))
+                {
+                    assetPath = evt.TargetId.StartsWith("Asset:") ? evt.TargetId.Substring(6) : evt.TargetId;
                 }
 
                 if (!string.IsNullOrEmpty(assetPath) && !EventFilter.ShouldTrackAsset(assetPath))

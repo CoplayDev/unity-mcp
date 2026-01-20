@@ -151,10 +151,14 @@ namespace MCPForUnity.Editor.Tools
                     Undo.PerformUndo();
                 }
 
-                // Force GUI refresh to update the scene
+                // Force GUI refresh to update the scene (with validity check)
                 EditorApplication.delayCall += () =>
                 {
-                    UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene());
+                    var scene = UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene();
+                    if (scene.IsValid() && scene.isLoaded)
+                    {
+                        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(scene);
+                    }
                 };
 
                 return new SuccessResponse($"Successfully reverted {stepsToUndo} Undo steps to reach sequence {targetSequence}", new

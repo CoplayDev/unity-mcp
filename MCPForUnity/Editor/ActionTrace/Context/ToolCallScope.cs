@@ -26,6 +26,7 @@ namespace MCPForUnity.Editor.ActionTrace.Context
         private readonly List<ToolCallScope> _childScopes;
         private readonly ToolCallScope _parentScope;
         private readonly int _createdThreadId;  // Track thread where scope was created
+        private readonly System.Threading.SynchronizationContext _syncContext;  // Capture sync context
 
         private long _endTimestampMs;
         private bool _isCompleted;
@@ -108,6 +109,7 @@ namespace MCPForUnity.Editor.ActionTrace.Context
             _startTimestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             _parentScope = Current;
             _createdThreadId = Thread.CurrentThread.ManagedThreadId;
+            _syncContext = System.Threading.SynchronizationContext.Current;  // Capture current sync context
 
             CallId = GenerateCallId();
 
@@ -283,32 +285,50 @@ namespace MCPForUnity.Editor.ActionTrace.Context
                 Complete();
             }
 
-            // Pop from stack (only if on the same thread as creation)
-            // This prevents stack leaks when ExecuteAsync disposes on a different thread
+            // Pop from stack, marshaling back to original thread if needed
             int currentThreadId = Thread.CurrentThread.ManagedThreadId;
-            if (currentThreadId == _createdThreadId)
+            var currentSyncContext = System.Threading.SynchronizationContext.Current;
+
+            // Check if we're on the correct thread (same thread as creation)
+            bool isCorrectThread = currentThreadId == _createdThreadId;
+            // Also check if sync contexts match (if available)
+            if (isCorrectThread && _syncContext != null && currentSyncContext != null)
             {
-                // Same thread: safe to pop from stack
-                if (_scopeStack.Value.Count > 0 && _scopeStack.Value.Peek() == this)
-                {
-                    _scopeStack.Value.Pop();
-                }
+                isCorrectThread = currentSyncContext == _syncContext;
+            }
+
+            if (isCorrectThread)
+            {
+                // Same thread: safe to pop from stack directly
+                PopFromStack();
             }
             else
             {
-                // Different thread: schedule cleanup on the original thread
-                // Note: This is a best-effort cleanup. In most cases, the scope
-                // will be properly cleaned up when the original thread processes its stack.
-                EditorApplication.delayCall += () =>
+                // Different thread: marshal cleanup back to original thread
+                if (_syncContext != null)
                 {
-                    if (_scopeStack.Value.Count > 0 && _scopeStack.Value.Peek() == this)
-                    {
-                        _scopeStack.Value.Pop();
-                    }
-                };
+                    // Use captured SynchronizationContext to marshal back
+                    _syncContext.Post(_ => PopFromStack(), null);
+                }
+                else
+                {
+                    // Fallback: use delayCall if no sync context was captured
+                    EditorApplication.delayCall += () => PopFromStack();
+                }
             }
 
             _isDisposed = true;
+        }
+
+        /// <summary>
+        /// Pops this scope from the stack. Must be called on the thread where the scope was created.
+        /// </summary>
+        private void PopFromStack()
+        {
+            if (_scopeStack.Value.Count > 0 && _scopeStack.Value.Peek() == this)
+            {
+                _scopeStack.Value.Pop();
+            }
         }
 
         private string GenerateCallId()
