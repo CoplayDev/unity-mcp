@@ -42,7 +42,7 @@
         <!-- 筛选摘要条（可选显示） -->
         <ui:VisualElement name="filter-summary-bar" class="filter-summary-bar" style="display: none;">
             <ui:Label name="filter-summary-text" class="filter-summary-text" />
-            <uie:ToolbarButton name="clear-filters-button" text="Clear All" class="clear-filters-btn" />
+            <uie:ToolbarButton name="clear-filters-button" text="Close" class="clear-filters-btn" />
         </ui:VisualElement>
 
         <!-- 主内容区 - 两栏布局 -->

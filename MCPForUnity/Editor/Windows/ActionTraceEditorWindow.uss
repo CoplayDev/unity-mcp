@@ -182,7 +182,7 @@
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 12px;
+    padding: 14px 20px;
     background-color: #2a2a2a;
     border-bottom-width: 1px;
     border-bottom-color: #3a3a3a;
@@ -195,14 +195,17 @@
 }
 
 .event-list-count {
-    font-size: 11px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10px;
     color: #707070;
     background-color: #383838;
     padding-left: 6px;
     padding-right: 6px;
-    padding-top: 2px;
-    padding-bottom: 2px;
-    border-radius: 8px;
+    padding-top: -2px;
+    padding-bottom: 12px;
+    border-radius: 12px;
 }
 
 /* 事件列表 */
@@ -374,9 +377,10 @@
     margin-left: 4px;
 }
 
-.context-indicator[data-source="Human"] { color: #4caf50; }
-.context-indicator[data-source="AI"] { color: #2196f3; }
-.context-indicator[data-source="System"] { color: #9e9e9e; }
+/* Use class-based selectors instead of data-* attributes (Unity doesn't support data-*) */
+.context-indicator.context-source--Human { color: #4caf50; }
+.context-indicator.context-source--AI { color: #2196f3; }
+.context-indicator.context-source--System { color: #9e9e9e; }
 
 /* ===== 空状态 ===== */
 .empty-state,
@@ -442,7 +446,9 @@
 .detail-scroll-view {
     flex: 1;
     min-width: 320px;
-    max-width: 450px;
+    min-height: 100%;
+    min-height: 100px;
+    max-width: 300px;
     background-color: #252525;
     border-left-width: 1px;
     border-left-color: #3a3a3a;
@@ -587,12 +593,6 @@
     min-width: 45px;
 }
 
-.importance-bar-label {
-    font-size: 10px;
-    color: #808080;
-    margin-right: 8px;
-}
-
 /* ===== 状态栏 ===== */
 .status-bar {
     flex-direction: row;
@@ -659,29 +659,27 @@
 }
 
 /* ===== 响应式布局 ===== */
-/* 小窗口适配 */
-@media (max-width: 800px) {
-    .event-list-container {
-        min-width: 300px;
-    }
+/* 小窗口适配 - 使用类选择器替代不支持的@media */
+.compact-layout .event-list-container {
+    min-width: 300px;
+}
 
-    .detail-scroll-view {
-        min-width: 250px;
-        max-width: 300px;
-    }
+.compact-layout .detail-scroll-view {
+    min-width: 250px;
+    max-width: 450px;
+}
 
-    .toolbar-display {
-        display: none;
-    }
+.compact-layout .toolbar-display {
+    display: none;
+}
 
-    .event-type {
-        min-width: 100px;
-    }
+.compact-layout .event-type {
+    min-width: 100px;
+}
 
-    .event-time {
-        min-width: 75px;
-        font-size: 10px;
-    }
+.compact-layout .event-time {
+    min-width: 75px;
+    font-size: 10px;
 }
 
 /* ===== 工具栏元素样式 ===== */

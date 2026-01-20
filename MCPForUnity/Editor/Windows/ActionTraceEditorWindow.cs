@@ -802,10 +802,8 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
         private void OnClearFiltersClicked()
         {
-            _searchText = string.Empty;
-            _searchField.value = string.Empty;
-            _minImportance = 0f;
-            RefreshEvents();
+            // Close the filter summary bar directly
+            _filterSummaryBar.style.display = DisplayStyle.None;
         }
 
         private void AnimateRefreshIndicator()
