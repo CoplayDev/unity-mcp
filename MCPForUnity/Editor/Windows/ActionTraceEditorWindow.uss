@@ -1,97 +1,344 @@
 /* ========================================
-   Timeline Editor Window Styles
-   Compatible with Unity 2022.3.62+
+   ActionTrace Editor Window Styles
+   Enhanced UI Design with improved aesthetics
    ======================================== */
 
+/* ===== 根容器 ===== */
 .root-container {
     flex-direction: column;
     flex-grow: 1;
     overflow: hidden;
+    background-color: #252525;
 }
 
-.main-content {
+/* ===== 顶部标题栏 ===== */
+.header-bar {
     flex-direction: row;
-    flex-grow: 1;
-    padding: 4px;
-    overflow: hidden;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 16px;
+    background-color: #1e1e1e;
+    border-bottom-width: 1px;
+    border-bottom-color: #3a3a3a;
+    min-height: 40px;
 }
 
-.event-list-container {
-    flex: 1;
-    min-width: 450px;
-    border-right-width: 1px;
-    border-right-color: #333333;
-    padding-right: 4px;
-    overflow: hidden;
+.window-title {
+    font-size: 16px;
+    -unity-font-style: bold;
+    color: #e0e0e0;
+    margin-right: 8px;
 }
 
-.event-list {
-    flex-grow: 1;
-    height: 100%;
-}
-
-.event-list > .unity-list-view__item {
+.event-count-badge {
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: #ffffff;
+    background-color: #4a90e2;
     padding-left: 8px;
     padding-right: 8px;
-    padding-top: 6px;
-    padding-bottom: 6px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    border-radius: 10px;
+    min-width: 24px;
+    -unity-text-align: middle-center;
+}
+
+/* ===== 工具栏区域 ===== */
+.main-toolbar {
+    flex-direction: row;
+    align-items: center;
+    padding: 4px 8px;
+    background-color: #2d2d2d;
     border-bottom-width: 1px;
-    border-bottom-color: #2a2a2a;
-    background-color: #393939;
-    min-height: 32px;
+    border-bottom-color: #3a3a3a;
+    min-height: 36px;
 }
 
-.event-list > .unity-list-view__item:hover {
-    background-color: #474747;
+.toolbar-primary {
+    flex-direction: row;
+    align-items: center;
 }
 
-.event-list > .unity-list-view__item.selected {
-    background-color: #485a7c;
+.toolbar-display {
+    flex-direction: row;
+    align-items: center;
+    margin-right: 8px;
 }
 
-.event-list > .unity-list-view__item.selected:hover {
-    background-color: #53668a;
+.toolbar-actions {
+    flex-direction: row;
+    align-items: center;
 }
 
-.event-item {
+/* 工具栏分组 - ToolbarSpacer 样式通过 UXML 设置，USS 中不需要定义 */
+
+/* 搜索框扩展 */
+.search-field-expanded {
+    width: 200px;
+    min-width: 180px;
+}
+
+/* 显示开关 */
+.display-toggle {
+    margin-right: 4px;
+    min-width: 70px;
+}
+
+/* 自动刷新容器 */
+.auto-refresh-container {
+    flex-direction: row;
+    align-items: center;
+    margin-left: 8px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    background-color: #383838;
+    border-radius: 4px;
+}
+
+.auto-refresh-label {
+    font-size: 10px;
+    color: #a0a0a0;
+    margin-right: 4px;
+}
+
+.auto-refresh-status {
+    font-size: 10px;
+    -unity-font-style: bold;
+    color: #4caf50;
+    min-width: 30px;
+}
+
+/* 操作按钮 */
+.action-btn {
+    min-width: 70px;
+    margin-left: 4px;
+    background-color: #383838;
+    border-radius: 4px;
+}
+
+.action-btn:hover {
+    background-color: #454545;
+}
+
+.action-btn-danger {
+    min-width: 70px;
+    margin-left: 4px;
+    background-color: #5a2a2a;
+    border-radius: 4px;
+    color: #e57373;
+}
+
+.action-btn-danger:hover {
+    background-color: #6a3a3a;
+}
+
+/* ===== 筛选摘要条 ===== */
+.filter-summary-bar {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    padding: 0;
+    padding: 6px 12px;
+    background-color: #2a3a4a;
+    border-bottom-width: 1px;
+    border-bottom-color: #3a4a5a;
+    min-height: 28px;
+}
+
+.filter-summary-text {
+    font-size: 11px;
+    color: #a0c0e0;
+    flex: 1;
+}
+
+.clear-filters-btn {
+    font-size: 10px;
+    min-width: 60px;
+    background-color: #3a4a5a;
     border-radius: 3px;
 }
 
-.event-item.has-context {
+/* ===== 主内容区 ===== */
+.main-content {
+    flex-direction: row;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+/* ===== 事件列表容器 ===== */
+.event-list-container {
+    flex: 1;
+    min-width: 400px;
+    flex-direction: column;
+    border-right-width: 1px;
+    border-right-color: #3a3a3a;
+    overflow: hidden;
+}
+
+/* 事件列表标题 */
+.event-list-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background-color: #2a2a2a;
+    border-bottom-width: 1px;
+    border-bottom-color: #3a3a3a;
+}
+
+.section-title {
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: #b0b0b0;
+}
+
+.event-list-count {
+    font-size: 11px;
+    color: #707070;
+    background-color: #383838;
+    padding-left: 6px;
+    padding-right: 6px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    border-radius: 8px;
+}
+
+/* 事件列表 */
+.event-list {
+    flex-grow: 1;
+    background-color: #282828;
+}
+
+.event-list > .unity-list-view__item {
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    border-bottom-width: 1px;
+    border-bottom-color: #2a2a2a;
+    background-color: #2d2d2d;
+    min-height: 36px;
+}
+
+.event-list > .unity-list-view__item:hover {
+    background-color: #3a3a3a;
+}
+
+.event-list > .unity-list-view__item.selected {
+    background-color: #3a4a5a;
     border-left-width: 3px;
     border-left-color: #4a90e2;
 }
 
-.event-time {
-    -unity-font-style: bold;
-    font-size: 11px;
-    color: #999999;
-    min-width: 95px;
-    margin-right: 12px;
+.event-list > .unity-list-view__item.selected:hover {
+    background-color: #455a6a;
 }
 
-.event-type {
+/* 交替行背景 */
+.event-list {
+    --unity-list-view-alternating-row-background-color: #333333;
+}
+
+/* ===== 事件列表项 ===== */
+.event-item {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0;
+    border-radius: 4px;
+}
+
+.event-item.selected {
+    background-color: transparent;
+}
+
+/* 主行：时间、图标、类型、摘要 */
+.event-item-main-row {
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+}
+
+/* 次行：额外信息（选中时显示） */
+.event-item-detail-row {
+    flex-direction: column;
+    margin-left: 95px;
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
+
+.event-item-detail-text {
+    font-size: 11px;
+    color: #a0a0a0;
+    margin-bottom: 2px;
+}
+
+/* 徽章行 */
+.event-item-badges {
+    flex-direction: row;
+    align-items: center;
+    margin-left: 95px;
+    margin-top: 4px;
+}
+
+.event-item-badge {
+    font-size: 9px;
+    padding-left: 6px;
+    padding-right: 6px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    border-radius: 3px;
+    margin-right: 6px;
     -unity-font-style: bold;
+}
+
+/* 时间 */
+.event-time {
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: #808080;
+    min-width: 90px;
+    margin-right: 10px;
+}
+
+/* 类型图标 */
+.event-type-icon {
+    font-size: 14px;
+    min-width: 20px;
+    margin-right: 6px;
+}
+
+/* 类型标签 */
+.event-type {
     font-size: 12px;
-    min-width: 140px;
-    margin-right: 12px;
+    -unity-font-style: bold;
+    min-width: 120px;
+    margin-right: 8px;
     color: #a0c0e0;
 }
 
+/* 事件类型颜色 - 使用类选择器 */
+.event-type--ASSET-CHANGE { color: #4fc3f7; }
+.event-type--COMPILATION { color: #fff176; }
+.event-type--PROPERTY-EDIT { color: #ba68c8; }
+.event-type--SCENE-SAVE { color: #81c784; }
+.event-type--SELECTION { color: #e0e0e0; }
+.event-type--MENU-ACTION { color: #ffb74d; }
+.event-type--BUILD-START { color: #64b5f6; }
+.event-type--ERROR { color: #e57373; }
+
+/* 摘要 */
 .event-summary {
     flex: 1;
     font-size: 12px;
-    color: #cccccc;
+    color: #c0c0c0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-right: 12px;
 }
 
+/* 重要性徽章 - 使用类选择器 */
 .importance-badge {
     font-size: 9px;
     -unity-font-style: bold;
@@ -101,89 +348,343 @@
     padding-bottom: 3px;
     border-radius: 3px;
     color: white;
-    min-width: 50px;
-    text-align: center;
+    min-width: 45px;
+    -unity-text-align: middle-center;
 }
 
+.importance-badge--high {
+    background-color: #e53935;
+}
+
+.importance-badge--medium {
+    background-color: #fb8c00;
+}
+
+.importance-badge--low {
+    background-color: #757575;
+}
+
+.importance-badge--critical {
+    background-color: #d32f2f;
+}
+
+/* 上下文指示器 */
+.context-indicator {
+    font-size: 11px;
+    margin-left: 4px;
+}
+
+.context-indicator[data-source="Human"] { color: #4caf50; }
+.context-indicator[data-source="AI"] { color: #2196f3; }
+.context-indicator[data-source="System"] { color: #9e9e9e; }
+
+/* ===== 空状态 ===== */
+.empty-state,
+.no-results-state {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 40px;
+    background-color: #2a2a2a;
+}
+
+.empty-state-icon {
+    margin-bottom: 16px;
+}
+
+.empty-state-emoji {
+    font-size: 48px;
+}
+
+.empty-state-title {
+    font-size: 16px;
+    -unity-font-style: bold;
+    color: #e0e0e0;
+    margin-bottom: 8px;
+}
+
+.empty-state-description {
+    font-size: 12px;
+    color: #909090;
+    -unity-text-align: middle-center;
+    margin-bottom: 24px;
+    max-width: 300px;
+}
+
+.empty-state-actions {
+    flex-direction: row;
+    margin-bottom: 24px;
+}
+
+.empty-state-btn {
+    min-width: 80px;
+    margin-left: 8px;
+    margin-right: 8px;
+}
+
+.empty-state-tip {
+    font-size: 11px;
+    color: #707070;
+    -unity-text-align: middle-center;
+    -unity-font-style: italic;
+}
+
+.no-results-filters {
+    font-size: 11px;
+    color: #a0a0a0;
+    background-color: #383838;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+/* ===== 详情面板 ===== */
 .detail-scroll-view {
     flex: 1;
-    min-width: 350px;
-    max-width: 500px;
-    padding-left: 8px;
-    padding-right: 8px;
-    background-color: #2d2d2d;
+    min-width: 320px;
+    max-width: 450px;
+    background-color: #252525;
     border-left-width: 1px;
-    border-left-color: #333333;
+    border-left-color: #3a3a3a;
 }
 
 .detail-placeholder {
-    color: #666666;
-    font-size: 14px;
-    text-align: middle-center;
+    color: #606060;
+    font-size: 13px;
+    -unity-text-align: middle-center;
     padding-top: 50%;
 }
 
-.detail-container {
+.detail-content {
     flex-direction: column;
     padding: 12px;
 }
 
-.detail-row {
-    flex-direction: row;
-    margin-bottom: 10px;
-    padding-bottom: 10px;
-    border-bottom-width: 1px;
-    border-bottom-color: #3a3a3a;
+/* 详情分组 */
+.detail-section {
+    flex-direction: column;
+    margin-bottom: 16px;
+    padding: 12px;
+    background-color: #2d2d2d;
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: #3a3a3a;
 }
 
-.detail-label {
-    -unity-font-style: bold;
-    font-size: 11px;
-    color: #888888;
-    min-width: 100px;
-    margin-right: 12px;
-}
-
-.detail-value {
-    font-size: 11px;
-    color: #e0e0e0;
-    flex: 1;
-    word-wrap: normal;
-    overflow-wrap: break-word;
-    white-space: normal;
-}
-
-.detail-header {
-    -unity-font-style: bold;
+.detail-section-header {
     font-size: 13px;
+    -unity-font-style: bold;
     color: #4a90e2;
-    margin-top: 16px;
-    margin-bottom: 12px;
-    padding-bottom: 4px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
     border-bottom-width: 2px;
     border-bottom-color: #4a90e2;
 }
 
+.detail-section-header > .detail-type-icon {
+    font-size: 14px;
+    margin-right: 6px;
+}
+
+.detail-row {
+    flex-direction: row;
+    margin-bottom: 8px;
+    align-items: flex-start;
+}
+
+.detail-label {
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: #808080;
+    min-width: 90px;
+    margin-right: 8px;
+}
+
+.detail-value {
+    font-size: 11px;
+    color: #d0d0d0;
+    flex: 1;
+    white-space: normal;
+}
+
+.detail-value.code {
+    font-size: 10px;
+    background-color: #1e1e1e;
+    padding: 4px 6px;
+    border-radius: 3px;
+    color: #a0c0e0;
+}
+
+.detail-subsection {
+    flex-direction: column;
+    margin-top: 8px;
+    padding-left: 12px;
+    border-left-width: 2px;
+    border-left-color: #3a3a3a;
+}
+
+.detail-subsection-title {
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: #a0a0a0;
+    margin-bottom: 6px;
+}
+
+/* 详情操作按钮 */
+.detail-actions {
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 12px;
+    border-top-width: 1px;
+    border-top-color: #3a3a3a;
+}
+
+.detail-action-btn {
+    flex: 1;
+    margin-left: 4px;
+    margin-right: 4px;
+    font-size: 11px;
+    min-height: 26px;
+}
+
+/* 重要性进度条 */
+.importance-bar-container {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 4px;
+}
+
+.importance-bar-label {
+    font-size: 10px;
+    color: #808080;
+    margin-right: 8px;
+}
+
+.importance-bar {
+    flex: 1;
+    height: 6px;
+    background-color: #3a3a3a;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.importance-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+}
+
+/* Importance bar fill - 使用类选择器 */
+.importance-bar-fill--high { background-color: #e53935; }
+.importance-bar-fill--medium { background-color: #fb8c00; }
+.importance-bar-fill--low { background-color: #757575; }
+.importance-bar-fill--critical { background-color: #d32f2f; }
+
+.importance-bar-value {
+    font-size: 10px;
+    -unity-font-style: bold;
+    color: #b0b0b0;
+    margin-left: 8px;
+    min-width: 45px;
+}
+
+.importance-bar-label {
+    font-size: 10px;
+    color: #808080;
+    margin-right: 8px;
+}
+
+/* ===== 状态栏 ===== */
 .status-bar {
     flex-direction: row;
     align-items: center;
     padding: 6px 12px;
-    background-color: #2d2d2d;
+    background-color: #1e1e1e;
     border-top-width: 1px;
-    border-top-color: #333333;
-    min-height: 24px;
+    border-top-color: #3a3a3a;
+    min-height: 26px;
+}
+
+.status-item {
+    flex-direction: row;
+    align-items: center;
+    margin-right: 16px;
 }
 
 .status-label {
+    font-size: 10px;
+    color: #707070;
+    margin-right: 4px;
+}
+
+.status-value {
     font-size: 11px;
-    color: #999999;
+    color: #909090;
 }
 
-.event-list {
-    --unity-list-view-alternating-row-background-color: #3d3d3d;
+.refresh-indicator {
+    font-size: 14px;
+    opacity: 0.5;
 }
 
+.refresh-indicator.active {
+    opacity: 1;
+}
 
+/* ===== 时间分组 ===== */
+.time-group-header {
+    flex-direction: row;
+    align-items: center;
+    padding: 8px 12px;
+    background-color: #333333;
+    border-bottom-width: 1px;
+    border-bottom-color: #3a3a3a;
+}
+
+.time-group-title {
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: #b0b0b0;
+    flex: 1;
+}
+
+.time-group-count {
+    font-size: 10px;
+    color: #707070;
+    background-color: #404040;
+    padding-left: 6px;
+    padding-right: 6px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    border-radius: 8px;
+}
+
+/* ===== 响应式布局 ===== */
+/* 小窗口适配 */
+@media (max-width: 800px) {
+    .event-list-container {
+        min-width: 300px;
+    }
+
+    .detail-scroll-view {
+        min-width: 250px;
+        max-width: 300px;
+    }
+
+    .toolbar-display {
+        display: none;
+    }
+
+    .event-type {
+        min-width: 100px;
+    }
+
+    .event-time {
+        min-width: 75px;
+        font-size: 10px;
+    }
+}
+
+/* ===== 工具栏元素样式 ===== */
 ToolbarSearchField {
     width: 180px;
     min-width: 150px;
@@ -203,17 +704,22 @@ ToolbarMenu {
     min-width: 70px;
 }
 
-/* 排序按钮样式 */
-ToolbarMenu[name="sort-menu"] {
-    min-width: 110px;
+.toolbar-menu-primary {
+    min-width: 75px;
 }
 
-/* 排序按钮菜单项选中指示 */
-ToolbarMenu[name="sort-menu"] > .unity-toolbar-menu__item {
-    flex-grow: 1;
-}
-
-/* 选中状态的菜单项 */
-ToolbarMenu[name="sort-menu"] > .unity-toolbar-menu__item.checked {
-    background-color: #3a3a3a;
+/* ===== 高亮颜色变量 ===== */
+:root {
+    --accent-primary: #4a90e2;
+    --accent-secondary: #64b5f6;
+    --danger: #e57373;
+    --warning: #ffb74d;
+    --success: #81c784;
+    --text-primary: #e0e0e0;
+    --text-secondary: #a0a0a0;
+    --text-muted: #707070;
+    --bg-primary: #252525;
+    --bg-secondary: #2d2d2d;
+    --bg-tertiary: #383838;
+    --border-color: #3a3a3a;
 }
