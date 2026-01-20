@@ -27,6 +27,9 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
     {
         static ActionTraceRecorder()
         {
+            // Subscribe to cleanup events
+            AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
+
             // Subscribe to HookRegistry events
             HookRegistry.OnComponentAdded += OnComponentAdded;
             HookRegistry.OnComponentRemoved += OnComponentRemoved;
@@ -44,6 +47,28 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
             HookRegistry.OnScriptCompiledDetailed += OnScriptCompiledDetailed;
             HookRegistry.OnScriptCompilationFailedDetailed += OnScriptCompilationFailedDetailed;
             HookRegistry.OnBuildCompletedDetailed += OnBuildCompletedDetailed;
+        }
+
+        private static void OnBeforeAssemblyReload()
+        {
+            // Unsubscribe from HookRegistry events before domain reload
+            HookRegistry.OnComponentAdded -= OnComponentAdded;
+            HookRegistry.OnComponentRemoved -= OnComponentRemoved;
+            HookRegistry.OnComponentRemovedDetailed -= OnComponentRemovedDetailed;
+            HookRegistry.OnGameObjectCreated -= OnGameObjectCreated;
+            HookRegistry.OnGameObjectDestroyedDetailed -= OnGameObjectDestroyedDetailed;
+            HookRegistry.OnSelectionChanged -= OnSelectionChanged;
+            HookRegistry.OnHierarchyChanged -= OnHierarchyChanged;
+            HookRegistry.OnPlayModeChanged -= OnPlayModeChanged;
+            HookRegistry.OnSceneSaved -= OnSceneSaved;
+            HookRegistry.OnSceneOpenedDetailed -= OnSceneOpenedDetailed;
+            HookRegistry.OnNewSceneCreatedDetailed -= OnNewSceneCreatedDetailed;
+            HookRegistry.OnScriptCompiledDetailed -= OnScriptCompiledDetailed;
+            HookRegistry.OnScriptCompilationFailedDetailed -= OnScriptCompilationFailedDetailed;
+            HookRegistry.OnBuildCompletedDetailed -= OnBuildCompletedDetailed;
+
+            // Unsubscribe from cleanup event
+            AssemblyReloadEvents.beforeAssemblyReload -= OnBeforeAssemblyReload;
         }
 
         #region Hook Handlers

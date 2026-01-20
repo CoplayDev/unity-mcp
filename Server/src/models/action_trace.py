@@ -121,4 +121,4 @@ class TransactionInfo(BaseModel):
     event_count: int = Field(..., description="Number of events included")
     duration_ms: int = Field(..., description="Duration (milliseconds)")
     tool_call_id: Optional[str] = Field(None, description="Tool call ID that triggered this transaction")
-    triggered_by_tool: Optional[bool] = Field(None, description="Whether triggered by tool")
+    triggered_by_tool: Optional[str] = Field(None, description="Tool name that triggered this transaction")

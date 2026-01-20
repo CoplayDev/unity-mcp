@@ -16,14 +16,17 @@ namespace MCPForUnity.Editor.ActionTrace.Core.Store
         /// </summary>
         private static void DehydrateOldEvents(int hotEventCount)
         {
-            // Find events that need dehydration (not already dehydrated and beyond hot count)
-            for (int i = 0; i < _events.Count - hotEventCount; i++)
+            lock (_queryLock)
             {
-                var evt = _events[i];
-                if (evt != null && !evt.IsDehydrated && evt.Payload != null)
+                // Find events that need dehydration (not already dehydrated and beyond hot count)
+                for (int i = 0; i < _events.Count - hotEventCount; i++)
                 {
-                    // Dehydrate the event (creates new instance with Payload = null)
-                    _events[i] = evt.Dehydrate();
+                    var evt = _events[i];
+                    if (evt != null && !evt.IsDehydrated && evt.Payload != null)
+                    {
+                        // Dehydrate the event (creates new instance with Payload = null)
+                        _events[i] = evt.Dehydrate();
+                    }
                 }
             }
         }

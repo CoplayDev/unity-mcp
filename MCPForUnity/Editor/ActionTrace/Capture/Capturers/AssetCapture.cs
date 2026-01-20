@@ -343,7 +343,10 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
             {
                 // Inject VCS context into all recorded events
                 var vcsContext = VcsContextProvider.GetCurrentContext();
-                payload["vcs_context"] = vcsContext.ToDictionary();
+                if (vcsContext != null)
+                {
+                    payload["vcs_context"] = vcsContext.ToDictionary();
+                }
 
                 // Inject Undo Group ID for undo_to_sequence functionality (P2.4)
                 int currentUndoGroup = Undo.GetCurrentGroup();

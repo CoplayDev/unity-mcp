@@ -179,7 +179,13 @@ namespace MCPForUnity.Editor.ActionTrace.Analysis.Context
         public CompressedContext CompressWithDetails(IReadOnlyList<EditorEvent> events)
         {
             if (events == null || events.Count == 0)
-                return new CompressedContext { OriginalCount = 0 };
+                return new CompressedContext
+                {
+                    OriginalCount = 0,
+                    PreservedEvents = new List<EditorEvent>(),
+                    DehydratedEvents = new List<EditorEvent>(),
+                    SummaryEvents = new List<EditorEvent>()
+                };
 
             var result = new CompressedContext
             {
@@ -421,6 +427,8 @@ namespace MCPForUnity.Editor.ActionTrace.Analysis.Context
         {
             if (events == null || events.Count == 0)
                 return new List<EditorEvent>();
+            if (windowMs <= 0)
+                throw new ArgumentOutOfRangeException(nameof(windowMs), "windowMs must be > 0.");
 
             var seen = new HashSet<string>();
             var result = new List<EditorEvent>();

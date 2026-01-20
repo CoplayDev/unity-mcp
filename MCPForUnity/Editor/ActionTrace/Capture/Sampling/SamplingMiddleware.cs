@@ -127,7 +127,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
             {
                 // For asset events, check the path (stored in TargetId or payload)
                 string assetPath = evt.TargetId;
-                if (string.IsNullOrEmpty(assetPath) && evt.Payload.TryGetValue("path", out var pathVal))
+                if (string.IsNullOrEmpty(assetPath) && evt.Payload != null && evt.Payload.TryGetValue("path", out var pathVal))
                 {
                     assetPath = pathVal?.ToString();
                 }
@@ -252,14 +252,47 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
 
         /// <summary>
         /// Removes expired samples from the cache.
-        /// Samples older than CleanupAgeMs are removed.
+        ///
+        /// For Debounce/DebounceByKey modes: uses strategy-specific WindowMs to avoid
+        /// dropping samples before they can be flushed by FlushExpiredDebounceSamples.
+        /// For other modes: uses CleanupAgeMs as a fallback.
         /// </summary>
         private static void CleanupExpiredSamples(long nowMs)
         {
             // Directly remove expired samples without intermediate list
             foreach (var kvp in _pendingSamples)
             {
-                if (nowMs - kvp.Value.TimestampMs > CleanupAgeMs)
+                long ageMs = nowMs - kvp.Value.TimestampMs;
+
+                // Check if this sample has a strategy configured
+                if (SamplingConfig.Strategies.TryGetValue(kvp.Value.Event.Type, out var strategy))
+                {
+                    // For Debounce modes, respect the strategy's WindowMs
+                    // This prevents samples from being deleted before FlushExpiredDebounceSamples can record them
+                    if (strategy.Mode == SamplingMode.Debounce || strategy.Mode == SamplingMode.DebounceByKey)
+                    {
+                        // Only remove if significantly older than the window (2x window as safety margin)
+                        if (ageMs > strategy.WindowMs * 2)
+                        {
+                            _pendingSamples.TryRemove(kvp.Key, out _);
+                        }
+                        // For debounce samples within the window, don't clean up
+                        continue;
+                    }
+
+                    // For Throttle mode, use the larger of strategy window or cleanup age
+                    if (strategy.Mode == SamplingMode.Throttle)
+                    {
+                        if (ageMs > Math.Max(strategy.WindowMs, CleanupAgeMs))
+                        {
+                            _pendingSamples.TryRemove(kvp.Key, out _);
+                        }
+                        continue;
+                    }
+                }
+
+                // Fallback: use CleanupAgeMs for samples without a strategy
+                if (ageMs > CleanupAgeMs)
                 {
                     _pendingSamples.TryRemove(kvp.Key, out _);
                 }

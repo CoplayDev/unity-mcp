@@ -50,6 +50,13 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
         /// </summary>
         public static void BeginToolCall(string toolName, string toolCallId)
         {
+            // Guard against nested BeginToolCall invocations
+            if (_isInToolCall)
+            {
+                McpLog.Warn($"[UndoGroupManager] BeginToolCall called while already in tool call '{_currentToolName}' (id: {_currentToolCallId}). Aborting previous state.");
+                AbortToolCall();
+            }
+
             if (string.IsNullOrEmpty(toolName))
             {
                 McpLog.Warn("[UndoGroupManager] BeginToolCall called with null toolName");

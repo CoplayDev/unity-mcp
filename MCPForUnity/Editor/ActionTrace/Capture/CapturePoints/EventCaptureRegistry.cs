@@ -44,7 +44,16 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
             if (point != null)
             {
                 if (_isInitialized)
-                    point.Shutdown();
+                {
+                    try
+                    {
+                        point.Shutdown();
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogError($"[EventCaptureRegistry] Failed to shutdown {point.CapturePointId}: {ex.Message}");
+                    }
+                }
                 _capturePoints.Remove(point);
                 return true;
             }
