@@ -35,6 +35,8 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         private TextField httpUrlField;
         private Button startHttpServerButton;
         private Button stopHttpServerButton;
+        private VisualElement projectScopedToolsRow;
+        private Toggle projectScopedToolsToggle;
         private VisualElement unitySocketPortRow;
         private TextField unityPortField;
         private VisualElement statusIndicator;
@@ -83,6 +85,8 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             httpUrlField = Root.Q<TextField>("http-url");
             startHttpServerButton = Root.Q<Button>("start-http-server-button");
             stopHttpServerButton = Root.Q<Button>("stop-http-server-button");
+            projectScopedToolsRow = Root.Q<VisualElement>("project-scoped-tools-row");
+            projectScopedToolsToggle = Root.Q<Toggle>("project-scoped-tools-toggle");
             unitySocketPortRow = Root.Q<VisualElement>("unity-socket-port-row");
             unityPortField = Root.Q<TextField>("unity-port");
             statusIndicator = Root.Q<VisualElement>("status-indicator");
@@ -123,6 +127,14 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             }
 
             httpUrlField.value = HttpEndpointUtility.GetBaseUrl();
+
+            if (projectScopedToolsToggle != null)
+            {
+                projectScopedToolsToggle.value = EditorPrefs.GetBool(
+                    EditorPrefKeys.ProjectScopedToolsLocalHttp,
+                    true
+                );
+            }
 
             int unityPort = EditorPrefs.GetInt(EditorPrefKeys.UnitySocketPort, 0);
             if (unityPort == 0)
@@ -229,6 +241,16 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                     // If a session is active, this will end it and attempt to stop the local server.
                     OnHttpServerToggleClicked();
                 };
+            }
+
+            if (projectScopedToolsToggle != null)
+            {
+                projectScopedToolsToggle.RegisterValueChangedCallback(evt =>
+                {
+                    EditorPrefs.SetBool(EditorPrefKeys.ProjectScopedToolsLocalHttp, evt.newValue);
+                    UpdateHttpServerCommandDisplay();
+                    OnManualConfigUpdateRequested?.Invoke();
+                });
             }
 
             if (copyHttpServerCommandButton != null)
@@ -456,7 +478,22 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             bool useHttp = (TransportProtocol)transportDropdown.value != TransportProtocol.Stdio;
 
             httpUrlRow.style.display = useHttp ? DisplayStyle.Flex : DisplayStyle.None;
+            UpdateProjectScopedToolsVisibility();
             unitySocketPortRow.style.display = useHttp ? DisplayStyle.None : DisplayStyle.Flex;
+        }
+
+        private void UpdateProjectScopedToolsVisibility()
+        {
+            if (projectScopedToolsRow == null)
+            {
+                return;
+            }
+
+            bool useHttp = transportDropdown != null && (TransportProtocol)transportDropdown.value != TransportProtocol.Stdio;
+            bool httpLocalSelected = IsHttpLocalSelected();
+            projectScopedToolsRow.style.display = useHttp && httpLocalSelected
+                ? DisplayStyle.Flex
+                : DisplayStyle.None;
         }
 
         private bool IsHttpLocalSelected()
@@ -514,6 +551,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         {
             UpdateStartHttpButtonState();
             UpdateHttpServerCommandDisplay();
+            UpdateProjectScopedToolsVisibility();
         }
 
         private async void OnHttpServerToggleClicked()
