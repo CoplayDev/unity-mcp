@@ -540,9 +540,8 @@ namespace MCPForUnity.Editor.Clients
             }
             else
             {
-                // Note: --reinstall is not supported by uvx, use --no-cache --refresh instead
-                string devFlags = shouldForceRefresh ? "--no-cache --refresh " : string.Empty;
-                args = $"mcp add --transport stdio UnityMCP -- \"{uvxPath}\" {devFlags}--from \"{gitUrl}\" {packageName}";
+                string packageArgs = BuildClaudeUvxArgs(uvxPath, gitUrl, packageName, shouldForceRefresh);
+                args = $"mcp add --transport stdio UnityMCP -- {packageArgs}";
             }
 
             // Remove any existing registrations - handle both "UnityMCP" and "unityMCP" (legacy)
@@ -599,10 +598,9 @@ namespace MCPForUnity.Editor.Clients
             else
             {
                 var (uvxPath, gitUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
-                // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
-                // Note: --reinstall is not supported by uvx, use --no-cache --refresh instead
-                string devFlags = AssetPathUtility.ShouldForceUvxRefresh() ? "--no-cache --refresh " : string.Empty;
-                args = $"mcp add --transport stdio UnityMCP -- \"{uvxPath}\" {devFlags}--from \"{gitUrl}\" {packageName}";
+                bool shouldForceRefresh = AssetPathUtility.ShouldForceUvxRefresh();
+                string packageArgs = BuildClaudeUvxArgs(uvxPath, gitUrl, packageName, shouldForceRefresh);
+                args = $"mcp add --transport stdio UnityMCP -- {packageArgs}";
             }
 
             string projectDir = Path.GetDirectoryName(Application.dataPath);
@@ -698,13 +696,12 @@ namespace MCPForUnity.Editor.Clients
                 return "# Error: Configuration not available - check paths in Advanced Settings";
             }
 
-            string packageSource = AssetPathUtility.GetMcpServerPackageSource();
-            // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
-            // Note: --reinstall is not supported by uvx, use --no-cache --refresh instead
-            string devFlags = AssetPathUtility.ShouldForceUvxRefresh() ? "--no-cache --refresh " : string.Empty;
+            var (_, gitUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
+            bool shouldForceRefresh = AssetPathUtility.ShouldForceUvxRefresh();
+            string packageArgs = BuildClaudeUvxArgs(uvxPath, gitUrl, packageName, shouldForceRefresh);
 
             return "# Register the MCP server with Claude Code:\n" +
-                   $"claude mcp add --transport stdio UnityMCP -- \"{uvxPath}\" {devFlags}--from \"{packageSource}\" mcp-for-unity\n\n" +
+                   $"claude mcp add --transport stdio UnityMCP -- {packageArgs}\n\n" +
                    "# Unregister the MCP server:\n" +
                    "claude mcp remove UnityMCP\n\n" +
                    "# List registered servers:\n" +
@@ -762,6 +759,34 @@ namespace MCPForUnity.Editor.Clients
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Builds the correct uvx package arguments for Claude CLI mcp add command.
+        /// IMPORTANT: We always need --from because the PyPI package name (mcpforunityserver)
+        /// differs from the executable name (mcp-for-unity). The uvx command format is:
+        /// uvx --from PACKAGE_SOURCE EXECUTABLE_NAME --transport stdio
+        /// Example: uvx --from mcpforunityserver==9.0.8 mcp-for-unity --transport stdio
+        /// </summary>
+        private static string BuildClaudeUvxArgs(string uvxPath, string fromUrl, string packageName, bool shouldForceRefresh)
+        {
+            // Dev flags
+            string devFlags = shouldForceRefresh ? "--no-cache --refresh " : string.Empty;
+
+            string packageArgs;
+            if (!string.IsNullOrEmpty(fromUrl))
+            {
+                // Always use --from because package name != executable name
+                // Example: uvx --from mcpforunityserver==9.0.8 mcp-for-unity
+                packageArgs = $"\"{uvxPath}\" {devFlags}--from \"{fromUrl}\" {packageName}";
+            }
+            else
+            {
+                // Fallback: packageName only (should not happen in normal use)
+                packageArgs = $"\"{uvxPath}\" {devFlags}{packageName}";
+            }
+
+            return packageArgs;
         }
     }
 }

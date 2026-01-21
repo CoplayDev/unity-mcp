@@ -161,7 +161,6 @@ namespace MCPForUnity.Editor.Helpers
             // Dev mode: force a fresh install/resolution (avoids stale cached builds while iterating).
             // `--no-cache` avoids reading from cache; `--refresh` ensures metadata is revalidated.
             // Note: --reinstall is not supported by uvx and will cause a warning.
-            // Keep ordering consistent with other uvx builders: dev flags first, then --from <url>, then package name.
             var args = new List<string>();
 
             // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
@@ -170,13 +169,18 @@ namespace MCPForUnity.Editor.Helpers
                 args.Add("--no-cache");
                 args.Add("--refresh");
             }
+
+            // IMPORTANT: We always need --from because the PyPI package name (mcpforunityserver)
+            // differs from the executable name (mcp-for-unity). The uvx command format is:
+            // uvx --from PACKAGE_SOURCE EXECUTABLE_NAME --transport stdio
+            // Example: uvx --from mcpforunityserver==9.0.8 mcp-for-unity --transport stdio
             if (!string.IsNullOrEmpty(fromUrl))
             {
                 args.Add("--from");
                 args.Add(fromUrl);
             }
-            args.Add(packageName);
 
+            args.Add(packageName);
             args.Add("--transport");
             args.Add("stdio");
 

@@ -27,6 +27,26 @@ namespace MCPForUnity.Editor.Helpers
             args.Add(new TomlString { Value = "--refresh" });
         }
 
+        /// <summary>
+        /// Adds package arguments to the TOML array.
+        /// IMPORTANT: We always need --from because the PyPI package name (mcpforunityserver)
+        /// differs from the executable name (mcp-for-unity). The uvx command format is:
+        /// uvx --from PACKAGE_SOURCE EXECUTABLE_NAME --transport stdio
+        /// </summary>
+        private static void AddPackageArgs(TomlArray args, string fromUrl, string packageName)
+        {
+            if (args == null) return;
+
+            // Always use --from because package name != executable name
+            if (!string.IsNullOrEmpty(fromUrl))
+            {
+                args.Add(new TomlString { Value = "--from" });
+                args.Add(new TomlString { Value = fromUrl });
+            }
+
+            args.Add(new TomlString { Value = packageName });
+        }
+
         public static string BuildCodexServerBlock(string uvPath)
         {
             var table = new TomlTable();
@@ -54,12 +74,7 @@ namespace MCPForUnity.Editor.Helpers
 
                 var args = new TomlArray();
                 AddDevModeArgs(args);
-                if (!string.IsNullOrEmpty(fromUrl))
-                {
-                    args.Add(new TomlString { Value = "--from" });
-                    args.Add(new TomlString { Value = fromUrl });
-                }
-                args.Add(new TomlString { Value = packageName });
+                AddPackageArgs(args, fromUrl, packageName);
                 args.Add(new TomlString { Value = "--transport" });
                 args.Add(new TomlString { Value = "stdio" });
 
@@ -203,12 +218,7 @@ namespace MCPForUnity.Editor.Helpers
 
                 var argsArray = new TomlArray();
                 AddDevModeArgs(argsArray);
-                if (!string.IsNullOrEmpty(fromUrl))
-                {
-                    argsArray.Add(new TomlString { Value = "--from" });
-                    argsArray.Add(new TomlString { Value = fromUrl });
-                }
-                argsArray.Add(new TomlString { Value = packageName });
+                AddPackageArgs(argsArray, fromUrl, packageName);
                 argsArray.Add(new TomlString { Value = "--transport" });
                 argsArray.Add(new TomlString { Value = "stdio" });
                 unityMCP["args"] = argsArray;
