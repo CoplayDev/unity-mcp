@@ -471,10 +471,6 @@ Examples:
             logger.warning(
                 "Failed to write pidfile '%s': %s", args.pidfile, exc)
 
-    project_scoped_tools = args.project_scoped_tools or os.environ.get(
-        "UNITY_MCP_PROJECT_SCOPED_TOOLS", "").lower() in ("1", "true", "yes", "on")
-    os.environ["UNITY_MCP_PROJECT_SCOPED_TOOLS"] = "1" if project_scoped_tools else "0"
-
     if args.http_url != "http://localhost:8080":
         logger.info(f"HTTP URL set to: {http_url}")
     if args.http_host:
@@ -482,7 +478,7 @@ Examples:
     if args.http_port:
         logger.info(f"HTTP port override: {http_port}")
 
-    mcp = create_mcp_server(project_scoped_tools)
+    mcp = create_mcp_server(args.project_scoped_tools)
 
     # Determine transport mode
     if transport_mode == 'http':
