@@ -30,6 +30,7 @@ namespace MCPForUnity.Runtime.Helpers
     public static class ScreenshotUtility
     {
         private const string ScreenshotsFolderName = "Screenshots";
+        private static bool s_loggedLegacyScreenCaptureFallback;
 
         private static Camera FindBestCamera()
         {
@@ -53,48 +54,25 @@ namespace MCPForUnity.Runtime.Helpers
 
         public static ScreenshotCaptureResult CaptureToAssetsFolder(string fileName = null, int superSize = 1, bool ensureUniqueFileName = true)
         {
-            int size = Mathf.Max(1, superSize);
-            string resolvedName = BuildFileName(fileName);
-            string folder = Path.Combine(Application.dataPath, ScreenshotsFolderName);
-            Directory.CreateDirectory(folder);
-
-            string fullPath = Path.Combine(folder, resolvedName);
-            if (ensureUniqueFileName)
-            {
-                fullPath = EnsureUnique(fullPath);
-            }
-
-            string normalizedFullPath = fullPath.Replace('\\', '/');
-
-            // Use Asset folder for ScreenCapture.CaptureScreenshot to ensure write to asset rather than project root
-            string projectRoot = GetProjectRootPath();
-            string assetsRelativePath = normalizedFullPath;
-            if (assetsRelativePath.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
-            {
-                assetsRelativePath = assetsRelativePath.Substring(projectRoot.Length).TrimStart('/');
-            }
-
-            bool isAsync;
 #if UNITY_2022_1_OR_NEWER
-            ScreenCapture.CaptureScreenshot(assetsRelativePath, size);
-            isAsync = true;
+            ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, isAsync: true);
+            ScreenCapture.CaptureScreenshot(result.AssetsRelativePath, result.SuperSize);
+            return result;
 #else
-            Debug.LogWarning("ScreenCapture is supported after Unity 2022.1. Using main camera capture as fallback.");
+            if (!s_loggedLegacyScreenCaptureFallback)
+            {
+                Debug.Log("ScreenCapture is supported after Unity 2022.1. Using camera capture as fallback.");
+                s_loggedLegacyScreenCaptureFallback = true;
+            }
+
             var cam = FindBestCamera();
             if (cam == null)
             {
                 throw new InvalidOperationException("No camera found to capture screenshot.");
             }
-            string captureName = Path.GetFileName(normalizedFullPath);
-            CaptureFromCameraToAssetsFolder(cam, captureName, size, false);
-            isAsync = false;
-#endif      
 
-            return new ScreenshotCaptureResult(
-                normalizedFullPath,
-                assetsRelativePath,
-                size,
-                isAsync);
+            return CaptureFromCameraToAssetsFolder(cam, fileName, superSize, ensureUniqueFileName);
+#endif
         }
 
         /// <summary>
@@ -107,18 +85,8 @@ namespace MCPForUnity.Runtime.Helpers
                 throw new ArgumentNullException(nameof(camera));
             }
 
-            int size = Mathf.Max(1, superSize);
-            string resolvedName = BuildFileName(fileName);
-            string folder = Path.Combine(Application.dataPath, ScreenshotsFolderName);
-            Directory.CreateDirectory(folder);
-
-            string fullPath = Path.Combine(folder, resolvedName);
-            if (ensureUniqueFileName)
-            {
-                fullPath = EnsureUnique(fullPath);
-            }
-
-            string normalizedFullPath = fullPath.Replace('\\', '/');
+            ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, isAsync: false);
+            int size = result.SuperSize;
 
             int width = Mathf.Max(1, camera.pixelWidth > 0 ? camera.pixelWidth : Screen.width);
             int height = Mathf.Max(1, camera.pixelHeight > 0 ? camera.pixelHeight : Screen.height);
@@ -140,7 +108,7 @@ namespace MCPForUnity.Runtime.Helpers
                 tex.Apply();
 
                 byte[] png = tex.EncodeToPNG();
-                File.WriteAllBytes(normalizedFullPath, png);
+                File.WriteAllBytes(result.FullPath, png);
             }
             finally
             {
@@ -160,14 +128,37 @@ namespace MCPForUnity.Runtime.Helpers
                 }
             }
 
+            return result;
+        }
+
+        private static ScreenshotCaptureResult PrepareCaptureResult(string fileName, int superSize, bool ensureUniqueFileName, bool isAsync)
+        {
+            int size = Mathf.Max(1, superSize);
+            string resolvedName = BuildFileName(fileName);
+            string folder = Path.Combine(Application.dataPath, ScreenshotsFolderName);
+            Directory.CreateDirectory(folder);
+
+            string fullPath = Path.Combine(folder, resolvedName);
+            if (ensureUniqueFileName)
+            {
+                fullPath = EnsureUnique(fullPath);
+            }
+
+            string normalizedFullPath = fullPath.Replace('\\', '/');
+            string assetsRelativePath = ToAssetsRelativePath(normalizedFullPath);
+
+            return new ScreenshotCaptureResult(normalizedFullPath, assetsRelativePath, size, isAsync);
+        }
+
+        private static string ToAssetsRelativePath(string normalizedFullPath)
+        {
             string projectRoot = GetProjectRootPath();
             string assetsRelativePath = normalizedFullPath;
             if (assetsRelativePath.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
             {
                 assetsRelativePath = assetsRelativePath.Substring(projectRoot.Length).TrimStart('/');
             }
-
-            return new ScreenshotCaptureResult(normalizedFullPath, assetsRelativePath, size);
+            return assetsRelativePath;
         }
 
         private static string BuildFileName(string fileName)

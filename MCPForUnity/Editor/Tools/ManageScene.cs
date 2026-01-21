@@ -436,7 +436,10 @@ namespace MCPForUnity.Editor.Tools
                         EditorApplication.ExecuteMenuItem("Window/General/Game %2");
                     }
                 }
-                catch { }
+                catch (Exception e)
+                {
+                    try { McpLog.Debug($"[ManageScene] screenshot: failed to open Game View via menu item: {e.Message}"); } catch { }
+                }
 
                 try
                 {
@@ -447,12 +450,27 @@ namespace MCPForUnity.Editor.Tools
                         window?.Repaint();
                     }
                 }
-                catch { }
+                catch (Exception e)
+                {
+                    try { McpLog.Debug($"[ManageScene] screenshot: failed to repaint Game View: {e.Message}"); } catch { }
+                }
 
-                try { SceneView.RepaintAll(); } catch { }
-                try { EditorApplication.QueuePlayerLoopUpdate(); } catch { }
+                try { SceneView.RepaintAll(); }
+                catch (Exception e)
+                {
+                    try { McpLog.Debug($"[ManageScene] screenshot: failed to repaint Scene View: {e.Message}"); } catch { }
+                }
+
+                try { EditorApplication.QueuePlayerLoopUpdate(); }
+                catch (Exception e)
+                {
+                    try { McpLog.Debug($"[ManageScene] screenshot: failed to queue player loop update: {e.Message}"); } catch { }
+                }
             }
-            catch { }
+            catch (Exception e)
+            {
+                try { McpLog.Debug($"[ManageScene] screenshot: BestEffortPrepareGameViewForScreenshot failed: {e.Message}"); } catch { }
+            }
         }
 
         private static void ScheduleAssetImportWhenFileExists(string assetsRelativePath, string fullPath, double timeoutSeconds)
@@ -463,6 +481,9 @@ namespace MCPForUnity.Editor.Tools
             }
 
             double start = EditorApplication.timeSinceStartup;
+            int failureCount = 0;
+            bool hasSeenFile = false;
+            const int maxLoggedFailures = 3;
             Action tick = null;
             tick = () =>
             {
@@ -470,19 +491,54 @@ namespace MCPForUnity.Editor.Tools
                 {
                     if (File.Exists(fullPath))
                     {
-                        EditorApplication.update -= tick;
+                        hasSeenFile = true;
+
                         AssetDatabase.ImportAsset(assetsRelativePath, ImportAssetOptions.ForceSynchronousImport);
+                        try { McpLog.Debug($"[ManageScene] Imported asset at '{assetsRelativePath}'."); } catch { }
+                        EditorApplication.update -= tick;
                         return;
                     }
+                }
+                catch (Exception e)
+                {
+                    failureCount++;
 
-                    if (EditorApplication.timeSinceStartup - start > timeoutSeconds)
+                    if (failureCount <= maxLoggedFailures)
                     {
-                        EditorApplication.update -= tick;
+                        try
+                        {
+                            McpLog.Warn(
+                                $"[ManageScene] Exception while importing asset '{assetsRelativePath}' from '{fullPath}' (attempt {failureCount}): {e}"
+                            );
+                        }
+                        catch { }
                     }
                 }
-                catch
+
+                if (EditorApplication.timeSinceStartup - start > timeoutSeconds)
                 {
-                    try { EditorApplication.update -= tick; } catch { }
+                    if (!hasSeenFile)
+                    {
+                        try
+                        {
+                            McpLog.Warn(
+                                $"[ManageScene] Timed out waiting for file '{fullPath}' (asset: '{assetsRelativePath}') after {timeoutSeconds:F1} seconds. The asset was not imported."
+                            );
+                        }
+                        catch { }
+                    }
+                    else
+                    {
+                        try
+                        {
+                            McpLog.Warn(
+                                $"[ManageScene] Timed out importing asset '{assetsRelativePath}' from '{fullPath}' after {timeoutSeconds:F1} seconds. The file existed but the asset was not imported."
+                            );
+                        }
+                        catch { }
+                    }
+
+                    EditorApplication.update -= tick;
                 }
             };
 
