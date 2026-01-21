@@ -446,7 +446,6 @@
 .detail-scroll-view {
     flex: 1;
     min-width: 320px;
-    min-height: 100%;
     min-height: 100px;
     max-width: 300px;
     background-color: #252525;

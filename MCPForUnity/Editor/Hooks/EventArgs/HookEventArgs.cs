@@ -1,6 +1,6 @@
 using System;
 
-namespace MCPForUnity.Editor.ActionTrace.Sources.EventArgs
+namespace MCPForUnity.Editor.Hooks.EventArgs
 {
     /// <summary>
     /// Base class for all hook event arguments.

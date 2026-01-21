@@ -1,5 +1,5 @@
 using System;
-using MCPForUnity.Editor.ActionTrace.Sources.EventArgs;
+using MCPForUnity.Editor.Hooks.EventArgs;
 using MCPForUnity.Editor.Helpers;
 using UnityEngine;
 using UnityEngine.SceneManagement;

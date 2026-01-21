@@ -1,12 +1,11 @@
 using System;
-using MCPForUnity.Editor.ActionTrace.Sources.EventArgs;
-using MCPForUnity.Editor.Hooks;
+using MCPForUnity.Editor.Hooks.EventArgs;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace MCPForUnity.Editor.ActionTrace.Sources.Unity
+namespace MCPForUnity.Editor.Hooks
 {
     /// <summary>
     /// Pure event detector for Unity editor events.
@@ -16,10 +15,6 @@ namespace MCPForUnity.Editor.ActionTrace.Sources.Unity
     /// Unity Events → UnityEventHooks (detection) → HookRegistry → Subscribers
     ///
     /// You should use HookRegistry to subscribe to events, not UnityEventHooks directly.
-    ///
-    /// File Organization:
-    /// - UnityEventHooks.cs (this file) - Basic events and initialization
-    /// - UnityEventHooks.Advanced.cs - Advanced features (compilation, build, GameObject tracking)
     ///
     /// Hook Coverage:
     /// - Component events: ComponentAdded
@@ -84,7 +79,7 @@ namespace MCPForUnity.Editor.ActionTrace.Sources.Unity
             EditorSceneManager.newSceneCreated += OnNewSceneCreated;
 
             // Build Events
-            BuildPlayerWindow.RegisterBuildPlayerHandler(BuildPlayerHandler);
+            BuildPlayerWindow.RegisterBuildPlayerHandler(options => BuildPlayerHandler(options));
 
             // Editor Update
             EditorApplication.update += OnUpdate;
@@ -154,7 +149,7 @@ namespace MCPForUnity.Editor.ActionTrace.Sources.Unity
             HookRegistry.NotifyComponentAdded(component);
 
             var gameObject = component.gameObject;
-            if (gameObject != null) RegisterGameObject(gameObject);
+            if (gameObject != null) RegisterGameObjectForTracking(gameObject);
         }
 
         #endregion
@@ -184,7 +179,7 @@ namespace MCPForUnity.Editor.ActionTrace.Sources.Unity
             GameObject selectedGo = Selection.activeObject as GameObject;
             HookRegistry.NotifySelectionChanged(selectedGo);
 
-            if (selectedGo != null) RegisterGameObject(selectedGo);
+            if (selectedGo != null) RegisterGameObjectForTracking(selectedGo);
         }
 
         #endregion
@@ -247,6 +242,52 @@ namespace MCPForUnity.Editor.ActionTrace.Sources.Unity
             TrackScriptCompilation();
             TrackGameObjectChanges();
         }
+
+        #endregion
+
+        #region Tracking Extension Points (for Advanced features)
+
+        /// <summary>
+        /// Extension point for tracking initialization.
+        /// Override in Advanced partial class to provide custom tracking.
+        /// </summary>
+        static partial void InitializeTracking();
+
+        /// <summary>
+        /// Extension point for tracking reset.
+        /// Override in Advanced partial class to provide custom tracking.
+        /// </summary>
+        static partial void ResetTracking();
+
+        /// <summary>
+        /// Extension point for GameObject registration.
+        /// Called when a GameObject is selected or has a component added.
+        /// </summary>
+        static partial void RegisterGameObjectForTracking(GameObject gameObject);
+
+        /// <summary>
+        /// Extension point for script compilation tracking.
+        /// Override in Advanced partial class to detect compilation state changes.
+        /// </summary>
+        static partial void TrackScriptCompilation();
+
+        /// <summary>
+        /// Extension point for GameObject change tracking.
+        /// Override in Advanced partial class to detect created/destroyed GameObjects.
+        /// </summary>
+        static partial void TrackGameObjectChanges();
+
+        /// <summary>
+        /// Extension point for component removal tracking.
+        /// Override in Advanced partial class to detect removed components.
+        /// </summary>
+        static partial void TrackComponentRemoval();
+
+        /// <summary>
+        /// Extension point for build player handling.
+        /// Override in Advanced partial class to handle build completion.
+        /// </summary>
+        static partial void BuildPlayerHandler(BuildPlayerOptions options);
 
         #endregion
     }

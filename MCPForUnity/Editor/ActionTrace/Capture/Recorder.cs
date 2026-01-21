@@ -4,7 +4,8 @@ using MCPForUnity.Editor.ActionTrace.Core;
 using MCPForUnity.Editor.ActionTrace.Core.Models;
 using MCPForUnity.Editor.ActionTrace.Core.Store;
 using MCPForUnity.Editor.ActionTrace.Integration.VCS;
-using MCPForUnity.Editor.ActionTrace.Sources.EventArgs;
+using MCPForUnity.Editor.ActionTrace.Sources.Helpers;
+using MCPForUnity.Editor.Hooks.EventArgs;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Hooks;
 using UnityEditor;
@@ -21,12 +22,22 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
     /// Unity Events → UnityEventHooks (detection) → HookRegistry → ActionTraceRecorder (recording)
     ///
     /// This allows UnityEventHooks to remain a pure detector without ActionTrace dependencies.
+    /// The GameObject tracking capability is injected via IGameObjectCacheProvider interface.
     /// </summary>
     [InitializeOnLoad]
     internal static class ActionTraceRecorder
     {
+        private static GameObjectTrackingHelper _trackingHelper;
+
         static ActionTraceRecorder()
         {
+            // Initialize GameObject tracking helper
+            _trackingHelper = new GameObjectTrackingHelper();
+
+            // Inject cache provider into UnityEventHooks
+            var cacheProvider = new GameObjectTrackingCacheProvider(_trackingHelper);
+            Hooks.UnityEventHooks.SetGameObjectCacheProvider(cacheProvider);
+
             // Subscribe to cleanup events
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
 

@@ -57,7 +57,6 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private static int mainThreadId;
         private static int currentUnityPort = 6400;
         private static bool isAutoConnectMode = false;
-        private static volatile bool _isReloading = false;  // Explicit flag for domain reload state
         private const ulong MaxFrameBytes = 64UL * 1024 * 1024;
         private const int FrameIOTimeoutMs = 30000;
 
@@ -169,48 +168,6 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     ScheduleInitRetry();
                 }
             };
-
-            // CRITICAL FIX: Stop listener BEFORE domain reload to prevent zombie listeners
-            // Domain reload does NOT trigger EditorApplication.quitting, so we must
-            // explicitly stop here. This prevents the old domain's listener from
-            // remaining bound to the port after the new domain loads.
-            try
-            {
-                var assemblyReloadEventsType = Type.GetType("UnityEditor.AssemblyReloadEvents, UnityEditor");
-                if (assemblyReloadEventsType != null)
-                {
-                    var beforeAssemblyReloadEvent = assemblyReloadEventsType.GetEvent("beforeAssemblyReload");
-                    if (beforeAssemblyReloadEvent != null)
-                    {
-                        beforeAssemblyReloadEvent.AddEventHandler(null, new System.Action(OnBeforeAssemblyReload));
-                        if (IsDebugEnabled())
-                            McpLog.Info("[StdioBridgeHost] Registered beforeAssemblyReload handler");
-                    }
-                }
-            }
-            catch { }
-        }
-
-        /// <summary>
-        /// Called immediately before Unity performs a domain reload (script compilation).
-        /// This is CRITICAL for preventing zombie listeners because EditorApplication.quitting
-        /// is NOT triggered during domain reload.
-        /// </summary>
-        private static void OnBeforeAssemblyReload()
-        {
-            if (IsDebugEnabled())
-                McpLog.Info("[StdioBridgeHost] beforeAssemblyReload: stopping listener to prevent zombie");
-
-            // Set explicit reload flag BEFORE calling Stop()
-            // This ensures Stop() knows we're in a domain reload, even if
-            // EditorApplication.isCompiling isn't true yet (timing issue)
-            _isReloading = true;
-
-            // Stop the listener BEFORE domain reload
-            Stop();
-
-            // Write heartbeat status AFTER Stop() so it won't be immediately deleted
-            WriteHeartbeat(true, "domain_reload");
         }
 
         private static void InitializeAfterCompilation()
@@ -336,11 +293,9 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
                 Stop();
 
-                // Get the port before starting
-                currentUnityPort = PortManager.GetPortWithFallback();
-
                 try
                 {
+                    currentUnityPort = PortManager.GetPortWithFallback();
 
                     LogBreadcrumb("Start");
 
@@ -434,17 +389,16 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         {
             var newListener = new TcpListener(IPAddress.Loopback, port);
 #if !UNITY_EDITOR_OSX
-            // NOTE: We do NOT set ReuseAddress=true to prevent zombie listeners from domain reload.
-            // Without SO_REUSEADDRESS, if an old listener is still bound, the new bind will fail
-            // with AddressAlreadyInUse, and the retry logic will wait for the OS to clean up the old socket.
-            // This is safer than allowing multiple listeners on the same port (zombie problem).
-            // macOS still needs ReuseAddress for proper domain reload behavior.
+            newListener.Server.SetSocketOption(
+                SocketOptionLevel.Socket,
+                SocketOptionName.ReuseAddress,
+                true
+            );
 #endif
 #if UNITY_EDITOR_WIN
             try
             {
-                // Explicitly enable exclusive address use to prevent multiple bindings
-                newListener.ExclusiveAddressUse = true;
+                newListener.ExclusiveAddressUse = false;
             }
             catch { }
 #endif
@@ -488,17 +442,6 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 }
             }
 
-            // Clear the resume flag when stopping for reasons other than domain reload.
-            // This prevents the UI from getting stuck showing "Resuming..." when a client disconnects.
-            // We skip clearing during assembly reloads since OnBeforeAssemblyReload sets the flag
-            // and expects it to still be set after the domain reload.
-            // Check BOTH the explicit reload flag and isCompiling to handle timing edge cases.
-            bool isReloading = _isReloading || EditorApplication.isCompiling;
-            if (!isReloading)
-            {
-                try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeStdioAfterReload); } catch { }
-            }
-
             TcpClient[] toClose;
             lock (clientsLock)
             {
@@ -518,29 +461,23 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             try { EditorApplication.update -= ProcessCommands; } catch { }
             try { EditorApplication.quitting -= Stop; } catch { }
 
-            // Delete status file only if NOT reloading
-            // During domain reload, the status file must remain so Python server can detect
-            // the reloading state and return "retry" hint to clients
-            if (!isReloading)
+            try
             {
-                try
+                string dir = Environment.GetEnvironmentVariable("UNITY_MCP_STATUS_DIR");
+                if (string.IsNullOrWhiteSpace(dir))
                 {
-                    string dir = Environment.GetEnvironmentVariable("UNITY_MCP_STATUS_DIR");
-                    if (string.IsNullOrWhiteSpace(dir))
-                    {
-                        dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".unity-mcp");
-                    }
-                    string statusFile = Path.Combine(dir, $"unity-mcp-status-{ComputeProjectHash(Application.dataPath)}.json");
-                    if (File.Exists(statusFile))
-                    {
-                        File.Delete(statusFile);
-                        if (IsDebugEnabled()) McpLog.Info($"Deleted status file: {statusFile}");
-                    }
+                    dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".unity-mcp");
                 }
-                catch (Exception ex)
+                string statusFile = Path.Combine(dir, $"unity-mcp-status-{ComputeProjectHash(Application.dataPath)}.json");
+                if (File.Exists(statusFile))
                 {
-                    if (IsDebugEnabled()) McpLog.Warn($"Failed to delete status file: {ex.Message}");
+                    File.Delete(statusFile);
+                    if (IsDebugEnabled()) McpLog.Info($"Deleted status file: {statusFile}");
                 }
+            }
+            catch (Exception ex)
+            {
+                if (IsDebugEnabled()) McpLog.Warn($"Failed to delete status file: {ex.Message}");
             }
 
             if (IsDebugEnabled()) McpLog.Info("StdioBridgeHost stopped.");

@@ -128,7 +128,8 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
         private bool? _previousBypassImportanceFilter;
 
         private string _searchText = string.Empty;
-        private float _minImportance;
+        private float _uiMinImportance = -1f;  // -1 means use Settings value, >=0 means UI override
+        private float _effectiveMinImportance => _uiMinImportance >= 0 ? _uiMinImportance : (ActionTraceSettings.Instance?.Filtering.MinImportanceForRecording ?? 0.4f);
         private bool _showSemantics;
         private bool _showContext;
         private SortMode _sortMode = SortMode.ByTimeDesc;
@@ -141,6 +142,8 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
         private readonly Dictionary<string, string> _iconCache = new();
         private readonly StringBuilder _stringBuilder = new();
         private bool _isScheduledRefreshActive;
+        private float _lastKnownSettingsImportance;
+        private float _lastRefreshedImportance = float.NaN;  // Track last used filter value for change detection
 
         #region Window Management
 
@@ -173,7 +176,8 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
             SetupDetailActions();
 
             _actionTraceQuery = new ActionTraceQuery();
-            _minImportance = ActionTraceSettings.Instance?.Filtering.MinImportanceForRecording ?? 0.4f;
+            _uiMinImportance = -1f;  // Start with "use Settings value" mode
+            _lastKnownSettingsImportance = ActionTraceSettings.Instance?.Filtering.MinImportanceForRecording ?? 0.4f;
 
             if (ActionTraceSettings.Instance != null)
             {
@@ -181,6 +185,8 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
                 ActionTraceSettings.Instance.Filtering.BypassImportanceFilter = true;
             }
 
+            UpdateFilterMenuText();
+            UpdateSortButtonText();
             RefreshEvents();
             UpdateStatus();
         }
@@ -422,15 +428,17 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
                 RefreshEvents();
             });
 
-            _filterMenu?.menu.AppendAction("All", a => SetImportance(0f));
-            _filterMenu?.menu.AppendAction("/", a => { });
-            _filterMenu?.menu.AppendAction("AI Can See", a => SetImportanceFromSettings());
-            _filterMenu?.menu.AppendAction("Low+", a => SetImportance(0f));
-            _filterMenu?.menu.AppendAction("Medium+", a => SetImportance(0.4f));
-            _filterMenu?.menu.AppendAction("High+", a => SetImportance(0.7f));
+            // Filter Menu - controls which events are shown
+            _filterMenu?.menu.AppendAction("All Events", a => SetImportance(0f));
+            _filterMenu?.menu.AppendAction("", a => { });  // Separator
+            _filterMenu?.menu.AppendAction("AI Can See (Settings)", a => SetImportanceFromSettings());
+            _filterMenu?.menu.AppendAction("", a => { });  // Separator
+            _filterMenu?.menu.AppendAction("Medium+ Only", a => SetImportance(0.4f));
+            _filterMenu?.menu.AppendAction("High+ Only", a => SetImportance(0.7f));
 
-            _sortMenu?.menu.AppendAction("By Time (Newest)", a => SetSortMode(SortMode.ByTimeDesc));
-            _sortMenu?.menu.AppendAction("AI Filtered", a => SetSortMode(SortMode.AIFiltered));
+            // Sort Menu - controls display order
+            _sortMenu?.menu.AppendAction("By Time (Newest First)", a => SetSortMode(SortMode.ByTimeDesc));
+            _sortMenu?.menu.AppendAction("By Importance (AI First)", a => SetSortMode(SortMode.AIFiltered));
 
             _exportButton?.RegisterCallback<ClickEvent>(_ => OnExportClicked());
             _settingsButton?.RegisterCallback<ClickEvent>(_ => OnSettingsClicked());
@@ -802,8 +810,17 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
         private void OnClearFiltersClicked()
         {
-            // Close the filter summary bar directly
+            // Clear actual filter state
+            _searchText = string.Empty;
+            _uiMinImportance = -1f;  // Reset to "AI Can See" mode
+
+            // Update UI
+            _searchField?.SetValueWithoutNotify(string.Empty);
             _filterSummaryBar.style.display = DisplayStyle.None;
+            UpdateFilterMenuText();
+
+            // Refresh with cleared filters
+            RefreshEvents();
         }
 
         private void AnimateRefreshIndicator()
@@ -829,16 +846,42 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
         private void RefreshEvents()
         {
+            // Check if Settings value changed (for "AI Can See" mode)
+            float currentSettingsImportance = ActionTraceSettings.Instance?.Filtering.MinImportanceForRecording ?? 0.4f;
+            bool settingsChanged = currentSettingsImportance != _lastKnownSettingsImportance;
+
+            if (settingsChanged)
+            {
+                _lastKnownSettingsImportance = currentSettingsImportance;
+                // Settings changed, need to re-filter (don't skip refresh below)
+            }
+
+            // Check if effective filter value changed (user changed filter menu selection)
+            float effectiveImportance = _effectiveMinImportance;
+            bool effectiveImportanceChanged = !float.IsNaN(_lastRefreshedImportance) &&
+                                             !Mathf.Approximately(effectiveImportance, _lastRefreshedImportance);
+
+            if (effectiveImportanceChanged)
+            {
+                _lastRefreshedImportance = effectiveImportance;
+                // Filter value changed, need to re-filter (don't skip refresh below)
+            }
+
             // Performance optimization: check if there are new events
             int currentStoreCount = EventStore.Count;
-            if (currentStoreCount == _lastEventStoreCount && 
-                _currentEvents.Count > 0 && 
-                string.IsNullOrEmpty(_searchText))
+            bool noNewEvents = currentStoreCount == _lastEventStoreCount;
+            bool noSearchText = string.IsNullOrEmpty(_searchText);
+            bool inStaticMode = _uiMinImportance >= 0;  // Using fixed value, not Settings
+
+            // Skip refresh if: no new events AND no search text AND filter didn't change AND (static mode OR settings didn't change)
+            if (noNewEvents && noSearchText && !effectiveImportanceChanged &&
+                (inStaticMode || !settingsChanged) && _currentEvents.Count > 0)
             {
-                // No new events and no search criteria, skip refresh
-                return;
+                return;  // Skip refresh, nothing changed
             }
+
             _lastEventStoreCount = currentStoreCount;
+            _lastRefreshedImportance = effectiveImportance;  // Update after actual refresh
 
             IEnumerable<ActionTraceViewItem> source = _showContext
                 ? _actionTraceQuery.ProjectWithContext(EventStore.QueryWithContext(DefaultQueryLimit))
@@ -869,7 +912,7 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
             _eventListView.style.display = hasEvents ? DisplayStyle.Flex : DisplayStyle.None;
 
-            bool hasFilters = !string.IsNullOrEmpty(_searchText) || _minImportance > 0;
+            bool hasFilters = !string.IsNullOrEmpty(_searchText) || _effectiveMinImportance > 0;
 
             if (!hasEvents)
             {
@@ -901,12 +944,12 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
                 _stringBuilder.Append(_searchText);
                 _stringBuilder.Append("\"");
             }
-            if (_minImportance > 0)
+            if (_effectiveMinImportance > 0)
             {
                 if (_stringBuilder.Length > 0)
                     _stringBuilder.Append("\n");
                 _stringBuilder.Append("Importance: ≥");
-                _stringBuilder.Append(_minImportance.ToString("F2"));
+                _stringBuilder.Append(_effectiveMinImportance.ToString("F2"));
             }
 
             _noResultsFiltersLabel.text = _stringBuilder.ToString();
@@ -916,7 +959,7 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
         {
             if (_filterSummaryBar == null) return;
 
-            bool hasActiveFilters = !string.IsNullOrEmpty(_searchText) || _minImportance > 0;
+            bool hasActiveFilters = !string.IsNullOrEmpty(_searchText) || _effectiveMinImportance > 0;
 
             if (hasActiveFilters)
             {
@@ -933,12 +976,12 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
                     _stringBuilder.Append("\"");
                     first = false;
                 }
-                if (_minImportance > 0)
+                if (_effectiveMinImportance > 0)
                 {
                     if (!first)
                         _stringBuilder.Append(", ");
                     _stringBuilder.Append("importance: ");
-                    _stringBuilder.Append(_minImportance.ToString("F2"));
+                    _stringBuilder.Append(_effectiveMinImportance.ToString("F2"));
                     _stringBuilder.Append("+");
                 }
 
@@ -968,7 +1011,9 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
         private bool FilterEvent(ActionTraceQuery.ActionTraceViewItem e)
         {
-            if (_sortMode == SortMode.AIFiltered && e.ImportanceScore < _minImportance)
+            // Apply importance filter regardless of sort mode
+            // This allows "AI Can See" filter to work in all sort modes
+            if (_effectiveMinImportance > 0 && e.ImportanceScore < _effectiveMinImportance)
                 return false;
 
             if (!string.IsNullOrEmpty(_searchText))
@@ -983,15 +1028,33 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
         private void SetImportance(float value)
         {
-            _minImportance = value;
+            _uiMinImportance = value;  // Explicit UI override
+            UpdateFilterMenuText();
             RefreshEvents();
         }
 
         private void SetImportanceFromSettings()
         {
-            var settings = ActionTraceSettings.Instance;
-            _minImportance = settings != null ? settings.Filtering.MinImportanceForRecording : 0.4f;
+            _uiMinImportance = -1f;  // Use Settings value (dynamic)
+            UpdateFilterMenuText();
             RefreshEvents();
+        }
+
+        private void UpdateFilterMenuText()
+        {
+            if (_filterMenu == null) return;
+
+            const float tolerance = 0.001f;  // Tolerance for float comparison
+
+            string text = _uiMinImportance switch
+            {
+                < 0 => "Filter: AI Can See",
+                var v when Mathf.Abs(v - 0) < tolerance => "Filter: All",
+                var v when Mathf.Abs(v - 0.4f) < tolerance => "Filter: Medium+",
+                var v when Mathf.Abs(v - 0.7f) < tolerance => "Filter: High+",
+                _ => $"Filter: ≥{_uiMinImportance:F2}"
+            };
+            _filterMenu.text = text;
         }
 
         private void SetSortMode(SortMode mode)
@@ -1012,7 +1075,7 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
             string text = _sortMode switch
             {
                 SortMode.ByTimeDesc => "Sort: Time",
-                SortMode.AIFiltered => "Sort: AI",
+                SortMode.AIFiltered => "Sort: Importance",
                 _ => "Sort: ?"
             };
             _sortMenu.text = text;

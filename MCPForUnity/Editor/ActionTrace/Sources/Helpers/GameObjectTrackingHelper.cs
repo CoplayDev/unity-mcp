@@ -95,6 +95,24 @@ namespace MCPForUnity.Editor.ActionTrace.Sources.Helpers
             _hasInitialized = false;
         }
 
+        /// <summary>
+        /// Get cached name for a GameObject by InstanceID.
+        /// Used by IGameObjectCacheProvider implementation.
+        /// </summary>
+        public string GetCachedName(int instanceId)
+        {
+            return _nameCache.TryGetValue(instanceId, out string name) ? name : null;
+        }
+
+        /// <summary>
+        /// Get cached GlobalID for a GameObject by InstanceID.
+        /// Used by IGameObjectCacheProvider implementation.
+        /// </summary>
+        public string GetCachedGlobalId(int instanceId)
+        {
+            return _globalIdCache.TryGetValue(instanceId, out string globalId) ? globalId : null;
+        }
+
         public GameObjectChangeResult DetectChanges()
         {
             if (!_hasInitialized)
