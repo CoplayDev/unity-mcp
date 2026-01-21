@@ -395,7 +395,7 @@ class CustomToolService:
             return dict
         return str
 
-    def _coerce_default(self, value: str | None, param_type: str):
+    def _coerce_default(self, value: str | None, param_type: str | None):
         if value is None:
             return None
         try:
