@@ -6,6 +6,7 @@ This tool provides access to the Unity editor's operation trace, allowing AI age
 - Filter events by importance, task, or conversation
 - Query events since a specific sequence number
 - Include semantic analysis or aggregated transaction summaries
+- Use preset query modes for common scenarios (P0 feature)
 
 Unity implementation: MCPForUnity/Editor/Tools/GetActionTraceTool.cs
 C# resource: MCPForUnity/Editor/Resources/ActionTrace/ActionTraceViewResource.cs
@@ -13,6 +14,7 @@ C# resource: MCPForUnity/Editor/Resources/ActionTrace/ActionTraceViewResource.cs
 Aligned with simplified schema (Basic, WithSemantics, Aggregated).
 Removed unsupported parameters: event_types, include_payload, include_context
 Added summary_only for transaction aggregation mode.
+Added query_mode for P0 Agentic Workflow optimization.
 """
 from typing import Annotated, Any
 
@@ -27,14 +29,15 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 
 
 @mcp_for_unity_tool(
-    description="Retrieve ActionTrace event history from Unity editor. Provides access to recent operations with optional semantic analysis or transaction aggregation. Filter by importance, task ID, or conversation ID.",
+    description="Retrieve ActionTrace event history from Unity editor. Provides access to recent operations with optional semantic analysis or transaction aggregation. Filter by importance, task ID, or conversation ID. Supports query_mode preset for common AI use cases.",
     annotations=ToolAnnotations(
         title="Get Action Trace",
     ),
 )
 async def get_action_trace(
     ctx: Context,
-    limit: Annotated[int | str | None, "Maximum number of events to return (1-1000, default: 50)."] = None,
+    query_mode: Annotated[str | None, "Preset mode: 'recent_errors', 'recent_changes', 'summary', 'verbose'. Reduces parameter construction burden for common scenarios."] = None,
+    limit: Annotated[int | str | None, "Maximum number of events to return (1-1000, default: 50). Note: Overridden by query_mode if specified."] = None,
     since_sequence: Annotated[int | str | None, "Only return events after this sequence number. Use for incremental queries."] = None,
     include_semantics: Annotated[bool | str | None, "Whether to include semantic analysis (importance, category, intent)."] = None,
     min_importance: Annotated[str | None, "Minimum importance level: 'low', 'medium' (default), 'high', 'critical'."] = None,
@@ -48,6 +51,10 @@ async def get_action_trace(
     try:
         # Prepare parameters for Unity
         params_dict: dict[str, Any] = {}
+
+        # P0: Add query_mode first (it will override other parameters on the C# side)
+        if query_mode is not None:
+            params_dict["query_mode"] = str(query_mode)
 
         # Coerce and add optional parameters
         if limit is not None:

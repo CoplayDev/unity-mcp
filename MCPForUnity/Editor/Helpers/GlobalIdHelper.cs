@@ -164,9 +164,34 @@ namespace MCPForUnity.Editor.ActionTrace.Core
         }
 
         /// <summary>
+        /// Extracts the InstanceID from a GlobalId string.
+        /// Returns null if the object no longer exists or the ID is invalid.
+        /// Useful for ActionTrace output to provide runtime object access.
+        /// </summary>
+        public static int? GetInstanceId(string globalIdStr)
+        {
+            if (string.IsNullOrEmpty(globalIdStr))
+                return null;
+
+            var obj = FromGlobalIdString(globalIdStr);
+            if (obj != null)
+                return obj.GetInstanceID();
+
+            // For fallback format "Instance:{instanceId}", extract the ID directly
+            if (globalIdStr.StartsWith(InstancePrefix))
+            {
+                string instanceStr = globalIdStr.Substring(InstancePrefix.Length);
+                if (int.TryParse(instanceStr, out int instanceId))
+                    return instanceId;
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// Extracts a human-readable display name from a GlobalId string.
         /// Useful for ActionTrace Viewer UI display.
-        /// Returns the object name if resolvable, otherwise a formatted ID string.
+        /// Returns the object name if resolvable, otherwise "<unknown>".
         /// </summary>
         public static string GetDisplayName(string globalIdStr)
         {
@@ -178,7 +203,7 @@ namespace MCPForUnity.Editor.ActionTrace.Core
             if (obj != null)
                 return obj.name;
 
-            // Object not found, extract readable parts from ID
+            // Object not found - extract readable parts from ID or return "<unknown>"
 #if UNITY_2020_3_OR_NEWER
             if (GlobalObjectId.TryParse(globalIdStr, out var globalId))
             {
@@ -189,7 +214,7 @@ namespace MCPForUnity.Editor.ActionTrace.Core
             }
 #endif
 
-            // Fallback format
+            // Fallback format: Scene path - extract object name
             if (globalIdStr.StartsWith(ScenePrefix))
             {
                 int separatorIndex = globalIdStr.IndexOf(PathSeparator);
@@ -204,6 +229,7 @@ namespace MCPForUnity.Editor.ActionTrace.Core
                 }
             }
 
+            // Fallback format: Asset path - extract filename
             if (globalIdStr.StartsWith(AssetPrefix))
             {
                 string assetPath = globalIdStr.Substring(AssetPrefix.Length);
@@ -214,11 +240,88 @@ namespace MCPForUnity.Editor.ActionTrace.Core
                     : assetPath;
             }
 
+            // Fallback format: Instance prefix - extract ID
+            if (globalIdStr.StartsWith(InstancePrefix))
+            {
+                string instanceStr = globalIdStr.Substring(InstancePrefix.Length);
+                if (int.TryParse(instanceStr, out int instanceId))
+                    return $"Instance:{instanceId}";
+            }
+
             // Truncate long IDs for display
             if (globalIdStr.Length > 50)
                 return globalIdStr.Substring(0, 47) + "...";
 
             return globalIdStr;
+        }
+
+        /// <summary>
+        /// Gets both InstanceID and display name in a single call for efficiency.
+        /// Useful when both values are needed (e.g., ActionTrace output).
+        /// </summary>
+        public static (int? instanceId, string displayName) GetInstanceInfo(string globalIdStr)
+        {
+            if (string.IsNullOrEmpty(globalIdStr))
+                return (null, "<null>");
+
+            var obj = FromGlobalIdString(globalIdStr);
+            if (obj != null)
+                return (obj.GetInstanceID(), obj.name);
+
+            // Object not found - extract what we can
+            int? instanceId = null;
+            string displayName = "<unknown>";
+
+#if UNITY_2020_3_OR_NEWER
+            if (GlobalObjectId.TryParse(globalIdStr, out var globalId))
+            {
+                var guidStr = globalId.assetGUID.ToString();
+                displayName = guidStr.Length >= 8
+                    ? $"[{globalId.identifierType} {guidStr.Substring(0, 8)}...]"
+                    : $"[{globalId.identifierType} {guidStr}]";
+                return (null, displayName);
+            }
+#endif
+
+            if (globalIdStr.StartsWith(ScenePrefix))
+            {
+                int separatorIndex = globalIdStr.IndexOf(PathSeparator);
+                if (separatorIndex > 0)
+                {
+                    string hierarchyPath = globalIdStr.Substring(separatorIndex + 1);
+                    int lastSlash = hierarchyPath.LastIndexOf('/');
+                    displayName = lastSlash >= 0
+                        ? hierarchyPath.Substring(lastSlash + 1)
+                        : hierarchyPath;
+                }
+            }
+            else if (globalIdStr.StartsWith(AssetPrefix))
+            {
+                string assetPath = globalIdStr.Substring(AssetPrefix.Length);
+                int lastSlash = assetPath.LastIndexOf('/');
+                displayName = lastSlash >= 0
+                    ? assetPath.Substring(lastSlash + 1)
+                    : assetPath;
+            }
+            else if (globalIdStr.StartsWith(InstancePrefix))
+            {
+                string instanceStr = globalIdStr.Substring(InstancePrefix.Length);
+                if (int.TryParse(instanceStr, out int parsedId))
+                {
+                    instanceId = parsedId;
+                    displayName = $"Instance:{parsedId}";
+                }
+            }
+            else if (globalIdStr.Length > 50)
+            {
+                displayName = globalIdStr.Substring(0, 47) + "...";
+            }
+            else
+            {
+                displayName = globalIdStr;
+            }
+
+            return (instanceId, displayName);
         }
 
         /// <summary>

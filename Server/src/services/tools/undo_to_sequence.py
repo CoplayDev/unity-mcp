@@ -57,8 +57,8 @@ async def undo_to_sequence(
 
     Example:
         # First, check current sequence
-        result = await get_actionTrace(ctx, limit=1)
-        current_seq = result["items"][0]["sequence"]
+        result = await get_action_trace(ctx, limit=1)
+        current_seq = result["data"]["items"][0]["sequence"]
 
         # Preview undo to 100 steps ago
         await undo_to_sequence(ctx, sequence_id=current_seq - 100, dry_run=True)

@@ -50,9 +50,6 @@ namespace MCPForUnity.Editor.ActionTrace.Core.Store
         private static readonly List<EditorEvent> _pendingNotifications = new();
         private static bool _notifyScheduled;
 
-        // Main thread detection: Kept for legacy/debugging purposes only
-        private static readonly int MainThreadId = Thread.CurrentThread.ManagedThreadId;
-
         // Fields shared with other partial class files
         private static EditorEvent _lastRecordedEvent;
         private static long _lastRecordedTime;

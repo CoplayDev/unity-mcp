@@ -99,355 +99,169 @@ namespace MCPForUnity.Editor.Hooks
 
         #region Internal Notification API
 
+        /// <summary>
+        /// Generic helper to safely invoke event handlers with exception handling.
+        /// Prevents subscriber errors from breaking the invocation chain.
+        /// Uses dynamic dispatch to handle different delegate signatures.
+        /// </summary>
+        private static void InvokeSafely<TDelegate>(TDelegate handler, string eventName, Action<dynamic> invoke)
+            where TDelegate : class
+        {
+            if (handler == null) return;
+
+            // Cast to Delegate base type to access GetInvocationList()
+            var multicastDelegate = handler as Delegate;
+            if (multicastDelegate == null) return;
+
+            foreach (Delegate subscriber in multicastDelegate.GetInvocationList())
+            {
+                try
+                {
+                    invoke(subscriber);
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Warn($"[HookRegistry] {eventName} subscriber threw exception: {ex.Message}");
+                }
+            }
+        }
+
         // P1 Fix: Exception handling - prevent subscriber errors from breaking the invocation chain
         // This ensures that a misbehaving subscriber doesn't prevent other subscribers from receiving notifications
         internal static void NotifyScriptCompiled()
         {
-            var handler = OnScriptCompiled;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try
-                {
-                    ((Action)subscriber)();
-                }
-                catch (Exception ex)
-                {
-                    McpLog.Warn($"[HookRegistry] OnScriptCompiled subscriber threw exception: {ex.Message}");
-                }
-            }
+            InvokeSafely(OnScriptCompiled, "OnScriptCompiled", h => h());
         }
 
         internal static void NotifyScriptCompiledDetailed(ScriptCompilationArgs args)
         {
-            var handler = OnScriptCompiledDetailed;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try
-                {
-                    ((Action<ScriptCompilationArgs>)subscriber)(args);
-                }
-                catch (Exception ex)
-                {
-                    McpLog.Warn($"[HookRegistry] OnScriptCompiledDetailed subscriber threw exception: {ex.Message}");
-                }
-            }
+            InvokeSafely(OnScriptCompiledDetailed, "OnScriptCompiledDetailed", h => h(args));
         }
 
         internal static void NotifyScriptCompilationFailed(int errorCount)
         {
-            var handler = OnScriptCompilationFailed;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try
-                {
-                    ((Action<int>)subscriber)(errorCount);
-                }
-                catch (Exception ex)
-                {
-                    McpLog.Warn($"[HookRegistry] OnScriptCompilationFailed subscriber threw exception: {ex.Message}");
-                }
-            }
+            InvokeSafely(OnScriptCompilationFailed, "OnScriptCompilationFailed", h => h(errorCount));
         }
 
         internal static void NotifyScriptCompilationFailedDetailed(ScriptCompilationFailedArgs args)
         {
-            var handler = OnScriptCompilationFailedDetailed;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try
-                {
-                    ((Action<ScriptCompilationFailedArgs>)subscriber)(args);
-                }
-                catch (Exception ex)
-                {
-                    McpLog.Warn($"[HookRegistry] OnScriptCompilationFailedDetailed subscriber threw exception: {ex.Message}");
-                }
-            }
+            InvokeSafely(OnScriptCompilationFailedDetailed, "OnScriptCompilationFailedDetailed", h => h(args));
         }
 
         // Apply same exception handling pattern to other notification methods
         internal static void NotifySceneSaved(Scene scene)
         {
-            var handler = OnSceneSaved;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action<Scene>)subscriber)(scene); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnSceneSaved subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnSceneSaved, "OnSceneSaved", h => h(scene));
         }
 
         internal static void NotifySceneOpened(Scene scene)
         {
-            var handler = OnSceneOpened;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action<Scene>)subscriber)(scene); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnSceneOpened subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnSceneOpened, "OnSceneOpened", h => h(scene));
         }
 
         internal static void NotifySceneOpenedDetailed(Scene scene, SceneOpenArgs args)
         {
-            var handler = OnSceneOpenedDetailed;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action<Scene, SceneOpenArgs>)subscriber)(scene, args); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnSceneOpenedDetailed subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnSceneOpenedDetailed, "OnSceneOpenedDetailed", h => h(scene, args));
         }
 
         internal static void NotifyNewSceneCreated(Scene scene)
         {
-            var handler = OnNewSceneCreated;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action<Scene>)subscriber)(scene); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnNewSceneCreated subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnNewSceneCreated, "OnNewSceneCreated", h => h(scene));
         }
 
         internal static void NotifyNewSceneCreatedDetailed(Scene scene, NewSceneArgs args)
         {
-            var handler = OnNewSceneCreatedDetailed;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action<Scene, NewSceneArgs>)subscriber)(scene, args); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnNewSceneCreatedDetailed subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnNewSceneCreatedDetailed, "OnNewSceneCreatedDetailed", h => h(scene, args));
         }
 
         internal static void NotifySceneLoaded(Scene scene)
         {
-            var handler = OnSceneLoaded;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action<Scene>)subscriber)(scene); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnSceneLoaded subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnSceneLoaded, "OnSceneLoaded", h => h(scene));
         }
 
         internal static void NotifySceneUnloaded(Scene scene)
         {
-            var handler = OnSceneUnloaded;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action<Scene>)subscriber)(scene); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnSceneUnloaded subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnSceneUnloaded, "OnSceneUnloaded", h => h(scene));
         }
 
         internal static void NotifyPlayModeChanged(bool isPlaying)
         {
-            var handler = OnPlayModeChanged;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action<bool>)subscriber)(isPlaying); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnPlayModeChanged subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnPlayModeChanged, "OnPlayModeChanged", h => h(isPlaying));
         }
 
         internal static void NotifyHierarchyChanged()
         {
-            var handler = OnHierarchyChanged;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action)subscriber)(); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnHierarchyChanged subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnHierarchyChanged, "OnHierarchyChanged", h => h());
         }
 
         internal static void NotifyGameObjectCreated(GameObject gameObject)
         {
-            var handler = OnGameObjectCreated;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action<GameObject>)subscriber)(gameObject); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnGameObjectCreated subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnGameObjectCreated, "OnGameObjectCreated", h => h(gameObject));
         }
 
         internal static void NotifyGameObjectDestroyed(GameObject gameObject)
         {
-            var handler = OnGameObjectDestroyed;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action<GameObject>)subscriber)(gameObject); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnGameObjectDestroyed subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnGameObjectDestroyed, "OnGameObjectDestroyed", h => h(gameObject));
         }
 
         internal static void NotifyGameObjectDestroyedDetailed(GameObjectDestroyedArgs args)
         {
-            var handler = OnGameObjectDestroyedDetailed;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action<GameObjectDestroyedArgs>)subscriber)(args); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnGameObjectDestroyedDetailed subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnGameObjectDestroyedDetailed, "OnGameObjectDestroyedDetailed", h => h(args));
         }
 
         internal static void NotifySelectionChanged(GameObject gameObject)
         {
-            var handler = OnSelectionChanged;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action<GameObject>)subscriber)(gameObject); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnSelectionChanged subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnSelectionChanged, "OnSelectionChanged", h => h(gameObject));
         }
 
         internal static void NotifyProjectChanged()
         {
-            var handler = OnProjectChanged;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action)subscriber)(); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnProjectChanged subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnProjectChanged, "OnProjectChanged", h => h());
         }
 
         internal static void NotifyAssetImported()
         {
-            var handler = OnAssetImported;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action)subscriber)(); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnAssetImported subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnAssetImported, "OnAssetImported", h => h());
         }
 
         internal static void NotifyAssetDeleted()
         {
-            var handler = OnAssetDeleted;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action)subscriber)(); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnAssetDeleted subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnAssetDeleted, "OnAssetDeleted", h => h());
         }
 
         internal static void NotifyBuildCompleted(bool success)
         {
-            var handler = OnBuildCompleted;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action<bool>)subscriber)(success); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnBuildCompleted subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnBuildCompleted, "OnBuildCompleted", h => h(success));
         }
 
         internal static void NotifyBuildCompletedDetailed(BuildArgs args)
         {
-            var handler = OnBuildCompletedDetailed;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action<BuildArgs>)subscriber)(args); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnBuildCompletedDetailed subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnBuildCompletedDetailed, "OnBuildCompletedDetailed", h => h(args));
         }
 
         internal static void NotifyEditorUpdate()
         {
-            var handler = OnEditorUpdate;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action)subscriber)(); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnEditorUpdate subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnEditorUpdate, "OnEditorUpdate", h => h());
         }
 
         internal static void NotifyEditorIdle()
         {
-            var handler = OnEditorIdle;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action)subscriber)(); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnEditorIdle subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnEditorIdle, "OnEditorIdle", h => h());
         }
 
         internal static void NotifyComponentAdded(Component component)
         {
-            var handler = OnComponentAdded;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action<Component>)subscriber)(component); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnComponentAdded subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnComponentAdded, "OnComponentAdded", h => h(component));
         }
 
         internal static void NotifyComponentRemoved(Component component)
         {
-            var handler = OnComponentRemoved;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action<Component>)subscriber)(component); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnComponentRemoved subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnComponentRemoved, "OnComponentRemoved", h => h(component));
         }
 
         internal static void NotifyComponentRemovedDetailed(ComponentRemovedArgs args)
         {
-            var handler = OnComponentRemovedDetailed;
-            if (handler == null) return;
-
-            foreach (var subscriber in handler.GetInvocationList())
-            {
-                try { ((Action<ComponentRemovedArgs>)subscriber)(args); }
-                catch (Exception ex) { McpLog.Warn($"[HookRegistry] OnComponentRemovedDetailed subscriber threw exception: {ex.Message}"); }
-            }
+            InvokeSafely(OnComponentRemovedDetailed, "OnComponentRemovedDetailed", h => h(args));
         }
 
         #endregion

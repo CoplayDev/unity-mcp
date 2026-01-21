@@ -5,6 +5,7 @@ using MCPForUnity.Editor.ActionTrace.Context;
 using MCPForUnity.Editor.ActionTrace.Core;
 using MCPForUnity.Editor.ActionTrace.Core.Models;
 using MCPForUnity.Editor.ActionTrace.Semantics;
+using MCPForUnity.Editor.Helpers;
 using UnityEngine;
 
 namespace MCPForUnity.Editor.ActionTrace.Analysis.Query
@@ -65,6 +66,7 @@ namespace MCPForUnity.Editor.ActionTrace.Analysis.Query
         /// Project events with computed semantic information.
         /// Returns ActionTraceViewItem objects containing the original event plus
         /// dynamically calculated importance, category, and intent.
+        /// Also converts GlobalID to InstanceID and Name for unified display.
         /// </summary>
         public IReadOnlyList<ActionTraceViewItem> Project(IReadOnlyList<EditorEvent> events)
         {
@@ -72,6 +74,9 @@ namespace MCPForUnity.Editor.ActionTrace.Analysis.Query
                 return Array.Empty<ActionTraceViewItem>();
 
             var result = new ActionTraceViewItem[events.Count];
+
+            // Build instance info cache for performance (many events may reference the same object)
+            var instanceInfoCache = new Dictionary<string, (int? instanceId, string displayName)>();
 
             for (int i = 0; i < events.Count; i++)
             {
@@ -134,6 +139,17 @@ namespace MCPForUnity.Editor.ActionTrace.Analysis.Query
                 var importanceColor = GetImportanceColor(category);
                 var importanceBadgeColor = GetImportanceBadgeColor(category);
 
+                // Convert GlobalID to InstanceID and Name (with caching)
+                (int? instanceId, string displayName) targetInfo = (null, null);
+                if (!string.IsNullOrEmpty(evt.TargetId))
+                {
+                    if (!instanceInfoCache.TryGetValue(evt.TargetId, out targetInfo))
+                    {
+                        targetInfo = GlobalIdHelper.GetInstanceInfo(evt.TargetId);
+                        instanceInfoCache[evt.TargetId] = targetInfo;
+                    }
+                }
+
                 result[i] = new ActionTraceViewItem
                 {
                     Event = evt,
@@ -148,7 +164,10 @@ namespace MCPForUnity.Editor.ActionTrace.Analysis.Query
                     DisplaySequence = displaySequence,
                     TypeColor = typeColor,
                     ImportanceColor = importanceColor,
-                    ImportanceBadgeColor = importanceBadgeColor
+                    ImportanceBadgeColor = importanceBadgeColor,
+                    // Target info (converted from GlobalID)
+                    TargetInstanceId = targetInfo.instanceId,
+                    TargetName = targetInfo.displayName
                 };
             }
 
@@ -158,6 +177,7 @@ namespace MCPForUnity.Editor.ActionTrace.Analysis.Query
         /// <summary>
         /// Project events with context associations.
         /// Overload for QueryWithContext results.
+        /// Also converts GlobalID to InstanceID and Name for unified display.
         /// </summary>
         public IReadOnlyList<ActionTraceViewItem> ProjectWithContext(
             IReadOnlyList<(EditorEvent Event, ContextMapping Context)> eventsWithContext)
@@ -166,6 +186,9 @@ namespace MCPForUnity.Editor.ActionTrace.Analysis.Query
                 return Array.Empty<ActionTraceViewItem>();
 
             var result = new ActionTraceViewItem[eventsWithContext.Count];
+
+            // Build instance info cache for performance (many events may reference the same object)
+            var instanceInfoCache = new Dictionary<string, (int? instanceId, string displayName)>();
 
             for (int i = 0; i < eventsWithContext.Count; i++)
             {
@@ -192,6 +215,17 @@ namespace MCPForUnity.Editor.ActionTrace.Analysis.Query
                 var importanceColor = GetImportanceColor(category);
                 var importanceBadgeColor = GetImportanceBadgeColor(category);
 
+                // Convert GlobalID to InstanceID and Name (with caching)
+                (int? instanceId, string displayName) targetInfo = (null, null);
+                if (!string.IsNullOrEmpty(evt.TargetId))
+                {
+                    if (!instanceInfoCache.TryGetValue(evt.TargetId, out targetInfo))
+                    {
+                        targetInfo = GlobalIdHelper.GetInstanceInfo(evt.TargetId);
+                        instanceInfoCache[evt.TargetId] = targetInfo;
+                    }
+                }
+
                 result[i] = new ActionTraceViewItem
                 {
                     Event = evt,
@@ -207,7 +241,10 @@ namespace MCPForUnity.Editor.ActionTrace.Analysis.Query
                     DisplaySequence = displaySequence,
                     TypeColor = typeColor,
                     ImportanceColor = importanceColor,
-                    ImportanceBadgeColor = importanceBadgeColor
+                    ImportanceBadgeColor = importanceBadgeColor,
+                    // Target info (converted from GlobalID)
+                    TargetInstanceId = targetInfo.instanceId,
+                    TargetName = targetInfo.displayName
                 };
             }
 
@@ -277,6 +314,19 @@ namespace MCPForUnity.Editor.ActionTrace.Analysis.Query
             /// May be null if intent cannot be determined.
             /// </summary>
             public string InferredIntent { get; set; }
+
+            /// <summary>
+            /// Unity InstanceID converted from GlobalID.
+            /// Null if object no longer exists or GlobalID is invalid.
+            /// Used for runtime object access and tool integration.
+            /// </summary>
+            public int? TargetInstanceId { get; set; }
+
+            /// <summary>
+            /// Human-readable target name converted from GlobalID.
+            /// GameObject name if resolvable, or formatted ID/placeholder if not found.
+            /// </summary>
+            public string TargetName { get; set; }
 
             // ========== Display cache (avoid repeated allocations in OnGUI) ==========
 

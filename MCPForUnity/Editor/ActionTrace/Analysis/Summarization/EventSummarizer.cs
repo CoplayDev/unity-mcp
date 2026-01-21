@@ -112,7 +112,11 @@ namespace MCPForUnity.Editor.ActionTrace.Analysis.Summarization
             // Special placeholders
             sb.Replace("{type}", evt.Type ?? "");
             sb.Replace("{target}", GetTargetName(evt) ?? "");
-            sb.Replace("{target_id}", evt.TargetId ?? "");
+            // Use InstanceID instead of GlobalID for {target_id} placeholder
+            var instanceInfo = GlobalIdHelper.GetInstanceInfo(evt.TargetId);
+            sb.Replace("{target_id}", instanceInfo.instanceId.HasValue
+                ? instanceInfo.instanceId.Value.ToString()
+                : (instanceInfo.displayName ?? evt.TargetId ?? ""));
             sb.Replace("{time}", FormatTime(evt.TimestampUnixMs));
             sb.Replace("{property_path_no_m}", StripMPrefix(evt, "property_path"));
             sb.Replace("{start_value_readable}", GetReadableValue(evt, "start_value"));
@@ -310,9 +314,9 @@ namespace MCPForUnity.Editor.ActionTrace.Analysis.Summarization
 
         /// <summary>
         /// Generate a human-readable summary for property modification events.
-        /// Format: "Changed {ComponentType}.{PropertyPath} from {StartValue} to {EndValue} (GameObject:{target_id})"
+        /// Format: "Changed {ComponentType}.{PropertyPath} from {StartValue} to {EndValue} (GameObject:{instance_id})"
         /// Strips "m_" prefix from Unity serialized property names.
-        /// Includes GameObject ID for AI tool invocation.
+        /// Uses InstanceID for tool invocation instead of GlobalID.
         /// </summary>
         private static string SummarizePropertyModified(EditorEvent evt, bool isSelection)
         {
@@ -350,13 +354,19 @@ namespace MCPForUnity.Editor.ActionTrace.Analysis.Summarization
                 return isSelection ? "Property modified (selected)" : "Property modified";
             }
 
-            // Append GameObject ID and (selected) for AI tool invocation
+            // Append GameObject InstanceID (instead of GlobalID) for tool invocation
+            // Get InstanceID from GlobalID - if object not found, show formatted placeholder
+            var instanceInfo = GlobalIdHelper.GetInstanceInfo(evt.TargetId);
+            string instanceDisplay = instanceInfo.instanceId.HasValue
+                ? instanceInfo.instanceId.Value.ToString()
+                : $"[{instanceInfo.displayName}]";
+
             if (string.IsNullOrEmpty(evt.TargetId))
                 return baseSummary + (isSelection ? " (selected)" : "");
 
             return isSelection
-                ? $"{baseSummary} (selected, GameObject:{evt.TargetId})"
-                : $"{baseSummary} (GameObject:{evt.TargetId})";
+                ? $"{baseSummary} (selected, GameObject:{instanceDisplay})"
+                : $"{baseSummary} (GameObject:{instanceDisplay})";
         }
 
         /// <summary>
@@ -449,11 +459,11 @@ namespace MCPForUnity.Editor.ActionTrace.Analysis.Summarization
         /// <summary>
         /// Get a human-readable name for the event target.
         /// Tries payload fields in order: name, game_object, scene_name, component_type, path.
-        /// Falls back to TargetId if none found.
+        /// Falls back to resolving GlobalID to get the object name.
         /// </summary>
         private static string GetTargetName(EditorEvent evt)
         {
-            // Try to get a human-readable name from payload
+            // Try to get a human-readable name from payload first
             if (evt.Payload != null)
             {
                 if (evt.Payload.TryGetValue("name", out var name) && name != null)
@@ -467,8 +477,13 @@ namespace MCPForUnity.Editor.ActionTrace.Analysis.Summarization
                 if (evt.Payload.TryGetValue("path", out var path) && path != null)
                     return path.ToString();
             }
-            // Fall back to target ID
-            return evt.TargetId ?? "";
+
+            // Fall back to resolving GlobalID to get display name
+            // This will return the object name if resolvable, or a formatted ID/placeholder
+            if (!string.IsNullOrEmpty(evt.TargetId))
+                return GlobalIdHelper.GetDisplayName(evt.TargetId);
+
+            return "";
         }
 
         /// <summary>

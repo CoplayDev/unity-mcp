@@ -62,6 +62,12 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
 
         private static void OnBeforeAssemblyReload()
         {
+            // Clear GameObject tracking helper state before reload
+            _trackingHelper?.Reset();
+
+            // Clear cache provider from UnityEventHooks to release references
+            Hooks.UnityEventHooks.SetGameObjectCacheProvider(null);
+
             // Unsubscribe from HookRegistry events before domain reload
             HookRegistry.OnComponentAdded -= OnComponentAdded;
             HookRegistry.OnComponentRemoved -= OnComponentRemoved;
@@ -167,27 +173,18 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
 
         private static void OnSelectionChanged(GameObject selectedGo)
         {
-            if (Selection.activeObject == null) return;
+            // Use the parameter instead of Selection.activeObject (more efficient and reliable)
+            if (selectedGo == null) return;
 
-            var selected = Selection.activeObject;
             var payload = new Dictionary<string, object>
             {
-                ["name"] = selected.name,
-                ["type"] = selected.GetType().Name,
-                ["instance_id"] = selected.GetInstanceID()
+                ["name"] = selectedGo.name,
+                ["type"] = selectedGo.GetType().Name,
+                ["instance_id"] = selectedGo.GetInstanceID(),
+                ["path"] = GetGameObjectPath(selectedGo)
             };
 
-            if (selected is GameObject go)
-            {
-                payload["path"] = GetGameObjectPath(go);
-            }
-            else if (selected is Component comp)
-            {
-                payload["path"] = GetGameObjectPath(comp.gameObject);
-                payload["component_type"] = comp.GetType().Name;
-            }
-
-            string globalId = GlobalIdHelper.ToGlobalIdString(selected);
+            string globalId = GlobalIdHelper.ToGlobalIdString(selectedGo);
             RecordEvent("SelectionChanged", globalId, payload);
         }
 

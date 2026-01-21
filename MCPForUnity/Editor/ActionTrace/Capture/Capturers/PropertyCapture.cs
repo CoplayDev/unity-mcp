@@ -6,6 +6,7 @@ using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.ActionTrace.Helpers;
 using MCPForUnity.Editor.ActionTrace.Core.Models;
 using MCPForUnity.Editor.ActionTrace.Core.Store;
+using System.Threading;
 
 namespace MCPForUnity.Editor.ActionTrace.Capture
 {
@@ -81,18 +82,21 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
         /// Called by Unity when properties are modified via Undo system.
         /// This includes Inspector changes, Scene view manipulations, etc.
         /// Returns the modifications unchanged to allow Undo system to continue.
+        ///
+        /// Performance: Minimizes lock持有时间 by extracting data before locking.
         /// </summary>
         private static UndoPropertyModification[] ProcessModifications(UndoPropertyModification[] modifications)
         {
             if (modifications == null || modifications.Length == 0)
                 return modifications;
 
-            lock (_lock)
+            // Phase 1: Extract data from Undo modifications (outside lock)
+            // This minimizes time spent inside the critical section
+            var extractedData = new List<ModificationData>(modifications.Length);
+            long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+            foreach (var undoMod in modifications)
             {
-                foreach (var undoMod in modifications)
-            {
-                // UndoPropertyModification contains the PropertyModification and value changes
-                // Try to extract target and property path
                 var target = UndoReflectionHelper.GetTarget(undoMod);
                 if (target == null)
                     continue;
@@ -101,61 +105,97 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 if (string.IsNullOrEmpty(propertyPath))
                     continue;
 
-                // Filter out Unity internal properties
+                // Filter out Unity internal properties early
                 if (PropertyFormatter.IsInternalProperty(propertyPath))
-                {
                     continue;
-                }
 
-                // Generate stable unique key
                 string globalId = GlobalIdHelper.ToGlobalIdString(target);
                 if (string.IsNullOrEmpty(globalId))
                     continue;
 
-                string uniqueKey = $"{globalId}:{propertyPath}";
-
-                // Get the current value (not the path)
                 var currentValue = UndoReflectionHelper.GetCurrentValue(undoMod);
+                var prevValue = UndoReflectionHelper.GetPreviousValue(undoMod);
 
-                // Check if we already have a pending change for this property
-                if (_pendingChanges.TryGetValue(uniqueKey, out var pending))
+                extractedData.Add(new ModificationData
                 {
-                    // Update existing pending change
-                    // Note: Must reassign to dictionary since PendingPropertyChange is a struct
-                    pending.EndValue = PropertyFormatter.FormatPropertyValue(currentValue);
-                    pending.ChangeCount++;
-                    pending.LastUpdateMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                    _pendingChanges[uniqueKey] = pending;
-                }
-                else
+                    GlobalId = globalId,
+                    TargetName = target.name,
+                    ComponentType = target.GetType().Name,
+                    PropertyPath = propertyPath,
+                    StartValue = PropertyFormatter.FormatPropertyValue(prevValue),
+                    EndValue = PropertyFormatter.FormatPropertyValue(currentValue),
+                    PropertyType = PropertyFormatter.GetPropertyTypeName(currentValue),
+                    LastUpdateMs = nowMs
+                });
+            }
+
+            // Phase 2: Update pending changes (inside lock, minimal work)
+            lock (_lock)
+            {
+                foreach (var data in extractedData)
                 {
-                    // Enforce cache limit to prevent unbounded growth
-                    if (_pendingChanges.Count >= MaxPendingEntries)
+                    string uniqueKey = $"{data.GlobalId}:{data.PropertyPath}";
+
+                    // Check if we already have a pending change for this property
+                    if (_pendingChanges.TryGetValue(uniqueKey, out var pending))
                     {
-                        // Force flush ALL entries to make room immediately
-                        FlushPendingChanges(force: true);
+                        // Update existing pending change
+                        pending.EndValue = data.EndValue;
+                        pending.ChangeCount++;
+                        pending.LastUpdateMs = data.LastUpdateMs;
+                        _pendingChanges[uniqueKey] = pending;
                     }
+                    else
+                    {
+                        // Enforce cache limit to prevent unbounded growth
+                        if (_pendingChanges.Count >= MaxPendingEntries)
+                        {
+                            // Exit lock before flushing to avoid nested lock
+                            Monitor.Exit(_lock);
+                            try
+                            {
+                                FlushPendingChanges(force: true);
+                            }
+                            finally
+                            {
+                                Monitor.Enter(_lock);
+                            }
+                        }
 
-                    // Create new pending change (use object pool if available)
-                    var change = AcquirePendingChange();
-                    change.GlobalId = globalId;
-                    change.TargetName = target.name;
-                    change.ComponentType = target.GetType().Name;
-                    change.PropertyPath = propertyPath;
-                    // Record the start value from the previous value reported by Undo system
-                    var prev = UndoReflectionHelper.GetPreviousValue(undoMod);
-                    change.StartValue = PropertyFormatter.FormatPropertyValue(prev);
-                    change.EndValue = PropertyFormatter.FormatPropertyValue(currentValue);
-                    change.PropertyType = PropertyFormatter.GetPropertyTypeName(currentValue);
-                    change.ChangeCount = 1;
-                    change.LastUpdateMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                        // Create new pending change (use object pool if available)
+                        var change = AcquirePendingChange();
+                        change.GlobalId = data.GlobalId;
+                        change.TargetName = data.TargetName;
+                        change.ComponentType = data.ComponentType;
+                        change.PropertyPath = data.PropertyPath;
+                        change.StartValue = data.StartValue;
+                        change.EndValue = data.EndValue;
+                        change.PropertyType = data.PropertyType;
+                        change.ChangeCount = 1;
+                        change.LastUpdateMs = data.LastUpdateMs;
 
-                    _pendingChanges[uniqueKey] = change;
+                        _pendingChanges[uniqueKey] = change;
+                    }
                 }
             }
 
             return modifications;
-            }
+        }
+
+        /// <summary>
+        /// Temporary structure to hold extracted modification data.
+        /// Used to minimize time spent inside lock.
+        /// </summary>
+        private struct ModificationData
+        {
+            public string GlobalId;
+            public string TargetName;
+            public string ComponentType;
+            public string PropertyPath;
+            public string StartValue;
+            public string EndValue;
+            public string PropertyType;
+            public long LastUpdateMs;
         }
 
         /// <summary>

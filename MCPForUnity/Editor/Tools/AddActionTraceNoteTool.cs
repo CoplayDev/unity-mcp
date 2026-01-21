@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.ActionTrace.Core.Settings;
@@ -31,6 +32,22 @@ namespace MCPForUnity.Editor.Tools
     [McpForUnityTool("add_action_trace_note", Description = "Adds AI notes/annotations to the ActionTrace for task tracking")]
     public static class AddActionTraceNoteTool
     {
+        /// <summary>
+        /// Helper to normalize parameter names from snake_case to camelCase.
+        /// Supports both legacy snake_case (from direct tool calls) and camelCase (from batch_execute normalization).
+        /// </summary>
+        private static string GetParamValue(JToken @params, string camelCaseName, string defaultValue = null)
+        {
+            // Try camelCase first (normalized by batch_execute)
+            var value = @params[camelCaseName];
+            if (value != null) return value.ToString();
+
+            // Fallback to snake_case (legacy format)
+            string snakeCase = string.Concat(camelCaseName.Select((c, i) => i > 0 && char.IsUpper(c) ? "_" + c.ToString().ToLower() : c.ToString().ToLower()));
+            value = @params[snakeCase];
+            return value?.ToString() ?? defaultValue;
+        }
+
         /// <summary>
         /// Parameters for add_action_trace_note tool.
         /// </summary>
@@ -90,10 +107,12 @@ namespace MCPForUnity.Editor.Tools
                     return new ErrorResponse("Note text is required.");
                 }
 
-                // Support both snake_case (legacy) and camelCase (normalized by batch_execute)
-                string agentId = @params["agent_id"]?.ToString() ?? @params["agentId"]?.ToString() ?? "unknown";
-                string taskId = @params["task_id"]?.ToString() ?? @params["taskId"]?.ToString();
-                string conversationId = @params["conversation_id"]?.ToString() ?? @params["conversationId"]?.ToString();
+                // Use helper to normalize parameter names (supports both snake_case and camelCase)
+                string agentId = GetParamValue(@params, "agentId", "unknown");
+                string taskId = GetParamValue(@params, "taskId");
+                string conversationId = GetParamValue(@params, "conversationId");
+                string intent = GetParamValue(@params, "intent");
+                string agentModel = GetParamValue(@params, "agentModel");
 
                 // Build payload with all fields
                 var payload = new Dictionary<string, object>
@@ -114,17 +133,15 @@ namespace MCPForUnity.Editor.Tools
                     payload["conversation_id"] = conversationId;
                 }
 
-                // Optional fields - support both snake_case and camelCase
-                var intentToken = @params["intent"] ?? @params["Intent"];
-                if (intentToken != null)
+                // Optional fields
+                if (!string.IsNullOrEmpty(intent))
                 {
-                    payload["intent"] = intentToken.ToString();
+                    payload["intent"] = intent;
                 }
 
-                var agentModelToken = @params["agent_model"] ?? @params["agentModel"];
-                if (agentModelToken != null)
+                if (!string.IsNullOrEmpty(agentModel))
                 {
-                    payload["agent_model"] = agentModelToken.ToString();
+                    payload["agent_model"] = agentModel;
                 }
 
                 // Related event sequences (if explicitly linking to specific events)

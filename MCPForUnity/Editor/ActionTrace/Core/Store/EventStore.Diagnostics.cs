@@ -12,7 +12,10 @@ namespace MCPForUnity.Editor.ActionTrace.Core.Store
     {
         /// <summary>
         /// Dehydrate old events (beyond hotEventCount) to save memory.
-        /// This is called automatically by Record().
+        /// This is called automatically by Record() while holding _queryLock.
+        ///
+        /// Thread safety: Caller must hold _queryLock before calling.
+        /// All _events access happens within the same lock to prevent concurrent modification.
         /// </summary>
         private static void DehydrateOldEvents(int hotEventCount)
         {
@@ -21,8 +24,11 @@ namespace MCPForUnity.Editor.ActionTrace.Core.Store
 
             lock (_queryLock)
             {
+                int count = _events.Count;
+                int dehydrateLimit = Math.Max(0, count - hotEventCount);
+
                 // Find events that need dehydration (not already dehydrated and beyond hot count)
-                for (int i = 0; i < _events.Count - hotEventCount; i++)
+                for (int i = 0; i < dehydrateLimit; i++)
                 {
                     var evt = _events[i];
                     if (evt != null && !evt.IsDehydrated && evt.Payload != null)

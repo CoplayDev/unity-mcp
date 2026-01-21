@@ -270,6 +270,20 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
             _eventListView.selectionChanged += OnSelectionChanged;
         }
 
+        // Performance optimization: cache child element references to avoid repeated Q<> queries
+        private sealed class ListItemCache
+        {
+            public Label timeLabel;
+            public Label typeIcon;
+            public Label typeLabel;
+            public Label summaryLabel;
+            public VisualElement detailRow;
+            public Label detailText;
+            public VisualElement badgesRow;
+            public Label importanceBadge;
+            public Label contextIndicator;
+        }
+
         private VisualElement MakeListItem()
         {
             var root = new VisualElement();
@@ -320,6 +334,20 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
             root.Add(badgesRow);
 
+            // Cache child element references to avoid Q<> queries during bind
+            root.userData = new ListItemCache
+            {
+                timeLabel = time,
+                typeIcon = typeIcon,
+                typeLabel = type,
+                summaryLabel = summary,
+                detailRow = detailRow,
+                detailText = detailText,
+                badgesRow = badgesRow,
+                importanceBadge = importanceBadge,
+                contextIndicator = contextIndicator
+            };
+
             return root;
         }
 
@@ -328,81 +356,73 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
             if (index < 0 || index >= _currentEvents.Count) return;
 
             var item = _currentEvents[index];
+            var cache = element.userData as ListItemCache;
+            if (cache == null) return;  // Should not happen
 
-            // Performance optimization: only update changed content
-            var timeLabel = element.Q<Label>("time");
-            if (timeLabel.text != item.DisplayTime)
-                timeLabel.text = item.DisplayTime;
+            // Performance optimization: use cached references instead of Q<> queries
+            if (cache.timeLabel.text != item.DisplayTime)
+                cache.timeLabel.text = item.DisplayTime;
 
-            var typeIcon = element.Q<Label>("type-icon");
             var iconText = GetEventTypeIconCached(item.Event.Type);
-            if (typeIcon.text != iconText)
-                typeIcon.text = iconText;
+            if (cache.typeIcon.text != iconText)
+                cache.typeIcon.text = iconText;
 
-            var typeLabel = element.Q<Label>("type");
-            if (typeLabel.text != item.Event.Type)
+            if (cache.typeLabel.text != item.Event.Type)
             {
-                typeLabel.text = item.Event.Type;
-                typeLabel.ClearClassList();
-                typeLabel.AddToClassList(Classes.EventType);
-                typeLabel.AddToClassList($"{Classes.EventType}--{SanitizeClassName(item.Event.Type)}");
+                cache.typeLabel.text = item.Event.Type;
+                cache.typeLabel.ClearClassList();
+                cache.typeLabel.AddToClassList(Classes.EventType);
+                cache.typeLabel.AddToClassList($"{Classes.EventType}--{SanitizeClassName(item.Event.Type)}");
             }
 
-            var summaryLabel = element.Q<Label>("summary");
-            if (summaryLabel.text != item.DisplaySummary)
-                summaryLabel.text = item.DisplaySummary;
+            if (cache.summaryLabel.text != item.DisplaySummary)
+                cache.summaryLabel.text = item.DisplaySummary;
 
-            var detailRow = element.Q<VisualElement>("detail-row");
-            var detailText = element.Q<Label>("detail-text");
-
-            if (detailRow != null && detailText != null)
+            if (cache.detailRow != null && cache.detailText != null)
             {
-                bool showDetail = _eventListView.selectedIndex == index || !string.IsNullOrEmpty(item.Event.TargetId);
+                bool showDetail = _eventListView.selectedIndex == index || !string.IsNullOrEmpty(item.TargetName);
                 var targetDisplay = showDetail ? DisplayStyle.Flex : DisplayStyle.None;
-                if (detailRow.style.display != targetDisplay)
-                    detailRow.style.display = targetDisplay;
-                
-                if (!string.IsNullOrEmpty(item.Event.TargetId))
+                if (cache.detailRow.style.display != targetDisplay)
+                    cache.detailRow.style.display = targetDisplay;
+
+                if (!string.IsNullOrEmpty(item.TargetName))
                 {
-                    var targetText = $"Target: {item.Event.TargetId}";
-                    if (detailText.text != targetText)
-                        detailText.text = targetText;
+                    // Use pre-converted InstanceID and Name from ActionTraceViewItem
+                    var targetText = FormatTargetDisplay(item.TargetInstanceId, item.TargetName);
+                    if (cache.detailText.text != targetText)
+                        cache.detailText.text = targetText;
                 }
             }
 
-            var badgesRow = element.Q<VisualElement>("badges-row");
-            var badge = element.Q<Label>("importance-badge");
-            var contextIndicator = element.Q<Label>("context-indicator");
-
-            if (badgesRow != null && badge != null)
+            if (cache.badgesRow != null && cache.importanceBadge != null)
             {
                 var badgesDisplay = _showSemantics ? DisplayStyle.Flex : DisplayStyle.None;
-                if (badgesRow.style.display != badgesDisplay)
-                    badgesRow.style.display = badgesDisplay;
+                if (cache.badgesRow.style.display != badgesDisplay)
+                    cache.badgesRow.style.display = badgesDisplay;
 
                 var categoryUpper = item.ImportanceCategory.ToUpperInvariant();
-                if (badge.text != categoryUpper)
+                if (cache.importanceBadge.text != categoryUpper)
                 {
-                    badge.text = categoryUpper;
-                    badge.ClearClassList();
-                    badge.AddToClassList(Classes.ImportanceBadge);
-                    badge.AddToClassList($"{Classes.ImportanceBadge}--{item.ImportanceCategory.ToLowerInvariant()}");
+                    cache.importanceBadge.text = categoryUpper;
+                    cache.importanceBadge.ClearClassList();
+                    cache.importanceBadge.AddToClassList(Classes.ImportanceBadge);
+                    cache.importanceBadge.AddToClassList($"{Classes.ImportanceBadge}--{item.ImportanceCategory.ToLowerInvariant()}");
                 }
             }
 
-            if (contextIndicator != null)
+            if (cache.contextIndicator != null)
             {
                 var hasContext = item.Context != null;
                 var contextDisplay = hasContext ? DisplayStyle.Flex : DisplayStyle.None;
-                if (contextIndicator.style.display != contextDisplay)
+                if (cache.contextIndicator.style.display != contextDisplay)
                 {
-                    contextIndicator.style.display = contextDisplay;
-                    if (hasContext && contextIndicator.text != "🔗")
+                    cache.contextIndicator.style.display = contextDisplay;
+                    if (hasContext && cache.contextIndicator.text != "🔗")
                     {
-                        contextIndicator.text = "🔗";
-                        contextIndicator.ClearClassList();
-                        contextIndicator.AddToClassList(Classes.ContextIndicator);
-                        contextIndicator.AddToClassList("context-source--System");
+                        cache.contextIndicator.text = "🔗";
+                        cache.contextIndicator.ClearClassList();
+                        cache.contextIndicator.AddToClassList(Classes.ContextIndicator);
+                        cache.contextIndicator.AddToClassList("context-source--System");
                     }
                 }
             }
@@ -505,11 +525,14 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
                 AddDetailRow(section, "Description", item.DisplaySummary);
             });
 
-            if (!string.IsNullOrEmpty(item.Event.TargetId))
+            if (!string.IsNullOrEmpty(item.TargetName))
             {
                 AddDetailSection("TARGET INFORMATION", section =>
                 {
-                    AddDetailRow(section, "Target ID", item.Event.TargetId);
+                    AddDetailRow(section, "Name", item.TargetName);
+                    if (item.TargetInstanceId.HasValue)
+                        AddDetailRow(section, "InstanceID", item.TargetInstanceId.Value.ToString());
+                    AddDetailRow(section, "GlobalID", item.Event.TargetId);
                 });
             }
 
@@ -675,9 +698,17 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
                 _stringBuilder.AppendLine($"      \"summary\": \"{SanitizeJson(e.DisplaySummary)}\",");
 
                 if (!string.IsNullOrEmpty(e.Event.TargetId))
+                {
                     _stringBuilder.AppendLine($"      \"targetId\": \"{SanitizeJson(e.Event.TargetId)}\",");
+                    _stringBuilder.AppendLine($"      \"targetName\": \"{SanitizeJson(e.TargetName)}\",");
+                    _stringBuilder.AppendLine($"      \"targetInstanceId\": {(e.TargetInstanceId.HasValue ? e.TargetInstanceId.Value.ToString() : "null")},");
+                }
                 else
+                {
                     _stringBuilder.AppendLine($"      \"targetId\": null,");
+                    _stringBuilder.AppendLine($"      \"targetName\": null,");
+                    _stringBuilder.AppendLine($"      \"targetInstanceId\": null,");
+                }
 
                 _stringBuilder.AppendLine($"      \"importanceScore\": {e.ImportanceScore:F2},");
                 _stringBuilder.AppendLine($"      \"importanceCategory\": \"{SanitizeJson(e.ImportanceCategory)}\"");
@@ -714,7 +745,7 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
         private string BuildCsvExport()
         {
             _stringBuilder.Clear();
-            _stringBuilder.AppendLine("Sequence,Time,Type,Summary,Target,Importance,Category,Intent");
+            _stringBuilder.AppendLine("Sequence,Time,Type,Summary,Target Name,InstanceID,Importance,Category,Intent");
 
             foreach (var e in _currentEvents)
             {
@@ -726,7 +757,19 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
                 _stringBuilder.Append("\",\"");
                 _stringBuilder.Append(SanitizeCsv(e.DisplaySummary));
                 _stringBuilder.Append("\",\"");
-                _stringBuilder.Append(SanitizeCsv(e.Event.TargetId ?? ""));
+
+                // Get instance info for export
+                if (!string.IsNullOrEmpty(e.TargetName))
+                {
+                    _stringBuilder.Append(SanitizeCsv(e.TargetName));
+                    _stringBuilder.Append("\",\"");
+                    _stringBuilder.Append(SanitizeCsv(e.TargetInstanceId?.ToString() ?? ""));
+                }
+                else
+                {
+                    _stringBuilder.Append("\",\"");
+                }
+
                 _stringBuilder.Append("\",");
                 _stringBuilder.Append(e.ImportanceScore.ToString("F2"));
                 _stringBuilder.Append(",\"");
@@ -1135,6 +1178,17 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
             return bytes < 1024 ? $"{bytes} B" :
                    bytes < 1024 * 1024 ? $"{bytes / 1024.0:F1} KB" :
                    $"{bytes / (1024.0 * 1024.0):F1} MB";
+        }
+
+        /// <summary>
+        /// Format target display text showing InstanceID and Name.
+        /// Example: "Cube (12345)" or "[type 1 abc12345...]" if object not found.
+        /// </summary>
+        private string FormatTargetDisplay(int? instanceId, string displayName)
+        {
+            if (instanceId.HasValue)
+                return $"{displayName} ({instanceId.Value})";
+            return displayName;
         }
 
         private string SanitizeClassName(string eventType)

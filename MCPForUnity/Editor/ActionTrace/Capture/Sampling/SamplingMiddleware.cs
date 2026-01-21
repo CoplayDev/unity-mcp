@@ -29,9 +29,17 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
     public static class SamplingMiddleware
     {
         // Configuration
-        private const int MaxSampleCache = 128;          // Max pending samples before forced cleanup
-        private const long CleanupAgeMs = 2000;          // Cleanup samples older than 2 seconds
-        private const long FlushCheckIntervalMs = 200;   // Check for expired debounce samples every 200ms
+        // MaxSampleCache: ~2-4 seconds of sampling at 30Hz event rate (128 samples)
+        // Prevents unbounded memory growth while allowing adequate debounce window coverage
+        private const int MaxSampleCache = 128;
+
+        // CleanupAgeMs: 2 seconds - balance between freshness and overhead
+        // Old enough to cover most debounce windows (typically 500-1000ms) but short enough to prevent stale data
+        private const long CleanupAgeMs = 2000;
+
+        // FlushCheckIntervalMs: 200ms - responsive without overwhelming the main thread
+        // Checks 5 times per second to detect expired debounce samples while keeping CPU impact minimal
+        private const long FlushCheckIntervalMs = 200;
 
         // State
         // Thread-safe dictionary to prevent race conditions in multi-threaded scenarios

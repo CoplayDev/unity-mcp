@@ -11,6 +11,7 @@ using Newtonsoft.Json.Linq;
 using static MCPForUnity.Editor.ActionTrace.Analysis.Query.ActionTraceQuery;
 using MCPForUnity.Editor.ActionTrace.Core.Models;
 using MCPForUnity.Editor.ActionTrace.Semantics;
+using MCPForUnity.Editor.ActionTrace.Core;
 
 namespace MCPForUnity.Editor.Resources.ActionTrace
 {
@@ -99,6 +100,7 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
         /// Basic query without semantics.
         /// Applies L3 importance filter by default (medium+ importance).
         /// Supports task_id and conversation_id filtering.
+        /// Includes target_instance_id and target_name for each event.
         /// </summary>
         private static object QueryBasic(int limit, long? sinceSequence, float minImportance, string taskId, string conversationId)
         {
@@ -116,13 +118,27 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
             // Apply task-level filtering
             filteredEvents = ApplyTaskFilters(filteredEvents, taskId, conversationId);
 
-            var eventItems = filteredEvents.Select(e => new
+            // Build instance info cache for performance (many events may reference the same object)
+            var instanceInfoCache = new Dictionary<string, (int? instanceId, string displayName)>();
+
+            var eventItems = filteredEvents.Select(e =>
             {
-                sequence = e.Sequence,
-                timestamp_unix_ms = e.TimestampUnixMs,
-                type = e.Type,
-                target_id = e.TargetId,
-                summary = e.GetSummary()
+                // Get or compute instance info (with caching)
+                if (!instanceInfoCache.TryGetValue(e.TargetId, out var info))
+                {
+                    info = GlobalIdHelper.GetInstanceInfo(e.TargetId);
+                    instanceInfoCache[e.TargetId] = info;
+                }
+
+                return new
+                {
+                    sequence = e.Sequence,
+                    timestamp_unix_ms = e.TimestampUnixMs,
+                    type = e.Type,
+                    target_instance_id = info.instanceId,
+                    target_name = info.displayName,
+                    summary = e.GetSummary()
+                };
             }).ToArray();
 
             return new SuccessResponse("Retrieved ActionTrace events.", new
@@ -138,6 +154,7 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
         /// Query with semantics.
         /// Applies L3 importance filter by default.
         /// Supports task_id and conversation_id filtering.
+        /// Includes target_instance_id and target_name for each event.
         /// </summary>
         private static object QueryWithSemanticsOnly(int limit, long? sinceSequence, float minImportance, string taskId, string conversationId)
         {
@@ -157,16 +174,30 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
             // Apply task-level filtering
             filtered = ApplyTaskFiltersToProjected(filtered, taskId, conversationId);
 
-            var eventItems = filtered.Select(p => new
+            // Build instance info cache for performance (many events may reference the same object)
+            var instanceInfoCache = new Dictionary<string, (int? instanceId, string displayName)>();
+
+            var eventItems = filtered.Select(p =>
             {
-                sequence = p.Event.Sequence,
-                timestamp_unix_ms = p.Event.TimestampUnixMs,
-                type = p.Event.Type,
-                target_id = p.Event.TargetId,
-                summary = p.Event.GetSummary(),
-                importance_score = p.ImportanceScore,
-                importance_category = p.ImportanceCategory,
-                inferred_intent = p.InferredIntent
+                // Get or compute instance info (with caching)
+                if (!instanceInfoCache.TryGetValue(p.Event.TargetId, out var info))
+                {
+                    info = GlobalIdHelper.GetInstanceInfo(p.Event.TargetId);
+                    instanceInfoCache[p.Event.TargetId] = info;
+                }
+
+                return new
+                {
+                    sequence = p.Event.Sequence,
+                    timestamp_unix_ms = p.Event.TimestampUnixMs,
+                    type = p.Event.Type,
+                    target_instance_id = info.instanceId,
+                    target_name = info.displayName,
+                    summary = p.Event.GetSummary(),
+                    importance_score = p.ImportanceScore,
+                    importance_category = p.ImportanceCategory,
+                    inferred_intent = p.InferredIntent
+                };
             }).ToArray();
 
             return new SuccessResponse("Retrieved ActionTrace events with semantics.", new
