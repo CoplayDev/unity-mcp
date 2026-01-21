@@ -9,20 +9,47 @@ namespace MCPForUnity.Runtime.Helpers
     public readonly struct ScreenshotCaptureResult
     {
         public ScreenshotCaptureResult(string fullPath, string assetsRelativePath, int superSize)
+            : this(fullPath, assetsRelativePath, superSize, isAsync: false)
+        {
+        }
+
+        public ScreenshotCaptureResult(string fullPath, string assetsRelativePath, int superSize, bool isAsync)
         {
             FullPath = fullPath;
             AssetsRelativePath = assetsRelativePath;
             SuperSize = superSize;
+            IsAsync = isAsync;
         }
 
         public string FullPath { get; }
         public string AssetsRelativePath { get; }
         public int SuperSize { get; }
+        public bool IsAsync { get; }
     }
 
     public static class ScreenshotUtility
     {
         private const string ScreenshotsFolderName = "Screenshots";
+
+        private static Camera FindBestCamera()
+        {
+            var main = Camera.main;
+            if (main != null)
+            {
+                return main;
+            }
+
+            try
+            {
+                // Use FindObjectsOfType for Unity 2021 compatibility.
+                var cams = UnityEngine.Object.FindObjectsOfType<Camera>();
+                return cams.FirstOrDefault();
+            }
+            catch
+            {
+                return null;
+            }
+        }
 
         public static ScreenshotCaptureResult CaptureToAssetsFolder(string fileName = null, int superSize = 1, bool ensureUniqueFileName = true)
         {
@@ -39,9 +66,6 @@ namespace MCPForUnity.Runtime.Helpers
 
             string normalizedFullPath = fullPath.Replace('\\', '/');
 
-            // Use only the file name to let Unity decide the final location (per CaptureScreenshot docs).
-            string captureName = Path.GetFileName(normalizedFullPath);
-
             // Use Asset folder for ScreenCapture.CaptureScreenshot to ensure write to asset rather than project root
             string projectRoot = GetProjectRootPath();
             string assetsRelativePath = normalizedFullPath;
@@ -50,17 +74,27 @@ namespace MCPForUnity.Runtime.Helpers
                 assetsRelativePath = assetsRelativePath.Substring(projectRoot.Length).TrimStart('/');
             }
 
+            bool isAsync;
 #if UNITY_2022_1_OR_NEWER
             ScreenCapture.CaptureScreenshot(assetsRelativePath, size);
+            isAsync = true;
 #else
             Debug.LogWarning("ScreenCapture is supported after Unity 2022.1. Using main camera capture as fallback.");
-            CaptureFromCameraToAssetsFolder(Camera.main, captureName, size, false);
+            var cam = FindBestCamera();
+            if (cam == null)
+            {
+                throw new InvalidOperationException("No camera found to capture screenshot.");
+            }
+            string captureName = Path.GetFileName(normalizedFullPath);
+            CaptureFromCameraToAssetsFolder(cam, captureName, size, false);
+            isAsync = false;
 #endif      
 
             return new ScreenshotCaptureResult(
                 normalizedFullPath,
                 assetsRelativePath,
-                size);
+                size,
+                isAsync);
         }
 
         /// <summary>
@@ -94,13 +128,14 @@ namespace MCPForUnity.Runtime.Helpers
             RenderTexture prevRT = camera.targetTexture;
             RenderTexture prevActive = RenderTexture.active;
             var rt = RenderTexture.GetTemporary(width, height, 24, RenderTextureFormat.ARGB32);
+            Texture2D tex = null;
             try
             {
                 camera.targetTexture = rt;
                 camera.Render();
 
                 RenderTexture.active = rt;
-                var tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
                 tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
                 tex.Apply();
 
@@ -112,6 +147,17 @@ namespace MCPForUnity.Runtime.Helpers
                 camera.targetTexture = prevRT;
                 RenderTexture.active = prevActive;
                 RenderTexture.ReleaseTemporary(rt);
+                if (tex != null)
+                {
+                    if (Application.isPlaying)
+                    {
+                        UnityEngine.Object.Destroy(tex);
+                    }
+                    else
+                    {
+                        UnityEngine.Object.DestroyImmediate(tex);
+                    }
+                }
             }
 
             string projectRoot = GetProjectRootPath();
