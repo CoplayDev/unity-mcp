@@ -153,7 +153,8 @@ namespace MCPForUnity.Editor.Helpers
         /// Checks for EditorPrefs override first (supports git URLs, file:// paths, etc.),
         /// then falls back to PyPI package reference.
         /// </summary>
-        /// <returns>Package source string for uvx --from argument</returns>
+        /// <returns>Package source string for uvx --from argument (guaranteed non-null)</returns>
+        /// <exception cref="InvalidOperationException">Thrown when package source cannot be determined</exception>
         public static string GetMcpServerPackageSource()
         {
             // Check for override first (supports git URLs, file:// paths, local paths)
@@ -182,13 +183,25 @@ namespace MCPForUnity.Editor.Helpers
         public static string GetMcpServerGitUrl() => GetMcpServerPackageSource();
 
         /// <summary>
-        /// Gets structured uvx command parts for different client configurations
+        /// Gets structured uvx command parts for different client configurations.
         /// </summary>
-        /// <returns>Tuple containing (uvxPath, fromUrl, packageName)</returns>
+        /// <returns>Tuple containing (uvxPath, fromUrl, packageName) - fromUrl is guaranteed non-null</returns>
+        /// <exception cref="InvalidOperationException">Thrown when uvx path cannot be determined</exception>
         public static (string uvxPath, string fromUrl, string packageName) GetUvxCommandParts()
         {
             string uvxPath = MCPServiceLocator.Paths.GetUvxPath();
+            if (string.IsNullOrEmpty(uvxPath))
+            {
+                throw new InvalidOperationException("Cannot determine uvx path. Please ensure uv is installed and configured.");
+            }
+
             string fromUrl = GetMcpServerPackageSource();
+            // GetMcpServerPackageSource() guarantees non-null, but validate for defense in depth
+            if (string.IsNullOrEmpty(fromUrl))
+            {
+                throw new InvalidOperationException("Cannot determine MCP server package source. This should never happen - please report this bug.");
+            }
+
             string packageName = "mcp-for-unity";
 
             return (uvxPath, fromUrl, packageName);

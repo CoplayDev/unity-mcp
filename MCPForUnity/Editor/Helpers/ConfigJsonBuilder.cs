@@ -174,11 +174,14 @@ namespace MCPForUnity.Editor.Helpers
             // differs from the executable name (mcp-for-unity). The uvx command format is:
             // uvx --from PACKAGE_SOURCE EXECUTABLE_NAME --transport stdio
             // Example: uvx --from mcpforunityserver==9.0.8 mcp-for-unity --transport stdio
-            if (!string.IsNullOrEmpty(fromUrl))
+            // fromUrl is guaranteed non-null by GetUvxCommandParts(), but validate for defense in depth
+            if (string.IsNullOrEmpty(fromUrl))
             {
-                args.Add("--from");
-                args.Add(fromUrl);
+                throw new InvalidOperationException("Package source (--from argument) cannot be empty. This should never happen - please report this bug.");
             }
+
+            args.Add("--from");
+            args.Add(fromUrl);
 
             args.Add(packageName);
             args.Add("--transport");

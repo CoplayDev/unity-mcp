@@ -32,17 +32,24 @@ namespace MCPForUnity.Editor.Helpers
         /// IMPORTANT: We always need --from because the PyPI package name (mcpforunityserver)
         /// differs from the executable name (mcp-for-unity). The uvx command format is:
         /// uvx --from PACKAGE_SOURCE EXECUTABLE_NAME --transport stdio
+        /// Example: uvx --from mcpforunityserver==9.0.8 mcp-for-unity --transport stdio
         /// </summary>
+        /// <param name="args">The TOML array to add arguments to</param>
+        /// <param name="fromUrl">Package source for --from argument (guaranteed non-null from GetUvxCommandParts)</param>
+        /// <param name="packageName">Executable name to run</param>
         private static void AddPackageArgs(TomlArray args, string fromUrl, string packageName)
         {
             if (args == null) return;
 
-            // Always use --from because package name != executable name
-            if (!string.IsNullOrEmpty(fromUrl))
+            // fromUrl is guaranteed non-null by GetUvxCommandParts(), but validate for defense in depth
+            if (string.IsNullOrEmpty(fromUrl))
             {
-                args.Add(new TomlString { Value = "--from" });
-                args.Add(new TomlString { Value = fromUrl });
+                throw new InvalidOperationException("Package source (--from argument) cannot be empty. This should never happen - please report this bug.");
             }
+
+            // Always use --from because package name != executable name
+            args.Add(new TomlString { Value = "--from" });
+            args.Add(new TomlString { Value = fromUrl });
 
             args.Add(new TomlString { Value = packageName });
         }
