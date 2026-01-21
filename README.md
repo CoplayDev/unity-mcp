@@ -221,7 +221,7 @@ If you are working on research that is related to Unity-MCP, please cite us!
 author = {Wu, Shutong and Barnett, Justin P.},
 title = {MCP-Unity: Protocol-Driven Framework for Interactive 3D Authoring},
 year = {2025},
-isbn= {9798400721366},
+isbn = {9798400721366},
 publisher = {Association for Computing Machinery},
 address = {New York, NY, USA},
 url = {https://doi.org/10.1145/3757376.3771417},
