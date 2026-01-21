@@ -10,10 +10,10 @@ namespace MCPForUnity.Editor.Clients.Configurators
         public RiderConfigurator() : base(new McpClient
         {
             name = "Rider GitHub Copilot",
-            // Rider GitHub Copilot uses github-copilot/intellij path under LocalApplicationData
+            // Rider GitHub Copilot uses github-copilot/intellij path under appropriate per-OS data directories
             windowsConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "github-copilot", "intellij", "mcp.json"),
-            macConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "github-copilot", "intellij", "mcp.json"),
-            linuxConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "github-copilot", "intellij", "mcp.json"),
+            macConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Application Support", "github-copilot", "intellij", "mcp.json"),
+            linuxConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share", "github-copilot", "intellij", "mcp.json"),
             IsVsCodeLayout = true
         })
         { }
