@@ -7,9 +7,17 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
     /// <summary>
     /// Static configuration for sampling strategies.
     /// Event types can be registered with their desired sampling behavior.
+    ///
+    /// Sampling intervals are configured via hardcoded constants.
+    /// To customize sampling behavior, modify InitializeStrategies() directly.
     /// </summary>
     public static class SamplingConfig
     {
+        // Hardcoded sampling intervals (milliseconds)
+        private const int HierarchySamplingMs = 1000;
+        private const int SelectionSamplingMs = 500;
+        private const int PropertySamplingMs = 200;
+
         /// <summary>
         /// Default sampling strategies for common event types.
         /// Configured to prevent event floods while preserving important data.
@@ -17,18 +25,35 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
         /// when accessed from EditorApplication.update and event emitters simultaneously.
         /// </summary>
         public static readonly ConcurrentDictionary<string, SamplingStrategy> Strategies = new(
-            new Dictionary<string, SamplingStrategy>
+            InitializeStrategies()
+        );
+
+        /// <summary>
+        /// Initializes sampling strategies with hardcoded values.
+        /// </summary>
+        private static Dictionary<string, SamplingStrategy> InitializeStrategies()
+        {
+            return new Dictionary<string, SamplingStrategy>
             {
                 // Hierarchy changes: Throttle to 1 event per second
                 {
                     EventTypes.HierarchyChanged,
-                    new SamplingStrategy(SamplingMode.Throttle, 1000)
+                    new SamplingStrategy(SamplingMode.Throttle, HierarchySamplingMs)
                 },
 
-                // PropertyModified handling removed here to avoid double-debounce when
-                // PropertyChangeTracker already implements a dedicated debounce window.
-                // If desired, SamplingConfig.SetStrategy(EventTypes.PropertyModified, ...) can
-                // be used at runtime to re-enable middleware-level sampling.
+                // Selection changes: Throttle to 1 event per 500ms
+                {
+                    EventTypes.SelectionChanged,
+                    new SamplingStrategy(SamplingMode.Throttle, SelectionSamplingMs)
+                },
+
+                // Property modifications: Debounce by key (200ms window)
+                // Note: PropertyChangeTracker also implements its own debounce window,
+                // so this provides additional protection against event storms.
+                {
+                    EventTypes.PropertyModified,
+                    new SamplingStrategy(SamplingMode.DebounceByKey, PropertySamplingMs)
+                },
 
                 // Component/GameObject events: No sampling (always record)
                 // ComponentAdded, ComponentRemoved, GameObjectCreated, GameObjectDestroyed
@@ -42,8 +67,8 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
 
                 // Build events: No sampling (record all)
                 // BuildStarted, BuildCompleted, BuildFailed are not in this dictionary
-            }
-        );
+            };
+        }
 
         /// <summary>
         /// Adds or updates a sampling strategy for an event type.

@@ -59,7 +59,7 @@ namespace MCPForUnity.Editor.ActionTrace.Core.Settings
         public int MaxEvents = 800;
 
         [Range(10, 1000)]
-        [Tooltip("Number of hot events (10-1000) to retain with full payload. Older events will be dehydrated (Payload=null).")]
+        [Tooltip("Number of hot events (10-1000) to retain with full payload. Events are kept in sequence order; the first N events (oldest) have full payload, while events beyond this limit are dehydrated (Payload=null).")]
         public int HotEventCount = 150;
 
         [Tooltip("Minimum number of events to keep when auto-cleaning.")]
@@ -72,28 +72,18 @@ namespace MCPForUnity.Editor.ActionTrace.Core.Settings
         public int AutoSaveIntervalSeconds = 30;
     }
 
-    /// <summary>
-    /// Layered settings for sampling and throttling.
-    /// Controls how high-frequency events are sampled.
-    /// </summary>
-    [Serializable]
-    public sealed class SamplingSettings
-    {
-        [Tooltip("Enable global sampling. Events below threshold will be sampled.")]
-        public bool EnableSampling = true;
-
-        [Tooltip("Sampling importance threshold. Events below this value may be sampled.")]
-        public float SamplingImportanceThreshold = 0.3f;
-
-        [Tooltip("HierarchyChanged event sampling interval (milliseconds).")]
-        public int HierarchySamplingMs = 1000;
-
-        [Tooltip("SelectionChanged event sampling interval (milliseconds).")]
-        public int SelectionSamplingMs = 500;
-
-        [Tooltip("PropertyModified event sampling interval (milliseconds).")]
-        public int PropertySamplingMs = 200;
-    }
+    // SamplingSettings is deprecated. Sampling is now configured via SamplingConfig
+    // with hardcoded values to avoid runtime configuration complexity.
+    //
+    // [Serializable]
+    // public sealed class SamplingSettings
+    // {
+    //     public bool EnableSampling = true;
+    //     public float SamplingImportanceThreshold = 0.3f;
+    //     public int HierarchySamplingMs = 1000;
+    //     public int SelectionSamplingMs = 500;
+    //     public int PropertySamplingMs = 200;
+    // }
 
     /// <summary>
     /// Persistent settings for the ActionTrace system.
@@ -120,9 +110,9 @@ namespace MCPForUnity.Editor.ActionTrace.Core.Settings
         [Tooltip("Controls event storage limits and memory management")]
         public StorageSettings Storage = new();
 
-        [Header("Event Sampling")]
-        [Tooltip("Controls high-frequency event sampling to prevent event storms")]
-        public SamplingSettings Sampling = new();
+        // Sampling is configured via SamplingConfig with hardcoded values
+        // To customize, modify SamplingConfig.InitializeStrategies() directly
+        // public SamplingSettings Sampling = new();
 
         // ========== Runtime State ==========
 
