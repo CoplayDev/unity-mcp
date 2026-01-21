@@ -154,7 +154,6 @@ namespace MCPForUnity.Editor.Helpers
         /// then falls back to PyPI package reference.
         /// </summary>
         /// <returns>Package source string for uvx --from argument (guaranteed non-null)</returns>
-        /// <exception cref="InvalidOperationException">Thrown when package source cannot be determined</exception>
         public static string GetMcpServerPackageSource()
         {
             // Check for override first (supports git URLs, file:// paths, local paths)
