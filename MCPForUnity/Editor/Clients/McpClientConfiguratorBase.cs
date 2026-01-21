@@ -773,18 +773,9 @@ namespace MCPForUnity.Editor.Clients
             // Dev flags
             string devFlags = shouldForceRefresh ? "--no-cache --refresh " : string.Empty;
 
-            string packageArgs;
-            if (!string.IsNullOrEmpty(fromUrl))
-            {
-                // Always use --from because package name != executable name
-                // Example: uvx --from mcpforunityserver==9.0.8 mcp-for-unity
-                packageArgs = $"\"{uvxPath}\" {devFlags}--from \"{fromUrl}\" {packageName}";
-            }
-            else
-            {
-                // Fallback: packageName only (should not happen in normal use)
-                packageArgs = $"\"{uvxPath}\" {devFlags}{packageName}";
-            }
+            // Always use --from because package name != executable name
+            // Example: uvx --from mcpforunityserver==9.0.8 mcp-for-unity
+            string packageArgs = $"\"{uvxPath}\" {devFlags}--from \"{fromUrl}\" {packageName}";
 
             return packageArgs;
         }
