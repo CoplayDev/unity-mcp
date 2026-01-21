@@ -484,7 +484,7 @@ namespace MCPForUnity.Editor.Tools
             int failureCount = 0;
             bool hasSeenFile = false;
             const int maxLoggedFailures = 3;
-            Action tick = null;
+            EditorApplication.CallbackFunction tick = null;
             tick = () =>
             {
                 try

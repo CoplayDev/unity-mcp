@@ -5,6 +5,14 @@
       "Edit(reports/**)",
       "MultiEdit(reports/**)"
     ],
-    "deny": []
+    "deny": [
+      "Bash",
+      "WebFetch",
+      "WebSearch",
+      "Task",
+      "TodoWrite",
+      "NotebookEdit",
+      "NotebookRead"
+    ]
   }
 }
