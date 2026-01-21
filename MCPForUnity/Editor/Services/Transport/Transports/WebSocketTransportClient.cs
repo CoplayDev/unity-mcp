@@ -682,9 +682,14 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 throw new InvalidOperationException($"Invalid MCP base URL: {baseUrl}");
             }
 
-            // Replace 0.0.0.0 with localhost for client connections
-            // 0.0.0.0 is only valid for server binding, not client connections
-            string host = httpUri.Host == "0.0.0.0" ? "localhost" : httpUri.Host;
+            // Replace bind-only addresses with localhost for client connections
+            // 0.0.0.0 and :: are only valid for server binding, not client connections
+            string host = httpUri.Host;
+            if (host == "0.0.0.0" || host == "::")
+            {
+                McpLog.Warn($"[WebSocket] Base URL host '{host}' is bind-only; using 'localhost' for client connection.");
+                host = "localhost";
+            }
 
             var builder = new UriBuilder(httpUri)
             {
