@@ -437,7 +437,7 @@
     margin-bottom: 4px;
 }
 
-.help-text.error {
+.help-text.http-local-url-error {
     color: rgba(255, 80, 80, 1);
     -unity-font-style: bold;
 }
