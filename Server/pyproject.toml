@@ -56,6 +56,15 @@ mcp-for-unity = "main:main"
 requires = ["setuptools>=64.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools]
+py-modules = ["main"]
+
 [tool.coverage.run]
 source = ["src"]
 omit = [

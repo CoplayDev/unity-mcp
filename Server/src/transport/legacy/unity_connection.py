@@ -233,14 +233,20 @@ class UnityConnection:
             logger.error(f"Error during receive: {str(e)}")
             raise
 
-    def send_command(self, command_type: str, params: dict[str, Any] = None) -> dict[str, Any]:
-        """Send a command with retry/backoff and port rediscovery. Pings only when requested."""
+    def send_command(self, command_type: str, params: dict[str, Any] = None, max_attempts: int | None = None) -> dict[str, Any]:
+        """Send a command with retry/backoff and port rediscovery. Pings only when requested.
+
+        Args:
+            command_type: The Unity command to send
+            params: Command parameters
+            max_attempts: Maximum retry attempts (None = use config default, 0 = no retries)
+        """
         # Defensive guard: catch empty/placeholder invocations early
         if not command_type:
             raise ValueError("MCP call missing command_type")
         if params is None:
             return MCPResponse(success=False, error="MCP call received with no parameters (client placeholder?)")
-        attempts = max(config.max_retries, 5)
+        attempts = max(config.max_retries, 5) if max_attempts is None else max_attempts
         base_backoff = max(0.5, config.retry_delay)
 
         def read_status_file(target_hash: str | None = None) -> dict | None:
@@ -734,7 +740,8 @@ def send_command_with_retry(
     *,
     instance_id: str | None = None,
     max_retries: int | None = None,
-    retry_ms: int | None = None
+    retry_ms: int | None = None,
+    retry_on_reload: bool = True
 ) -> dict[str, Any] | MCPResponse:
     """Send a command to a Unity instance, waiting politely through Unity reloads.
 
@@ -744,6 +751,8 @@ def send_command_with_retry(
         instance_id: Optional Unity instance identifier (name, hash, name@hash, etc.)
         max_retries: Maximum number of retries for reload states
         retry_ms: Delay between retries in milliseconds
+        retry_on_reload: If False, don't retry when Unity is reloading (for commands
+            that trigger compilation/reload and shouldn't be re-sent)
 
     Returns:
         Response dictionary or MCPResponse from Unity
@@ -768,11 +777,15 @@ def send_command_with_retry(
     # Clamp to [0, 30] to prevent misconfiguration from causing excessive waits
     max_wait_s = max(0.0, min(max_wait_s, 30.0))
 
-    response = conn.send_command(command_type, params)
+    # If retry_on_reload=False, disable connection-level retries too (issue #577)
+    # Commands that trigger compilation/reload shouldn't retry on disconnect
+    send_max_attempts = None if retry_on_reload else 0
+
+    response = conn.send_command(command_type, params, max_attempts=send_max_attempts)
     retries = 0
     wait_started = None
     reason = _extract_response_reason(response)
-    while _is_reloading_response(response) and retries < max_retries:
+    while retry_on_reload and _is_reloading_response(response) and retries < max_retries:
         if wait_started is None:
             wait_started = time.monotonic()
             logger.debug(
@@ -842,7 +855,8 @@ async def async_send_command_with_retry(
     instance_id: str | None = None,
     loop=None,
     max_retries: int | None = None,
-    retry_ms: int | None = None
+    retry_ms: int | None = None,
+    retry_on_reload: bool = True
 ) -> dict[str, Any] | MCPResponse:
     """Async wrapper that runs the blocking retry helper in a thread pool.
 
@@ -853,6 +867,7 @@ async def async_send_command_with_retry(
         loop: Optional asyncio event loop
         max_retries: Maximum number of retries for reload states
         retry_ms: Delay between retries in milliseconds
+        retry_on_reload: If False, don't retry when Unity is reloading
 
     Returns:
         Response dictionary or MCPResponse on error
@@ -864,7 +879,8 @@ async def async_send_command_with_retry(
         return await loop.run_in_executor(
             None,
             lambda: send_command_with_retry(
-                command_type, params, instance_id=instance_id, max_retries=max_retries, retry_ms=retry_ms),
+                command_type, params, instance_id=instance_id, max_retries=max_retries,
+                retry_ms=retry_ms, retry_on_reload=retry_on_reload),
         )
     except Exception as e:
         return MCPResponse(success=False, error=str(e))

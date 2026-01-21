@@ -1310,6 +1310,7 @@ namespace MCPForUnity.Editor.Services
             }
 
             // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
+            // Note: --reinstall is not supported by uvx, use --no-cache --refresh instead
             string devFlags = AssetPathUtility.ShouldForceUvxRefresh() ? "--no-cache --refresh " : string.Empty;
             string args = string.IsNullOrEmpty(fromUrl)
                 ? $"{devFlags}{packageName} --transport http --http-url {httpUrl}"

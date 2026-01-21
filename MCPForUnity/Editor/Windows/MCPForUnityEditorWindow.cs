@@ -232,6 +232,11 @@ namespace MCPForUnity.Editor.Windows
             toolsSection.Refresh();
         }
 
+        // Throttle OnEditorUpdate to avoid per-frame overhead (GitHub issue #577).
+        // Connection status polling every frame caused expensive network checks 60+ times/sec.
+        private double _lastEditorUpdateTime;
+        private const double EditorUpdateIntervalSeconds = 2.0;
+
         private void OnEnable()
         {
             EditorApplication.update += OnEditorUpdate;
@@ -257,6 +262,16 @@ namespace MCPForUnity.Editor.Windows
 
         private void OnEditorUpdate()
         {
+            // Throttle to 2-second intervals instead of every frame.
+            // This prevents the expensive IsLocalHttpServerReachable() socket checks from running
+            // 60+ times per second, which caused main thread blocking and GC pressure.
+            double now = EditorApplication.timeSinceStartup;
+            if (now - _lastEditorUpdateTime < EditorUpdateIntervalSeconds)
+            {
+                return;
+            }
+            _lastEditorUpdateTime = now;
+
             if (rootVisualElement == null || rootVisualElement.childCount == 0)
                 return;
 

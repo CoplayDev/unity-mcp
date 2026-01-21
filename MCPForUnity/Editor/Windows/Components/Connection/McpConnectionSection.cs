@@ -674,6 +674,12 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             {
                 if (bridgeService.IsRunning)
                 {
+                    // Clear any resume flags when user manually ends the session to prevent
+                    // getting stuck in "Resuming..." state (the flag may have been set by a
+                    // domain reload that started just before the user clicked End Session)
+                    try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeStdioAfterReload); } catch { }
+                    try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeHttpAfterReload); } catch { }
+
                     await bridgeService.StopAsync();
                 }
                 else
@@ -717,6 +723,11 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             {
                 connectionToggleInProgress = true;
                 connectionToggleButton?.SetEnabled(false);
+
+                // Clear resume flags to prevent getting stuck in "Resuming..." state
+                try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeStdioAfterReload); } catch { }
+                try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeHttpAfterReload); } catch { }
+
                 await MCPServiceLocator.Bridge.StopAsync();
             }
             catch (Exception ex)

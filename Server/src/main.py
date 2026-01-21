@@ -37,6 +37,19 @@ except Exception:
 
 from fastmcp import FastMCP
 from logging.handlers import RotatingFileHandler
+
+
+class WindowsSafeRotatingFileHandler(RotatingFileHandler):
+    """RotatingFileHandler that gracefully handles Windows file locking during rotation."""
+
+    def doRollover(self):
+        """Override to catch PermissionError on Windows when log file is locked."""
+        try:
+            super().doRollover()
+        except PermissionError:
+            # On Windows, another process may have the log file open.
+            # Skip rotation this time - we'll try again on the next rollover.
+            pass
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import WebSocketRoute
@@ -69,7 +82,7 @@ try:
         "~/Library/Application Support/UnityMCP"), "Logs")
     os.makedirs(_log_dir, exist_ok=True)
     _file_path = os.path.join(_log_dir, "unity_mcp_server.log")
-    _fh = RotatingFileHandler(
+    _fh = WindowsSafeRotatingFileHandler(
         _file_path, maxBytes=512*1024, backupCount=2, encoding="utf-8")
     _fh.setFormatter(logging.Formatter(config.log_format))
     _fh.setLevel(getattr(logging, config.log_level))

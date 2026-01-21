@@ -30,7 +30,17 @@ namespace MCPForUnity.Editor.Services
         private static long? _domainReloadAfterUnixMs;
 
         private static double _lastUpdateTimeSinceStartup;
-        private const double MinUpdateIntervalSeconds = 0.25;
+        private const double MinUpdateIntervalSeconds = 1.0; // Reduced frequency: 1s instead of 0.25s
+
+        // State tracking to detect when snapshot actually changes (checked BEFORE building)
+        private static string _lastTrackedScenePath;
+        private static string _lastTrackedSceneName;
+        private static bool _lastTrackedIsFocused;
+        private static bool _lastTrackedIsPlaying;
+        private static bool _lastTrackedIsPaused;
+        private static bool _lastTrackedIsUpdating;
+        private static bool _lastTrackedTestsRunning;
+        private static string _lastTrackedActivityPhase;
 
         private static JObject _cached;
 
@@ -263,15 +273,77 @@ namespace MCPForUnity.Editor.Services
         {
             // Throttle to reduce overhead while keeping the snapshot fresh enough for polling clients.
             double now = EditorApplication.timeSinceStartup;
-            if (now - _lastUpdateTimeSinceStartup < MinUpdateIntervalSeconds)
+            // Use GetActualIsCompiling() to avoid Play mode false positives (issue #582)
+            bool isCompiling = GetActualIsCompiling();
+
+            // Check for compilation edge transitions (always update on these)
+            bool compilationEdge = isCompiling != _lastIsCompiling;
+
+            if (!compilationEdge && now - _lastUpdateTimeSinceStartup < MinUpdateIntervalSeconds)
             {
-                // Still update on compilation edge transitions to keep timestamps meaningful.
-                bool isCompiling = GetActualIsCompiling();
-                if (isCompiling == _lastIsCompiling)
-                {
-                    return;
-                }
+                return;
             }
+
+            // Fast state-change detection BEFORE building snapshot.
+            // This avoids the expensive BuildSnapshot() call entirely when nothing changed.
+            // These checks are much cheaper than building a full JSON snapshot.
+            var scene = EditorSceneManager.GetActiveScene();
+            string scenePath = string.IsNullOrEmpty(scene.path) ? null : scene.path;
+            string sceneName = scene.name ?? string.Empty;
+            bool isFocused = InternalEditorUtility.isApplicationActive;
+            bool isPlaying = EditorApplication.isPlaying;
+            bool isPaused = EditorApplication.isPaused;
+            bool isUpdating = EditorApplication.isUpdating;
+            bool testsRunning = TestRunStatus.IsRunning;
+
+            var activityPhase = "idle";
+            if (testsRunning)
+            {
+                activityPhase = "running_tests";
+            }
+            else if (isCompiling)
+            {
+                activityPhase = "compiling";
+            }
+            else if (_domainReloadPending)
+            {
+                activityPhase = "domain_reload";
+            }
+            else if (isUpdating)
+            {
+                activityPhase = "asset_import";
+            }
+            else if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                activityPhase = "playmode_transition";
+            }
+
+            bool hasChanges = compilationEdge
+                || _lastTrackedScenePath != scenePath
+                || _lastTrackedSceneName != sceneName
+                || _lastTrackedIsFocused != isFocused
+                || _lastTrackedIsPlaying != isPlaying
+                || _lastTrackedIsPaused != isPaused
+                || _lastTrackedIsUpdating != isUpdating
+                || _lastTrackedTestsRunning != testsRunning
+                || _lastTrackedActivityPhase != activityPhase;
+
+            if (!hasChanges)
+            {
+                // No state change - skip the expensive BuildSnapshot entirely.
+                // This is the key optimization that prevents the 28ms GC spikes.
+                return;
+            }
+
+            // Update tracked state
+            _lastTrackedScenePath = scenePath;
+            _lastTrackedSceneName = sceneName;
+            _lastTrackedIsFocused = isFocused;
+            _lastTrackedIsPlaying = isPlaying;
+            _lastTrackedIsPaused = isPaused;
+            _lastTrackedIsUpdating = isUpdating;
+            _lastTrackedTestsRunning = testsRunning;
+            _lastTrackedActivityPhase = activityPhase;
 
             _lastUpdateTimeSinceStartup = now;
             ForceUpdate("tick");
@@ -425,6 +497,10 @@ namespace MCPForUnity.Editor.Services
                 {
                     _cached = BuildSnapshot("rebuild");
                 }
+
+                // Always return a fresh clone to prevent mutation bugs.
+                // The main GC optimization comes from state-change detection (OnUpdate)
+                // which prevents unnecessary _cached rebuilds, not from caching the clone.
                 return (JObject)_cached.DeepClone();
             }
         }
