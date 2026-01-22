@@ -1,5 +1,9 @@
 name: Release
 
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
     inputs:
@@ -23,9 +27,19 @@ jobs:
       new_version: ${{ steps.compute.outputs.new_version }}
       tag: ${{ steps.tag.outputs.tag }}
     steps:
+      - name: Ensure workflow is running on main
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_NAME}" != "main" ]]; then
+            echo "This workflow must be run on the main branch. Current ref: ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
+          ref: main
           fetch-depth: 0
 
       - name: Compute new version
@@ -93,9 +107,8 @@ jobs:
             git commit -m "chore: bump version to ${NEW_VERSION}"
           fi
 
-          BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
-          echo "Pushing to branch: $BRANCH"
-          git push origin "$BRANCH"
+          echo "Pushing bump commit to main"
+          git push origin HEAD:main
 
       - name: Create and push tag
         env:
@@ -106,8 +119,8 @@ jobs:
           echo "Preparing to create tag $TAG"
 
           if git ls-remote --tags origin | grep -q "refs/tags/$TAG$"; then
-            echo "Tag $TAG already exists on remote. Skipping tag creation."
-            exit 0
+            echo "Tag $TAG already exists on remote. Refusing to release." >&2
+            exit 1
           fi
 
           git tag -a "$TAG" -m "Version ${TAG#v}"
@@ -119,6 +132,31 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: ${{ steps.tag.outputs.tag }}
           generate_release_notes: true
+
+  sync_beta:
+    name: Merge main back into beta
+    needs:
+      - bump
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout beta
+        uses: actions/checkout@v6
+        with:
+          ref: beta
+          fetch-depth: 0
+
+      - name: Merge main into beta and push
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+          git fetch origin main
+          git merge --no-ff --no-edit origin/main
+          git push origin HEAD:beta
 
   publish_docker:
     name: Publish Docker image
