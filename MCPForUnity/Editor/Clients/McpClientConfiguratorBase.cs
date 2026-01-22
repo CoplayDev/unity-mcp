@@ -352,8 +352,11 @@ namespace MCPForUnity.Editor.Clients
         /// Internal thread-safe version of CheckStatus.
         /// Can be called from background threads because all main-thread-only values are passed as parameters.
         /// projectDir, useHttpTransport, and claudePath are REQUIRED (non-nullable) to enforce thread safety at compile time.
+        /// NOTE: attemptAutoRewrite is NOT fully thread-safe because Configure() requires the main thread.
+        /// When called from a background thread, pass attemptAutoRewrite=false and handle re-registration
+        /// on the main thread based on the returned status.
         /// </summary>
-        internal McpStatus CheckStatusWithProjectDir(string projectDir, bool useHttpTransport, string claudePath, bool attemptAutoRewrite = true)
+        internal McpStatus CheckStatusWithProjectDir(string projectDir, bool useHttpTransport, string claudePath, bool attemptAutoRewrite = false)
         {
             try
             {
@@ -391,7 +394,7 @@ namespace MCPForUnity.Editor.Clients
                 }
                 catch { }
 
-                // Check if UnityMCP exists
+                // Check if UnityMCP exists (handles both "UnityMCP" and legacy "unityMCP")
                 if (ExecPath.TryRun(claudePath, "mcp list", projectDir, out var listStdout, out var listStderr, 10000, pathPrepend))
                 {
                     if (!string.IsNullOrEmpty(listStdout) && listStdout.IndexOf("UnityMCP", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -401,7 +404,11 @@ namespace MCPForUnity.Editor.Clients
                         bool currentUseHttp = useHttpTransport;
 
                         // Get detailed info about the registration to check transport type
-                        if (ExecPath.TryRun(claudePath, "mcp get UnityMCP", projectDir, out var getStdout, out var getStderr, 7000, pathPrepend))
+                        // Try both "UnityMCP" and "unityMCP" (legacy naming)
+                        string getStdout = null, getStderr = null;
+                        bool gotInfo = ExecPath.TryRun(claudePath, "mcp get UnityMCP", projectDir, out getStdout, out getStderr, 7000, pathPrepend)
+                                    || ExecPath.TryRun(claudePath, "mcp get unityMCP", projectDir, out getStdout, out getStderr, 7000, pathPrepend);
+                        if (gotInfo)
                         {
                             // Parse the output to determine registered transport mode
                             // The CLI output format contains "Type: http" or "Type: stdio"
@@ -409,14 +416,60 @@ namespace MCPForUnity.Editor.Clients
                             bool registeredWithStdio = getStdout.Contains("Type: stdio", StringComparison.OrdinalIgnoreCase);
 
                             // Check for transport mismatch
-                            if ((currentUseHttp && registeredWithStdio) || (!currentUseHttp && registeredWithHttp))
+                            bool hasTransportMismatch = (currentUseHttp && registeredWithStdio) || (!currentUseHttp && registeredWithHttp);
+
+                            // For stdio transport, also check package version
+                            bool hasVersionMismatch = false;
+                            string configuredPackageSource = null;
+                            string expectedPackageSource = null;
+                            if (registeredWithStdio)
                             {
-                                string registeredTransport = registeredWithHttp ? "HTTP" : "stdio";
-                                string currentTransport = currentUseHttp ? "HTTP" : "stdio";
-                                string errorMsg = $"Transport mismatch: Claude Code is registered with {registeredTransport} but current setting is {currentTransport}. Click Configure to re-register.";
-                                client.SetStatus(McpStatus.Error, errorMsg);
-                                McpLog.Warn(errorMsg);
-                                return client.status;
+                                expectedPackageSource = AssetPathUtility.GetMcpServerPackageSource();
+                                configuredPackageSource = ExtractPackageSourceFromCliOutput(getStdout);
+                                hasVersionMismatch = !string.IsNullOrEmpty(configuredPackageSource) &&
+                                    !string.Equals(configuredPackageSource, expectedPackageSource, StringComparison.OrdinalIgnoreCase);
+                            }
+
+                            // If there's any mismatch and auto-rewrite is enabled, re-register
+                            if (hasTransportMismatch || hasVersionMismatch)
+                            {
+                                // Configure() requires main thread (accesses EditorPrefs, Application.dataPath)
+                                // Only attempt auto-rewrite if we're on the main thread
+                                bool isMainThread = System.Threading.Thread.CurrentThread.ManagedThreadId == 1;
+                                if (attemptAutoRewrite && isMainThread)
+                                {
+                                    string reason = hasTransportMismatch
+                                        ? $"Transport mismatch (registered: {(registeredWithHttp ? "HTTP" : "stdio")}, expected: {(currentUseHttp ? "HTTP" : "stdio")})"
+                                        : $"Package version mismatch (registered: {configuredPackageSource}, expected: {expectedPackageSource})";
+                                    McpLog.Info($"{reason}. Re-registering...");
+                                    try
+                                    {
+                                        // Force re-register by ensuring status is not Configured (which would toggle to Unregister)
+                                        client.SetStatus(McpStatus.IncorrectPath);
+                                        Configure();
+                                        return client.status;
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        McpLog.Warn($"Auto-reregister failed: {ex.Message}");
+                                        client.SetStatus(McpStatus.IncorrectPath, $"Configuration mismatch. Click Configure to re-register.");
+                                        return client.status;
+                                    }
+                                }
+                                else
+                                {
+                                    if (hasTransportMismatch)
+                                    {
+                                        string errorMsg = $"Transport mismatch: Claude Code is registered with {(registeredWithHttp ? "HTTP" : "stdio")} but current setting is {(currentUseHttp ? "HTTP" : "stdio")}. Click Configure to re-register.";
+                                        client.SetStatus(McpStatus.Error, errorMsg);
+                                        McpLog.Warn(errorMsg);
+                                    }
+                                    else
+                                    {
+                                        client.SetStatus(McpStatus.IncorrectPath, $"Package version mismatch: registered with '{configuredPackageSource}' but current version is '{expectedPackageSource}'.");
+                                    }
+                                    return client.status;
+                                }
                             }
                         }
 
@@ -447,6 +500,85 @@ namespace MCPForUnity.Editor.Clients
             }
         }
 
+        /// <summary>
+        /// Thread-safe version of Configure that uses pre-captured main-thread values.
+        /// All parameters must be captured on the main thread before calling this method.
+        /// </summary>
+        public void ConfigureWithCapturedValues(
+            string projectDir, string claudePath, string pathPrepend,
+            bool useHttpTransport, string httpUrl,
+            string uvxPath, string gitUrl, string packageName, bool shouldForceRefresh)
+        {
+            if (client.status == McpStatus.Configured)
+            {
+                UnregisterWithCapturedValues(projectDir, claudePath, pathPrepend);
+            }
+            else
+            {
+                RegisterWithCapturedValues(projectDir, claudePath, pathPrepend,
+                    useHttpTransport, httpUrl, uvxPath, gitUrl, packageName, shouldForceRefresh);
+            }
+        }
+
+        /// <summary>
+        /// Thread-safe registration using pre-captured values.
+        /// </summary>
+        private void RegisterWithCapturedValues(
+            string projectDir, string claudePath, string pathPrepend,
+            bool useHttpTransport, string httpUrl,
+            string uvxPath, string gitUrl, string packageName, bool shouldForceRefresh)
+        {
+            if (string.IsNullOrEmpty(claudePath))
+            {
+                throw new InvalidOperationException("Claude CLI not found. Please install Claude Code first.");
+            }
+
+            string args;
+            if (useHttpTransport)
+            {
+                args = $"mcp add --transport http UnityMCP {httpUrl}";
+            }
+            else
+            {
+                // Note: --reinstall is not supported by uvx, use --no-cache --refresh instead
+                string devFlags = shouldForceRefresh ? "--no-cache --refresh " : string.Empty;
+                args = $"mcp add --transport stdio UnityMCP -- \"{uvxPath}\" {devFlags}--from \"{gitUrl}\" {packageName}";
+            }
+
+            // Remove any existing registrations - handle both "UnityMCP" and "unityMCP" (legacy)
+            McpLog.Info("Removing any existing UnityMCP registrations before adding...");
+            ExecPath.TryRun(claudePath, "mcp remove UnityMCP", projectDir, out _, out _, 7000, pathPrepend);
+            ExecPath.TryRun(claudePath, "mcp remove unityMCP", projectDir, out _, out _, 7000, pathPrepend);
+
+            // Now add the registration
+            if (!ExecPath.TryRun(claudePath, args, projectDir, out var stdout, out var stderr, 15000, pathPrepend))
+            {
+                throw new InvalidOperationException($"Failed to register with Claude Code:\n{stderr}\n{stdout}");
+            }
+
+            McpLog.Info($"Successfully registered with Claude Code using {(useHttpTransport ? "HTTP" : "stdio")} transport.");
+            client.SetStatus(McpStatus.Configured);
+        }
+
+        /// <summary>
+        /// Thread-safe unregistration using pre-captured values.
+        /// </summary>
+        private void UnregisterWithCapturedValues(string projectDir, string claudePath, string pathPrepend)
+        {
+            if (string.IsNullOrEmpty(claudePath))
+            {
+                throw new InvalidOperationException("Claude CLI not found. Please install Claude Code first.");
+            }
+
+            // Remove both "UnityMCP" and "unityMCP" (legacy naming)
+            McpLog.Info("Removing all UnityMCP registrations...");
+            ExecPath.TryRun(claudePath, "mcp remove UnityMCP", projectDir, out _, out _, 7000, pathPrepend);
+            ExecPath.TryRun(claudePath, "mcp remove unityMCP", projectDir, out _, out _, 7000, pathPrepend);
+
+            McpLog.Info("MCP server successfully unregistered from Claude Code.");
+            client.SetStatus(McpStatus.NotConfigured);
+        }
+
         private void Register()
         {
             var pathService = MCPServiceLocator.Paths;
@@ -468,6 +600,7 @@ namespace MCPForUnity.Editor.Clients
             {
                 var (uvxPath, gitUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
                 // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
+                // Note: --reinstall is not supported by uvx, use --no-cache --refresh instead
                 string devFlags = AssetPathUtility.ShouldForceUvxRefresh() ? "--no-cache --refresh " : string.Empty;
                 args = $"mcp add --transport stdio UnityMCP -- \"{uvxPath}\" {devFlags}--from \"{gitUrl}\" {packageName}";
             }
@@ -496,17 +629,10 @@ namespace MCPForUnity.Editor.Clients
             }
             catch { }
 
-            // Check if UnityMCP already exists and remove it first to ensure clean registration
-            // This ensures we always use the current transport mode setting
-            bool serverExists = ExecPath.TryRun(claudePath, "mcp get UnityMCP", projectDir, out _, out _, 7000, pathPrepend);
-            if (serverExists)
-            {
-                McpLog.Info("Existing UnityMCP registration found - removing to ensure transport mode is up-to-date");
-                if (!ExecPath.TryRun(claudePath, "mcp remove UnityMCP", projectDir, out var removeStdout, out var removeStderr, 10000, pathPrepend))
-                {
-                    McpLog.Warn($"Failed to remove existing UnityMCP registration: {removeStderr}. Attempting to register anyway...");
-                }
-            }
+            // Remove any existing registrations - handle both "UnityMCP" and "unityMCP" (legacy)
+            McpLog.Info("Removing any existing UnityMCP registrations before adding...");
+            ExecPath.TryRun(claudePath, "mcp remove UnityMCP", projectDir, out _, out _, 7000, pathPrepend);
+            ExecPath.TryRun(claudePath, "mcp remove unityMCP", projectDir, out _, out _, 7000, pathPrepend);
 
             // Now add the registration with the current transport mode
             if (!ExecPath.TryRun(claudePath, args, projectDir, out var stdout, out var stderr, 15000, pathPrepend))
@@ -542,26 +668,13 @@ namespace MCPForUnity.Editor.Clients
                 pathPrepend = "/usr/local/bin:/usr/bin:/bin";
             }
 
-            bool serverExists = ExecPath.TryRun(claudePath, "mcp get UnityMCP", projectDir, out _, out _, 7000, pathPrepend);
+            // Remove both "UnityMCP" and "unityMCP" (legacy naming)
+            McpLog.Info("Removing all UnityMCP registrations...");
+            ExecPath.TryRun(claudePath, "mcp remove UnityMCP", projectDir, out _, out _, 7000, pathPrepend);
+            ExecPath.TryRun(claudePath, "mcp remove unityMCP", projectDir, out _, out _, 7000, pathPrepend);
 
-            if (!serverExists)
-            {
-                client.SetStatus(McpStatus.NotConfigured);
-                McpLog.Info("No MCP for Unity server found - already unregistered.");
-                return;
-            }
-
-            if (ExecPath.TryRun(claudePath, "mcp remove UnityMCP", projectDir, out var stdout, out var stderr, 10000, pathPrepend))
-            {
-                McpLog.Info("MCP server successfully unregistered from Claude Code.");
-            }
-            else
-            {
-                throw new InvalidOperationException($"Failed to unregister: {stderr}");
-            }
-
+            McpLog.Info("MCP server successfully unregistered from Claude Code.");
             client.SetStatus(McpStatus.NotConfigured);
-            // Status is already set - no need for blocking CheckStatus() call
         }
 
         public override string GetManualSnippet()
@@ -577,7 +690,7 @@ namespace MCPForUnity.Editor.Clients
                        "# Unregister the MCP server:\n" +
                        "claude mcp remove UnityMCP\n\n" +
                        "# List registered servers:\n" +
-                       "claude mcp list # Only works when claude is run in the project's directory";
+                       "claude mcp list";
             }
 
             if (string.IsNullOrEmpty(uvxPath))
@@ -587,6 +700,7 @@ namespace MCPForUnity.Editor.Clients
 
             string packageSource = AssetPathUtility.GetMcpServerPackageSource();
             // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
+            // Note: --reinstall is not supported by uvx, use --no-cache --refresh instead
             string devFlags = AssetPathUtility.ShouldForceUvxRefresh() ? "--no-cache --refresh " : string.Empty;
 
             return "# Register the MCP server with Claude Code:\n" +
@@ -594,7 +708,7 @@ namespace MCPForUnity.Editor.Clients
                    "# Unregister the MCP server:\n" +
                    "claude mcp remove UnityMCP\n\n" +
                    "# List registered servers:\n" +
-                   "claude mcp list # Only works when claude is run in the project's directory";
+                   "claude mcp list";
         }
 
         public override IList<string> GetInstallationSteps() => new List<string>
@@ -603,5 +717,51 @@ namespace MCPForUnity.Editor.Clients
             "Use Register to add UnityMCP (or run claude mcp add UnityMCP)",
             "Restart Claude Code"
         };
+
+        /// <summary>
+        /// Extracts the package source (--from argument value) from claude mcp get output.
+        /// The output format includes args like: --from "mcpforunityserver==9.0.1"
+        /// </summary>
+        private static string ExtractPackageSourceFromCliOutput(string cliOutput)
+        {
+            if (string.IsNullOrEmpty(cliOutput))
+                return null;
+
+            // Look for --from followed by the package source
+            // The CLI output may have it quoted or unquoted
+            int fromIndex = cliOutput.IndexOf("--from", StringComparison.OrdinalIgnoreCase);
+            if (fromIndex < 0)
+                return null;
+
+            // Move past "--from" and any whitespace
+            int startIndex = fromIndex + 6;
+            while (startIndex < cliOutput.Length && char.IsWhiteSpace(cliOutput[startIndex]))
+                startIndex++;
+
+            if (startIndex >= cliOutput.Length)
+                return null;
+
+            // Check if value is quoted
+            char quoteChar = cliOutput[startIndex];
+            if (quoteChar == '"' || quoteChar == '\'')
+            {
+                startIndex++;
+                int endIndex = cliOutput.IndexOf(quoteChar, startIndex);
+                if (endIndex > startIndex)
+                    return cliOutput.Substring(startIndex, endIndex - startIndex);
+            }
+            else
+            {
+                // Unquoted - read until whitespace or end of line
+                int endIndex = startIndex;
+                while (endIndex < cliOutput.Length && !char.IsWhiteSpace(cliOutput[endIndex]))
+                    endIndex++;
+
+                if (endIndex > startIndex)
+                    return cliOutput.Substring(startIndex, endIndex - startIndex);
+            }
+
+            return null;
+        }
     }
 }

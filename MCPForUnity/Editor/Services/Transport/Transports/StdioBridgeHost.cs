@@ -821,6 +821,12 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 List<(string id, QueuedCommand command)> work;
                 lock (lockObj)
                 {
+                    // Early exit inside lock to prevent per-frame List allocations (GitHub issue #577)
+                    if (commandQueue.Count == 0)
+                    {
+                        return;
+                    }
+
                     work = new List<(string, QueuedCommand)>(commandQueue.Count);
                     foreach (var kvp in commandQueue)
                     {

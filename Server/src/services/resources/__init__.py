@@ -18,7 +18,7 @@ logger = logging.getLogger("mcp-for-unity-server")
 __all__ = ['register_all_resources']
 
 
-def register_all_resources(mcp: FastMCP):
+def register_all_resources(mcp: FastMCP, *, project_scoped_tools: bool = True):
     """
     Auto-discover and register all resources in the resources/ directory.
 
@@ -45,6 +45,11 @@ def register_all_resources(mcp: FastMCP):
         resource_name = resource_info['name']
         description = resource_info['description']
         kwargs = resource_info['kwargs']
+
+        if not project_scoped_tools and resource_name == "custom_tools":
+            logger.info(
+                "Skipping custom_tools resource registration (project-scoped tools disabled)")
+            continue
 
         # Check if URI contains query parameters (e.g., {?unity_instance})
         has_query_params = '{?' in uri

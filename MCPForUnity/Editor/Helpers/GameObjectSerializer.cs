@@ -115,6 +115,48 @@ namespace MCPForUnity.Editor.Helpers
         // --- End Metadata Caching ---
 
         /// <summary>
+        /// Checks if a type is or derives from a type with the specified full name.
+        /// Used to detect special-case components including their subclasses.
+        /// </summary>
+        private static bool IsOrDerivedFrom(Type type, string baseTypeFullName)
+        {
+            Type current = type;
+            while (current != null)
+            {
+                if (current.FullName == baseTypeFullName)
+                    return true;
+                current = current.BaseType;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Serializes a UnityEngine.Object reference to a dictionary with name, instanceID, and assetPath.
+        /// Used for consistent serialization of asset references in special-case component handlers.
+        /// </summary>
+        /// <param name="obj">The Unity object to serialize</param>
+        /// <param name="includeAssetPath">Whether to include the asset path (default true)</param>
+        /// <returns>A dictionary with the object's reference info, or null if obj is null</returns>
+        private static Dictionary<string, object> SerializeAssetReference(UnityEngine.Object obj, bool includeAssetPath = true)
+        {
+            if (obj == null) return null;
+            
+            var result = new Dictionary<string, object>
+            {
+                { "name", obj.name },
+                { "instanceID", obj.GetInstanceID() }
+            };
+            
+            if (includeAssetPath)
+            {
+                var assetPath = AssetDatabase.GetAssetPath(obj);
+                result["assetPath"] = string.IsNullOrEmpty(assetPath) ? null : assetPath;
+            }
+            
+            return result;
+        }
+
+        /// <summary>
         /// Creates a serializable representation of a Component, attempting to serialize
         /// public properties and fields using reflection, with caching and control over non-public fields.
         /// </summary>
@@ -219,6 +261,72 @@ namespace MCPForUnity.Editor.Helpers
                 };
             }
             // --- End Special handling for Camera ---
+
+            // --- Special handling for UIDocument to avoid infinite loops from VisualElement hierarchy (Issue #585) ---
+            // UIDocument.rootVisualElement contains circular parent/child references that cause infinite serialization loops.
+            // Use IsOrDerivedFrom to also catch subclasses of UIDocument.
+            if (IsOrDerivedFrom(componentType, "UnityEngine.UIElements.UIDocument"))
+            {
+                var uiDocProperties = new Dictionary<string, object>();
+
+                try
+                {
+                    // Get panelSettings reference safely
+                    var panelSettingsProp = componentType.GetProperty("panelSettings");
+                    if (panelSettingsProp != null)
+                    {
+                        var panelSettings = panelSettingsProp.GetValue(c) as UnityEngine.Object;
+                        uiDocProperties["panelSettings"] = SerializeAssetReference(panelSettings);
+                    }
+
+                    // Get visualTreeAsset reference safely (the UXML file)
+                    var visualTreeAssetProp = componentType.GetProperty("visualTreeAsset");
+                    if (visualTreeAssetProp != null)
+                    {
+                        var visualTreeAsset = visualTreeAssetProp.GetValue(c) as UnityEngine.Object;
+                        uiDocProperties["visualTreeAsset"] = SerializeAssetReference(visualTreeAsset);
+                    }
+
+                    // Get sortingOrder safely
+                    var sortingOrderProp = componentType.GetProperty("sortingOrder");
+                    if (sortingOrderProp != null)
+                    {
+                        uiDocProperties["sortingOrder"] = sortingOrderProp.GetValue(c);
+                    }
+
+                    // Get enabled state (from Behaviour base class)
+                    var enabledProp = componentType.GetProperty("enabled");
+                    if (enabledProp != null)
+                    {
+                        uiDocProperties["enabled"] = enabledProp.GetValue(c);
+                    }
+
+                    // Get parentUI reference safely (no asset path needed - it's a scene reference)
+                    var parentUIProp = componentType.GetProperty("parentUI");
+                    if (parentUIProp != null)
+                    {
+                        var parentUI = parentUIProp.GetValue(c) as UnityEngine.Object;
+                        uiDocProperties["parentUI"] = SerializeAssetReference(parentUI, includeAssetPath: false);
+                    }
+
+                    // NOTE: rootVisualElement is intentionally skipped - it contains circular
+                    // parent/child references that cause infinite serialization loops
+                    uiDocProperties["_note"] = "rootVisualElement skipped to prevent circular reference loops";
+                }
+                catch (Exception e)
+                {
+                    McpLog.Warn($"[GetComponentData] Error reading UIDocument properties: {e.Message}");
+                }
+
+                // Return structure matches Camera special handling (typeName, instanceID, properties)
+                return new Dictionary<string, object>
+                {
+                    { "typeName", componentType.FullName },
+                    { "instanceID", c.GetInstanceID() },
+                    { "properties", uiDocProperties }
+                };
+            }
+            // --- End Special handling for UIDocument ---
 
             var data = new Dictionary<string, object>
             {
