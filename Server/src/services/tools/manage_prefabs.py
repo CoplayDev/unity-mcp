@@ -49,30 +49,65 @@ async def manage_prefabs(
         "Prefab operation to perform.",
     ],
     prefab_path: Annotated[
-        str, "Prefab asset path (e.g., Assets/Prefabs/MyPrefab.prefab). Used by: get_info, get_hierarchy, open_stage."
+        str, 
+        "Prefab asset path (e.g., Assets/Prefabs/MyPrefab.prefab). "
+        "Used by: get_info, get_hierarchy, open_stage, create_from_gameobject."
     ] | None = None,
     mode: Annotated[
-        str, "Prefab stage mode for open_stage. Only 'InIsolation' is currently supported."
+        str, 
+        "Prefab stage mode for open_stage. Only 'InIsolation' is currently supported."
     ] | None = None,
     save_before_close: Annotated[
-        bool, "When true with close_stage, saves the prefab before closing the stage."
+        bool, 
+        "When true with close_stage, saves the prefab before closing the stage if there are unsaved changes."
     ] | None = None,
     target: Annotated[
-        str, "Scene GameObject name for create_from_gameobject. The object to convert to a prefab."
+        str, 
+        "Scene GameObject name for create_from_gameobject. The object to convert to a prefab."
     ] | None = None,
     allow_overwrite: Annotated[
-        bool, "When true with create_from_gameobject, allows replacing an existing prefab at the same path."
+        bool, 
+        "When true with create_from_gameobject, allows replacing an existing prefab at the same path. "
     ] | None = None,
     search_inactive: Annotated[
-        bool, "When true with create_from_gameobject, includes inactive GameObjects in the search."
+        bool, 
+        "When true with create_from_gameobject, includes inactive GameObjects in the search for the target object."
+    ] | None = None,
+    unlink_if_instance: Annotated[
+        bool,
+        "When true with create_from_gameobject, automatically unlinks the object from its existing prefab if it's already a prefab instance. "
+        "This allows creating a new independent prefab from an existing prefab instance. "
+        "If false (default), attempting to create a prefab from an existing instance will fail."
     ] | None = None,
     page_size: Annotated[
-        int | str, "Number of items per page for get_hierarchy (default: 50)."
+        int | str, "Number of items per page for get_hierarchy (default: 50, max: 500)."
     ] | None = None,
     cursor: Annotated[
-        int | str, "Pagination cursor for get_hierarchy (offset index)."
+        int | str, "Pagination cursor for get_hierarchy (offset index). Use nextCursor from previous response to get next page."
     ] | None = None,
 ) -> dict[str, Any]:
+    """
+    Manages Unity Prefab assets and stages.
+    
+    Actions:
+    - get_info: Get metadata about a prefab (type, components, child count, etc.)
+    - get_hierarchy: Get the complete hierarchy structure of a prefab (supports pagination)
+    - open_stage: Open a prefab in Prefab Mode for editing
+    - close_stage: Close the currently open Prefab Mode (optionally saving first)
+    - save_open_stage: Save changes to the currently open prefab
+    - create_from_gameobject: Convert a scene GameObject into a new prefab asset
+    
+    Common workflows:
+    1. Edit existing prefab: open_stage → (make changes) → save_open_stage → close_stage
+    2. Create new prefab: create_from_gameobject (from scene object)
+    3. Inspect prefab: get_info or get_hierarchy
+    
+    Tips:
+    - Use search_inactive=True if your target GameObject is currently disabled
+    - Use unlink_if_instance=True to create a new prefab from an existing prefab instance
+    - Use allow_overwrite=True to replace an existing prefab file
+    - Always save_open_stage before close_stage to persist your changes
+    """
     # Validate required parameters
     required = REQUIRED_PARAMS.get(action, [])
     for param_name in required:
@@ -85,7 +120,7 @@ async def manage_prefabs(
 
     unity_instance = get_unity_instance_from_context(ctx)
 
-    # Preflight check for read operations to ensure Unity is ready
+    # Preflight check for operations to ensure Unity is ready
     try:
         gate = await preflight(ctx, wait_for_no_compile=True, refresh_if_dirty=True)
         if gate is not None:
@@ -112,7 +147,7 @@ async def manage_prefabs(
         if mode:
             params["mode"] = mode
 
-        # Handle boolean parameters
+        # Handle boolean parameters with proper coercion
         save_before_close_val = coerce_bool(save_before_close)
         if save_before_close_val is not None:
             params["saveBeforeClose"] = save_before_close_val
@@ -127,6 +162,10 @@ async def manage_prefabs(
         search_inactive_val = coerce_bool(search_inactive)
         if search_inactive_val is not None:
             params["searchInactive"] = search_inactive_val
+
+        unlink_if_instance_val = coerce_bool(unlink_if_instance)
+        if unlink_if_instance_val is not None:
+            params["unlinkIfInstance"] = unlink_if_instance_val
 
         # Handle pagination parameters
         if coerced_page_size is not None:
@@ -153,7 +192,7 @@ async def manage_prefabs(
     except TimeoutError:
         return {
             "success": False,
-            "message": "Unity connection timeout. Please check if Unity is running."
+            "message": "Unity connection timeout. Please check if Unity is running and responsive."
         }
     except Exception as exc:
         return {
