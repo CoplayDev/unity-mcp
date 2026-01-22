@@ -259,7 +259,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             GameObject sourceObject = FindSceneObjectByName(targetName, includeInactive);
             if (sourceObject == null)
             {
-                return new ErrorResponse($"GameObject '{targetName}' not found in the active scene{(includeInactive ? " (including inactive objects)" : "")}.");
+                return new ErrorResponse($"GameObject '{targetName}' not found in the active scene or prefab stage{(includeInactive ? " (including inactive objects)" : "")}.");
             }
 
             // 3. Validate source object state
@@ -441,7 +441,12 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 return;
             }
 
-            string fullDirectory = Path.Combine(Directory.GetCurrentDirectory(), directory);
+            // Use Application.dataPath for more reliable path resolution
+            // Application.dataPath points to the Assets folder (e.g., ".../ProjectName/Assets")
+            string assetsPath = Application.dataPath;
+            string projectRoot = Path.GetDirectoryName(assetsPath);
+            string fullDirectory = Path.Combine(projectRoot, directory);
+
             if (!Directory.Exists(fullDirectory))
             {
                 Directory.CreateDirectory(fullDirectory);
@@ -461,7 +466,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             {
                 foreach (Transform transform in stage.prefabContentsRoot.GetComponentsInChildren<Transform>(includeInactive))
                 {
-                    if (transform.name == name)
+                    if (transform.name == name && (includeInactive || transform.gameObject.activeSelf))
                     {
                         return transform.gameObject;
                     }
@@ -481,7 +486,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 // Check children
                 foreach (Transform transform in root.GetComponentsInChildren<Transform>(includeInactive))
                 {
-                    if (transform.name == name)
+                    if (transform.name == name && (includeInactive || transform.gameObject.activeSelf))
                     {
                         return transform.gameObject;
                     }

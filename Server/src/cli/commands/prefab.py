@@ -113,13 +113,20 @@ def save_stage():
     is_flag=True,
     help="Include inactive objects when finding target."
 )
-def create(target: str, path: str, overwrite: bool, include_inactive: bool):
+@click.option(
+    "--unlink-if-instance",
+    is_flag=True,
+    help="Unlink from existing prefab before creating new one."
+)
+
+def create(target: str, path: str, overwrite: bool, include_inactive: bool, unlink_if_instance: bool):
     """Create a prefab from a scene GameObject.
 
     \b
     Examples:
         unity-mcp prefab create "Player" "Assets/Prefabs/Player.prefab"
         unity-mcp prefab create "Enemy" "Assets/Prefabs/Enemy.prefab" --overwrite
+        unity-mcp prefab create "EnemyInstance" "Assets/Prefabs/BossEnemy.prefab" --unlink-if-instance
     """
     config = get_config()
 
@@ -133,6 +140,8 @@ def create(target: str, path: str, overwrite: bool, include_inactive: bool):
         params["allowOverwrite"] = True
     if include_inactive:
         params["searchInactive"] = True
+    if unlink_if_instance:
+        params["unlinkIfInstance"] = True
 
     try:
         result = run_command("manage_prefabs", params, config)
