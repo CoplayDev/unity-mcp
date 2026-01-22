@@ -130,11 +130,18 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 throw new InvalidOperationException("Cannot save prefab stage without a prefab root.");
             }
 
-            bool saved = PrefabUtility.SaveAsPrefabAsset(stage.prefabContentsRoot, stage.assetPath);
+            // Mark the prefab stage scene as dirty to ensure changes are tracked
+            EditorSceneManager.MarkSceneDirty(stage.scene);
+
+            // Save the prefab stage changes
+            bool saved = EditorSceneManager.SaveScene(stage.scene);
             if (!saved)
             {
                 throw new InvalidOperationException($"Failed to save prefab asset at '{stage.assetPath}'.");
             }
+
+            // Ensure asset database writes the changes to disk
+            AssetDatabase.SaveAssets();
         }
 
         private static object CreatePrefabFromGameObject(JObject @params)
