@@ -28,25 +28,53 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
         private static string BuildConfigPath()
         {
-            string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            return Path.Combine(home, ".config", "opencode", "opencode.json");
+            string xdgConfigHome = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+            string configBase = !string.IsNullOrEmpty(xdgConfigHome)
+                ? xdgConfigHome
+                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config");
+            return Path.Combine(configBase, "opencode", "opencode.json");
         }
 
         public override string GetConfigPath() => CurrentOsPath();
+
+        /// <summary>
+        /// Attempts to load and parse the config file.
+        /// Returns null if file doesn't exist.
+        /// Returns empty JObject if file exists but contains malformed JSON (logs warning).
+        /// Throws on I/O errors (permission denied, etc.).
+        /// </summary>
+        private JObject TryLoadConfig(string path)
+        {
+            if (!File.Exists(path))
+                return null;
+
+            string content = File.ReadAllText(path);
+            try
+            {
+                return JsonConvert.DeserializeObject<JObject>(content) ?? new JObject();
+            }
+            catch (JsonException)
+            {
+                // Malformed JSON - return empty object so caller can overwrite with valid config
+                UnityEngine.Debug.LogWarning($"[OpenCodeConfigurator] Malformed JSON in {path}, will overwrite with valid config");
+                return new JObject();
+            }
+        }
 
         public override McpStatus CheckStatus(bool attemptAutoRewrite = true)
         {
             try
             {
                 string path = GetConfigPath();
-                if (!File.Exists(path))
+                var config = TryLoadConfig(path);
+
+                if (config == null)
                 {
                     client.SetStatus(McpStatus.NotConfigured);
                     return client.status;
                 }
 
-                var config = JsonConvert.DeserializeObject<JObject>(File.ReadAllText(path));
-                var unityMcp = config?["mcp"]?[ServerName] as JObject;
+                var unityMcp = config["mcp"]?[ServerName] as JObject;
 
                 if (unityMcp == null)
                 {
@@ -80,20 +108,25 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
         public override void Configure()
         {
-            string path = GetConfigPath();
-            McpConfigurationHelper.EnsureConfigDirectoryExists(path);
+            try
+            {
+                string path = GetConfigPath();
+                McpConfigurationHelper.EnsureConfigDirectoryExists(path);
 
-            JObject config = File.Exists(path)
-                ? JsonConvert.DeserializeObject<JObject>(File.ReadAllText(path)) ?? new JObject()
-                : new JObject { ["$schema"] = SchemaUrl };
+                var config = TryLoadConfig(path) ?? new JObject { ["$schema"] = SchemaUrl };
 
-            var mcpSection = config["mcp"] as JObject ?? new JObject();
-            config["mcp"] = mcpSection;
+                var mcpSection = config["mcp"] as JObject ?? new JObject();
+                config["mcp"] = mcpSection;
 
-            mcpSection[ServerName] = BuildServerEntry();
+                mcpSection[ServerName] = BuildServerEntry();
 
-            McpConfigurationHelper.WriteAtomicFile(path, JsonConvert.SerializeObject(config, Formatting.Indented));
-            client.SetStatus(McpStatus.Configured);
+                McpConfigurationHelper.WriteAtomicFile(path, JsonConvert.SerializeObject(config, Formatting.Indented));
+                client.SetStatus(McpStatus.Configured);
+            }
+            catch (Exception ex)
+            {
+                client.SetStatus(McpStatus.Error, ex.Message);
+            }
         }
 
         public override string GetManualSnippet()
