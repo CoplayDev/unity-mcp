@@ -263,7 +263,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             }
 
             // 3. Validate source object state
-            var objectValidation = ValidateSourceObjectForPrefab(sourceObject, unlinkIfInstance, replaceExisting);
+            var objectValidation = ValidateSourceObjectForPrefab(sourceObject, unlinkIfInstance);
             if (!objectValidation.isValid)
             {
                 return new ErrorResponse(objectValidation.errorMessage);
@@ -373,7 +373,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
         /// Validates source object can be converted to prefab.
         /// </summary>
         private static (bool isValid, string errorMessage, bool shouldUnlink, string existingPrefabPath)
-            ValidateSourceObjectForPrefab(GameObject sourceObject, bool unlinkIfInstance, bool replaceExisting)
+            ValidateSourceObjectForPrefab(GameObject sourceObject, bool unlinkIfInstance)
         {
             // Check if this is a Prefab Asset (the .prefab file itself in the editor)
             if (PrefabUtility.IsPartOfPrefabAsset(sourceObject))
