@@ -221,6 +221,13 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 
             var client = configurators[selectedClientIndex];
 
+            // Handle CLI configurators asynchronously
+            if (client is ClaudeCliMcpConfigurator)
+            {
+                ConfigureClaudeCliAsync(client);
+                return;
+            }
+
             try
             {
                 MCPServiceLocator.Client.ConfigureClient(client);
@@ -235,6 +242,92 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                 McpLog.Error($"Configuration failed: {ex.Message}");
                 EditorUtility.DisplayDialog("Configuration Failed", ex.Message, "OK");
             }
+        }
+
+        private void ConfigureClaudeCliAsync(IMcpClientConfigurator client)
+        {
+            if (statusRefreshInFlight.Contains(client))
+                return;
+
+            statusRefreshInFlight.Add(client);
+            bool isCurrentlyConfigured = client.Status == McpStatus.Configured;
+            ApplyStatusToUi(client, showChecking: true, customMessage: isCurrentlyConfigured ? "Unregistering..." : "Registering...");
+
+            // Capture ALL main-thread-only values before async task
+            string projectDir = Path.GetDirectoryName(Application.dataPath);
+            bool useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            string claudePath = MCPServiceLocator.Paths.GetClaudeCliPath();
+            string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
+            var (uvxPath, gitUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
+            bool shouldForceRefresh = AssetPathUtility.ShouldForceUvxRefresh();
+
+            // Compute pathPrepend on main thread
+            string pathPrepend = null;
+            if (Application.platform == RuntimePlatform.OSXEditor)
+                pathPrepend = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin";
+            else if (Application.platform == RuntimePlatform.LinuxEditor)
+                pathPrepend = "/usr/local/bin:/usr/bin:/bin";
+            try
+            {
+                string claudeDir = Path.GetDirectoryName(claudePath);
+                if (!string.IsNullOrEmpty(claudeDir))
+                    pathPrepend = string.IsNullOrEmpty(pathPrepend) ? claudeDir : $"{claudeDir}:{pathPrepend}";
+            }
+            catch { }
+
+            Task.Run(() =>
+            {
+                try
+                {
+                    if (client is ClaudeCliMcpConfigurator cliConfigurator)
+                    {
+                        cliConfigurator.ConfigureWithCapturedValues(
+                            projectDir, claudePath, pathPrepend,
+                            useHttpTransport, httpUrl,
+                            uvxPath, gitUrl, packageName, shouldForceRefresh);
+                    }
+                    return (success: true, error: (string)null);
+                }
+                catch (Exception ex)
+                {
+                    return (success: false, error: ex.Message);
+                }
+            }).ContinueWith(t =>
+            {
+                string errorMessage = null;
+                if (t.IsFaulted && t.Exception != null)
+                {
+                    errorMessage = t.Exception.GetBaseException()?.Message ?? "Configuration failed";
+                }
+                else if (!t.Result.success)
+                {
+                    errorMessage = t.Result.error;
+                }
+
+                EditorApplication.delayCall += () =>
+                {
+                    statusRefreshInFlight.Remove(client);
+                    lastStatusChecks.Remove(client);
+
+                    if (errorMessage != null)
+                    {
+                        if (client is McpClientConfiguratorBase baseConfigurator)
+                        {
+                            baseConfigurator.Client.SetStatus(McpStatus.Error, errorMessage);
+                        }
+                        McpLog.Error($"Configuration failed: {errorMessage}");
+                        RefreshClientStatus(client, forceImmediate: true);
+                    }
+                    else
+                    {
+                        // Registration succeeded - trust the status set by RegisterWithCapturedValues
+                        // and update UI without re-verifying (which could fail due to CLI timing/scope issues)
+                        lastStatusChecks[client] = DateTime.UtcNow;
+                        ApplyStatusToUi(client);
+                    }
+                    UpdateManualConfiguration();
+                };
+            });
         }
 
         private void OnBrowseClaudeClicked()
@@ -396,7 +489,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
             return (DateTime.UtcNow - last) > StatusRefreshInterval;
         }
 
-        private void ApplyStatusToUi(IMcpClientConfigurator client, bool showChecking = false)
+        private void ApplyStatusToUi(IMcpClientConfigurator client, bool showChecking = false, string customMessage = null)
         {
             if (selectedClientIndex < 0 || selectedClientIndex >= configurators.Count)
                 return;
@@ -410,7 +503,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 
             if (showChecking)
             {
-                clientStatusLabel.text = "Checking...";
+                clientStatusLabel.text = customMessage ?? "Checking...";
                 clientStatusLabel.style.color = StyleKeyword.Null;
                 clientStatusIndicator.AddToClassList("warning");
                 configureButton.text = client.GetConfigureActionLabel();

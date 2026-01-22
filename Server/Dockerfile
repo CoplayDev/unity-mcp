@@ -28,4 +28,9 @@ EXPOSE 8080
 
 ENV PYTHONPATH=/app/Server/src
 
-CMD ["uv", "run", "python", "src/main.py", "--transport", "http", "--http-host", "0.0.0.0", "--http-port", "8080"]
+# ENTRYPOINT allows override via docker run arguments
+# Default: stdio transport (Docker MCP Gateway compatible)
+# For HTTP: docker run -p 8080:8080 <image> --transport http --http-host 0.0.0.0 --http-port 8080
+# If hosting remotely, you should add the --project-scoped-tools flag
+ENTRYPOINT ["uv", "run", "mcp-for-unity"]
+CMD []

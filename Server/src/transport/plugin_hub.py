@@ -315,6 +315,23 @@ class PluginHub(WebSocketEndpoint):
         logger.info(
             f"Registered {len(payload.tools)} tools for session {session_id}")
 
+        try:
+            from services.custom_tool_service import CustomToolService
+
+            service = CustomToolService.get_instance()
+            service.register_global_tools(payload.tools)
+        except RuntimeError as exc:
+            logger.debug(
+                "Skipping global custom tool registration: CustomToolService not initialized yet (%s)",
+                exc,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Unexpected error during global custom tool registration; "
+                "custom tools may not be available globally",
+                exc_info=exc,
+            )
+
     async def _handle_command_result(self, payload: CommandResultMessage) -> None:
         cls = type(self)
         lock = cls._lock

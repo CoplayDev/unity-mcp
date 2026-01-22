@@ -1,21 +1,26 @@
 import asyncio
+import inspect
 import logging
 import time
 from hashlib import sha256
 from typing import Optional
 
-from fastmcp import FastMCP
+from fastmcp import Context, FastMCP
 from pydantic import BaseModel, Field, ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from models.models import MCPResponse, ToolDefinitionModel, ToolParameterModel
+from core.logging_decorator import log_execution
+from core.telemetry_decorator import telemetry_tool
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import (
     async_send_command_with_retry,
     get_unity_connection_pool,
 )
 from transport.plugin_hub import PluginHub
+from services.tools import get_unity_instance_from_context
+from services.registry import get_registered_tools
 
 logger = logging.getLogger("mcp-for-unity-server")
 
@@ -39,11 +44,13 @@ class ToolRegistrationResponse(BaseModel):
 class CustomToolService:
     _instance: "CustomToolService | None" = None
 
-    def __init__(self, mcp: FastMCP):
+    def __init__(self, mcp: FastMCP, project_scoped_tools: bool = True):
         CustomToolService._instance = self
         self._mcp = mcp
+        self._project_scoped_tools = project_scoped_tools
         self._project_tools: dict[str, dict[str, ToolDefinitionModel]] = {}
         self._hash_to_project: dict[str, str] = {}
+        self._global_tools: dict[str, ToolDefinitionModel] = {}
         self._register_http_routes()
 
     @classmethod
@@ -61,17 +68,8 @@ class CustomToolService:
             except ValidationError as exc:
                 return JSONResponse({"success": False, "error": exc.errors()}, status_code=400)
 
-            registered: list[str] = []
-            replaced: list[str] = []
-            for tool in payload.tools:
-                if self._is_registered(payload.project_id, tool.name):
-                    replaced.append(tool.name)
-                self._register_tool(payload.project_id, tool)
-                registered.append(tool.name)
-
-            if payload.project_hash:
-                self._hash_to_project[payload.project_hash.lower(
-                )] = payload.project_id
+            registered, replaced = self._register_project_tools(
+                payload.project_id, payload.tools, project_hash=payload.project_hash)
 
             message = f"Registered {len(registered)} tool(s)"
             if replaced:
@@ -265,6 +263,163 @@ class CustomToolService:
         if response is None:
             return None
         return {"message": str(response)}
+
+    def _register_project_tools(
+        self,
+        project_id: str,
+        tools: list[ToolDefinitionModel],
+        project_hash: str | None = None,
+    ) -> tuple[list[str], list[str]]:
+        registered: list[str] = []
+        replaced: list[str] = []
+        for tool in tools:
+            if self._is_registered(project_id, tool.name):
+                replaced.append(tool.name)
+            self._register_tool(project_id, tool)
+            registered.append(tool.name)
+            if not self._project_scoped_tools:
+                self._register_global_tool(tool)
+
+        if project_hash:
+            self._hash_to_project[project_hash.lower()] = project_id
+
+        return registered, replaced
+
+    def register_global_tools(self, tools: list[ToolDefinitionModel]) -> None:
+        if self._project_scoped_tools:
+            return
+        builtin_names = self._get_builtin_tool_names()
+        for tool in tools:
+            if tool.name in builtin_names:
+                logger.info(
+                    "Skipping global custom tool registration for built-in tool '%s'",
+                    tool.name,
+                )
+                continue
+            self._register_global_tool(tool)
+
+    def _get_builtin_tool_names(self) -> set[str]:
+        return {tool["name"] for tool in get_registered_tools()}
+
+    def _register_global_tool(self, definition: ToolDefinitionModel) -> None:
+        existing = self._global_tools.get(definition.name)
+        if existing:
+            if existing.model_dump() != definition.model_dump():
+                logger.warning(
+                    "Custom tool '%s' already registered with a different schema; keeping existing definition.",
+                    definition.name,
+                )
+            return
+
+        handler = self._build_global_tool_handler(definition)
+        wrapped = log_execution(definition.name, "Tool")(handler)
+        wrapped = telemetry_tool(definition.name)(wrapped)
+
+        try:
+            wrapped = self._mcp.tool(
+                name=definition.name,
+                description=definition.description,
+            )(wrapped)
+        except Exception as exc:  # pragma: no cover - defensive against tool conflicts
+            logger.warning(
+                "Failed to register custom tool '%s' globally: %s",
+                definition.name,
+                exc,
+            )
+            return
+
+        self._global_tools[definition.name] = definition
+
+    def _build_global_tool_handler(self, definition: ToolDefinitionModel):
+        async def _handler(ctx: Context, **kwargs) -> MCPResponse:
+            unity_instance = get_unity_instance_from_context(ctx)
+            if not unity_instance:
+                return MCPResponse(
+                    success=False,
+                    message="No active Unity instance. Call set_active_instance with Name@hash from mcpforunity://instances.",
+                )
+
+            project_id = resolve_project_id_for_unity_instance(unity_instance)
+            if project_id is None:
+                return MCPResponse(
+                    success=False,
+                    message=f"Could not resolve project id for {unity_instance}. Ensure Unity is running and reachable.",
+                )
+
+            params = {k: v for k, v in kwargs.items() if v is not None}
+            service = CustomToolService.get_instance()
+            return await service.execute_tool(project_id, definition.name, unity_instance, params)
+
+        _handler.__name__ = f"custom_tool_{definition.name}"
+        _handler.__doc__ = definition.description or ""
+        _handler.__signature__ = self._build_signature(definition)
+        _handler.__annotations__ = self._build_annotations(definition)
+        return _handler
+
+    def _build_signature(self, definition: ToolDefinitionModel) -> inspect.Signature:
+        params: list[inspect.Parameter] = [
+            inspect.Parameter(
+                "ctx",
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                annotation=Context,
+            )
+        ]
+        for param in definition.parameters:
+            if not param.name.isidentifier():
+                logger.warning(
+                    "Custom tool '%s' has non-identifier parameter '%s'; exposing via kwargs only.",
+                    definition.name,
+                    param.name,
+                )
+                continue
+            default = inspect._empty if param.required else self._coerce_default(
+                param.default_value, param.type)
+            params.append(
+                inspect.Parameter(
+                    param.name,
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    default=default,
+                    annotation=self._map_param_type(param),
+                )
+            )
+        return inspect.Signature(parameters=params)
+
+    def _build_annotations(self, definition: ToolDefinitionModel) -> dict[str, object]:
+        annotations: dict[str, object] = {"ctx": Context}
+        for param in definition.parameters:
+            if not param.name.isidentifier():
+                continue
+            annotations[param.name] = self._map_param_type(param)
+        return annotations
+
+    def _map_param_type(self, param: ToolParameterModel):
+        ptype = (param.type or "string").lower()
+        if ptype in ("integer", "int"):
+            return int
+        if ptype in ("number", "float", "double"):
+            return float
+        if ptype in ("bool", "boolean"):
+            return bool
+        if ptype in ("array", "list"):
+            return list
+        if ptype in ("object", "dict"):
+            return dict
+        return str
+
+    def _coerce_default(self, value: str | None, param_type: str | None):
+        if value is None:
+            return None
+        try:
+            ptype = (param_type or "string").lower()
+            if ptype in ("integer", "int"):
+                return int(value)
+            if ptype in ("number", "float", "double"):
+                return float(value)
+            if ptype in ("bool", "boolean"):
+                return str(value).lower() in ("1", "true", "yes", "on")
+            return value
+        except Exception:
+            return value
 
 
 def compute_project_id(project_name: str, project_path: str) -> str:
