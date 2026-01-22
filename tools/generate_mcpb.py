@@ -79,9 +79,10 @@ def generate_mcpb(
                 shutil.copy2(src, build_dir / filename)
 
         # Pack using mcpb CLI
+        # Syntax: mcpb pack [directory] [output]
         try:
             result = subprocess.run(
-                ["npx", "@anthropic-ai/mcpb", "pack", "--output", str(output_path)],
+                ["npx", "@anthropic-ai/mcpb", "pack", ".", str(output_path.absolute())],
                 cwd=build_dir,
                 capture_output=True,
                 text=True,
