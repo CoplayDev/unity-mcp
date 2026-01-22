@@ -17,7 +17,6 @@ REQUIRED_PARAMS = {
     "get_hierarchy": ["prefab_path"],
     "open_stage": ["prefab_path"],
     "create_from_gameobject": ["target", "prefab_path"],
-    "list_prefabs": [],  # No required params
     "save_open_stage": [],
     "close_stage": [],
 }
@@ -26,9 +25,10 @@ REQUIRED_PARAMS = {
 @mcp_for_unity_tool(
     description=(
         "Manages Unity Prefab assets and stages. "
-        "Read operations: get_info (metadata), get_hierarchy (internal structure), list_prefabs (search project). "
+        "Read operations: get_info (metadata), get_hierarchy (internal structure). "
         "Write operations: open_stage (edit prefab), close_stage (exit editing), save_open_stage (save changes), "
-        "create_from_gameobject (convert scene object to prefab)."
+        "create_from_gameobject (convert scene object to prefab). "
+        "Note: Use manage_asset with action=search and filterType=Prefab to list prefabs in project."
     ),
     annotations=ToolAnnotations(
         title="Manage Prefabs",
@@ -45,15 +45,11 @@ async def manage_prefabs(
             "create_from_gameobject",
             "get_info",
             "get_hierarchy",
-            "list_prefabs",
         ],
         "Prefab operation to perform.",
     ],
     prefab_path: Annotated[
         str, "Prefab asset path (e.g., Assets/Prefabs/MyPrefab.prefab). Used by: get_info, get_hierarchy, open_stage."
-    ] | None = None,
-    folder_path: Annotated[
-        str, "Search folder path for list_prefabs (e.g., Assets or Assets/Prefabs)."
     ] | None = None,
     mode: Annotated[
         str, "Prefab stage mode for open_stage. Only 'InIsolation' is currently supported."
@@ -71,16 +67,10 @@ async def manage_prefabs(
         bool, "When true with create_from_gameobject, includes inactive GameObjects in the search."
     ] | None = None,
     page_size: Annotated[
-        int | str, "Number of items per page for get_hierarchy and list_prefabs (default: 50)."
+        int | str, "Number of items per page for get_hierarchy (default: 50)."
     ] | None = None,
     cursor: Annotated[
         int | str, "Pagination cursor for get_hierarchy (offset index)."
-    ] | None = None,
-    page_number: Annotated[
-        int | str, "Page number for list_prefabs (1-based, default: 1)."
-    ] | None = None,
-    search: Annotated[
-        str, "Optional name filter for list_prefabs to find specific prefabs."
     ] | None = None,
 ) -> dict[str, Any]:
     # Validate required parameters
@@ -110,18 +100,13 @@ async def manage_prefabs(
         # Coerce pagination parameters
         coerced_page_size = coerce_int(page_size, default=None)
         coerced_cursor = coerce_int(cursor, default=None)
-        coerced_page_number = coerce_int(page_number, default=None)
 
         # Build parameters dictionary
         params: dict[str, Any] = {"action": action}
 
         # Handle prefab path parameter
-        if action == "list_prefabs":
-            if folder_path:
-                params["path"] = folder_path
-        else:
-            if prefab_path:
-                params["prefabPath"] = prefab_path
+        if prefab_path:
+            params["prefabPath"] = prefab_path
 
         # Handle mode parameter
         if mode:
@@ -150,26 +135,19 @@ async def manage_prefabs(
         if coerced_cursor is not None:
             params["cursor"] = coerced_cursor
 
-        if coerced_page_number is not None:
-            params["pageNumber"] = coerced_page_number
-
-        if search:
-            params["search"] = search
-
         # Send command to Unity
         response = await send_with_unity_instance(
             async_send_command_with_retry, unity_instance, "manage_prefabs", params
         )
 
-        if isinstance(response, dict) and response.get("success"):
-            return {
-                "success": True,
-                "message": response.get("message", "Prefab operation successful."),
-                "data": response.get("data"),
-            }
-        return response if isinstance(response, dict) else {
+        # Return Unity response directly; ensure success field exists
+        if isinstance(response, dict):
+            if "success" not in response:
+                response["success"] = False
+            return response
+        return {
             "success": False,
-            "message": f"Unexpected response from Unity: {str(response)}"
+            "message": f"Unexpected response type: {type(response).__name__}"
         }
 
     except TimeoutError:

@@ -17,7 +17,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
     /// </summary>
     public static class ManagePrefabs
     {
-        private const string SupportedActions = "open_stage, close_stage, save_open_stage, create_from_gameobject, get_info, get_hierarchy, list_prefabs";
+        private const string SupportedActions = "open_stage, close_stage, save_open_stage, create_from_gameobject, get_info, get_hierarchy";
 
         // Pagination constants
         private const int DefaultPageSize = 50;
@@ -52,8 +52,6 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                         return GetInfo(@params);
                     case "get_hierarchy":
                         return GetHierarchy(@params);
-                    case "list_prefabs":
-                        return ListPrefabs(@params);
                     default:
                         return new ErrorResponse($"Unknown action: '{action}'. Valid actions are: {SupportedActions}.");
                 }
@@ -141,18 +139,13 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 throw new InvalidOperationException("Cannot save prefab stage without a prefab root.");
             }
 
-            // Mark the prefab stage scene as dirty to ensure changes are tracked
-            EditorSceneManager.MarkSceneDirty(stage.scene);
-
-            // Save the prefab stage changes
-            bool saved = EditorSceneManager.SaveScene(stage.scene);
-            if (!saved)
+            // Save prefab asset changes (Unity 2021.2+)
+            // This correctly saves modifications made in Prefab Mode to the .prefab file on disk
+            PrefabUtility.SavePrefabAsset(stage.prefabContentsRoot, out bool savedSuccessfully);
+            if (!savedSuccessfully)
             {
                 throw new InvalidOperationException($"Failed to save prefab asset at '{stage.assetPath}'.");
             }
-
-            // Ensure asset database writes the changes to disk
-            AssetDatabase.SaveAssets();
         }
 
         private static object CreatePrefabFromGameObject(JObject @params)
@@ -384,77 +377,6 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 // Always unload prefab contents to free memory
                 PrefabUtility.UnloadPrefabContents(prefabContents);
             }
-        }
-
-        /// <summary>
-        /// Lists prefabs in the project with optional filtering.
-        /// </summary>
-        private static object ListPrefabs(JObject @params)
-        {
-            string path = @params["path"]?.ToString() ?? @params["prefabPath"]?.ToString() ?? "Assets";
-            string search = @params["search"]?.ToString() ?? string.Empty;
-            int pageSize = ParamCoercion.CoerceInt(@params["pageSize"] ?? @params["page_size"], DefaultPageSize);
-            int pageNumber = ParamCoercion.CoerceInt(@params["pageNumber"] ?? @params["page_number"], 1);
-
-            // Clamp values
-            pageSize = Mathf.Clamp(pageSize, 1, MaxPageSize);
-            pageNumber = Mathf.Max(1, pageNumber);
-
-            // Sanitize path - handle Assets folder specially to avoid double prefix
-            string sanitizedPath;
-            if (path.Equals("Assets", StringComparison.OrdinalIgnoreCase) || path.Equals("Assets/", StringComparison.OrdinalIgnoreCase))
-            {
-                sanitizedPath = "Assets";
-            }
-            else
-            {
-                sanitizedPath = AssetPathUtility.SanitizeAssetPath(path);
-            }
-
-            if (!AssetDatabase.IsValidFolder(sanitizedPath))
-            {
-                return new ErrorResponse($"Invalid path '{sanitizedPath}'. Path must be a valid folder.");
-            }
-
-            // Find all prefabs in the specified path
-            string[] guids = AssetDatabase.FindAssets($"t:Prefab {search}".Trim(), new[] { sanitizedPath });
-
-            // Convert to items
-            var allItems = new List<object>();
-            foreach (string guid in guids)
-            {
-                string assetPath = AssetDatabase.GUIDToAssetPath(guid);
-                string name = System.IO.Path.GetFileNameWithoutExtension(assetPath);
-                allItems.Add(new
-                {
-                    path = assetPath,
-                    name = name,
-                    guid = guid
-                });
-            }
-
-            // Apply pagination
-            int startIndex = (pageNumber - 1) * pageSize;
-            int endIndex = Mathf.Min(startIndex + pageSize, allItems.Count);
-            int totalCount = allItems.Count;
-
-            var pageItems = startIndex < totalCount
-                ? allItems.Skip(startIndex).Take(endIndex - startIndex).ToList()
-                : new List<object>();
-
-            bool hasMore = endIndex < totalCount;
-
-            return new SuccessResponse(
-                $"Found {totalCount} prefab(s).",
-                new
-                {
-                    items = pageItems,
-                    totalCount = totalCount,
-                    pageNumber = pageNumber,
-                    pageSize = pageSize,
-                    hasMore = hasMore
-                }
-            );
         }
 
         #endregion
