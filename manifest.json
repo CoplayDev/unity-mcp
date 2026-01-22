@@ -14,7 +14,7 @@
   "homepage": "https://www.coplay.dev",
   "documentation": "https://github.com/CoplayDev/unity-mcp#readme",
   "support": "https://github.com/CoplayDev/unity-mcp/issues",
-  "icon": "icon.png",
+  "icon": "coplay-logo.png",
   "server": {
     "type": "python",
     "entry_point": "Server/src/main.py",

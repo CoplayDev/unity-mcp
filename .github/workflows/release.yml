@@ -188,3 +188,43 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: Server/dist/
+
+  publish_mcpb:
+    name: Generate and publish MCPB bundle
+    needs:
+      - bump
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.bump.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generate MCPB bundle
+        env:
+          NEW_VERSION: ${{ needs.bump.outputs.new_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/generate_mcpb.py "$NEW_VERSION" \
+            --output "unity-mcp-${NEW_VERSION}.mcpb" \
+            --icon docs/images/coplay-logo.png
+
+      - name: Upload MCPB to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.bump.outputs.tag }}
+          files: unity-mcp-${{ needs.bump.outputs.new_version }}.mcpb
