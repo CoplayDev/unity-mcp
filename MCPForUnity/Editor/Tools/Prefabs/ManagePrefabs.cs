@@ -175,6 +175,10 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
         /// <summary>
         /// Saves the prefab stage asset using the correct Unity API (Unity 2021.2+).
+        ///
+        /// When editing in PrefabStage, the prefabContentsRoot is treated as a prefab instance.
+        /// We use SetDirty + SaveAssets pattern which is the correct way to save changes
+        /// made to a prefab that's open in PrefabStage.
         /// </summary>
         private static void SaveStagePrefab(PrefabStage stage)
         {
@@ -190,21 +194,11 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
             try
             {
-                // Save prefab asset modifications.
-                // Returns: root GameObject of the saved Prefab Asset (null if failed)
-                // Out parameter: savedSuccessfully indicates if the save succeeded
-                GameObject result = PrefabUtility.SavePrefabAsset(
-                    stage.prefabContentsRoot,
-                    out bool savedSuccessfully
-                );
+                // Mark the prefab as modified so Unity knows it needs to be saved
+                EditorUtility.SetDirty(stage.prefabContentsRoot);
 
-                if (result == null || !savedSuccessfully)
-                {
-                    throw new InvalidOperationException(
-                        $"SavePrefabAsset failed for '{stage.assetPath}'. " +
-                        "The prefab may be corrupted or the path may be invalid."
-                    );
-                }
+                // Save all modified assets including the prefab
+                AssetDatabase.SaveAssets();
 
                 McpLog.Info($"[ManagePrefabs] Prefab asset saved: {stage.assetPath}");
             }
