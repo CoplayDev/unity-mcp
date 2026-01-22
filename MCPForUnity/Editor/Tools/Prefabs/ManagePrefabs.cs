@@ -416,32 +416,17 @@ namespace MCPForUnity.Editor.Tools.Prefabs
         /// </summary>
         private static GameObject CreatePrefabAsset(GameObject sourceObject, string path, bool replaceExisting)
         {
-            GameObject result;
+            GameObject result = PrefabUtility.SaveAsPrefabAssetAndConnect(
+                sourceObject,
+                path,
+                InteractionMode.AutomatedAction
+            );
 
-            if (replaceExisting)
-            {
-                // Replace the existing prefab
-                result = PrefabUtility.SaveAsPrefabAssetAndConnect(
-                    sourceObject,
-                    path,
-                    InteractionMode.AutomatedAction
-                );
-                McpLog.Info($"[ManagePrefabs] Replaced existing prefab at '{path}'.");
-            }
-            else
-            {
-                // Create a new prefab and connect
-                result = PrefabUtility.SaveAsPrefabAssetAndConnect(
-                    sourceObject,
-                    path,
-                    InteractionMode.AutomatedAction
-                );
-                McpLog.Info($"[ManagePrefabs] Created new prefab at '{path}'.");
-            }
+            string action = replaceExisting ? "Replaced existing" : "Created new";
+            McpLog.Info($"[ManagePrefabs] {action} prefab at '{path}'.");
 
             if (result != null)
             {
-                // Refresh asset database
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
             }
