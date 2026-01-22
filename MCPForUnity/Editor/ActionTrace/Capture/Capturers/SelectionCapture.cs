@@ -104,7 +104,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
 
             foreach (var undoMod in modifications)
             {
-                var target = UndoReflectionHelper.GetTarget(undoMod);
+                var target = PropertyModificationHelper.GetTarget(undoMod);
                 if (target == null)
                 {
                     continue;
@@ -117,7 +117,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 if (!isMatch)
                     continue;
 
-                var propertyPath = UndoReflectionHelper.GetPropertyPath(undoMod);
+                var propertyPath = PropertyModificationHelper.GetPropertyPath(undoMod);
                 if (string.IsNullOrEmpty(propertyPath))
                     continue;
 
@@ -138,8 +138,8 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
         /// </summary>
         private static void RecordSelectionPropertyModified(UndoPropertyModification undoMod, UnityEngine.Object target, string targetGlobalId, string propertyPath)
         {
-            var currentValue = UndoReflectionHelper.GetCurrentValue(undoMod);
-            var prevValue = UndoReflectionHelper.GetPreviousValue(undoMod);
+            var currentValue = PropertyModificationHelper.GetCurrentValue(undoMod);
+            var prevValue = PropertyModificationHelper.GetPreviousValue(undoMod);
 
             var payload = new Dictionary<string, object>
             {

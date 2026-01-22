@@ -315,9 +315,6 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                     payload["vcs_context"] = vcsContext.ToDictionary();
                 }
 
-                // Inject Undo Group ID
-                payload["undo_group"] = Undo.GetCurrentGroup();
-
                 // Create event
                 var evt = new EditorEvent(
                     0, // sequence (assigned by EventStore)

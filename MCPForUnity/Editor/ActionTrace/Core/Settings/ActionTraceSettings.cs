@@ -23,9 +23,6 @@ namespace MCPForUnity.Editor.ActionTrace.Core.Settings
 
         [Tooltip("List of disabled event types. Empty means all enabled.")]
         public string[] DisabledEventTypes = Array.Empty<string>();
-
-        [Tooltip("(Future Feature,not used now) Enable emergency AI trigger. Critical events (score 10.0) will interrupt AI request attention.")]
-        public bool EnableEmergencyAITrigger = true;
     }
 
     /// <summary>
@@ -61,15 +58,6 @@ namespace MCPForUnity.Editor.ActionTrace.Core.Settings
         [Range(10, 1000)]
         [Tooltip("Number of hot events (10-1000) to retain with full payload. Events are kept in sequence order; the first N events (oldest) have full payload, while events beyond this limit are dehydrated (Payload=null).")]
         public int HotEventCount = 150;
-
-        [Tooltip("Minimum number of events to keep when auto-cleaning.")]
-        public int MinKeepEvents = 100;
-
-        [Tooltip("Enable cross-domain reload persistence.")]
-        public bool EnablePersistence = true;
-
-        [Tooltip("Auto-save interval in seconds. 0 = disable auto-save.")]
-        public int AutoSaveIntervalSeconds = 30;
     }
 
     // SamplingSettings is deprecated. Sampling is now configured via SamplingConfig

@@ -5,9 +5,9 @@ namespace MCPForUnity.Editor.ActionTrace.Helpers
 {
     /// <summary>
     /// Shared reflection helpers for extracting data from Unity's UndoPropertyModification.
-    /// This class centralizes reflection logic that was duplicated across PropertyChangeTracker and SelectionPropertyTracker.
+    /// This class centralizes reflection logic for property change tracking.
     /// </summary>
-    public static class UndoReflectionHelper
+    public static class PropertyModificationHelper
     {
         /// <summary>
         /// Generic reflection helper to extract nested values from UndoPropertyModification.
@@ -56,14 +56,14 @@ namespace MCPForUnity.Editor.ActionTrace.Helpers
         /// Extracts target object from an UndoPropertyModification.
         /// The target is UnityEngine.Object being modified (e.g., a Component or GameObject).
         /// </summary>
-        public static UnityEngine.Object GetTarget(UndoPropertyModification undoMod)
+        public static UnityEngine.Object GetTarget(UndoPropertyModification modification)
         {
             // Try direct 'currentValue.target' path
-            var result = GetNestedValue(undoMod, "currentValue.target");
+            var result = GetNestedValue(modification, "currentValue.target");
             if (result is UnityEngine.Object obj) return obj;
 
             // Fallback to 'previousValue.target'
-            result = GetNestedValue(undoMod, "previousValue.target");
+            result = GetNestedValue(modification, "previousValue.target");
             if (result is UnityEngine.Object obj2) return obj2;
 
             return null;
@@ -73,12 +73,12 @@ namespace MCPForUnity.Editor.ActionTrace.Helpers
         /// Extracts property path from an UndoPropertyModification.
         /// The property path identifies which property was modified (e.g., "m_Intensity").
         /// </summary>
-        public static string GetPropertyPath(UndoPropertyModification undoMod)
+        public static string GetPropertyPath(UndoPropertyModification modification)
         {
-            var result = GetNestedValue(undoMod, "currentValue.propertyPath");
+            var result = GetNestedValue(modification, "currentValue.propertyPath");
             if (result != null) return result as string;
 
-            result = GetNestedValue(undoMod, "previousValue.propertyPath");
+            result = GetNestedValue(modification, "previousValue.propertyPath");
             return result as string;
         }
 
@@ -86,27 +86,27 @@ namespace MCPForUnity.Editor.ActionTrace.Helpers
         /// Extracts current (new) value from an UndoPropertyModification.
         /// This is value after modification was applied.
         /// </summary>
-        public static object GetCurrentValue(UndoPropertyModification undoMod)
+        public static object GetCurrentValue(UndoPropertyModification modification)
         {
             // Try direct 'currentValue.value' path
-            var result = GetNestedValue(undoMod, "currentValue.value");
+            var result = GetNestedValue(modification, "currentValue.value");
             if (result != null) return result;
 
-            return GetNestedValue(undoMod, "currentValue");
+            return GetNestedValue(modification, "currentValue");
         }
 
         /// <summary>
         /// Extracts previous (old) value from an UndoPropertyModification.
         /// This is value before modification was applied.
         /// </summary>
-        public static object GetPreviousValue(UndoPropertyModification undoMod)
+        public static object GetPreviousValue(UndoPropertyModification modification)
         {
             // Try 'previousValue.value' (nested structure) first - matches GetCurrentValue pattern
-            var result = GetNestedValue(undoMod, "previousValue.value");
+            var result = GetNestedValue(modification, "previousValue.value");
             if (result != null) return result;
 
             // Fallback to direct 'previousValue' property
-            return GetNestedValue(undoMod, "previousValue");
+            return GetNestedValue(modification, "previousValue");
         }
     }
 }

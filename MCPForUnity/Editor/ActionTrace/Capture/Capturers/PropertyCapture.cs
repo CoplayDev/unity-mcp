@@ -26,7 +26,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
     /// Reuses existing Helpers:
     /// - GlobalIdHelper.ToGlobalIdString() for stable object IDs
     /// - PropertyFormatter for property value formatting
-    /// - UndoReflectionHelper for Undo reflection logic
+    /// - PropertyModificationHelper for Undo reflection logic
     /// </summary>
     [InitializeOnLoad]
     public static class PropertyChangeTracker
@@ -97,11 +97,11 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
 
             foreach (var undoMod in modifications)
             {
-                var target = UndoReflectionHelper.GetTarget(undoMod);
+                var target = PropertyModificationHelper.GetTarget(undoMod);
                 if (target == null)
                     continue;
 
-                var propertyPath = UndoReflectionHelper.GetPropertyPath(undoMod);
+                var propertyPath = PropertyModificationHelper.GetPropertyPath(undoMod);
                 if (string.IsNullOrEmpty(propertyPath))
                     continue;
 
@@ -113,8 +113,8 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                 if (string.IsNullOrEmpty(globalId))
                     continue;
 
-                var currentValue = UndoReflectionHelper.GetCurrentValue(undoMod);
-                var prevValue = UndoReflectionHelper.GetPreviousValue(undoMod);
+                var currentValue = PropertyModificationHelper.GetCurrentValue(undoMod);
+                var prevValue = PropertyModificationHelper.GetPreviousValue(undoMod);
 
                 extractedData.Add(new ModificationData
                 {

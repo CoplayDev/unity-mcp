@@ -25,7 +25,22 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 
 
 @mcp_for_unity_tool(
-    description="Get AI-friendly summary of recent ActionTrace events. Returns categorized changes, warnings, and suggested actions to reduce token usage and improve context understanding.",
+    description="""Get AI-friendly summary of recent Unity operations.
+
+CALL WHEN:
+• User asks "what did I do?", "what changed?"
+• Debugging/Confusion about Unity state
+• User refers to past work ("fix the cube I just made")
+• Before complex tasks to understand current state
+
+PARAMETERS:
+• time_range: '5m' | '15m' (default) | '1h' | 'today'
+• min_importance: 'high' (errors only) | 'medium' (default)
+• task_id: Filter by task ID
+• conversation_id: Filter by conversation ID
+
+RETURNS:
+Summary, stats (created/modified/deleted), hotspots, alerts, suggestions""",
     annotations=ToolAnnotations(
         title="Get Action Trace Summary",
     ),

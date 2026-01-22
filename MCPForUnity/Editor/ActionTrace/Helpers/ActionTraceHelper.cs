@@ -38,7 +38,6 @@ namespace MCPForUnity.Editor.ActionTrace.Helpers
         ///
         /// Used in:
         /// - TransactionAggregator (summary generation)
-        /// - UndoGroupManager (Undo group names)
         /// </summary>
         public static string FormatToolName(string toolName)
         {

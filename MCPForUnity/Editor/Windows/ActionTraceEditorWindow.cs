@@ -37,8 +37,6 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
             public const string SortMenu = "sort-menu";
             public const string ImportanceToggle = "importance-toggle";
             public const string ContextToggle = "context-toggle";
-            public const string AutoRefreshStatus = "auto-refresh-status";
-            public const string ExportButton = "export-button";
             public const string SettingsButton = "settings-button";
             public const string RefreshButton = "refresh-button";
             public const string ClearButton = "clear-button";
@@ -99,8 +97,6 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
         private ToolbarMenu _sortMenu;
         private ToolbarToggle _importanceToggle;
         private ToolbarToggle _contextToggle;
-        private Label _autoRefreshStatus;
-        private ToolbarButton _exportButton;
         private ToolbarButton _settingsButton;
         private ToolbarButton _refreshButton;
         private ToolbarButton _clearButton;
@@ -234,8 +230,6 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
             _sortMenu = rootVisualElement.Q<ToolbarMenu>(UINames.SortMenu);
             _importanceToggle = rootVisualElement.Q<ToolbarToggle>(UINames.ImportanceToggle);
             _contextToggle = rootVisualElement.Q<ToolbarToggle>(UINames.ContextToggle);
-            _autoRefreshStatus = rootVisualElement.Q<Label>(UINames.AutoRefreshStatus);
-            _exportButton = rootVisualElement.Q<ToolbarButton>(UINames.ExportButton);
             _settingsButton = rootVisualElement.Q<ToolbarButton>(UINames.SettingsButton);
             _refreshButton = rootVisualElement.Q<ToolbarButton>(UINames.RefreshButton);
             _clearButton = rootVisualElement.Q<ToolbarButton>(UINames.ClearButton);
@@ -460,7 +454,6 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
             _sortMenu?.menu.AppendAction("By Time (Newest First)", a => SetSortMode(SortMode.ByTimeDesc));
             _sortMenu?.menu.AppendAction("By Importance (AI First)", a => SetSortMode(SortMode.AIFiltered));
 
-            _exportButton?.RegisterCallback<ClickEvent>(_ => OnExportClicked());
             _settingsButton?.RegisterCallback<ClickEvent>(_ => OnSettingsClicked());
             _refreshButton?.RegisterCallback<ClickEvent>(_ => OnRefreshClicked());
             _clearButton?.RegisterCallback<ClickEvent>(_ => OnClearClicked());
@@ -630,201 +623,13 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
         #region Action Handlers
 
-        private void OnExportClicked()
-        {
-            if (_currentEvents.Count == 0)
-            {
-                Debug.Log("[ActionTrace] No events to export.");
-                return;
-            }
-
-            var menu = new GenericMenu();
-            menu.AddItem(new GUIContent("Save as JSON..."), false, () => SaveJsonToFile());
-            menu.AddItem(new GUIContent("Save as CSV..."), false, () => SaveCsvToFile());
-
-            menu.ShowAsContext();
-        }
-
-        private void SaveJsonToFile()
-        {
-            var path = EditorUtility.SaveFilePanel("Save Events as JSON", "", "action-trace", "json");
-            if (string.IsNullOrEmpty(path)) return;
-
-            try
-            {
-                var json = BuildJsonExport();
-                System.IO.File.WriteAllText(path, json);
-                Debug.Log($"[ActionTrace] Saved {_currentEvents.Count} events to {path}");
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError($"[ActionTrace] Failed to save JSON: {ex.Message}");
-            }
-        }
-
-        private void SaveCsvToFile()
-        {
-            var path = EditorUtility.SaveFilePanel("Save Events as CSV", "", "action-trace", "csv");
-            if (string.IsNullOrEmpty(path)) return;
-
-            try
-            {
-                var csv = BuildCsvExport();
-                System.IO.File.WriteAllText(path, csv);
-                Debug.Log($"[ActionTrace] Saved {_currentEvents.Count} events to {path}");
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError($"[ActionTrace] Failed to save CSV: {ex.Message}");
-            }
-        }
-
-        private string BuildJsonExport()
-        {
-            _stringBuilder.Clear();
-            _stringBuilder.AppendLine("{");
-            _stringBuilder.AppendLine($"  \"exportTime\": \"{DateTime.Now:O}\",");
-            _stringBuilder.AppendLine($"  \"totalEvents\": {_currentEvents.Count},");
-            _stringBuilder.AppendLine("  \"events\": [");
-
-            for (int i = 0; i < _currentEvents.Count; i++)
-            {
-                var e = _currentEvents[i];
-                _stringBuilder.AppendLine("    {");
-                _stringBuilder.AppendLine($"      \"sequence\": {e.Event.Sequence},");
-                _stringBuilder.AppendLine($"      \"type\": \"{SanitizeJson(e.Event.Type)}\",");
-                _stringBuilder.AppendLine($"      \"timestamp\": {e.Event.TimestampUnixMs},");
-                _stringBuilder.AppendLine($"      \"displayTime\": \"{SanitizeJson(e.DisplayTime)}\",");
-                _stringBuilder.AppendLine($"      \"summary\": \"{SanitizeJson(e.DisplaySummary)}\",");
-
-                if (!string.IsNullOrEmpty(e.Event.TargetId))
-                {
-                    _stringBuilder.AppendLine($"      \"targetId\": \"{SanitizeJson(e.Event.TargetId)}\",");
-                    _stringBuilder.AppendLine($"      \"targetName\": \"{SanitizeJson(e.TargetName)}\",");
-                    _stringBuilder.AppendLine($"      \"targetInstanceId\": {(e.TargetInstanceId.HasValue ? e.TargetInstanceId.Value.ToString() : "null")},");
-                }
-                else
-                {
-                    _stringBuilder.AppendLine($"      \"targetId\": null,");
-                    _stringBuilder.AppendLine($"      \"targetName\": null,");
-                    _stringBuilder.AppendLine($"      \"targetInstanceId\": null,");
-                }
-
-                _stringBuilder.AppendLine($"      \"importanceScore\": {e.ImportanceScore:F2},");
-                _stringBuilder.AppendLine($"      \"importanceCategory\": \"{SanitizeJson(e.ImportanceCategory)}\"");
-
-                if (!string.IsNullOrEmpty(e.InferredIntent))
-                    _stringBuilder.AppendLine($"      ,\"inferredIntent\": \"{SanitizeJson(e.InferredIntent)}\"");
-
-                if (e.Event.Payload != null && e.Event.Payload.Count > 0)
-                {
-                    _stringBuilder.AppendLine("      ,\"payload\": {");
-                    var payloadKeys = e.Event.Payload.Keys.ToList();
-                    for (int j = 0; j < payloadKeys.Count; j++)
-                    {
-                        var key = payloadKeys[j];
-                        var value = e.Event.Payload[key];
-                        var valueStr = value?.ToString() ?? "null";
-                        _stringBuilder.AppendLine($"        \"{SanitizeJson(key)}\": \"{SanitizeJson(valueStr)}\"{(j < payloadKeys.Count - 1 ? "," : "")}");
-                    }
-                    _stringBuilder.AppendLine("      }");
-                }
-
-                _stringBuilder.Append(i < _currentEvents.Count - 1 ? "    }," : "    }");
-                if (i < _currentEvents.Count - 1)
-                    _stringBuilder.AppendLine();
-            }
-
-            _stringBuilder.AppendLine();
-            _stringBuilder.AppendLine("  ]");
-            _stringBuilder.AppendLine("}");
-
-            return _stringBuilder.ToString();
-        }
-
-        private string BuildCsvExport()
-        {
-            _stringBuilder.Clear();
-            _stringBuilder.AppendLine("Sequence,Time,Type,Summary,Target Name,InstanceID,Importance,Category,Intent");
-
-            foreach (var e in _currentEvents)
-            {
-                _stringBuilder.Append(e.Event.Sequence);
-                _stringBuilder.Append(",\"");
-                _stringBuilder.Append(SanitizeCsv(e.DisplayTime));
-                _stringBuilder.Append("\",\"");
-                _stringBuilder.Append(SanitizeCsv(e.Event.Type));
-                _stringBuilder.Append("\",\"");
-                _stringBuilder.Append(SanitizeCsv(e.DisplaySummary));
-                _stringBuilder.Append("\",\"");
-
-                // Get instance info for export
-                if (!string.IsNullOrEmpty(e.TargetName))
-                {
-                    _stringBuilder.Append(SanitizeCsv(e.TargetName));
-                    _stringBuilder.Append("\",\"");
-                    _stringBuilder.Append(SanitizeCsv(e.TargetInstanceId?.ToString() ?? ""));
-                }
-                else
-                {
-                    _stringBuilder.Append("\",\"");
-                }
-
-                _stringBuilder.Append("\",");
-                _stringBuilder.Append(e.ImportanceScore.ToString("F2"));
-                _stringBuilder.Append(",\"");
-                _stringBuilder.Append(SanitizeCsv(e.ImportanceCategory));
-                _stringBuilder.Append("\",\"");
-                _stringBuilder.Append(SanitizeCsv(e.InferredIntent ?? ""));
-                _stringBuilder.AppendLine("\"");
-            }
-
-            return _stringBuilder.ToString();
-        }
-
-        private string SanitizeJson(string input)
-        {
-            if (string.IsNullOrEmpty(input)) return "";
-
-            // Performance optimization: use StringBuilder to avoid intermediate strings from multiple Replace calls
-            var sb = _stringBuilder;
-            sb.Clear();
-            sb.EnsureCapacity(input.Length * 2);
-
-            foreach (char c in input)
-            {
-                switch (c)
-                {
-                    case '\\': sb.Append("\\\\"); break;
-                    case '\"': sb.Append("\\\""); break;
-                    case '\n': sb.Append("\\n"); break;
-                    case '\r': sb.Append("\\r"); break;
-                    case '\t': sb.Append("\\t"); break;
-                    default: sb.Append(c); break;
-                }
-            }
-
-            return sb.ToString();
-        }
-
-        private string SanitizeCsv(string input)
-        {
-            if (string.IsNullOrEmpty(input)) return "";
-            return input.Replace("\"", "\"\"");
-        }
-
-        private void CopySummaryToClipboard()
+        private void OnCopySummaryClicked()
         {
             if (_selectedItem == null) return;
 
             var summary = $"[{_selectedItem.DisplayTime}] {_selectedItem.Event.Type}: {_selectedItem.DisplaySummary}";
             GUIUtility.systemCopyBuffer = summary;
             Debug.Log($"[ActionTrace] Copied event summary to clipboard.");
-        }
-
-        private void OnCopySummaryClicked()
-        {
-            CopySummaryToClipboard();
         }
 
         private void OnSettingsClicked()

@@ -361,10 +361,6 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                     payload["vcs_context"] = vcsContext.ToDictionary();
                 }
 
-                // Inject Undo Group ID for undo_to_sequence functionality (P2.4)
-                int currentUndoGroup = Undo.GetCurrentGroup();
-                payload["undo_group"] = currentUndoGroup;
-
                 var evt = new EditorEvent(
                     sequence: 0,
                     timestampUnixMs: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),

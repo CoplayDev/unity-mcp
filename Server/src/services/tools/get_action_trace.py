@@ -29,7 +29,20 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 
 
 @mcp_for_unity_tool(
-    description="Retrieve ActionTrace event history from Unity editor. Provides access to recent operations with optional semantic analysis or transaction aggregation. Filter by importance, task ID, or conversation ID. Supports query_mode preset for common AI use cases.",
+    description="""Retrieve Unity editor operation history.
+
+WHEN TO CALL:
+• Undo/Revert: Use 'verbose' to find operation ID
+• Error/Failure: Use 'recent_errors' to diagnose
+• Context Confusion: Use 'summary' to sync state
+• User asks "What did I do?", "Why is this pink?"
+
+WHEN NOT TO CALL:
+• After every single tool execution
+• Simple verified operations (e.g., creating a cube)
+
+PRESETS (query_mode):
+'recent_errors' | 'recent_changes' | 'summary' | 'verbose'""",
     annotations=ToolAnnotations(
         title="Get Action Trace",
     ),
@@ -37,10 +50,10 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 async def get_action_trace(
     ctx: Context,
     query_mode: Annotated[str | None, "Preset mode: 'recent_errors', 'recent_changes', 'summary', 'verbose'. Reduces parameter construction burden for common scenarios."] = None,
-    limit: Annotated[int | str | None, "Maximum number of events to return (1-1000, default: 50). Note: Overridden by query_mode if specified."] = None,
+    limit: Annotated[int | str | None, "Maximum number of events to return (1-1000, default: 50). Note: Overridden by query_mode if specified."] = 50,
     since_sequence: Annotated[int | str | None, "Only return events after this sequence number. Use for incremental queries."] = None,
     include_semantics: Annotated[bool | str | None, "Whether to include semantic analysis (importance, category, intent)."] = None,
-    min_importance: Annotated[str | None, "Minimum importance level: 'low', 'medium' (default), 'high', 'critical'."] = None,
+    min_importance: Annotated[str | None, "Minimum importance level: 'low', 'medium' (default), 'high', 'critical'."] = "medium",
     summary_only: Annotated[bool | str | None, "Return aggregated transactions instead of raw events (reduces token usage)."] = None,
     task_id: Annotated[str | None, "Filter by task ID (only show events associated with this task)."] = None,
     conversation_id: Annotated[str | None, "Filter by conversation ID."] = None,
