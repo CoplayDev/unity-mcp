@@ -112,7 +112,8 @@ async def manage_prefabs(
     required = REQUIRED_PARAMS.get(action, [])
     for param_name in required:
         param_value = locals().get(param_name)
-        if param_value is None:
+        # Check for None and empty/whitespace strings
+        if param_value is None or (isinstance(param_value, str) and not param_value.strip()):
             return {
                 "success": False,
                 "message": f"Action '{action}' requires parameter '{param_name}'."
@@ -180,6 +181,9 @@ async def manage_prefabs(
         )
 
         # Return Unity response directly; ensure success field exists
+        # Handle MCPResponse objects (returned on error) by converting to dict
+        if hasattr(response, 'model_dump'):
+            return response.model_dump()
         if isinstance(response, dict):
             if "success" not in response:
                 response["success"] = False

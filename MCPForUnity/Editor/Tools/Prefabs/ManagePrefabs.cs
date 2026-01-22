@@ -17,7 +17,15 @@ namespace MCPForUnity.Editor.Tools.Prefabs
     /// </summary>
     public static class ManagePrefabs
     {
-        private const string SupportedActions = "open_stage, close_stage, save_open_stage, create_from_gameobject, get_info, get_hierarchy";
+        // Action constants
+        private const string ACTION_OPEN_STAGE = "open_stage";
+        private const string ACTION_CLOSE_STAGE = "close_stage";
+        private const string ACTION_SAVE_OPEN_STAGE = "save_open_stage";
+        private const string ACTION_CREATE_FROM_GAMEOBJECT = "create_from_gameobject";
+        private const string ACTION_GET_INFO = "get_info";
+        private const string ACTION_GET_HIERARCHY = "get_hierarchy";
+        
+        private const string SupportedActions = ACTION_OPEN_STAGE + ", " + ACTION_CLOSE_STAGE + ", " + ACTION_SAVE_OPEN_STAGE + ", " + ACTION_CREATE_FROM_GAMEOBJECT + ", " + ACTION_GET_INFO + ", " + ACTION_GET_HIERARCHY;
 
         // Pagination constants
         private const int DefaultPageSize = 50;
@@ -40,17 +48,17 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             {
                 switch (action)
                 {
-                    case "open_stage":
+                    case ACTION_OPEN_STAGE:
                         return OpenStage(@params);
-                    case "close_stage":
+                    case ACTION_CLOSE_STAGE:
                         return CloseStage(@params);
-                    case "save_open_stage":
+                    case ACTION_SAVE_OPEN_STAGE:
                         return SaveOpenStage();
-                    case "create_from_gameobject":
+                    case ACTION_CREATE_FROM_GAMEOBJECT:
                         return CreatePrefabFromGameObject(@params);
-                    case "get_info":
+                    case ACTION_GET_INFO:
                         return GetInfo(@params);
-                    case "get_hierarchy":
+                    case ACTION_GET_HIERARCHY:
                         return GetHierarchy(@params);
                     default:
                         return new ErrorResponse($"Unknown action: '{action}'. Valid actions are: {SupportedActions}.");
@@ -174,11 +182,12 @@ namespace MCPForUnity.Editor.Tools.Prefabs
         }
 
         /// <summary>
-        /// Saves the prefab stage asset using the correct Unity API (Unity 2021.2+).
+        /// Saves the prefab stage asset using the correct Unity API (Unity 2021.3+).
         ///
         /// When editing in PrefabStage, the prefabContentsRoot is treated as a prefab instance.
         /// We use SetDirty + SaveAssets pattern which is the correct way to save changes
         /// made to a prefab that's open in PrefabStage.
+        /// Note: AssetDatabase.SaveAssets() is called by SaveAndRefreshStage after this method.
         /// </summary>
         private static void SaveStagePrefab(PrefabStage stage)
         {
@@ -192,24 +201,10 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 throw new InvalidOperationException("Prefab stage has invalid asset path.");
             }
 
-            try
-            {
-                // Mark the prefab as modified so Unity knows it needs to be saved
-                EditorUtility.SetDirty(stage.prefabContentsRoot);
+            // Mark the prefab as modified so Unity knows it needs to be saved
+            EditorUtility.SetDirty(stage.prefabContentsRoot);
 
-                // Save all modified assets including the prefab
-                AssetDatabase.SaveAssets();
-
-                McpLog.Info($"[ManagePrefabs] Prefab asset saved: {stage.assetPath}");
-            }
-            catch (Exception e)
-            {
-                McpLog.Error($"[ManagePrefabs] Error saving prefab at '{stage.assetPath}': {e}");
-                throw new InvalidOperationException(
-                    $"Failed to save prefab asset at '{stage.assetPath}': {e.Message}",
-                    e
-                );
-            }
+            McpLog.Info($"[ManagePrefabs] Prefab stage marked dirty: {stage.assetPath}");
         }
 
         /// <summary>
@@ -289,8 +284,13 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             {
                 try
                 {
-                    PrefabUtility.UnpackPrefabInstance(sourceObject, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
-                    McpLog.Info($"[ManagePrefabs] Unpacked prefab instance '{sourceObject.name}' before creating new prefab.");
+                    // UnpackPrefabInstance requires the prefab instance root, not a child object
+                    GameObject rootToUnlink = PrefabUtility.GetOutermostPrefabInstanceRoot(sourceObject);
+                    if (rootToUnlink != null)
+                    {
+                        PrefabUtility.UnpackPrefabInstance(rootToUnlink, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+                        McpLog.Info($"[ManagePrefabs] Unpacked prefab instance '{rootToUnlink.name}' before creating new prefab.");
+                    }
                 }
                 catch (Exception e)
                 {
@@ -562,7 +562,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             try
             {
                 // Build hierarchy items
-                var allItems = BuildHierarchyItems(prefabContents.transform, sanitizedPath);
+                var allItems = BuildHierarchyItems(prefabContents.transform);
                 int totalCount = allItems.Count;
 
                 // Apply pagination
@@ -601,17 +601,17 @@ namespace MCPForUnity.Editor.Tools.Prefabs
         /// <summary>
         /// Builds a flat list of hierarchy items from a transform root.
         /// </summary>
-        private static List<object> BuildHierarchyItems(Transform root, string prefabPath)
+        private static List<object> BuildHierarchyItems(Transform root)
         {
             var items = new List<object>();
-            BuildHierarchyItemsRecursive(root, prefabPath, "", items);
+            BuildHierarchyItemsRecursive(root, "", items);
             return items;
         }
 
         /// <summary>
         /// Recursively builds hierarchy items.
         /// </summary>
-        private static void BuildHierarchyItemsRecursive(Transform transform, string prefabPath, string parentPath, List<object> items)
+        private static void BuildHierarchyItemsRecursive(Transform transform, string parentPath, List<object> items)
         {
             if (transform == null) return;
 
@@ -644,7 +644,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             // Recursively process children
             foreach (Transform child in transform)
             {
-                BuildHierarchyItemsRecursive(child, prefabPath, path, items);
+                BuildHierarchyItemsRecursive(child, path, items);
             }
         }
 
