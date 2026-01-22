@@ -85,6 +85,13 @@ jobs:
           echo "Updating Server/README.md version references to v$NEW_VERSION"
           sed -i 's|git+https://github.com/CoplayDev/unity-mcp@v[0-9]\+\.[0-9]\+\.[0-9]\+#subdirectory=Server|git+https://github.com/CoplayDev/unity-mcp@v'"$NEW_VERSION"'#subdirectory=Server|g' Server/README.md
 
+          echo "Updating root README.md fixed version examples to v$NEW_VERSION"
+          sed -i 's|https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v[0-9]\+\.[0-9]\+\.[0-9]\+|https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v'"$NEW_VERSION"'|g' README.md
+
+          echo "Updating README-zh.md fixed version examples to v$NEW_VERSION"
+          sed -i 's|https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v[0-9]\+\.[0-9]\+\.[0-9]\+|https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v'"$NEW_VERSION"'|g' README-zh.md
+          sed -i 's|git+https://github.com/CoplayDev/unity-mcp@v[0-9]\+\.[0-9]\+\.[0-9]\+#subdirectory=Server|git+https://github.com/CoplayDev/unity-mcp@v'"$NEW_VERSION"'#subdirectory=Server|g' README-zh.md
+
       - name: Commit and push changes
         env:
           NEW_VERSION: ${{ steps.compute.outputs.new_version }}
@@ -93,7 +100,7 @@ jobs:
           set -euo pipefail
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add MCPForUnity/package.json "Server/pyproject.toml" Server/README.md
+          git add MCPForUnity/package.json "Server/pyproject.toml" Server/README.md README.md README-zh.md
           if git diff --cached --quiet; then
             echo "No version changes to commit."
           else
