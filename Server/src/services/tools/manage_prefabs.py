@@ -11,6 +11,18 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 from services.tools.preflight import preflight
 
 
+# Required parameters for each action
+REQUIRED_PARAMS = {
+    "get_info": ["prefab_path"],
+    "get_hierarchy": ["prefab_path"],
+    "open_stage": ["prefab_path"],
+    "create_from_gameobject": ["target", "prefab_path"],
+    "list_prefabs": [],  # No required params
+    "save_open_stage": [],
+    "close_stage": [],
+}
+
+
 @mcp_for_unity_tool(
     description=(
         "Manages Unity Prefab assets and stages. "
@@ -40,8 +52,8 @@ async def manage_prefabs(
     prefab_path: Annotated[
         str, "Prefab asset path (e.g., Assets/Prefabs/MyPrefab.prefab). Used by: get_info, get_hierarchy, open_stage."
     ] | None = None,
-    path: Annotated[
-        str, "For list_prefabs: search folder path. For other actions: alias for prefab_path."
+    folder_path: Annotated[
+        str, "Search folder path for list_prefabs (e.g., Assets or Assets/Prefabs)."
     ] | None = None,
     mode: Annotated[
         str, "Prefab stage mode for open_stage. Only 'InIsolation' is currently supported."
@@ -71,12 +83,28 @@ async def manage_prefabs(
         str, "Optional name filter for list_prefabs to find specific prefabs."
     ] | None = None,
 ) -> dict[str, Any]:
+    # Validate required parameters
+    required = REQUIRED_PARAMS.get(action, [])
+    for param_name in required:
+        param_value = locals().get(param_name)
+        if param_value is None:
+            return {
+                "success": False,
+                "message": f"Action '{action}' requires parameter '{param_name}'."
+            }
+
     unity_instance = get_unity_instance_from_context(ctx)
 
     # Preflight check for read operations to ensure Unity is ready
-    gate = await preflight(ctx, wait_for_no_compile=True, refresh_if_dirty=True)
-    if gate is not None:
-        return gate.model_dump()
+    try:
+        gate = await preflight(ctx, wait_for_no_compile=True, refresh_if_dirty=True)
+        if gate is not None:
+            return gate.model_dump()
+    except Exception as exc:
+        return {
+            "success": False,
+            "message": f"Unity preflight check failed: {exc}"
+        }
 
     try:
         # Coerce pagination parameters
@@ -84,17 +112,16 @@ async def manage_prefabs(
         coerced_cursor = coerce_int(cursor, default=None)
         coerced_page_number = coerce_int(page_number, default=None)
 
+        # Build parameters dictionary
         params: dict[str, Any] = {"action": action}
 
-        # Handle path parameter (both prefab_path and path are supported)
-        # For list_prefabs, path is the search folder, not a prefab path
+        # Handle prefab path parameter
         if action == "list_prefabs":
-            if path:
-                params["path"] = path
+            if folder_path:
+                params["path"] = folder_path
         else:
-            prefab_path_value = prefab_path or path
-            if prefab_path_value:
-                params["prefabPath"] = prefab_path_value
+            if prefab_path:
+                params["prefabPath"] = prefab_path
 
         # Handle mode parameter
         if mode:
@@ -129,6 +156,7 @@ async def manage_prefabs(
         if search:
             params["search"] = search
 
+        # Send command to Unity
         response = await send_with_unity_instance(
             async_send_command_with_retry, unity_instance, "manage_prefabs", params
         )
@@ -139,6 +167,18 @@ async def manage_prefabs(
                 "message": response.get("message", "Prefab operation successful."),
                 "data": response.get("data"),
             }
-        return response if isinstance(response, dict) else {"success": False, "message": str(response)}
+        return response if isinstance(response, dict) else {
+            "success": False,
+            "message": f"Unexpected response from Unity: {str(response)}"
+        }
+
+    except TimeoutError:
+        return {
+            "success": False,
+            "message": "Unity connection timeout. Please check if Unity is running."
+        }
     except Exception as exc:
-        return {"success": False, "message": f"Python error managing prefabs: {exc}"}
+        return {
+            "success": False,
+            "message": f"Error managing prefabs: {exc}"
+        }

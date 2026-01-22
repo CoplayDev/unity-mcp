@@ -19,6 +19,10 @@ namespace MCPForUnity.Editor.Tools.Prefabs
     {
         private const string SupportedActions = "open_stage, close_stage, save_open_stage, create_from_gameobject, get_info, get_hierarchy, list_prefabs";
 
+        // Pagination constants
+        private const int DefaultPageSize = 50;
+        private const int MaxPageSize = 500;
+
         public static object HandleCommand(JObject @params)
         {
             if (@params == null)
@@ -100,10 +104,9 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             }
 
             bool saveBeforeClose = @params["saveBeforeClose"]?.ToObject<bool>() ?? false;
-            if (saveBeforeClose && stage.scene.isDirty)
+            if (saveBeforeClose)
             {
-                SaveStagePrefab(stage);
-                AssetDatabase.SaveAssets();
+                SaveAndRefreshStage(stage);
             }
 
             StageUtility.GoToMainStage();
@@ -118,9 +121,17 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 return new ErrorResponse("No prefab stage is currently open.");
             }
 
+            SaveAndRefreshStage(stage);
+            return new SuccessResponse($"Saved prefab stage for '{stage.assetPath}'.", SerializeStage(stage));
+        }
+
+        /// <summary>
+        /// Saves the prefab stage and refreshes the asset database.
+        /// </summary>
+        private static void SaveAndRefreshStage(PrefabStage stage)
+        {
             SaveStagePrefab(stage);
             AssetDatabase.SaveAssets();
-            return new SuccessResponse($"Saved prefab stage for '{stage.assetPath}'.", SerializeStage(stage));
         }
 
         private static void SaveStagePrefab(PrefabStage stage)
@@ -292,24 +303,15 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 return new ErrorResponse($"No prefab asset found at path '{sanitizedPath}'.");
             }
 
-            // Get GUID
             string guid = PrefabUtilityHelper.GetPrefabGUID(sanitizedPath);
-
-            // Get prefab type
             PrefabAssetType assetType = PrefabUtility.GetPrefabAssetType(prefabAsset);
             string prefabTypeString = assetType.ToString();
-
-            // Get component types on root
             var componentTypes = PrefabUtilityHelper.GetComponentTypeNames(prefabAsset);
-
-            // Count children recursively
             int childCount = PrefabUtilityHelper.CountChildrenRecursive(prefabAsset.transform);
-
-            // Get variant info
             var (isVariant, parentPrefab, _) = PrefabUtilityHelper.GetVariantInfo(prefabAsset);
 
             return new SuccessResponse(
-                $"成功获取 prefab 信息。",
+                $"Successfully retrieved prefab info.",
                 new
                 {
                     assetPath = sanitizedPath,
@@ -338,8 +340,8 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             string sanitizedPath = AssetPathUtility.SanitizeAssetPath(prefabPath);
 
             // Parse pagination parameters
-            var pagination = PaginationRequest.FromParams(@params, defaultPageSize: 50);
-            int pageSize = Mathf.Clamp(pagination.PageSize, 1, 500);
+            var pagination = PaginationRequest.FromParams(@params, defaultPageSize: DefaultPageSize);
+            int pageSize = Mathf.Clamp(pagination.PageSize, 1, MaxPageSize);
             int cursor = pagination.Cursor;
 
             // Load prefab contents in background (without opening stage UI)
@@ -364,7 +366,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 string nextCursor = truncated ? endIndex.ToString() : null;
 
                 return new SuccessResponse(
-                    $"成功获取 prefab 层级。",
+                    $"Successfully retrieved prefab hierarchy. Found {totalCount} objects.",
                     new
                     {
                         prefabPath = sanitizedPath,
@@ -391,11 +393,11 @@ namespace MCPForUnity.Editor.Tools.Prefabs
         {
             string path = @params["path"]?.ToString() ?? @params["prefabPath"]?.ToString() ?? "Assets";
             string search = @params["search"]?.ToString() ?? string.Empty;
-            int pageSize = ParamCoercion.CoerceInt(@params["pageSize"] ?? @params["page_size"], 50);
+            int pageSize = ParamCoercion.CoerceInt(@params["pageSize"] ?? @params["page_size"], DefaultPageSize);
             int pageNumber = ParamCoercion.CoerceInt(@params["pageNumber"] ?? @params["page_number"], 1);
 
             // Clamp values
-            pageSize = Mathf.Clamp(pageSize, 1, 500);
+            pageSize = Mathf.Clamp(pageSize, 1, MaxPageSize);
             pageNumber = Mathf.Max(1, pageNumber);
 
             // Sanitize path - handle Assets folder specially to avoid double prefix
@@ -408,6 +410,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             {
                 sanitizedPath = AssetPathUtility.SanitizeAssetPath(path);
             }
+
             if (!AssetDatabase.IsValidFolder(sanitizedPath))
             {
                 return new ErrorResponse($"Invalid path '{sanitizedPath}'. Path must be a valid folder.");
@@ -442,7 +445,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             bool hasMore = endIndex < totalCount;
 
             return new SuccessResponse(
-                $"找到 {totalCount} 个 prefab。",
+                $"Found {totalCount} prefab(s).",
                 new
                 {
                     items = pageItems,
