@@ -1,6 +1,6 @@
 <img width="676" height="380" alt="MCP for Unity" src="docs/images/logo.png" />
 
-| [English](README.md) | [简体中文](README-zh.md) |
+| [English](README.md) | [简体中文](docs/i18n/README-zh.md) |
 |----------------------|---------------------------------|
 
 #### Proudly sponsored and maintained by [Coplay](https://www.coplay.dev/?ref=unity-mcp) -- the best AI assistant for Unity.
@@ -191,7 +191,7 @@ Still stuck? [Open an Issue](https://github.com/CoplayDev/unity-mcp/issues) or [
 <details>
 <summary><strong>Contributing</strong></summary>
 
-See [README-DEV.md](docs/README-DEV.md) for development setup. For custom tools, see [CUSTOM_TOOLS.md](docs/CUSTOM_TOOLS.md).
+See [README-DEV.md](docs/development/README-DEV.md) for development setup. For custom tools, see [CUSTOM_TOOLS.md](docs/reference/CUSTOM_TOOLS.md).
 
 1. Fork → Create issue → Branch (`feature/your-idea`) → Make changes → PR
 </details>
@@ -199,7 +199,7 @@ See [README-DEV.md](docs/README-DEV.md) for development setup. For custom tools,
 <details>
 <summary><strong>Telemetry & Privacy</strong></summary>
 
-Anonymous, privacy-focused telemetry (no code, no project names, no personal data). Opt out with `DISABLE_TELEMETRY=true`. See [TELEMETRY.md](docs/TELEMETRY.md).
+Anonymous, privacy-focused telemetry (no code, no project names, no personal data). Opt out with `DISABLE_TELEMETRY=true`. See [TELEMETRY.md](docs/reference/TELEMETRY.md).
 </details>
 
 ---

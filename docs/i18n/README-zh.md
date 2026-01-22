@@ -1,6 +1,6 @@
-<img width="676" height="380" alt="MCP for Unity" src="docs/images/logo.png" />
+<img width="676" height="380" alt="MCP for Unity" src="../images/logo.png" />
 
-| [English](README.md) | [简体中文](README-zh.md) |
+| [English](../../README.md) | [简体中文](README-zh.md) |
 |----------------------|---------------------------------|
 
 #### 由 [Coplay](https://www.coplay.dev/?ref=unity-mcp) 荣誉赞助并维护 —— Unity 最好的 AI 助手。
@@ -15,7 +15,7 @@
 
 **用大语言模型创建你的 Unity 应用！** MCP for Unity 通过 [Model Context Protocol](https://modelcontextprotocol.io/introduction) 将 AI 助手（Claude、Cursor、VS Code 等）与你的 Unity Editor 连接起来。为你的大语言模型提供管理资源、控制场景、编辑脚本和自动化任务的工具。
 
-<img alt="MCP for Unity building a scene" src="docs/images/building_scene.gif">
+<img alt="MCP for Unity building a scene" src="../images/building_scene.gif">
 
 ---
 
@@ -191,7 +191,7 @@ MCP for Unity 支持多个 Unity Editor 实例。要将操作定向到某个特�
 <details>
 <summary><strong>贡献</strong></summary>
 
-开发环境设置见 [README-DEV.md](docs/README-DEV.md)。自定义工具见 [CUSTOM_TOOLS.md](docs/CUSTOM_TOOLS.md)。
+开发环境设置见 [README-DEV.md](../development/README-DEV.md)。自定义工具见 [CUSTOM_TOOLS.md](../reference/CUSTOM_TOOLS.md)。
 
 1. Fork → 创建 issue → 新建分支（`feature/your-idea`）→ 修改 → 提 PR
 </details>
@@ -199,12 +199,12 @@ MCP for Unity 支持多个 Unity Editor 实例。要将操作定向到某个特�
 <details>
 <summary><strong>遥测与隐私</strong></summary>
 
-匿名、注重隐私的遥测（不包含代码、项目名或个人数据）。可通过 `DISABLE_TELEMETRY=true` 关闭。详见 [TELEMETRY.md](docs/TELEMETRY.md)。
+匿名、注重隐私的遥测（不包含代码、项目名或个人数据）。可通过 `DISABLE_TELEMETRY=true` 关闭。详见 [TELEMETRY.md](../reference/TELEMETRY.md)。
 </details>
 
 ---
 
-**许可证：** MIT — 查看 [LICENSE](LICENSE) | **需要帮助？** [Discord](https://discord.gg/y4p8KfzrN4) | [Issues](https://github.com/CoplayDev/unity-mcp/issues)
+**许可证：** MIT — 查看 [LICENSE](../../LICENSE) | **需要帮助？** [Discord](https://discord.gg/y4p8KfzrN4) | [Issues](https://github.com/CoplayDev/unity-mcp/issues)
 
 ---
 
@@ -240,7 +240,7 @@ Coplay 提供 3 个 Unity AI 工具：
 
 （这些工具有不同的技术栈。参见这篇博客文章：[comparing Coplay to MCP for Unity](https://coplay.dev/blog/coplay-vs-coplay-mcp-vs-unity-mcp)。）
 
-<img alt="Coplay" src="docs/images/coplay-logo.png" />
+<img alt="Coplay" src="../images/coplay-logo.png" />
 
 ## 免责声明
 

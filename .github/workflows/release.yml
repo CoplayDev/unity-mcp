@@ -88,8 +88,8 @@ jobs:
           echo "Updating root README.md fixed version examples to v$NEW_VERSION"
           sed -i 's|https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v[0-9]\+\.[0-9]\+\.[0-9]\+|https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v'"$NEW_VERSION"'|g' README.md
 
-          echo "Updating README-zh.md fixed version examples to v$NEW_VERSION"
-          sed -i 's|https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v[0-9]\+\.[0-9]\+\.[0-9]\+|https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v'"$NEW_VERSION"'|g' README-zh.md
+          echo "Updating docs/i18n/README-zh.md fixed version examples to v$NEW_VERSION"
+          sed -i 's|https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v[0-9]\+\.[0-9]\+\.[0-9]\+|https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v'"$NEW_VERSION"'|g' docs/i18n/README-zh.md
 
       - name: Commit and push changes
         env:
@@ -99,7 +99,7 @@ jobs:
           set -euo pipefail
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add MCPForUnity/package.json "Server/pyproject.toml" Server/README.md README.md README-zh.md
+          git add MCPForUnity/package.json "Server/pyproject.toml" Server/README.md README.md docs/i18n/README-zh.md
           if git diff --cached --quiet; then
             echo "No version changes to commit."
           else
