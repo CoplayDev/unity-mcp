@@ -651,7 +651,23 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
             _currentEvents.Clear();
             _lastEventStoreCount = 0;
             _eventListView.RefreshItems();
-            _detailScrollView.Clear();
+
+            // P0 Fix: Don't Clear() the entire scroll view - it removes placeholder and breaks OnSelectionChange
+            // Instead, clear only the content areas
+            if (_detailContent != null)
+            {
+                _detailContent.Clear();
+            }
+            if (_detailActions != null)
+            {
+                _detailActions.Clear();
+            }
+            // Ensure placeholder is visible
+            if (_detailPlaceholder != null)
+            {
+                _detailPlaceholder.style.display = DisplayStyle.Flex;
+            }
+
             UpdateStatus();
             McpLog.Debug("[ActionTraceEditorWindow] Clear clicked");
         }
@@ -1024,8 +1040,13 @@ namespace MCPForUnity.Editor.ActionTrace.UI.Windows
 
         private void OnEditorUpdate()
         {
+            // P0 Fix: Guard against null references before CreateGUI completes
+            // Check if critical UI elements are initialized
+            if (_actionTraceQuery == null || _eventListView == null)
+                return;
+
             // Performance optimization: use time interval to control refresh rate
-            if (_isScheduledRefreshActive && 
+            if (_isScheduledRefreshActive &&
                 EditorApplication.timeSinceStartup - _lastRefreshTime > RefreshInterval)
             {
                 _lastRefreshTime = EditorApplication.timeSinceStartup;

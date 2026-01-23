@@ -25,7 +25,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
     /// All asset events use "Asset:{path}" format for TargetId to ensure
     /// cross-session stability.
     /// </summary>
-    internal sealed class AssetChangePostprocessor : AssetPostprocessor
+    internal sealed class AssetCapture : AssetPostprocessor
     {
         /// <summary>
         /// Tracks assets processed in the current session to prevent duplicate events.

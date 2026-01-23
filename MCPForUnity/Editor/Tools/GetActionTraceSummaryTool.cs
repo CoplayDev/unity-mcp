@@ -183,7 +183,9 @@ namespace MCPForUnity.Editor.Tools
                     modifiedCount++;
 
                 // Check for errors
-                if (importanceCategory == "critical" || evtTypeLower.Contains("error") || evtTypeLower.Contains("exception"))
+                // P0 Fix: Exclude AINote events from error counting (they are intentionally critical but not errors)
+                if (!string.Equals(evt.Type, "AINote", StringComparison.OrdinalIgnoreCase) &&
+                    (importanceCategory == "critical" || evtTypeLower.Contains("error") || evtTypeLower.Contains("exception")))
                 {
                     errorCount++;
                     errorEvents.Add(new
@@ -296,6 +298,7 @@ namespace MCPForUnity.Editor.Tools
 
         /// <summary>
         /// Parse time_range parameter and convert to since_sequence threshold.
+        /// P0 Fix: Actually implement time-based filtering by querying events and finding sequence threshold.
         /// </summary>
         private static long? CalculateSinceSequence(string timeRange)
         {
@@ -315,10 +318,28 @@ namespace MCPForUnity.Editor.Tools
                 _ => nowMs - (60 * 60 * 1000) // Default to 1h
             };
 
-            // Find the sequence number closest to this threshold
-            // Since we can't efficiently query by timestamp, we'll use a different approach:
-            // Query with a larger limit and filter by timestamp client-side
-            // For now, return null (which means "from the beginning" within the limit)
+            // P0 Fix: Find the sequence number closest to the time threshold
+            // Query recent events to find the sequence number at the threshold time
+            try
+            {
+                // Query a larger sample to find events around the threshold
+                var sampleEvents = EventStore.Query(500, null);
+
+                // Find first event after threshold
+                var thresholdEvent = sampleEvents.FirstOrDefault(e => e.TimestampUnixMs >= thresholdMs);
+
+                if (thresholdEvent != null)
+                {
+                    // Return sequence number to filter from this point
+                    return thresholdEvent.Sequence;
+                }
+            }
+            catch (Exception ex)
+            {
+                McpLog.Warn($"[GetActionTraceSummaryTool] Failed to calculate since_sequence for time_range '{timeRange}': {ex.Message}");
+            }
+
+            // Fallback: return null (query from beginning within limit)
             return null;
         }
 
@@ -428,12 +449,18 @@ namespace MCPForUnity.Editor.Tools
                     }
                 }
 
+                // P0 Fix: Require conversation_id to be present when filter is specified
                 if (!string.IsNullOrEmpty(conversationId))
                 {
                     if (e.Payload.TryGetValue("conversation_id", out var convVal))
                     {
                         if (convVal?.ToString() != conversationId)
                             return false;
+                    }
+                    else
+                    {
+                        // P0 Fix: Reject events without conversation_id when filter is specified
+                        return false;
                     }
                 }
 

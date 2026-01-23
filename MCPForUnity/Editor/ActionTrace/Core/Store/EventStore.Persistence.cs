@@ -41,14 +41,38 @@ namespace MCPForUnity.Editor.ActionTrace.Core.Store
         /// Multiple rapid calls result in a single save (coalesced).
         /// Thread-safe: uses lock to protect _saveScheduled flag.
         /// P1 Fix: Added throttling to prevent excessive disk writes.
+        /// P0 Fix: When throttled, schedule retry instead of returning to prevent data loss.
         /// </summary>
         private static void ScheduleSave()
         {
-            // P1 Fix: Check throttling - skip if too soon since last save
+            // P1 Fix: Check throttling
             long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            if (now - _lastSaveTime < MinSaveIntervalMs)
+            long timeSinceLastSave = now - _lastSaveTime;
+
+            if (timeSinceLastSave < MinSaveIntervalMs)
             {
-                // Too soon, just mark dirty and skip save
+                // P0 Fix: Schedule retry instead of just returning
+                // Calculate remaining throttle time with small cap to avoid excessive retries
+                long remainingMs = MinSaveIntervalMs - timeSinceLastSave;
+                int retryDelayMs = (int)Math.Min(remainingMs, 500); // Cap at 500ms
+
+                lock (_queryLock)
+                {
+                    // Only schedule retry if not already scheduled
+                    if (!_saveScheduled)
+                    {
+                        _saveScheduled = true;
+                        EditorApplication.delayCall += () =>
+                        {
+                            lock (_queryLock)
+                            {
+                                _saveScheduled = false;
+                            }
+                            // Retry scheduling save
+                            ScheduleSave();
+                        };
+                    }
+                }
                 return;
             }
 
@@ -197,18 +221,26 @@ namespace MCPForUnity.Editor.ActionTrace.Core.Store
 
         /// <summary>
         /// Save events to persistent storage.
+        /// P0 Fix: Acquire snapshot under lock to avoid concurrent mutation, serialize outside lock.
         /// </summary>
         private static void SaveToStorage()
         {
             try
             {
-                var state = new EventStoreState
+                // P0 Fix: Take snapshot of mutable state under lock
+                EventStoreState state;
+                lock (_queryLock)
                 {
-                    SchemaVersion = CurrentSchemaVersion,
-                    SequenceCounter = _sequenceCounter,
-                    Events = _events.ToList(),
-                    ContextMappings = _contextMappings.ToList()
-                };
+                    state = new EventStoreState
+                    {
+                        SchemaVersion = CurrentSchemaVersion,
+                        SequenceCounter = _sequenceCounter,
+                        Events = _events.ToList(),
+                        ContextMappings = _contextMappings.ToList()
+                    };
+                }
+
+                // Serialize and save outside lock to avoid holding lock during I/O
                 McpJobStateStore.SaveState(StateKey, state);
             }
             catch (Exception ex)

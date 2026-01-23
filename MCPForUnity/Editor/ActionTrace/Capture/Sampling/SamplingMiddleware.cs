@@ -226,14 +226,13 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
                             oldestSample = kvp.Value;
                         }
                     }
-                    if (!string.IsNullOrEmpty(oldestKey) && _pendingSamples.TryRemove(oldestKey, out var removedSample))
+                    if (!string.IsNullOrEmpty(oldestKey) &&
+                        _pendingSamples.TryRemove(oldestKey, out var removedSample) &&
+                        SamplingConfig.Strategies.TryGetValue(removedSample.Event.Type, out var evictedStrategy) &&
+                        (evictedStrategy.Mode == SamplingMode.Debounce || evictedStrategy.Mode == SamplingMode.DebounceByKey))
                     {
                         // Record evicted debounce samples to prevent data loss
-                        if (SamplingConfig.Strategies.TryGetValue(removedSample.Event.Type, out var evictedStrategy) &&
-                            (evictedStrategy.Mode == SamplingMode.Debounce || evictedStrategy.Mode == SamplingMode.DebounceByKey))
-                        {
-                            EventStore.Record(removedSample.Event);
-                        }
+                        EventStore.Record(removedSample.Event);
                     }
                 }
             }

@@ -349,6 +349,7 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
         /// <summary>
         /// P1.2: Apply task_id and conversation_id filters to raw event list.
         /// Filters AINote events by matching task_id and conversation_id in payload.
+        /// P0 Fix: Require conversation_id to be present and matching when conversationId filter is specified.
         /// </summary>
         private static List<EditorEvent> ApplyTaskFilters(List<EditorEvent> events, string taskId, string conversationId)
         {
@@ -382,6 +383,7 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
                 }
 
                 // Check conversation_id filter
+                // P0 Fix: Require conversation_id to be present when filter is specified
                 if (!string.IsNullOrEmpty(conversationId))
                 {
                     if (e.Payload.TryGetValue("conversation_id", out var convVal))
@@ -389,6 +391,11 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
                         string eventConvId = convVal?.ToString();
                         if (eventConvId != conversationId)
                             return false;
+                    }
+                    else
+                    {
+                        // P0 Fix: Reject events without conversation_id when filter is specified
+                        return false;
                     }
                 }
 
@@ -398,6 +405,7 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
 
         /// <summary>
         /// P1.2: Apply task filters to projected events (with semantics).
+        /// P0 Fix: Require conversation_id to be present and matching when conversationId filter is specified.
         /// </summary>
         private static List<ActionTraceViewItem> ApplyTaskFiltersToProjected(List<ActionTraceViewItem> projected, string taskId, string conversationId)
         {
@@ -426,12 +434,18 @@ namespace MCPForUnity.Editor.Resources.ActionTrace
                     }
                 }
 
+                // P0 Fix: Require conversation_id to be present when filter is specified
                 if (!string.IsNullOrEmpty(conversationId))
                 {
                     if (p.Event.Payload.TryGetValue("conversation_id", out var convVal))
                     {
                         if (convVal?.ToString() != conversationId)
                             return false;
+                    }
+                    else
+                    {
+                        // P0 Fix: Reject events without conversation_id when filter is specified
+                        return false;
                     }
                 }
 

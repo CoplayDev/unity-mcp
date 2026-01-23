@@ -29,20 +29,11 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 
 
 @mcp_for_unity_tool(
-    description="""Retrieve Unity editor operation history.
+    description="""⚠️ DETAILED HISTORY - Use when summary insufficient
 
-WHEN TO CALL:
-• Undo/Revert: Use 'verbose' to find operation ID
-• Error/Failure: Use 'recent_errors' to diagnose
-• Context Confusion: Use 'summary' to sync state
-• User asks "What did I do?", "Why is this pink?"
+Raw event list for deep analysis. Prefer summary first for speed.
 
-WHEN NOT TO CALL:
-• After every single tool execution
-• Simple verified operations (e.g., creating a cube)
-
-PRESETS (query_mode):
-'recent_errors' | 'recent_changes' | 'summary' | 'verbose'""",
+Presets: 'recent_errors' | 'recent_changes' | 'summary' | 'verbose'""",
     annotations=ToolAnnotations(
         title="Get Action Trace",
     ),

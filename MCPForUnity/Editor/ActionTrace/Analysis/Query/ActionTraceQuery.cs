@@ -217,13 +217,11 @@ namespace MCPForUnity.Editor.ActionTrace.Analysis.Query
 
                 // Convert GlobalID to InstanceID and Name (with caching)
                 (int? instanceId, string displayName) targetInfo = (null, null);
-                if (!string.IsNullOrEmpty(evt.TargetId))
+                if (!string.IsNullOrEmpty(evt.TargetId) &&
+                !instanceInfoCache.TryGetValue(evt.TargetId, out targetInfo))
                 {
-                    if (!instanceInfoCache.TryGetValue(evt.TargetId, out targetInfo))
-                    {
-                        targetInfo = GlobalIdHelper.GetInstanceInfo(evt.TargetId);
-                        instanceInfoCache[evt.TargetId] = targetInfo;
-                    }
+                    targetInfo = GlobalIdHelper.GetInstanceInfo(evt.TargetId);
+                    instanceInfoCache[evt.TargetId] = targetInfo;
                 }
 
                 result[i] = new ActionTraceViewItem

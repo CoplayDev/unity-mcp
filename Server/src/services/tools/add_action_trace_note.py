@@ -68,7 +68,12 @@ def _coerce_int_list(value) -> list[int] | None:
 
 
 @mcp_for_unity_tool(
-    description="Adds an AI comment or summary to the ActionTrace. Supports task-level tracking and multi-agent collaboration. Use this to record decisions, task completion, or explain the purpose of a series of operations.",
+    description="""✍️ DOCUMENT YOUR WORK - Helps future AI understand context
+
+Record decisions, workarounds, completed tasks (>3 steps).
+
+✓ Good: "Refactored PlayerController: speed 5→8, fixed collision"
+✗ Bad: "Created cube" (ActionTrace already records this)""",
     annotations=ToolAnnotations(
         title="Add Action Trace Note",
     ),
@@ -119,6 +124,13 @@ async def add_action_trace_note(
         effective_task_id = f"task-{uuid.uuid4().hex[:8]}"
     if not effective_conv_id:
         effective_conv_id = f"conv-{uuid.uuid4().hex[:8]}"
+
+    # P0 Fix: Persist auto-generated IDs back to context for future calls
+    # This ensures task-level grouping works across multiple note additions
+    if not task_id:
+        _current_task_id.set(effective_task_id)
+    if not conversation_id:
+        _current_conversation_id.set(effective_conv_id)
 
     # Prepare parameters for Unity
     params_dict: dict[str, Any] = {

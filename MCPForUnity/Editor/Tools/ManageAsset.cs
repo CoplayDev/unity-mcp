@@ -290,7 +290,15 @@ namespace MCPForUnity.Editor.Tools
                 AssetDatabase.SaveAssets();
 
                 // === ActionTrace Integration: Notify subscribers (low-coupling) ===
-                OnAssetCreated?.Invoke(fullPath, assetType);
+                // P0 Fix: Wrap callback in try-catch to prevent subscriber exceptions from breaking core functionality
+                try
+                {
+                    OnAssetCreated?.Invoke(fullPath, assetType);
+                }
+                catch (Exception callbackEx)
+                {
+                    McpLog.Warn($"[ManageAsset] OnAssetCreated callback failed for '{fullPath}': {callbackEx.Message}");
+                }
 
                 // AssetDatabase.Refresh(); // CreateAsset often handles refresh
                 return new SuccessResponse(
@@ -496,11 +504,19 @@ namespace MCPForUnity.Editor.Tools
                     AssetDatabase.SaveAssets();
 
                     // === ActionTrace Integration: Notify subscribers (low-coupling) ===
-                    OnAssetModified?.Invoke(
-                        fullPath,
-                        asset.GetType().FullName,
-                        properties.ToObject<Dictionary<string, object>>()
-                    );
+                    // P0 Fix: Wrap callback in try-catch to prevent subscriber exceptions from breaking core functionality
+                    try
+                    {
+                        OnAssetModified?.Invoke(
+                            fullPath,
+                            asset.GetType().FullName,
+                            properties.ToObject<Dictionary<string, object>>()
+                        );
+                    }
+                    catch (Exception callbackEx)
+                    {
+                        McpLog.Warn($"[ManageAsset] OnAssetModified callback failed for '{fullPath}': {callbackEx.Message}");
+                    }
 
                     // Refresh might be needed in some edge cases, but SaveAssets usually covers it.
                     // AssetDatabase.Refresh();
@@ -545,7 +561,15 @@ namespace MCPForUnity.Editor.Tools
                 if (success)
                 {
                     // === ActionTrace Integration: Notify subscribers (low-coupling) ===
-                    OnAssetDeleted?.Invoke(fullPath, assetType);
+                    // P0 Fix: Wrap callback in try-catch to prevent subscriber exceptions from breaking core functionality
+                    try
+                    {
+                        OnAssetDeleted?.Invoke(fullPath, assetType);
+                    }
+                    catch (Exception callbackEx)
+                    {
+                        McpLog.Warn($"[ManageAsset] OnAssetDeleted callback failed for '{fullPath}': {callbackEx.Message}");
+                    }
 
                     // AssetDatabase.Refresh(); // DeleteAsset usually handles refresh
                     return new SuccessResponse($"Asset '{fullPath}' deleted successfully.");

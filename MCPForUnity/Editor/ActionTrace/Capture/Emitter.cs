@@ -265,21 +265,16 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
 
             string targetId = $"Asset:{assetPath}";
 
+            var resolvedAssetType = !string.IsNullOrEmpty(assetType)
+                ? assetType
+                : DetectAssetType(assetPath);
+
             var payload = new Dictionary<string, object>
             {
                 ["path"] = assetPath,
-                ["extension"] = System.IO.Path.GetExtension(assetPath)
+                ["extension"] = System.IO.Path.GetExtension(assetPath),
+                ["asset_type"] = resolvedAssetType
             };
-
-            if (!string.IsNullOrEmpty(assetType))
-            {
-                payload["asset_type"] = assetType;
-            }
-            else
-            {
-                // Auto-detect asset type
-                payload["asset_type"] = DetectAssetType(assetPath);
-            }
 
             EmitEvent(EventTypes.AssetImported, targetId, payload);
         }
