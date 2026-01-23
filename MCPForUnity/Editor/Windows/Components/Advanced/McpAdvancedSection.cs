@@ -434,7 +434,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
                 {
                     healthIndicator.AddToClassList("healthy");
                 }
-                else if (statusText == "Unknown")
+                else if (statusText == HealthStatus.Unknown)
                 {
                     healthIndicator.AddToClassList("unknown");
                 }

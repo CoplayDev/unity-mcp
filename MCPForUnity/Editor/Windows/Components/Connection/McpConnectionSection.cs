@@ -56,12 +56,6 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         // Reference to Advanced section for health status updates
         private Action<bool, string> onHealthStatusUpdate;
 
-        // Health status constants
-        private const string HealthStatusUnknown = "Unknown";
-        private const string HealthStatusHealthy = "Healthy";
-        private const string HealthStatusPingFailed = "Ping Failed";
-        private const string HealthStatusUnhealthy = "Unhealthy";
-
         // Events
         public event Action OnManualConfigUpdateRequested;
         public event Action OnTransportChanged;
@@ -760,13 +754,13 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             var bridgeService = MCPServiceLocator.Bridge;
             if (!bridgeService.IsRunning)
             {
-                onHealthStatusUpdate?.Invoke(false, HealthStatusUnknown);
+                onHealthStatusUpdate?.Invoke(false, HealthStatus.Unknown);
 
                 // Only log if state changed
-                if (lastHealthStatus != HealthStatusUnknown)
+                if (lastHealthStatus != HealthStatus.Unknown)
                 {
                     McpLog.Warn("Cannot verify connection: Bridge is not running");
-                    lastHealthStatus = HealthStatusUnknown;
+                    lastHealthStatus = HealthStatus.Unknown;
                 }
                 return;
             }
@@ -777,7 +771,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             bool isHealthy;
             if (result.Success && result.PingSucceeded)
             {
-                newStatus = HealthStatusHealthy;
+                newStatus = HealthStatus.Healthy;
                 isHealthy = true;
 
                 // Only log if state changed
@@ -789,7 +783,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             }
             else if (result.HandshakeValid)
             {
-                newStatus = HealthStatusPingFailed;
+                newStatus = HealthStatus.PingFailed;
                 isHealthy = false;
 
                 // Log once per distinct warning state
@@ -801,7 +795,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             }
             else
             {
-                newStatus = HealthStatusUnhealthy;
+                newStatus = HealthStatus.Unhealthy;
                 isHealthy = false;
 
                 // Log once per distinct error state

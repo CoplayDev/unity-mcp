@@ -248,7 +248,10 @@ namespace MCPForUnity.Editor.Windows
                 advancedSection.OnHttpServerCommandUpdateRequested += () =>
                     connectionSection?.UpdateHttpServerCommandDisplay();
                 advancedSection.OnTestConnectionRequested += async () =>
-                    await connectionSection?.VerifyBridgeConnectionAsync();
+                {
+                    if (connectionSection != null)
+                        await connectionSection.VerifyBridgeConnectionAsync();
+                };
 
                 // Wire up health status updates from Connection to Advanced
                 connectionSection?.SetHealthStatusUpdateCallback((isHealthy, statusText) =>
