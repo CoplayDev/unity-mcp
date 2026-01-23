@@ -1221,5 +1221,124 @@ class TestCodeSearchCommand:
             assert "Line 1" in result.output
 
 
+
+
+# =============================================================================
+# Texture Command Tests
+# =============================================================================
+
+class TestTextureCommands:
+    """Tests for Texture CLI commands."""
+
+    def test_texture_create_basic(self, runner, mock_unity_response):
+        """Test basic texture create command."""
+        with patch("cli.commands.texture.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, [
+                "texture", "create", "Assets/Textures/Red.png",
+                "--color", "[255,0,0,255]"
+            ])
+            assert result.exit_code == 0
+
+    def test_texture_create_with_hex_color(self, runner, mock_unity_response):
+        """Test texture create with hex color."""
+        with patch("cli.commands.texture.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, [
+                "texture", "create", "Assets/Textures/Blue.png",
+                "--color", "#0000FF"
+            ])
+            assert result.exit_code == 0
+
+    def test_texture_create_with_pattern(self, runner, mock_unity_response):
+        """Test texture create with pattern."""
+        with patch("cli.commands.texture.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, [
+                "texture", "create", "Assets/Textures/Checker.png",
+                "--pattern", "checkerboard",
+                "--width", "128",
+                "--height", "128"
+            ])
+            assert result.exit_code == 0
+
+    def test_texture_create_with_import_settings(self, runner, mock_unity_response):
+        """Test texture create with import settings."""
+        with patch("cli.commands.texture.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, [
+                "texture", "create", "Assets/Textures/Sprite.png",
+                "--import-settings", '{"texture_type": "sprite", "filter_mode": "point"}'
+            ])
+            assert result.exit_code == 0
+
+    def test_texture_sprite_basic(self, runner, mock_unity_response):
+        """Test sprite create command."""
+        with patch("cli.commands.texture.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, [
+                "texture", "sprite", "Assets/Sprites/Player.png"
+            ])
+            assert result.exit_code == 0
+
+    def test_texture_sprite_with_color(self, runner, mock_unity_response):
+        """Test sprite create with solid color."""
+        with patch("cli.commands.texture.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, [
+                "texture", "sprite", "Assets/Sprites/Green.png",
+                "--color", "[0,255,0,255]"
+            ])
+            assert result.exit_code == 0
+
+    def test_texture_sprite_with_pattern(self, runner, mock_unity_response):
+        """Test sprite create with pattern."""
+        with patch("cli.commands.texture.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, [
+                "texture", "sprite", "Assets/Sprites/Dots.png",
+                "--pattern", "dots",
+                "--ppu", "50"
+            ])
+            assert result.exit_code == 0
+
+    def test_texture_sprite_with_custom_pivot(self, runner, mock_unity_response):
+        """Test sprite create with custom pivot."""
+        with patch("cli.commands.texture.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, [
+                "texture", "sprite", "Assets/Sprites/Custom.png",
+                "--pivot", "[0.25,0.75]"
+            ])
+            assert result.exit_code == 0
+
+    def test_texture_modify(self, runner, mock_unity_response):
+        """Test texture modify command."""
+        with patch("cli.commands.texture.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, [
+                "texture", "modify", "Assets/Textures/Test.png",
+                "--set-pixels", '{"x":0,"y":0,"width":10,"height":10,"color":[255,0,0,255]}'
+            ])
+            assert result.exit_code == 0
+
+    def test_texture_delete(self, runner, mock_unity_response):
+        """Test texture delete command."""
+        with patch("cli.commands.texture.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, [
+                "texture", "delete", "Assets/Textures/Old.png"
+            ])
+            assert result.exit_code == 0
+
+    def test_texture_create_invalid_json(self, runner):
+        """Test texture create with invalid JSON."""
+        result = runner.invoke(cli, [
+            "texture", "create", "Assets/Test.png",
+            "--import-settings", "not valid json"
+        ])
+        assert result.exit_code == 1
+        assert "Invalid JSON" in result.output
+
+    def test_texture_sprite_color_and_pattern_precedence(self, runner, mock_unity_response):
+        """Test that color takes precedence over default pattern in sprite command."""
+        with patch("cli.commands.texture.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, [
+                "texture", "sprite", "Assets/Sprites/Solid.png",
+                "--color", "[255,0,0,255]"
+            ])
+            assert result.exit_code == 0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
