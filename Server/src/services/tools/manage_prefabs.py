@@ -47,7 +47,6 @@ async def manage_prefabs(
         "Prefab operation to perform.",
     ],
     prefab_path: Annotated[str, "Prefab asset path (e.g., Assets/Prefabs/MyPrefab.prefab)."] | None = None,
-    mode: Annotated[str, "Stage mode (only 'InIsolation' supported)."] | None = None,
     save_before_close: Annotated[bool, "Save before closing if unsaved changes exist."] | None = None,
     target: Annotated[str, "Scene GameObject name for create_from_gameobject."] | None = None,
     allow_overwrite: Annotated[bool, "Allow replacing existing prefab."] | None = None,
@@ -85,10 +84,6 @@ async def manage_prefabs(
         # Handle prefab path parameter
         if prefab_path:
             params["prefabPath"] = prefab_path
-
-        # Handle mode parameter
-        if mode:
-            params["mode"] = mode
 
         # Handle boolean parameters with proper coercion
         save_before_close_val = coerce_bool(save_before_close)

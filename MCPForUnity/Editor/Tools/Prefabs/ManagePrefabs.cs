@@ -87,12 +87,6 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 return new ErrorResponse($"No prefab asset found at path '{sanitizedPath}'.");
             }
 
-            string modeValue = @params["mode"]?.ToString();
-            if (!string.IsNullOrEmpty(modeValue) && !modeValue.Equals(PrefabStage.Mode.InIsolation.ToString(), StringComparison.OrdinalIgnoreCase))
-            {
-                return new ErrorResponse("Only PrefabStage mode 'InIsolation' is supported at this time.");
-            }
-
             PrefabStage stage = PrefabStageUtility.OpenPrefab(sanitizedPath);
             if (stage == null)
             {
