@@ -573,7 +573,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             try
             {
                 // Build complete hierarchy items (no pagination)
-                var allItems = BuildHierarchyItems(prefabContents.transform);
+                var allItems = BuildHierarchyItems(prefabContents.transform, sanitizedPath);
 
                 return new SuccessResponse(
                     $"Successfully retrieved prefab hierarchy. Found {allItems.Count} objects.",
@@ -599,17 +599,25 @@ namespace MCPForUnity.Editor.Tools.Prefabs
         /// <summary>
         /// Builds a flat list of hierarchy items from a transform root.
         /// </summary>
-        private static List<object> BuildHierarchyItems(Transform root)
+        /// <param name="root">The root transform of the prefab.</param>
+        /// <param name="mainPrefabPath">Asset path of the main prefab.</param>
+        /// <returns>List of hierarchy items with prefab information.</returns>
+        private static List<object> BuildHierarchyItems(Transform root, string mainPrefabPath)
         {
             var items = new List<object>();
-            BuildHierarchyItemsRecursive(root, "", items);
+            BuildHierarchyItemsRecursive(root, root, mainPrefabPath, "", items);
             return items;
         }
 
         /// <summary>
         /// Recursively builds hierarchy items.
         /// </summary>
-        private static void BuildHierarchyItemsRecursive(Transform transform, string parentPath, List<object> items)
+        /// <param name="transform">Current transform being processed.</param>
+        /// <param name="mainPrefabRoot">Root transform of the main prefab asset.</param>
+        /// <param name="mainPrefabPath">Asset path of the main prefab.</param>
+        /// <param name="parentPath">Parent path for building full hierarchy path.</param>
+        /// <param name="items">List to accumulate hierarchy items.</param>
+        private static void BuildHierarchyItemsRecursive(Transform transform, Transform mainPrefabRoot, string mainPrefabPath, string parentPath, List<object> items)
         {
             if (transform == null) return;
 
@@ -620,9 +628,14 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             int childCount = transform.childCount;
             var componentTypes = PrefabUtilityHelper.GetComponentTypeNames(transform.gameObject);
 
-            // Check if this is a nested prefab root
+            // Prefab information
             bool isNestedPrefab = PrefabUtility.IsAnyPrefabInstanceRoot(transform.gameObject);
-            bool isPrefabRoot = transform == transform.root;
+            bool isPrefabRoot = transform == mainPrefabRoot;
+            int nestingDepth = isPrefabRoot ? 0 : PrefabUtilityHelper.GetPrefabNestingDepth(transform.gameObject, mainPrefabRoot);
+            string parentPrefabPath = isNestedPrefab && !isPrefabRoot
+                ? PrefabUtilityHelper.GetParentPrefabPath(transform.gameObject, mainPrefabRoot)
+                : null;
+            string nestedPrefabPath = isNestedPrefab ? PrefabUtilityHelper.GetNestedPrefabPath(transform.gameObject) : null;
 
             var item = new
             {
@@ -632,9 +645,14 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 activeSelf = activeSelf,
                 childCount = childCount,
                 componentTypes = componentTypes,
-                isPrefabRoot = isPrefabRoot,
-                isNestedPrefab = isNestedPrefab,
-                nestedPrefabPath = isNestedPrefab ? PrefabUtilityHelper.GetNestedPrefabPath(transform.gameObject) : null
+                prefab = new
+                {
+                    isRoot = isPrefabRoot,
+                    isNestedRoot = isNestedPrefab,
+                    nestingDepth = nestingDepth,
+                    assetPath = isNestedPrefab ? nestedPrefabPath : mainPrefabPath,
+                    parentPath = parentPrefabPath
+                }
             };
 
             items.Add(item);
@@ -642,7 +660,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             // Recursively process children
             foreach (Transform child in transform)
             {
-                BuildHierarchyItemsRecursive(child, path, items);
+                BuildHierarchyItemsRecursive(child, mainPrefabRoot, mainPrefabPath, path, items);
             }
         }
 

@@ -151,5 +151,78 @@ namespace MCPForUnity.Editor.Helpers
 
             return null;
         }
+
+        /// <summary>
+        /// Gets the nesting depth of a prefab instance within the prefab hierarchy.
+        /// Returns 0 for main prefab root, 1 for first-level nested, 2 for second-level, etc.
+        /// Returns -1 for non-prefab-root objects.
+        /// </summary>
+        /// <param name="gameObject">The GameObject to analyze.</param>
+        /// <param name="mainPrefabRoot">The root transform of the main prefab asset.</param>
+        /// <returns>Nesting depth (0=main root, 1+=nested), or -1 if not a prefab root.</returns>
+        public static int GetPrefabNestingDepth(GameObject gameObject, Transform mainPrefabRoot)
+        {
+            if (gameObject == null)
+                return -1;
+
+            // Main prefab root
+            if (gameObject.transform == mainPrefabRoot)
+                return 0;
+
+            // Not a prefab instance root
+            if (!PrefabUtility.IsAnyPrefabInstanceRoot(gameObject))
+                return -1;
+
+            // Calculate depth by walking up the hierarchy
+            int depth = 0;
+            Transform current = gameObject.transform;
+
+            while (current != null && current != mainPrefabRoot)
+            {
+                if (PrefabUtility.IsAnyPrefabInstanceRoot(current.gameObject))
+                {
+                    depth++;
+                }
+                current = current.parent;
+            }
+
+            return depth;
+        }
+
+        /// <summary>
+        /// Gets the parent prefab path for a nested prefab instance.
+        /// Returns null for main prefab root or non-prefab objects.
+        /// </summary>
+        /// <param name="gameObject">The GameObject to analyze.</param>
+        /// <param name="mainPrefabRoot">The root transform of the main prefab asset.</param>
+        /// <returns>The asset path of the parent prefab, or null if none.</returns>
+        public static string GetParentPrefabPath(GameObject gameObject, Transform mainPrefabRoot)
+        {
+            if (gameObject == null || gameObject.transform == mainPrefabRoot)
+                return null;
+
+            if (!PrefabUtility.IsAnyPrefabInstanceRoot(gameObject))
+                return null;
+
+            // Walk up the hierarchy to find the parent prefab instance
+            Transform current = gameObject.transform.parent;
+
+            while (current != null && current != mainPrefabRoot)
+            {
+                if (PrefabUtility.IsAnyPrefabInstanceRoot(current.gameObject))
+                {
+                    return GetNestedPrefabPath(current.gameObject);
+                }
+                current = current.parent;
+            }
+
+            // Parent is the main prefab root - get its asset path
+            if (mainPrefabRoot != null)
+            {
+                return AssetDatabase.GetAssetPath(mainPrefabRoot.gameObject);
+            }
+
+            return null;
+        }
     }
 }
