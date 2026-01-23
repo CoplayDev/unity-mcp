@@ -77,7 +77,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             }
 
             string sanitizedPath = AssetPathUtility.SanitizeAssetPath(prefabPath);
-            if (sanitizedPath == null)
+            if (string.IsNullOrEmpty(sanitizedPath))
             {
                 return new ErrorResponse($"Invalid prefab path: '{prefabPath}'.");
             }
@@ -261,8 +261,10 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 return new ErrorResponse(objectValidation.errorMessage);
             }
 
-            // 4. Check for path conflicts
-            if (!replaceExisting && AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(finalPath) != null)
+            // 4. Check for path conflicts and track if file will be replaced
+            bool fileExistedAtPath = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(finalPath) != null;
+
+            if (!replaceExisting && fileExistedAtPath)
             {
                 finalPath = AssetDatabase.GenerateUniqueAssetPath(finalPath);
                 McpLog.Info($"[ManagePrefabs] Generated unique path: {finalPath}");
@@ -311,7 +313,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                         instanceId = result.GetInstanceID(),
                         instanceName = result.name,
                         wasUnlinked = unlinkIfInstance && objectValidation.shouldUnlink,
-                        wasReplaced = replaceExisting && objectValidation.existingPrefabPath != null,
+                        wasReplaced = replaceExisting && fileExistedAtPath,
                         componentCount = result.GetComponents<Component>().Length,
                         childCount = result.transform.childCount
                     }
@@ -510,7 +512,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             }
 
             string sanitizedPath = AssetPathUtility.SanitizeAssetPath(prefabPath);
-            if (sanitizedPath == null)
+            if (string.IsNullOrEmpty(sanitizedPath))
             {
                 return new ErrorResponse($"Invalid prefab path: '{prefabPath}'.");
             }
