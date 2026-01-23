@@ -5,24 +5,18 @@ using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
 using UnityEditor;
-using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-namespace MCPForUnity.Editor.Windows.Components.Settings
+namespace MCPForUnity.Editor.Windows.Components.Advanced
 {
     /// <summary>
-    /// Controller for the Settings section of the MCP For Unity editor window.
-    /// Handles version display, debug logs, validation level, and advanced path overrides.
+    /// Controller for the Advanced Settings section.
+    /// Handles path overrides, server source configuration, dev mode, and package deployment.
     /// </summary>
-    public class McpSettingsSection
+    public class McpAdvancedSection
     {
         // UI Elements
-        private Label versionLabel;
-        private Toggle debugLogsToggle;
-        private EnumField validationLevelField;
-        private Label validationDescription;
-        private Foldout advancedSettingsFoldout;
         private TextField uvxPathOverride;
         private Button browseUvxButton;
         private Button clearUvxButton;
@@ -30,6 +24,7 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
         private TextField gitUrlOverride;
         private Button browseGitUrlButton;
         private Button clearGitUrlButton;
+        private Toggle debugLogsToggle;
         private Toggle devModeForceRefreshToggle;
         private TextField deploySourcePath;
         private Button browseDeploySourceButton;
@@ -39,26 +34,18 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
         private Label deployTargetLabel;
         private Label deployBackupLabel;
         private Label deployStatusLabel;
-
-        // Data
-        private ValidationLevel currentValidationLevel = ValidationLevel.Standard;
+        private VisualElement healthIndicator;
+        private Label healthStatus;
+        private Button testConnectionButton;
 
         // Events
         public event Action OnGitUrlChanged;
         public event Action OnHttpServerCommandUpdateRequested;
-
-        // Validation levels
-        private enum ValidationLevel
-        {
-            Basic,
-            Standard,
-            Comprehensive,
-            Strict
-        }
+        public event Action OnTestConnectionRequested;
 
         public VisualElement Root { get; private set; }
 
-        public McpSettingsSection(VisualElement root)
+        public McpAdvancedSection(VisualElement root)
         {
             Root = root;
             CacheUIElements();
@@ -68,11 +55,6 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
 
         private void CacheUIElements()
         {
-            versionLabel = Root.Q<Label>("version-label");
-            debugLogsToggle = Root.Q<Toggle>("debug-logs-toggle");
-            validationLevelField = Root.Q<EnumField>("validation-level");
-            validationDescription = Root.Q<Label>("validation-description");
-            advancedSettingsFoldout = Root.Q<Foldout>("advanced-settings-foldout");
             uvxPathOverride = Root.Q<TextField>("uv-path-override");
             browseUvxButton = Root.Q<Button>("browse-uv-button");
             clearUvxButton = Root.Q<Button>("clear-uv-button");
@@ -80,6 +62,7 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             gitUrlOverride = Root.Q<TextField>("git-url-override");
             browseGitUrlButton = Root.Q<Button>("browse-git-url-button");
             clearGitUrlButton = Root.Q<Button>("clear-git-url-button");
+            debugLogsToggle = Root.Q<Toggle>("debug-logs-toggle");
             devModeForceRefreshToggle = Root.Q<Toggle>("dev-mode-force-refresh-toggle");
             deploySourcePath = Root.Q<TextField>("deploy-source-path");
             browseDeploySourceButton = Root.Q<Button>("browse-deploy-source-button");
@@ -89,46 +72,70 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             deployTargetLabel = Root.Q<Label>("deploy-target-label");
             deployBackupLabel = Root.Q<Label>("deploy-backup-label");
             deployStatusLabel = Root.Q<Label>("deploy-status-label");
+            healthIndicator = Root.Q<VisualElement>("health-indicator");
+            healthStatus = Root.Q<Label>("health-status");
+            testConnectionButton = Root.Q<Button>("test-connection-button");
         }
 
         private void InitializeUI()
         {
-            UpdateVersionLabel();
+            // Set tooltips for fields
+            if (uvxPathOverride != null)
+                uvxPathOverride.tooltip = "Override path to uvx executable. Leave empty for auto-detection.";
+            if (gitUrlOverride != null)
+                gitUrlOverride.tooltip = "Override server source for uvx --from. Leave empty to use default PyPI package. Example local dev: /path/to/unity-mcp/Server";
+            if (debugLogsToggle != null)
+            {
+                debugLogsToggle.tooltip = "Enable verbose debug logging to the Unity Console.";
+                var debugLabel = debugLogsToggle?.parent?.Q<Label>();
+                if (debugLabel != null)
+                    debugLabel.tooltip = debugLogsToggle.tooltip;
+            }
+            if (devModeForceRefreshToggle != null)
+            {
+                devModeForceRefreshToggle.tooltip = "When enabled, generated uvx commands add '--no-cache --refresh' before launching (slower startup, but avoids stale cached builds while iterating on the Server).";
+                var forceRefreshLabel = devModeForceRefreshToggle?.parent?.Q<Label>();
+                if (forceRefreshLabel != null)
+                    forceRefreshLabel.tooltip = devModeForceRefreshToggle.tooltip;
+            }
+            if (testConnectionButton != null)
+                testConnectionButton.tooltip = "Test the connection between Unity and the MCP server.";
+            if (deploySourcePath != null)
+                deploySourcePath.tooltip = "Copy a MCPForUnity folder into this project's package location.";
+
+            // Set tooltips for buttons
+            if (browseUvxButton != null)
+                browseUvxButton.tooltip = "Browse for uvx executable";
+            if (clearUvxButton != null)
+                clearUvxButton.tooltip = "Clear override and use auto-detection";
+            if (browseGitUrlButton != null)
+                browseGitUrlButton.tooltip = "Select local server source folder";
+            if (clearGitUrlButton != null)
+                clearGitUrlButton.tooltip = "Clear override and use default PyPI package";
+            if (browseDeploySourceButton != null)
+                browseDeploySourceButton.tooltip = "Select MCPForUnity source folder";
+            if (clearDeploySourceButton != null)
+                clearDeploySourceButton.tooltip = "Clear deployment source path";
+            if (deployButton != null)
+                deployButton.tooltip = "Copy MCPForUnity to this project's package location";
+            if (deployRestoreButton != null)
+                deployRestoreButton.tooltip = "Restore the last backup before deployment";
+
+            gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
 
             bool debugEnabled = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
             debugLogsToggle.value = debugEnabled;
             McpLog.SetDebugLoggingEnabled(debugEnabled);
 
-            validationLevelField.Init(ValidationLevel.Standard);
-            int savedLevel = EditorPrefs.GetInt(EditorPrefKeys.ValidationLevel, 1);
-            currentValidationLevel = (ValidationLevel)Mathf.Clamp(savedLevel, 0, 3);
-            validationLevelField.value = currentValidationLevel;
-            UpdateValidationDescription();
-
-            advancedSettingsFoldout.value = false;
-            gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
             devModeForceRefreshToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
-
+            UpdatePathOverrides();
             UpdateDeploymentSection();
         }
 
         private void RegisterCallbacks()
         {
-            debugLogsToggle.RegisterValueChangedCallback(evt =>
-            {
-                McpLog.SetDebugLoggingEnabled(evt.newValue);
-            });
-
-            validationLevelField.RegisterValueChangedCallback(evt =>
-            {
-                currentValidationLevel = (ValidationLevel)evt.newValue;
-                EditorPrefs.SetInt(EditorPrefKeys.ValidationLevel, (int)currentValidationLevel);
-                UpdateValidationDescription();
-            });
-
             browseUvxButton.clicked += OnBrowseUvxClicked;
             clearUvxButton.clicked += OnClearUvxClicked;
-
             browseGitUrlButton.clicked += OnBrowseGitUrlClicked;
 
             gitUrlOverride.RegisterValueChangedCallback(evt =>
@@ -154,6 +161,11 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
                 OnHttpServerCommandUpdateRequested?.Invoke();
             };
 
+            debugLogsToggle.RegisterValueChangedCallback(evt =>
+            {
+                McpLog.SetDebugLoggingEnabled(evt.newValue);
+            });
+
             devModeForceRefreshToggle.RegisterValueChangedCallback(evt =>
             {
                 EditorPrefs.SetBool(EditorPrefKeys.DevModeForceServerRefresh, evt.newValue);
@@ -167,7 +179,7 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
                 {
                     return;
                 }
-                
+
                 try
                 {
                     MCPServiceLocator.Deployment.SetStoredSourcePath(path);
@@ -183,6 +195,7 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             clearDeploySourceButton.clicked += OnClearDeploySourceClicked;
             deployButton.clicked += OnDeployClicked;
             deployRestoreButton.clicked += OnRestoreBackupClicked;
+            testConnectionButton.clicked += () => OnTestConnectionRequested?.Invoke();
         }
 
         public void UpdatePathOverrides()
@@ -259,45 +272,9 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             }
 
             gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
+            debugLogsToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
             devModeForceRefreshToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
             UpdateDeploymentSection();
-        }
-
-        private void UpdateVersionLabel()
-        {
-            string currentVersion = AssetPathUtility.GetPackageVersion();
-            versionLabel.text = $"v{currentVersion}";
-
-            var updateCheck = MCPServiceLocator.Updates.CheckForUpdate(currentVersion);
-
-            if (updateCheck.UpdateAvailable && !string.IsNullOrEmpty(updateCheck.LatestVersion))
-            {
-                versionLabel.text = $"\u2191 v{currentVersion} (Update available: v{updateCheck.LatestVersion})";
-                versionLabel.style.color = new Color(1f, 0.7f, 0f);
-                versionLabel.tooltip = $"Version {updateCheck.LatestVersion} is available. Update via Package Manager.\n\nGit URL: https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity";
-            }
-            else
-            {
-                versionLabel.style.color = StyleKeyword.Null;
-                versionLabel.tooltip = $"Current version: {currentVersion}";
-            }
-        }
-
-        private void UpdateValidationDescription()
-        {
-            validationDescription.text = GetValidationLevelDescription((int)currentValidationLevel);
-        }
-
-        private string GetValidationLevelDescription(int index)
-        {
-            return index switch
-            {
-                0 => "Only basic syntax checks (braces, quotes, comments)",
-                1 => "Syntax checks + Unity best practices and warnings",
-                2 => "All checks + semantic analysis and performance warnings",
-                3 => "Full semantic validation with namespace/type resolution (requires Roslyn)",
-                _ => "Standard validation"
-            };
         }
 
         private void OnBrowseUvxClicked()
@@ -438,6 +415,34 @@ namespace MCPForUnity.Editor.Windows.Components.Settings
             deployStatusLabel.style.color = isError
                 ? new StyleColor(new Color(0.85f, 0.2f, 0.2f))
                 : StyleKeyword.Null;
+        }
+
+        public void UpdateHealthStatus(bool isHealthy, string statusText)
+        {
+            if (healthStatus != null)
+            {
+                healthStatus.text = statusText;
+            }
+
+            if (healthIndicator != null)
+            {
+                healthIndicator.RemoveFromClassList("healthy");
+                healthIndicator.RemoveFromClassList("disconnected");
+                healthIndicator.RemoveFromClassList("unknown");
+
+                if (isHealthy)
+                {
+                    healthIndicator.AddToClassList("healthy");
+                }
+                else if (statusText == HealthStatus.Unknown)
+                {
+                    healthIndicator.AddToClassList("unknown");
+                }
+                else
+                {
+                    healthIndicator.AddToClassList("disconnected");
+                }
+            }
         }
     }
 }

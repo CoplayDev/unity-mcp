@@ -2,6 +2,10 @@
     <ui:VisualElement name="tools-section" class="section">
         <ui:Label text="Tools" class="section-title" />
         <ui:VisualElement class="section-content">
+            <ui:VisualElement class="setting-row" name="project-scoped-tools-row">
+                <ui:Label text="Project-Scoped Tools:" class="setting-label" />
+                <ui:Toggle name="project-scoped-tools-toggle" />
+            </ui:VisualElement>
             <ui:Label name="tools-summary" class="help-text" text="Discovering tools..." />
             <ui:VisualElement name="tools-actions" class="tool-actions">
                 <ui:Button name="enable-all-button" text="Enable All" class="tool-action-button" />

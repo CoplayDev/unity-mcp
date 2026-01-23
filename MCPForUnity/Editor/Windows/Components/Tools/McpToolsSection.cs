@@ -17,6 +17,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
     public class McpToolsSection
     {
         private readonly Dictionary<string, Toggle> toolToggleMap = new();
+        private Toggle projectScopedToolsToggle;
         private Label summaryLabel;
         private Label noteLabel;
         private Button enableAllButton;
@@ -36,6 +37,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
 
         private void CacheUIElements()
         {
+            projectScopedToolsToggle = Root.Q<Toggle>("project-scoped-tools-toggle");
             summaryLabel = Root.Q<Label>("tools-summary");
             noteLabel = Root.Q<Label>("tools-note");
             enableAllButton = Root.Q<Button>("enable-all-button");
@@ -46,6 +48,19 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
 
         private void RegisterCallbacks()
         {
+            if (projectScopedToolsToggle != null)
+            {
+                projectScopedToolsToggle.value = EditorPrefs.GetBool(
+                    EditorPrefKeys.ProjectScopedToolsLocalHttp,
+                    false
+                );
+                projectScopedToolsToggle.tooltip = "When enabled, register project-scoped tools with HTTP Local transport. Allows per-project tool customization.";
+                projectScopedToolsToggle.RegisterValueChangedCallback(evt =>
+                {
+                    EditorPrefs.SetBool(EditorPrefKeys.ProjectScopedToolsLocalHttp, evt.newValue);
+                });
+            }
+
             if (enableAllButton != null)
             {
                 enableAllButton.AddToClassList("tool-action-button");

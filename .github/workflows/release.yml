@@ -1,5 +1,9 @@
 name: Release
 
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
     inputs:
@@ -19,13 +23,25 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     outputs:
       new_version: ${{ steps.compute.outputs.new_version }}
       tag: ${{ steps.tag.outputs.tag }}
+      bump_branch: ${{ steps.bump_branch.outputs.name }}
     steps:
+      - name: Ensure workflow is running on main
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_NAME}" != "main" ]]; then
+            echo "This workflow must be run on the main branch. Current ref: ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
+          ref: main
           fetch-depth: 0
 
       - name: Compute new version
@@ -75,56 +91,101 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "Updating MCPForUnity/package.json to $NEW_VERSION"
-          jq ".version = \"${NEW_VERSION}\"" MCPForUnity/package.json > MCPForUnity/package.json.tmp
-          mv MCPForUnity/package.json.tmp MCPForUnity/package.json
+          echo "Updating all version references to $NEW_VERSION"
+          python3 tools/update_versions.py --version "$NEW_VERSION"
 
-          echo "Updating Server/pyproject.toml to $NEW_VERSION"
-          sed -i '0,/^version = ".*"/s//version = "'"$NEW_VERSION"'"/' "Server/pyproject.toml"
-
-          echo "Updating Server/README.md version references to v$NEW_VERSION"
-          sed -i 's|git+https://github.com/CoplayDev/unity-mcp@v[0-9]\+\.[0-9]\+\.[0-9]\+#subdirectory=Server|git+https://github.com/CoplayDev/unity-mcp@v'"$NEW_VERSION"'#subdirectory=Server|g' Server/README.md
-
-          echo "Updating root README.md fixed version examples to v$NEW_VERSION"
-          sed -i 's|https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v[0-9]\+\.[0-9]\+\.[0-9]\+|https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v'"$NEW_VERSION"'|g' README.md
-
-          echo "Updating docs/i18n/README-zh.md fixed version examples to v$NEW_VERSION"
-          sed -i 's|https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v[0-9]\+\.[0-9]\+\.[0-9]\+|https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v'"$NEW_VERSION"'|g' docs/i18n/README-zh.md
-
-      - name: Commit and push changes
+      - name: Commit version bump to a temporary branch
+        id: bump_branch
         env:
           NEW_VERSION: ${{ steps.compute.outputs.new_version }}
         shell: bash
         run: |
           set -euo pipefail
+          BRANCH="release/v${NEW_VERSION}"
+          echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
+
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add MCPForUnity/package.json "Server/pyproject.toml" Server/README.md README.md docs/i18n/README-zh.md
+          git checkout -b "$BRANCH"
+          git add MCPForUnity/package.json manifest.json "Server/pyproject.toml" Server/README.md
           if git diff --cached --quiet; then
             echo "No version changes to commit."
           else
             git commit -m "chore: bump version to ${NEW_VERSION}"
           fi
 
-          BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
-          echo "Pushing to branch: $BRANCH"
+          echo "Pushing bump branch $BRANCH"
           git push origin "$BRANCH"
 
-      - name: Create and push tag
+      - name: Create PR for version bump into main
+        id: bump_pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+          BRANCH: ${{ steps.bump_branch.outputs.name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PR_URL=$(gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore: bump version to ${NEW_VERSION}" \
+            --body "Automated version bump to ${NEW_VERSION}.")
+          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+          PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Enable auto-merge and merge PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.bump_pr.outputs.pr_number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Enable auto-merge (requires repo setting "Allow auto-merge")
+          gh pr merge "$PR_NUMBER" --merge --auto || true
+          # Wait for PR to be merged (poll up to 2 minutes)
+          for i in {1..24}; do
+            STATE=$(gh pr view "$PR_NUMBER" --json state -q '.state')
+            if [[ "$STATE" == "MERGED" ]]; then
+              echo "PR merged successfully."
+              exit 0
+            fi
+            echo "Waiting for PR to merge... (state: $STATE)"
+            sleep 5
+          done
+          echo "PR did not merge in time. Attempting direct merge..."
+          gh pr merge "$PR_NUMBER" --merge
+
+      - name: Fetch merged main and create tag
         env:
           TAG: ${{ steps.tag.outputs.tag }}
         shell: bash
         run: |
           set -euo pipefail
+          git fetch origin main
+          git checkout main
+          git pull origin main
+
           echo "Preparing to create tag $TAG"
 
           if git ls-remote --tags origin | grep -q "refs/tags/$TAG$"; then
-            echo "Tag $TAG already exists on remote. Skipping tag creation."
-            exit 0
+            echo "Tag $TAG already exists on remote. Refusing to release." >&2
+            exit 1
           fi
 
           git tag -a "$TAG" -m "Version ${TAG#v}"
           git push origin "$TAG"
+
+      - name: Clean up release branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.bump_branch.outputs.name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin --delete "$BRANCH" || true
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
@@ -132,6 +193,70 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: ${{ steps.tag.outputs.tag }}
           generate_release_notes: true
+
+  sync_beta:
+    name: Merge main back into beta via PR
+    needs:
+      - bump
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Create PR to merge main into beta
+        id: sync_pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEW_VERSION: ${{ needs.bump.outputs.new_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Check if beta is behind main
+          git fetch origin beta
+          if git merge-base --is-ancestor origin/main origin/beta; then
+            echo "beta is already up to date with main. Skipping PR."
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          PR_URL=$(gh pr create \
+            --base beta \
+            --head main \
+            --title "chore: sync main (v${NEW_VERSION}) into beta" \
+            --body "Automated sync of version bump from main into beta.")
+          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+          PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "skipped=false" >> "$GITHUB_OUTPUT"
+
+      - name: Enable auto-merge and merge sync PR
+        if: steps.sync_pr.outputs.skipped != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.sync_pr.outputs.pr_number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Enable auto-merge (requires repo setting "Allow auto-merge")
+          gh pr merge "$PR_NUMBER" --merge --auto || true
+          # Wait for PR to be merged (poll up to 2 minutes)
+          for i in {1..24}; do
+            STATE=$(gh pr view "$PR_NUMBER" --json state -q '.state')
+            if [[ "$STATE" == "MERGED" ]]; then
+              echo "Sync PR merged successfully."
+              exit 0
+            fi
+            echo "Waiting for sync PR to merge... (state: $STATE)"
+            sleep 5
+          done
+          echo "Sync PR did not merge in time. Attempting direct merge..."
+          gh pr merge "$PR_NUMBER" --merge
 
   publish_docker:
     name: Publish Docker image
@@ -194,3 +319,43 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: Server/dist/
+
+  publish_mcpb:
+    name: Generate and publish MCPB bundle
+    needs:
+      - bump
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.bump.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generate MCPB bundle
+        env:
+          NEW_VERSION: ${{ needs.bump.outputs.new_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/generate_mcpb.py "$NEW_VERSION" \
+            --output "unity-mcp-${NEW_VERSION}.mcpb" \
+            --icon docs/images/coplay-logo.png
+
+      - name: Upload MCPB to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.bump.outputs.tag }}
+          files: unity-mcp-${{ needs.bump.outputs.new_version }}.mcpb

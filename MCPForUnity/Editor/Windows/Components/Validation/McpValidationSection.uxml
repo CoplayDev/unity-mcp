@@ -1,0 +1,13 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+    <Style src="../Common.uss" />
+    <ui:VisualElement name="validation-section" class="section">
+        <ui:Label text="Script Validation" class="section-title" />
+        <ui:VisualElement class="section-content">
+            <ui:VisualElement class="setting-column">
+                <ui:Label text="Validation Level:" class="setting-label" />
+                <uie:EnumField name="validation-level" class="setting-dropdown" />
+                <ui:Label name="validation-description" class="validation-description" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

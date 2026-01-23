@@ -1,30 +1,22 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
     <Style src="../Common.uss" />
     <ui:VisualElement name="connection-section" class="section">
-        <ui:Label text="Connection" class="section-title" />
+        <ui:Label text="Server" class="section-title" />
         <ui:VisualElement class="section-content">
             <ui:VisualElement class="setting-row">
                 <ui:Label text="Transport:" class="setting-label" />
                 <uie:EnumField name="transport-dropdown" class="setting-dropdown-inline" />
             </ui:VisualElement>
+            <ui:VisualElement name="transport-mismatch-warning" class="warning-banner">
+                <ui:Label name="transport-mismatch-text" class="warning-banner-text" />
+            </ui:VisualElement>
             <ui:VisualElement class="setting-row" name="http-url-row">
                 <ui:Label text="HTTP URL:" class="setting-label" />
                 <ui:TextField name="http-url" class="url-field" />
             </ui:VisualElement>
-            <ui:VisualElement name="http-server-command-section" class="manual-config-content">
-                <ui:Label text="Use this command to launch the server manually:" class="config-label" />
-                <ui:VisualElement class="config-json-row">
-                    <ui:TextField name="http-server-command" readonly="true" multiline="true" class="config-json-field" />
-                    <ui:Button name="copy-http-server-command-button" text="Copy" class="icon-button-vertical" />
-                </ui:VisualElement>
-                <ui:Label name="http-server-command-hint" class="help-text" />
-                <ui:VisualElement style="flex-direction: row; justify-content: flex-start; margin-bottom: 6px;">
-                    <ui:Button name="start-http-server-button" text="Start Server" class="action-button start-server-button" style="width: auto; flex-grow: 1;" />
-                </ui:VisualElement>
-            </ui:VisualElement>
-            <ui:VisualElement class="setting-row" name="project-scoped-tools-row">
-                <ui:Label text="Project-Scoped Tools:" class="setting-label" />
-                <ui:Toggle name="project-scoped-tools-toggle" />
+            <ui:VisualElement class="setting-row" name="http-server-control-row">
+                <ui:Label text="Local Server:" class="setting-label" />
+                <ui:Button name="start-http-server-button" text="Start Server" class="action-button start-server-button" />
             </ui:VisualElement>
             <ui:VisualElement class="setting-row" name="unity-socket-port-row">
                 <ui:Label text="Unity Socket Port:" class="setting-label" />
@@ -37,14 +29,16 @@
                 </ui:VisualElement>
                 <ui:Button name="connection-toggle" text="Start" class="action-button" />
             </ui:VisualElement>
-            <ui:VisualElement class="setting-row" name="health-row">
-                <ui:Label text="Health:" class="setting-label" />
-                <ui:VisualElement class="status-container">
-                    <ui:VisualElement name="health-indicator" class="status-dot" />
-                    <ui:Label name="health-status" text="Unknown" class="status-text" />
+            <ui:Foldout name="manual-command-foldout" text="Manual Server Launch" value="false" class="manual-config-foldout">
+                <ui:VisualElement name="http-server-command-section" class="manual-config-content">
+                    <ui:Label text="Use this command to launch the server manually:" class="config-label" />
+                    <ui:VisualElement class="config-json-row">
+                        <ui:TextField name="http-server-command" readonly="true" multiline="true" class="config-json-field" />
+                        <ui:Button name="copy-http-server-command-button" text="Copy" class="icon-button-vertical" />
+                    </ui:VisualElement>
+                    <ui:Label name="http-server-command-hint" class="help-text" />
                 </ui:VisualElement>
-                <ui:Button name="test-connection-button" text="Test" class="action-button" />
-            </ui:VisualElement>
+            </ui:Foldout>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

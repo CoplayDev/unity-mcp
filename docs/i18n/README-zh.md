@@ -36,9 +36,9 @@
 > https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity
 > ```
 
-**需要一个稳定/固定版本？** 使用带 tag 的 URL（更新时需要卸载才能更新）：
+**想要最新的 beta 版本？** 使用 beta 分支：
 ```text
-https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v9.1.0
+https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#beta
 ```
 
 <details>

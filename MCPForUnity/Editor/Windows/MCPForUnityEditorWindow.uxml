@@ -1,12 +1,26 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
     <ui:VisualElement name="root-container" class="root-layout">
-        <ui:Label text="MCP For Unity" name="title" class="title" />
+        <ui:VisualElement name="header-bar" class="header-bar">
+            <ui:Label text="MCP For Unity" name="title" class="header-title" />
+            <ui:Label text="v9.1.0" name="version-label" class="header-version" />
+        </ui:VisualElement>
+        <ui:VisualElement name="update-notification" class="update-notification">
+            <ui:Label name="update-notification-text" class="update-notification-text" />
+        </ui:VisualElement>
         <uie:Toolbar name="tab-toolbar" class="tab-toolbar">
-            <uie:ToolbarToggle name="settings-tab" text="Settings" value="true" />
+            <uie:ToolbarToggle name="clients-tab" text="Connect" value="true" />
             <uie:ToolbarToggle name="tools-tab" text="Tools" />
+            <uie:ToolbarToggle name="validation-tab" text="Scripts" />
+            <uie:ToolbarToggle name="advanced-tab" text="Advanced" />
         </uie:Toolbar>
-        <ui:ScrollView name="settings-panel" class="panel-scroll" style="flex-grow: 1;">
-            <ui:VisualElement name="settings-container" class="section-stack" />
+        <ui:ScrollView name="clients-panel" class="panel-scroll" style="flex-grow: 1;">
+            <ui:VisualElement name="clients-container" class="section-stack" />
+        </ui:ScrollView>
+        <ui:ScrollView name="validation-panel" class="panel-scroll hidden" style="flex-grow: 1;">
+            <ui:VisualElement name="validation-container" class="section-stack" />
+        </ui:ScrollView>
+        <ui:ScrollView name="advanced-panel" class="panel-scroll hidden" style="flex-grow: 1;">
+            <ui:VisualElement name="advanced-container" class="section-stack" />
         </ui:ScrollView>
         <ui:ScrollView name="tools-panel" class="panel-scroll hidden" style="flex-grow: 1;">
             <ui:VisualElement name="tools-container" class="section-stack" />

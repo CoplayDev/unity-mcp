@@ -28,6 +28,7 @@ namespace MCPForUnity.Editor.Clients
         public string Id => client.name.Replace(" ", "").ToLowerInvariant();
         public virtual string DisplayName => client.name;
         public McpStatus Status => client.status;
+        public ConfiguredTransport ConfiguredTransport => client.configuredTransport;
         public virtual bool SupportsAutoConfigure => true;
         public virtual string GetConfigureActionLabel() => "Configure";
 
@@ -94,6 +95,7 @@ namespace MCPForUnity.Editor.Clients
                 if (!File.Exists(path))
                 {
                     client.SetStatus(McpStatus.NotConfigured);
+                    client.configuredTransport = Models.ConfiguredTransport.Unknown;
                     return client.status;
                 }
 
@@ -135,6 +137,7 @@ namespace MCPForUnity.Editor.Clients
                     if (standardConfig?.mcpServers?.unityMCP != null)
                     {
                         args = standardConfig.mcpServers.unityMCP.args;
+                        configuredUrl = standardConfig.mcpServers.unityMCP.url;
                         configExists = true;
                     }
                 }
@@ -142,7 +145,22 @@ namespace MCPForUnity.Editor.Clients
                 if (!configExists)
                 {
                     client.SetStatus(McpStatus.MissingConfig);
+                    client.configuredTransport = Models.ConfiguredTransport.Unknown;
                     return client.status;
+                }
+
+                // Determine and set the configured transport type
+                if (args != null && args.Length > 0)
+                {
+                    client.configuredTransport = Models.ConfiguredTransport.Stdio;
+                }
+                else if (!string.IsNullOrEmpty(configuredUrl))
+                {
+                    client.configuredTransport = Models.ConfiguredTransport.Http;
+                }
+                else
+                {
+                    client.configuredTransport = Models.ConfiguredTransport.Unknown;
                 }
 
                 bool matches = false;
@@ -171,6 +189,9 @@ namespace MCPForUnity.Editor.Clients
                     if (result == "Configured successfully")
                     {
                         client.SetStatus(McpStatus.Configured);
+                        // Update transport after rewrite based on current server setting
+                        bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+                        client.configuredTransport = useHttp ? Models.ConfiguredTransport.Http : Models.ConfiguredTransport.Stdio;
                     }
                     else
                     {
@@ -185,6 +206,7 @@ namespace MCPForUnity.Editor.Clients
             catch (Exception ex)
             {
                 client.SetStatus(McpStatus.Error, ex.Message);
+                client.configuredTransport = Models.ConfiguredTransport.Unknown;
             }
 
             return client.status;
@@ -198,6 +220,9 @@ namespace MCPForUnity.Editor.Clients
             if (result == "Configured successfully")
             {
                 client.SetStatus(McpStatus.Configured);
+                // Set transport based on current server setting
+                bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+                client.configuredTransport = useHttp ? Models.ConfiguredTransport.Http : Models.ConfiguredTransport.Stdio;
             }
             else
             {
@@ -237,12 +262,27 @@ namespace MCPForUnity.Editor.Clients
                 if (!File.Exists(path))
                 {
                     client.SetStatus(McpStatus.NotConfigured);
+                    client.configuredTransport = Models.ConfiguredTransport.Unknown;
                     return client.status;
                 }
 
                 string toml = File.ReadAllText(path);
                 if (CodexConfigHelper.TryParseCodexServer(toml, out _, out var args, out var url))
                 {
+                    // Determine and set the configured transport type
+                    if (!string.IsNullOrEmpty(url))
+                    {
+                        client.configuredTransport = Models.ConfiguredTransport.Http;
+                    }
+                    else if (args != null && args.Length > 0)
+                    {
+                        client.configuredTransport = Models.ConfiguredTransport.Stdio;
+                    }
+                    else
+                    {
+                        client.configuredTransport = Models.ConfiguredTransport.Unknown;
+                    }
+
                     bool matches = false;
                     if (!string.IsNullOrEmpty(url))
                     {
@@ -262,6 +302,10 @@ namespace MCPForUnity.Editor.Clients
                         return client.status;
                     }
                 }
+                else
+                {
+                    client.configuredTransport = Models.ConfiguredTransport.Unknown;
+                }
 
                 if (attemptAutoRewrite)
                 {
@@ -269,6 +313,9 @@ namespace MCPForUnity.Editor.Clients
                     if (result == "Configured successfully")
                     {
                         client.SetStatus(McpStatus.Configured);
+                        // Update transport after rewrite based on current server setting
+                        bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+                        client.configuredTransport = useHttp ? Models.ConfiguredTransport.Http : Models.ConfiguredTransport.Stdio;
                     }
                     else
                     {
@@ -283,6 +330,7 @@ namespace MCPForUnity.Editor.Clients
             catch (Exception ex)
             {
                 client.SetStatus(McpStatus.Error, ex.Message);
+                client.configuredTransport = Models.ConfiguredTransport.Unknown;
             }
 
             return client.status;
@@ -296,6 +344,9 @@ namespace MCPForUnity.Editor.Clients
             if (result == "Configured successfully")
             {
                 client.SetStatus(McpStatus.Configured);
+                // Set transport based on current server setting
+                bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+                client.configuredTransport = useHttp ? Models.ConfiguredTransport.Http : Models.ConfiguredTransport.Stdio;
             }
             else
             {
@@ -363,6 +414,7 @@ namespace MCPForUnity.Editor.Clients
                 if (string.IsNullOrEmpty(claudePath))
                 {
                     client.SetStatus(McpStatus.NotConfigured, "Claude CLI not found");
+                    client.configuredTransport = Models.ConfiguredTransport.Unknown;
                     return client.status;
                 }
 
@@ -414,6 +466,20 @@ namespace MCPForUnity.Editor.Clients
                             // The CLI output format contains "Type: http" or "Type: stdio"
                             bool registeredWithHttp = getStdout.Contains("Type: http", StringComparison.OrdinalIgnoreCase);
                             bool registeredWithStdio = getStdout.Contains("Type: stdio", StringComparison.OrdinalIgnoreCase);
+
+                            // Set the configured transport based on what we detected
+                            if (registeredWithHttp)
+                            {
+                                client.configuredTransport = Models.ConfiguredTransport.Http;
+                            }
+                            else if (registeredWithStdio)
+                            {
+                                client.configuredTransport = Models.ConfiguredTransport.Stdio;
+                            }
+                            else
+                            {
+                                client.configuredTransport = Models.ConfiguredTransport.Unknown;
+                            }
 
                             // Check for transport mismatch
                             bool hasTransportMismatch = (currentUseHttp && registeredWithStdio) || (!currentUseHttp && registeredWithHttp);
@@ -479,10 +545,12 @@ namespace MCPForUnity.Editor.Clients
                 }
 
                 client.SetStatus(McpStatus.NotConfigured);
+                client.configuredTransport = Models.ConfiguredTransport.Unknown;
             }
             catch (Exception ex)
             {
                 client.SetStatus(McpStatus.Error, ex.Message);
+                client.configuredTransport = Models.ConfiguredTransport.Unknown;
             }
 
             return client.status;
@@ -558,6 +626,7 @@ namespace MCPForUnity.Editor.Clients
 
             McpLog.Info($"Successfully registered with Claude Code using {(useHttpTransport ? "HTTP" : "stdio")} transport.");
             client.SetStatus(McpStatus.Configured);
+            client.configuredTransport = useHttpTransport ? Models.ConfiguredTransport.Http : Models.ConfiguredTransport.Stdio;
         }
 
         /// <summary>
@@ -577,6 +646,7 @@ namespace MCPForUnity.Editor.Clients
 
             McpLog.Info("MCP server successfully unregistered from Claude Code.");
             client.SetStatus(McpStatus.NotConfigured);
+            client.configuredTransport = Models.ConfiguredTransport.Unknown;
         }
 
         private void Register()
@@ -645,6 +715,7 @@ namespace MCPForUnity.Editor.Clients
             // Set status to Configured immediately after successful registration
             // The UI will trigger an async verification check separately to avoid blocking
             client.SetStatus(McpStatus.Configured);
+            client.configuredTransport = useHttpTransport ? Models.ConfiguredTransport.Http : Models.ConfiguredTransport.Stdio;
         }
 
         private void Unregister()
@@ -675,6 +746,7 @@ namespace MCPForUnity.Editor.Clients
 
             McpLog.Info("MCP server successfully unregistered from Claude Code.");
             client.SetStatus(McpStatus.NotConfigured);
+            client.configuredTransport = Models.ConfiguredTransport.Unknown;
         }
 
         public override string GetManualSnippet()

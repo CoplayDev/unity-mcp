@@ -10,6 +10,7 @@ namespace MCPForUnity.Editor.Models
         public string linuxConfigPath;
         public string configStatus;
         public McpStatus status = McpStatus.NotConfigured;
+        public ConfiguredTransport configuredTransport = ConfiguredTransport.Unknown;
 
         // Capability flags/config for JSON-based configurators
         public bool IsVsCodeLayout; // Whether the config file follows VS Code layout (env object at root)

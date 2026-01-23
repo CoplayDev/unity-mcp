@@ -19,6 +19,14 @@ Save your change type
 <!-- If applicable, add screenshots or recordings to demonstrate the changes -->
 
 
+## Documentation Updates
+<!-- Check if you updated documentation for changes to tools/resources -->
+- [ ] I have added/removed/modified tools or resources
+- [ ] If yes, I have updated all documentation files using:
+  - [ ] The LLM prompt at `tools/UPDATE_DOCS_PROMPT.md` (recommended)
+  - [ ] Manual updates following the guide at `tools/UPDATE_DOCS.md`
+
+
 ## Related Issues
 <!-- Link any related issues using "Fixes #123" or "Relates to #123" -->
 

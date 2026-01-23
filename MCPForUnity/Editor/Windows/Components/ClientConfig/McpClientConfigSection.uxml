@@ -20,7 +20,7 @@
                 <ui:TextField name="claude-cli-path" readonly="true" class="path-display-field" />
                 <ui:Button name="browse-claude-button" text="Browse" class="icon-button" />
             </ui:VisualElement>
-            <ui:Foldout name="manual-config-foldout" text="Manual Configuration" class="manual-config-foldout">
+            <ui:Foldout name="manual-config-foldout" text="Manual Configuration" value="false" class="manual-config-foldout">
                 <ui:VisualElement class="manual-config-content">
                     <ui:Label text="Config Path:" class="config-label" />
                     <ui:VisualElement class="path-row">

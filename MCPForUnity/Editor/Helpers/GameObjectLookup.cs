@@ -69,7 +69,9 @@ namespace MCPForUnity.Editor.Helpers
         /// </summary>
         public static GameObject FindById(int instanceId)
         {
+#pragma warning disable CS0618 // Type or member is obsolete
             return EditorUtility.InstanceIDToObject(instanceId) as GameObject;
+#pragma warning restore CS0618
         }
 
         /// <summary>
@@ -103,7 +105,9 @@ namespace MCPForUnity.Editor.Helpers
                 case SearchMethod.ById:
                     if (int.TryParse(searchTerm, out int instanceId))
                     {
+#pragma warning disable CS0618 // Type or member is obsolete
                         var obj = EditorUtility.InstanceIDToObject(instanceId) as GameObject;
+#pragma warning restore CS0618
                         if (obj != null && (includeInactive || obj.activeInHierarchy))
                         {
                             results.Add(instanceId);

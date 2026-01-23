@@ -1,0 +1,149 @@
+{
+  "manifest_version": "0.3",
+  "name": "Unity MCP",
+  "version": "9.2.0",
+  "description": "AI-powered Unity Editor automation via MCP - manage GameObjects, scripts, materials, scenes, prefabs, VFX, and run tests",
+  "author": {
+    "name": "Coplay",
+    "url": "https://www.coplay.dev"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CoplayDev/unity-mcp"
+  },
+  "homepage": "https://www.coplay.dev",
+  "documentation": "https://github.com/CoplayDev/unity-mcp#readme",
+  "support": "https://github.com/CoplayDev/unity-mcp/issues",
+  "icon": "coplay-logo.png",
+  "server": {
+    "type": "python",
+    "entry_point": "Server/src/main.py",
+    "mcp_config": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "mcpforunityserver",
+        "mcp-for-unity"
+      ],
+      "env": {}
+    }
+  },
+  "tools": [
+    {
+      "name": "batch_execute",
+      "description": "Execute multiple Unity operations in a single batch"
+    },
+    {
+      "name": "debug_request_context",
+      "description": "Debug and inspect MCP request context"
+    },
+    {
+      "name": "execute_custom_tool",
+      "description": "Execute custom Unity Editor tools registered by the project"
+    },
+    {
+      "name": "execute_menu_item",
+      "description": "Execute Unity Editor menu items"
+    },
+    {
+      "name": "find_gameobjects",
+      "description": "Find GameObjects in the scene by various criteria"
+    },
+    {
+      "name": "find_in_file",
+      "description": "Search for content within Unity project files"
+    },
+    {
+      "name": "manage_asset",
+      "description": "Create, modify, search, and organize Unity assets"
+    },
+    {
+      "name": "manage_components",
+      "description": "Add, remove, and configure GameObject components"
+    },
+    {
+      "name": "manage_editor",
+      "description": "Control Unity Editor state, play mode, and preferences"
+    },
+    {
+      "name": "manage_gameobject",
+      "description": "Create, modify, transform, and delete GameObjects"
+    },
+    {
+      "name": "manage_material",
+      "description": "Create and modify Unity materials and shaders"
+    },
+    {
+      "name": "manage_prefabs",
+      "description": "Create, instantiate, unpack, and modify prefabs"
+    },
+    {
+      "name": "manage_scene",
+      "description": "Load, save, query hierarchy, and manage Unity scenes"
+    },
+    {
+      "name": "manage_script",
+      "description": "Create, read, and modify C# scripts"
+    },
+    {
+      "name": "manage_scriptable_object",
+      "description": "Create and modify ScriptableObjects"
+    },
+    {
+      "name": "manage_shader",
+      "description": "Work with Unity shaders"
+    },
+    {
+      "name": "manage_vfx",
+      "description": "Manage Visual Effects, particle systems, and trails"
+    },
+    {
+      "name": "read_console",
+      "description": "Read Unity Editor console output (logs, warnings, errors)"
+    },
+    {
+      "name": "refresh_unity",
+      "description": "Refresh Unity Editor asset database"
+    },
+    {
+      "name": "run_tests",
+      "description": "Run Unity Test Framework tests"
+    },
+    {
+      "name": "get_test_job",
+      "description": "Get status of async test job"
+    },
+    {
+      "name": "script_apply_edits",
+      "description": "Apply code edits to C# scripts with validation"
+    },
+    {
+      "name": "set_active_instance",
+      "description": "Set the active Unity Editor instance for multi-instance workflows"
+    },
+    {
+      "name": "apply_text_edits",
+      "description": "Apply text edits to script content"
+    },
+    {
+      "name": "create_script",
+      "description": "Create new C# scripts"
+    },
+    {
+      "name": "delete_script",
+      "description": "Delete C# scripts"
+    },
+    {
+      "name": "validate_script",
+      "description": "Validate C# script syntax and compilation"
+    },
+    {
+      "name": "manage_script_capabilities",
+      "description": "Query script management capabilities"
+    },
+    {
+      "name": "get_sha",
+      "description": "Get SHA hash of script content"
+    }
+  ]
+}

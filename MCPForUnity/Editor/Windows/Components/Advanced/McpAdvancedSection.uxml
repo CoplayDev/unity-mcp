@@ -1,0 +1,61 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+    <Style src="../Common.uss" />
+    <ui:VisualElement name="advanced-section" class="section">
+        <ui:Label text="Advanced Settings" class="section-title" />
+        <ui:VisualElement class="section-content">
+            <ui:VisualElement class="override-row">
+                <ui:Label text="UVX Path:" class="override-label" />
+                <ui:VisualElement class="status-indicator-small" name="uv-path-status" />
+            </ui:VisualElement>
+            <ui:VisualElement class="path-override-controls">
+                <ui:TextField name="uv-path-override" readonly="true" class="override-field" />
+                <ui:Button name="browse-uv-button" text="Browse" class="icon-button" />
+                <ui:Button name="clear-uv-button" text="Clear" class="icon-button" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="override-row" style="margin-top: 8px;">
+                <ui:Label text="Server Source:" class="override-label" />
+            </ui:VisualElement>
+            <ui:VisualElement class="path-override-controls">
+                <ui:TextField name="git-url-override" placeholder-text="/path/to/Server or git+https://..." class="override-field" />
+                <ui:Button name="browse-git-url-button" text="Select" class="icon-button" />
+                <ui:Button name="clear-git-url-button" text="Clear" class="icon-button" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="setting-row" style="margin-top: 8px;">
+                <ui:Label text="Debug Logging:" class="setting-label" />
+                <ui:Toggle name="debug-logs-toggle" class="setting-toggle" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="setting-row">
+                <ui:Label text="Server Health:" class="setting-label" />
+                <ui:VisualElement class="status-container">
+                    <ui:VisualElement name="health-indicator" class="status-dot" />
+                    <ui:Label name="health-status" text="Unknown" class="status-text" />
+                </ui:VisualElement>
+                <ui:Button name="test-connection-button" text="Test" class="action-button" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="setting-row">
+                <ui:Label text="Force Fresh Install:" class="setting-label" />
+                <ui:Toggle name="dev-mode-force-refresh-toggle" class="setting-toggle" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="override-row" style="margin-top: 8px;">
+                <ui:Label text="Package Source:" class="override-label" />
+            </ui:VisualElement>
+            <ui:VisualElement class="path-override-controls">
+                <ui:TextField name="deploy-source-path" class="override-field" />
+                <ui:Button name="browse-deploy-source-button" text="Select" class="icon-button" />
+                <ui:Button name="clear-deploy-source-button" text="Clear" class="icon-button" />
+            </ui:VisualElement>
+            <ui:Label name="deploy-target-label" class="help-text" />
+            <ui:Label name="deploy-backup-label" class="help-text" />
+            <ui:VisualElement class="path-override-controls" style="margin-top: 4px;">
+                <ui:Button name="deploy-button" text="Deploy" class="icon-button" />
+                <ui:Button name="deploy-restore-button" text="Restore" class="icon-button" />
+            </ui:VisualElement>
+            <ui:Label name="deploy-status-label" class="help-text" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
