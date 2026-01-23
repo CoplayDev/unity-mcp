@@ -24,7 +24,6 @@ namespace MCPForUnity.Editor.Tools.Prefabs
         private const string ACTION_CREATE_FROM_GAMEOBJECT = "create_from_gameobject";
         private const string ACTION_GET_INFO = "get_info";
         private const string ACTION_GET_HIERARCHY = "get_hierarchy";
-        
         private const string SupportedActions = ACTION_OPEN_STAGE + ", " + ACTION_CLOSE_STAGE + ", " + ACTION_SAVE_OPEN_STAGE + ", " + ACTION_CREATE_FROM_GAMEOBJECT + ", " + ACTION_GET_INFO + ", " + ACTION_GET_HIERARCHY;
 
         // Pagination constants
@@ -83,6 +82,10 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             }
 
             string sanitizedPath = AssetPathUtility.SanitizeAssetPath(prefabPath);
+            if (sanitizedPath == null)
+            {
+                return new ErrorResponse($"Invalid prefab path: '{prefabPath}'.");
+            }
             GameObject prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(sanitizedPath);
             if (prefabAsset == null)
             {
@@ -117,7 +120,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
             string assetPath = stage.assetPath;
             bool saveBeforeClose = @params["saveBeforeClose"]?.ToObject<bool>() ?? false;
-            
+
             if (saveBeforeClose && stage.scene.isDirty)
             {
                 try
@@ -335,8 +338,8 @@ namespace MCPForUnity.Editor.Tools.Prefabs
         /// <summary>
         /// Validates parameters for creating a prefab from GameObject.
         /// </summary>
-        private static (bool isValid, string errorMessage, string targetName, string finalPath, bool includeInactive, bool replaceExisting, bool unlinkIfInstance) 
-            ValidateCreatePrefabParams(JObject @params)
+        private static (bool isValid, string errorMessage, string targetName, string finalPath, bool includeInactive, bool replaceExisting, bool unlinkIfInstance)
+        ValidateCreatePrefabParams(JObject @params)
         {
             string targetName = @params["target"]?.ToString() ?? @params["name"]?.ToString();
             if (string.IsNullOrEmpty(targetName))
@@ -351,6 +354,14 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             }
 
             string sanitizedPath = AssetPathUtility.SanitizeAssetPath(requestedPath);
+            if (sanitizedPath == null)
+            {
+                return (false, $"Invalid prefab path (path traversal detected): '{requestedPath}'", targetName, null, false, false, false);
+            }
+            if (string.IsNullOrEmpty(sanitizedPath))
+            {
+                return (false, $"Invalid prefab path '{requestedPath}'. Path cannot be empty.", targetName, null, false, false, false);
+            }
             if (!sanitizedPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
             {
                 sanitizedPath += ".prefab";
@@ -510,6 +521,10 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             }
 
             string sanitizedPath = AssetPathUtility.SanitizeAssetPath(prefabPath);
+            if (sanitizedPath == null)
+            {
+                return new ErrorResponse($"Invalid prefab path: '{prefabPath}'.");
+            }
             GameObject prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(sanitizedPath);
             if (prefabAsset == null)
             {
@@ -551,6 +566,10 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             }
 
             string sanitizedPath = AssetPathUtility.SanitizeAssetPath(prefabPath);
+            if (string.IsNullOrEmpty(sanitizedPath))
+            {
+                return new ErrorResponse($"Invalid prefab path '{prefabPath}'. Path traversal sequences are not allowed.");
+            }
 
             // Parse pagination parameters
             var pagination = PaginationRequest.FromParams(@params, defaultPageSize: DefaultPageSize);
