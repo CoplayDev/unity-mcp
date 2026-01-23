@@ -14,5 +14,16 @@ namespace MCPForUnity.Editor.Models
         UnsupportedOS, // OS is not supported
         Error, // General error state
     }
+
+    /// <summary>
+    /// Represents the transport type a client is configured to use.
+    /// Used to detect mismatches between server and client transport settings.
+    /// </summary>
+    public enum ConfiguredTransport
+    {
+        Unknown, // Could not determine transport type
+        Stdio,   // Client configured for stdio transport
+        Http     // Client configured for HTTP transport
+    }
 }
 

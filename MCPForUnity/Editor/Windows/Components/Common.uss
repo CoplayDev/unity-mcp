@@ -10,29 +10,38 @@
     font-size: 20px;
     -unity-font-style: bold;
     margin-bottom: 20px;
-    padding: 12px;
+    padding: 8px;
     background-color: rgba(0, 0, 0, 0.1);
     border-radius: 4px;
 }
 
 /* Section Styling */
 .section {
-    margin-bottom: 16px;
-    padding: 12px;
-    background-color: rgba(0, 0, 0, 0.05);
-    border-radius: 6px;
+    margin-bottom: 14px;
+    padding: 8px;
+    background-color: rgba(0, 0, 0, 0.04);
+    border-radius: 4px;
     border-width: 1px;
-    border-color: rgba(0, 0, 0, 0.2);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+/* Remove bottom margin from last section in a stack */
+.section-stack > .section:last-child {
+    margin-bottom: 0px;
 }
 
 .section-title {
-    font-size: 14px;
+    font-size: 13px;
     -unity-font-style: bold;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    letter-spacing: 0.3px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
 .section-content {
-    padding: 8px;
+    padding: 4px;
 }
 
 /* Setting Rows */
@@ -41,7 +50,7 @@
     flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
     min-height: 24px;
     flex-shrink: 1;
     min-width: 0;
@@ -49,7 +58,7 @@
 
 .setting-column {
     flex-direction: column;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
     flex-shrink: 1;
     min-width: 0;
 }
@@ -394,6 +403,23 @@
     font-size: 12px;
 }
 
+/* Manual Command Foldout */
+.manual-command-foldout {
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+
+.manual-command-foldout > .unity-foldout__toggle {
+    font-size: 11px;
+    padding: 4px;
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 3px;
+}
+
+.manual-command-foldout > .unity-foldout__content {
+    margin-top: 4px;
+}
+
 .advanced-settings-content {
     padding: 8px;
     margin-top: 8px;
@@ -496,6 +522,10 @@
     border-color: rgba(0, 0, 0, 0.15);
 }
 
+.unity-theme-light .section-title {
+    border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
 .unity-theme-dark .tool-tag {
     color: rgba(220, 220, 220, 1);
     background-color: rgba(80, 80, 80, 0.6);
@@ -546,4 +576,38 @@
 
 .unity-theme-light .path-display-field > .unity-text-field__input {
     background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Warning Banner (for transport mismatch, etc.) */
+.warning-banner {
+    display: none;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    background-color: rgba(255, 180, 0, 0.2);
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: rgba(255, 180, 0, 0.5);
+}
+
+.warning-banner.visible {
+    display: flex;
+}
+
+.warning-banner-text {
+    font-size: 11px;
+    white-space: normal;
+    color: rgba(180, 120, 0, 1);
+}
+
+.unity-theme-dark .warning-banner {
+    background-color: rgba(255, 180, 0, 0.15);
+    border-color: rgba(255, 180, 0, 0.4);
+}
+
+.unity-theme-dark .warning-banner-text {
+    color: rgba(255, 200, 100, 1);
+}
+
+.unity-theme-light .manual-command-foldout > .unity-foldout__toggle {
+    background-color: rgba(0, 0, 0, 0.03);
 }

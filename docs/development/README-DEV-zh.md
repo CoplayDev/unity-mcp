@@ -338,6 +338,36 @@ python3 tools/stress_mcp.py \
 4. **迭代** - 按需重复 1-3
 5. **Restore** 完成后用 `restore-dev.bat` 恢复原始文件
 
+## 重要说明
+
+### 更新工具和 Manifest
+
+在 Unity 包中添加或修改 MCP 工具时：
+- 工具定义位于仓库根目录的 manifest.json 文件中
+- 在发布过程中，manifest.json 版本会自动与 MCPForUnity/package.json 保持同步
+- 如果在发布过程之外手动更新工具，请确保相应更新 manifest.json 版本
+- 使用综合版本更新脚本：`python3 tools/update_versions.py` 来同步项目中所有版本引用
+
+`update_versions.py` 脚本会更新：
+- MCPForUnity/package.json（Unity 包版本）
+- manifest.json（MCP bundle manifest）
+- Server/pyproject.toml（Python 包版本）
+- Server/README.md（版本引用）
+- README.md（固定版本示例）
+- docs/i18n/README-zh.md（固定版本示例）
+
+使用示例：
+```bash
+# 更新所有文件以匹配 package.json 版本
+python3 tools/update_versions.py
+
+# 更新所有文件到指定版本
+python3 tools/update_versions.py --version 9.2.0
+
+# 干运行以查看将要更新的内容
+python3 tools/update_versions.py --dry-run
+```
+
 ## Troubleshooting
 
 ### 运行 .bat 时出现 "Path not found"

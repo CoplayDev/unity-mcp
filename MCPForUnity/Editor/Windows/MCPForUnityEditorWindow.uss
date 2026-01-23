@@ -1,34 +1,102 @@
 /* Root Layout */
 #root-container {
-    padding: 16px;
+    padding: 0px;
     flex-direction: column;
     flex-grow: 1;
     overflow: hidden;
 }
 
-/* Title */
-.title {
-    font-size: 20px;
-    -unity-font-style: bold;
-    margin-bottom: 16px;
-    padding: 12px;
-    background-color: rgba(0, 0, 0, 0.1);
+/* Header Bar */
+.header-bar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    margin: 12px 12px 5px 12px;
+    min-height: 44px;
+    flex-shrink: 0;
+    background-color: rgba(0, 0, 0, 0.05);
     border-radius: 4px;
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+.header-title {
+    font-size: 16px;
+    -unity-font-style: bold;
+    letter-spacing: 0.5px;
+}
+
+.header-version {
+    font-size: 11px;
+    color: rgba(180, 210, 255, 1);
+    padding: 3px 10px;
+    background-color: rgba(50, 120, 200, 0.25);
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: rgba(80, 150, 220, 0.4);
+}
+
+/* Update Notification */
+.update-notification {
+    display: none;
+    padding: 8px 16px;
+    margin: 0px 12px;
+    background-color: rgba(100, 200, 100, 0.15);
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: rgba(100, 200, 100, 0.3);
+}
+
+.update-notification.visible {
+    display: flex;
+}
+
+.update-notification-text {
+    font-size: 11px;
+    color: rgba(100, 200, 100, 1);
+    white-space: normal;
 }
 
 /* Tabs */
 .tab-toolbar {
-    margin-bottom: 8px;
+    margin: 8px 12px 0px 12px;
+    padding: 0px;
+    background-color: transparent;
+    border-width: 0px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(0, 0, 0, 0.15);
 }
 
 .tab-toolbar .unity-toolbar-button {
     flex-grow: 1;
+    min-height: 32px;
+    font-size: 12px;
+    border-width: 0px;
+    background-color: transparent;
+    margin: 0px 2px 0px 0px;
+    padding: 0px 12px;
+    border-radius: 4px 4px 0px 0px;
+    margin-bottom: -1px;
+}
+
+.tab-toolbar .unity-toolbar-button:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.tab-toolbar .unity-toolbar-button:checked {
+    background-color: rgba(0, 0, 0, 0.04);
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0.15);
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(56, 56, 56, 1);
 }
 
 /* Panels */
 .panel-scroll {
     flex-grow: 1;
-    margin-top: 8px;
+    margin: 0px;
+    padding: 0px 8px 0px 8px;
 }
 
 .hidden {
@@ -37,4 +105,29 @@
 
 .section-stack {
     flex-direction: column;
+}
+
+/* Light Theme */
+.unity-theme-light .header-bar {
+    background-color: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+.unity-theme-light .header-version {
+    background-color: rgba(0, 0, 0, 0.08);
+}
+
+.unity-theme-light .tab-toolbar .unity-toolbar-button:checked {
+    background-color: rgba(255, 255, 255, 0.5);
+    border-color: rgba(0, 0, 0, 0.15);
+    border-bottom-color: rgba(194, 194, 194, 1);
+}
+
+.unity-theme-light .update-notification {
+    background-color: rgba(100, 200, 100, 0.1);
+    border-color: rgba(100, 200, 100, 0.25);
+}
+
+.unity-theme-dark .update-notification-text {
+    color: rgba(150, 255, 150, 1);
 }
