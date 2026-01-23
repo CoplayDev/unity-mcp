@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.IO;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
@@ -25,10 +24,6 @@ namespace MCPForUnity.Editor.Tools.Prefabs
         private const string ACTION_GET_INFO = "get_info";
         private const string ACTION_GET_HIERARCHY = "get_hierarchy";
         private const string SupportedActions = ACTION_OPEN_STAGE + ", " + ACTION_CLOSE_STAGE + ", " + ACTION_SAVE_OPEN_STAGE + ", " + ACTION_CREATE_FROM_GAMEOBJECT + ", " + ACTION_GET_INFO + ", " + ACTION_GET_HIERARCHY;
-
-        // Pagination constants
-        private const int DefaultPageSize = 50;
-        private const int MaxPageSize = 500;
 
         public static object HandleCommand(JObject @params)
         {
@@ -556,6 +551,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
         /// <summary>
         /// Gets the hierarchical structure of a prefab asset.
+        /// Returns all objects in the prefab for full client-side filtering and search.
         /// </summary>
         private static object GetHierarchy(JObject @params)
         {
@@ -571,11 +567,6 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 return new ErrorResponse($"Invalid prefab path '{prefabPath}'. Path traversal sequences are not allowed.");
             }
 
-            // Parse pagination parameters
-            var pagination = PaginationRequest.FromParams(@params, defaultPageSize: DefaultPageSize);
-            int pageSize = Mathf.Clamp(pagination.PageSize, 1, MaxPageSize);
-            int cursor = pagination.Cursor;
-
             // Load prefab contents in background (without opening stage UI)
             GameObject prefabContents = PrefabUtility.LoadPrefabContents(sanitizedPath);
             if (prefabContents == null)
@@ -585,29 +576,16 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
             try
             {
-                // Build hierarchy items
+                // Build complete hierarchy items (no pagination)
                 var allItems = BuildHierarchyItems(prefabContents.transform);
-                int totalCount = allItems.Count;
-
-                // Apply pagination
-                int startIndex = Mathf.Min(cursor, totalCount);
-                int endIndex = Mathf.Min(startIndex + pageSize, totalCount);
-                var paginatedItems = allItems.Skip(startIndex).Take(endIndex - startIndex).ToList();
-
-                bool truncated = endIndex < totalCount;
-                string nextCursor = truncated ? endIndex.ToString() : null;
 
                 return new SuccessResponse(
-                    $"Successfully retrieved prefab hierarchy. Found {totalCount} objects.",
+                    $"Successfully retrieved prefab hierarchy. Found {allItems.Count} objects.",
                     new
                     {
                         prefabPath = sanitizedPath,
-                        cursor = cursor.ToString(),
-                        pageSize = pageSize,
-                        nextCursor = nextCursor,
-                        truncated = truncated,
-                        total = totalCount,
-                        items = paginatedItems
+                        total = allItems.Count,
+                        items = allItems
                     }
                 );
             }

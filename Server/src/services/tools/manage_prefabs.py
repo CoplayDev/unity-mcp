@@ -5,7 +5,7 @@ from mcp.types import ToolAnnotations
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
-from services.tools.utils import coerce_bool, coerce_int
+from services.tools.utils import coerce_bool
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 from services.tools.preflight import preflight
@@ -53,8 +53,6 @@ async def manage_prefabs(
     allow_overwrite: Annotated[bool, "Allow replacing existing prefab."] | None = None,
     search_inactive: Annotated[bool, "Include inactive GameObjects in search."] | None = None,
     unlink_if_instance: Annotated[bool, "Unlink from existing prefab before creating new one."] | None = None,
-    page_size: Annotated[int | str, "Items per page for get_hierarchy (default: 50, max: 500)."] | None = None,
-    cursor: Annotated[int | str, "Pagination cursor for get_hierarchy."] | None = None,
 ) -> dict[str, Any]:
     # Validate required parameters
     required = REQUIRED_PARAMS.get(action, [])
@@ -81,10 +79,6 @@ async def manage_prefabs(
         }
 
     try:
-        # Coerce pagination parameters
-        coerced_page_size = coerce_int(page_size, default=None)
-        coerced_cursor = coerce_int(cursor, default=None)
-
         # Build parameters dictionary
         params: dict[str, Any] = {"action": action}
 
@@ -115,13 +109,6 @@ async def manage_prefabs(
         unlink_if_instance_val = coerce_bool(unlink_if_instance)
         if unlink_if_instance_val is not None:
             params["unlinkIfInstance"] = unlink_if_instance_val
-
-        # Handle pagination parameters
-        if coerced_page_size is not None:
-            params["pageSize"] = coerced_page_size
-
-        if coerced_cursor is not None:
-            params["cursor"] = coerced_cursor
 
         # Send command to Unity
         response = await send_with_unity_instance(
