@@ -17,6 +17,12 @@ namespace MCPForUnity.Editor.Clients
         /// <summary>Current status cached by the configurator.</summary>
         McpStatus Status { get; }
 
+        /// <summary>
+        /// The transport type the client is currently configured for.
+        /// Returns Unknown if the client is not configured or the transport cannot be determined.
+        /// </summary>
+        ConfiguredTransport ConfiguredTransport { get; }
+
         /// <summary>True if this client supports auto-configure.</summary>
         bool SupportsAutoConfigure { get; }
 
