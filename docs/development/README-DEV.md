@@ -199,6 +199,12 @@ Some Unity tool calls can return *very large* JSON payloads (deep hierarchies, c
   - **`max_nodes`**: defaults to **1000**, clamped to **1..5000**
   - **`include_transform`**: defaults to **false**
 
+### `manage_scene(action="screenshot")`
+
+- Saves PNGs under `Assets/Screenshots/`.
+- Unity **2022.1+**: captures the **Game View** via `ScreenCapture.CaptureScreenshot`, so `Screen Space - Overlay` UI is included. This write is **async**, so the file may appear/import a moment later.
+- Unity **2021.3**: falls back to rendering the best available `Camera` into a `RenderTexture` (camera output only; `Screen Space - Overlay` UI is not included).
+
 ### `manage_gameobject(action="get_components")`
 
 - **Default behavior**: returns **paged component metadata** only (`typeName`, `instanceID`).
