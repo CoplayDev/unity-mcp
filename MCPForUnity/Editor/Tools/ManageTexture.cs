@@ -101,57 +101,96 @@ namespace MCPForUnity.Editor.Tools
             if (string.IsNullOrEmpty(path))
                 return new ErrorResponse("'path' is required for create.");
 
+            string imagePath = @params["imagePath"]?.ToString();
+            bool hasImage = !string.IsNullOrEmpty(imagePath);
+
             int width = @params["width"]?.ToObject<int>() ?? 64;
             int height = @params["height"]?.ToObject<int>() ?? 64;
 
             // Validate dimensions
-            var dimensionError = ValidateDimensions(width, height);
-            if (dimensionError != null)
-                return dimensionError;
+            if (!hasImage)
+            {
+                var dimensionError = ValidateDimensions(width, height);
+                if (dimensionError != null)
+                    return dimensionError;
+            }
 
             string fullPath = AssetPathUtility.SanitizeAssetPath(path);
             EnsureDirectoryExists(fullPath);
 
             try
             {
+                var fillColorToken = @params["fillColor"];
                 var patternToken = @params["pattern"];
+                var pixelsToken = @params["pixels"];
+
+                if (hasImage && (fillColorToken != null || patternToken != null || pixelsToken != null))
+                {
+                    return new ErrorResponse("imagePath cannot be combined with fillColor, pattern, or pixels.");
+                }
+
                 int patternSize = 8;
-                if (patternToken != null)
+                if (!hasImage && patternToken != null)
                 {
                     patternSize = @params["patternSize"]?.ToObject<int>() ?? 8;
                     if (patternSize <= 0)
                         return new ErrorResponse("patternSize must be greater than 0.");
                 }
 
-                Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
-
-                // Check for fill color
-                var fillColorToken = @params["fillColor"];
-                if (fillColorToken != null && fillColorToken.Type == JTokenType.Array)
+                Texture2D texture;
+                if (hasImage)
                 {
-                    Color32 fillColor = TextureOps.ParseColor32(fillColorToken as JArray);
-                    TextureOps.FillTexture(texture, fillColor);
+                    string resolvedImagePath = ResolveImagePath(imagePath);
+                    if (!File.Exists(resolvedImagePath))
+                        return new ErrorResponse($"Image file not found at '{imagePath}'.");
+
+                    byte[] imageBytes = File.ReadAllBytes(resolvedImagePath);
+                    texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                    if (!texture.LoadImage(imageBytes))
+                    {
+                        UnityEngine.Object.DestroyImmediate(texture);
+                        return new ErrorResponse($"Failed to load image from '{imagePath}'.");
+                    }
+
+                    width = texture.width;
+                    height = texture.height;
+                    var imageDimensionError = ValidateDimensions(width, height);
+                    if (imageDimensionError != null)
+                    {
+                        UnityEngine.Object.DestroyImmediate(texture);
+                        return imageDimensionError;
+                    }
                 }
-
-                // Check for pattern
-                if (patternToken != null)
+                else
                 {
-                    string pattern = patternToken.ToString();
-                    var palette = TextureOps.ParsePalette(@params["palette"] as JArray);
-                    ApplyPatternToTexture(texture, pattern, palette, patternSize);
-                }
+                    texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
 
-                // Check for direct pixel data
-                var pixelsToken = @params["pixels"];
-                if (pixelsToken != null)
-                {
-                    TextureOps.ApplyPixelData(texture, pixelsToken, width, height);
-                }
+                    // Check for fill color
+                    if (fillColorToken != null && fillColorToken.Type == JTokenType.Array)
+                    {
+                        Color32 fillColor = TextureOps.ParseColor32(fillColorToken as JArray);
+                        TextureOps.FillTexture(texture, fillColor);
+                    }
 
-                // If nothing specified, create transparent texture
-                if (fillColorToken == null && patternToken == null && pixelsToken == null)
-                {
-                    TextureOps.FillTexture(texture, new Color32(0, 0, 0, 0));
+                    // Check for pattern
+                    if (patternToken != null)
+                    {
+                        string pattern = patternToken.ToString();
+                        var palette = TextureOps.ParsePalette(@params["palette"] as JArray);
+                        ApplyPatternToTexture(texture, pattern, palette, patternSize);
+                    }
+
+                    // Check for direct pixel data
+                    if (pixelsToken != null)
+                    {
+                        TextureOps.ApplyPixelData(texture, pixelsToken, width, height);
+                    }
+
+                    // If nothing specified, create transparent texture
+                    if (fillColorToken == null && patternToken == null && pixelsToken == null)
+                    {
+                        TextureOps.FillTexture(texture, new Color32(0, 0, 0, 0));
+                    }
                 }
 
                 texture.Apply();
@@ -934,6 +973,14 @@ namespace MCPForUnity.Editor.Tools
         private static string GetAbsolutePath(string assetPath)
         {
             return Path.Combine(Directory.GetCurrentDirectory(), assetPath);
+        }
+
+        private static string ResolveImagePath(string imagePath)
+        {
+            if (Path.IsPathRooted(imagePath))
+                return imagePath;
+
+            return Path.Combine(Directory.GetCurrentDirectory(), imagePath);
         }
     }
 }

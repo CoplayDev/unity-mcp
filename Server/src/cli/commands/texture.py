@@ -308,6 +308,7 @@ def texture():
 @click.argument("path")
 @click.option("--width", default=64, help="Texture width (default: 64)")
 @click.option("--height", default=64, help="Texture height (default: 64)")
+@click.option("--image-path", help="Source image path (PNG/JPG) to import.")
 @click.option("--color", help="Fill color (e.g., '#FF0000' or '[1,0,0,1]')")
 @click.option("--pattern", type=click.Choice([
     "checkerboard", "stripes", "stripes_h", "stripes_v", "stripes_diag",
@@ -315,7 +316,7 @@ def texture():
 ]), help="Pattern type")
 @click.option("--palette", help="Color palette for pattern (JSON array of colors)")
 @click.option("--import-settings", help="TextureImporter settings (JSON)")
-def create(path: str, width: int, height: int, color: Optional[str], 
+def create(path: str, width: int, height: int, image_path: Optional[str], color: Optional[str],
            pattern: Optional[str], palette: Optional[str], import_settings: Optional[str]):
     """Create a new procedural texture.
 
@@ -326,11 +327,16 @@ def create(path: str, width: int, height: int, color: Optional[str],
         unity-mcp texture create Assets/UI.png --import-settings '{"texture_type": "sprite"}'
     """
     config = get_config()
-    try:
-        _validate_texture_dimensions(width, height)
-    except ValueError as e:
-        print_error(str(e))
-        sys.exit(1)
+    if image_path:
+        if color or pattern or palette:
+            print_error("image-path cannot be combined with color, pattern, or palette.")
+            sys.exit(1)
+    else:
+        try:
+            _validate_texture_dimensions(width, height)
+        except ValueError as e:
+            print_error(str(e))
+            sys.exit(1)
 
     params: dict[str, Any] = {
         "action": "create",
@@ -345,7 +351,7 @@ def create(path: str, width: int, height: int, color: Optional[str],
         except ValueError as e:
             print_error(str(e))
             sys.exit(1)
-    elif not pattern:
+    elif not pattern and not image_path:
         # Default to white if no color or pattern specified
         params["fillColor"] = [255, 255, 255, 255]
 
@@ -366,6 +372,9 @@ def create(path: str, width: int, height: int, color: Optional[str],
             print_error(str(e))
             sys.exit(1)
 
+    if image_path:
+        params["imagePath"] = image_path
+
     try:
         result = run_command("manage_texture", params, config)
         click.echo(format_output(result, config.format))
@@ -380,13 +389,14 @@ def create(path: str, width: int, height: int, color: Optional[str],
 @click.argument("path")
 @click.option("--width", default=64, help="Texture width (default: 64)")
 @click.option("--height", default=64, help="Texture height (default: 64)")
+@click.option("--image-path", help="Source image path (PNG/JPG) to import.")
 @click.option("--color", help="Fill color (e.g., '#FF0000' or '[1,0,0,1]')")
 @click.option("--pattern", type=click.Choice([
     "checkerboard", "stripes", "dots", "grid"
 ]), help="Pattern type (defaults to checkerboard if no color specified)")
 @click.option("--ppu", default=100.0, help="Pixels Per Unit")
 @click.option("--pivot", help="Pivot as [x,y] (default: [0.5, 0.5])")
-def sprite(path: str, width: int, height: int, color: Optional[str], pattern: Optional[str], ppu: float, pivot: Optional[str]):
+def sprite(path: str, width: int, height: int, image_path: Optional[str], color: Optional[str], pattern: Optional[str], ppu: float, pivot: Optional[str]):
     """Quickly create a sprite texture.
 
     \b
@@ -396,11 +406,16 @@ def sprite(path: str, width: int, height: int, color: Optional[str], pattern: Op
         unity-mcp texture sprite Assets/Sprites/Solid.png --color '[0,255,0]'
     """
     config = get_config()
-    try:
-        _validate_texture_dimensions(width, height)
-    except ValueError as e:
-        print_error(str(e))
-        sys.exit(1)
+    if image_path:
+        if color or pattern:
+            print_error("image-path cannot be combined with color or pattern.")
+            sys.exit(1)
+    else:
+        try:
+            _validate_texture_dimensions(width, height)
+        except ValueError as e:
+            print_error(str(e))
+            sys.exit(1)
 
     sprite_settings: dict[str, Any] = {"pixelsPerUnit": ppu}
     if pivot:
@@ -426,8 +441,11 @@ def sprite(path: str, width: int, height: int, color: Optional[str], pattern: Op
     # Only default pattern if no color is specified
     if pattern:
         params["pattern"] = pattern
-    elif not color:
+    elif not color and not image_path:
         params["pattern"] = "checkerboard"
+
+    if image_path:
+        params["imagePath"] = image_path
 
     try:
         result = run_command("manage_texture", params, config)

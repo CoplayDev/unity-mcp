@@ -506,6 +506,9 @@ async def manage_texture(
     pixels: Annotated[list[list[int]] | str,
                       "Pixel data as JSON array of [r,g,b,a] values or base64 string"] | None = None,
 
+    image_path: Annotated[str,
+                          "Source image file path for create/create_sprite (PNG/JPG)."] | None = None,
+
     # Gradient settings
     gradient_type: Annotated[Literal["linear", "radial"],
                              "Gradient type (default: linear)"] | None = None,
@@ -550,46 +553,58 @@ async def manage_texture(
     if fill_error:
         return {"success": False, "message": fill_error}
 
+    action_lower = action.lower()
+
+    if image_path is not None and action_lower not in ("create", "create_sprite"):
+        return {"success": False, "message": "image_path is only supported for create/create_sprite."}
+
+    if image_path is not None and (fill_color is not None or pattern is not None or pixels is not None):
+        return {"success": False, "message": "image_path cannot be combined with fill_color, pattern, or pixels."}
+
     # Default to white for create action if nothing else specified
-    if action == "create" and fill_color is None and pattern is None and pixels is None:
+    if action == "create" and fill_color is None and pattern is None and pixels is None and image_path is None:
         fill_color = [255, 255, 255, 255]
 
     palette, palette_error = _normalize_palette(palette)
     if palette_error:
         return {"success": False, "message": palette_error}
 
-    # Normalize dimensions
-    width, width_error = _normalize_dimension(width, "width")
-    if width_error:
-        return {"success": False, "message": width_error}
-    height, height_error = _normalize_dimension(height, "height")
-    if height_error:
-        return {"success": False, "message": height_error}
-    total_pixels = width * height
-    if total_pixels > _MAX_TEXTURE_PIXELS:
-        return {
-            "success": False,
-            "message": f"width*height must be <= {_MAX_TEXTURE_PIXELS} (got {width}x{height}).",
-        }
-    if action.lower() == "apply_noise":
-        noise_octaves = octaves if octaves is not None else 1
-        noise_work = width * height * noise_octaves
-        if noise_work > _MAX_NOISE_WORK:
+    if image_path is None:
+        # Normalize dimensions
+        width, width_error = _normalize_dimension(width, "width")
+        if width_error:
+            return {"success": False, "message": width_error}
+        height, height_error = _normalize_dimension(height, "height")
+        if height_error:
+            return {"success": False, "message": height_error}
+        total_pixels = width * height
+        if total_pixels > _MAX_TEXTURE_PIXELS:
             return {
                 "success": False,
-                "message": (
-                    f"width*height*octaves must be <= {_MAX_NOISE_WORK} "
-                    f"(got {width}x{height}x{noise_octaves})."
-                ),
+                "message": f"width*height must be <= {_MAX_TEXTURE_PIXELS} (got {width}x{height}).",
             }
+        if action_lower == "apply_noise":
+            noise_octaves = octaves if octaves is not None else 1
+            noise_work = width * height * noise_octaves
+            if noise_work > _MAX_NOISE_WORK:
+                return {
+                    "success": False,
+                    "message": (
+                        f"width*height*octaves must be <= {_MAX_NOISE_WORK} "
+                        f"(got {width}x{height}x{noise_octaves})."
+                    ),
+                }
 
-    pattern_size, pattern_error = _normalize_positive_int(pattern_size, "pattern_size")
-    if pattern_error:
-        return {"success": False, "message": pattern_error}
+        pattern_size, pattern_error = _normalize_positive_int(pattern_size, "pattern_size")
+        if pattern_error:
+            return {"success": False, "message": pattern_error}
 
-    octaves, octaves_error = _normalize_positive_int(octaves, "octaves")
-    if octaves_error:
-        return {"success": False, "message": octaves_error}
+        octaves, octaves_error = _normalize_positive_int(octaves, "octaves")
+        if octaves_error:
+            return {"success": False, "message": octaves_error}
+    else:
+        width = None
+        height = None
 
     # Normalize pixels if provided
     pixels_normalized = None
@@ -648,6 +663,7 @@ async def manage_texture(
         "palette": palette,
         "patternSize": pattern_size,
         "pixels": pixels_normalized,
+        "imagePath": image_path,
         "gradientType": gradient_type,
         "gradientAngle": gradient_angle,
         "noiseScale": noise_scale,
