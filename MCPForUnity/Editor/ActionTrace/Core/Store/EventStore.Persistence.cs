@@ -53,26 +53,45 @@ namespace MCPForUnity.Editor.ActionTrace.Core.Store
             {
                 // P0 Fix: Schedule retry instead of just returning
                 // Calculate remaining throttle time with small cap to avoid excessive retries
-                long remainingMs = MinSaveIntervalMs - timeSinceLastSave;
-                int retryDelayMs = (int)Math.Min(remainingMs, 500); // Cap at 500ms
+                long remainingMs     = MinSaveIntervalMs - timeSinceLastSave;
+                int  retryDelayMs    = (int)Math.Min(remainingMs, 500); // Cap at 500ms
 
                 lock (_queryLock)
                 {
                     // Only schedule retry if not already scheduled
-                    if (!_saveScheduled)
-                    {
-                        _saveScheduled = true;
-                        EditorApplication.delayCall += () =>
-                        {
-                            lock (_queryLock)
-                            {
-                                _saveScheduled = false;
-                            }
-                            // Retry scheduling save
-                            ScheduleSave();
-                        };
-                    }
+                    if (_saveScheduled)
+                        return;
+
+                    _saveScheduled = true;
                 }
+
+                // Implement an actual delayed retry using EditorApplication.update.
+                // delayCall runs on the next editor tick; from there we wait retryDelayMs
+                // using timeSinceStartup before invoking ScheduleSave again.
+                EditorApplication.delayCall += () =>
+                {
+                    double targetTime = EditorApplication.timeSinceStartup + (retryDelayMs / 1000.0);
+
+                    EditorApplication.CallbackFunction updateHandler = null;
+                    updateHandler = () =>
+                    {
+                        if (EditorApplication.timeSinceStartup < targetTime)
+                            return;
+
+                        // Stop listening for updates
+                        EditorApplication.update -= updateHandler;
+
+                        // Allow new save schedules and retry
+                        lock (_queryLock)
+                        {
+                            _saveScheduled = false;
+                        }
+
+                        ScheduleSave();
+                    };
+
+                    EditorApplication.update += updateHandler;
+                };
                 return;
             }
 
