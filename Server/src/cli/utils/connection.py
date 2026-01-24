@@ -152,38 +152,34 @@ async def list_unity_instances(config: Optional[CLIConfig] = None) -> Dict[str, 
     """
     cfg = config or get_config()
 
-    # Try the new /api/instances endpoint first, fall back to /plugin/sessions
-    urls_to_try = [
-        f"http://{cfg.host}:{cfg.port}/api/instances",
-        f"http://{cfg.host}:{cfg.port}/plugin/sessions",
-    ]
+    url = f"http://{cfg.host}:{cfg.port}/api/instances"
 
-    async with httpx.AsyncClient() as client:
-        for url in urls_to_try:
-            try:
-                response = await client.get(url, timeout=10)
-                if response.status_code == 200:
-                    data = response.json()
-                    # Normalize response format
-                    if "instances" in data:
-                        return data
-                    elif "sessions" in data:
-                        # Convert sessions format to instances format
-                        instances = []
-                        for session_id, details in data["sessions"].items():
-                            instances.append({
-                                "session_id": session_id,
-                                "project": details.get("project", "Unknown"),
-                                "hash": details.get("hash", ""),
-                                "unity_version": details.get("unity_version", "Unknown"),
-                                "connected_at": details.get("connected_at", ""),
-                            })
-                        return {"success": True, "instances": instances}
-            except Exception:
-                continue
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            if "instances" in data:
+                return data
+    except httpx.ConnectError as e:
+        raise UnityConnectionError(
+            f"Cannot connect to Unity MCP server at {cfg.host}:{cfg.port}. "
+            f"Make sure the server is running and Unity is connected.\n"
+            f"Error: {e}"
+        )
+    except httpx.TimeoutException:
+        raise UnityConnectionError(
+            "Connection to Unity timed out while listing instances. "
+            "Unity may be busy or unresponsive."
+        )
+    except httpx.HTTPStatusError as e:
+        raise UnityConnectionError(
+            f"HTTP error from server: {e.response.status_code} - {e.response.text}"
+        )
+    except Exception as e:
+        raise UnityConnectionError(f"Unexpected error: {e}")
 
-    raise UnityConnectionError(
-        "Failed to list Unity instances: No working endpoint found")
+    raise UnityConnectionError("Failed to list Unity instances")
 
 
 def run_list_instances(config: Optional[CLIConfig] = None) -> Dict[str, Any]:
