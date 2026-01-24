@@ -388,7 +388,7 @@ namespace MCPForUnity.Editor.Tools
                 // Best-effort: ensure Game View exists and repaints before capture.
                 if (!Application.isBatchMode)
                 {
-                    BestEffortPrepareGameViewForScreenshot();
+                    EnsureGameView();
                 }
 
                 ScreenshotCaptureResult result = ScreenshotUtility.CaptureToAssetsFolder(fileName, resolvedSuperSize, ensureUniqueFileName: true);
@@ -423,7 +423,7 @@ namespace MCPForUnity.Editor.Tools
             }
         }
 
-        private static void BestEffortPrepareGameViewForScreenshot()
+        private static void EnsureGameView()
         {
             try
             {
@@ -477,6 +477,7 @@ namespace MCPForUnity.Editor.Tools
         {
             if (string.IsNullOrWhiteSpace(assetsRelativePath) || string.IsNullOrWhiteSpace(fullPath))
             {
+                McpLog.Warn("[ManageScene] ScheduleAssetImportWhenFileExists: invalid paths provided, skipping import scheduling.");
                 return;
             }
 
@@ -494,7 +495,7 @@ namespace MCPForUnity.Editor.Tools
                         hasSeenFile = true;
 
                         AssetDatabase.ImportAsset(assetsRelativePath, ImportAssetOptions.ForceSynchronousImport);
-                        try { McpLog.Debug($"[ManageScene] Imported asset at '{assetsRelativePath}'."); } catch { }
+                        McpLog.Debug($"[ManageScene] Imported asset at '{assetsRelativePath}'.");
                         EditorApplication.update -= tick;
                         return;
                     }
@@ -505,13 +506,7 @@ namespace MCPForUnity.Editor.Tools
 
                     if (failureCount <= maxLoggedFailures)
                     {
-                        try
-                        {
-                            McpLog.Warn(
-                                $"[ManageScene] Exception while importing asset '{assetsRelativePath}' from '{fullPath}' (attempt {failureCount}): {e}"
-                            );
-                        }
-                        catch { }
+                        McpLog.Warn($"[ManageScene] Exception while importing asset '{assetsRelativePath}' from '{fullPath}' (attempt {failureCount}): {e}");
                     }
                 }
 
@@ -519,23 +514,11 @@ namespace MCPForUnity.Editor.Tools
                 {
                     if (!hasSeenFile)
                     {
-                        try
-                        {
-                            McpLog.Warn(
-                                $"[ManageScene] Timed out waiting for file '{fullPath}' (asset: '{assetsRelativePath}') after {timeoutSeconds:F1} seconds. The asset was not imported."
-                            );
-                        }
-                        catch { }
+                        McpLog.Warn($"[ManageScene] Timed out waiting for file '{fullPath}' (asset: '{assetsRelativePath}') after {timeoutSeconds:F1} seconds. The asset was not imported.");
                     }
                     else
                     {
-                        try
-                        {
-                            McpLog.Warn(
-                                $"[ManageScene] Timed out importing asset '{assetsRelativePath}' from '{fullPath}' after {timeoutSeconds:F1} seconds. The file existed but the asset was not imported."
-                            );
-                        }
-                        catch { }
+                        McpLog.Warn($"[ManageScene] Timed out importing asset '{assetsRelativePath}' from '{fullPath}' after {timeoutSeconds:F1} seconds. The file existed but the asset was not imported.");
                     }
 
                     EditorApplication.update -= tick;
@@ -786,8 +769,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception ex)
             {
-                try { McpLog.Debug($"[ManageScene] Failed to enumerate components for '{go.name}': {ex.Message}"); }
-                catch { }
+                McpLog.Debug($"[ManageScene] Failed to enumerate components for '{go.name}': {ex.Message}");
             }
 
             var d = new Dictionary<string, object>
