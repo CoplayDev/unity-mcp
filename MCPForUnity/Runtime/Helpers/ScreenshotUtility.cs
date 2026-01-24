@@ -32,7 +32,7 @@ namespace MCPForUnity.Runtime.Helpers
         private const string ScreenshotsFolderName = "Screenshots";
         private static bool s_loggedLegacyScreenCaptureFallback;
 
-        private static Camera FindBestCamera()
+        private static Camera FindAvailableCamera()
         {
             var main = Camera.main;
             if (main != null)
@@ -65,7 +65,7 @@ namespace MCPForUnity.Runtime.Helpers
                 s_loggedLegacyScreenCaptureFallback = true;
             }
 
-            var cam = FindBestCamera();
+            var cam = FindAvailableCamera();
             if (cam == null)
             {
                 throw new InvalidOperationException("No camera found to capture screenshot.");
