@@ -207,6 +207,12 @@ namespace MCPForUnity.Editor.ActionTrace.Core
                     DefaultImportance = 0.4f,
                     SummaryTemplate = "Scripts compiled: {script_count} files ({duration_ms}ms)",
                 },
+                [PlayModeChanged] = new EventMetadata
+                {
+                    Category = EventCategory.Editor,
+                    DefaultImportance = 0.4f,
+                    SummaryTemplate = "Play mode: {state}",
+                },
 
                 // ========== Low (0.1-0.3) ==========
                 [AssetMoved] = new EventMetadata
@@ -214,12 +220,6 @@ namespace MCPForUnity.Editor.ActionTrace.Core
                     Category = EventCategory.Asset,
                     DefaultImportance = 0.3f,
                     SummaryTemplate = "Moved {from_path} → {to_path} ({target_id})",
-                },
-                [PlayModeChanged] = new EventMetadata
-                {
-                    Category = EventCategory.Editor,
-                    DefaultImportance = 0.3f,
-                    SummaryTemplate = "Play mode: {state}",
                 },
                 [HierarchyChanged] = new EventMetadata
                 {

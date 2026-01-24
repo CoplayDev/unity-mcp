@@ -41,9 +41,7 @@ namespace MCPForUnity.Editor.Hooks
         static UnityEventHooks()
         {
             // Subscribe to cleanup events first
-            AssemblyReloadEvents.beforeAssemblyReload -= OnBeforeAssemblyReload;
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
-            EditorApplication.quitting -= OnEditorQuitting;
             EditorApplication.quitting += OnEditorQuitting;
 
             // Only initialize subscriptions once
@@ -59,6 +57,9 @@ namespace MCPForUnity.Editor.Hooks
         /// </summary>
         private static void SubscribeToUnityEvents()
         {
+            // Property Events
+            Undo.postprocessModifications += OnPropertiesModified;
+
             // GameObject/Component Events
             ObjectFactory.componentWasAdded += OnComponentAdded;
 
@@ -94,6 +95,9 @@ namespace MCPForUnity.Editor.Hooks
         /// </summary>
         private static void UnsubscribeFromUnityEvents()
         {
+            // Property Events
+            Undo.postprocessModifications -= OnPropertiesModified;
+
             // GameObject/Component Events
             ObjectFactory.componentWasAdded -= OnComponentAdded;
 
@@ -150,6 +154,15 @@ namespace MCPForUnity.Editor.Hooks
 
             var gameObject = component.gameObject;
             if (gameObject != null) RegisterGameObjectForTracking(gameObject);
+        }
+
+        #endregion
+
+        #region Property Events
+
+        private static UndoPropertyModification[] OnPropertiesModified(UndoPropertyModification[] modifications)
+        {
+            return HookRegistry.NotifyPropertiesModified(modifications);
         }
 
         #endregion

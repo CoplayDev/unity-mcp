@@ -7,13 +7,14 @@ using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.ActionTrace.Helpers;
 using MCPForUnity.Editor.ActionTrace.Core.Models;
 using MCPForUnity.Editor.ActionTrace.Core.Store;
+using MCPForUnity.Editor.Hooks;
 
 namespace MCPForUnity.Editor.ActionTrace.Capture
 {
     /// <summary>
     /// Tracks property modifications made to the currently selected object.
     ///
-    /// Combines Selection.selectionChanged with Undo.postprocessModifications
+    /// Combines HookRegistry.OnSelectionChanged with HookRegistry.OnPropertiesModified
     /// to provide rich context about which object's properties are being modified.
     ///
     /// Key features:
@@ -23,7 +24,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
     /// - Lightweight event-based design (no polling)
     /// </summary>
     [InitializeOnLoad]
-    public static class SelectionPropertyTracker
+    public static class SelectionCapture
     {
         // Current selection state
         private static string _currentSelectionGlobalId;
@@ -31,16 +32,16 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
         private static string _currentSelectionType;
         private static string _currentSelectionPath;
 
-        static SelectionPropertyTracker()
+        static SelectionCapture()
         {
             // Initialize with current selection
             UpdateSelectionState();
 
-            // Monitor selection changes
-            Selection.selectionChanged += OnSelectionChanged;
+            // Monitor selection changes via HookRegistry
+            HookRegistry.OnSelectionChanged += OnSelectionChanged;
 
-            // Monitor property modifications
-            Undo.postprocessModifications += OnPropertyModified;
+            // Monitor property modifications via HookRegistry
+            HookRegistry.OnPropertiesModified += OnPropertyModified;
 
             McpLog.Debug("[SelectionPropertyTracker] Initialized");
         }
@@ -48,7 +49,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
         /// <summary>
         /// Updates the cached selection state when selection changes.
         /// </summary>
-        private static void OnSelectionChanged()
+        private static void OnSelectionChanged(GameObject selectedGo)
         {
             UpdateSelectionState();
         }

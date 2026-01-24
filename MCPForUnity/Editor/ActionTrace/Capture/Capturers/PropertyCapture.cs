@@ -6,6 +6,7 @@ using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.ActionTrace.Helpers;
 using MCPForUnity.Editor.ActionTrace.Core.Models;
 using MCPForUnity.Editor.ActionTrace.Core.Store;
+using MCPForUnity.Editor.Hooks;
 using System.Threading;
 
 namespace MCPForUnity.Editor.ActionTrace.Capture
@@ -13,12 +14,12 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
     /// <summary>
     /// High-performance property change tracker with debouncing.
     ///
-    /// Captures Unity property modifications via Undo.postprocessModifications,
+    /// Captures Unity property modifications via HookRegistry.OnPropertiesModified,
     /// applies debouncing to merge rapid changes (e.g., Slider drag), and records
     /// PropertyModified events to the ActionTrace EventStore.
     ///
     /// Key features:
-    /// - Uses EditorApplication.update for periodic flushing (safe on domain reload)
+    /// - Uses HookRegistry.OnEditorUpdate for periodic flushing (decoupled from Unity)
     /// - Object pooling to reduce GC pressure
     /// - Cache size limits to prevent unbounded memory growth
     /// - Cross-session stable IDs via GlobalIdHelper
@@ -29,7 +30,7 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
     /// - PropertyModificationHelper for Undo reflection logic
     /// </summary>
     [InitializeOnLoad]
-    public static class PropertyChangeTracker
+    public static class PropertyCapture
     {
         // Configuration
         private const long DebounceWindowMs = 500;      // Debounce window in milliseconds
@@ -43,28 +44,16 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
         private static double _lastFlushTime;
 
         /// <summary>
-        /// Initializes the property tracker and subscribes to Unity callbacks.
+        /// Initializes the property tracker and subscribes to HookRegistry events.
         /// </summary>
-        static PropertyChangeTracker()
+        static PropertyCapture()
         {
-            Undo.postprocessModifications += mods => ProcessModifications(mods);
-            ScheduleNextFlush();
+            HookRegistry.OnPropertiesModified += mods => ProcessModifications(mods);
+            HookRegistry.OnEditorUpdate += FlushCheck;
         }
 
         /// <summary>
-        /// Schedules periodic flush checks using EditorApplication.update.
-        /// FlushCheck is called every frame but only processes when debounce window expires.
-        /// </summary>
-        private static void ScheduleNextFlush()
-        {
-            // Use EditorApplication.update instead of delayCall to avoid infinite recursion
-            // This ensures the callback is properly cleaned up on domain reload
-            EditorApplication.update -= FlushCheck;
-            EditorApplication.update += FlushCheck;
-        }
-
-        /// <summary>
-        /// Periodic flush check called by EditorApplication.update.
+        /// Periodic flush check called by HookRegistry.OnEditorUpdate.
         /// Only performs flush when the debounce window has expired.
         /// </summary>
         private static void FlushCheck()

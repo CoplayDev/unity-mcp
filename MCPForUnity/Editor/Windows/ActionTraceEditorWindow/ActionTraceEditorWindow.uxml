@@ -23,7 +23,6 @@
             <!-- Display options section -->
             <ui:VisualElement name="toolbar-display" class="toolbar-display">
                 <uie:ToolbarToggle name="importance-toggle" text="Badges" class="display-toggle" />
-                <uie:ToolbarToggle name="context-toggle" text="Context" class="display-toggle" />
                 <ui:VisualElement name="auto-refresh-container" class="auto-refresh-container">
                     <ui:Label name="auto-refresh-label" text="Auto:" class="auto-refresh-label" />
                     <ui:Label name="auto-refresh-status" text="ON" class="auto-refresh-status" />
@@ -32,7 +31,6 @@
 
             <!-- Action buttons section -->
             <ui:VisualElement name="toolbar-actions" class="toolbar-actions">
-                <uie:ToolbarButton name="export-button" text="Export" class="action-btn" />
                 <uie:ToolbarButton name="settings-button" text="Settings" class="action-btn" />
                 <uie:ToolbarButton name="refresh-button" text="Refresh" class="action-btn" />
                 <uie:ToolbarButton name="clear-button" text="Clear" class="action-btn-danger" />

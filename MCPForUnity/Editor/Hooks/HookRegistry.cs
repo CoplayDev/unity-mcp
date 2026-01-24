@@ -3,6 +3,7 @@ using MCPForUnity.Editor.Hooks.EventArgs;
 using MCPForUnity.Editor.Helpers;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEditor;
 
 namespace MCPForUnity.Editor.Hooks
 {
@@ -94,6 +95,17 @@ namespace MCPForUnity.Editor.Hooks
         public static event Action<Component> OnComponentAdded;
         public static event Action<Component> OnComponentRemoved;
         public static event Action<ComponentRemovedArgs> OnComponentRemovedDetailed;
+
+        #endregion
+
+        #region Property Events
+
+        /// <summary>
+        /// Fired when properties are modified via the Undo system.
+        /// Passes the UndoPropertyModification array from Unity.
+        /// Subscribers should return the array unchanged to allow Undo system to continue.
+        /// </summary>
+        public static event Func<UndoPropertyModification[], UndoPropertyModification[]> OnPropertiesModified;
 
         #endregion
 
@@ -262,6 +274,39 @@ namespace MCPForUnity.Editor.Hooks
         internal static void NotifyComponentRemovedDetailed(ComponentRemovedArgs args)
         {
             InvokeSafely(OnComponentRemovedDetailed, "OnComponentRemovedDetailed", h => h(args));
+        }
+
+        internal static UndoPropertyModification[] NotifyPropertiesModified(UndoPropertyModification[] modifications)
+        {
+            if (modifications == null) return modifications;
+
+            var handler = OnPropertiesModified;
+            if (handler == null) return modifications;
+
+            // Cast to Delegate base type to access GetInvocationList()
+            var multicastDelegate = handler as Delegate;
+            if (multicastDelegate == null) return modifications;
+
+            UndoPropertyModification[] result = modifications;
+
+            // Chain all subscribers: each gets the result of the previous
+            foreach (Func<UndoPropertyModification[], UndoPropertyModification[]> subscriber in multicastDelegate.GetInvocationList())
+            {
+                try
+                {
+                    var nextResult = subscriber(result);
+                    if (nextResult != null)
+                    {
+                        result = nextResult;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Warn($"[HookRegistry] OnPropertiesModified subscriber threw exception: {ex.Message}");
+                }
+            }
+
+            return result;
         }
 
         #endregion

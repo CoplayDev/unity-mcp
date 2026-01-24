@@ -1,6 +1,6 @@
-using MCPForUnity.Editor.ActionTrace.UI.Windows;
 using MCPForUnity.Editor.Setup;
 using MCPForUnity.Editor.Windows;
+using MCPForUnity.Editor.Windows.ActionTraceEditorWindow;
 using UnityEditor;
 using UnityEngine;
 

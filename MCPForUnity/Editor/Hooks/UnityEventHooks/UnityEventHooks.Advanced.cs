@@ -135,8 +135,6 @@ namespace MCPForUnity.Editor.Hooks
                 },
                 onDestroyed: (instanceId) =>
                 {
-                    HookRegistry.NotifyGameObjectDestroyed(null);
-
                     // Get cached data for detailed event
                     string name = _cacheProvider?.GetCachedName(instanceId) ?? "Unknown";
                     string globalId = _cacheProvider?.GetCachedGlobalId(instanceId) ?? $"Instance:{instanceId}";
