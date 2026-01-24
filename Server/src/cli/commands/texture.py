@@ -67,20 +67,34 @@ _SPRITE_MESH_TYPES = {"full_rect": "FullRect", "tight": "Tight"}
 
 _MIPMAP_FILTERS = {"box": "BoxFilter", "kaiser": "KaiserFilter"}
 
+_MAX_TEXTURE_PIXELS = 1024 * 1024
+
+
+def _validate_texture_dimensions(width: int, height: int) -> None:
+    if width <= 0 or height <= 0:
+        raise ValueError("width and height must be positive")
+    total_pixels = width * height
+    if total_pixels > _MAX_TEXTURE_PIXELS:
+        raise ValueError(f"width*height must be <= {_MAX_TEXTURE_PIXELS} (got {width}x{height}).")
+
 
 def _is_normalized_color(values: list[Any]) -> bool:
     if not values:
         return False
 
-    all_small = all(0 <= v <= 1.0 for v in values)
+    try:
+        numeric_values = [float(v) for v in values]
+    except (TypeError, ValueError):
+        return False
+
+    all_small = all(0 <= v <= 1.0 for v in numeric_values)
     if not all_small:
         return False
 
-    has_float = any(isinstance(v, float) for v in values)
-    has_fractional = any(0 < v < 1 for v in values)
-    all_binary = all(v in (0, 1, 0.0, 1.0) for v in values)
+    has_fractional = any(0 < v < 1 for v in numeric_values)
+    all_binary = all(v in (0, 1, 0.0, 1.0) for v in numeric_values)
 
-    return has_float or has_fractional or all_binary
+    return has_fractional or all_binary
 
 
 def _parse_hex_color(value: str) -> list[int]:
@@ -105,9 +119,12 @@ def _normalize_color(value: Any, context: str) -> list[int]:
         if len(value) == 3:
             value = list(value) + [1.0 if _is_normalized_color(value) else 255]
         if len(value) == 4:
-            if _is_normalized_color(value):
-                return [int(round(float(c) * 255)) for c in value]
-            return [int(c) for c in value]
+            try:
+                if _is_normalized_color(value):
+                    return [int(round(float(c) * 255)) for c in value]
+                return [int(c) for c in value]
+            except (TypeError, ValueError):
+                raise ValueError(f"{context} values must be numeric, got {value}")
         raise ValueError(f"{context} must have 3 or 4 components, got {len(value)}")
 
     raise ValueError(f"{context} must be a list or hex string")
@@ -191,6 +208,24 @@ def _map_enum(value: Any, mapping: dict[str, str]) -> Any:
     return value
 
 
+_TRUE_STRINGS = {"true", "1", "yes", "on"}
+_FALSE_STRINGS = {"false", "0", "no", "off"}
+
+
+def _coerce_bool(value: Any, name: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in (0, 1, 0.0, 1.0):
+        return bool(value)
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in _TRUE_STRINGS:
+            return True
+        if lowered in _FALSE_STRINGS:
+            return False
+    raise ValueError(f"{name} must be a boolean")
+
+
 def _normalize_import_settings(value: Any) -> dict[str, Any]:
     if value is None:
         return {}
@@ -214,7 +249,7 @@ def _normalize_import_settings(value: Any) -> dict[str, Any]:
         ("compression_crunched", "crunchedCompression"),
     ]:
         if snake in value:
-            result[camel] = bool(value[snake])
+            result[camel] = _coerce_bool(value[snake], snake)
 
     if "alpha_source" in value:
         result["alphaSource"] = _map_enum(value["alpha_source"], _ALPHA_SOURCES)
@@ -291,6 +326,11 @@ def create(path: str, width: int, height: int, color: Optional[str],
         unity-mcp texture create Assets/UI.png --import-settings '{"texture_type": "sprite"}'
     """
     config = get_config()
+    try:
+        _validate_texture_dimensions(width, height)
+    except ValueError as e:
+        print_error(str(e))
+        sys.exit(1)
 
     params: dict[str, Any] = {
         "action": "create",
@@ -356,6 +396,11 @@ def sprite(path: str, width: int, height: int, color: Optional[str], pattern: Op
         unity-mcp texture sprite Assets/Sprites/Solid.png --color '[0,255,0]'
     """
     config = get_config()
+    try:
+        _validate_texture_dimensions(width, height)
+    except ValueError as e:
+        print_error(str(e))
+        sys.exit(1)
 
     sprite_settings: dict[str, Any] = {"pixelsPerUnit": ppu}
     if pivot:

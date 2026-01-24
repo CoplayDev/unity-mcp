@@ -16,6 +16,10 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 from services.tools.preflight import preflight
 
 
+_MAX_TEXTURE_PIXELS = 1024 * 1024
+_MAX_NOISE_WORK = 4000000
+
+
 def _is_normalized_color(values: list) -> bool:
     """
     Check if color values appear to be in normalized 0.0-1.0 range.
@@ -24,23 +28,45 @@ def _is_normalized_color(values: list) -> bool:
     if not values:
         return False
     
+    try:
+        numeric_values = [float(v) for v in values]
+    except (TypeError, ValueError):
+        return False
+
     # Check if all values are <= 1.0
-    all_small = all(0 <= v <= 1.0 for v in values)
+    all_small = all(0 <= v <= 1.0 for v in numeric_values)
     if not all_small:
         return False
     
-    # If any value is a float (not an integer), it's likely normalized
-    has_float = any(isinstance(v, float) for v in values)
-    
     # If any non-zero value is less than 1, it's likely normalized (e.g., 0.5)
-    has_fractional = any(0 < v < 1 for v in values)
+    has_fractional = any(0 < v < 1 for v in numeric_values)
     
     # If all values are 0 or 1, and they're all integers, could be either format
     # In this ambiguous case (like [1, 0, 0, 1]), assume normalized since that's
     # what graphics programmers typically use
-    all_binary = all(v in (0, 1, 0.0, 1.0) for v in values)
+    all_binary = all(v in (0, 1, 0.0, 1.0) for v in numeric_values)
     
-    return has_float or has_fractional or all_binary
+    return has_fractional or all_binary
+
+
+def _normalize_dimension(value: Any, name: str, default: int = 64) -> tuple[int | None, str | None]:
+    if value is None:
+        return default, None
+    coerced = coerce_int(value)
+    if coerced is None:
+        return None, f"{name} must be an integer"
+    if coerced <= 0:
+        return None, f"{name} must be positive"
+    return coerced, None
+
+
+def _normalize_positive_int(value: Any, name: str) -> tuple[int | None, str | None]:
+    if value is None:
+        return None, None
+    coerced = coerce_int(value)
+    if coerced is None or coerced <= 0:
+        return None, f"{name} must be a positive integer"
+    return coerced, None
 
 
 def _normalize_color(value: Any) -> tuple[list[int] | None, str | None]:
@@ -533,8 +559,37 @@ async def manage_texture(
         return {"success": False, "message": palette_error}
 
     # Normalize dimensions
-    width = coerce_int(width) or 64
-    height = coerce_int(height) or 64
+    width, width_error = _normalize_dimension(width, "width")
+    if width_error:
+        return {"success": False, "message": width_error}
+    height, height_error = _normalize_dimension(height, "height")
+    if height_error:
+        return {"success": False, "message": height_error}
+    total_pixels = width * height
+    if total_pixels > _MAX_TEXTURE_PIXELS:
+        return {
+            "success": False,
+            "message": f"width*height must be <= {_MAX_TEXTURE_PIXELS} (got {width}x{height}).",
+        }
+    if action.lower() == "apply_noise":
+        noise_octaves = octaves if octaves is not None else 1
+        noise_work = width * height * noise_octaves
+        if noise_work > _MAX_NOISE_WORK:
+            return {
+                "success": False,
+                "message": (
+                    f"width*height*octaves must be <= {_MAX_NOISE_WORK} "
+                    f"(got {width}x{height}x{noise_octaves})."
+                ),
+            }
+
+    pattern_size, pattern_error = _normalize_positive_int(pattern_size, "pattern_size")
+    if pattern_error:
+        return {"success": False, "message": pattern_error}
+
+    octaves, octaves_error = _normalize_positive_int(octaves, "octaves")
+    if octaves_error:
+        return {"success": False, "message": octaves_error}
 
     # Normalize pixels if provided
     pixels_normalized = None
@@ -591,12 +646,12 @@ async def manage_texture(
         "fillColor": fill_color,
         "pattern": pattern,
         "palette": palette,
-        "patternSize": coerce_int(pattern_size),
+        "patternSize": pattern_size,
         "pixels": pixels_normalized,
         "gradientType": gradient_type,
         "gradientAngle": gradient_angle,
         "noiseScale": noise_scale,
-        "octaves": coerce_int(octaves),
+        "octaves": octaves,
         "setPixels": set_pixels_normalized,
         "spriteSettings": sprite_settings,
         "importSettings": import_settings_normalized,

@@ -16,6 +16,8 @@ namespace MCPForUnity.Editor.Tools
     [McpForUnityTool("manage_texture", AutoRegister = false)]
     public static class ManageTexture
     {
+        private const int MaxTexturePixels = 1024 * 1024;
+        private const int MaxNoiseWork = 4000000;
         private static readonly List<string> ValidActions = new List<string>
         {
             "create",
@@ -26,6 +28,24 @@ namespace MCPForUnity.Editor.Tools
             "apply_gradient",
             "apply_noise"
         };
+
+        private static ErrorResponse ValidateDimensions(int width, int height)
+        {
+            if (width <= 0 || height <= 0)
+                return new ErrorResponse($"Invalid dimensions: {width}x{height}. Must be positive.");
+            long totalPixels = (long)width * height;
+            if (totalPixels > MaxTexturePixels)
+                return new ErrorResponse($"Invalid dimensions: {width}x{height}. Total pixels must be <= {MaxTexturePixels}.");
+            return null;
+        }
+
+        private static ErrorResponse ValidateNoiseWork(int width, int height, int octaves)
+        {
+            long work = (long)width * height * octaves;
+            if (work > MaxNoiseWork)
+                return new ErrorResponse($"Invalid noise workload: {width}x{height}x{octaves} exceeds {MaxNoiseWork}.");
+            return null;
+        }
 
         public static object HandleCommand(JObject @params)
         {
@@ -85,14 +105,24 @@ namespace MCPForUnity.Editor.Tools
             int height = @params["height"]?.ToObject<int>() ?? 64;
 
             // Validate dimensions
-            if (width <= 0 || height <= 0 || width > 4096 || height > 4096)
-                return new ErrorResponse($"Invalid dimensions: {width}x{height}. Must be 1-4096.");
+            var dimensionError = ValidateDimensions(width, height);
+            if (dimensionError != null)
+                return dimensionError;
 
             string fullPath = AssetPathUtility.SanitizeAssetPath(path);
             EnsureDirectoryExists(fullPath);
 
             try
             {
+                var patternToken = @params["pattern"];
+                int patternSize = 8;
+                if (patternToken != null)
+                {
+                    patternSize = @params["patternSize"]?.ToObject<int>() ?? 8;
+                    if (patternSize <= 0)
+                        return new ErrorResponse("patternSize must be greater than 0.");
+                }
+
                 Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
 
                 // Check for fill color
@@ -104,12 +134,10 @@ namespace MCPForUnity.Editor.Tools
                 }
 
                 // Check for pattern
-                var patternToken = @params["pattern"];
                 if (patternToken != null)
                 {
                     string pattern = patternToken.ToString();
                     var palette = TextureOps.ParsePalette(@params["palette"] as JArray);
-                    int patternSize = @params["patternSize"]?.ToObject<int>() ?? 8;
                     ApplyPatternToTexture(texture, pattern, palette, patternSize);
                 }
 
@@ -294,6 +322,9 @@ namespace MCPForUnity.Editor.Tools
 
             int width = @params["width"]?.ToObject<int>() ?? 64;
             int height = @params["height"]?.ToObject<int>() ?? 64;
+            var dimensionError = ValidateDimensions(width, height);
+            if (dimensionError != null)
+                return dimensionError;
             string gradientType = @params["gradientType"]?.ToString() ?? "linear";
             float angle = @params["gradientAngle"]?.ToObject<float>() ?? 0f;
 
@@ -360,8 +391,16 @@ namespace MCPForUnity.Editor.Tools
 
             int width = @params["width"]?.ToObject<int>() ?? 64;
             int height = @params["height"]?.ToObject<int>() ?? 64;
+            var dimensionError = ValidateDimensions(width, height);
+            if (dimensionError != null)
+                return dimensionError;
             float scale = @params["noiseScale"]?.ToObject<float>() ?? 0.1f;
             int octaves = @params["octaves"]?.ToObject<int>() ?? 1;
+            if (octaves <= 0)
+                return new ErrorResponse("octaves must be greater than 0.");
+            var noiseWorkError = ValidateNoiseWork(width, height, octaves);
+            if (noiseWorkError != null)
+                return noiseWorkError;
 
             var palette = TextureOps.ParsePalette(@params["palette"] as JArray);
             if (palette == null || palette.Count < 2)
@@ -490,13 +529,15 @@ namespace MCPForUnity.Editor.Tools
             int height = texture.height;
             float radians = angle * Mathf.Deg2Rad;
             Vector2 dir = new Vector2(Mathf.Cos(radians), Mathf.Sin(radians));
+            float denomX = Mathf.Max(1, width - 1);
+            float denomY = Mathf.Max(1, height - 1);
 
             for (int y = 0; y < height; y++)
             {
                 for (int x = 0; x < width; x++)
                 {
-                    float nx = x / (float)(width - 1);
-                    float ny = y / (float)(height - 1);
+                    float nx = x / denomX;
+                    float ny = y / denomY;
                     float t = Vector2.Dot(new Vector2(nx, ny), dir);
                     t = Mathf.Clamp01((t + 1f) / 2f);
 

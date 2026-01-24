@@ -255,7 +255,7 @@ class TestManageTextureIntegration:
         assert captured["params"]["path"] == "Assets/Textures/Old.png"
 
     def test_invalid_dimensions(self, monkeypatch):
-        """Test error handling for invalid dimensions (verified by Unity)."""
+        """Test error handling for invalid dimensions."""
         async def fake_send(func, instance, cmd, params, **kwargs):
             w = params.get("width", 0)
             if w > 4096:
@@ -269,8 +269,9 @@ class TestManageTextureIntegration:
             ctx=DummyContext(),
             action="create",
             path="Assets/Invalid.png",
-            width=5000  # Too large
+            width=5000,
+            height=300  # Too many total pixels
         ))
 
         assert resp["success"] is False
-        assert "dimensions" in resp["message"].lower()
+        assert "width*height" in resp["message"].lower()
