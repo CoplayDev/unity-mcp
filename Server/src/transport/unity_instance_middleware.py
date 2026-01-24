@@ -9,6 +9,7 @@ import logging
 
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 
+from core.config import config
 from transport.plugin_hub import PluginHub
 
 logger = logging.getLogger("mcp-for-unity-server")
@@ -96,6 +97,9 @@ class UnityInstanceMiddleware(Middleware):
             from transport.unity_transport import _current_transport
 
             transport = _current_transport()
+            # This implicit behavior works well for solo-users, but is dangerous for multi-user setups
+            if transport == "http" and config.http_remote_hosted:
+                return None
             if PluginHub.is_configured():
                 try:
                     sessions_data = await PluginHub.get_sessions()

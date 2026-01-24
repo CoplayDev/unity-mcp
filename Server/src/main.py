@@ -365,6 +365,14 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
                         status_code=404,
                     )
             else:
+                if config.http_remote_hosted:
+                    return JSONResponse(
+                        {
+                            "success": False,
+                            "error": "unity_instance is required. Use /api/instances or mcpforunity://instances to pick a Name@hash (or hash).",
+                        },
+                        status_code=400,
+                    )
                 # No specific unity_instance requested: use first available session
                 session_id = next(iter(sessions.sessions.keys()))
 
@@ -492,6 +500,11 @@ Examples:
              "Overrides UNITY_MCP_HTTP_PORT environment variable."
     )
     parser.add_argument(
+        "--http-remote-hosted",
+        action="store_true",
+        help="Treat HTTP transport as remotely hosted (forces explicit Unity instance selection)."
+    )
+    parser.add_argument(
         "--unity-instance-token",
         type=str,
         default=None,
@@ -514,6 +527,8 @@ Examples:
     )
 
     args = parser.parse_args()
+
+    config.http_remote_hosted = bool(args.http_remote_hosted)
 
     # Set environment variables from command line args
     if args.default_instance:

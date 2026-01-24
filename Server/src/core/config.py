@@ -15,6 +15,9 @@ class ServerConfig:
     unity_port: int = 6400
     mcp_port: int = 6500
 
+    # HTTP transport behaviour
+    http_remote_hosted: bool = False
+
     # Connection settings
     connection_timeout: float = 30.0
     buffer_size: int = 16 * 1024 * 1024  # 16MB buffer

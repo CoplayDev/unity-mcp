@@ -410,24 +410,32 @@ class PluginHub(WebSocketEndpoint):
             else:
                 target_hash = unity_instance
 
-        async def _try_once() -> tuple[str | None, int]:
+        async def _try_once() -> tuple[str | None, int, bool]:
+            explicit_required = config.http_remote_hosted
             # Prefer a specific Unity instance if one was requested
             if target_hash:
                 session_id = await cls._registry.get_session_id_by_hash(target_hash)
                 sessions = await cls._registry.list_sessions()
-                return session_id, len(sessions)
+                return session_id, len(sessions), explicit_required
 
             # No target provided: determine if we can auto-select
             sessions = await cls._registry.list_sessions()
             count = len(sessions)
             if count == 0:
-                return None, count
+                return None, count, explicit_required
+            if explicit_required:
+                return None, count, explicit_required
             if count == 1:
-                return next(iter(sessions.keys())), count
+                return next(iter(sessions.keys())), count, explicit_required
             # Multiple sessions but no explicit target is ambiguous
-            return None, count
+            return None, count, explicit_required
 
-        session_id, session_count = await _try_once()
+        session_id, session_count, explicit_required = await _try_once()
+        if session_id is None and explicit_required and not target_hash and session_count > 0:
+            raise RuntimeError(
+                "Unity instance selection is required. "
+                "Call set_active_instance with Name@hash from mcpforunity://instances."
+            )
         deadline = time.monotonic() + max_wait_s
         wait_started = None
 
@@ -439,6 +447,11 @@ class PluginHub(WebSocketEndpoint):
                     "Multiple Unity instances are connected. "
                     "Call set_active_instance with Name@hash from mcpforunity://instances."
                 )
+            if session_id is None and explicit_required and not target_hash and session_count > 0:
+                raise RuntimeError(
+                    "Unity instance selection is required. "
+                    "Call set_active_instance with Name@hash from mcpforunity://instances."
+                )
             if wait_started is None:
                 wait_started = time.monotonic()
                 logger.debug(
@@ -447,7 +460,7 @@ class PluginHub(WebSocketEndpoint):
                     max_wait_s,
                 )
             await asyncio.sleep(sleep_seconds)
-            session_id, session_count = await _try_once()
+            session_id, session_count, explicit_required = await _try_once()
 
         if session_id is not None and wait_started is not None:
             logger.debug(
@@ -458,6 +471,12 @@ class PluginHub(WebSocketEndpoint):
         if session_id is None and not target_hash and session_count > 1:
             raise RuntimeError(
                 "Multiple Unity instances are connected. "
+                "Call set_active_instance with Name@hash from mcpforunity://instances."
+            )
+
+        if session_id is None and explicit_required and not target_hash and session_count > 0:
+            raise RuntimeError(
+                "Unity instance selection is required. "
                 "Call set_active_instance with Name@hash from mcpforunity://instances."
             )
 
