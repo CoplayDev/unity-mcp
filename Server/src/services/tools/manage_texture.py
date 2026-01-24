@@ -16,10 +16,6 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 from services.tools.preflight import preflight
 
 
-_MAX_TEXTURE_PIXELS = 1024 * 1024
-_MAX_NOISE_WORK = 4000000
-
-
 def _is_normalized_color(values: list) -> bool:
     """
     Check if color values appear to be in normalized 0.0-1.0 range.
@@ -577,24 +573,6 @@ async def manage_texture(
         height, height_error = _normalize_dimension(height, "height")
         if height_error:
             return {"success": False, "message": height_error}
-        total_pixels = width * height
-        if total_pixels > _MAX_TEXTURE_PIXELS:
-            return {
-                "success": False,
-                "message": f"width*height must be <= {_MAX_TEXTURE_PIXELS} (got {width}x{height}).",
-            }
-        if action_lower == "apply_noise":
-            noise_octaves = octaves if octaves is not None else 1
-            noise_work = width * height * noise_octaves
-            if noise_work > _MAX_NOISE_WORK:
-                return {
-                    "success": False,
-                    "message": (
-                        f"width*height*octaves must be <= {_MAX_NOISE_WORK} "
-                        f"(got {width}x{height}x{noise_octaves})."
-                    ),
-                }
-
         pattern_size, pattern_error = _normalize_positive_int(pattern_size, "pattern_size")
         if pattern_error:
             return {"success": False, "message": pattern_error}

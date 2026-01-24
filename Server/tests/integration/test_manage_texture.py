@@ -269,9 +269,9 @@ class TestManageTextureIntegration:
             ctx=DummyContext(),
             action="create",
             path="Assets/Invalid.png",
-            width=5000,
-            height=300  # Too many total pixels
+            width=0,
+            height=64  # Non-positive dimension
         ))
 
         assert resp["success"] is False
-        assert "width*height" in resp["message"].lower()
+        assert "positive" in resp["message"].lower()

@@ -16,6 +16,7 @@ namespace MCPForUnity.Editor.Tools
     [McpForUnityTool("manage_texture", AutoRegister = false)]
     public static class ManageTexture
     {
+        private const int MaxTextureDimension = 1024;
         private const int MaxTexturePixels = 1024 * 1024;
         private const int MaxNoiseWork = 4000000;
         private static readonly List<string> ValidActions = new List<string>
@@ -29,23 +30,18 @@ namespace MCPForUnity.Editor.Tools
             "apply_noise"
         };
 
-        private static ErrorResponse ValidateDimensions(int width, int height)
+        private static ErrorResponse ValidateDimensions(int width, int height, List<string> warnings)
         {
             if (width <= 0 || height <= 0)
                 return new ErrorResponse($"Invalid dimensions: {width}x{height}. Must be positive.");
+            if (width > MaxTextureDimension || height > MaxTextureDimension)
+                warnings.Add($"Dimensions exceed recommended max {MaxTextureDimension} per side (got {width}x{height}).");
             long totalPixels = (long)width * height;
             if (totalPixels > MaxTexturePixels)
-                return new ErrorResponse($"Invalid dimensions: {width}x{height}. Total pixels must be <= {MaxTexturePixels}.");
+                warnings.Add($"Total pixels exceed recommended max {MaxTexturePixels} (got {width}x{height}).");
             return null;
         }
 
-        private static ErrorResponse ValidateNoiseWork(int width, int height, int octaves)
-        {
-            long work = (long)width * height * octaves;
-            if (work > MaxNoiseWork)
-                return new ErrorResponse($"Invalid noise workload: {width}x{height}x{octaves} exceeds {MaxNoiseWork}.");
-            return null;
-        }
 
         public static object HandleCommand(JObject @params)
         {
@@ -106,11 +102,12 @@ namespace MCPForUnity.Editor.Tools
 
             int width = @params["width"]?.ToObject<int>() ?? 64;
             int height = @params["height"]?.ToObject<int>() ?? 64;
+            List<string> warnings = new List<string>();
 
             // Validate dimensions
             if (!hasImage)
             {
-                var dimensionError = ValidateDimensions(width, height);
+                var dimensionError = ValidateDimensions(width, height, warnings);
                 if (dimensionError != null)
                     return dimensionError;
             }
@@ -154,7 +151,7 @@ namespace MCPForUnity.Editor.Tools
 
                     width = texture.width;
                     height = texture.height;
-                    var imageDimensionError = ValidateDimensions(width, height);
+                    var imageDimensionError = ValidateDimensions(width, height, warnings);
                     if (imageDimensionError != null)
                     {
                         UnityEngine.Object.DestroyImmediate(texture);
@@ -222,10 +219,21 @@ namespace MCPForUnity.Editor.Tools
 
                 // Clean up memory
                 UnityEngine.Object.DestroyImmediate(texture);
+                foreach (var warning in warnings)
+                {
+                    McpLog.Warn($"[ManageTexture] {warning}");
+                }
 
                 return new SuccessResponse(
                     $"Texture created at '{fullPath}' ({width}x{height})" + (asSprite ? " as sprite" : ""),
-                    new { path = fullPath, width, height, asSprite = asSprite || spriteSettingsToken != null || (importSettingsToken?["textureType"]?.ToString() == "Sprite") }
+                    new
+                    {
+                        path = fullPath,
+                        width,
+                        height,
+                        asSprite = asSprite || spriteSettingsToken != null || (importSettingsToken?["textureType"]?.ToString() == "Sprite"),
+                        warnings = warnings.Count > 0 ? warnings : null
+                    }
                 );
             }
             catch (Exception e)
@@ -361,7 +369,8 @@ namespace MCPForUnity.Editor.Tools
 
             int width = @params["width"]?.ToObject<int>() ?? 64;
             int height = @params["height"]?.ToObject<int>() ?? 64;
-            var dimensionError = ValidateDimensions(width, height);
+            List<string> warnings = new List<string>();
+            var dimensionError = ValidateDimensions(width, height, warnings);
             if (dimensionError != null)
                 return dimensionError;
             string gradientType = @params["gradientType"]?.ToString() ?? "linear";
@@ -410,10 +419,21 @@ namespace MCPForUnity.Editor.Tools
                 }
 
                 UnityEngine.Object.DestroyImmediate(texture);
+                foreach (var warning in warnings)
+                {
+                    McpLog.Warn($"[ManageTexture] {warning}");
+                }
 
                 return new SuccessResponse(
                     $"Gradient texture created at '{fullPath}' ({width}x{height})",
-                    new { path = fullPath, width, height, gradientType }
+                    new
+                    {
+                        path = fullPath,
+                        width,
+                        height,
+                        gradientType,
+                        warnings = warnings.Count > 0 ? warnings : null
+                    }
                 );
             }
             catch (Exception e)
@@ -430,16 +450,17 @@ namespace MCPForUnity.Editor.Tools
 
             int width = @params["width"]?.ToObject<int>() ?? 64;
             int height = @params["height"]?.ToObject<int>() ?? 64;
-            var dimensionError = ValidateDimensions(width, height);
+            List<string> warnings = new List<string>();
+            var dimensionError = ValidateDimensions(width, height, warnings);
             if (dimensionError != null)
                 return dimensionError;
             float scale = @params["noiseScale"]?.ToObject<float>() ?? 0.1f;
             int octaves = @params["octaves"]?.ToObject<int>() ?? 1;
             if (octaves <= 0)
                 return new ErrorResponse("octaves must be greater than 0.");
-            var noiseWorkError = ValidateNoiseWork(width, height, octaves);
-            if (noiseWorkError != null)
-                return noiseWorkError;
+            long noiseWork = (long)width * height * octaves;
+            if (noiseWork > MaxNoiseWork)
+                warnings.Add($"Noise workload exceeds recommended max {MaxNoiseWork} (got {width}x{height}x{octaves}).");
 
             var palette = TextureOps.ParsePalette(@params["palette"] as JArray);
             if (palette == null || palette.Count < 2)
@@ -476,10 +497,22 @@ namespace MCPForUnity.Editor.Tools
                 }
 
                 UnityEngine.Object.DestroyImmediate(texture);
+                foreach (var warning in warnings)
+                {
+                    McpLog.Warn($"[ManageTexture] {warning}");
+                }
 
                 return new SuccessResponse(
                     $"Noise texture created at '{fullPath}' ({width}x{height})",
-                    new { path = fullPath, width, height, noiseScale = scale, octaves }
+                    new
+                    {
+                        path = fullPath,
+                        width,
+                        height,
+                        noiseScale = scale,
+                        octaves,
+                        warnings = warnings.Count > 0 ? warnings : null
+                    }
                 );
             }
             catch (Exception e)

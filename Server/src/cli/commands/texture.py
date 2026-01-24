@@ -67,15 +67,20 @@ _SPRITE_MESH_TYPES = {"full_rect": "FullRect", "tight": "Tight"}
 
 _MIPMAP_FILTERS = {"box": "BoxFilter", "kaiser": "KaiserFilter"}
 
+_MAX_TEXTURE_DIMENSION = 1024
 _MAX_TEXTURE_PIXELS = 1024 * 1024
 
 
-def _validate_texture_dimensions(width: int, height: int) -> None:
+def _validate_texture_dimensions(width: int, height: int) -> list[str]:
     if width <= 0 or height <= 0:
         raise ValueError("width and height must be positive")
+    warnings: list[str] = []
+    if width > _MAX_TEXTURE_DIMENSION or height > _MAX_TEXTURE_DIMENSION:
+        warnings.append(f"width and height should be <= {_MAX_TEXTURE_DIMENSION} (got {width}x{height})")
     total_pixels = width * height
     if total_pixels > _MAX_TEXTURE_PIXELS:
-        raise ValueError(f"width*height must be <= {_MAX_TEXTURE_PIXELS} (got {width}x{height}).")
+        warnings.append(f"width*height should be <= {_MAX_TEXTURE_PIXELS} (got {width}x{height})")
+    return warnings
 
 
 def _is_normalized_color(values: list[Any]) -> bool:
@@ -333,10 +338,12 @@ def create(path: str, width: int, height: int, image_path: Optional[str], color:
             sys.exit(1)
     else:
         try:
-            _validate_texture_dimensions(width, height)
+            warnings = _validate_texture_dimensions(width, height)
         except ValueError as e:
             print_error(str(e))
             sys.exit(1)
+        for warning in warnings:
+            click.echo(f"⚠️ Warning: {warning}")
 
     params: dict[str, Any] = {
         "action": "create",
@@ -412,10 +419,12 @@ def sprite(path: str, width: int, height: int, image_path: Optional[str], color:
             sys.exit(1)
     else:
         try:
-            _validate_texture_dimensions(width, height)
+            warnings = _validate_texture_dimensions(width, height)
         except ValueError as e:
             print_error(str(e))
             sys.exit(1)
+        for warning in warnings:
+            click.echo(f"⚠️ Warning: {warning}")
 
     sprite_settings: dict[str, Any] = {"pixelsPerUnit": ppu}
     if pivot:
