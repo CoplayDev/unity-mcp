@@ -386,9 +386,10 @@ namespace MCPForUnity.Editor.Tools
             string fullPath = AssetPathUtility.SanitizeAssetPath(path);
             EnsureDirectoryExists(fullPath);
 
+            Texture2D texture = null;
             try
             {
-                Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
 
                 if (gradientType == "radial")
                 {
@@ -404,7 +405,6 @@ namespace MCPForUnity.Editor.Tools
                 byte[] imageData = TextureOps.EncodeTexture(texture, fullPath);
                 if (imageData == null || imageData.Length == 0)
                 {
-                    UnityEngine.Object.DestroyImmediate(texture);
                     return new ErrorResponse($"Failed to encode texture for '{fullPath}'");
                 }
                 File.WriteAllBytes(GetAbsolutePath(fullPath), imageData);
@@ -418,7 +418,6 @@ namespace MCPForUnity.Editor.Tools
                     ConfigureAsSprite(fullPath, spriteSettingsToken);
                 }
 
-                UnityEngine.Object.DestroyImmediate(texture);
                 foreach (var warning in warnings)
                 {
                     McpLog.Warn($"[ManageTexture] {warning}");
@@ -439,6 +438,11 @@ namespace MCPForUnity.Editor.Tools
             catch (Exception e)
             {
                 return new ErrorResponse($"Failed to create gradient texture: {e.Message}");
+            }
+            finally
+            {
+                if (texture != null)
+                    UnityEngine.Object.DestroyImmediate(texture);
             }
         }
 
@@ -471,10 +475,9 @@ namespace MCPForUnity.Editor.Tools
             string fullPath = AssetPathUtility.SanitizeAssetPath(path);
             EnsureDirectoryExists(fullPath);
 
+            Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
             try
             {
-                Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
-
                 ApplyPerlinNoise(texture, palette, scale, octaves);
 
                 texture.Apply();
@@ -482,7 +485,6 @@ namespace MCPForUnity.Editor.Tools
                 byte[] imageData = TextureOps.EncodeTexture(texture, fullPath);
                 if (imageData == null || imageData.Length == 0)
                 {
-                    UnityEngine.Object.DestroyImmediate(texture);
                     return new ErrorResponse($"Failed to encode texture for '{fullPath}'");
                 }
                 File.WriteAllBytes(GetAbsolutePath(fullPath), imageData);
@@ -496,7 +498,6 @@ namespace MCPForUnity.Editor.Tools
                     ConfigureAsSprite(fullPath, spriteSettingsToken);
                 }
 
-                UnityEngine.Object.DestroyImmediate(texture);
                 foreach (var warning in warnings)
                 {
                     McpLog.Warn($"[ManageTexture] {warning}");
@@ -518,6 +519,11 @@ namespace MCPForUnity.Editor.Tools
             catch (Exception e)
             {
                 return new ErrorResponse($"Failed to create noise texture: {e.Message}");
+            }
+            finally
+            {
+                if (texture != null)
+                    UnityEngine.Object.DestroyImmediate(texture);
             }
         }
 

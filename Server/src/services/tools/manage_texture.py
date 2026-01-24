@@ -619,9 +619,9 @@ async def manage_texture(
                 return {"success": False, "message": f"set_pixels.color: {error}"}
             set_pixels_normalized["color"] = color
         if "pixels" in set_pixels_normalized:
-            region_width = coerce_int(set_pixels_normalized.get("width")) or 1
-            region_height = coerce_int(set_pixels_normalized.get("height")) or 1
-            if region_width <= 0 or region_height <= 0:
+            region_width = coerce_int(set_pixels_normalized.get("width"))
+            region_height = coerce_int(set_pixels_normalized.get("height"))
+            if region_width is None or region_height is None or region_width <= 0 or region_height <= 0:
                 return {"success": False, "message": "set_pixels width and height must be positive integers"}
             pixels_normalized, pixels_error = _normalize_pixels(
                 set_pixels_normalized["pixels"], region_width, region_height
