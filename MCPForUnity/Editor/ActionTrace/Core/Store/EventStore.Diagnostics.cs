@@ -22,20 +22,17 @@ namespace MCPForUnity.Editor.ActionTrace.Core.Store
             // Clamp to non-negative to prevent negative iteration
             hotEventCount = Math.Max(0, hotEventCount);
 
-            lock (_queryLock)
-            {
-                int count = _events.Count;
-                int dehydrateLimit = Math.Max(0, count - hotEventCount);
+            int count = _events.Count;
+            int dehydrateLimit = Math.Max(0, count - hotEventCount);
 
-                // Find events that need dehydration (not already dehydrated and beyond hot count)
-                for (int i = 0; i < dehydrateLimit; i++)
+            // Find events that need dehydration (not already dehydrated and beyond hot count)
+            for (int i = 0; i < dehydrateLimit; i++)
+            {
+                var evt = _events[i];
+                if (evt != null && !evt.IsDehydrated && evt.Payload != null)
                 {
-                    var evt = _events[i];
-                    if (evt != null && !evt.IsDehydrated && evt.Payload != null)
-                    {
-                        // Dehydrate the event (creates new instance with Payload = null)
-                        _events[i] = evt.Dehydrate();
-                    }
+                    // Dehydrate the event (creates new instance with Payload = null)
+                    _events[i] = evt.Dehydrate();
                 }
             }
         }
