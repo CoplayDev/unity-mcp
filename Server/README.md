@@ -113,12 +113,66 @@ uv run src/main.py --transport stdio
 
 ## Configuration
 
-The server connects to Unity Editor automatically when both are running. No additional configuration needed.
+The server connects to Unity Editor automatically when both are running. Most users do not need to change any settings.
 
-**Environment Variables:**
+### CLI options
 
-- `DISABLE_TELEMETRY=true` - Opt out of anonymous usage analytics
-- `LOG_LEVEL=DEBUG` - Enable detailed logging (default: INFO)
+These options apply to the `mcp-for-unity` command (whether run via `uvx`, Docker, or `python src/main.py`).
+
+- `--transport {stdio,http}` - Transport protocol (default: `stdio`)
+- `--http-url URL` - Base URL used to derive host/port defaults (default: `http://localhost:8080`)
+- `--http-host HOST` - Override HTTP bind host (overrides URL host)
+- `--http-port PORT` - Override HTTP bind port (overrides URL port)
+- `--http-remote-hosted` - Treat HTTP transport as remotely hosted
+  - Disables local/CLI-only HTTP routes (`/api/command`, `/api/instances`)
+  - Forces explicit Unity instance selection for MCP tool/resource calls
+- `--default-instance INSTANCE` - Default Unity instance to target (project name, hash, or `Name@hash`)
+- `--project-scoped-tools` - Keep custom tools scoped to the active Unity project and enable the custom tools resource
+- `--unity-instance-token TOKEN` - Optional per-launch token set by Unity for deterministic lifecycle management
+- `--pidfile PATH` - Optional path where the server writes its PID on startup (used by Unity-managed terminal launches)
+
+### Environment variables
+
+- `UNITY_MCP_TRANSPORT` - Transport protocol: `stdio` or `http`
+- `UNITY_MCP_HTTP_URL` - HTTP server URL (default: `http://localhost:8080`)
+- `UNITY_MCP_HTTP_HOST` - HTTP bind host (overrides URL host)
+- `UNITY_MCP_HTTP_PORT` - HTTP bind port (overrides URL port)
+- `UNITY_MCP_DEFAULT_INSTANCE` - Default Unity instance to target (project name, hash, or `Name@hash`)
+- `UNITY_MCP_SKIP_STARTUP_CONNECT=1` - Skip initial Unity connection attempt on startup
+
+Telemetry:
+
+- `DISABLE_TELEMETRY=1` - Disable anonymous telemetry (opt-out)
+- `UNITY_MCP_DISABLE_TELEMETRY=1` - Same as `DISABLE_TELEMETRY`
+- `MCP_DISABLE_TELEMETRY=1` - Same as `DISABLE_TELEMETRY`
+- `UNITY_MCP_TELEMETRY_ENDPOINT` - Override telemetry endpoint URL
+- `UNITY_MCP_TELEMETRY_TIMEOUT` - Override telemetry request timeout (seconds)
+
+### Examples
+
+**Stdio (default):**
+
+```bash
+uvx --from mcpforunityserver mcp-for-unity --transport stdio
+```
+
+**HTTP (local):**
+
+```bash
+uvx --from mcpforunityserver mcp-for-unity --transport http --http-host 127.0.0.1 --http-port 8080
+```
+
+**HTTP (remote-hosted):**
+
+```bash
+uvx --from mcpforunityserver mcp-for-unity --transport http --http-host 0.0.0.0 --http-port 8080 --http-remote-hosted
+```
+
+**Disable telemetry:**
+
+```bash
+DISABLE_TELEMETRY=1 uvx --from mcpforunityserver mcp-for-unity --transport stdio
+```
 
 ---
 
