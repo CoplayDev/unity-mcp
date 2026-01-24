@@ -1,6 +1,6 @@
 <img width="676" height="380" alt="MCP for Unity" src="docs/images/logo.png" />
 
-| [English](README.md) | [简体中文](README-zh.md) |
+| [English](README.md) | [简体中文](docs/i18n/README-zh.md) |
 |----------------------|---------------------------------|
 
 #### Proudly sponsored and maintained by [Coplay](https://www.coplay.dev/?ref=unity-mcp) -- the best AI assistant for Unity.
@@ -36,9 +36,9 @@ In Unity: `Window > Package Manager > + > Add package from git URL...`
 > https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity
 > ```
 
-**Need a stable/fixed version?** Use a tagged URL (requires uninstall to update):
+**Want the latest beta?** Use the beta branch:
 ```text
-https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v9.0.3
+https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#beta
 ```
 
 <details>
@@ -191,7 +191,7 @@ Still stuck? [Open an Issue](https://github.com/CoplayDev/unity-mcp/issues) or [
 <details>
 <summary><strong>Contributing</strong></summary>
 
-See [README-DEV.md](docs/README-DEV.md) for development setup. For custom tools, see [CUSTOM_TOOLS.md](docs/CUSTOM_TOOLS.md).
+See [README-DEV.md](docs/development/README-DEV.md) for development setup. For custom tools, see [CUSTOM_TOOLS.md](docs/reference/CUSTOM_TOOLS.md).
 
 1. Fork → Create issue → Branch (`feature/your-idea`) → Make changes → PR
 </details>
@@ -199,7 +199,7 @@ See [README-DEV.md](docs/README-DEV.md) for development setup. For custom tools,
 <details>
 <summary><strong>Telemetry & Privacy</strong></summary>
 
-Anonymous, privacy-focused telemetry (no code, no project names, no personal data). Opt out with `DISABLE_TELEMETRY=true`. See [TELEMETRY.md](docs/TELEMETRY.md).
+Anonymous, privacy-focused telemetry (no code, no project names, no personal data). Opt out with `DISABLE_TELEMETRY=true`. See [TELEMETRY.md](docs/reference/TELEMETRY.md).
 </details>
 
 ---
@@ -212,13 +212,33 @@ Anonymous, privacy-focused telemetry (no code, no project names, no personal dat
 
 [![Star History Chart](https://api.star-history.com/svg?repos=CoplayDev/unity-mcp&type=Date)](https://www.star-history.com/#CoplayDev/unity-mcp&Date)
 
+<details>
+<summary><strong>Citation for Research</strong></summary>
+If you are working on research that is related to Unity-MCP, please cite us!
+
+```bibtex
+@inproceedings{10.1145/3757376.3771417,
+author = {Wu, Shutong and Barnett, Justin P.},
+title = {MCP-Unity: Protocol-Driven Framework for Interactive 3D Authoring},
+year = {2025},
+isbn = {9798400721366},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi.org/10.1145/3757376.3771417},
+doi = {10.1145/3757376.3771417},
+series = {SA Technical Communications '25}
+}
+```
+</details>
+
 ## Unity AI Tools by Coplay
 
-Coplay offers 2 AI tools for Unity:
+Coplay offers 3 AI tools for Unity:
 - **MCP for Unity** is available freely under the MIT license.
 - **Coplay** is a premium Unity AI assistant that sits within Unity and is more than the MCP for Unity.
+- **Coplay MCP** a free-for-now MCP for Coplay tools.
 
-(These tools have different tech stacks. See this blog post [comparing Coplay to MCP for Unity](https://www.coplay.dev/blog/comparing-coplay-and-unity-mcp).)
+(These tools have different tech stacks. See this blog post [comparing Coplay to MCP for Unity](https://coplay.dev/blog/coplay-vs-coplay-mcp-vs-unity-mcp).)
 
 <img alt="Coplay" src="docs/images/coplay-logo.png" />
 

@@ -22,6 +22,10 @@
                     <ui:Button name="start-http-server-button" text="Start Server" class="action-button start-server-button" style="width: auto; flex-grow: 1;" />
                 </ui:VisualElement>
             </ui:VisualElement>
+            <ui:VisualElement class="setting-row" name="project-scoped-tools-row">
+                <ui:Label text="Project-Scoped Tools:" class="setting-label" />
+                <ui:Toggle name="project-scoped-tools-toggle" />
+            </ui:VisualElement>
             <ui:VisualElement class="setting-row" name="unity-socket-port-row">
                 <ui:Label text="Unity Socket Port:" class="setting-label" />
                 <ui:TextField name="unity-port" class="port-field" />

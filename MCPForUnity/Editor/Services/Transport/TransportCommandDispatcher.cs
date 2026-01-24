@@ -229,6 +229,12 @@ namespace MCPForUnity.Editor.Services.Transport
 
             lock (PendingLock)
             {
+                // Early exit inside lock to prevent per-frame List allocations (GitHub issue #577)
+                if (Pending.Count == 0)
+                {
+                    return;
+                }
+
                 ready = new List<(string, PendingCommand)>(Pending.Count);
                 foreach (var kvp in Pending)
                 {

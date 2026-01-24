@@ -1,30 +1,27 @@
-using System;
 using System.Collections.Generic;
-using System.IO;
 using MCPForUnity.Editor.Models;
 
 namespace MCPForUnity.Editor.Clients.Configurators
 {
-    public class ClaudeCodeConfigurator : JsonFileMcpConfigurator
+    /// <summary>
+    /// Claude Code configurator using the CLI-based registration (claude mcp add/remove).
+    /// This integrates with Claude Code's native MCP management.
+    /// </summary>
+    public class ClaudeCodeConfigurator : ClaudeCliMcpConfigurator
     {
         public ClaudeCodeConfigurator() : base(new McpClient
         {
             name = "Claude Code",
-            windowsConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude.json"),
-            macConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude.json"),
-            linuxConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude.json"),
             SupportsHttpTransport = true,
-            HttpUrlProperty = "url", // Claude Code uses "url" for HTTP servers
-            IsVsCodeLayout = false,  // Claude Code uses standard mcpServers layout
         })
         { }
 
         public override IList<string> GetInstallationSteps() => new List<string>
         {
-            "Open your project in Claude Code",
-            "Click Configure in MCP for Unity (or manually edit ~/.claude.json)",
-            "The MCP server will be added to the global mcpServers section",
-            "Restart Claude Code to apply changes"
+            "Ensure Claude CLI is installed (comes with Claude Code)",
+            "Click Register to add UnityMCP via 'claude mcp add'",
+            "The server will be automatically available in Claude Code",
+            "Use Unregister to remove via 'claude mcp remove'"
         };
     }
 }

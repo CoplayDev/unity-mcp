@@ -334,6 +334,36 @@ We provide a CI job to run a Natural Language Editing suite against the Unity te
 4. **Iterate** - repeat steps 1-3 as needed
 5. **Restore** original files when done using `restore-dev.bat`
 
+## Important Notes
+
+### Updating Tools and Manifest
+
+When adding or modifying MCP tools in the Unity package:
+- Tool definitions are located in the manifest.json file at the repository root
+- The manifest.json version is automatically kept in sync with MCPForUnity/package.json during releases
+- If you manually update tools outside of the release process, ensure to update the manifest.json version accordingly
+- Use the comprehensive version update script: `python3 tools/update_versions.py` to sync all version references across the project
+
+The `update_versions.py` script updates:
+- MCPForUnity/package.json (Unity package version)
+- manifest.json (MCP bundle manifest)
+- Server/pyproject.toml (Python package version)
+- Server/README.md (version references)
+- README.md (fixed version examples)
+- docs/i18n/README-zh.md (fixed version examples)
+
+Usage examples:
+```bash
+# Update all files to match package.json version
+python3 tools/update_versions.py
+
+# Update all files to a specific version
+python3 tools/update_versions.py --version 9.2.0
+
+# Dry run to see what would be updated
+python3 tools/update_versions.py --dry-run
+```
+
 ## Troubleshooting
 
 ### "Path not found" errors running the .bat file

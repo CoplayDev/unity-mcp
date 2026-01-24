@@ -1,6 +1,6 @@
 [project]
 name = "mcpforunityserver"
-version = "9.0.8"
+version = "9.2.0"
 description = "MCP for Unity Server: A Unity package for Unity Editor integration via the Model Context Protocol (MCP)."
 readme = "README.md"
 license = "MIT"
@@ -36,6 +36,7 @@ dependencies = [
  "tomli>=2.3.0",
  "fastapi>=0.104.0",
  "uvicorn>=0.35.0",
+ "click>=8.1.0",
 ]
 
 [project.optional-dependencies]
@@ -51,10 +52,20 @@ Issues = "https://github.com/CoplayDev/unity-mcp/issues"
 
 [project.scripts]
 mcp-for-unity = "main:main"
+unity-mcp = "cli.main:main"
 
 [build-system]
 requires = ["setuptools>=64.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools]
+py-modules = ["main"]
 
 [tool.coverage.run]
 source = ["src"]

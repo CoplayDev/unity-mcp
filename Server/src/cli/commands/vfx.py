@@ -1,0 +1,439 @@
+"""VFX CLI commands for managing Unity visual effects."""
+
+import sys
+import json
+import click
+from typing import Optional, Tuple, Any
+
+from cli.utils.config import get_config
+from cli.utils.output import format_output, print_error, print_success
+from cli.utils.connection import run_command, UnityConnectionError
+
+
+@click.group()
+def vfx():
+    """VFX operations - particle systems, line renderers, trails."""
+    pass
+
+
+# =============================================================================
+# Particle System Commands
+# =============================================================================
+
+@vfx.group()
+def particle():
+    """Particle system operations."""
+    pass
+
+
+@particle.command("info")
+@click.argument("target")
+@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+def particle_info(target: str, search_method: Optional[str]):
+    """Get particle system info.
+
+    \\b
+    Examples:
+        unity-mcp vfx particle info "Fire"
+        unity-mcp vfx particle info "-12345" --search-method by_id
+    """
+    config = get_config()
+    params: dict[str, Any] = {"action": "particle_get_info", "target": target}
+    if search_method:
+        params["searchMethod"] = search_method
+
+    try:
+        result = run_command("manage_vfx", params, config)
+        click.echo(format_output(result, config.format))
+    except UnityConnectionError as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
+@particle.command("play")
+@click.argument("target")
+@click.option("--with-children", is_flag=True, help="Also play child particle systems.")
+@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+def particle_play(target: str, with_children: bool, search_method: Optional[str]):
+    """Play a particle system.
+
+    \\b
+    Examples:
+        unity-mcp vfx particle play "Fire"
+        unity-mcp vfx particle play "Effects" --with-children
+    """
+    config = get_config()
+    params: dict[str, Any] = {"action": "particle_play", "target": target}
+    if with_children:
+        params["withChildren"] = True
+    if search_method:
+        params["searchMethod"] = search_method
+
+    try:
+        result = run_command("manage_vfx", params, config)
+        click.echo(format_output(result, config.format))
+        if result.get("success"):
+            print_success(f"Playing particle system: {target}")
+    except UnityConnectionError as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
+@particle.command("stop")
+@click.argument("target")
+@click.option("--with-children", is_flag=True, help="Also stop child particle systems.")
+@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+def particle_stop(target: str, with_children: bool, search_method: Optional[str]):
+    """Stop a particle system."""
+    config = get_config()
+    params: dict[str, Any] = {"action": "particle_stop", "target": target}
+    if with_children:
+        params["withChildren"] = True
+    if search_method:
+        params["searchMethod"] = search_method
+
+    try:
+        result = run_command("manage_vfx", params, config)
+        click.echo(format_output(result, config.format))
+        if result.get("success"):
+            print_success(f"Stopped particle system: {target}")
+    except UnityConnectionError as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
+@particle.command("pause")
+@click.argument("target")
+@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+def particle_pause(target: str, search_method: Optional[str]):
+    """Pause a particle system."""
+    config = get_config()
+    params: dict[str, Any] = {"action": "particle_pause", "target": target}
+    if search_method:
+        params["searchMethod"] = search_method
+
+    try:
+        result = run_command("manage_vfx", params, config)
+        click.echo(format_output(result, config.format))
+    except UnityConnectionError as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
+@particle.command("restart")
+@click.argument("target")
+@click.option("--with-children", is_flag=True)
+@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+def particle_restart(target: str, with_children: bool, search_method: Optional[str]):
+    """Restart a particle system."""
+    config = get_config()
+    params: dict[str, Any] = {"action": "particle_restart", "target": target}
+    if with_children:
+        params["withChildren"] = True
+    if search_method:
+        params["searchMethod"] = search_method
+
+    try:
+        result = run_command("manage_vfx", params, config)
+        click.echo(format_output(result, config.format))
+    except UnityConnectionError as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
+@particle.command("clear")
+@click.argument("target")
+@click.option("--with-children", is_flag=True)
+@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+def particle_clear(target: str, with_children: bool, search_method: Optional[str]):
+    """Clear all particles from a particle system."""
+    config = get_config()
+    params: dict[str, Any] = {"action": "particle_clear", "target": target}
+    if with_children:
+        params["withChildren"] = True
+    if search_method:
+        params["searchMethod"] = search_method
+
+    try:
+        result = run_command("manage_vfx", params, config)
+        click.echo(format_output(result, config.format))
+    except UnityConnectionError as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
+# =============================================================================
+# Line Renderer Commands
+# =============================================================================
+
+@vfx.group()
+def line():
+    """Line renderer operations."""
+    pass
+
+
+@line.command("info")
+@click.argument("target")
+@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+def line_info(target: str, search_method: Optional[str]):
+    """Get line renderer info.
+
+    \\b
+    Examples:
+        unity-mcp vfx line info "LaserBeam"
+    """
+    config = get_config()
+    params: dict[str, Any] = {"action": "line_get_info", "target": target}
+    if search_method:
+        params["searchMethod"] = search_method
+
+    try:
+        result = run_command("manage_vfx", params, config)
+        click.echo(format_output(result, config.format))
+    except UnityConnectionError as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
+@line.command("set-positions")
+@click.argument("target")
+@click.option("--positions", "-p", required=True, help='Positions as JSON array: [[0,0,0], [1,1,1], [2,0,0]]')
+@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+def line_set_positions(target: str, positions: str, search_method: Optional[str]):
+    """Set all positions on a line renderer.
+
+    \\b
+    Examples:
+        unity-mcp vfx line set-positions "Line" --positions "[[0,0,0], [5,2,0], [10,0,0]]"
+    """
+    config = get_config()
+
+    try:
+        positions_list = json.loads(positions)
+    except json.JSONDecodeError as e:
+        print_error(f"Invalid JSON for positions: {e}")
+        sys.exit(1)
+
+    params: dict[str, Any] = {
+        "action": "line_set_positions",
+        "target": target,
+        "positions": positions_list,
+    }
+    if search_method:
+        params["searchMethod"] = search_method
+
+    try:
+        result = run_command("manage_vfx", params, config)
+        click.echo(format_output(result, config.format))
+    except UnityConnectionError as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
+@line.command("create-line")
+@click.argument("target")
+@click.option("--start", nargs=3, type=float, required=True, help="Start point X Y Z")
+@click.option("--end", nargs=3, type=float, required=True, help="End point X Y Z")
+@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+def line_create_line(target: str, start: Tuple[float, float, float], end: Tuple[float, float, float], search_method: Optional[str]):
+    """Create a simple line between two points.
+
+    \\b
+    Examples:
+        unity-mcp vfx line create-line "MyLine" --start 0 0 0 --end 10 5 0
+    """
+    config = get_config()
+    params: dict[str, Any] = {
+        "action": "line_create_line",
+        "target": target,
+        "start": list(start),
+        "end": list(end),
+    }
+    if search_method:
+        params["searchMethod"] = search_method
+
+    try:
+        result = run_command("manage_vfx", params, config)
+        click.echo(format_output(result, config.format))
+    except UnityConnectionError as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
+@line.command("create-circle")
+@click.argument("target")
+@click.option("--center", nargs=3, type=float, default=(0, 0, 0), help="Center point X Y Z")
+@click.option("--radius", type=float, required=True, help="Circle radius")
+@click.option("--segments", type=int, default=32, help="Number of segments")
+@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+def line_create_circle(target: str, center: Tuple[float, float, float], radius: float, segments: int, search_method: Optional[str]):
+    """Create a circle shape.
+
+    \\b
+    Examples:
+        unity-mcp vfx line create-circle "Circle" --radius 5 --segments 64
+        unity-mcp vfx line create-circle "Ring" --center 0 2 0 --radius 3
+    """
+    config = get_config()
+    params: dict[str, Any] = {
+        "action": "line_create_circle",
+        "target": target,
+        "center": list(center),
+        "radius": radius,
+        "segments": segments,
+    }
+    if search_method:
+        params["searchMethod"] = search_method
+
+    try:
+        result = run_command("manage_vfx", params, config)
+        click.echo(format_output(result, config.format))
+    except UnityConnectionError as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
+@line.command("clear")
+@click.argument("target")
+@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+def line_clear(target: str, search_method: Optional[str]):
+    """Clear all positions from a line renderer."""
+    config = get_config()
+    params: dict[str, Any] = {"action": "line_clear", "target": target}
+    if search_method:
+        params["searchMethod"] = search_method
+
+    try:
+        result = run_command("manage_vfx", params, config)
+        click.echo(format_output(result, config.format))
+    except UnityConnectionError as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
+# =============================================================================
+# Trail Renderer Commands
+# =============================================================================
+
+@vfx.group()
+def trail():
+    """Trail renderer operations."""
+    pass
+
+
+@trail.command("info")
+@click.argument("target")
+@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+def trail_info(target: str, search_method: Optional[str]):
+    """Get trail renderer info."""
+    config = get_config()
+    params: dict[str, Any] = {"action": "trail_get_info", "target": target}
+    if search_method:
+        params["searchMethod"] = search_method
+
+    try:
+        result = run_command("manage_vfx", params, config)
+        click.echo(format_output(result, config.format))
+    except UnityConnectionError as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
+@trail.command("set-time")
+@click.argument("target")
+@click.argument("duration", type=float)
+@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+def trail_set_time(target: str, duration: float, search_method: Optional[str]):
+    """Set trail duration.
+
+    \\b
+    Examples:
+        unity-mcp vfx trail set-time "PlayerTrail" 2.0
+    """
+    config = get_config()
+    params: dict[str, Any] = {
+        "action": "trail_set_time",
+        "target": target,
+        "time": duration,
+    }
+    if search_method:
+        params["searchMethod"] = search_method
+
+    try:
+        result = run_command("manage_vfx", params, config)
+        click.echo(format_output(result, config.format))
+    except UnityConnectionError as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
+@trail.command("clear")
+@click.argument("target")
+@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+def trail_clear(target: str, search_method: Optional[str]):
+    """Clear a trail renderer."""
+    config = get_config()
+    params: dict[str, Any] = {"action": "trail_clear", "target": target}
+    if search_method:
+        params["searchMethod"] = search_method
+
+    try:
+        result = run_command("manage_vfx", params, config)
+        click.echo(format_output(result, config.format))
+    except UnityConnectionError as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
+# =============================================================================
+# Raw Command (escape hatch for all VFX actions)
+# =============================================================================
+
+@vfx.command("raw")
+@click.argument("action")
+@click.argument("target", required=False)
+@click.option("--params", "-p", default="{}", help="Additional parameters as JSON.")
+@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+def vfx_raw(action: str, target: Optional[str], params: str, search_method: Optional[str]):
+    """Execute any VFX action directly.
+
+    For advanced users who need access to all 60+ VFX actions.
+
+    \\b
+    Actions include:
+        particle_*: particle_set_main, particle_set_emission, particle_set_shape, ...
+        vfx_*: vfx_set_float, vfx_send_event, vfx_play, ...
+        line_*: line_create_arc, line_create_bezier, ...
+        trail_*: trail_set_width, trail_set_color, ...
+
+    \\b
+    Examples:
+        unity-mcp vfx raw particle_set_main "Fire" --params '{"duration": 5, "looping": true}'
+        unity-mcp vfx raw line_create_arc "Arc" --params '{"radius": 3, "startAngle": 0, "endAngle": 180}'
+        unity-mcp vfx raw vfx_send_event "Explosion" --params '{"eventName": "OnSpawn"}'
+    """
+    config = get_config()
+
+    try:
+        extra_params = json.loads(params)
+    except json.JSONDecodeError as e:
+        print_error(f"Invalid JSON for params: {e}")
+        sys.exit(1)
+    if not isinstance(extra_params, dict):
+        print_error("Invalid JSON for params: expected an object")
+        sys.exit(1)
+
+    request_params: dict[str, Any] = {"action": action}
+    if target:
+        request_params["target"] = target
+    if search_method:
+        request_params["searchMethod"] = search_method
+
+    # Merge extra params
+    request_params.update(extra_params)
+    try:
+        result = run_command("manage_vfx", request_params, config)
+        click.echo(format_output(result, config.format))
+    except UnityConnectionError as e:
+        print_error(str(e))
+        sys.exit(1)
