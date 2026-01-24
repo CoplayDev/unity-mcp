@@ -56,7 +56,7 @@ namespace MCPForUnity.Editor.ActionTrace.Core.Settings
         public int MaxEvents = 800;
 
         [Range(10, 1000)]
-        [Tooltip("Number of hot events (10-1000) to retain with full payload. Events are kept in sequence order; the first N events (oldest) have full payload, while events beyond this limit are dehydrated (Payload=null).")]
+        [Tooltip("Number of hot events (10-1000) to retain with full payload. Events are kept in sequence order; the last N events (newest) have full payload, while earlier events beyond this limit are dehydrated (Payload=null).")]
         public int HotEventCount = 150;
     }
 
