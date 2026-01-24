@@ -21,7 +21,7 @@ namespace MCPForUnity.Editor.Tools
         public static object HandleCommand(JObject @params)
         {
             // Extract parameters
-            string action = @params["action"]?.ToString().ToLower();
+            string action = @params["action"]?.ToString()?.ToLowerInvariant();
             string name = @params["name"]?.ToString();
             string path = @params["path"]?.ToString(); // Relative to Assets/
             string contents = null;

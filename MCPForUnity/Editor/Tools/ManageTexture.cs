@@ -45,7 +45,7 @@ namespace MCPForUnity.Editor.Tools
 
         public static object HandleCommand(JObject @params)
         {
-            string action = @params["action"]?.ToString().ToLower();
+            string action = @params["action"]?.ToString()?.ToLowerInvariant();
             if (string.IsNullOrEmpty(action))
             {
                 return new ErrorResponse("Action parameter is required.");

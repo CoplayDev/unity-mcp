@@ -24,7 +24,7 @@ namespace MCPForUnity.Editor.Tools
         /// </summary>
         public static object HandleCommand(JObject @params)
         {
-            string action = @params["action"]?.ToString().ToLower();
+            string action = @params["action"]?.ToString()?.ToLowerInvariant();
             // Parameters for specific actions
             string tagName = @params["tagName"]?.ToString();
             string layerName = @params["layerName"]?.ToString();
