@@ -10,6 +10,9 @@ namespace MCPForUnity.Editor.ActionTrace.Integration.VCS
     /// <summary>
     /// Version Control System (VCS) integration for ActionTrace events.
     ///
+    /// NOTE: Currently disabled - vcs_context is injected into events but not consumed
+    /// by any tool or query system. Re-enable when AI tools need Git context awareness.
+    ///
     /// Purpose (from ActionTrace-enhancements.md P2.2):
     /// - Track Git commit and branch information
     /// - Mark events as "dirty" if they occurred after last commit
@@ -35,7 +38,7 @@ namespace MCPForUnity.Editor.ActionTrace.Integration.VCS
     ///   }
     /// }
     /// </summary>
-    [InitializeOnLoad]
+    // [InitializeOnLoad]  // Disabled: vcs_context not consumed by any tool
     public static class VcsContextProvider
     {
         // Configuration

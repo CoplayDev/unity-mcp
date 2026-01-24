@@ -309,11 +309,12 @@ namespace MCPForUnity.Editor.ActionTrace.Capture
             try
             {
                 // Inject VCS context if available
-                var vcsContext = VcsContextProvider.GetCurrentContext();
-                if (vcsContext != null)
-                {
-                    payload["vcs_context"] = vcsContext.ToDictionary();
-                }
+                // DISABLED: vcs_context not consumed by any tool/query system
+                // var vcsContext = VcsContextProvider.GetCurrentContext();
+                // if (vcsContext != null)
+                // {
+                //     payload["vcs_context"] = vcsContext.ToDictionary();
+                // }
 
                 // Create event
                 var evt = new EditorEvent(
