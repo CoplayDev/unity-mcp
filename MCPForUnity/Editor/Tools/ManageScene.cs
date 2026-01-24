@@ -469,7 +469,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception e)
             {
-                try { McpLog.Debug($"[ManageScene] screenshot: BestEffortPrepareGameViewForScreenshot failed: {e.Message}"); } catch { }
+                try { McpLog.Debug($"[ManageScene] screenshot: EnsureGameView failed: {e.Message}"); } catch { }
             }
         }
 
