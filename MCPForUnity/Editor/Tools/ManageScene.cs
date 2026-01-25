@@ -384,34 +384,27 @@ namespace MCPForUnity.Editor.Tools
             try
             {
                 int resolvedSuperSize = (superSize.HasValue && superSize.Value > 0) ? superSize.Value : 1;
-                ScreenshotCaptureResult result;
 
-                if (Application.isPlaying)
+                // Best-effort: ensure Game View exists and repaints before capture.
+                if (!Application.isBatchMode)
                 {
-                    result = ScreenshotUtility.CaptureToAssetsFolder(fileName, resolvedSuperSize, ensureUniqueFileName: true);
+                    EnsureGameView();
+                }
+
+                ScreenshotCaptureResult result = ScreenshotUtility.CaptureToAssetsFolder(fileName, resolvedSuperSize, ensureUniqueFileName: true);
+
+                // ScreenCapture.CaptureScreenshot is async. Import after the file actually hits disk.
+                if (result.IsAsync)
+                {
+                    ScheduleAssetImportWhenFileExists(result.AssetsRelativePath, result.FullPath, timeoutSeconds: 30.0);
                 }
                 else
                 {
-                    // Edit Mode path: render from the best-guess camera using RenderTexture.
-                    Camera cam = Camera.main;
-                    if (cam == null)
-                    {
-                        // Use FindObjectsOfType for Unity 2021 compatibility
-                        var cams = UnityEngine.Object.FindObjectsOfType<Camera>();
-                        cam = cams.FirstOrDefault();
-                    }
-
-                    if (cam == null)
-                    {
-                        return new ErrorResponse("No camera found to capture screenshot in Edit Mode.");
-                    }
-
-                    result = ScreenshotUtility.CaptureFromCameraToAssetsFolder(cam, fileName, resolvedSuperSize, ensureUniqueFileName: true);
+                    AssetDatabase.ImportAsset(result.AssetsRelativePath, ImportAssetOptions.ForceSynchronousImport);
                 }
 
-                AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
-
-                string message = $"Screenshot captured to '{result.AssetsRelativePath}' (full: {result.FullPath}).";
+                string verb = result.IsAsync ? "Screenshot requested" : "Screenshot captured";
+                string message = $"{verb} to '{result.AssetsRelativePath}' (full: {result.FullPath}).";
 
                 return new SuccessResponse(
                     message,
@@ -420,6 +413,7 @@ namespace MCPForUnity.Editor.Tools
                         path = result.AssetsRelativePath,
                         fullPath = result.FullPath,
                         superSize = result.SuperSize,
+                        isAsync = result.IsAsync,
                     }
                 );
             }
@@ -427,6 +421,111 @@ namespace MCPForUnity.Editor.Tools
             {
                 return new ErrorResponse($"Error capturing screenshot: {e.Message}");
             }
+        }
+
+        private static void EnsureGameView()
+        {
+            try
+            {
+                // Ensure a Game View exists and has a chance to repaint before capture.
+                try
+                {
+                    if (!EditorApplication.ExecuteMenuItem("Window/General/Game"))
+                    {
+                        // Some Unity versions expose hotkey suffixes in menu paths.
+                        EditorApplication.ExecuteMenuItem("Window/General/Game %2");
+                    }
+                }
+                catch (Exception e)
+                {
+                    try { McpLog.Debug($"[ManageScene] screenshot: failed to open Game View via menu item: {e.Message}"); } catch { }
+                }
+
+                try
+                {
+                    var gameViewType = Type.GetType("UnityEditor.GameView,UnityEditor");
+                    if (gameViewType != null)
+                    {
+                        var window = EditorWindow.GetWindow(gameViewType);
+                        window?.Repaint();
+                    }
+                }
+                catch (Exception e)
+                {
+                    try { McpLog.Debug($"[ManageScene] screenshot: failed to repaint Game View: {e.Message}"); } catch { }
+                }
+
+                try { SceneView.RepaintAll(); }
+                catch (Exception e)
+                {
+                    try { McpLog.Debug($"[ManageScene] screenshot: failed to repaint Scene View: {e.Message}"); } catch { }
+                }
+
+                try { EditorApplication.QueuePlayerLoopUpdate(); }
+                catch (Exception e)
+                {
+                    try { McpLog.Debug($"[ManageScene] screenshot: failed to queue player loop update: {e.Message}"); } catch { }
+                }
+            }
+            catch (Exception e)
+            {
+                try { McpLog.Debug($"[ManageScene] screenshot: EnsureGameView failed: {e.Message}"); } catch { }
+            }
+        }
+
+        private static void ScheduleAssetImportWhenFileExists(string assetsRelativePath, string fullPath, double timeoutSeconds)
+        {
+            if (string.IsNullOrWhiteSpace(assetsRelativePath) || string.IsNullOrWhiteSpace(fullPath))
+            {
+                McpLog.Warn("[ManageScene] ScheduleAssetImportWhenFileExists: invalid paths provided, skipping import scheduling.");
+                return;
+            }
+
+            double start = EditorApplication.timeSinceStartup;
+            int failureCount = 0;
+            bool hasSeenFile = false;
+            const int maxLoggedFailures = 3;
+            EditorApplication.CallbackFunction tick = null;
+            tick = () =>
+            {
+                try
+                {
+                    if (File.Exists(fullPath))
+                    {
+                        hasSeenFile = true;
+
+                        AssetDatabase.ImportAsset(assetsRelativePath, ImportAssetOptions.ForceSynchronousImport);
+                        McpLog.Debug($"[ManageScene] Imported asset at '{assetsRelativePath}'.");
+                        EditorApplication.update -= tick;
+                        return;
+                    }
+                }
+                catch (Exception e)
+                {
+                    failureCount++;
+
+                    if (failureCount <= maxLoggedFailures)
+                    {
+                        McpLog.Warn($"[ManageScene] Exception while importing asset '{assetsRelativePath}' from '{fullPath}' (attempt {failureCount}): {e}");
+                    }
+                }
+
+                if (EditorApplication.timeSinceStartup - start > timeoutSeconds)
+                {
+                    if (!hasSeenFile)
+                    {
+                        McpLog.Warn($"[ManageScene] Timed out waiting for file '{fullPath}' (asset: '{assetsRelativePath}') after {timeoutSeconds:F1} seconds. The asset was not imported.");
+                    }
+                    else
+                    {
+                        McpLog.Warn($"[ManageScene] Timed out importing asset '{assetsRelativePath}' from '{fullPath}' after {timeoutSeconds:F1} seconds. The file existed but the asset was not imported.");
+                    }
+
+                    EditorApplication.update -= tick;
+                }
+            };
+
+            EditorApplication.update += tick;
         }
 
         private static object GetActiveSceneInfo()
@@ -668,7 +767,10 @@ namespace MCPForUnity.Editor.Tools
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                McpLog.Debug($"[ManageScene] Failed to enumerate components for '{go.name}': {ex.Message}");
+            }
 
             var d = new Dictionary<string, object>
             {
@@ -684,7 +786,7 @@ namespace MCPForUnity.Editor.Tools
                 { "childrenTruncated", childrenTruncated },
                 { "childrenCursor", childCount > 0 ? "0" : null },
                 { "childrenPageSizeDefault", maxChildrenPerNode },
-                { "componentTypes", componentTypes },  // NEW: Lightweight component type list
+                { "componentTypes", componentTypes },
             };
 
             if (includeTransform && go.transform != null)
@@ -721,57 +823,5 @@ namespace MCPForUnity.Editor.Tools
             }
         }
 
-        /// <summary>
-        /// Recursively builds a data representation of a GameObject and its children.
-        /// </summary>
-        private static object GetGameObjectDataRecursive(GameObject go)
-        {
-            if (go == null)
-                return null;
-
-            var childrenData = new List<object>();
-            foreach (Transform child in go.transform)
-            {
-                childrenData.Add(GetGameObjectDataRecursive(child.gameObject));
-            }
-
-            var gameObjectData = new Dictionary<string, object>
-            {
-                { "name", go.name },
-                { "activeSelf", go.activeSelf },
-                { "activeInHierarchy", go.activeInHierarchy },
-                { "tag", go.tag },
-                { "layer", go.layer },
-                { "isStatic", go.isStatic },
-                { "instanceID", go.GetInstanceID() }, // Useful unique identifier
-                {
-                    "transform",
-                    new
-                    {
-                        position = new
-                        {
-                            x = go.transform.localPosition.x,
-                            y = go.transform.localPosition.y,
-                            z = go.transform.localPosition.z,
-                        },
-                        rotation = new
-                        {
-                            x = go.transform.localRotation.eulerAngles.x,
-                            y = go.transform.localRotation.eulerAngles.y,
-                            z = go.transform.localRotation.eulerAngles.z,
-                        }, // Euler for simplicity
-                        scale = new
-                        {
-                            x = go.transform.localScale.x,
-                            y = go.transform.localScale.y,
-                            z = go.transform.localScale.z,
-                        },
-                    }
-                },
-                { "children", childrenData },
-            };
-
-            return gameObjectData;
-        }
     }
 }

@@ -9,58 +9,70 @@ namespace MCPForUnity.Runtime.Helpers
     public readonly struct ScreenshotCaptureResult
     {
         public ScreenshotCaptureResult(string fullPath, string assetsRelativePath, int superSize)
+            : this(fullPath, assetsRelativePath, superSize, isAsync: false)
+        {
+        }
+
+        public ScreenshotCaptureResult(string fullPath, string assetsRelativePath, int superSize, bool isAsync)
         {
             FullPath = fullPath;
             AssetsRelativePath = assetsRelativePath;
             SuperSize = superSize;
+            IsAsync = isAsync;
         }
 
         public string FullPath { get; }
         public string AssetsRelativePath { get; }
         public int SuperSize { get; }
+        public bool IsAsync { get; }
     }
 
     public static class ScreenshotUtility
     {
         private const string ScreenshotsFolderName = "Screenshots";
+        private static bool s_loggedLegacyScreenCaptureFallback;
+
+        private static Camera FindAvailableCamera()
+        {
+            var main = Camera.main;
+            if (main != null)
+            {
+                return main;
+            }
+
+            try
+            {
+                // Use FindObjectsOfType for Unity 2021 compatibility.
+                var cams = UnityEngine.Object.FindObjectsOfType<Camera>();
+                return cams.FirstOrDefault();
+            }
+            catch
+            {
+                return null;
+            }
+        }
 
         public static ScreenshotCaptureResult CaptureToAssetsFolder(string fileName = null, int superSize = 1, bool ensureUniqueFileName = true)
         {
-            int size = Mathf.Max(1, superSize);
-            string resolvedName = BuildFileName(fileName);
-            string folder = Path.Combine(Application.dataPath, ScreenshotsFolderName);
-            Directory.CreateDirectory(folder);
-
-            string fullPath = Path.Combine(folder, resolvedName);
-            if (ensureUniqueFileName)
-            {
-                fullPath = EnsureUnique(fullPath);
-            }
-
-            string normalizedFullPath = fullPath.Replace('\\', '/');
-
-            // Use only the file name to let Unity decide the final location (per CaptureScreenshot docs).
-            string captureName = Path.GetFileName(normalizedFullPath);
-
-            // Use Asset folder for ScreenCapture.CaptureScreenshot to ensure write to asset rather than project root
-            string projectRoot = GetProjectRootPath();
-            string assetsRelativePath = normalizedFullPath;
-            if (assetsRelativePath.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
-            {
-                assetsRelativePath = assetsRelativePath.Substring(projectRoot.Length).TrimStart('/');
-            }
-
 #if UNITY_2022_1_OR_NEWER
-            ScreenCapture.CaptureScreenshot(assetsRelativePath, size);
+            ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, isAsync: true);
+            ScreenCapture.CaptureScreenshot(result.AssetsRelativePath, result.SuperSize);
+            return result;
 #else
-            Debug.LogWarning("ScreenCapture is supported after Unity 2022.1. Using main camera capture as fallback.");
-            CaptureFromCameraToAssetsFolder(Camera.main, captureName, size, false);
-#endif      
+            if (!s_loggedLegacyScreenCaptureFallback)
+            {
+                Debug.Log("ScreenCapture is supported after Unity 2022.1. Using camera capture as fallback.");
+                s_loggedLegacyScreenCaptureFallback = true;
+            }
 
-            return new ScreenshotCaptureResult(
-                normalizedFullPath,
-                assetsRelativePath,
-                size);
+            var cam = FindAvailableCamera();
+            if (cam == null)
+            {
+                throw new InvalidOperationException("No camera found to capture screenshot.");
+            }
+
+            return CaptureFromCameraToAssetsFolder(cam, fileName, superSize, ensureUniqueFileName);
+#endif
         }
 
         /// <summary>
@@ -73,6 +85,54 @@ namespace MCPForUnity.Runtime.Helpers
                 throw new ArgumentNullException(nameof(camera));
             }
 
+            ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, isAsync: false);
+            int size = result.SuperSize;
+
+            int width = Mathf.Max(1, camera.pixelWidth > 0 ? camera.pixelWidth : Screen.width);
+            int height = Mathf.Max(1, camera.pixelHeight > 0 ? camera.pixelHeight : Screen.height);
+            width *= size;
+            height *= size;
+
+            RenderTexture prevRT = camera.targetTexture;
+            RenderTexture prevActive = RenderTexture.active;
+            var rt = RenderTexture.GetTemporary(width, height, 24, RenderTextureFormat.ARGB32);
+            Texture2D tex = null;
+            try
+            {
+                camera.targetTexture = rt;
+                camera.Render();
+
+                RenderTexture.active = rt;
+                tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+                tex.Apply();
+
+                byte[] png = tex.EncodeToPNG();
+                File.WriteAllBytes(result.FullPath, png);
+            }
+            finally
+            {
+                camera.targetTexture = prevRT;
+                RenderTexture.active = prevActive;
+                RenderTexture.ReleaseTemporary(rt);
+                if (tex != null)
+                {
+                    if (Application.isPlaying)
+                    {
+                        UnityEngine.Object.Destroy(tex);
+                    }
+                    else
+                    {
+                        UnityEngine.Object.DestroyImmediate(tex);
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        private static ScreenshotCaptureResult PrepareCaptureResult(string fileName, int superSize, bool ensureUniqueFileName, bool isAsync)
+        {
             int size = Mathf.Max(1, superSize);
             string resolvedName = BuildFileName(fileName);
             string folder = Path.Combine(Application.dataPath, ScreenshotsFolderName);
@@ -85,43 +145,20 @@ namespace MCPForUnity.Runtime.Helpers
             }
 
             string normalizedFullPath = fullPath.Replace('\\', '/');
+            string assetsRelativePath = ToAssetsRelativePath(normalizedFullPath);
 
-            int width = Mathf.Max(1, camera.pixelWidth > 0 ? camera.pixelWidth : Screen.width);
-            int height = Mathf.Max(1, camera.pixelHeight > 0 ? camera.pixelHeight : Screen.height);
-            width *= size;
-            height *= size;
+            return new ScreenshotCaptureResult(normalizedFullPath, assetsRelativePath, size, isAsync);
+        }
 
-            RenderTexture prevRT = camera.targetTexture;
-            RenderTexture prevActive = RenderTexture.active;
-            var rt = RenderTexture.GetTemporary(width, height, 24, RenderTextureFormat.ARGB32);
-            try
-            {
-                camera.targetTexture = rt;
-                camera.Render();
-
-                RenderTexture.active = rt;
-                var tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
-                tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
-                tex.Apply();
-
-                byte[] png = tex.EncodeToPNG();
-                File.WriteAllBytes(normalizedFullPath, png);
-            }
-            finally
-            {
-                camera.targetTexture = prevRT;
-                RenderTexture.active = prevActive;
-                RenderTexture.ReleaseTemporary(rt);
-            }
-
+        private static string ToAssetsRelativePath(string normalizedFullPath)
+        {
             string projectRoot = GetProjectRootPath();
             string assetsRelativePath = normalizedFullPath;
             if (assetsRelativePath.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
             {
                 assetsRelativePath = assetsRelativePath.Substring(projectRoot.Length).TrimStart('/');
             }
-
-            return new ScreenshotCaptureResult(normalizedFullPath, assetsRelativePath, size);
+            return assetsRelativePath;
         }
 
         private static string BuildFileName(string fileName)

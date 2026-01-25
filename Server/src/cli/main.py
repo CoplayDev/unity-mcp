@@ -229,6 +229,7 @@ def register_commands():
         ("cli.commands.shader", "shader"),
         ("cli.commands.vfx", "vfx"),
         ("cli.commands.batch", "batch"),
+        ("cli.commands.texture", "texture"),
     ]
 
     for module_name, command_name in optional_commands:

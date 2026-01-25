@@ -208,6 +208,12 @@ X:\UnityProject\Library\PackageCache\com.coplaydev.unity-mcp@272123cfd97e
   - **`max_nodes`**：默认 **1000**，限制 **1..5000**
   - **`include_transform`**：默认 **false**
 
+### `manage_scene(action="screenshot")`
+
+- 将 PNG 保存到 `Assets/Screenshots/`。
+- Unity **2022.1+**：通过 `ScreenCapture.CaptureScreenshot` 捕获 **Game View**，因此包含 `Screen Space - Overlay` UI。注意该写入是 **异步** 的，文件/导入可能会稍后出现。
+- Unity **2021.3**：回退为将可用的 `Camera` 渲染到 `RenderTexture`（仅相机输出；不包含 `Screen Space - Overlay` UI）。
+
 ### `manage_gameobject(action="get_components")`
 
 - **默认行为**：仅返回 **分页的组件元数据**（`typeName`, `instanceID`）。

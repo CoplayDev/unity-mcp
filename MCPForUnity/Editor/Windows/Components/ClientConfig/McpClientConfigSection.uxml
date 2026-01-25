@@ -7,7 +7,6 @@
                 <ui:Label text="Client:" class="setting-label" />
                 <ui:DropdownField name="client-dropdown" class="setting-dropdown-inline" />
             </ui:VisualElement>
-            <ui:Button name="configure-all-button" text="Configure All Detected Clients" class="secondary-button" />
             <ui:VisualElement class="setting-row">
                 <ui:VisualElement class="status-container">
                     <ui:VisualElement name="client-status-indicator" class="status-dot" />
@@ -37,6 +36,7 @@
                     <ui:Label name="installation-steps" class="installation-steps" />
                 </ui:VisualElement>
             </ui:Foldout>
+            <ui:Button name="configure-all-button" text="Configure All Detected Clients" class="secondary-button" style="width: auto; padding-left: 12px; padding-right: 12px;" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>
