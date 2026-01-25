@@ -197,6 +197,15 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 EditorSceneManager.MarkSceneDirty(stage.scene);
             }
 
+            // Mark all children as dirty to ensure their changes are captured
+            foreach (Transform child in stage.prefabContentsRoot.GetComponentsInChildren<Transform>(true))
+            {
+                if (child != stage.prefabContentsRoot.transform)
+                {
+                    EditorUtility.SetDirty(child.gameObject);
+                }
+            }
+
             // Use PrefabUtility.SaveAsPrefabAsset which saves without dialogs
             // This is more reliable for automated workflows than EditorSceneManager.SaveScene
             bool success;
@@ -209,6 +218,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
             // Ensure changes are persisted to disk
             AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
 
             McpLog.Info($"[ManagePrefabs] Successfully saved prefab '{stage.assetPath}'.");
         }
