@@ -278,6 +278,10 @@ namespace MCPForUnity.Editor.Windows
                 McpLog.Warn("Failed to load tools section UXML. Tool configuration will be unavailable.");
             }
 
+            // Apply .section-last class to last section in each stack
+            // (Unity UI Toolkit doesn't support :last-child pseudo-class)
+            ApplySectionLastClasses();
+
             guiCreated = true;
 
             // Initial updates
@@ -298,6 +302,29 @@ namespace MCPForUnity.Editor.Windows
 
             toolsLoaded = true;
             toolsSection.Refresh();
+        }
+
+        /// <summary>
+        /// Applies the .section-last class to the last .section element in each .section-stack container.
+        /// This is a workaround for Unity UI Toolkit not supporting the :last-child pseudo-class.
+        /// </summary>
+        private void ApplySectionLastClasses()
+        {
+            var sectionStacks = rootVisualElement.Query<VisualElement>(className: "section-stack").ToList();
+            foreach (var stack in sectionStacks)
+            {
+                var sections = stack.Children().Where(c => c.ClassListContains("section")).ToList();
+                if (sections.Count > 0)
+                {
+                    // Remove class from all sections first (in case of refresh)
+                    foreach (var section in sections)
+                    {
+                        section.RemoveFromClassList("section-last");
+                    }
+                    // Add class to the last section
+                    sections[sections.Count - 1].AddToClassList("section-last");
+                }
+            }
         }
 
         // Throttle OnEditorUpdate to avoid per-frame overhead (GitHub issue #577).
