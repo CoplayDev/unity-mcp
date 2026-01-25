@@ -123,7 +123,6 @@ def save_stage(force: bool):
     is_flag=True,
     help="Unlink from existing prefab before creating new one."
 )
-
 def create(target: str, path: str, overwrite: bool, include_inactive: bool, unlink_if_instance: bool):
     """Create a prefab from a scene GameObject.
 
