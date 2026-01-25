@@ -20,7 +20,93 @@ namespace MCPForUnity.Editor.Tools.Vfx
     /// - Visual Effect Graph (modern GPU particles, currently only support HDRP, other SRPs may not work)
     /// - LineRenderer (lines, bezier curves, shapes)
     /// - TrailRenderer (motion trails)
-    /// - More to come based on demand and feedback!
+    ///
+    /// COMPONENT REQUIREMENTS:
+    /// - particle_* actions require ParticleSystem component on target GameObject
+    /// - vfx_* actions require VisualEffect component (+ com.unity.visualeffectgraph package)
+    /// - line_* actions require LineRenderer component
+    /// - trail_* actions require TrailRenderer component
+    ///
+    /// TARGETING:
+    /// Use 'target' parameter with optional 'searchMethod':
+    /// - by_name (default): "Fire" finds first GameObject named "Fire"
+    /// - by_path: "Effects/Fire" finds GameObject at hierarchy path
+    /// - by_id: "12345" finds GameObject by instance ID (most reliable)
+    /// - by_tag: "Enemy" finds first GameObject with tag
+    ///
+    /// AVAILABLE ACTIONS:
+    ///
+    /// ParticleSystem (particle_*):
+    ///   - particle_get_info: Get system info and current state
+    ///   - particle_set_main: Set main module (duration, looping, startLifetime, startSpeed, startSize, startColor, gravityModifier, maxParticles, simulationSpace, playOnAwake, etc.)
+    ///   - particle_set_emission: Set emission module (rateOverTime, rateOverDistance)
+    ///   - particle_set_shape: Set shape module (shapeType, radius, angle, arc, position, rotation, scale)
+    ///   - particle_set_color_over_lifetime: Set color gradient over particle lifetime
+    ///   - particle_set_size_over_lifetime: Set size curve over particle lifetime
+    ///   - particle_set_velocity_over_lifetime: Set velocity (x, y, z, speedModifier, space)
+    ///   - particle_set_noise: Set noise turbulence (strength, frequency, scrollSpeed, damping, octaveCount, quality)
+    ///   - particle_set_renderer: Set renderer (renderMode, material, sortMode, minParticleSize, maxParticleSize, etc.)
+    ///   - particle_enable_module: Enable/disable modules by name
+    ///   - particle_play/stop/pause/restart/clear: Playback control (withChildren optional)
+    ///   - particle_add_burst: Add emission burst (time, count, cycles, interval, probability)
+    ///   - particle_clear_bursts: Clear all bursts
+    ///
+    /// Visual Effect Graph (vfx_*):
+    ///   Asset Management:
+    ///   - vfx_create_asset: Create new VFX asset file (assetName, folderPath, template, overwrite)
+    ///   - vfx_assign_asset: Assign VFX asset to VisualEffect component (target, assetPath)
+    ///   - vfx_list_templates: List available VFX templates in project and packages
+    ///   - vfx_list_assets: List all VFX assets (folder, search filters)
+    ///   Runtime Control:
+    ///   - vfx_get_info: Get VFX info including exposed parameters
+    ///   - vfx_set_float/int/bool: Set exposed scalar parameters (parameter, value)
+    ///   - vfx_set_vector2/vector3/vector4: Set exposed vector parameters (parameter, value as array)
+    ///   - vfx_set_color: Set exposed color (parameter, color as [r,g,b,a])
+    ///   - vfx_set_gradient: Set exposed gradient (parameter, gradient)
+    ///   - vfx_set_texture: Set exposed texture (parameter, texturePath)
+    ///   - vfx_set_mesh: Set exposed mesh (parameter, meshPath)
+    ///   - vfx_set_curve: Set exposed animation curve (parameter, curve)
+    ///   - vfx_send_event: Send event with attributes (eventName, position, velocity, color, size, lifetime)
+    ///   - vfx_play/stop/pause/reinit: Playback control
+    ///   - vfx_set_playback_speed: Set playback speed multiplier (playRate)
+    ///   - vfx_set_seed: Set random seed (seed, resetSeedOnPlay)
+    ///
+    /// LineRenderer (line_*):
+    ///   - line_get_info: Get line info (position count, width, color, etc.)
+    ///   - line_set_positions: Set all positions (positions as [[x,y,z], ...])
+    ///   - line_add_position: Add position at end (position as [x,y,z])
+    ///   - line_set_position: Set specific position (index, position)
+    ///   - line_set_width: Set width (width, startWidth, endWidth, widthCurve, widthMultiplier)
+    ///   - line_set_color: Set color (color, gradient, startColor, endColor)
+    ///   - line_set_material: Set material (materialPath)
+    ///   - line_set_properties: Set renderer properties (loop, useWorldSpace, alignment, textureMode, numCornerVertices, numCapVertices, etc.)
+    ///   - line_clear: Clear all positions
+    ///   Shape Creation:
+    ///   - line_create_line: Create simple line (start, end, segments)
+    ///   - line_create_circle: Create circle (center, radius, segments, normal)
+    ///   - line_create_arc: Create arc (center, radius, startAngle, endAngle, segments, normal)
+    ///   - line_create_bezier: Create Bezier curve (start, end, controlPoint1, controlPoint2, segments)
+    ///
+    /// TrailRenderer (trail_*):
+    ///   - trail_get_info: Get trail info
+    ///   - trail_set_time: Set trail duration (time)
+    ///   - trail_set_width: Set width (width, startWidth, endWidth, widthCurve, widthMultiplier)
+    ///   - trail_set_color: Set color (color, gradient, startColor, endColor)
+    ///   - trail_set_material: Set material (materialPath)
+    ///   - trail_set_properties: Set properties (minVertexDistance, autodestruct, emitting, alignment, textureMode, etc.)
+    ///   - trail_clear: Clear trail
+    ///   - trail_emit: Emit point at current position (Unity 2021.1+)
+    ///
+    /// COMMON PARAMETERS:
+    /// - target (string): GameObject identifier
+    /// - searchMethod (string): "by_id" | "by_name" | "by_path" | "by_tag" | "by_layer"
+    /// - materialPath (string): Asset path to material (e.g., "Assets/Materials/Fire.mat")
+    /// - color (array): Color as [r, g, b, a] with values 0-1
+    /// - position (array): 3D position as [x, y, z]
+    /// - gradient (object): {colorKeys: [{color: [r,g,b,a], time: 0-1}], alphaKeys: [{alpha: 0-1, time: 0-1}]}
+    /// - curve (object): {keys: [{time: 0-1, value: number, inTangent: number, outTangent: number}]}
+    ///
+    /// For full parameter details, refer to Unity documentation for each component type.
     /// </summary>
     [McpForUnityTool("manage_vfx", AutoRegister = false)]
     public static class ManageVFX
