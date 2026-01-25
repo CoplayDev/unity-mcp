@@ -17,12 +17,7 @@ def prefab():
 
 @prefab.command("open")
 @click.argument("path")
-@click.option(
-    "--mode", "-m",
-    default="InIsolation",
-    help="Prefab stage mode (InIsolation)."
-)
-def open_stage(path: str, mode: str):
+def open_stage(path: str):
     """Open a prefab in the prefab stage for editing.
 
     \b
@@ -34,7 +29,6 @@ def open_stage(path: str, mode: str):
     params: dict[str, Any] = {
         "action": "open_stage",
         "prefabPath": path,
-        "mode": mode,
     }
 
     try:
@@ -80,18 +74,29 @@ def close_stage(save: bool):
 
 
 @prefab.command("save")
-def save_stage():
+@click.option(
+    "--force", "-f",
+    is_flag=True,
+    help="Force save even if no changes detected. Useful for automated workflows."
+)
+def save_stage(force: bool):
     """Save the currently open prefab stage.
 
     \b
     Examples:
         unity-mcp prefab save
+        unity-mcp prefab save --force
     """
     config = get_config()
 
+    params: dict[str, Any] = {
+        "action": "save_open_stage",
+    }
+    if force:
+        params["force"] = True
+
     try:
-        result = run_command("manage_prefabs", {
-                             "action": "save_open_stage"}, config)
+        result = run_command("manage_prefabs", params, config)
         click.echo(format_output(result, config.format))
         if result.get("success"):
             print_success("Saved prefab")
