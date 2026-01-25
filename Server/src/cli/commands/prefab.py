@@ -11,7 +11,7 @@ from cli.utils.connection import run_command, UnityConnectionError
 
 @click.group()
 def prefab():
-    """Prefab operations - open, save, create prefabs."""
+    """Prefab operations - info, hierarchy, open, save, close, create prefabs."""
     pass
 
 
@@ -100,6 +100,114 @@ def save_stage(force: bool):
         click.echo(format_output(result, config.format))
         if result.get("success"):
             print_success("Saved prefab")
+    except UnityConnectionError as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
+@prefab.command("info")
+@click.argument("path")
+@click.option(
+    "--compact", "-c",
+    is_flag=True,
+    help="Show compact output (key values only)."
+)
+def info(path: str, compact: bool):
+    """Get information about a prefab asset.
+
+    \b
+    Examples:
+        unity-mcp prefab info "Assets/Prefabs/Player.prefab"
+        unity-mcp prefab info "Assets/Prefabs/UI.prefab" --compact
+    """
+    config = get_config()
+
+    params: dict[str, Any] = {
+        "action": "get_info",
+        "prefabPath": path,
+    }
+
+    try:
+        result = run_command("manage_prefabs", params, config)
+        # Get the actual response data from the wrapped result structure
+        response_data = result.get("result", result)
+        if compact and response_data.get("success") and response_data.get("data"):
+            data = response_data["data"]
+            click.echo(f"Prefab: {data.get('assetPath', path)}")
+            click.echo(f"  Type: {data.get('prefabType', 'Unknown')}")
+            click.echo(f"  Root: {data.get('rootObjectName', 'N/A')}")
+            click.echo(f"  GUID: {data.get('guid', 'N/A')}")
+            click.echo(f"  Components: {len(data.get('rootComponentTypes', []))}")
+            click.echo(f"  Children: {data.get('childCount', 0)}")
+            if data.get('isVariant'):
+                click.echo(f"  Variant of: {data.get('parentPrefab', 'N/A')}")
+        else:
+            click.echo(format_output(result, config.format))
+    except UnityConnectionError as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
+@prefab.command("hierarchy")
+@click.argument("path")
+@click.option(
+    "--compact", "-c",
+    is_flag=True,
+    help="Show compact output (names and paths only)."
+)
+@click.option(
+    "--show-prefab-info", "-p",
+    is_flag=True,
+    help="Show prefab nesting information."
+)
+def hierarchy(path: str, compact: bool, show_prefab_info: bool):
+    """Get the hierarchical structure of a prefab.
+
+    \b
+    Examples:
+        unity-mcp prefab hierarchy "Assets/Prefabs/Player.prefab"
+        unity-mcp prefab hierarchy "Assets/Prefabs/UI.prefab" --compact
+        unity-mcp prefab hierarchy "Assets/Prefabs/Complex.prefab" --show-prefab-info
+    """
+    config = get_config()
+
+    params: dict[str, Any] = {
+        "action": "get_hierarchy",
+        "prefabPath": path,
+    }
+
+    try:
+        result = run_command("manage_prefabs", params, config)
+        # Get the actual response data from the wrapped result structure
+        response_data = result.get("result", result)
+        if compact and response_data.get("success") and response_data.get("data"):
+            data = response_data["data"]
+            items = data.get("items", [])
+            for item in items:
+                indent = "  " * item.get("path", "").count("/")
+                prefab_info = ""
+                if show_prefab_info and item.get("prefab", {}).get("isNestedRoot"):
+                    prefab_info = f" [nested: {item['prefab']['assetPath']}]"
+                click.echo(f"{indent}{item.get('name')}{prefab_info}")
+            click.echo(f"\nTotal: {data.get('total', 0)} objects")
+        elif show_prefab_info:
+            # Show prefab info in readable format
+            if response_data.get("success") and response_data.get("data"):
+                data = response_data["data"]
+                items = data.get("items", [])
+                for item in items:
+                    prefab = item.get("prefab", {})
+                    prefab_info = ""
+                    if prefab.get("isRoot"):
+                        prefab_info = " [root]"
+                    elif prefab.get("isNestedRoot"):
+                        prefab_info = f" [nested: {prefab.get('nestingDepth', 0)}]"
+                    click.echo(f"{item.get('path')}{prefab_info}")
+                click.echo(f"\nTotal: {data.get('total', 0)} objects")
+            else:
+                click.echo(format_output(result, config.format))
+        else:
+            click.echo(format_output(result, config.format))
     except UnityConnectionError as e:
         print_error(str(e))
         sys.exit(1)
