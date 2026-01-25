@@ -82,8 +82,8 @@ async def manage_material(
                      "Value to set (color array, float, texture path/instruction)"] | None = None,
 
     # set_material_color / set_renderer_color
-    color: Annotated[list[float],
-                     "Color as [r, g, b] or [r, g, b, a] array."] | None = None,
+    color: Annotated[Any,
+                     "Color as [r, g, b] or [r, g, b, a] array (list or JSON string)."] | None = None,
 
     # assign_material_to_renderer / set_renderer_color
     target: Annotated[str,
