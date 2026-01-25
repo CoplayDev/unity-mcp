@@ -52,6 +52,7 @@ async def manage_prefabs(
     allow_overwrite: Annotated[bool, "Allow replacing existing prefab."] | None = None,
     search_inactive: Annotated[bool, "Include inactive GameObjects in search."] | None = None,
     unlink_if_instance: Annotated[bool, "Unlink from existing prefab before creating new one."] | None = None,
+    force: Annotated[bool, "Force save even if no changes detected. Useful for automated workflows."] | None = None,
 ) -> dict[str, Any]:
     # Validate required parameters
     required = REQUIRED_PARAMS.get(action, [])
@@ -104,6 +105,10 @@ async def manage_prefabs(
         unlink_if_instance_val = coerce_bool(unlink_if_instance)
         if unlink_if_instance_val is not None:
             params["unlinkIfInstance"] = unlink_if_instance_val
+
+        force_val = coerce_bool(force)
+        if force_val is not None:
+            params["force"] = force_val
 
         # Send command to Unity
         response = await send_with_unity_instance(

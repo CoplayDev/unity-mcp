@@ -47,7 +47,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                     case ACTION_CLOSE_STAGE:
                         return CloseStage(@params);
                     case ACTION_SAVE_OPEN_STAGE:
-                        return SaveOpenStage();
+                        return SaveOpenStage(@params);
                     case ACTION_CREATE_FROM_GAMEOBJECT:
                         return CreatePrefabFromGameObject(@params);
                     case ACTION_GET_INFO:
@@ -128,8 +128,9 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
         /// <summary>
         /// Saves changes to the currently open prefab stage.
+        /// Supports a 'force' parameter for automated workflows where isDirty may not be set.
         /// </summary>
-        private static object SaveOpenStage()
+        private static object SaveOpenStage(JObject @params)
         {
             PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
             if (stage == null)
@@ -142,9 +143,19 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 return new ErrorResponse("Prefab stage validation failed. Cannot save.");
             }
 
+            // Check for force parameter (useful for automated workflows)
+            bool force = @params?["force"]?.ToObject<bool>() ?? false;
+
+            // Check if there are actual changes to save
+            bool wasDirty = stage.scene.isDirty;
+            if (!wasDirty && !force)
+            {
+                return new SuccessResponse($"Prefab stage for '{stage.assetPath}' has no unsaved changes.", SerializeStage(stage));
+            }
+
             try
             {
-                SaveAndRefreshStage(stage);
+                SaveAndRefreshStage(stage, force);
                 return new SuccessResponse($"Saved prefab stage for '{stage.assetPath}'.", SerializeStage(stage));
             }
             catch (Exception e)
@@ -157,33 +168,18 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
         /// <summary>
         /// Saves the prefab stage and refreshes the asset database.
+        /// Uses PrefabUtility.SaveAsPrefabAsset for reliable prefab saving without dialogs.
         /// </summary>
-        private static void SaveAndRefreshStage(PrefabStage stage)
+        /// <param name="stage">The prefab stage to save.</param>
+        /// <param name="force">If true, marks the prefab dirty before saving to ensure changes are captured.</param>
+        private static void SaveAndRefreshStage(PrefabStage stage, bool force = false)
         {
             if (stage == null)
             {
                 throw new ArgumentNullException(nameof(stage), "Prefab stage cannot be null.");
             }
 
-            SaveStagePrefab(stage);
-
-            // Save all assets to ensure changes persist to disk
-            AssetDatabase.SaveAssets();
-
-            McpLog.Info($"[ManagePrefabs] Successfully saved prefab '{stage.assetPath}'.");
-        }
-
-        /// <summary>
-        /// Saves the prefab stage asset using the correct Unity API (Unity 2021.3+).
-        ///
-        /// When editing in PrefabStage, the prefabContentsRoot is treated as a prefab instance.
-        /// We use SetDirty + SaveAssets pattern which is the correct way to save changes
-        /// made to a prefab that's open in PrefabStage.
-        /// Note: AssetDatabase.SaveAssets() is called by SaveAndRefreshStage after this method.
-        /// </summary>
-        private static void SaveStagePrefab(PrefabStage stage)
-        {
-            if (stage?.prefabContentsRoot == null)
+            if (stage.prefabContentsRoot == null)
             {
                 throw new InvalidOperationException("Cannot save prefab stage without a prefab root.");
             }
@@ -193,10 +189,28 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 throw new InvalidOperationException("Prefab stage has invalid asset path.");
             }
 
-            // Mark the prefab as modified so Unity knows it needs to be saved
-            EditorUtility.SetDirty(stage.prefabContentsRoot);
+            // When force=true, mark the prefab root dirty to ensure changes are saved
+            // This is useful for automated workflows where isDirty may not be set correctly
+            if (force)
+            {
+                EditorUtility.SetDirty(stage.prefabContentsRoot);
+                EditorSceneManager.MarkSceneDirty(stage.scene);
+            }
 
-            McpLog.Info($"[ManagePrefabs] Prefab stage marked dirty: {stage.assetPath}");
+            // Use PrefabUtility.SaveAsPrefabAsset which saves without dialogs
+            // This is more reliable for automated workflows than EditorSceneManager.SaveScene
+            bool success;
+            PrefabUtility.SaveAsPrefabAsset(stage.prefabContentsRoot, stage.assetPath, out success);
+
+            if (!success)
+            {
+                throw new InvalidOperationException($"Failed to save prefab asset for '{stage.assetPath}'.");
+            }
+
+            // Ensure changes are persisted to disk
+            AssetDatabase.SaveAssets();
+
+            McpLog.Info($"[ManagePrefabs] Successfully saved prefab '{stage.assetPath}'.");
         }
 
         /// <summary>
