@@ -5,6 +5,7 @@ using System.Linq;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEditorInternal;
 using UnityEngine;
 
@@ -239,6 +240,18 @@ namespace MCPForUnity.Editor.Tools.GameObjects
             }
 
             EditorUtility.SetDirty(targetGo);
+
+            // Mark the appropriate scene as dirty (handles both regular scenes and prefab stages)
+            var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+            if (prefabStage != null)
+            {
+                EditorSceneManager.MarkSceneDirty(prefabStage.scene);
+            }
+            else
+            {
+                EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            }
+
             return new SuccessResponse(
                 $"GameObject '{targetGo.name}' modified successfully.",
                 Helpers.GameObjectSerializer.GetGameObjectData(targetGo)
