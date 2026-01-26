@@ -186,7 +186,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 {
                     return JToken.Parse(token.ToString()) as JObject;
                 }
-                catch (JsonException)
+                catch (JsonException ex)
                 {
                     throw new JsonException(  
                         $"Failed to parse 'properties' JSON string. Raw value: {token}",  
