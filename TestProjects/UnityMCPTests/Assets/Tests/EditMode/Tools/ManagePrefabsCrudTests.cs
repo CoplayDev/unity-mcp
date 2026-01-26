@@ -423,9 +423,6 @@ namespace MCPForUnityTests.Editor.Tools
 
                 AssetDatabase.Refresh();
 
-                // Expect the nested prefab warning due to test environment
-                LogAssert.Expect(UnityEngine.LogType.Error, new Regex("Nested Prefab problem"));
-
                 var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
                 {
                     ["action"] = "get_hierarchy",
@@ -444,10 +441,10 @@ namespace MCPForUnityTests.Editor.Tools
             }
             finally
             {
-                SafeDeleteAsset(parentPath);
-                SafeDeleteAsset(Path.Combine(TempDirectory, "ParentPrefab.prefab").Replace('\\', '/'));
-                SafeDeleteAsset(Path.Combine(TempDirectory, "ChildPrefab.prefab").Replace('\\', '/'));
+                // Delete nested container first (before deleting prefabs it references)
                 SafeDeleteAsset(Path.Combine(TempDirectory, "NestedContainer.prefab").Replace('\\', '/'));
+                SafeDeleteAsset(parentPath);
+                SafeDeleteAsset(Path.Combine(TempDirectory, "ChildPrefab.prefab").Replace('\\', '/'));
             }
         }
 
