@@ -43,6 +43,8 @@ namespace MCPForUnity.Editor.Helpers
                 Material defaultMat = RenderPipelineUtility.GetOrCreateDefaultVFXMaterial(componentType.Value);
                 if (defaultMat != null)
                 {
+                    Undo.RecordObject(renderer, "Assign default VFX material");
+                    EditorUtility.SetDirty(renderer);
                     renderer.sharedMaterial = defaultMat;
                 }
             }

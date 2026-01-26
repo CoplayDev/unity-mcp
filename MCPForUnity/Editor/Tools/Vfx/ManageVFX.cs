@@ -188,7 +188,9 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 }
                 catch (JsonException)
                 {
-                    return null;
+                    throw new JsonException(  
+                        $"Failed to parse 'properties' JSON string. Raw value: {token}",  
+                        ex); 
                 }
             }
 
