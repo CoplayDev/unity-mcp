@@ -12,6 +12,43 @@ namespace MCPForUnity.Editor.Helpers
     /// </summary>
     public static class RendererHelpers
     {
+        /// <summary>
+        /// Ensures a renderer has a material assigned. If not, auto-assigns a default material
+        /// based on the render pipeline and component type.
+        /// </summary>
+        /// <param name="renderer">The renderer to check</param>
+        public static void EnsureMaterial(Renderer renderer)
+        {
+            if (renderer == null || renderer.sharedMaterial != null)
+            {
+                return;
+            }
+
+            RenderPipelineUtility.VFXComponentType? componentType = null;
+            if (renderer is ParticleSystemRenderer)
+            {
+                componentType = RenderPipelineUtility.VFXComponentType.ParticleSystem;
+            }
+            else if (renderer is LineRenderer)
+            {
+                componentType = RenderPipelineUtility.VFXComponentType.LineRenderer;
+            }
+            else if (renderer is TrailRenderer)
+            {
+                componentType = RenderPipelineUtility.VFXComponentType.TrailRenderer;
+            }
+
+            if (componentType.HasValue)
+            {
+                Material defaultMat = RenderPipelineUtility.GetOrCreateDefaultVFXMaterial(componentType.Value);
+                if (defaultMat != null)
+                {
+                    Undo.RecordObject(renderer, "Assign default VFX material");
+                    EditorUtility.SetDirty(renderer);
+                    renderer.sharedMaterial = defaultMat;
+                }
+            }
+        }
 
         /// <summary>
         /// Applies common Renderer properties (shadows, lighting, probes, sorting, rendering layer).
@@ -127,12 +164,48 @@ namespace MCPForUnity.Editor.Helpers
         /// <param name="params">JSON parameters containing materialPath</param>
         /// <param name="undoName">Name for the undo operation</param>
         /// <param name="findMaterial">Function to find material by path</param>
-        public static object SetRendererMaterial(Renderer renderer, JObject @params, string undoName, Func<string, Material> findMaterial)
+        /// <param name="autoAssignDefault">If true, auto-assigns default material when materialPath is not provided</param>
+        public static object SetRendererMaterial(Renderer renderer, JObject @params, string undoName, Func<string, Material> findMaterial, bool autoAssignDefault = true)
         {
             if (renderer == null) return new { success = false, message = "Renderer not found" };
 
             string path = @params["materialPath"]?.ToString();
-            if (string.IsNullOrEmpty(path)) return new { success = false, message = "materialPath required" };
+
+            if (string.IsNullOrEmpty(path))
+            {
+                if (!autoAssignDefault)
+                {
+                    return new { success = false, message = "materialPath required" };
+                }
+
+                RenderPipelineUtility.VFXComponentType? componentType = null;
+                if (renderer is ParticleSystemRenderer)
+                {
+                    componentType = RenderPipelineUtility.VFXComponentType.ParticleSystem;
+                }
+                else if (renderer is LineRenderer)
+                {
+                    componentType = RenderPipelineUtility.VFXComponentType.LineRenderer;
+                }
+                else if (renderer is TrailRenderer)
+                {
+                    componentType = RenderPipelineUtility.VFXComponentType.TrailRenderer;
+                }
+
+                if (componentType.HasValue)
+                {
+                    Material defaultMat = RenderPipelineUtility.GetOrCreateDefaultVFXMaterial(componentType.Value);
+                    if (defaultMat != null)
+                    {
+                        Undo.RecordObject(renderer, undoName);
+                        renderer.sharedMaterial = defaultMat;
+                        EditorUtility.SetDirty(renderer);
+                        return new { success = true, message = $"Auto-assigned default material: {defaultMat.name}" };
+                    }
+                }
+
+                return new { success = false, message = "materialPath required" };
+            }
 
             Material mat = findMaterial(path);
             if (mat == null) return new { success = false, message = $"Material not found: {path}" };

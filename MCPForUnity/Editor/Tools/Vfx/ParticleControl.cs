@@ -2,6 +2,7 @@ using System;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
+using MCPForUnity.Editor.Helpers;
 
 namespace MCPForUnity.Editor.Tools.Vfx
 {
@@ -42,6 +43,16 @@ namespace MCPForUnity.Editor.Tools.Vfx
             ParticleSystem ps = ParticleCommon.FindParticleSystem(@params);
             if (ps == null) return new { success = false, message = "ParticleSystem not found" };
 
+            // Ensure material is assigned before playing
+            if (action == "play" || action == "restart")
+            {
+                var renderer = ps.GetComponent<ParticleSystemRenderer>();
+                if (renderer != null)
+                {
+                    RendererHelpers.EnsureMaterial(renderer);
+                }
+            }
+
             bool withChildren = @params["withChildren"]?.ToObject<bool>() ?? true;
 
             switch (action)
@@ -61,6 +72,13 @@ namespace MCPForUnity.Editor.Tools.Vfx
         {
             ParticleSystem ps = ParticleCommon.FindParticleSystem(@params);
             if (ps == null) return new { success = false, message = "ParticleSystem not found" };
+
+            // Ensure material is assigned
+            var renderer = ps.GetComponent<ParticleSystemRenderer>();
+            if (renderer != null)
+            {
+                RendererHelpers.EnsureMaterial(renderer);
+            }
 
             Undo.RecordObject(ps, "Add Burst");
             var emission = ps.emission;

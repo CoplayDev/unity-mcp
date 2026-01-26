@@ -27,6 +27,7 @@ namespace MCPForUnity.Editor.Helpers
 
         /// <summary>
         /// Normalizes a Unity asset path by ensuring forward slashes are used and that it is rooted under "Assets/".
+        /// Also protects against path traversal attacks using "../" sequences.
         /// </summary>
         public static string SanitizeAssetPath(string path)
         {
@@ -36,12 +37,60 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             path = NormalizeSeparators(path);
+
+            // Check for path traversal sequences
+            if (path.Contains(".."))
+            {
+                McpLog.Warn($"[AssetPathUtility] Path contains potential traversal sequence: '{path}'");
+                return null;
+            }
+
+            // Ensure path starts with Assets/
             if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
             {
                 return "Assets/" + path.TrimStart('/');
             }
 
             return path;
+        }
+
+        /// <summary>
+        /// Checks if a given asset path is valid and safe (no traversal, within Assets folder).
+        /// </summary>
+        /// <returns>True if the path is valid, false otherwise.</returns>
+        public static bool IsValidAssetPath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+
+            // Normalize for comparison
+            string normalized = NormalizeSeparators(path);
+
+            // Must start with Assets/
+            if (!normalized.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            // Must not contain traversal sequences
+            if (normalized.Contains(".."))
+            {
+                return false;
+            }
+
+            // Must not contain invalid path characters
+            char[] invalidChars = { ':', '*', '?', '"', '<', '>', '|' };
+            foreach (char c in invalidChars)
+            {
+                if (normalized.IndexOf(c) >= 0)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         /// <summary>

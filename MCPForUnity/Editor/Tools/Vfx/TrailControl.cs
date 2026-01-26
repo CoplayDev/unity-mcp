@@ -1,6 +1,7 @@
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
+using MCPForUnity.Editor.Helpers;
 
 namespace MCPForUnity.Editor.Tools.Vfx
 {
@@ -20,6 +21,8 @@ namespace MCPForUnity.Editor.Tools.Vfx
         {
             TrailRenderer tr = TrailRead.FindTrailRenderer(@params);
             if (tr == null) return new { success = false, message = "TrailRenderer not found" };
+
+            RendererHelpers.EnsureMaterial(tr);
 
 #if UNITY_2021_1_OR_NEWER
             Vector3 pos = ManageVfxCommon.ParseVector3(@params["position"]);

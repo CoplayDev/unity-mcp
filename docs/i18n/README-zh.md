@@ -157,8 +157,8 @@ MCP for Unity 支持多个 Unity Editor 实例。要将操作定向到某个特�
 要使用能捕获未定义命名空间、类型和方法的 **Strict** 验证：
 
 1. 安装 [NuGetForUnity](https://github.com/GlitchEnzo/NuGetForUnity)
-2. `Window > NuGet Package Manager` → 安装 `Microsoft.CodeAnalysis` v4.14.0
-3. 同时安装 `SQLitePCLRaw.core` 和 `SQLitePCLRaw.bundle_e_sqlite3`
+2. `Window > NuGet Package Manager` → 安装 `Microsoft.CodeAnalysis` v5.0
+3. 同时安装 `SQLitePCLRaw.core` 和 `SQLitePCLRaw.bundle_e_sqlite3` v3.0.2
 4. 在 `Player Settings > Scripting Define Symbols` 中添加 `USE_ROSLYN`
 5. 重启 Unity
 

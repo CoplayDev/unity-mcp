@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEditor;
 
 namespace MCPForUnity.Editor.Helpers
 {
@@ -13,6 +15,15 @@ namespace MCPForUnity.Editor.Helpers
             HighDefinition,
             Custom
         }
+
+        internal enum VFXComponentType
+        {
+            ParticleSystem,
+            LineRenderer,
+            TrailRenderer
+        }
+
+        private static Dictionary<string, Material> s_DefaultVFXMaterials = new Dictionary<string, Material>();
 
         private static readonly string[] BuiltInLitShaders = { "Standard", "Legacy Shaders/Diffuse" };
         private static readonly string[] BuiltInUnlitShaders = { "Unlit/Color", "Unlit/Texture" };
@@ -191,6 +202,83 @@ namespace MCPForUnity.Editor.Helpers
                     }
                     break;
             }
+        }
+
+        internal static Material GetOrCreateDefaultVFXMaterial(VFXComponentType componentType)
+        {
+            var pipeline = GetActivePipeline();
+            string cacheKey = $"{pipeline}_{componentType}";
+
+            if (s_DefaultVFXMaterials.TryGetValue(cacheKey, out Material cachedMaterial) && cachedMaterial != null)
+            {
+                return cachedMaterial;
+            }
+
+            Material material = null;
+
+            if (pipeline == PipelineKind.BuiltIn)
+            {
+                string builtinPath = componentType == VFXComponentType.ParticleSystem
+                    ? "Default-Particle.mat"
+                    : "Default-Line.mat";
+
+                material = AssetDatabase.GetBuiltinExtraResource<Material>(builtinPath);
+            }
+
+            if (material == null)
+            {
+                Shader shader = ResolveDefaultUnlitShader(pipeline);
+                if (shader == null)
+                {
+                    shader = Shader.Find("Unlit/Color");
+                }
+
+                if (shader != null)
+                {
+                    material = new Material(shader);
+                    material.name = $"Auto_Default_{componentType}_{pipeline}";
+
+                    // Set default color (white is standard for VFX)
+                    if (material.HasProperty("_Color"))
+                    {
+                        material.SetColor("_Color", Color.white);
+                    }
+                    if (material.HasProperty("_BaseColor"))
+                    {
+                        material.SetColor("_BaseColor", Color.white);
+                    }
+
+                    if (componentType == VFXComponentType.ParticleSystem)
+                    {
+                        material.renderQueue = 3000;
+                        if (material.HasProperty("_Mode"))
+                        {
+                            material.SetFloat("_Mode", 2);
+                        }
+                        if (material.HasProperty("_SrcBlend"))
+                        {
+                            material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                        }
+                        if (material.HasProperty("_DstBlend"))
+                        {
+                            material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                        }
+                        if (material.HasProperty("_ZWrite"))
+                        {
+                            material.SetFloat("_ZWrite", 0);
+                        }
+                    }
+
+                    McpLog.Info($"[RenderPipelineUtility] Created default VFX material for {componentType} using {shader.name}");
+                }
+            }
+
+            if (material != null)
+            {
+                s_DefaultVFXMaterials[cacheKey] = material;
+            }
+
+            return material;
         }
     }
 }

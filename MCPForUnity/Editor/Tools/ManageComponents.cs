@@ -5,6 +5,7 @@ using System.Reflection;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 
 namespace MCPForUnity.Editor.Tools
@@ -103,6 +104,7 @@ namespace MCPForUnity.Editor.Tools
             }
 
             EditorUtility.SetDirty(targetGo);
+            MarkOwningSceneDirty(targetGo);
 
             return new
             {
@@ -146,6 +148,7 @@ namespace MCPForUnity.Editor.Tools
             }
 
             EditorUtility.SetDirty(targetGo);
+            MarkOwningSceneDirty(targetGo);
 
             return new
             {
@@ -227,6 +230,7 @@ namespace MCPForUnity.Editor.Tools
                 }
 
                 EditorUtility.SetDirty(component);
+                MarkOwningSceneDirty(targetGo);
 
                 if (errors.Count > 0)
                 {
@@ -261,6 +265,23 @@ namespace MCPForUnity.Editor.Tools
         #endregion
 
         #region Helpers
+
+        /// <summary>
+        /// Marks the appropriate scene as dirty for the given GameObject.
+        /// Handles both regular scenes and prefab stages.
+        /// </summary>
+        private static void MarkOwningSceneDirty(GameObject targetGo)
+        {
+            var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+            if (prefabStage != null)
+            {
+                EditorSceneManager.MarkSceneDirty(prefabStage.scene);
+            }
+            else
+            {
+                EditorSceneManager.MarkSceneDirty(targetGo.scene);
+            }
+        }
 
         private static GameObject FindTarget(JToken targetToken, string searchMethod)
         {
