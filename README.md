@@ -157,8 +157,8 @@ MCP for Unity supports multiple Unity Editor instances. To target a specific one
 For **Strict** validation that catches undefined namespaces, types, and methods:
 
 1. Install [NuGetForUnity](https://github.com/GlitchEnzo/NuGetForUnity)
-2. `Window > NuGet Package Manager` → Install `Microsoft.CodeAnalysis` v4.14.0
-3. Also install `SQLitePCLRaw.core` and `SQLitePCLRaw.bundle_e_sqlite3`
+2. `Window > NuGet Package Manager` → Install `Microsoft.CodeAnalysis` v5.0
+3. Also install `SQLitePCLRaw.core` and `SQLitePCLRaw.bundle_e_sqlite3` v3.0.2
 4. Add `USE_ROSLYN` to `Player Settings > Scripting Define Symbols`
 5. Restart Unity
 
