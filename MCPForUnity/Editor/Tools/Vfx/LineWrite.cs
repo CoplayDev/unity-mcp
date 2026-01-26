@@ -13,6 +13,8 @@ namespace MCPForUnity.Editor.Tools.Vfx
             LineRenderer lr = LineRead.FindLineRenderer(@params);
             if (lr == null) return new { success = false, message = "LineRenderer not found" };
 
+            RendererHelpers.EnsureMaterial(lr);
+
             JArray posArr = @params["positions"] as JArray;
             if (posArr == null) return new { success = false, message = "Positions array required" };
 
@@ -35,6 +37,8 @@ namespace MCPForUnity.Editor.Tools.Vfx
             LineRenderer lr = LineRead.FindLineRenderer(@params);
             if (lr == null) return new { success = false, message = "LineRenderer not found" };
 
+            RendererHelpers.EnsureMaterial(lr);
+
             Vector3 pos = ManageVfxCommon.ParseVector3(@params["position"]);
 
             Undo.RecordObject(lr, "Add Line Position");
@@ -50,6 +54,8 @@ namespace MCPForUnity.Editor.Tools.Vfx
         {
             LineRenderer lr = LineRead.FindLineRenderer(@params);
             if (lr == null) return new { success = false, message = "LineRenderer not found" };
+
+            RendererHelpers.EnsureMaterial(lr);
 
             int index = @params["index"]?.ToObject<int>() ?? -1;
             if (index < 0 || index >= lr.positionCount) return new { success = false, message = $"Invalid index {index}" };
@@ -68,6 +74,8 @@ namespace MCPForUnity.Editor.Tools.Vfx
             LineRenderer lr = LineRead.FindLineRenderer(@params);
             if (lr == null) return new { success = false, message = "LineRenderer not found" };
 
+            RendererHelpers.EnsureMaterial(lr);
+
             Undo.RecordObject(lr, "Set Line Width");
             var changes = new List<string>();
 
@@ -84,6 +92,8 @@ namespace MCPForUnity.Editor.Tools.Vfx
         {
             LineRenderer lr = LineRead.FindLineRenderer(@params);
             if (lr == null) return new { success = false, message = "LineRenderer not found" };
+
+            RendererHelpers.EnsureMaterial(lr);
 
             Undo.RecordObject(lr, "Set Line Color");
             var changes = new List<string>();
@@ -108,8 +118,48 @@ namespace MCPForUnity.Editor.Tools.Vfx
             LineRenderer lr = LineRead.FindLineRenderer(@params);
             if (lr == null) return new { success = false, message = "LineRenderer not found" };
 
+            RendererHelpers.EnsureMaterial(lr);
+
             Undo.RecordObject(lr, "Set Line Properties");
             var changes = new List<string>();
+
+            // Handle material if provided
+            if (@params["materialPath"] != null)
+            {
+                Material mat = ManageVfxCommon.FindMaterialByPath(@params["materialPath"].ToString());
+                if (mat != null)
+                {
+                    lr.sharedMaterial = mat;
+                    changes.Add($"material={mat.name}");
+                }
+                else
+                {
+                    McpLog.Warn($"Material not found: {@params["materialPath"]}");
+                }
+            }
+
+            // Handle positions if provided
+            if (@params["positions"] != null)
+            {
+                JArray posArr = @params["positions"] as JArray;
+                if (posArr != null && posArr.Count > 0)
+                {
+                    var positions = new Vector3[posArr.Count];
+                    for (int i = 0; i < posArr.Count; i++)
+                    {
+                        positions[i] = ManageVfxCommon.ParseVector3(posArr[i]);
+                    }
+                    lr.positionCount = positions.Length;
+                    lr.SetPositions(positions);
+                    changes.Add($"positions({positions.Length})");
+                }
+            }
+            else if (@params["positionCount"] != null)
+            {
+                int count = @params["positionCount"].ToObject<int>();
+                lr.positionCount = count;
+                changes.Add("positionCount");
+            }
 
             RendererHelpers.ApplyLineTrailProperties(@params, changes,
                 v => lr.loop = v, v => lr.useWorldSpace = v,

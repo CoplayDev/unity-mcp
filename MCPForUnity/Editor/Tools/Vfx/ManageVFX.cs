@@ -34,6 +34,16 @@ namespace MCPForUnity.Editor.Tools.Vfx
     /// - by_id: "12345" finds GameObject by instance ID (most reliable)
     /// - by_tag: "Enemy" finds first GameObject with tag
     ///
+    /// AUTOMATIC MATERIAL ASSIGNMENT:
+    /// VFX components (ParticleSystem, LineRenderer, TrailRenderer) automatically receive
+    /// appropriate default materials based on the active rendering pipeline when no material
+    /// is explicitly specified:
+    /// - Built-in Pipeline: Uses Unity's built-in Default-Particle.mat and Default-Line.mat
+    /// - URP/HDRP: Creates materials with pipeline-appropriate unlit shaders
+    /// - Materials are cached to avoid recreation
+    /// - Explicit materialPath parameter always overrides auto-assignment
+    /// - Auto-assigned materials are logged for transparency
+    ///
     /// AVAILABLE ACTIONS:
     ///
     /// ParticleSystem (particle_*):
@@ -111,9 +121,154 @@ namespace MCPForUnity.Editor.Tools.Vfx
     [McpForUnityTool("manage_vfx", AutoRegister = false)]
     public static class ManageVFX
     {
+        private static readonly Dictionary<string, string> ParamAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "size_over_lifetime", "size" },
+            { "start_color_line", "startColor" },
+            { "sorting_layer_id", "sortingLayerID" },
+            { "material", "materialPath" },
+        };
+
+        private static JObject NormalizeParams(JObject source)
+        {
+            if (source == null)
+            {
+                return new JObject();
+            }
+
+            var normalized = new JObject();
+            var properties = ExtractProperties(source);
+            if (properties != null)
+            {
+                foreach (var prop in properties.Properties())
+                {
+                    normalized[NormalizeKey(prop.Name, true)] = NormalizeToken(prop.Value);
+                }
+            }
+
+            foreach (var prop in source.Properties())
+            {
+                if (string.Equals(prop.Name, "properties", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                normalized[NormalizeKey(prop.Name, true)] = NormalizeToken(prop.Value);
+            }
+
+            return normalized;
+        }
+
+        private static JObject ExtractProperties(JObject source)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            if (!source.TryGetValue("properties", StringComparison.OrdinalIgnoreCase, out var token))
+            {
+                return null;
+            }
+
+            if (token == null || token.Type == JTokenType.Null)
+            {
+                return null;
+            }
+
+            if (token is JObject obj)
+            {
+                return obj;
+            }
+
+            if (token.Type == JTokenType.String)
+            {
+                try
+                {
+                    return JToken.Parse(token.ToString()) as JObject;
+                }
+                catch (JsonException)
+                {
+                    return null;
+                }
+            }
+
+            return null;
+        }
+
+        private static string NormalizeKey(string key, bool allowAliases)
+        {
+            if (string.IsNullOrEmpty(key))
+            {
+                return key;
+            }
+            if (string.Equals(key, "action", StringComparison.OrdinalIgnoreCase))
+            {
+                return "action";
+            }
+            if (allowAliases && ParamAliases.TryGetValue(key, out var alias))
+            {
+                return alias;
+            }
+            if (key.IndexOf('_') >= 0)
+            {
+                return ToCamelCase(key);
+            }
+            return key;
+        }
+
+        private static JToken NormalizeToken(JToken token)
+        {
+            if (token == null)
+            {
+                return null;
+            }
+
+            if (token is JObject obj)
+            {
+                var normalized = new JObject();
+                foreach (var prop in obj.Properties())
+                {
+                    normalized[NormalizeKey(prop.Name, false)] = NormalizeToken(prop.Value);
+                }
+                return normalized;
+            }
+
+            if (token is JArray array)
+            {
+                var normalized = new JArray();
+                foreach (var item in array)
+                {
+                    normalized.Add(NormalizeToken(item));
+                }
+                return normalized;
+            }
+
+            return token;
+        }
+
+        private static string ToCamelCase(string key)
+        {
+            if (string.IsNullOrEmpty(key) || key.IndexOf('_') < 0)
+            {
+                return key;
+            }
+
+            var parts = key.Split('_');
+            if (parts.Length == 0)
+            {
+                return key;
+            }
+
+            var first = parts[0];
+            var rest = string.Concat(parts.Skip(1).Select(part =>
+                string.IsNullOrEmpty(part) ? "" : char.ToUpperInvariant(part[0]) + part.Substring(1)));
+            return first + rest;
+        }
+
         public static object HandleCommand(JObject @params)
         {
-            string action = @params["action"]?.ToString();
+            JObject normalizedParams = NormalizeParams(@params);
+            string action = normalizedParams["action"]?.ToString();
             if (string.IsNullOrEmpty(action))
             {
                 return new { success = false, message = "Action is required" };
@@ -132,25 +287,25 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 // ParticleSystem actions (particle_*)
                 if (actionLower.StartsWith("particle_"))
                 {
-                    return HandleParticleSystemAction(@params, actionLower.Substring(9));
+                    return HandleParticleSystemAction(normalizedParams, actionLower.Substring(9));
                 }
 
                 // VFX Graph actions (vfx_*)
                 if (actionLower.StartsWith("vfx_"))
                 {
-                    return HandleVFXGraphAction(@params, actionLower.Substring(4));
+                    return HandleVFXGraphAction(normalizedParams, actionLower.Substring(4));
                 }
 
                 // LineRenderer actions (line_*)
                 if (actionLower.StartsWith("line_"))
                 {
-                    return HandleLineRendererAction(@params, actionLower.Substring(5));
+                    return HandleLineRendererAction(normalizedParams, actionLower.Substring(5));
                 }
 
                 // TrailRenderer actions (trail_*)
                 if (actionLower.StartsWith("trail_"))
                 {
-                    return HandleTrailRendererAction(@params, actionLower.Substring(6));
+                    return HandleTrailRendererAction(normalizedParams, actionLower.Substring(6));
                 }
 
                 return new { success = false, message = $"Unknown action: {action}. Actions must be prefixed with: particle_, vfx_, line_, or trail_" };

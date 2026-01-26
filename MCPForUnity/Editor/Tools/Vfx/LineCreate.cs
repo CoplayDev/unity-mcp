@@ -1,6 +1,7 @@
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
+using MCPForUnity.Editor.Helpers;
 
 namespace MCPForUnity.Editor.Tools.Vfx
 {
@@ -18,6 +19,29 @@ namespace MCPForUnity.Editor.Tools.Vfx
             lr.positionCount = 2;
             lr.SetPosition(0, start);
             lr.SetPosition(1, end);
+
+            RendererHelpers.EnsureMaterial(lr);
+
+            // Apply optional width
+            if (@params["width"] != null)
+            {
+                float w = @params["width"].ToObject<float>();
+                lr.startWidth = w;
+                lr.endWidth = w;
+            }
+            if (@params["startWidth"] != null) lr.startWidth = @params["startWidth"].ToObject<float>();
+            if (@params["endWidth"] != null) lr.endWidth = @params["endWidth"].ToObject<float>();
+
+            // Apply optional color
+            if (@params["color"] != null)
+            {
+                Color c = ManageVfxCommon.ParseColor(@params["color"]);
+                lr.startColor = c;
+                lr.endColor = c;
+            }
+            if (@params["startColor"] != null) lr.startColor = ManageVfxCommon.ParseColor(@params["startColor"]);
+            if (@params["endColor"] != null) lr.endColor = ManageVfxCommon.ParseColor(@params["endColor"]);
+
             EditorUtility.SetDirty(lr);
 
             return new { success = true, message = "Created line" };
@@ -48,6 +72,28 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 Vector3 point = center + (right * Mathf.Cos(angle) + forward * Mathf.Sin(angle)) * radius;
                 lr.SetPosition(i, point);
             }
+
+            RendererHelpers.EnsureMaterial(lr);
+
+            // Apply optional width
+            if (@params["width"] != null)
+            {
+                float w = @params["width"].ToObject<float>();
+                lr.startWidth = w;
+                lr.endWidth = w;
+            }
+            if (@params["startWidth"] != null) lr.startWidth = @params["startWidth"].ToObject<float>();
+            if (@params["endWidth"] != null) lr.endWidth = @params["endWidth"].ToObject<float>();
+
+            // Apply optional color
+            if (@params["color"] != null)
+            {
+                Color c = ManageVfxCommon.ParseColor(@params["color"]);
+                lr.startColor = c;
+                lr.endColor = c;
+            }
+            if (@params["startColor"] != null) lr.startColor = ManageVfxCommon.ParseColor(@params["startColor"]);
+            if (@params["endColor"] != null) lr.endColor = ManageVfxCommon.ParseColor(@params["endColor"]);
 
             EditorUtility.SetDirty(lr);
             return new { success = true, message = $"Created circle with {segments} segments" };
@@ -81,6 +127,28 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 Vector3 point = center + (right * Mathf.Cos(angle) + forward * Mathf.Sin(angle)) * radius;
                 lr.SetPosition(i, point);
             }
+
+            RendererHelpers.EnsureMaterial(lr);
+
+            // Apply optional width
+            if (@params["width"] != null)
+            {
+                float w = @params["width"].ToObject<float>();
+                lr.startWidth = w;
+                lr.endWidth = w;
+            }
+            if (@params["startWidth"] != null) lr.startWidth = @params["startWidth"].ToObject<float>();
+            if (@params["endWidth"] != null) lr.endWidth = @params["endWidth"].ToObject<float>();
+
+            // Apply optional color
+            if (@params["color"] != null)
+            {
+                Color c = ManageVfxCommon.ParseColor(@params["color"]);
+                lr.startColor = c;
+                lr.endColor = c;
+            }
+            if (@params["startColor"] != null) lr.startColor = ManageVfxCommon.ParseColor(@params["startColor"]);
+            if (@params["endColor"] != null) lr.endColor = ManageVfxCommon.ParseColor(@params["endColor"]);
 
             EditorUtility.SetDirty(lr);
             return new { success = true, message = $"Created arc with {segments} segments" };
@@ -122,6 +190,28 @@ namespace MCPForUnity.Editor.Tools.Vfx
 
                 lr.SetPosition(i, point);
             }
+
+            RendererHelpers.EnsureMaterial(lr);
+
+            // Apply optional width
+            if (@params["width"] != null)
+            {
+                float w = @params["width"].ToObject<float>();
+                lr.startWidth = w;
+                lr.endWidth = w;
+            }
+            if (@params["startWidth"] != null) lr.startWidth = @params["startWidth"].ToObject<float>();
+            if (@params["endWidth"] != null) lr.endWidth = @params["endWidth"].ToObject<float>();
+
+            // Apply optional color
+            if (@params["color"] != null)
+            {
+                Color c = ManageVfxCommon.ParseColor(@params["color"]);
+                lr.startColor = c;
+                lr.endColor = c;
+            }
+            if (@params["startColor"] != null) lr.startColor = ManageVfxCommon.ParseColor(@params["startColor"]);
+            if (@params["endColor"] != null) lr.endColor = ManageVfxCommon.ParseColor(@params["endColor"]);
 
             EditorUtility.SetDirty(lr);
             return new { success = true, message = $"Created {(isQuadratic ? "quadratic" : "cubic")} Bezier" };

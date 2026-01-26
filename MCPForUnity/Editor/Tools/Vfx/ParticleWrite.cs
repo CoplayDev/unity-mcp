@@ -14,6 +14,21 @@ namespace MCPForUnity.Editor.Tools.Vfx
             ParticleSystem ps = ParticleCommon.FindParticleSystem(@params);
             if (ps == null) return new { success = false, message = "ParticleSystem not found" };
 
+            // Ensure material is assigned before any configuration
+            var renderer = ps.GetComponent<ParticleSystemRenderer>();
+            if (renderer != null)
+            {
+                RendererHelpers.EnsureMaterial(renderer);
+            }
+
+            // Stop particle system if it's playing and duration needs to be changed
+            bool wasPlaying = ps.isPlaying;
+            bool needsStop = @params["duration"] != null && wasPlaying;
+            if (needsStop)
+            {
+                ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            }
+
             Undo.RecordObject(ps, "Set ParticleSystem Main");
             var main = ps.main;
             var changes = new List<string>();
@@ -34,6 +49,14 @@ namespace MCPForUnity.Editor.Tools.Vfx
             if (@params["maxParticles"] != null) { main.maxParticles = @params["maxParticles"].ToObject<int>(); changes.Add("maxParticles"); }
 
             EditorUtility.SetDirty(ps);
+
+            // Restart particle system if it was playing
+            if (needsStop && wasPlaying)
+            {
+                ps.Play(true);
+                changes.Add("(restarted after duration change)");
+            }
+
             return new { success = true, message = $"Updated: {string.Join(", ", changes)}" };
         }
 
@@ -41,6 +64,13 @@ namespace MCPForUnity.Editor.Tools.Vfx
         {
             ParticleSystem ps = ParticleCommon.FindParticleSystem(@params);
             if (ps == null) return new { success = false, message = "ParticleSystem not found" };
+
+            // Ensure material is assigned
+            var renderer = ps.GetComponent<ParticleSystemRenderer>();
+            if (renderer != null)
+            {
+                RendererHelpers.EnsureMaterial(renderer);
+            }
 
             Undo.RecordObject(ps, "Set ParticleSystem Emission");
             var emission = ps.emission;
@@ -58,6 +88,13 @@ namespace MCPForUnity.Editor.Tools.Vfx
         {
             ParticleSystem ps = ParticleCommon.FindParticleSystem(@params);
             if (ps == null) return new { success = false, message = "ParticleSystem not found" };
+
+            // Ensure material is assigned
+            var renderer = ps.GetComponent<ParticleSystemRenderer>();
+            if (renderer != null)
+            {
+                RendererHelpers.EnsureMaterial(renderer);
+            }
 
             Undo.RecordObject(ps, "Set ParticleSystem Shape");
             var shape = ps.shape;
@@ -82,6 +119,13 @@ namespace MCPForUnity.Editor.Tools.Vfx
             ParticleSystem ps = ParticleCommon.FindParticleSystem(@params);
             if (ps == null) return new { success = false, message = "ParticleSystem not found" };
 
+            // Ensure material is assigned
+            var renderer = ps.GetComponent<ParticleSystemRenderer>();
+            if (renderer != null)
+            {
+                RendererHelpers.EnsureMaterial(renderer);
+            }
+
             Undo.RecordObject(ps, "Set ParticleSystem Color Over Lifetime");
             var col = ps.colorOverLifetime;
             var changes = new List<string>();
@@ -97,6 +141,13 @@ namespace MCPForUnity.Editor.Tools.Vfx
         {
             ParticleSystem ps = ParticleCommon.FindParticleSystem(@params);
             if (ps == null) return new { success = false, message = "ParticleSystem not found" };
+
+            // Ensure material is assigned
+            var renderer = ps.GetComponent<ParticleSystemRenderer>();
+            if (renderer != null)
+            {
+                RendererHelpers.EnsureMaterial(renderer);
+            }
 
             Undo.RecordObject(ps, "Set ParticleSystem Size Over Lifetime");
             var sol = ps.sizeOverLifetime;
@@ -130,6 +181,13 @@ namespace MCPForUnity.Editor.Tools.Vfx
             ParticleSystem ps = ParticleCommon.FindParticleSystem(@params);
             if (ps == null) return new { success = false, message = "ParticleSystem not found" };
 
+            // Ensure material is assigned
+            var renderer = ps.GetComponent<ParticleSystemRenderer>();
+            if (renderer != null)
+            {
+                RendererHelpers.EnsureMaterial(renderer);
+            }
+
             Undo.RecordObject(ps, "Set ParticleSystem Velocity Over Lifetime");
             var vol = ps.velocityOverLifetime;
             var changes = new List<string>();
@@ -149,6 +207,13 @@ namespace MCPForUnity.Editor.Tools.Vfx
         {
             ParticleSystem ps = ParticleCommon.FindParticleSystem(@params);
             if (ps == null) return new { success = false, message = "ParticleSystem not found" };
+
+            // Ensure material is assigned
+            var renderer = ps.GetComponent<ParticleSystemRenderer>();
+            if (renderer != null)
+            {
+                RendererHelpers.EnsureMaterial(renderer);
+            }
 
             Undo.RecordObject(ps, "Set ParticleSystem Noise");
             var noise = ps.noise;
@@ -173,6 +238,9 @@ namespace MCPForUnity.Editor.Tools.Vfx
 
             var renderer = ps.GetComponent<ParticleSystemRenderer>();
             if (renderer == null) return new { success = false, message = "ParticleSystemRenderer not found" };
+
+            // Ensure material is set before any other operations
+            RendererHelpers.EnsureMaterial(renderer);
 
             Undo.RecordObject(renderer, "Set ParticleSystem Renderer");
             var changes = new List<string>();
@@ -199,10 +267,20 @@ namespace MCPForUnity.Editor.Tools.Vfx
 
             if (@params["materialPath"] != null)
             {
-                var findInst = new JObject { ["find"] = @params["materialPath"].ToString() };
+                string matPath = @params["materialPath"].ToString();
+                var findInst = new JObject { ["find"] = matPath };
                 Material mat = ObjectResolver.Resolve(findInst, typeof(Material)) as Material;
-                if (mat != null) { renderer.sharedMaterial = mat; changes.Add("material"); }
+                if (mat != null)
+                {
+                    renderer.sharedMaterial = mat;
+                    changes.Add($"material={mat.name}");
+                }
+                else
+                {
+                    McpLog.Warn($"Material not found at path: {matPath}. Keeping existing material.");
+                }
             }
+
             if (@params["trailMaterialPath"] != null)
             {
                 var findInst = new JObject { ["find"] = @params["trailMaterialPath"].ToString() };
