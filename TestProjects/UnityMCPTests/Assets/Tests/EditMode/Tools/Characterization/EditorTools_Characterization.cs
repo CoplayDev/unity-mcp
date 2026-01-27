@@ -61,9 +61,9 @@ namespace MCPForUnityTests.Editor.Tools.Characterization
         public void HandleCommand_ActionNormalization_CaseInsensitive()
         {
             // Current behavior: Actions are normalized to lowercase for comparison
-            // Both "PLAY" and "play" should be handled the same way
-            var upperResult = ManageEditor.HandleCommand(new JObject { ["action"] = "PLAY" });
-            var lowerResult = ManageEditor.HandleCommand(new JObject { ["action"] = "play" });
+            // Using telemetry_status (read-only) instead of play to avoid mutating editor state
+            var upperResult = ManageEditor.HandleCommand(new JObject { ["action"] = "TELEMETRY_STATUS" });
+            var lowerResult = ManageEditor.HandleCommand(new JObject { ["action"] = "telemetry_status" });
 
             var upperJo = ToJO(upperResult);
             var lowerJo = ToJO(lowerResult);
@@ -83,7 +83,7 @@ namespace MCPForUnityTests.Editor.Tools.Characterization
             // Current behavior: Tools accept camelCase parameter names
             var result = FindGameObjects.HandleCommand(new JObject
             {
-                ["query"] = "TestObject",
+                ["searchTerm"] = "TestObject",
                 ["searchMethod"] = "by_name"
             });
             var jo = ToJO(result);
@@ -97,7 +97,7 @@ namespace MCPForUnityTests.Editor.Tools.Characterization
             // Current behavior: Tools also accept snake_case parameter names
             var result = FindGameObjects.HandleCommand(new JObject
             {
-                ["query"] = "TestObject",
+                ["searchTerm"] = "TestObject",
                 ["search_method"] = "by_name"
             });
             var jo = ToJO(result);
@@ -110,7 +110,7 @@ namespace MCPForUnityTests.Editor.Tools.Characterization
             // Current behavior: searchMethod defaults to "by_name"
             var result = FindGameObjects.HandleCommand(new JObject
             {
-                ["query"] = "TestObject"
+                ["searchTerm"] = "TestObject"
             });
             var jo = ToJO(result);
             Assert.IsTrue((bool)jo["success"], "Should use default search method");
@@ -122,7 +122,7 @@ namespace MCPForUnityTests.Editor.Tools.Characterization
             // Current behavior: pageSize is clamped to 1-500 range
             var result = FindGameObjects.HandleCommand(new JObject
             {
-                ["query"] = "TestObject",
+                ["searchTerm"] = "TestObject",
                 ["pageSize"] = 1000  // Exceeds max
             });
             var jo = ToJO(result);
@@ -143,18 +143,18 @@ namespace MCPForUnityTests.Editor.Tools.Characterization
         }
 
         [Test]
-        public void HandleCommand_ManageEditor_WithBooleanParameter_AcceptsMultipleTypes()
+        public void HandleCommand_ManageEditor_ActionsRecognized()
         {
-            // Current behavior: Boolean parameters accept various representations
-            // Test with string "true" vs boolean true
-            var stringResult = ManageEditor.HandleCommand(new JObject
+            // Current behavior: Valid actions are recognized and return response objects
+            // Using telemetry_status (read-only) to avoid mutating editor state
+            var result = ManageEditor.HandleCommand(new JObject
             {
-                ["action"] = "play"
+                ["action"] = "telemetry_status"
             });
-            // This test documents that the action works regardless of boolean format
-            var jo = ToJO(stringResult);
-            // play action should be recognized
+            // Action should be recognized and return valid response
+            var jo = ToJO(result);
             Assert.IsNotNull(jo, "Should return a response object");
+            Assert.IsTrue(jo.ContainsKey("success"), "Response should have success field");
         }
 
         #endregion
@@ -176,15 +176,16 @@ namespace MCPForUnityTests.Editor.Tools.Characterization
         }
 
         [Test]
-        public void HandleCommand_ManageEditor_PlayAction_DifferentFromStop()
+        public void HandleCommand_ManageEditor_DifferentActionsDispatchToDifferentHandlers()
         {
             // Current behavior: Different actions dispatch to different handlers
-            var playResult = ManageEditor.HandleCommand(new JObject { ["action"] = "play" });
-            var stopResult = ManageEditor.HandleCommand(new JObject { ["action"] = "stop" });
+            // Using read-only actions to avoid mutating editor state
+            var statusResult = ManageEditor.HandleCommand(new JObject { ["action"] = "telemetry_status" });
+            var pingResult = ManageEditor.HandleCommand(new JObject { ["action"] = "telemetry_ping" });
 
-            // Both should return responses (success depends on editor state)
-            Assert.IsNotNull(playResult, "Play should return response");
-            Assert.IsNotNull(stopResult, "Stop should return response");
+            // Both should return responses
+            Assert.IsNotNull(statusResult, "Status should return response");
+            Assert.IsNotNull(pingResult, "Ping should return response");
         }
 
         [Test]
@@ -218,10 +219,11 @@ namespace MCPForUnityTests.Editor.Tools.Characterization
         }
 
         [Test]
-        public void HandleCommand_ManageEditor_PlayAction_ReturnsResponseObject()
+        public void HandleCommand_ManageEditor_ReturnsResponseObject()
         {
             // Current behavior: All responses are either SuccessResponse or ErrorResponse
-            var result = ManageEditor.HandleCommand(new JObject { ["action"] = "play" });
+            // Using telemetry_status (read-only) to avoid mutating editor state
+            var result = ManageEditor.HandleCommand(new JObject { ["action"] = "telemetry_status" });
             var jo = ToJO(result);
             // Verify response has expected shape
             Assert.IsTrue(jo.ContainsKey("success"), "Response should have 'success' field");
@@ -314,14 +316,15 @@ namespace MCPForUnityTests.Editor.Tools.Characterization
         #region Section 6: State Mutation and Side Effects
 
         [Test]
-        public void HandleCommand_ManageEditor_PlayAction_AffectsEditorState()
+        public void HandleCommand_ManageEditor_ReadOnlyActionsDoNotMutateState()
         {
-            // Current behavior: Play action mutates EditorApplication.isPlaying
-            // Note: We can't fully test this without entering play mode
-            var result = ManageEditor.HandleCommand(new JObject { ["action"] = "play" });
-            var jo = ToJO(result);
-            // The action should be recognized (success/failure depends on current state)
-            Assert.IsTrue(jo.ContainsKey("success"), "Should return valid response");
+            // Current behavior: Read-only actions like telemetry_status don't mutate editor state
+            // Verify isPlaying remains false after calling telemetry_status
+            var wasPlayingBefore = UnityEditor.EditorApplication.isPlaying;
+            var result = ManageEditor.HandleCommand(new JObject { ["action"] = "telemetry_status" });
+            var isPlayingAfter = UnityEditor.EditorApplication.isPlaying;
+
+            Assert.AreEqual(wasPlayingBefore, isPlayingAfter, "Read-only actions should not change play mode state");
         }
 
         [Test]
@@ -537,7 +540,7 @@ namespace MCPForUnityTests.Editor.Tools.Characterization
             // Current behavior: Finding no objects is a valid success case
             var result = FindGameObjects.HandleCommand(new JObject
             {
-                ["query"] = "DEFINITELY_NONEXISTENT_OBJECT_NAME_12345"
+                ["searchTerm"] = "DEFINITELY_NONEXISTENT_OBJECT_NAME_12345"
             });
             var jo = ToJO(result);
             Assert.IsTrue((bool)jo["success"], "Empty results should still be success");
@@ -568,9 +571,11 @@ namespace MCPForUnityTests.Editor.Tools.Characterization
         }
 
         [Test]
+        [Explicit("Opens Console window - steals focus")]
         public void HandleCommand_ExecuteMenuItem_ExecutesNonBlacklistedItems()
         {
             // Current behavior: Non-blacklisted items are executed
+            // NOTE: This test opens the Console window which steals focus from the terminal
             var result = ExecuteMenuItem.HandleCommand(new JObject
             {
                 ["menuPath"] = "Window/General/Console"
