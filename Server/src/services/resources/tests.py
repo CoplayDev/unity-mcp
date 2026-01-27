@@ -36,7 +36,7 @@ class GetTestsResponse(MCPResponse):
     uri="mcpforunity://tests",
     name="get_tests",
     description="Provides a paginated list of Unity tests with optional filtering. "
-                "Supports mode, filter, page_size (default 50, max 200), and cursor parameters."
+                "Supports mode, filter, page_size (default 50, max 200), and cursor parameters.\n\nURI: mcpforunity://tests"
 )
 async def get_tests(ctx: Context) -> GetTestsResponse | MCPResponse:
     """Provides a paginated list of all Unity tests with optional filtering.
@@ -66,7 +66,7 @@ async def get_tests(ctx: Context) -> GetTestsResponse | MCPResponse:
 @mcp_for_unity_resource(
     uri="mcpforunity://tests/{mode}",
     name="get_tests_for_mode",
-    description="Provides a paginated list of tests for a specific mode (EditMode or PlayMode)."
+    description="Provides a paginated list of tests for a specific mode (EditMode or PlayMode).\n\nURI: mcpforunity://tests/{mode}"
 )
 async def get_tests_for_mode(
     ctx: Context,

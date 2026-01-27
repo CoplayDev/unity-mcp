@@ -15,7 +15,7 @@ class LayersResponse(MCPResponse):
 @mcp_for_unity_resource(
     uri="mcpforunity://project/layers",
     name="project_layers",
-    description="All layers defined in the project's TagManager with their indices (0-31). Read this before using add_layer or remove_layer tools."
+    description="All layers defined in the project's TagManager with their indices (0-31). Read this before using add_layer or remove_layer tools.\n\nURI: mcpforunity://project/layers"
 )
 async def get_layers(ctx: Context) -> LayersResponse | MCPResponse:
     """Get all project layers with their indices."""

@@ -122,6 +122,26 @@ The server connects to Unity Editor automatically when both are running. No addi
 
 ---
 
+## MCP Resources
+
+The server provides read-only MCP resources for querying Unity Editor state. Resources provide up-to-date information about your Unity project without modifying it.
+
+**Accessing Resources:**
+
+Resources are accessed by their URI (not their name). Always use `ListMcpResources` to get the correct URI format.
+
+**Example URIs:**
+- `mcpforunity://editor/state` - Editor readiness snapshot
+- `mcpforunity://project/tags` - All project tags
+- `mcpforunity://scene/gameobject/{instance_id}` - GameObject details by ID
+- `mcpforunity://prefab/{encoded_path}` - Prefab info by asset path
+
+**Important:** Resource names use underscores (e.g., `editor_state`) but URIs use slashes/hyphens (e.g., `mcpforunity://editor/state`). Always use the URI from `ListMcpResources()` when reading resources.
+
+**All resource descriptions now include their URI** for easy reference. List available resources to see the complete catalog with URIs.
+
+---
+
 ## Example Prompts
 
 Once connected, try these commands in your AI assistant:
