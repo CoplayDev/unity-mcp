@@ -533,6 +533,18 @@ unity-mcp editor tests
 unity-mcp editor tests --mode PlayMode
 ```
 
+### Custom Tools
+
+```bash
+# List custom tools / default tools for the active Unity project
+unity-mcp tool list
+unity-mcp custom_tool list
+
+# Execute a custom tool by name
+unity-mcp editor custom-tool "MyBuildTool"
+unity-mcp editor custom-tool "Deploy" --params '{"target": "Android"}'
+```
+
 ### Prefab Commands
 
 ```bash

@@ -13,32 +13,40 @@ from services.tools.utils import coerce_bool, parse_json_payload, coerce_int
 from services.tools.preflight import preflight
 
 
-def _normalize_vector(value: Any, default: Any = None) -> list[float] | None:
+def _normalize_vector(value: Any, param_name: str = "vector") -> tuple[list[float] | None, str | None]:
     """
     Robustly normalize a vector parameter to [x, y, z] format.
     Handles: list, tuple, JSON string, comma-separated string.
-    Returns None if parsing fails.
+    Returns (parsed_vector, error_message). If error_message is set, parsed_vector is None.
     """
     if value is None:
-        return default
+        return None, None
 
     # If already a list/tuple with 3 elements, convert to floats
     if isinstance(value, (list, tuple)) and len(value) == 3:
         try:
             vec = [float(value[0]), float(value[1]), float(value[2])]
-            return vec if all(math.isfinite(n) for n in vec) else default
+            if all(math.isfinite(n) for n in vec):
+                return vec, None
+            return None, f"{param_name} values must be finite numbers, got {value}"
         except (ValueError, TypeError):
-            return default
+            return None, f"{param_name} values must be numbers, got {value}"
 
     # Try parsing as JSON string
     if isinstance(value, str):
+        # Check for obviously invalid values
+        if value in ("[object Object]", "undefined", "null", ""):
+            return None, f"{param_name} received invalid value: '{value}'. Expected [x, y, z] array (list or JSON string)"
+
         parsed = parse_json_payload(value)
         if isinstance(parsed, list) and len(parsed) == 3:
             try:
                 vec = [float(parsed[0]), float(parsed[1]), float(parsed[2])]
-                return vec if all(math.isfinite(n) for n in vec) else default
+                if all(math.isfinite(n) for n in vec):
+                    return vec, None
+                return None, f"{param_name} values must be finite numbers, got {parsed}"
             except (ValueError, TypeError):
-                pass
+                return None, f"{param_name} values must be numbers, got {parsed}"
 
         # Handle legacy comma-separated strings "1,2,3" or "[1,2,3]"
         s = value.strip()
@@ -48,11 +56,15 @@ def _normalize_vector(value: Any, default: Any = None) -> list[float] | None:
         if len(parts) == 3:
             try:
                 vec = [float(parts[0]), float(parts[1]), float(parts[2])]
-                return vec if all(math.isfinite(n) for n in vec) else default
+                if all(math.isfinite(n) for n in vec):
+                    return vec, None
+                return None, f"{param_name} values must be finite numbers, got {value}"
             except (ValueError, TypeError):
-                pass
+                return None, f"{param_name} values must be numbers, got {value}"
 
-    return default
+        return None, f"{param_name} must be a [x, y, z] array (list or JSON string), got: {value}"
+
+    return None, f"{param_name} must be a list or JSON string, got {type(value).__name__}"
 
 
 def _normalize_component_properties(value: Any) -> tuple[dict[str, dict[str, Any]] | None, str | None]:
@@ -103,12 +115,12 @@ async def manage_gameobject(
                    "Tag name - used for both 'create' (initial tag) and 'modify' (change tag)"] | None = None,
     parent: Annotated[str,
                       "Parent GameObject reference - used for both 'create' (initial parent) and 'modify' (change parent)"] | None = None,
-    position: Annotated[list[float],
-                        "Position as [x, y, z] array"] | None = None,
-    rotation: Annotated[list[float],
-                        "Rotation as [x, y, z] euler angles array"] | None = None,
-    scale: Annotated[list[float],
-                     "Scale as [x, y, z] array"] | None = None,
+    position: Annotated[list[float] | str,
+                        "Position as [x, y, z] array (list or JSON string)"] | None = None,
+    rotation: Annotated[list[float] | str,
+                        "Rotation as [x, y, z] euler angles array (list or JSON string)"] | None = None,
+    scale: Annotated[list[float] | str,
+                     "Scale as [x, y, z] array (list or JSON string)"] | None = None,
     components_to_add: Annotated[list[str],
                                  "List of component names to add"] | None = None,
     primitive_type: Annotated[str,
@@ -157,8 +169,8 @@ async def manage_gameobject(
     # --- Parameters for 'duplicate' ---
     new_name: Annotated[str,
                         "New name for the duplicated object (default: SourceName_Copy)"] | None = None,
-    offset: Annotated[list[float],
-                      "Offset from original/reference position as [x, y, z] array"] | None = None,
+    offset: Annotated[list[float] | str,
+                      "Offset from original/reference position as [x, y, z] array (list or JSON string)"] | None = None,
     # --- Parameters for 'move_relative' ---
     reference_object: Annotated[str,
                                 "Reference object for relative movement (required for move_relative)"] | None = None,
@@ -183,11 +195,19 @@ async def manage_gameobject(
             "message": "Missing required parameter 'action'. Valid actions: create, modify, delete, duplicate, move_relative. For finding GameObjects use find_gameobjects tool. For component operations use manage_components tool."
         }
 
-    # --- Normalize vector parameters using robust helper ---
-    position = _normalize_vector(position)
-    rotation = _normalize_vector(rotation)
-    scale = _normalize_vector(scale)
-    offset = _normalize_vector(offset)
+    # --- Normalize vector parameters with detailed error handling ---
+    position, position_error = _normalize_vector(position, "position")
+    if position_error:
+        return {"success": False, "message": position_error}
+    rotation, rotation_error = _normalize_vector(rotation, "rotation")
+    if rotation_error:
+        return {"success": False, "message": rotation_error}
+    scale, scale_error = _normalize_vector(scale, "scale")
+    if scale_error:
+        return {"success": False, "message": scale_error}
+    offset, offset_error = _normalize_vector(offset, "offset")
+    if offset_error:
+        return {"success": False, "message": offset_error}
 
     # --- Normalize boolean parameters ---
     save_as_prefab = coerce_bool(save_as_prefab)

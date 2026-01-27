@@ -8,6 +8,7 @@ from typing import Optional
 
 from cli import __version__
 from cli.utils.config import CLIConfig, set_config, get_config
+from cli.utils.suggestions import suggest_matches, format_suggestions
 from cli.utils.output import format_output, print_error, print_success, print_info
 from cli.utils.connection import (
     run_command,
@@ -26,6 +27,35 @@ class Context:
 
 
 pass_context = click.make_pass_decorator(Context, ensure=True)
+
+
+_ORIGINAL_RESOLVE_COMMAND = click.Group.resolve_command
+
+
+def _resolve_command_with_suggestions(self: click.Group, ctx: click.Context, args: list[str]):
+    try:
+        return _ORIGINAL_RESOLVE_COMMAND(self, ctx, args)
+    except click.exceptions.NoSuchCommand as e:
+        if not args or args[0].startswith("-"):
+            raise
+        matches = suggest_matches(args[0], self.list_commands(ctx))
+        suggestion = format_suggestions(matches)
+        if suggestion:
+            message = f"{e}\n{suggestion}"
+            raise click.exceptions.UsageError(message, ctx=ctx)
+        raise
+    except click.exceptions.UsageError as e:
+        if args and not args[0].startswith("-") and "No such command" in str(e):
+            matches = suggest_matches(args[0], self.list_commands(ctx))
+            suggestion = format_suggestions(matches)
+            if suggestion:
+                message = f"{e}\n{suggestion}"
+                raise click.exceptions.UsageError(message, ctx=ctx)
+        raise
+
+
+# Install suggestion handling for all CLI command groups.
+click.Group.resolve_command = _resolve_command_with_suggestions  # type: ignore[assignment]
 
 
 @click.group()
@@ -212,6 +242,8 @@ def register_commands():
         cli.add_command(command)
 
     optional_commands = [
+        ("cli.commands.tool", "tool"),
+        ("cli.commands.tool", "custom_tool"),
         ("cli.commands.gameobject", "gameobject"),
         ("cli.commands.component", "component"),
         ("cli.commands.scene", "scene"),

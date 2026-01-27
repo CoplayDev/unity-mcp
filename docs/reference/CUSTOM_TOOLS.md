@@ -73,6 +73,22 @@ Once you've created your tool, you'll need to let your AI assistant know about i
 
 **If that doesn't work:** Some clients (like Windsurf) may need you to remove and reconfigure the MCP for Unity server entirely. It's a bit more work, but it guarantees your new tools will appear.
 
+## Step 3: List and Call Your Tool from the CLI
+
+If you want to use the CLI directly, list custom tools for the active Unity project:
+
+```bash
+unity-mcp tool list
+unity-mcp custom_tool list
+```
+
+Then call your tool by name:
+
+```bash
+unity-mcp editor custom-tool "my_custom_tool"
+unity-mcp editor custom-tool "my_custom_tool" --params '{"param1":"value"}'
+```
+
 ## Complete Example: Screenshot Tool
 
 ### C# Handler (`Assets/Editor/ScreenShots/CaptureScreenshotTool.cs`)

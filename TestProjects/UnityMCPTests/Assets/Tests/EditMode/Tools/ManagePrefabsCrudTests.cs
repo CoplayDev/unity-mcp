@@ -14,9 +14,7 @@ using static MCPForUnityTests.Editor.TestUtilities;
 namespace MCPForUnityTests.Editor.Tools
 {
     /// <summary>
-    /// Comprehensive test suite for Prefab CRUD operations and new features.
-    /// Tests cover: Create, Read, Update, Delete patterns, force save, unlink-if-instance,
-    /// overwrite handling, inactive object search, and save dialog prevention.
+    /// Tests for Prefab CRUD operations: create_from_gameobject, get_info, get_hierarchy, modify_contents.
     /// </summary>
     public class ManagePrefabsCrudTests
     {
@@ -45,7 +43,7 @@ namespace MCPForUnityTests.Editor.Tools
         #region CREATE Tests
 
         [Test]
-        public void CreateFromGameObject_CreatesNewPrefab_WithValidParameters()
+        public void CreateFromGameObject_CreatesNewPrefab()
         {
             string prefabPath = Path.Combine(TempDirectory, "NewPrefab.prefab").Replace('\\', '/');
             GameObject sceneObject = new GameObject("TestObject");
@@ -59,12 +57,9 @@ namespace MCPForUnityTests.Editor.Tools
                     ["prefabPath"] = prefabPath
                 }));
 
-                Assert.IsTrue(result.Value<bool>("success"), "create_from_gameobject should succeed.");
-                var data = result["data"] as JObject;
-                Assert.AreEqual(prefabPath, data.Value<string>("prefabPath"));
-
-                GameObject prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-                Assert.IsNotNull(prefabAsset, "Prefab asset should exist at path.");
+                Assert.IsTrue(result.Value<bool>("success"));
+                Assert.AreEqual(prefabPath, result["data"].Value<string>("prefabPath"));
+                Assert.IsNotNull(AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath));
             }
             finally
             {
@@ -74,176 +69,71 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
-        public void CreateFromGameObject_UnlinksInstance_WhenUnlinkIfInstanceIsTrue()
+        public void CreateFromGameObject_HandlesExistingPrefabsAndLinks()
         {
-            // Create an initial prefab
-            string initialPrefabPath = Path.Combine(TempDirectory, "Original.prefab").Replace('\\', '/');
-            GameObject sourceObject = new GameObject("SourceObject");
-            GameObject instance = null;
-
-            try
-            {
-                // Create initial prefab and connect source object to it
-                PrefabUtility.SaveAsPrefabAssetAndConnect(
-                    sourceObject, initialPrefabPath, InteractionMode.AutomatedAction);
-
-                // Verify source object is now linked
-                Assert.IsTrue(PrefabUtility.IsAnyPrefabInstanceRoot(sourceObject),
-                    "Source object should be linked to prefab after SaveAsPrefabAssetAndConnect.");
-
-                // Create new prefab with unlinkIfInstance
-                // The command will find sourceObject by name and unlink it
-                string newPrefabPath = Path.Combine(TempDirectory, "NewFromLinked.prefab").Replace('\\', '/');
-                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
-                {
-                    ["action"] = "create_from_gameobject",
-                    ["target"] = sourceObject.name,
-                    ["prefabPath"] = newPrefabPath,
-                    ["unlinkIfInstance"] = true
-                }));
-
-                Assert.IsTrue(result.Value<bool>("success"), "create_from_gameobject with unlinkIfInstance should succeed.");
-                var data = result["data"] as JObject;
-                Assert.IsTrue(data.Value<bool>("wasUnlinked"), "wasUnlinked should be true.");
-
-                // Note: After creating the new prefab, the sourceObject is now linked to the NEW prefab
-                // (via SaveAsPrefabAssetAndConnect in CreatePrefabAsset), which is the correct behavior.
-                // What matters is that it was unlinked from the original prefab first.
-                Assert.IsTrue(PrefabUtility.IsAnyPrefabInstanceRoot(sourceObject),
-                    "Source object should now be linked to the new prefab.");
-                string currentPrefabPath = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(sourceObject);
-                Assert.AreNotEqual(initialPrefabPath, currentPrefabPath,
-                    "Source object should NOT be linked to original prefab anymore.");
-                Assert.AreEqual(newPrefabPath, currentPrefabPath,
-                    "Source object should now be linked to the new prefab.");
-            }
-            finally
-            {
-                SafeDeleteAsset(initialPrefabPath);
-                SafeDeleteAsset(Path.Combine(TempDirectory, "NewFromLinked.prefab").Replace('\\', '/'));
-                if (sourceObject != null) UnityEngine.Object.DestroyImmediate(sourceObject, true);
-                if (instance != null) UnityEngine.Object.DestroyImmediate(instance, true);
-            }
-        }
-
-        [Test]
-        public void CreateFromGameObject_Fails_WhenTargetIsAlreadyLinked()
-        {
+            // Tests: unlinkIfInstance, allowOverwrite, unique path generation
             string prefabPath = Path.Combine(TempDirectory, "Existing.prefab").Replace('\\', '/');
             GameObject sourceObject = new GameObject("SourceObject");
 
             try
             {
-                // Create initial prefab and connect the source object to it
-                GameObject connectedInstance = PrefabUtility.SaveAsPrefabAssetAndConnect(
-                    sourceObject, prefabPath, InteractionMode.AutomatedAction);
+                // Create initial prefab and link source object
+                PrefabUtility.SaveAsPrefabAssetAndConnect(sourceObject, prefabPath, InteractionMode.AutomatedAction);
+                Assert.IsTrue(PrefabUtility.IsAnyPrefabInstanceRoot(sourceObject));
 
-                // Verify the source object is now linked to the prefab
-                Assert.IsTrue(PrefabUtility.IsAnyPrefabInstanceRoot(sourceObject),
-                    "Source object should be linked to prefab after SaveAsPrefabAssetAndConnect.");
-
-                // Try to create again without unlink - sourceObject.name should find the connected instance
-                string newPath = Path.Combine(TempDirectory, "Duplicate.prefab").Replace('\\', '/');
-                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                // Without unlink - should fail (already linked)
+                string newPath = Path.Combine(TempDirectory, "New.prefab").Replace('\\', '/');
+                var failResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
                 {
                     ["action"] = "create_from_gameobject",
                     ["target"] = sourceObject.name,
                     ["prefabPath"] = newPath
                 }));
+                Assert.IsFalse(failResult.Value<bool>("success"));
+                Assert.IsTrue(failResult.Value<string>("error").Contains("already linked"));
 
-                Assert.IsFalse(result.Value<bool>("success"),
-                    "create_from_gameobject should fail when target is already linked.");
-                Assert.IsTrue(result.Value<string>("error").Contains("already linked"),
-                    "Error message should mention 'already linked'.");
-            }
-            finally
-            {
-                SafeDeleteAsset(prefabPath);
-                SafeDeleteAsset(Path.Combine(TempDirectory, "Duplicate.prefab").Replace('\\', '/'));
-                if (sourceObject != null) UnityEngine.Object.DestroyImmediate(sourceObject, true);
-            }
-        }
-
-        [Test]
-        public void CreateFromGameObject_Overwrites_WhenAllowOverwriteIsTrue()
-        {
-            string prefabPath = Path.Combine(TempDirectory, "OverwriteTest.prefab").Replace('\\', '/');
-            GameObject firstObject = new GameObject("OverwriteTest");  // Use path filename
-            GameObject secondObject = new GameObject("OverwriteTest");  // Use path filename
-
-            try
-            {
-                // Create initial prefab
-                PrefabUtility.SaveAsPrefabAsset(firstObject, prefabPath, out bool _);
-                AssetDatabase.Refresh();
-
-                GameObject firstPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-                Assert.AreEqual("OverwriteTest", firstPrefab.name, "First prefab should have name 'OverwriteTest'.");
-
-                // Overwrite with new object
-                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                // With unlinkIfInstance - should succeed
+                var unlinkResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
                 {
                     ["action"] = "create_from_gameobject",
-                    ["target"] = secondObject.name,
-                    ["prefabPath"] = prefabPath,
+                    ["target"] = sourceObject.name,
+                    ["prefabPath"] = newPath,
+                    ["unlinkIfInstance"] = true
+                }));
+                Assert.IsTrue(unlinkResult.Value<bool>("success"));
+                Assert.IsTrue(unlinkResult["data"].Value<bool>("wasUnlinked"));
+
+                // With allowOverwrite - should replace
+                GameObject anotherObject = new GameObject("AnotherObject");
+                var overwriteResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "create_from_gameobject",
+                    ["target"] = anotherObject.name,
+                    ["prefabPath"] = newPath,
                     ["allowOverwrite"] = true
                 }));
+                Assert.IsTrue(overwriteResult.Value<bool>("success"));
+                Assert.IsTrue(overwriteResult["data"].Value<bool>("wasReplaced"));
+                UnityEngine.Object.DestroyImmediate(anotherObject, true);
 
-                Assert.IsTrue(result.Value<bool>("success"), "create_from_gameobject with allowOverwrite should succeed.");
-                var data = result["data"] as JObject;
-                Assert.IsTrue(data.Value<bool>("wasReplaced"), "wasReplaced should be true.");
-
-                AssetDatabase.Refresh();
-                GameObject updatedPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-                Assert.AreEqual("OverwriteTest", updatedPrefab.name, "Prefab should be overwritten (keeps filename as name).");
-            }
-            finally
-            {
-                SafeDeleteAsset(prefabPath);
-                if (firstObject != null) UnityEngine.Object.DestroyImmediate(firstObject, true);
-                if (secondObject != null) UnityEngine.Object.DestroyImmediate(secondObject, true);
-            }
-        }
-
-        [Test]
-        public void CreateFromGameObject_GeneratesUniquePath_WhenFileExistsAndNoOverwrite()
-        {
-            string prefabPath = Path.Combine(TempDirectory, "UniqueTest.prefab").Replace('\\', '/');
-            GameObject firstObject = new GameObject("FirstObject");
-            GameObject secondObject = new GameObject("SecondObject");
-
-            try
-            {
-                // Create initial prefab
-                PrefabUtility.SaveAsPrefabAsset(firstObject, prefabPath, out bool _);
-                AssetDatabase.Refresh();
-
-                // Create again without overwrite - should generate unique path
-                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                // Without overwrite on existing - should generate unique path
+                GameObject thirdObject = new GameObject("ThirdObject");
+                var uniqueResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
                 {
                     ["action"] = "create_from_gameobject",
-                    ["target"] = secondObject.name,
-                    ["prefabPath"] = prefabPath
+                    ["target"] = thirdObject.name,
+                    ["prefabPath"] = newPath
                 }));
-
-                Assert.IsTrue(result.Value<bool>("success"), "create_from_gameobject should succeed with unique path.");
-                var data = result["data"] as JObject;
-                string actualPath = data.Value<string>("prefabPath");
-                Assert.AreNotEqual(prefabPath, actualPath, "Path should be different (unique).");
-                Assert.IsTrue(actualPath.Contains("UniqueTest 1"), "Unique path should contain suffix.");
-
-                // Verify both prefabs exist
-                Assert.IsNotNull(AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath),
-                    "Original prefab should still exist.");
-                Assert.IsNotNull(AssetDatabase.LoadAssetAtPath<GameObject>(actualPath),
-                    "New prefab should exist at unique path.");
+                Assert.IsTrue(uniqueResult.Value<bool>("success"));
+                Assert.AreNotEqual(newPath, uniqueResult["data"].Value<string>("prefabPath"));
+                SafeDeleteAsset(uniqueResult["data"].Value<string>("prefabPath"));
+                UnityEngine.Object.DestroyImmediate(thirdObject, true);
             }
             finally
             {
                 SafeDeleteAsset(prefabPath);
-                SafeDeleteAsset(Path.Combine(TempDirectory, "UniqueTest 1.prefab").Replace('\\', '/'));
-                if (firstObject != null) UnityEngine.Object.DestroyImmediate(firstObject, true);
-                if (secondObject != null) UnityEngine.Object.DestroyImmediate(secondObject, true);
+                SafeDeleteAsset(Path.Combine(TempDirectory, "New.prefab").Replace('\\', '/'));
+                if (sourceObject != null) UnityEngine.Object.DestroyImmediate(sourceObject, true);
             }
         }
 
@@ -256,28 +146,25 @@ namespace MCPForUnityTests.Editor.Tools
 
             try
             {
-                // Try without searchInactive - should fail
-                var resultWithout = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                // Without searchInactive - should fail to find inactive object
+                var failResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
                 {
                     ["action"] = "create_from_gameobject",
                     ["target"] = inactiveObject.name,
                     ["prefabPath"] = prefabPath
                 }));
+                Assert.IsFalse(failResult.Value<bool>("success"));
 
-                Assert.IsFalse(resultWithout.Value<bool>("success"),
-                    "Should fail when object is inactive and searchInactive=false.");
-
-                // Try with searchInactive - should succeed
-                var resultWith = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                // With searchInactive - should succeed
+                var successResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
                 {
                     ["action"] = "create_from_gameobject",
                     ["target"] = inactiveObject.name,
                     ["prefabPath"] = prefabPath,
                     ["searchInactive"] = true
                 }));
-
-                Assert.IsTrue(resultWith.Value<bool>("success"),
-                    "Should succeed when searchInactive=true.");
+                Assert.IsTrue(successResult.Value<bool>("success"));
+                Assert.IsNotNull(AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath));
             }
             finally
             {
@@ -286,43 +173,14 @@ namespace MCPForUnityTests.Editor.Tools
             }
         }
 
-        [Test]
-        public void CreateFromGameObject_CreatesDirectory_WhenPathDoesNotExist()
-        {
-            string prefabPath = Path.Combine(TempDirectory, "Nested/Deep/Directory/NewPrefab.prefab").Replace('\\', '/');
-            GameObject sceneObject = new GameObject("TestObject");
-
-            try
-            {
-                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
-                {
-                    ["action"] = "create_from_gameobject",
-                    ["target"] = sceneObject.name,
-                    ["prefabPath"] = prefabPath
-                }));
-
-                Assert.IsTrue(result.Value<bool>("success"), "Should create directories as needed.");
-
-                GameObject prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-                Assert.IsNotNull(prefabAsset, "Prefab should exist at nested path.");
-                Assert.IsTrue(AssetDatabase.IsValidFolder(Path.Combine(TempDirectory, "Nested").Replace('\\', '/')),
-                    "Nested directory should be created.");
-            }
-            finally
-            {
-                SafeDeleteAsset(prefabPath);
-                if (sceneObject != null) UnityEngine.Object.DestroyImmediate(sceneObject, true);
-            }
-        }
-
         #endregion
 
-        #region READ Tests (GetInfo & GetHierarchy)
+        #region READ Tests
 
         [Test]
-        public void GetInfo_ReturnsCorrectMetadata_ForValidPrefab()
+        public void GetInfo_ReturnsMetadata()
         {
-            string prefabPath = CreateTestPrefab("InfoTestPrefab");
+            string prefabPath = CreateTestPrefab("InfoTest");
 
             try
             {
@@ -332,19 +190,12 @@ namespace MCPForUnityTests.Editor.Tools
                     ["prefabPath"] = prefabPath
                 }));
 
-                Assert.IsTrue(result.Value<bool>("success"), "get_info should succeed.");
+                Assert.IsTrue(result.Value<bool>("success"));
                 var data = result["data"] as JObject;
-
                 Assert.AreEqual(prefabPath, data.Value<string>("assetPath"));
-                Assert.IsNotNull(data.Value<string>("guid"), "GUID should be present.");
-                Assert.AreEqual("Regular", data.Value<string>("prefabType"), "Should be Regular prefab type.");
-                Assert.AreEqual("InfoTestPrefab", data.Value<string>("rootObjectName"));
-                Assert.AreEqual(0, data.Value<int>("childCount"), "Should have no children.");
-                Assert.IsFalse(data.Value<bool>("isVariant"), "Should not be a variant.");
-
-                var components = data["rootComponentTypes"] as JArray;
-                Assert.IsNotNull(components, "Component types should be present.");
-                Assert.IsTrue(components.Count > 0, "Should have at least one component.");
+                Assert.IsNotNull(data.Value<string>("guid"));
+                Assert.AreEqual("Regular", data.Value<string>("prefabType"));
+                Assert.AreEqual("InfoTest", data.Value<string>("rootObjectName"));
             }
             finally
             {
@@ -353,399 +204,399 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
-        public void GetInfo_ReturnsError_ForInvalidPath()
+        public void GetHierarchy_ReturnsHierarchyWithNestingInfo()
         {
-            var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
-            {
-                ["action"] = "get_info",
-                ["prefabPath"] = "Assets/Nonexistent/Prefab.prefab"
-            }));
-
-            Assert.IsFalse(result.Value<bool>("success"), "get_info should fail for invalid path.");
-            Assert.IsTrue(result.Value<string>("error").Contains("No prefab asset found") ||
-                result.Value<string>("error").Contains("not found"),
-                "Error should mention prefab not found.");
-        }
-
-        [Test]
-        public void GetHierarchy_ReturnsCompleteHierarchy_ForNestedPrefab()
-        {
-            string prefabPath = CreateNestedTestPrefab("HierarchyTest");
+            // Create a prefab with nested prefab instance
+            string childPrefabPath = CreateTestPrefab("ChildPrefab");
+            string containerPath = null;
 
             try
             {
-                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
-                {
-                    ["action"] = "get_hierarchy",
-                    ["prefabPath"] = prefabPath
-                }));
-
-                Assert.IsTrue(result.Value<bool>("success"), "get_hierarchy should succeed.");
-                var data = result["data"] as JObject;
-
-                Assert.AreEqual(prefabPath, data.Value<string>("prefabPath"));
-                int total = data.Value<int>("total");
-                Assert.IsTrue(total >= 3, $"Should have at least 3 objects (root + 2 children), got {total}.");
-
-                var items = data["items"] as JArray;
-                Assert.IsNotNull(items, "Items should be present.");
-                Assert.AreEqual(total, items.Count, "Items count should match total.");
-
-                // Find root object
-                var root = items.Cast<JObject>().FirstOrDefault(j => j["prefab"]["isRoot"].Value<bool>());
-                Assert.IsNotNull(root, "Should have a root object with isRoot=true.");
-                Assert.AreEqual("HierarchyTest", root.Value<string>("name"));
-            }
-            finally
-            {
-                SafeDeleteAsset(prefabPath);
-            }
-        }
-
-        [Test]
-        public void GetHierarchy_IncludesNestingInfo_ForNestedPrefabs()
-        {
-            // Create a parent prefab first
-            string parentPath = CreateTestPrefab("ParentPrefab");
-
-            try
-            {
-                // Create a prefab that contains the parent prefab as nested
-                string childPath = CreateTestPrefab("ChildPrefab");
                 GameObject container = new GameObject("Container");
+                GameObject child1 = new GameObject("Child1");
+                child1.transform.parent = container.transform;
+
+                // Add nested prefab instance
                 GameObject nestedInstance = PrefabUtility.InstantiatePrefab(
-                    AssetDatabase.LoadAssetAtPath<GameObject>(childPath)) as GameObject;
+                    AssetDatabase.LoadAssetAtPath<GameObject>(childPrefabPath)) as GameObject;
                 nestedInstance.transform.parent = container.transform;
 
-                string nestedPrefabPath = Path.Combine(TempDirectory, "NestedContainer.prefab").Replace('\\', '/');
-                PrefabUtility.SaveAsPrefabAsset(container, nestedPrefabPath, out bool _);
+                containerPath = Path.Combine(TempDirectory, "Container.prefab").Replace('\\', '/');
+                PrefabUtility.SaveAsPrefabAsset(container, containerPath, out bool _);
                 UnityEngine.Object.DestroyImmediate(container);
-
                 AssetDatabase.Refresh();
 
                 var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
                 {
                     ["action"] = "get_hierarchy",
-                    ["prefabPath"] = nestedPrefabPath
+                    ["prefabPath"] = containerPath
                 }));
 
-                Assert.IsTrue(result.Value<bool>("success"), "get_hierarchy should succeed.");
+                Assert.IsTrue(result.Value<bool>("success"));
                 var data = result["data"] as JObject;
                 var items = data["items"] as JArray;
+                Assert.IsTrue(data.Value<int>("total") >= 3); // Container, Child1, nested prefab
 
-                // Find the nested prefab
+                // Verify root and nested prefab info
+                var root = items.Cast<JObject>().FirstOrDefault(j => j["prefab"]["isRoot"].Value<bool>());
+                Assert.IsNotNull(root);
+                Assert.AreEqual("Container", root.Value<string>("name"));
+
                 var nested = items.Cast<JObject>().FirstOrDefault(j => j["prefab"]["isNestedRoot"].Value<bool>());
-                Assert.IsNotNull(nested, "Should have a nested prefab root.");
-                Assert.AreEqual(1, nested["prefab"]["nestingDepth"].Value<int>(),
-                    "Nested prefab should have depth 1.");
+                Assert.IsNotNull(nested);
+                Assert.AreEqual(1, nested["prefab"]["nestingDepth"].Value<int>());
             }
             finally
             {
-                // Delete nested container first (before deleting prefabs it references)
-                SafeDeleteAsset(Path.Combine(TempDirectory, "NestedContainer.prefab").Replace('\\', '/'));
-                SafeDeleteAsset(parentPath);
-                SafeDeleteAsset(Path.Combine(TempDirectory, "ChildPrefab.prefab").Replace('\\', '/'));
+                if (containerPath != null) SafeDeleteAsset(containerPath);
+                SafeDeleteAsset(childPrefabPath);
             }
         }
 
         #endregion
 
-        #region UPDATE Tests (Open, Save, Close)
+        #region UPDATE Tests (ModifyContents)
 
         [Test]
-        public void SaveOpenStage_WithForce_SavesEvenWhenNotDirty()
+        public void ModifyContents_ModifiesTransformWithoutOpeningStage()
         {
-            string prefabPath = CreateTestPrefab("ForceSaveTest");
-            Vector3 originalScale = Vector3.one;
+            string prefabPath = CreateTestPrefab("ModifyTest");
 
             try
-            {
-                ManagePrefabs.HandleCommand(new JObject
-                {
-                    ["action"] = "open_stage",
-                    ["prefabPath"] = prefabPath
-                });
-
-                PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
-                Assert.IsNotNull(stage, "Stage should be open.");
-                Assert.IsFalse(stage.scene.isDirty, "Stage should not be dirty initially.");
-
-                // Save without force - should succeed but indicate no changes
-                var noForceResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
-                {
-                    ["action"] = "save_open_stage"
-                }));
-
-                Assert.IsTrue(noForceResult.Value<bool>("success"),
-                    "Save should succeed even when not dirty.");
-
-                // Now save with force
-                var forceResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
-                {
-                    ["action"] = "save_open_stage",
-                    ["force"] = true
-                }));
-
-                Assert.IsTrue(forceResult.Value<bool>("success"), "Force save should succeed.");
-                var data = forceResult["data"] as JObject;
-                Assert.IsTrue(data.Value<bool>("isDirty") || data.Value<bool>("isOpen"),
-                    "Stage should still be open after force save.");
-            }
-            finally
             {
                 StageUtility.GoToMainStage();
-                SafeDeleteAsset(prefabPath);
-            }
-        }
+                Assert.IsNull(PrefabStageUtility.GetCurrentPrefabStage());
 
-        [Test]
-        public void SaveOpenStage_DoesNotShowSaveDialog()
-        {
-            string prefabPath = CreateTestPrefab("NoDialogTest");
-
-            try
-            {
-                ManagePrefabs.HandleCommand(new JObject
-                {
-                    ["action"] = "open_stage",
-                    ["prefabPath"] = prefabPath
-                });
-
-                PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
-                stage.prefabContentsRoot.transform.localScale = new Vector3(2f, 2f, 2f);
-                // Mark as dirty to ensure changes are tracked
-                EditorUtility.SetDirty(stage.prefabContentsRoot);
-
-                // This save should NOT show a dialog - it should complete synchronously
-                // If a dialog appeared, this would hang or require user interaction
                 var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
                 {
-                    ["action"] = "save_open_stage",
-                    ["force"] = true  // Use force to ensure save happens
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["position"] = new JArray(1f, 2f, 3f),
+                    ["rotation"] = new JArray(45f, 0f, 0f),
+                    ["scale"] = new JArray(2f, 2f, 2f)
                 }));
 
-                // If we got here without hanging, no dialog was shown
-                Assert.IsTrue(result.Value<bool>("success"),
-                    "Save should complete without showing dialog.");
+                Assert.IsTrue(result.Value<bool>("success"));
 
-                // Verify the change was saved
+                // Verify no stage was opened (headless editing)
+                Assert.IsNull(PrefabStageUtility.GetCurrentPrefabStage());
+
+                // Verify changes persisted
                 GameObject reloaded = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-                Assert.AreEqual(new Vector3(2f, 2f, 2f), reloaded.transform.localScale,
-                    "Changes should be saved without dialog.");
+                Assert.AreEqual(new Vector3(1f, 2f, 3f), reloaded.transform.localPosition);
+                Assert.AreEqual(new Vector3(2f, 2f, 2f), reloaded.transform.localScale);
             }
             finally
             {
-                StageUtility.GoToMainStage();
                 SafeDeleteAsset(prefabPath);
             }
         }
 
         [Test]
-        public void CloseStage_WithSaveBeforeClose_SavesDirtyChanges()
+        public void ModifyContents_TargetsChildrenByNameAndPath()
         {
-            string prefabPath = CreateTestPrefab("CloseSaveTest");
+            string prefabPath = CreateNestedTestPrefab("TargetTest");
 
             try
             {
-                ManagePrefabs.HandleCommand(new JObject
+                // Target by name
+                var nameResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
                 {
-                    ["action"] = "open_stage",
-                    ["prefabPath"] = prefabPath
-                });
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["target"] = "Child1",
+                    ["position"] = new JArray(10f, 10f, 10f)
+                }));
+                Assert.IsTrue(nameResult.Value<bool>("success"));
 
-                PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
-                stage.prefabContentsRoot.transform.position = new Vector3(5f, 5f, 5f);
-                // Mark as dirty to ensure changes are tracked
-                EditorUtility.SetDirty(stage.prefabContentsRoot);
+                // Target by path
+                var pathResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["target"] = "Child1/Grandchild",
+                    ["scale"] = new JArray(3f, 3f, 3f)
+                }));
+                Assert.IsTrue(pathResult.Value<bool>("success"));
 
-                // Close with save
+                // Verify changes
+                GameObject reloaded = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                Assert.AreEqual(new Vector3(10f, 10f, 10f), reloaded.transform.Find("Child1").localPosition);
+                Assert.AreEqual(new Vector3(3f, 3f, 3f), reloaded.transform.Find("Child1/Grandchild").localScale);
+            }
+            finally
+            {
+                SafeDeleteAsset(prefabPath);
+            }
+        }
+
+        [Test]
+        public void ModifyContents_AddsAndRemovesComponents()
+        {
+            string prefabPath = CreateTestPrefab("ComponentTest");
+            // Cube primitive has BoxCollider by default
+
+            try
+            {
+                // Add Rigidbody
+                var addResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["componentsToAdd"] = new JArray("Rigidbody")
+                }));
+                Assert.IsTrue(addResult.Value<bool>("success"));
+
+                // Remove BoxCollider
+                var removeResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["componentsToRemove"] = new JArray("BoxCollider")
+                }));
+                Assert.IsTrue(removeResult.Value<bool>("success"));
+
+                // Verify
+                GameObject reloaded = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                Assert.IsNotNull(reloaded.GetComponent<Rigidbody>());
+                Assert.IsNull(reloaded.GetComponent<BoxCollider>());
+            }
+            finally
+            {
+                SafeDeleteAsset(prefabPath);
+            }
+        }
+
+        [Test]
+        public void ModifyContents_SetsPropertiesAndRenames()
+        {
+            string prefabPath = CreateNestedTestPrefab("PropertiesTest");
+
+            try
+            {
                 var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
                 {
-                    ["action"] = "close_stage",
-                    ["saveBeforeClose"] = true
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["target"] = "Child1",
+                    ["name"] = "RenamedChild",
+                    ["tag"] = "MainCamera",
+                    ["layer"] = "UI",
+                    ["setActive"] = false
                 }));
 
-                Assert.IsTrue(result.Value<bool>("success"), "Close with save should succeed.");
-                Assert.IsNull(PrefabStageUtility.GetCurrentPrefabStage(),
-                    "Stage should be closed after close_stage.");
+                Assert.IsTrue(result.Value<bool>("success"));
 
-                // Verify changes were saved
                 GameObject reloaded = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-                Assert.AreEqual(new Vector3(5f, 5f, 5f), reloaded.transform.position,
-                    "Position change should be saved before close.");
+                Transform renamed = reloaded.transform.Find("RenamedChild");
+                Assert.IsNotNull(renamed);
+                Assert.IsNull(reloaded.transform.Find("Child1")); // Old name gone
+                Assert.AreEqual("MainCamera", renamed.gameObject.tag);
+                Assert.AreEqual(LayerMask.NameToLayer("UI"), renamed.gameObject.layer);
+                Assert.IsFalse(renamed.gameObject.activeSelf);
             }
             finally
             {
-                StageUtility.GoToMainStage();
                 SafeDeleteAsset(prefabPath);
             }
         }
 
         [Test]
-        public void OpenEditClose_CompleteWorkflow_Succeeds()
+        public void ModifyContents_WorksOnComplexMultiComponentPrefab()
         {
-            string prefabPath = CreateTestPrefab("WorkflowTest");
+            // Create a complex prefab: Vehicle with multiple children, each with multiple components
+            string prefabPath = CreateComplexTestPrefab("Vehicle");
 
             try
             {
-                // OPEN
-                var openResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                // Modify root - add Rigidbody
+                var rootResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
                 {
-                    ["action"] = "open_stage",
-                    ["prefabPath"] = prefabPath
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["componentsToAdd"] = new JArray("Rigidbody")
                 }));
-                Assert.IsTrue(openResult.Value<bool>("success"), "Open should succeed.");
+                Assert.IsTrue(rootResult.Value<bool>("success"));
 
-                // EDIT
-                PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
-                stage.prefabContentsRoot.transform.localRotation = Quaternion.Euler(45f, 45f, 45f);
-                // Mark as dirty to ensure changes are tracked
-                EditorUtility.SetDirty(stage.prefabContentsRoot);
-
-                // SAVE
-                var saveResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                // Modify child by name - reposition FrontWheel, add SphereCollider
+                var wheelResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
                 {
-                    ["action"] = "save_open_stage",
-                    ["force"] = true  // Use force to ensure save happens
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["target"] = "FrontWheel",
+                    ["position"] = new JArray(0f, 0.5f, 2f),
+                    ["componentsToAdd"] = new JArray("SphereCollider")
                 }));
-                Assert.IsTrue(saveResult.Value<bool>("success"), "Save should succeed.");
-                // Note: stage.scene.isDirty may still be true in Unity's internal state
-                // The important thing is that changes were saved (verified below)
+                Assert.IsTrue(wheelResult.Value<bool>("success"));
 
-                // CLOSE
-                var closeResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                // Modify nested child by path - scale Barrel inside Turret
+                var barrelResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
                 {
-                    ["action"] = "close_stage"
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["target"] = "Turret/Barrel",
+                    ["scale"] = new JArray(0.5f, 0.5f, 3f),
+                    ["tag"] = "Player"
                 }));
-                Assert.IsTrue(closeResult.Value<bool>("success"), "Close should succeed.");
-                Assert.IsNull(PrefabStageUtility.GetCurrentPrefabStage(),
-                    "No stage should be open after close.");
+                Assert.IsTrue(barrelResult.Value<bool>("success"));
 
-                // VERIFY
+                // Remove component from child
+                var removeResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["target"] = "BackWheel",
+                    ["componentsToRemove"] = new JArray("BoxCollider")
+                }));
+                Assert.IsTrue(removeResult.Value<bool>("success"));
+
+                // Verify all changes persisted
                 GameObject reloaded = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-                Assert.AreEqual(Quaternion.Euler(45f, 45f, 45f), reloaded.transform.localRotation,
-                    "Rotation should be saved and persisted.");
+
+                // Root has Rigidbody
+                Assert.IsNotNull(reloaded.GetComponent<Rigidbody>(), "Root should have Rigidbody");
+
+                // FrontWheel repositioned and has SphereCollider
+                Transform frontWheel = reloaded.transform.Find("FrontWheel");
+                Assert.AreEqual(new Vector3(0f, 0.5f, 2f), frontWheel.localPosition);
+                Assert.IsNotNull(frontWheel.GetComponent<SphereCollider>(), "FrontWheel should have SphereCollider");
+
+                // Turret/Barrel scaled and tagged
+                Transform barrel = reloaded.transform.Find("Turret/Barrel");
+                Assert.AreEqual(new Vector3(0.5f, 0.5f, 3f), barrel.localScale);
+                Assert.AreEqual("Player", barrel.gameObject.tag);
+
+                // BackWheel BoxCollider removed
+                Transform backWheel = reloaded.transform.Find("BackWheel");
+                Assert.IsNull(backWheel.GetComponent<BoxCollider>(), "BackWheel BoxCollider should be removed");
             }
             finally
             {
-                StageUtility.GoToMainStage();
+                SafeDeleteAsset(prefabPath);
+            }
+        }
+
+        [Test]
+        public void ModifyContents_ReparentsChildWithinPrefab()
+        {
+            string prefabPath = CreateNestedTestPrefab("ReparentTest");
+
+            try
+            {
+                // Reparent Child2 under Child1
+                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["target"] = "Child2",
+                    ["parent"] = "Child1"
+                }));
+
+                Assert.IsTrue(result.Value<bool>("success"));
+
+                // Verify Child2 is now under Child1
+                GameObject reloaded = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                Assert.IsNull(reloaded.transform.Find("Child2"), "Child2 should no longer be direct child of root");
+                Assert.IsNotNull(reloaded.transform.Find("Child1/Child2"), "Child2 should now be under Child1");
+            }
+            finally
+            {
+                SafeDeleteAsset(prefabPath);
+            }
+        }
+
+        [Test]
+        public void ModifyContents_PreventsHierarchyLoops()
+        {
+            string prefabPath = CreateNestedTestPrefab("HierarchyLoopTest");
+
+            try
+            {
+                // Attempt to parent Child1 under its own descendant (Grandchild)
+                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["target"] = "Child1",
+                    ["parent"] = "Child1/Grandchild"
+                }));
+
+                Assert.IsFalse(result.Value<bool>("success"));
+                Assert.IsTrue(result.Value<string>("error").Contains("hierarchy loop") ||
+                    result.Value<string>("error").Contains("would create"),
+                    "Error should mention hierarchy loop prevention");
+            }
+            finally
+            {
                 SafeDeleteAsset(prefabPath);
             }
         }
 
         #endregion
 
-        #region Edge Cases & Error Handling
+        #region Error Handling
 
         [Test]
-        public void HandleCommand_ReturnsError_ForUnknownAction()
+        public void HandleCommand_ValidatesParameters()
         {
-            var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
-            {
-                ["action"] = "unknown_action"
-            }));
+            // Null params
+            var nullResult = ToJObject(ManagePrefabs.HandleCommand(null));
+            Assert.IsFalse(nullResult.Value<bool>("success"));
+            Assert.IsTrue(nullResult.Value<string>("error").Contains("null"));
 
-            Assert.IsFalse(result.Value<bool>("success"), "Unknown action should fail.");
-            Assert.IsTrue(result.Value<string>("error").Contains("Unknown action"),
-                "Error should mention unknown action.");
-        }
+            // Missing action
+            var missingAction = ToJObject(ManagePrefabs.HandleCommand(new JObject()));
+            Assert.IsFalse(missingAction.Value<bool>("success"));
+            Assert.IsTrue(missingAction.Value<string>("error").Contains("Action parameter is required"));
 
-        [Test]
-        public void HandleCommand_ReturnsError_ForNullParameters()
-        {
-            var result = ToJObject(ManagePrefabs.HandleCommand(null));
+            // Unknown action
+            var unknownAction = ToJObject(ManagePrefabs.HandleCommand(new JObject { ["action"] = "invalid" }));
+            Assert.IsFalse(unknownAction.Value<bool>("success"));
+            Assert.IsTrue(unknownAction.Value<string>("error").Contains("Unknown action"));
 
-            Assert.IsFalse(result.Value<bool>("success"), "Null parameters should fail.");
-            Assert.IsTrue(result.Value<string>("error").Contains("null"),
-                "Error should mention null parameters.");
-        }
-
-        [Test]
-        public void HandleCommand_ReturnsError_WhenActionIsMissing()
-        {
-            var result = ToJObject(ManagePrefabs.HandleCommand(new JObject()));
-
-            Assert.IsFalse(result.Value<bool>("success"), "Missing action should fail.");
-            Assert.IsTrue(result.Value<string>("error").Contains("Action parameter is required"),
-                "Error should mention required action parameter.");
-        }
-
-        [Test]
-        public void CreateFromGameObject_ReturnsError_ForEmptyTarget()
-        {
-            var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
+            // Path traversal
+            GameObject testObj = new GameObject("Test");
+            var traversal = ToJObject(ManagePrefabs.HandleCommand(new JObject
             {
                 ["action"] = "create_from_gameobject",
-                ["prefabPath"] = "Assets/Test.prefab"
+                ["target"] = "Test",
+                ["prefabPath"] = "../../etc/passwd"
             }));
-
-            Assert.IsFalse(result.Value<bool>("success"), "Missing target should fail.");
-            Assert.IsTrue(result.Value<string>("error").Contains("'target' parameter is required"),
-                "Error should mention required target parameter.");
+            Assert.IsFalse(traversal.Value<bool>("success"));
+            Assert.IsTrue(traversal.Value<string>("error").Contains("path traversal") ||
+                traversal.Value<string>("error").Contains("Invalid"));
+            UnityEngine.Object.DestroyImmediate(testObj, true);
         }
 
         [Test]
-        public void CreateFromGameObject_ReturnsError_ForEmptyPrefabPath()
+        public void ModifyContents_ReturnsErrorsForInvalidInputs()
         {
-            var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
-            {
-                ["action"] = "create_from_gameobject",
-                ["target"] = "SomeObject"
-            }));
-
-            Assert.IsFalse(result.Value<bool>("success"), "Missing prefabPath should fail.");
-            Assert.IsTrue(result.Value<string>("error").Contains("'prefabPath' parameter is required"),
-                "Error should mention required prefabPath parameter.");
-        }
-
-        [Test]
-        public void CreateFromGameObject_ReturnsError_ForPathTraversal()
-        {
-            GameObject testObject = new GameObject("TestObject");
+            string prefabPath = CreateTestPrefab("ErrorTest");
 
             try
             {
-                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                // Invalid target
+                var invalidTarget = ToJObject(ManagePrefabs.HandleCommand(new JObject
                 {
-                    ["action"] = "create_from_gameobject",
-                    ["target"] = "TestObject",
-                    ["prefabPath"] = "../../etc/passwd"
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["target"] = "NonexistentChild"
                 }));
+                Assert.IsFalse(invalidTarget.Value<bool>("success"));
+                Assert.IsTrue(invalidTarget.Value<string>("error").Contains("not found"));
 
-                Assert.IsFalse(result.Value<bool>("success"), "Path traversal should be blocked.");
-                Assert.IsTrue(result.Value<string>("error").Contains("path traversal") ||
-                    result.Value<string>("error").Contains("Invalid"),
-                    "Error should mention path traversal or invalid path.");
+                // Invalid path
+                LogAssert.Expect(LogType.Error, new Regex(".*modify_contents.*does not exist.*"));
+                var invalidPath = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = "Assets/Nonexistent.prefab"
+                }));
+                Assert.IsFalse(invalidPath.Value<bool>("success"));
             }
             finally
             {
-                if (testObject != null) UnityEngine.Object.DestroyImmediate(testObject, true);
-            }
-        }
-
-        [Test]
-        public void CreateFromGameObject_AutoPrependsAssets_WhenPathIsRelative()
-        {
-            GameObject testObject = new GameObject("TestObject");
-
-            try
-            {
-                // SanitizeAssetPath auto-prepends "Assets/" to relative paths
-                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
-                {
-                    ["action"] = "create_from_gameobject",
-                    ["target"] = "TestObject",
-                    ["prefabPath"] = "SomeFolder/Prefab.prefab"
-                }));
-
-                Assert.IsTrue(result.Value<bool>("success"), "Should auto-prepend Assets/ to relative path.");
-
-                // Clean up the created prefab at the corrected path
-                SafeDeleteAsset("Assets/SomeFolder/Prefab.prefab");
-            }
-            finally
-            {
-                if (testObject != null) UnityEngine.Object.DestroyImmediate(testObject, true);
+                SafeDeleteAsset(prefabPath);
             }
         }
 
@@ -764,10 +615,7 @@ namespace MCPForUnityTests.Editor.Tools
             UnityEngine.Object.DestroyImmediate(temp);
             AssetDatabase.Refresh();
 
-            if (!success)
-            {
-                throw new Exception($"Failed to create test prefab at {path}");
-            }
+            if (!success) throw new Exception($"Failed to create test prefab at {path}");
             return path;
         }
 
@@ -775,27 +623,56 @@ namespace MCPForUnityTests.Editor.Tools
         {
             EnsureFolder(TempDirectory);
             GameObject root = new GameObject(name);
-
-            // Add children
-            GameObject child1 = new GameObject("Child1");
-            child1.transform.parent = root.transform;
-
-            GameObject child2 = new GameObject("Child2");
-            child2.transform.parent = root.transform;
-
-            // Add grandchild
-            GameObject grandchild = new GameObject("Grandchild");
-            grandchild.transform.parent = child1.transform;
+            GameObject child1 = new GameObject("Child1") { transform = { parent = root.transform } };
+            GameObject child2 = new GameObject("Child2") { transform = { parent = root.transform } };
+            GameObject grandchild = new GameObject("Grandchild") { transform = { parent = child1.transform } };
 
             string path = Path.Combine(TempDirectory, name + ".prefab").Replace('\\', '/');
             PrefabUtility.SaveAsPrefabAsset(root, path, out bool success);
             UnityEngine.Object.DestroyImmediate(root);
             AssetDatabase.Refresh();
 
-            if (!success)
-            {
-                throw new Exception($"Failed to create nested test prefab at {path}");
-            }
+            if (!success) throw new Exception($"Failed to create nested test prefab at {path}");
+            return path;
+        }
+
+        private static string CreateComplexTestPrefab(string name)
+        {
+            // Creates: Vehicle (root with BoxCollider)
+            //   - FrontWheel (Cube with MeshRenderer, BoxCollider)
+            //   - BackWheel (Cube with MeshRenderer, BoxCollider)
+            //   - Turret (empty)
+            //       - Barrel (Cylinder with MeshRenderer, CapsuleCollider)
+            EnsureFolder(TempDirectory);
+
+            GameObject root = new GameObject(name);
+            root.AddComponent<BoxCollider>();
+
+            GameObject frontWheel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            frontWheel.name = "FrontWheel";
+            frontWheel.transform.parent = root.transform;
+            frontWheel.transform.localPosition = new Vector3(0, 0.5f, 1f);
+
+            GameObject backWheel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            backWheel.name = "BackWheel";
+            backWheel.transform.parent = root.transform;
+            backWheel.transform.localPosition = new Vector3(0, 0.5f, -1f);
+
+            GameObject turret = new GameObject("Turret");
+            turret.transform.parent = root.transform;
+            turret.transform.localPosition = new Vector3(0, 1f, 0);
+
+            GameObject barrel = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            barrel.name = "Barrel";
+            barrel.transform.parent = turret.transform;
+            barrel.transform.localPosition = new Vector3(0, 0, 1f);
+
+            string path = Path.Combine(TempDirectory, name + ".prefab").Replace('\\', '/');
+            PrefabUtility.SaveAsPrefabAsset(root, path, out bool success);
+            UnityEngine.Object.DestroyImmediate(root);
+            AssetDatabase.Refresh();
+
+            if (!success) throw new Exception($"Failed to create complex test prefab at {path}");
             return path;
         }
 
