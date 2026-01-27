@@ -8,6 +8,7 @@ from typing import Optional, Tuple, Any
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success, print_warning
 from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.constants import SEARCH_METHOD_CHOICE_FULL, SEARCH_METHOD_CHOICE_TAGGED
 
 
 @click.group()
@@ -20,8 +21,7 @@ def gameobject():
 @click.argument("search_term")
 @click.option(
     "--method", "-m",
-    type=click.Choice(["by_name", "by_tag", "by_layer",
-                      "by_component", "by_path", "by_id"]),
+    type=SEARCH_METHOD_CHOICE_FULL,
     default="by_name",
     help="Search method."
 )
@@ -265,7 +265,7 @@ def create(
 )
 @click.option(
     "--search-method",
-    type=click.Choice(["by_name", "by_path", "by_tag", "by_id"]),
+    type=SEARCH_METHOD_CHOICE_TAGGED,
     default=None,
     help="How to find the target GameObject."
 )
@@ -339,7 +339,7 @@ def modify(
 @click.argument("target")
 @click.option(
     "--search-method",
-    type=click.Choice(["by_name", "by_path", "by_tag", "by_id"]),
+    type=SEARCH_METHOD_CHOICE_TAGGED,
     default=None,
     help="How to find the target GameObject."
 )
@@ -396,7 +396,7 @@ def delete(target: str, search_method: Optional[str], force: bool):
 )
 @click.option(
     "--search-method",
-    type=click.Choice(["by_name", "by_path", "by_tag", "by_id"]),
+    type=SEARCH_METHOD_CHOICE_TAGGED,
     default=None,
     help="How to find the target GameObject."
 )
@@ -465,7 +465,7 @@ def duplicate(
 )
 @click.option(
     "--search-method",
-    type=click.Choice(["by_name", "by_path", "by_tag", "by_id"]),
+    type=SEARCH_METHOD_CHOICE_TAGGED,
     default=None,
     help="How to find the target GameObject."
 )

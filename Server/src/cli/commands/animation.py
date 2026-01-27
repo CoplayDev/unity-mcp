@@ -7,6 +7,7 @@ from typing import Optional, Any
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_info
 from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.constants import SEARCH_METHOD_CHOICE_BASIC
 
 
 @click.group()
@@ -26,7 +27,7 @@ def animation():
 )
 @click.option(
     "--search-method",
-    type=click.Choice(["by_name", "by_path", "by_id"]),
+    type=SEARCH_METHOD_CHOICE_BASIC,
     default=None,
     help="How to find the target."
 )

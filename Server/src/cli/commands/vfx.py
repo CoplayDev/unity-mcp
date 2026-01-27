@@ -9,6 +9,7 @@ from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success
 from cli.utils.connection import run_command, UnityConnectionError
 from cli.utils.parsers import parse_json_list_or_exit, parse_json_dict_or_exit
+from cli.utils.constants import SEARCH_METHOD_CHOICE_TAGGED
 
 
 _VFX_TOP_LEVEL_KEYS = {"action", "target", "searchMethod", "properties"}
@@ -50,7 +51,7 @@ def particle():
 
 @particle.command("info")
 @click.argument("target")
-@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+@click.option("--search-method", type=SEARCH_METHOD_CHOICE_TAGGED, default=None)
 def particle_info(target: str, search_method: Optional[str]):
     """Get particle system info.
 
@@ -76,7 +77,7 @@ def particle_info(target: str, search_method: Optional[str]):
 @particle.command("play")
 @click.argument("target")
 @click.option("--with-children", is_flag=True, help="Also play child particle systems.")
-@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+@click.option("--search-method", type=SEARCH_METHOD_CHOICE_TAGGED, default=None)
 def particle_play(target: str, with_children: bool, search_method: Optional[str]):
     """Play a particle system.
 
@@ -106,7 +107,7 @@ def particle_play(target: str, with_children: bool, search_method: Optional[str]
 @particle.command("stop")
 @click.argument("target")
 @click.option("--with-children", is_flag=True, help="Also stop child particle systems.")
-@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+@click.option("--search-method", type=SEARCH_METHOD_CHOICE_TAGGED, default=None)
 def particle_stop(target: str, with_children: bool, search_method: Optional[str]):
     """Stop a particle system."""
     config = get_config()
@@ -129,7 +130,7 @@ def particle_stop(target: str, with_children: bool, search_method: Optional[str]
 
 @particle.command("pause")
 @click.argument("target")
-@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+@click.option("--search-method", type=SEARCH_METHOD_CHOICE_TAGGED, default=None)
 def particle_pause(target: str, search_method: Optional[str]):
     """Pause a particle system."""
     config = get_config()
@@ -149,7 +150,7 @@ def particle_pause(target: str, search_method: Optional[str]):
 @particle.command("restart")
 @click.argument("target")
 @click.option("--with-children", is_flag=True)
-@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+@click.option("--search-method", type=SEARCH_METHOD_CHOICE_TAGGED, default=None)
 def particle_restart(target: str, with_children: bool, search_method: Optional[str]):
     """Restart a particle system."""
     config = get_config()
@@ -171,7 +172,7 @@ def particle_restart(target: str, with_children: bool, search_method: Optional[s
 @particle.command("clear")
 @click.argument("target")
 @click.option("--with-children", is_flag=True)
-@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+@click.option("--search-method", type=SEARCH_METHOD_CHOICE_TAGGED, default=None)
 def particle_clear(target: str, with_children: bool, search_method: Optional[str]):
     """Clear all particles from a particle system."""
     config = get_config()
@@ -202,7 +203,7 @@ def line():
 
 @line.command("info")
 @click.argument("target")
-@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+@click.option("--search-method", type=SEARCH_METHOD_CHOICE_TAGGED, default=None)
 def line_info(target: str, search_method: Optional[str]):
     """Get line renderer info.
 
@@ -227,7 +228,7 @@ def line_info(target: str, search_method: Optional[str]):
 @line.command("set-positions")
 @click.argument("target")
 @click.option("--positions", "-p", required=True, help='Positions as JSON array: [[0,0,0], [1,1,1], [2,0,0]]')
-@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+@click.option("--search-method", type=SEARCH_METHOD_CHOICE_TAGGED, default=None)
 def line_set_positions(target: str, positions: str, search_method: Optional[str]):
     """Set all positions on a line renderer.
 
@@ -260,7 +261,7 @@ def line_set_positions(target: str, positions: str, search_method: Optional[str]
 @click.argument("target")
 @click.option("--start", nargs=3, type=float, required=True, help="Start point X Y Z")
 @click.option("--end", nargs=3, type=float, required=True, help="End point X Y Z")
-@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+@click.option("--search-method", type=SEARCH_METHOD_CHOICE_TAGGED, default=None)
 def line_create_line(target: str, start: Tuple[float, float, float], end: Tuple[float, float, float], search_method: Optional[str]):
     """Create a simple line between two points.
 
@@ -292,7 +293,7 @@ def line_create_line(target: str, start: Tuple[float, float, float], end: Tuple[
 @click.option("--center", nargs=3, type=float, default=(0, 0, 0), help="Center point X Y Z")
 @click.option("--radius", type=float, required=True, help="Circle radius")
 @click.option("--segments", type=int, default=32, help="Number of segments")
-@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+@click.option("--search-method", type=SEARCH_METHOD_CHOICE_TAGGED, default=None)
 def line_create_circle(target: str, center: Tuple[float, float, float], radius: float, segments: int, search_method: Optional[str]):
     """Create a circle shape.
 
@@ -323,7 +324,7 @@ def line_create_circle(target: str, center: Tuple[float, float, float], radius: 
 
 @line.command("clear")
 @click.argument("target")
-@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+@click.option("--search-method", type=SEARCH_METHOD_CHOICE_TAGGED, default=None)
 def line_clear(target: str, search_method: Optional[str]):
     """Clear all positions from a line renderer."""
     config = get_config()
@@ -352,7 +353,7 @@ def trail():
 
 @trail.command("info")
 @click.argument("target")
-@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+@click.option("--search-method", type=SEARCH_METHOD_CHOICE_TAGGED, default=None)
 def trail_info(target: str, search_method: Optional[str]):
     """Get trail renderer info."""
     config = get_config()
@@ -372,7 +373,7 @@ def trail_info(target: str, search_method: Optional[str]):
 @trail.command("set-time")
 @click.argument("target")
 @click.argument("duration", type=float)
-@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+@click.option("--search-method", type=SEARCH_METHOD_CHOICE_TAGGED, default=None)
 def trail_set_time(target: str, duration: float, search_method: Optional[str]):
     """Set trail duration.
 
@@ -400,7 +401,7 @@ def trail_set_time(target: str, duration: float, search_method: Optional[str]):
 
 @trail.command("clear")
 @click.argument("target")
-@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+@click.option("--search-method", type=SEARCH_METHOD_CHOICE_TAGGED, default=None)
 def trail_clear(target: str, search_method: Optional[str]):
     """Clear a trail renderer."""
     config = get_config()
@@ -425,7 +426,7 @@ def trail_clear(target: str, search_method: Optional[str]):
 @click.argument("action")
 @click.argument("target", required=False)
 @click.option("--params", "-p", default="{}", help="Additional parameters as JSON.")
-@click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
+@click.option("--search-method", type=SEARCH_METHOD_CHOICE_TAGGED, default=None)
 def vfx_raw(action: str, target: Optional[str], params: str, search_method: Optional[str]):
     """Execute any VFX action directly.
 

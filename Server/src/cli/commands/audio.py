@@ -7,6 +7,7 @@ from typing import Optional, Any
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_info
 from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.constants import SEARCH_METHOD_CHOICE_BASIC
 
 
 @click.group()
@@ -24,7 +25,7 @@ def audio():
 )
 @click.option(
     "--search-method",
-    type=click.Choice(["by_name", "by_path", "by_id"]),
+    type=SEARCH_METHOD_CHOICE_BASIC,
     default=None,
     help="How to find the target."
 )
@@ -64,7 +65,7 @@ def play(target: str, clip: Optional[str], search_method: Optional[str]):
 @click.argument("target")
 @click.option(
     "--search-method",
-    type=click.Choice(["by_name", "by_path", "by_id"]),
+    type=SEARCH_METHOD_CHOICE_BASIC,
     default=None,
     help="How to find the target."
 )
@@ -101,7 +102,7 @@ def stop(target: str, search_method: Optional[str]):
 @click.argument("level", type=float)
 @click.option(
     "--search-method",
-    type=click.Choice(["by_name", "by_path", "by_id"]),
+    type=SEARCH_METHOD_CHOICE_BASIC,
     default=None,
     help="How to find the target."
 )

@@ -9,6 +9,7 @@ from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success
 from cli.utils.connection import run_command, UnityConnectionError
 from cli.utils.parsers import parse_value_safe, parse_json_dict_or_exit
+from cli.utils.constants import SEARCH_METHOD_CHOICE_RENDERER
 
 
 @click.group()
@@ -160,8 +161,7 @@ def set_property(path: str, property_name: str, value: str):
 @click.argument("target")
 @click.option(
     "--search-method",
-    type=click.Choice(["by_name", "by_path", "by_tag",
-                      "by_layer", "by_component"]),
+    type=SEARCH_METHOD_CHOICE_RENDERER,
     default=None,
     help="How to find the target GameObject."
 )
@@ -217,8 +217,7 @@ def assign(material_path: str, target: str, search_method: Optional[str], slot: 
 @click.argument("a", type=float, default=1.0)
 @click.option(
     "--search-method",
-    type=click.Choice(["by_name", "by_path", "by_tag",
-                      "by_layer", "by_component"]),
+    type=SEARCH_METHOD_CHOICE_RENDERER,
     default=None,
     help="How to find the target GameObject."
 )

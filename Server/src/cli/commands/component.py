@@ -9,6 +9,7 @@ from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success
 from cli.utils.connection import run_command, UnityConnectionError
 from cli.utils.parsers import parse_value_safe, parse_json_dict_or_exit
+from cli.utils.constants import SEARCH_METHOD_CHOICE_BASIC
 
 
 @click.group()
@@ -22,7 +23,7 @@ def component():
 @click.argument("component_type")
 @click.option(
     "--search-method",
-    type=click.Choice(["by_id", "by_name", "by_path"]),
+    type=SEARCH_METHOD_CHOICE_BASIC,
     default=None,
     help="How to find the target GameObject."
 )
@@ -68,7 +69,7 @@ def add(target: str, component_type: str, search_method: Optional[str], properti
 @click.argument("component_type")
 @click.option(
     "--search-method",
-    type=click.Choice(["by_id", "by_name", "by_path"]),
+    type=SEARCH_METHOD_CHOICE_BASIC,
     default=None,
     help="How to find the target GameObject."
 )
@@ -116,7 +117,7 @@ def remove(target: str, component_type: str, search_method: Optional[str], force
 @click.argument("value")
 @click.option(
     "--search-method",
-    type=click.Choice(["by_id", "by_name", "by_path"]),
+    type=SEARCH_METHOD_CHOICE_BASIC,
     default=None,
     help="How to find the target GameObject."
 )
@@ -165,7 +166,7 @@ def set_property(target: str, component_type: str, property_name: str, value: st
 )
 @click.option(
     "--search-method",
-    type=click.Choice(["by_id", "by_name", "by_path"]),
+    type=SEARCH_METHOD_CHOICE_BASIC,
     default=None,
     help="How to find the target GameObject."
 )
