@@ -1,8 +1,10 @@
-# Refactor Progress - Last Updated 2026-01-27 5:45 PM
+# Refactor Progress - Last Updated 2026-01-27 6:15 PM
 
-## Current Status: Characterization Tests Validated - Ready for Refactoring
+## Current Status: Utility Audit Complete - Ready to Start Quick Wins
 
-All characterization tests successfully created, validated, and passing.
+All characterization tests successfully created, validated, and passing (144 passing, 2 explicit).
+Utility audit completed to identify existing helpers vs. patterns needing extraction.
+Ready to begin Phase 1 Quick Wins refactoring.
 
 ---
 
@@ -96,6 +98,38 @@ All planned characterization tests have been created and validated:
 
 ---
 
+## Pre-Refactor Utility Audit ✅ (2026-01-27)
+
+Before starting Quick Wins refactoring, audited existing utilities to avoid duplication and identify opportunities to "patch in" existing helpers rather than creating new ones.
+
+### Key Findings
+
+**C# Utilities That Already Exist:**
+- ✅ **AssetPathUtility.cs** - Path normalization (NormalizeSeparators, SanitizeAssetPath, IsValidAssetPath)
+  - Action: Patch into 8+ tools with duplicated path normalization (QW-3)
+- ✅ **ParamCoercion.cs** - Parameter type coercion (CoerceInt, CoerceBool, CoerceFloat, CoerceString, CoerceEnum)
+  - Action: Already widely used, good foundation for P1-1 ToolParams Validation
+- ✅ **PropertyConversion.cs** - Unity type conversion from JToken
+  - Action: Foundation for P1-3 Type Conversion consolidation
+- ✅ **VectorParsing.cs** - Vector string parsing
+  - Action: Consolidate with PropertyConversion.cs in P1-3
+
+**Python Utilities That Need Creation:**
+- ❌ **JSON Parser** - Duplicated try/except pattern in 5+ files (material.py, component.py, asset.py, texture.py, vfx.py)
+  - Action: Create `Server/src/cli/utils/parsers.py` (QW-2)
+- ❌ **Search Method Constants** - Duplicated across 6+ files, 14 occurrences in vfx.py alone!
+  - Action: Create `Server/src/cli/utils/constants.py` (QW-4)
+- ❌ **Confirmation Dialog** - Duplicated in 5 files (component.py, asset.py, shader.py, script.py, gameobject.py)
+  - Action: Create `Server/src/cli/utils/confirmation.py` (QW-5)
+
+**Documentation**: See `results/UTILITY_AUDIT.md` for full details
+
+**Impact on Refactor Plan**: Updated `results/REFACTOR_PLAN.md` to reflect:
+- QW-3 changed from "Create" to "Patch in AssetPathUtility" (already exists)
+- QW-2, QW-4, QW-5 confirmed as "Create" (patterns exist but not extracted)
+
+---
+
 ## Test Coverage Summary
 
 ### C# Tests (Unity) ✅
@@ -119,6 +153,7 @@ All planned characterization tests have been created and validated:
 ## Key Files
 
 - **Refactor Plan**: `results/REFACTOR_PLAN.md`
+- **Utility Audit**: `results/UTILITY_AUDIT.md` (completed 2026-01-27)
 - **Test Documentation**: `MCPForUnity/Editor/*/Tests/*.md`
 - **This Progress File**: `REFACTOR_PROGRESS.md`
 
@@ -130,12 +165,13 @@ All planned characterization tests have been created and validated:
 2. ✅ ~~Fix characterization tests to document actual behavior~~ - DONE
 3. ✅ ~~Document null handling inconsistency in refactor plan~~ - DONE (added to P1-1)
 4. ✅ ~~Validate characterization tests run without side effects~~ - DONE (37/38 passing)
-5. **START REFACTORING**: Begin Phase 1 Quick Wins from `results/REFACTOR_PLAN.md`
-   - **QW-1**: Remove dead code (port_registry_ttl, reload_retry_ms, deprecated accessors)
-   - **QW-2**: Extract JSON Parser Utility (CLI) - eliminates ~50 lines duplication
-   - **QW-3**: Extract Path Normalization Utility (Editor Tools) - eliminates ~100 lines duplication
-   - **QW-4**: Consolidate Destructive Confirmation Prompts (CLI)
-   - **QW-5**: Extract Test Scene Setup Helper
+5. ✅ ~~Audit existing utilities to avoid duplication~~ - DONE (see `results/UTILITY_AUDIT.md`)
+6. **START REFACTORING**: Begin Phase 1 Quick Wins from `results/REFACTOR_PLAN.md`
+   - **QW-1**: Delete Dead Code - 1-2 hours, very low risk
+   - **QW-2**: Create JSON Parser Utility (CLI) - 30 min, eliminates ~50 lines duplication
+   - **QW-3**: Patch in AssetPathUtility (Editor) - 45 min, eliminates ~100 lines duplication (ALREADY EXISTS!)
+   - **QW-4**: Create Search Method Constants (CLI) - 20 min, eliminates duplication across 6+ files
+   - **QW-5**: Create Confirmation Dialog Utility (CLI) - 15 min, eliminates 5+ duplicate patterns
 
    Or jump to higher-impact items:
    - **P1-1**: ToolParams Validation Wrapper - eliminates 997+ validation lines

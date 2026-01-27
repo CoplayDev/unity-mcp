@@ -35,6 +35,10 @@ This plan consolidates findings from analysis of all 10 major domains in unity-m
 
 These deliver immediate value with minimal risk. Can be done in any order.
 
+**Note**: Utilities audited 2026-01-27 (see `results/UTILITY_AUDIT.md`). Quick wins updated to reflect:
+- ✅ **Patch in existing utilities** where they already exist (QW-3: AssetPathUtility)
+- ❌ **Create new utilities** where patterns are duplicated but not extracted (QW-2, QW-4, QW-5)
+
 ### QW-1: Delete Dead Code
 **Impact**: Cleaner codebase, reduced cognitive load
 **Effort**: 1-2 hours
@@ -52,7 +56,8 @@ These deliver immediate value with minimal risk. Can be done in any order.
 | UI | Commented `maxSize` | `McpSetupWindow.cs:37` |
 | UI | Stop button backward-compat | `McpConnectionSection.cs:234-242` |
 
-### QW-2: Extract JSON Parser Utility (CLI)
+### QW-2: Create JSON Parser Utility (CLI)
+**Status**: ❌ Does NOT exist - duplicated pattern in 5+ files (audited 2026-01-27)
 **Impact**: Eliminates ~50 lines of duplication across 5+ modules
 **Effort**: 30 minutes
 **Risk**: Very low
@@ -72,41 +77,40 @@ def try_parse_json(value: str, context: str = "") -> Any:
 
 **Files to update**: `commands/material.py`, `commands/component.py`, `commands/asset.py`, `commands/texture.py`, `commands/vfx.py`
 
-### QW-3: Extract Path Normalization Utility (Editor Tools)
+### QW-3: Patch In AssetPathUtility (Editor Tools)
+**Status**: ✅ Already exists as `Helpers/AssetPathUtility.cs` (audited 2026-01-27)
 **Impact**: Eliminates ~100 lines duplicated across 8+ tools
 **Effort**: 45 minutes
 **Risk**: Very low
 
-```csharp
-// Helpers/AssetPathNormalizer.cs
-public static string NormalizeAssetPath(string path, string extension = null, string defaultDir = null)
-{
-    if (string.IsNullOrEmpty(path)) path = defaultDir ?? "";
-    path = path.Replace('\\', '/').Trim('/');
-    if (path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
-        path = path.Substring("Assets/".Length);
-    if (!string.IsNullOrEmpty(extension) && !path.EndsWith(extension))
-        path += extension;
-    return Path.Combine("Assets", path).Replace('\\', '/');
-}
-```
+**Existing utility** provides:
+- `NormalizeSeparators(string path)` - Converts backslashes to forward slashes
+- `SanitizeAssetPath(string path)` - Removes leading/trailing slashes, ensures Assets/ prefix
+- `IsValidAssetPath(string path)` - Validates path format
 
-**Files to update**: `ManageScene.cs`, `ManageShader.cs`, `ManageMaterial.cs`, `ManagePrefabs.cs`
+**Action**: Replace duplicated path normalization logic with calls to AssetPathUtility
 
-### QW-4: Consolidate Search Method Constants (CLI)
+**Files to update**: `ManageScene.cs`, `ManageShader.cs`, `ManageMaterial.cs`, `ManagePrefabs.cs`, and others with inline path normalization
+
+### QW-4: Create Search Method Constants (CLI)
+**Status**: ❌ Does NOT exist - duplicated across 6+ files (audited 2026-01-27)
 **Impact**: Single source of truth, easier to extend
 **Effort**: 20 minutes
 **Risk**: Very low
 
+**Current duplication**: vfx.py (14 times!), gameobject.py, component.py, material.py, animation.py, audio.py
+
 ```python
 # cli/utils/constants.py
-SEARCH_METHODS = ["by_name", "by_path", "by_id", "by_tag", "by_layer", "by_component"]
-SEARCH_METHOD_CHOICE = click.Choice(SEARCH_METHODS)
+SEARCH_METHODS_FULL = ["by_name", "by_path", "by_id", "by_tag", "by_layer", "by_component"]
+SEARCH_METHODS_BASIC = ["by_name", "by_path", "by_id"]
+SEARCH_METHODS_TAGGED = ["by_name", "by_path", "by_id", "by_tag"]
 ```
 
-**Files to update**: `commands/material.py`, `commands/component.py`, `commands/gameobject.py`, `commands/vfx.py`
+**Files to update**: `commands/vfx.py` (14 occurrences), `commands/material.py`, `commands/component.py`, `commands/gameobject.py`, `commands/animation.py`, `commands/audio.py`
 
-### QW-5: Extract Confirmation Dialog Utility (CLI)
+### QW-5: Create Confirmation Dialog Utility (CLI)
+**Status**: ❌ Does NOT exist - duplicated in 5 files (audited 2026-01-27)
 **Impact**: Consistent UX, eliminates 5+ duplicate patterns
 **Effort**: 15 minutes
 **Risk**: Very low
@@ -114,10 +118,13 @@ SEARCH_METHOD_CHOICE = click.Choice(SEARCH_METHODS)
 ```python
 # cli/utils/confirmation.py
 def confirm_destructive_action(target: str, action: str, force: bool) -> bool:
+    """Prompt for confirmation before destructive actions unless --force is used."""
     if not force:
         click.confirm(f"{action} '{target}'?", abort=True)
     return True
 ```
+
+**Files to update**: `commands/component.py`, `commands/asset.py`, `commands/shader.py`, `commands/script.py`, `commands/gameobject.py`
 
 ---
 
