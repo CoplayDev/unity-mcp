@@ -63,26 +63,31 @@ These deliver immediate value with minimal risk. Can be done in any order.
 **Tests Updated:** Characterization tests updated to document removal of configure_logging
 **Verification:** All 59 config/transport tests passing
 
-### QW-2: Create JSON Parser Utility (CLI)
-**Status**: ❌ Does NOT exist - duplicated pattern in 5+ files (audited 2026-01-27)
-**Impact**: Eliminates ~50 lines of duplication across 5+ modules
-**Effort**: 30 minutes
+### QW-2: Create JSON Parser Utility (CLI) ✅ COMPLETE (2026-01-27)
+**Status**: ✅ Created `Server/src/cli/utils/parsers.py` (audited 2026-01-27)
+**Impact**: Eliminated ~60 lines of duplication across 8 modules
+**Effort**: 30 minutes (actual)
 **Risk**: Very low
 
+**Created utilities:**
 ```python
 # cli/utils/parsers.py
-def try_parse_json(value: str, context: str = "") -> Any:
-    """Parse JSON, fall back to float, fall back to string."""
-    try:
-        return json.loads(value)
-    except json.JSONDecodeError:
-        try:
-            return float(value)
-        except ValueError:
-            return value
+def parse_value_safe(value: str) -> Any:
+    """Try JSON → float → string fallback (no exit)"""
+
+def parse_json_or_exit(value: str, context: str = "parameter") -> Any:
+    """Parse JSON with quote/bool fixes, exit on error"""
+
+def parse_json_dict_or_exit(value: str, context: str) -> dict[str, Any]:
+    """Parse JSON dict, exit if not dict"""
+
+def parse_json_list_or_exit(value: str, context: str) -> list[Any]:
+    """Parse JSON list, exit if not list"""
 ```
 
-**Files to update**: `commands/material.py`, `commands/component.py`, `commands/asset.py`, `commands/texture.py`, `commands/vfx.py`
+**Files updated**: `material.py` (2 patterns), `component.py` (3 patterns), `texture.py` (removed local function), `vfx.py` (2 patterns), `asset.py`, `editor.py`, `script.py`, `batch.py`
+
+**Tests**: All 23 material/component CLI tests passing
 
 ### QW-3: Patch In AssetPathUtility (Editor Tools)
 **Status**: ✅ Already exists as `Helpers/AssetPathUtility.cs` (audited 2026-01-27)

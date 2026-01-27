@@ -1,10 +1,11 @@
-# Refactor Progress - Last Updated 2026-01-27 6:45 PM
+# Refactor Progress - Last Updated 2026-01-27 7:15 PM
 
-## Current Status: QW-1 Complete - Continuing Quick Wins
+## Current Status: QW-1 & QW-2 Complete - Continuing Quick Wins
 
 All characterization tests successfully created, validated, and passing (144 passing, 2 explicit).
 Utility audit completed to identify existing helpers vs. patterns needing extraction.
-QW-1 (Delete Dead Code) completed - 86 lines of dead code removed.
+QW-1 (Delete Dead Code) completed - 86 lines removed.
+QW-2 (JSON Parser Utility) completed - ~60 lines of duplication eliminated across 8 modules.
 
 ---
 
@@ -173,6 +174,21 @@ Before starting Quick Wins refactoring, audited existing utilities to avoid dupl
 - **Tests**: Updated characterization tests, all 59 config/transport tests passing
 - **Corrections**: Refactor plan items port_registry_ttl, reload_retry_ms, and STDIO framing config are NOT dead code - they're actively used
 
+### ✅ QW-2: Create JSON Parser Utility (CLI) (2026-01-27)
+- **Time**: 30 minutes
+- **Created**: `Server/src/cli/utils/parsers.py` with 4 parsing utilities
+  - `parse_value_safe()` - JSON → float → string fallback (no exit)
+  - `parse_json_or_exit()` - JSON with quote/bool fixes, exits on error
+  - `parse_json_dict_or_exit()` - Ensures result is dict, exits on error
+  - `parse_json_list_or_exit()` - Ensures result is list, exits on error
+- **Updated**: 8 CLI command modules (material, component, texture, vfx, asset, editor, script, batch)
+- **Eliminated**: ~60 lines of duplicated JSON parsing code
+  - texture.py: Removed 14-line local `try_parse_json` function
+  - material.py: 2 patterns replaced
+  - component.py: 3 patterns replaced
+  - vfx.py, asset.py, editor.py, script.py, batch.py: 1 pattern each
+- **Tests**: All 23 material/component CLI tests passing
+
 ---
 
 ## Next Steps
@@ -183,8 +199,8 @@ Before starting Quick Wins refactoring, audited existing utilities to avoid dupl
 4. ✅ ~~Validate characterization tests run without side effects~~ - DONE (37/38 passing)
 5. ✅ ~~Audit existing utilities to avoid duplication~~ - DONE (see `results/UTILITY_AUDIT.md`)
 6. ✅ **QW-1: Delete Dead Code** - DONE (86 lines removed)
-7. **Continue Quick Wins**:
-   - **QW-2**: Create JSON Parser Utility (CLI) - 30 min, eliminates ~50 lines duplication
+7. ✅ **QW-2: Create JSON Parser Utility** - DONE (~60 lines eliminated)
+8. **Continue Quick Wins**:
    - **QW-3**: Patch in AssetPathUtility (Editor) - 45 min, eliminates ~100 lines duplication (ALREADY EXISTS!)
    - **QW-4**: Create Search Method Constants (CLI) - 20 min, eliminates duplication across 6+ files
    - **QW-5**: Create Confirmation Dialog Utility (CLI) - 15 min, eliminates 5+ duplicate patterns
