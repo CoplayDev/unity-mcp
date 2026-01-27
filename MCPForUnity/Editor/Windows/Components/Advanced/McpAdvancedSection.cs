@@ -102,7 +102,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             }
             if (useTestPyPIToggle != null)
             {
-                useTestPyPIToggle.tooltip = "When enabled, uvx will use TestPyPI (test.pypi.org) instead of PyPI to fetch the server package. Useful for testing pre-release versions.";
+                useTestPyPIToggle.tooltip = "When enabled, uvx will fetch the latest beta server version from PyPI. Enable this on the beta branch to get the matching server version.";
                 var testPyPILabel = useTestPyPIToggle?.parent?.Q<Label>();
                 if (testPyPILabel != null)
                     testPyPILabel.tooltip = useTestPyPIToggle.tooltip;
@@ -137,7 +137,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             McpLog.SetDebugLoggingEnabled(debugEnabled);
 
             devModeForceRefreshToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
-            useTestPyPIToggle.value = EditorPrefs.GetBool(EditorPrefKeys.UseTestPyPI, false);
+            useTestPyPIToggle.value = EditorPrefs.GetBool(EditorPrefKeys.UseTestPyPI, true);
             UpdatePathOverrides();
             UpdateDeploymentSection();
         }
@@ -290,7 +290,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
             debugLogsToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
             devModeForceRefreshToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
-            useTestPyPIToggle.value = EditorPrefs.GetBool(EditorPrefKeys.UseTestPyPI, false);
+            useTestPyPIToggle.value = EditorPrefs.GetBool(EditorPrefKeys.UseTestPyPI, true);
             UpdateDeploymentSection();
         }
 

@@ -1317,9 +1317,29 @@ namespace MCPForUnity.Editor.Services
                 true
             );
             string scopedFlag = projectScopedTools ? " --project-scoped-tools" : string.Empty;
-            string args = string.IsNullOrEmpty(fromUrl)
+
+            // Beta server mode: allow beta versions from PyPI
+            // Beta server versions are published to PyPI as beta versions (e.g., 9.3.0b20260127)
+            // Use --prerelease explicit with version specifier to only get prereleases of our package,
+            // not of dependencies (which can be broken on PyPI).
+            bool usePreRelease = EditorPrefs.GetBool(EditorPrefKeys.UseTestPyPI, true);
+            string fromArgs;
+            if (usePreRelease)
+            {
+                fromArgs = "--prerelease explicit --from \"mcpforunityserver>=0.0.0a0\"";
+            }
+            else if (!string.IsNullOrEmpty(fromUrl))
+            {
+                fromArgs = $"--from {fromUrl}";
+            }
+            else
+            {
+                fromArgs = "";
+            }
+
+            string args = string.IsNullOrEmpty(fromArgs)
                 ? $"{devFlags}{packageName} --transport http --http-url {httpUrl}{scopedFlag}"
-                : $"{devFlags}--from {fromUrl} {packageName} --transport http --http-url {httpUrl}{scopedFlag}";
+                : $"{devFlags}{fromArgs} {packageName} --transport http --http-url {httpUrl}{scopedFlag}";
 
             fileName = uvxPath;
             arguments = args;

@@ -1,4 +1,4 @@
-name: Beta Release (TestPyPI)
+name: Beta Release (PyPI Pre-release)
 
 concurrency:
   group: beta-release
@@ -12,12 +12,12 @@ on:
       - "Server/**"
 
 jobs:
-  publish_testpypi:
-    name: Publish beta to TestPyPI
+  publish_pypi_prerelease:
+    name: Publish beta to PyPI (pre-release)
     runs-on: ubuntu-latest
     environment:
-      name: testpypi
-      url: https://test.pypi.org/p/mcpforunityserver
+      name: pypi
+      url: https://pypi.org/p/mcpforunityserver
     permissions:
       contents: read
       id-token: write
@@ -33,27 +33,29 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "Server/uv.lock"
 
-      - name: Generate dev version
+      - name: Generate beta version
         id: version
         shell: bash
         run: |
           set -euo pipefail
           BASE_VERSION=$(grep -oP '(?<=version = ")[^"]+' Server/pyproject.toml)
-          # Use date for unique dev version (PEP 440 compliant: X.Y.Z.devN)
-          # Note: PyPI/TestPyPI don't support local version identifiers (+...)
-          DEV_NUMBER="$(date +%Y%m%d%H%M%S)"
-          DEV_VERSION="${BASE_VERSION}.dev${DEV_NUMBER}"
+          # Bump minor version and use beta suffix (PEP 440 compliant: X.Y+1.0bN)
+          # This ensures beta is "newer" than the stable release
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
+          NEXT_MINOR=$((MINOR + 1))
+          BETA_NUMBER="$(date +%Y%m%d%H%M%S)"
+          BETA_VERSION="${MAJOR}.${NEXT_MINOR}.0b${BETA_NUMBER}"
           echo "Base version: $BASE_VERSION"
-          echo "Dev version: $DEV_VERSION"
-          echo "dev_version=$DEV_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Beta version: $BETA_VERSION"
+          echo "beta_version=$BETA_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Update version for beta release
         env:
-          DEV_VERSION: ${{ steps.version.outputs.dev_version }}
+          BETA_VERSION: ${{ steps.version.outputs.beta_version }}
         shell: bash
         run: |
           set -euo pipefail
-          sed -i "s/^version = .*/version = \"${DEV_VERSION}\"/" Server/pyproject.toml
+          sed -i "s/^version = .*/version = \"${BETA_VERSION}\"/" Server/pyproject.toml
           echo "Updated pyproject.toml:"
           grep "^version" Server/pyproject.toml
 
@@ -62,8 +64,7 @@ jobs:
         run: uv build
         working-directory: ./Server
 
-      - name: Publish distribution to TestPyPI
+      - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: Server/dist/
-          repository-url: https://test.pypi.org/legacy/

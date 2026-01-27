@@ -42,7 +42,7 @@
             </ui:VisualElement>
 
             <ui:VisualElement class="setting-row">
-                <ui:Label text="Use TestPyPI:" class="setting-label" />
+                <ui:Label text="Use Beta Server:" class="setting-label" />
                 <ui:Toggle name="use-testpypi-toggle" class="setting-toggle" />
             </ui:VisualElement>
 

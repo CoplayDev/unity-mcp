@@ -171,16 +171,18 @@ namespace MCPForUnity.Editor.Helpers
                 args.Add("--refresh");
             }
 
-            // TestPyPI mode: use test.pypi.org as the default index for pre-release testing
-            // When using TestPyPI, don't pin version since TestPyPI versions may differ from PyPI
-            bool useTestPyPI = EditorPrefs.GetBool(EditorPrefKeys.UseTestPyPI, false);
-            if (useTestPyPI)
+            // Beta server mode: allow beta versions from PyPI
+            // Beta server versions are published to PyPI as beta versions (e.g., 9.3.0b20260127)
+            // Defaults to true on beta branch to ensure server schema matches C# client.
+            // Use --prerelease explicit with version specifier to only get prereleases of our package,
+            // not of dependencies (which can be broken on PyPI).
+            bool usePreRelease = EditorPrefs.GetBool(EditorPrefKeys.UseTestPyPI, true);
+            if (usePreRelease)
             {
-                args.Add("--default-index");
-                args.Add("https://test.pypi.org/simple/");
-                // Use unversioned package name to get latest from TestPyPI
+                args.Add("--prerelease");
+                args.Add("explicit");
                 args.Add("--from");
-                args.Add("mcpforunityserver");
+                args.Add("mcpforunityserver>=0.0.0a0");
             }
             else if (!string.IsNullOrEmpty(fromUrl))
             {
