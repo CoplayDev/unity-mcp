@@ -31,7 +31,7 @@ namespace MCPForUnity.Editor.Tools
             var p = new ToolParams(@params);
 
             // Parse search parameters
-            string searchMethod = p.Get("searchMethod", SearchMethods.BY_NAME);
+            string searchMethod = p.Get("searchMethod", "by_name");
 
             // Try searchTerm, search_term, or target (for backwards compatibility)
             string searchTerm = p.Get("searchTerm");

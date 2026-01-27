@@ -139,17 +139,17 @@ namespace MCPForUnity.Editor.Helpers
     {
         public bool IsSuccess { get; }
         public T Value { get; }
-        public string Error { get; }
+        public string ErrorMessage { get; }
 
-        private Result(bool isSuccess, T value, string error)
+        private Result(bool isSuccess, T value, string errorMessage)
         {
             IsSuccess = isSuccess;
             Value = value;
-            Error = error;
+            ErrorMessage = errorMessage;
         }
 
         public static Result<T> Success(T value) => new Result<T>(true, value, null);
-        public static Result<T> Error(string error) => new Result<T>(false, default, error);
+        public static Result<T> Error(string errorMessage) => new Result<T>(false, default, errorMessage);
 
         /// <summary>
         /// Get value or return ErrorResponse.
@@ -162,7 +162,7 @@ namespace MCPForUnity.Editor.Helpers
                 return null;
             }
             value = default;
-            return new ErrorResponse(Error);
+            return new ErrorResponse(ErrorMessage);
         }
     }
 }

@@ -37,7 +37,7 @@ namespace MCPForUnity.Editor.Tools
             var actionResult = p.GetRequired("action");
             if (!actionResult.IsSuccess)
             {
-                return new ErrorResponse(actionResult.Error);
+                return new ErrorResponse(actionResult.ErrorMessage);
             }
             string action = actionResult.Value.ToLowerInvariant();
 
@@ -99,30 +99,30 @@ namespace MCPForUnity.Editor.Tools
                 case "set_active_tool":
                     var toolNameResult = p.GetRequired("toolName", "'toolName' parameter required for set_active_tool.");
                     if (!toolNameResult.IsSuccess)
-                        return new ErrorResponse(toolNameResult.Error);
+                        return new ErrorResponse(toolNameResult.ErrorMessage);
                     return SetActiveTool(toolNameResult.Value);
 
                 // Tag Management
                 case "add_tag":
                     var addTagResult = p.GetRequired("tagName", "'tagName' parameter required for add_tag.");
                     if (!addTagResult.IsSuccess)
-                        return new ErrorResponse(addTagResult.Error);
+                        return new ErrorResponse(addTagResult.ErrorMessage);
                     return AddTag(addTagResult.Value);
                 case "remove_tag":
                     var removeTagResult = p.GetRequired("tagName", "'tagName' parameter required for remove_tag.");
                     if (!removeTagResult.IsSuccess)
-                        return new ErrorResponse(removeTagResult.Error);
+                        return new ErrorResponse(removeTagResult.ErrorMessage);
                     return RemoveTag(removeTagResult.Value);
                 // Layer Management
                 case "add_layer":
                     var addLayerResult = p.GetRequired("layerName", "'layerName' parameter required for add_layer.");
                     if (!addLayerResult.IsSuccess)
-                        return new ErrorResponse(addLayerResult.Error);
+                        return new ErrorResponse(addLayerResult.ErrorMessage);
                     return AddLayer(addLayerResult.Value);
                 case "remove_layer":
                     var removeLayerResult = p.GetRequired("layerName", "'layerName' parameter required for remove_layer.");
                     if (!removeLayerResult.IsSuccess)
-                        return new ErrorResponse(removeLayerResult.Error);
+                        return new ErrorResponse(removeLayerResult.ErrorMessage);
                     return RemoveLayer(removeLayerResult.Value);
                 // --- Settings (Example) ---
                 // case "set_resolution":

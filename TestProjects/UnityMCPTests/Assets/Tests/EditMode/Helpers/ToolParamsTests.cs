@@ -37,7 +37,7 @@ namespace MCPForUnityTests.Editor.Helpers
 
             Assert.IsTrue(result.IsSuccess);
             Assert.AreEqual("create", result.Value);
-            Assert.IsNull(result.Error);
+            Assert.IsNull(result.ErrorMessage);
         }
 
         [Test]
@@ -50,7 +50,7 @@ namespace MCPForUnityTests.Editor.Helpers
 
             Assert.IsFalse(result.IsSuccess);
             Assert.IsNull(result.Value);
-            Assert.That(result.Error, Does.Contain("'action' parameter is required"));
+            Assert.That(result.ErrorMessage, Does.Contain("'action' parameter is required"));
         }
 
         [Test]
@@ -62,7 +62,7 @@ namespace MCPForUnityTests.Editor.Helpers
             var result = p.GetRequired("action");
 
             Assert.IsFalse(result.IsSuccess);
-            Assert.That(result.Error, Does.Contain("'action' parameter is required"));
+            Assert.That(result.ErrorMessage, Does.Contain("'action' parameter is required"));
         }
 
         [Test]
@@ -74,7 +74,7 @@ namespace MCPForUnityTests.Editor.Helpers
             var result = p.GetRequired("action", "Custom error message");
 
             Assert.IsFalse(result.IsSuccess);
-            Assert.AreEqual("Custom error message", result.Error);
+            Assert.AreEqual("Custom error message", result.ErrorMessage);
         }
 
         #endregion
@@ -353,7 +353,7 @@ namespace MCPForUnityTests.Editor.Helpers
 
             Assert.IsTrue(result.IsSuccess);
             Assert.AreEqual("value", result.Value);
-            Assert.IsNull(result.Error);
+            Assert.IsNull(result.ErrorMessage);
         }
 
         [Test]
@@ -363,7 +363,7 @@ namespace MCPForUnityTests.Editor.Helpers
 
             Assert.IsFalse(result.IsSuccess);
             Assert.IsNull(result.Value);
-            Assert.AreEqual("error message", result.Error);
+            Assert.AreEqual("error message", result.ErrorMessage);
         }
 
         [Test]

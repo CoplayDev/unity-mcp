@@ -135,14 +135,14 @@ namespace MCPForUnity.Editor.Tools
             var actionResult = p.GetRequired("action");
             if (!actionResult.IsSuccess)
             {
-                return new ErrorResponse(actionResult.Error);
+                return new ErrorResponse(actionResult.ErrorMessage);
             }
             string action = actionResult.Value.ToLowerInvariant();
 
             var nameResult = p.GetRequired("name");
             if (!nameResult.IsSuccess)
             {
-                return new ErrorResponse(nameResult.Error);
+                return new ErrorResponse(nameResult.ErrorMessage);
             }
             string name = nameResult.Value;
 
@@ -229,9 +229,9 @@ namespace MCPForUnity.Editor.Tools
                         var textEdits = p.GetRaw("edits") as JArray;
                         string precondition = p.Get("precondition_sha256");
                         // Respect optional options
-                        var options = p.GetRaw("options");
-                        string refreshOpt = options?["refresh"]?.ToString()?.ToLowerInvariant();
-                        string validateOpt = options?["validate"]?.ToString()?.ToLowerInvariant();
+                        var optionsToken = p.GetRaw("options");
+                        string refreshOpt = optionsToken?["refresh"]?.ToString()?.ToLowerInvariant();
+                        string validateOpt = optionsToken?["validate"]?.ToString()?.ToLowerInvariant();
                         return ApplyTextEdits(fullPath, relativePath, name, textEdits, precondition, refreshOpt, validateOpt);
                     }
                 case "validate":
