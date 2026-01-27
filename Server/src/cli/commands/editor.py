@@ -6,7 +6,8 @@ from typing import Optional, Any
 
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success, print_info
-from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.connection import run_command, run_list_custom_tools, UnityConnectionError
+from cli.utils.suggestions import suggest_matches, format_suggestions
 
 
 @click.group()
@@ -472,6 +473,8 @@ def custom_tool(tool_name: str, params: str):
         params_dict = json.loads(params)
     except json.JSONDecodeError as e:
         print_error(f"Invalid JSON for params: {e}")
+        print_info("Example: --params '{\"key\":\"value\"}'")
+        print_info("Tip: wrap JSON in single quotes to avoid shell escaping issues.")
         sys.exit(1)
 
     try:
@@ -482,6 +485,26 @@ def custom_tool(tool_name: str, params: str):
         click.echo(format_output(result, config.format))
         if result.get("success"):
             print_success(f"Executed custom tool: {tool_name}")
+        else:
+            message = (result.get("message") or result.get("error") or "").lower()
+            if "not found" in message and "tool" in message:
+                try:
+                    tools_result = run_list_custom_tools(config)
+                    tools = tools_result.get("tools")
+                    if tools is None:
+                        data = tools_result.get("data", {})
+                        tools = data.get("tools") if isinstance(data, dict) else None
+                    names = [
+                        t.get("name") for t in tools if isinstance(t, dict) and t.get("name")
+                    ] if isinstance(tools, list) else []
+                    matches = suggest_matches(tool_name, names)
+                    suggestion = format_suggestions(matches)
+                    if suggestion:
+                        print_info(suggestion)
+                        print_info(
+                            f'Example: unity-mcp editor custom-tool "{matches[0]}"')
+                except UnityConnectionError:
+                    pass
     except UnityConnectionError as e:
         print_error(str(e))
         sys.exit(1)

@@ -189,3 +189,40 @@ async def list_unity_instances(config: Optional[CLIConfig] = None) -> Dict[str, 
 def run_list_instances(config: Optional[CLIConfig] = None) -> Dict[str, Any]:
     """Synchronous wrapper for list_unity_instances."""
     return asyncio.run(list_unity_instances(config))
+
+
+async def list_custom_tools(config: Optional[CLIConfig] = None) -> Dict[str, Any]:
+    """List custom tools registered for the active Unity project."""
+    cfg = config or get_config()
+    url = f"http://{cfg.host}:{cfg.port}/api/custom-tools"
+    params: Dict[str, Any] = {}
+    if cfg.unity_instance:
+        params["instance"] = cfg.unity_instance
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, params=params, timeout=cfg.timeout)
+            response.raise_for_status()
+            return response.json()
+    except httpx.ConnectError as e:
+        raise UnityConnectionError(
+            f"Cannot connect to Unity MCP server at {cfg.host}:{cfg.port}. "
+            f"Make sure the server is running and Unity is connected.\n"
+            f"Error: {e}"
+        )
+    except httpx.TimeoutException:
+        raise UnityConnectionError(
+            f"Connection to Unity timed out after {cfg.timeout}s. "
+            f"Unity may be busy or unresponsive."
+        )
+    except httpx.HTTPStatusError as e:
+        raise UnityConnectionError(
+            f"HTTP error from server: {e.response.status_code} - {e.response.text}"
+        )
+    except Exception as e:
+        raise UnityConnectionError(f"Unexpected error: {e}")
+
+
+def run_list_custom_tools(config: Optional[CLIConfig] = None) -> Dict[str, Any]:
+    """Synchronous wrapper for list_custom_tools."""
+    return asyncio.run(list_custom_tools(config))

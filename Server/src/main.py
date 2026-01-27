@@ -9,7 +9,10 @@ from core.telemetry import record_milestone, record_telemetry, MilestoneType, Re
 from services.resources import register_all_resources
 from transport.plugin_registry import PluginRegistry
 from transport.plugin_hub import PluginHub
-from services.custom_tool_service import CustomToolService
+from services.custom_tool_service import (
+    CustomToolService,
+    resolve_project_id_for_unity_instance,
+)
 from core.config import config
 from starlette.routing import WebSocketRoute
 from starlette.responses import JSONResponse
@@ -325,6 +328,14 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
             "message": "MCP for Unity server is running"
         })
 
+    def _normalize_instance_token(instance_token: str | None) -> tuple[str | None, str | None]:
+        if not instance_token:
+            return None, None
+        if "@" in instance_token:
+            name_part, _, hash_part = instance_token.partition("@")
+            return (name_part or None), (hash_part or None)
+        return None, instance_token
+
     @mcp.custom_route("/api/command", methods=["POST"])
     async def cli_command_route(request: Request) -> JSONResponse:
         """REST endpoint for CLI commands to Unity."""
@@ -348,11 +359,14 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
 
             # Find target session
             session_id = None
+            session_details = None
+            instance_name, instance_hash = _normalize_instance_token(unity_instance)
             if unity_instance:
                 # Try to match by hash or project name
                 for sid, details in sessions.sessions.items():
-                    if details.hash == unity_instance or details.project == unity_instance:
+                    if details.hash == instance_hash or details.project in (instance_name, unity_instance):
                         session_id = sid
+                        session_details = details
                         break
 
                 # If a specific unity_instance was requested but not found, return an error
@@ -367,6 +381,46 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
             else:
                 # No specific unity_instance requested: use first available session
                 session_id = next(iter(sessions.sessions.keys()))
+                session_details = sessions.sessions.get(session_id)
+
+            if command_type == "execute_custom_tool":
+                tool_name = None
+                tool_params = {}
+                if isinstance(params, dict):
+                    tool_name = params.get("tool_name") or params.get("name")
+                    tool_params = params.get("parameters") or params.get("params") or {}
+
+                if not tool_name:
+                    return JSONResponse(
+                        {"success": False, "error": "Missing 'tool_name' for execute_custom_tool"},
+                        status_code=400,
+                    )
+                if tool_params is None:
+                    tool_params = {}
+                if not isinstance(tool_params, dict):
+                    return JSONResponse(
+                        {"success": False, "error": "Tool parameters must be an object/dict"},
+                        status_code=400,
+                    )
+
+                # Prefer a concrete hash for project-scoped tools.
+                unity_instance_hint = unity_instance
+                if session_details and session_details.hash:
+                    unity_instance_hint = session_details.hash
+
+                project_id = resolve_project_id_for_unity_instance(
+                    unity_instance_hint)
+                if not project_id:
+                    return JSONResponse(
+                        {"success": False, "error": "Could not resolve project id for custom tool"},
+                        status_code=400,
+                    )
+
+                service = CustomToolService.get_instance()
+                result = await service.execute_tool(
+                    project_id, tool_name, unity_instance_hint, tool_params
+                )
+                return JSONResponse(result.model_dump())
 
             # Send command to Unity
             result = await PluginHub.send_command(session_id, command_type, params)
@@ -374,6 +428,67 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
 
         except Exception as e:
             logger.error(f"CLI command error: {e}")
+            return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+    @mcp.custom_route("/api/custom-tools", methods=["GET"])
+    async def cli_custom_tools_route(request: Request) -> JSONResponse:
+        """REST endpoint to list custom tools for the active Unity project."""
+        try:
+            unity_instance = request.query_params.get("instance")
+            instance_name, instance_hash = _normalize_instance_token(unity_instance)
+
+            sessions = await PluginHub.get_sessions()
+            if not sessions.sessions:
+                return JSONResponse({
+                    "success": False,
+                    "error": "No Unity instances connected. Make sure Unity is running with MCP plugin."
+                }, status_code=503)
+
+            session_details = None
+            if unity_instance:
+                # Try to match by hash or project name
+                for _, details in sessions.sessions.items():
+                    if details.hash == instance_hash or details.project in (instance_name, unity_instance):
+                        session_details = details
+                        break
+                if not session_details:
+                    return JSONResponse(
+                        {
+                            "success": False,
+                            "error": f"Unity instance '{unity_instance}' not found",
+                        },
+                        status_code=404,
+                    )
+            else:
+                # No specific unity_instance requested: use first available session
+                session_details = next(iter(sessions.sessions.values()))
+
+            unity_instance_hint = unity_instance
+            if session_details and session_details.hash:
+                unity_instance_hint = session_details.hash
+
+            project_id = resolve_project_id_for_unity_instance(
+                unity_instance_hint)
+            if not project_id:
+                return JSONResponse(
+                    {"success": False, "error": "Could not resolve project id for custom tools"},
+                    status_code=400,
+                )
+
+            service = CustomToolService.get_instance()
+            tools = await service.list_registered_tools(project_id)
+            tools_payload = [
+                tool.model_dump() if hasattr(tool, "model_dump") else tool for tool in tools
+            ]
+
+            return JSONResponse({
+                "success": True,
+                "project_id": project_id,
+                "tool_count": len(tools_payload),
+                "tools": tools_payload,
+            })
+        except Exception as e:
+            logger.error(f"CLI custom tools error: {e}")
             return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
     @mcp.custom_route("/api/instances", methods=["GET"])
