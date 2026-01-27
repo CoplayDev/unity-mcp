@@ -25,57 +25,6 @@ def _current_transport() -> str:
     return "http" if _is_http_transport() else "stdio"
 
 
-def with_unity_instance(
-    log: str | Callable[[Context, tuple, dict, str | None], str] | None = None,
-    *,
-    kwarg_name: str = "unity_instance",
-):
-    def _decorate(fn: Callable[..., T]):
-        is_coro = asyncio.iscoroutinefunction(fn)
-
-        def _compose_message(ctx: Context, a: tuple, k: dict, inst: str | None) -> str | None:
-            if log is None:
-                return None
-            if callable(log):
-                try:
-                    return log(ctx, a, k, inst)
-                except Exception:
-                    return None
-            try:
-                return str(log).format(unity_instance=inst or "default")
-            except Exception:
-                return str(log)
-
-        if is_coro:
-            async def _wrapper(ctx: Context, *args, **kwargs):
-                inst = get_unity_instance_from_context(ctx)
-                msg = _compose_message(ctx, args, kwargs, inst)
-                if msg:
-                    try:
-                        await ctx.info(msg)
-                    except Exception:
-                        pass
-                kwargs.setdefault(kwarg_name, inst)
-                return await fn(ctx, *args, **kwargs)
-        else:
-            async def _wrapper(ctx: Context, *args, **kwargs):
-                inst = get_unity_instance_from_context(ctx)
-                msg = _compose_message(ctx, args, kwargs, inst)
-                if msg:
-                    try:
-                        await ctx.info(msg)
-                    except Exception:
-                        pass
-                kwargs.setdefault(kwarg_name, inst)
-                return fn(ctx, *args, **kwargs)
-
-        from functools import wraps
-
-        return wraps(fn)(_wrapper)  # type: ignore[arg-type]
-
-    return _decorate
-
-
 async def send_with_unity_instance(
     send_fn: Callable[..., Awaitable[T]],
     unity_instance: str | None,

@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash"
+      "Bash",
+      "mcp__unity-mcp__get_test_job",
+      "mcp__UnityMCP__get_test_job",
+      "mcp__UnityMCP__run_tests",
+      "mcp__UnityMCP__read_console"
     ],
     "ask": [
       "Bash(git push*)"

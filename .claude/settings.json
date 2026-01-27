@@ -6,7 +6,6 @@
       "MultiEdit(reports/**)"
     ],
     "deny": [
-      "Bash",
       "WebFetch",
       "WebSearch",
       "Task",

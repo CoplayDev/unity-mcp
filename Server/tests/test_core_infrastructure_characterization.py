@@ -680,41 +680,34 @@ class TestServerConfigDefaults:
 
 
 class TestServerConfigLogging:
-    """Tests for ServerConfig.configure_logging method.
+    """Tests documenting that ServerConfig.configure_logging() was removed.
 
-    Note: config.py has a bug - it uses logging without importing it.
-    This test documents that behavior.
+    The method was defined but never invoked anywhere in the codebase.
+    Removed during QW-1: Delete Dead Code refactoring (2026-01-27).
+
+    Historical note: config.py had a bug - it used logging without importing it.
     """
 
-    def test_configure_logging_method_exists(self):
-        """Verify configure_logging method exists on ServerConfig."""
+    def test_configure_logging_method_removed(self):
+        """Documents that configure_logging was removed as unused code."""
         config = ServerConfig()
-        assert hasattr(config, "configure_logging")
-        assert callable(config.configure_logging)
+        assert not hasattr(config, "configure_logging")
 
-    def test_configure_logging_info_level(self):
-        """Verify configure_logging sets log level from config."""
+    def test_configure_logging_info_level_removed(self):
+        """Documents that configure_logging was removed as unused code."""
         config = ServerConfig(log_level="INFO")
+        # Method no longer exists
+        assert not hasattr(config, "configure_logging")
+        # Log level config field still exists for potential future use
+        assert config.log_level == "INFO"
 
-        # This will fail if logging is not imported in config.py
-        # but documents current behavior
-        try:
-            config.configure_logging()
-            # If it works, verify logging was configured
-            assert logging.root.level in (logging.INFO, logging.NOTSET)
-        except NameError as e:
-            # Expected: NameError: name 'logging' is not defined
-            assert "logging" in str(e)
-
-    def test_configure_logging_debug_level(self):
-        """Verify configure_logging handles DEBUG level."""
+    def test_configure_logging_debug_level_removed(self):
+        """Documents that configure_logging was removed as unused code."""
         config = ServerConfig(log_level="DEBUG")
-
-        try:
-            config.configure_logging()
-            assert logging.root.level in (logging.DEBUG, logging.NOTSET)
-        except NameError:
-            pass  # Expected if logging not imported
+        # Method no longer exists
+        assert not hasattr(config, "configure_logging")
+        # Log level config field still exists for potential future use
+        assert config.log_level == "DEBUG"
 
 
 class TestTelemetryConfigPrecedence:

@@ -39,7 +39,6 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         private Label httpServerCommandHint;
         private TextField httpUrlField;
         private Button startHttpServerButton;
-        private Button stopHttpServerButton;
         private VisualElement unitySocketPortRow;
         private TextField unityPortField;
         private VisualElement statusIndicator;
@@ -89,7 +88,6 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             httpServerCommandHint = Root.Q<Label>("http-server-command-hint");
             httpUrlField = Root.Q<TextField>("http-url");
             startHttpServerButton = Root.Q<Button>("start-http-server-button");
-            stopHttpServerButton = Root.Q<Button>("stop-http-server-button");
             unitySocketPortRow = Root.Q<VisualElement>("unity-socket-port-row");
             unityPortField = Root.Q<TextField>("unity-port");
             statusIndicator = Root.Q<VisualElement>("status-indicator");
@@ -224,18 +222,6 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             if (startHttpServerButton != null)
             {
                 startHttpServerButton.clicked += OnHttpServerToggleClicked;
-            }
-
-            if (stopHttpServerButton != null)
-            {
-                // Stop button removed from UXML as part of consolidated Start/Stop UX.
-                // Kept null-check for backward compatibility if older UXML is loaded.
-                stopHttpServerButton.clicked += () =>
-                {
-                    // In older UXML layouts, route the stop button to the consolidated toggle behavior.
-                    // If a session is active, this will end it and attempt to stop the local server.
-                    OnHttpServerToggleClicked();
-                };
             }
 
             if (copyHttpServerCommandButton != null)
@@ -505,9 +491,6 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             startHttpServerButton.tooltip = httpLocalSelected
                 ? (canStartLocalServer ? string.Empty : "HTTP Local requires a localhost URL (localhost/127.0.0.1/0.0.0.0/::1).")
                 : string.Empty;
-
-            // Stop button is no longer used; it may be null depending on UXML version.
-            stopHttpServerButton?.SetEnabled(false);
         }
 
         private void RefreshHttpUi()

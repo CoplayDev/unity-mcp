@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "unity-mcp": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/Users/davidsarno/unity-mcp-refactor/Server",
+        "src/main.py",
+        "--transport",
+        "stdio"
+      ]
+    }
+  }
+}
