@@ -8,6 +8,7 @@ from typing import Optional, Any
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success
 from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.parsers import parse_json_dict_or_exit
 
 
 @click.group()
@@ -129,11 +130,7 @@ def create(path: str, asset_type: str, properties: Optional[str]):
     }
 
     if properties:
-        try:
-            params["properties"] = json.loads(properties)
-        except json.JSONDecodeError as e:
-            print_error(f"Invalid JSON for properties: {e}")
-            sys.exit(1)
+        params["properties"] = parse_json_dict_or_exit(properties, "properties")
 
     try:
         result = run_command("manage_asset", params, config)

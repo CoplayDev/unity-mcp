@@ -8,21 +8,7 @@ from typing import Optional, Any
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success
 from cli.utils.connection import run_command, UnityConnectionError
-
-
-def try_parse_json(value: str, context: str) -> Any:
-    """Try to parse JSON, with fallback for single quotes and Python bools."""
-    try:
-        return json.loads(value)
-    except json.JSONDecodeError:
-        # Try to fix common shell quoting issues (single quotes, Python bools)
-        try:
-            fixed = value.replace("'", '"').replace(
-                "True", "true").replace("False", "false")
-            return json.loads(fixed)
-        except json.JSONDecodeError as e:
-            print_error(f"Invalid JSON for {context}: {e}")
-            sys.exit(1)
+from cli.utils.parsers import parse_json_or_exit as try_parse_json
 
 
 _TEXTURE_TYPES = {

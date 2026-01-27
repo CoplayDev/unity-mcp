@@ -8,6 +8,7 @@ from typing import Optional, Any
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success
 from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.parsers import parse_json_list_or_exit
 
 
 @click.group()
@@ -187,11 +188,7 @@ def edit(path: str, edits: str):
     """
     config = get_config()
 
-    try:
-        edits_list = json.loads(edits)
-    except json.JSONDecodeError as e:
-        print_error(f"Invalid JSON for edits: {e}")
-        sys.exit(1)
+    edits_list = parse_json_list_or_exit(edits, "edits")
 
     params: dict[str, Any] = {
         "uri": path,

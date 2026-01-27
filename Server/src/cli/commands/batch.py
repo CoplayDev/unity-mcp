@@ -8,6 +8,7 @@ from typing import Optional, Any
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success, print_info
 from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.parsers import parse_json_list_or_exit
 
 
 @click.group()
@@ -104,15 +105,7 @@ def batch_inline(commands_json: str, parallel: bool, fail_fast: bool):
     """
     config = get_config()
 
-    try:
-        commands = json.loads(commands_json)
-    except json.JSONDecodeError as e:
-        print_error(f"Invalid JSON: {e}")
-        sys.exit(1)
-
-    if not isinstance(commands, list):
-        print_error("Commands must be an array")
-        sys.exit(1)
+    commands = parse_json_list_or_exit(commands_json, "commands")
 
     if len(commands) > 25:
         print_error(f"Maximum 25 commands per batch, got {len(commands)}")

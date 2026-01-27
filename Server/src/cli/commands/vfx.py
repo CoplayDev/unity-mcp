@@ -8,6 +8,7 @@ from typing import Optional, Tuple, Any
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success
 from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.parsers import parse_json_list_or_exit, parse_json_dict_or_exit
 
 
 _VFX_TOP_LEVEL_KEYS = {"action", "target", "searchMethod", "properties"}
@@ -236,11 +237,7 @@ def line_set_positions(target: str, positions: str, search_method: Optional[str]
     """
     config = get_config()
 
-    try:
-        positions_list = json.loads(positions)
-    except json.JSONDecodeError as e:
-        print_error(f"Invalid JSON for positions: {e}")
-        sys.exit(1)
+    positions_list = parse_json_list_or_exit(positions, "positions")
 
     params: dict[str, Any] = {
         "action": "line_set_positions",
@@ -449,14 +446,7 @@ def vfx_raw(action: str, target: Optional[str], params: str, search_method: Opti
     """
     config = get_config()
 
-    try:
-        extra_params = json.loads(params)
-    except json.JSONDecodeError as e:
-        print_error(f"Invalid JSON for params: {e}")
-        sys.exit(1)
-    if not isinstance(extra_params, dict):
-        print_error("Invalid JSON for params: expected an object")
-        sys.exit(1)
+    extra_params = parse_json_dict_or_exit(params, "params")
 
     request_params: dict[str, Any] = {"action": action}
     if target:

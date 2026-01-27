@@ -8,6 +8,7 @@ from typing import Optional, Any, Tuple
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success
 from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.parsers import parse_value_safe, parse_json_dict_or_exit
 
 
 @click.group()
@@ -68,11 +69,7 @@ def create(path: str, shader: str, properties: Optional[str]):
     }
 
     if properties:
-        try:
-            params["properties"] = json.loads(properties)
-        except json.JSONDecodeError as e:
-            print_error(f"Invalid JSON for properties: {e}")
-            sys.exit(1)
+        params["properties"] = parse_json_dict_or_exit(properties, "properties")
 
     try:
         result = run_command("manage_material", params, config)
@@ -139,14 +136,7 @@ def set_property(path: str, property_name: str, value: str):
     config = get_config()
 
     # Try to parse value as JSON for complex types
-    try:
-        parsed_value = json.loads(value)
-    except json.JSONDecodeError:
-        # Try to parse as number
-        try:
-            parsed_value = float(value)
-        except ValueError:
-            parsed_value = value
+    parsed_value = parse_value_safe(value)
 
     params: dict[str, Any] = {
         "action": "set_material_shader_property",

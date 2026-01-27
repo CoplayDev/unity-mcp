@@ -8,6 +8,7 @@ from typing import Optional, Any
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success
 from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.parsers import parse_value_safe, parse_json_dict_or_exit
 
 
 @click.group()
@@ -50,11 +51,7 @@ def add(target: str, component_type: str, search_method: Optional[str], properti
     if search_method:
         params["searchMethod"] = search_method
     if properties:
-        try:
-            params["properties"] = json.loads(properties)
-        except json.JSONDecodeError as e:
-            print_error(f"Invalid JSON for properties: {e}")
-            sys.exit(1)
+        params["properties"] = parse_json_dict_or_exit(properties, "properties")
 
     try:
         result = run_command("manage_components", params, config)
@@ -135,11 +132,7 @@ def set_property(target: str, component_type: str, property_name: str, value: st
     config = get_config()
 
     # Try to parse value as JSON for complex types
-    try:
-        parsed_value = json.loads(value)
-    except json.JSONDecodeError:
-        # Keep as string if not valid JSON
-        parsed_value = value
+    parsed_value = parse_value_safe(value)
 
     params: dict[str, Any] = {
         "action": "set_property",
@@ -186,11 +179,7 @@ def modify(target: str, component_type: str, properties: str, search_method: Opt
     """
     config = get_config()
 
-    try:
-        props_dict = json.loads(properties)
-    except json.JSONDecodeError as e:
-        print_error(f"Invalid JSON for properties: {e}")
-        sys.exit(1)
+    props_dict = parse_json_dict_or_exit(properties, "properties")
 
     params: dict[str, Any] = {
         "action": "set_property",

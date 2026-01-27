@@ -8,6 +8,7 @@ from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success, print_info
 from cli.utils.connection import run_command, run_list_custom_tools, UnityConnectionError
 from cli.utils.suggestions import suggest_matches, format_suggestions
+from cli.utils.parsers import parse_json_dict_or_exit
 
 
 @click.group()
@@ -469,14 +470,7 @@ def custom_tool(tool_name: str, params: str):
     import json
     config = get_config()
 
-    try:
-        params_dict = json.loads(params)
-    except json.JSONDecodeError as e:
-        print_error(f"Invalid JSON for params: {e}")
-        print_info("Example: --params '{\"key\":\"value\"}'")
-        print_info(
-            "Tip: wrap JSON in single quotes to avoid shell escaping issues.")
-        sys.exit(1)
+    params_dict = parse_json_dict_or_exit(params, "params")
 
     try:
         result = run_command("execute_custom_tool", {
