@@ -6,17 +6,19 @@
 
 ---
 
-## Attempted But Not Working
+## Characterization Tests Coverage
 
-### 1. Editor Tools Characterization Tests (33 tests) ⚠️
+### 1. Editor Tools Characterization Tests ✅
 - **File**: `TestProjects/UnityMCPTests/Assets/Tests/EditMode/Tools/Characterization/EditorTools_Characterization.cs`
-- **Status**: File exists (584 lines) but **NOT discovered by Unity** - likely compilation errors or assembly definition issues
+- **Status**: ✅ 37 passing, 1 explicit
 - **Covers**: ManageEditor, ManageMaterial, FindGameObjects, ManagePrefabs, ExecuteMenuItem
 
-### 2. Services Characterization Tests (26 tests) ⚠️
+### 2. Services Characterization Tests ✅
 - **File**: `TestProjects/UnityMCPTests/Assets/Tests/EditMode/Services/Characterization/Services_Characterization.cs`
-- **Status**: File exists (501 lines) but **NOT discovered by Unity** - likely compilation errors or assembly definition issues
+- **Status**: ✅ 25 passing, 1 explicit
 - **Covers**: ServerManagementService, EditorStateCache, BridgeControlService, ClientConfigurationService, MCPServiceLocator
+
+**Total Characterization Tests**: 62 passing, 2 explicit (64 total)
 
 ---
 
@@ -24,7 +26,9 @@
 
 ### 4. Characterization Test Validation ✅ (2026-01-27)
 - **Goal**: Validate existing characterization tests capture CURRENT behavior accurately
-- **Status**: ✅ COMPLETE - 37 of 38 tests passing, 1 marked explicit
+- **Status**: ✅ COMPLETE - 62 of 64 tests passing, 2 marked explicit
+
+#### EditorToolsCharacterizationTests (37 passing, 1 explicit)
 - **Root Causes Identified**:
   1. Tests calling `ManageEditor.HandleCommand` with `"play"` action entered Unity play mode
   2. Test executing `"Window/General/Console"` menu item opened Console window
@@ -33,13 +37,24 @@
   - Replaced `"play"` actions with `"telemetry_status"` (read-only) in 5 tests
   - Fixed FindGameObjects tests: changed `"query"` to `"searchTerm"` parameter
   - Marked `ExecuteMenuItem_ExecutesNonBlacklistedItems` as `[Explicit]` (opens Console window)
-- **Discovered Issues Documented**:
-  - Inconsistent null parameter handling (ManageEditor throws, FindGameObjects handles gracefully)
-  - Documented in `results/REFACTOR_PLAN.md` P1-1 section
-- **Test Results**: 37 passed, 1 skipped (explicit), 0 failed
-  - No play mode entry ✓
-  - No focus stealing ✓
-  - No assembly reload issues ✓
+
+#### ServicesCharacterizationTests (25 passing, 1 explicit)
+- **Root Cause Identified**:
+  - `ServerManagementService_StopLocalHttpServer_PrefersPidfileBasedApproach` called `service.StopLocalHttpServer()`
+  - This **actually stopped the running MCP server**, crashing the connection
+- **Fix Applied**:
+  - Marked test as `[Explicit]` (stops MCP server)
+
+#### Issues Documented for Refactoring
+- Inconsistent null parameter handling (ManageEditor throws, FindGameObjects handles gracefully)
+- Documented in `results/REFACTOR_PLAN.md` P1-1 section
+
+#### Final Test Results
+- **Total**: 62 passed, 2 skipped (explicit), 0 failed
+- ✓ No play mode entry
+- ✓ No focus stealing
+- ✓ No MCP server crashes
+- ✓ No assembly reload issues
 
 ---
 
@@ -65,12 +80,12 @@ If we want MORE test coverage before refactoring, we could create:
 
 ---
 
-## Existing Test Coverage
+## Test Coverage Summary
 
 ### C# Tests (Unity) ✅
-- **280 regression tests** already in codebase
-- Covers: Tools, Services, Helpers, Resources, stress tests, play mode tests
-- All passing (except delete tests which we just fixed)
+- **280 existing regression tests** (Tools, Services, Helpers, Resources, stress tests, play mode tests)
+- **62 characterization tests** (37 EditorTools + 25 Services) - validated and passing
+- **Total C# tests**: 342 passing, 2 explicit
 
 ### Python Tests ✅
 | Domain | Tests | Status |
@@ -81,7 +96,7 @@ If we want MORE test coverage before refactoring, we could create:
 | Transport | ~50 | Partial |
 | Utilities | 0 | Empty stub |
 
-**Total Coverage: ~483 tests** (280 C# + 203 Python)
+**Total Coverage: ~545 tests** (342 C# + 203 Python)
 
 ---
 
