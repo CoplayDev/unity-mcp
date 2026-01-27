@@ -43,6 +43,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
         public event Action OnGitUrlChanged;
         public event Action OnHttpServerCommandUpdateRequested;
         public event Action OnTestConnectionRequested;
+        public event Action<bool> OnBetaModeChanged;
 
         public VisualElement Root { get; private set; }
 
@@ -186,6 +187,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             {
                 EditorPrefs.SetBool(EditorPrefKeys.UseTestPyPI, evt.newValue);
                 OnHttpServerCommandUpdateRequested?.Invoke();
+                OnBetaModeChanged?.Invoke(evt.newValue);
             });
 
             deploySourcePath.RegisterValueChangedCallback(evt =>

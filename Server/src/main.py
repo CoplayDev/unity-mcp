@@ -134,7 +134,8 @@ custom_tool_service: CustomToolService | None = None
 async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     """Handle server startup and shutdown."""
     global _unity_connection_pool
-    logger.info("MCP for Unity Server starting up")
+    server_version = get_package_version()
+    logger.info(f"MCP for Unity Server v{server_version} starting up")
 
     # Register custom tool management endpoints with FastMCP
     # Routes are declared globally below after FastMCP initialization
@@ -158,7 +159,6 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     # Record server startup telemetry
     start_time = time.time()
     start_clk = time.perf_counter()
-    server_version = get_package_version()
     # Defer initial telemetry by 1s to avoid stdio handshake interference
 
     def _emit_startup():
@@ -325,6 +325,7 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
         return JSONResponse({
             "status": "healthy",
             "timestamp": time.time(),
+            "version": get_package_version(),
             "message": "MCP for Unity server is running"
         })
 

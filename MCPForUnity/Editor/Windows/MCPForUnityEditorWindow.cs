@@ -182,11 +182,7 @@ namespace MCPForUnity.Editor.Windows
             }
 
             // Initialize version label
-            if (versionLabel != null)
-            {
-                string version = AssetPathUtility.GetPackageVersion();
-                versionLabel.text = $"v{version}";
-            }
+            UpdateVersionLabel(EditorPrefs.GetBool(EditorPrefKeys.UseTestPyPI, true));
 
             SetupTabs();
 
@@ -252,6 +248,7 @@ namespace MCPForUnity.Editor.Windows
                     if (connectionSection != null)
                         await connectionSection.VerifyBridgeConnectionAsync();
                 };
+                advancedSection.OnBetaModeChanged += UpdateVersionLabel;
 
                 // Wire up health status updates from Connection to Advanced
                 connectionSection?.SetHealthStatusUpdateCallback((isHealthy, statusText) =>
@@ -286,6 +283,20 @@ namespace MCPForUnity.Editor.Windows
 
             // Initial updates
             RefreshAllData();
+        }
+
+        private void UpdateVersionLabel(bool useBetaServer)
+        {
+            if (versionLabel == null)
+            {
+                return;
+            }
+
+            string version = AssetPathUtility.GetPackageVersion();
+            versionLabel.text = useBetaServer ? $"v{version} β" : $"v{version}";
+            versionLabel.tooltip = useBetaServer
+                ? "Beta server mode - fetching pre-release server versions from PyPI"
+                : $"MCP For Unity v{version}";
         }
 
         private void EnsureToolsLoaded()
