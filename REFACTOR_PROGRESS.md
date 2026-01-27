@@ -1,4 +1,4 @@
-# Refactor Progress - Last Updated 2026-01-27 5:30 PM
+# Refactor Progress - Last Updated 2026-01-27 5:45 PM
 
 ## Current Status: Characterization Tests Validated - Ready for Refactoring
 
@@ -23,7 +23,13 @@ All characterization tests successfully created, validated, and passing.
 - **Status**: ✅ 29 passing
 - **Covers**: EditorPrefsWindow, MCPSetupWindow, McpConnectionSection, McpAdvancedSection, McpClientConfigSection, visibility logic, event signaling
 
-**Total Characterization Tests**: 91 passing, 2 explicit (93 total)
+### 4. Models Characterization Tests ✅
+- **File**: `TestProjects/UnityMCPTests/Assets/Tests/EditMode/Models/Characterization/Models_Characterization.cs`
+- **Status**: ✅ 53 passing
+- **Covers**: McpStatus, ConfiguredTransport, McpClient (6 capability flags), McpConfigServer, McpConfigServers, McpConfig, Command
+- **Bugs Documented**: McpClient.SetStatus() NullReferenceException when configStatus is null
+
+**Total Characterization Tests**: 144 passing, 2 explicit (146 total)
 
 ---
 
@@ -52,7 +58,13 @@ All characterization tests successfully created, validated, and passing.
 
 #### Issues Documented for Refactoring
 - Inconsistent null parameter handling (ManageEditor throws, FindGameObjects handles gracefully)
-- Documented in `results/REFACTOR_PLAN.md` P1-1 section
+  - Documented in `results/REFACTOR_PLAN.md` P1-1 section
+- **McpClient.SetStatus() NullReferenceException** (discovered 2026-01-27)
+  - When `configStatus` is null and `SetStatus(McpStatus.Error)` is called without errorDetails, it throws NullReferenceException
+  - Root cause: `GetStatusDisplayString()` calls `configStatus.StartsWith()` without null check
+  - Location: `MCPForUnity/Editor/Models/McpClient.cs:37`
+  - Workaround: Initialize `configStatus` before calling `SetStatus()`
+  - Should be fixed during P1-4 (Session Model Consolidation) or P2 refactoring
 
 #### Final Test Results
 - **Total**: 62 passed, 2 skipped (explicit), 0 failed
@@ -72,15 +84,15 @@ All characterization tests successfully created, validated, and passing.
 
 ---
 
-## Not Started (Additional Characterization Tests - Optional)
+## Characterization Tests Complete ✅
 
-If we want MORE test coverage before refactoring, we could create:
+All planned characterization tests have been created and validated:
+- ✅ EditorTools (37 passing, 1 explicit)
+- ✅ Services (25 passing, 1 explicit)
+- ✅ Windows/UI (29 passing)
+- ✅ Models (53 passing)
 
-| Domain | Planned Tests | Documentation |
-|--------|---------------|---------------|
-| Models (C#) | 60+ | `results/MODELS_CHARACTERIZATION_SUMMARY.md` |
-
-**However**, with 573 existing tests (371 C# + 203 Python), we have substantial coverage to start refactoring.
+**Total**: 144 passing, 2 explicit (146 total characterization tests)
 
 ---
 
@@ -88,8 +100,8 @@ If we want MORE test coverage before refactoring, we could create:
 
 ### C# Tests (Unity) ✅
 - **280 existing regression tests** (Tools, Services, Helpers, Resources, stress tests, play mode tests)
-- **91 characterization tests** (37 EditorTools + 25 Services + 29 Windows/UI) - validated and passing
-- **Total C# tests**: 371 passing, 2 explicit
+- **144 characterization tests** (37 EditorTools + 25 Services + 29 Windows/UI + 53 Models) - validated and passing
+- **Total C# tests**: 424 passing, 2 explicit
 
 ### Python Tests ✅
 | Domain | Tests | Status |
@@ -100,7 +112,7 @@ If we want MORE test coverage before refactoring, we could create:
 | Transport | ~50 | Partial |
 | Utilities | 0 | Empty stub |
 
-**Total Coverage: ~574 tests** (371 C# + 203 Python)
+**Total Coverage: ~627 tests** (424 C# + 203 Python)
 
 ---
 
