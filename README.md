@@ -113,15 +113,15 @@ If auto-setup doesn't work, add this to your MCP client's config file:
 ```
 
 <details>
-<summary>Stdio configuration (legacy)</summary>
+<summary>Stdio configuration (uvx)</summary>
 
 **macOS/Linux:**
 ```json
 {
   "mcpServers": {
     "unityMCP": {
-      "command": "uv",
-      "args": ["run", "--directory", "/Users/YOUR_USERNAME/Library/AppSupport/UnityMCP/UnityMcpServer/src", "server.py", "--transport", "stdio"]
+      "command": "uvx",
+      "args": ["--from", "mcpforunityserver", "mcp-for-unity", "--transport", "stdio"]
     }
   }
 }
@@ -132,8 +132,8 @@ If auto-setup doesn't work, add this to your MCP client's config file:
 {
   "mcpServers": {
     "unityMCP": {
-      "command": "C:/Users/YOUR_USERNAME/AppData/Local/Microsoft/WinGet/Links/uv.exe",
-      "args": ["run", "--directory", "C:/Users/YOUR_USERNAME/AppData/Local/UnityMCP/UnityMcpServer/src", "server.py", "--transport", "stdio"]
+      "command": "C:/Users/YOUR_USERNAME/AppData/Local/Microsoft/WinGet/Links/uvx.exe",
+      "args": ["--from", "mcpforunityserver", "mcp-for-unity", "--transport", "stdio"]
     }
   }
 }
