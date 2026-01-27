@@ -9,6 +9,7 @@ from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success, print_warning
 from cli.utils.connection import run_command, UnityConnectionError
 from cli.utils.constants import SEARCH_METHOD_CHOICE_FULL, SEARCH_METHOD_CHOICE_TAGGED
+from cli.utils.confirmation import confirm_destructive_action
 
 
 @click.group()
@@ -359,8 +360,7 @@ def delete(target: str, search_method: Optional[str], force: bool):
     """
     config = get_config()
 
-    if not force:
-        click.confirm(f"Delete GameObject '{target}'?", abort=True)
+    confirm_destructive_action("Delete", "GameObject", target, force)
 
     params = {
         "action": "delete",

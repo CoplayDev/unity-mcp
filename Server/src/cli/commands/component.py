@@ -10,6 +10,7 @@ from cli.utils.output import format_output, print_error, print_success
 from cli.utils.connection import run_command, UnityConnectionError
 from cli.utils.parsers import parse_value_safe, parse_json_dict_or_exit
 from cli.utils.constants import SEARCH_METHOD_CHOICE_BASIC
+from cli.utils.confirmation import confirm_destructive_action
 
 
 @click.group()
@@ -88,8 +89,7 @@ def remove(target: str, component_type: str, search_method: Optional[str], force
     """
     config = get_config()
 
-    if not force:
-        click.confirm(f"Remove {component_type} from '{target}'?", abort=True)
+    confirm_destructive_action("Remove", component_type, target, force, "from")
 
     params: dict[str, Any] = {
         "action": "remove",

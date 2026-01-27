@@ -9,6 +9,7 @@ from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success
 from cli.utils.connection import run_command, UnityConnectionError
 from cli.utils.parsers import parse_json_dict_or_exit
+from cli.utils.confirmation import confirm_destructive_action
 
 
 @click.group()
@@ -159,8 +160,7 @@ def delete(path: str, force: bool):
     """
     config = get_config()
 
-    if not force:
-        click.confirm(f"Delete asset '{path}'?", abort=True)
+    confirm_destructive_action("Delete", "asset", path, force)
 
     try:
         result = run_command(

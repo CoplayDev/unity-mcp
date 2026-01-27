@@ -9,6 +9,7 @@ from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success
 from cli.utils.connection import run_command, UnityConnectionError
 from cli.utils.parsers import parse_json_list_or_exit
+from cli.utils.confirmation import confirm_destructive_action
 
 
 @click.group()
@@ -148,8 +149,7 @@ def delete(path: str, force: bool):
     """
     config = get_config()
 
-    if not force:
-        click.confirm(f"Delete script '{path}'?", abort=True)
+    confirm_destructive_action("Delete", "script", path, force)
 
     parts = path.rsplit("/", 1)
     filename = parts[-1]
