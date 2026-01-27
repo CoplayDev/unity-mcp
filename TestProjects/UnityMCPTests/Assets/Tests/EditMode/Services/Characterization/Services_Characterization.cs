@@ -191,10 +191,12 @@ namespace MCPForUnityTests.Editor.Services.Characterization
         /// for deterministic termination.
         /// </summary>
         [Test]
+        [Explicit("Stops the MCP server - kills connection")]
         public void ServerManagementService_StopLocalHttpServer_PrefersPidfileBasedApproach()
         {
             var service = new ServerManagementService();
 
+            // WARNING: This test calls StopLocalHttpServer() which will kill the running MCP server
             // Calling stop when no server is running should not throw
             Assert.DoesNotThrow(() =>
             {
