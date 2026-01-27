@@ -152,6 +152,24 @@ public class ToolParams
 }
 ```
 
+**Known Issue (Documented by Characterization Tests)**:
+Tools currently have **inconsistent null parameter handling** at the HandleCommand entry point:
+- **ManageEditor.cs:27** - No null check, throws `NullReferenceException` when @params is null
+- **FindGameObjects.cs:26-29** - Checks for null, returns `ErrorResponse` gracefully
+
+The ToolParams wrapper above assumes it receives a valid JObject. As part of this refactoring, all tools should add a consistent null check at HandleCommand entry:
+
+```csharp
+public static object HandleCommand(JObject @params)
+{
+    if (@params == null)
+        return new ErrorResponse("Parameters cannot be null.");
+
+    var p = new ToolParams(@params);
+    // ... rest of implementation
+}
+```
+
 **Usage**: Replace manual validation in 20+ tools.
 
 ### P1-2: EditorPrefs Binding Helper (UI)

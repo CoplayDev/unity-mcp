@@ -29,21 +29,22 @@ namespace MCPForUnityTests.Editor.Tools.Characterization
         /// This is the standard pattern - tests verify all sampled tools follow it.
         /// </summary>
         [Test]
-        public void HandleCommand_ManageEditor_WithNullParams_ReturnsErrorResponse()
+        public void HandleCommand_ManageEditor_WithNullParams_ThrowsNullReferenceException()
         {
-            // ManageEditor handles null params gracefully
-            var result = ManageEditor.HandleCommand(null);
-            var jo = ToJO(result);
-            Assert.IsFalse((bool)jo["success"], "Should return error for null params");
+            // CURRENT BEHAVIOR: ManageEditor does NOT handle null params gracefully - it throws NullReferenceException
+            // This documents actual behavior before refactoring. After refactoring, this should be fixed.
+            Assert.Throws<NullReferenceException>(() => ManageEditor.HandleCommand(null));
         }
 
         [Test]
         public void HandleCommand_FindGameObjects_WithNullParams_ReturnsErrorResponse()
         {
-            // FindGameObjects handles null params gracefully
+            // CURRENT BEHAVIOR: FindGameObjects DOES handle null params gracefully - returns ErrorResponse
+            // This is good design and should be preserved during refactoring.
             var result = FindGameObjects.HandleCommand(null);
             var jo = ToJO(result);
             Assert.IsFalse((bool)jo["success"], "Should return error for null params");
+            Assert.IsNotNull(jo["error"], "Should have error message");
         }
 
         [Test]
