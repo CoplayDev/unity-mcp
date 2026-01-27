@@ -39,22 +39,29 @@ These deliver immediate value with minimal risk. Can be done in any order.
 - ✅ **Patch in existing utilities** where they already exist (QW-3: AssetPathUtility)
 - ❌ **Create new utilities** where patterns are duplicated but not extracted (QW-2, QW-4, QW-5)
 
-### QW-1: Delete Dead Code
-**Impact**: Cleaner codebase, reduced cognitive load
-**Effort**: 1-2 hours
+### QW-1: Delete Dead Code ✅ COMPLETE (2026-01-27)
+**Impact**: Cleaner codebase, reduced cognitive load (~86 lines removed)
+**Effort**: 1 hour (actual)
 **Risk**: Very low
 
+**Deleted:**
 | Domain | Item | Location |
 |--------|------|----------|
-| Helpers | `reload_sentinel.py` | `Server/src/utils/` — entire file is deprecated no-op shim |
-| Transport | `with_unity_instance()` decorator | `Server/src/transport/unity_transport.py` — defined but never used |
-| Transport | `list_sessions_sync()`, `send_command_to_plugin()` | Same file — never called |
-| Core | `ServerConfig.configure_logging()` | `Server/src/core/config.py` — never invoked |
-| Core | STDIO framing config options | `config.py` — `require_framing`, `handshake_timeout`, etc. unused |
-| Core | `port_registry_ttl`, `reload_retry_ms` | Same file — defined but not used |
-| Models | Deprecated accessors | `TransportManager.cs` — `ActiveTransport`, `ActiveMode` return null |
-| UI | Commented `maxSize` | `McpSetupWindow.cs:37` |
-| UI | Stop button backward-compat | `McpConnectionSection.cs:234-242` |
+| Helpers | `reload_sentinel.py` | `Server/src/utils/` — entire file deleted (10 lines) |
+| Transport | `with_unity_instance()` decorator | `Server/src/transport/unity_transport.py:28-76` — 49 lines removed |
+| Core | `ServerConfig.configure_logging()` | `Server/src/core/config.py:49-51` — 3 lines removed |
+| Models | Deprecated accessors | `TransportManager.cs:26-27` — 2 lines removed |
+| UI | Commented `maxSize` | `McpSetupWindow.cs:37` — 1 line removed |
+| UI | Stop button backward-compat | `McpConnectionSection.cs` — 21 lines removed (stopHttpServerButton references) |
+
+**NOT Deleted (Refactor plan was incorrect - actively used):**
+- ❌ `list_sessions_sync()`, `send_command_to_plugin()` — do not exist (never defined)
+- ❌ STDIO framing config — USED in unity_connection.py (require_framing, handshake_timeout, etc.)
+- ❌ `port_registry_ttl` — USED in stdio_port_registry.py
+- ❌ `reload_retry_ms` — USED in plugin_hub.py and unity_connection.py
+
+**Tests Updated:** Characterization tests updated to document removal of configure_logging
+**Verification:** All 59 config/transport tests passing
 
 ### QW-2: Create JSON Parser Utility (CLI)
 **Status**: ❌ Does NOT exist - duplicated pattern in 5+ files (audited 2026-01-27)

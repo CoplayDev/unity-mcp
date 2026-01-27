@@ -1,10 +1,10 @@
-# Refactor Progress - Last Updated 2026-01-27 6:15 PM
+# Refactor Progress - Last Updated 2026-01-27 6:45 PM
 
-## Current Status: Utility Audit Complete - Ready to Start Quick Wins
+## Current Status: QW-1 Complete - Continuing Quick Wins
 
 All characterization tests successfully created, validated, and passing (144 passing, 2 explicit).
 Utility audit completed to identify existing helpers vs. patterns needing extraction.
-Ready to begin Phase 1 Quick Wins refactoring.
+QW-1 (Delete Dead Code) completed - 86 lines of dead code removed.
 
 ---
 
@@ -159,6 +159,22 @@ Before starting Quick Wins refactoring, audited existing utilities to avoid dupl
 
 ---
 
+## Quick Wins Progress
+
+### ✅ QW-1: Delete Dead Code (2026-01-27)
+- **Time**: 1 hour
+- **Removed**: 86 lines of dead code
+  - `reload_sentinel.py` - entire deprecated file (10 lines)
+  - `with_unity_instance()` decorator - never used (49 lines)
+  - `configure_logging()` method - never called (3 lines)
+  - TransportManager deprecated accessors (2 lines)
+  - Commented maxSize (1 line)
+  - Stop button backward-compat code (21 lines)
+- **Tests**: Updated characterization tests, all 59 config/transport tests passing
+- **Corrections**: Refactor plan items port_registry_ttl, reload_retry_ms, and STDIO framing config are NOT dead code - they're actively used
+
+---
+
 ## Next Steps
 
 1. ✅ ~~Fix delete test failures~~ - DONE
@@ -166,8 +182,8 @@ Before starting Quick Wins refactoring, audited existing utilities to avoid dupl
 3. ✅ ~~Document null handling inconsistency in refactor plan~~ - DONE (added to P1-1)
 4. ✅ ~~Validate characterization tests run without side effects~~ - DONE (37/38 passing)
 5. ✅ ~~Audit existing utilities to avoid duplication~~ - DONE (see `results/UTILITY_AUDIT.md`)
-6. **START REFACTORING**: Begin Phase 1 Quick Wins from `results/REFACTOR_PLAN.md`
-   - **QW-1**: Delete Dead Code - 1-2 hours, very low risk
+6. ✅ **QW-1: Delete Dead Code** - DONE (86 lines removed)
+7. **Continue Quick Wins**:
    - **QW-2**: Create JSON Parser Utility (CLI) - 30 min, eliminates ~50 lines duplication
    - **QW-3**: Patch in AssetPathUtility (Editor) - 45 min, eliminates ~100 lines duplication (ALREADY EXISTS!)
    - **QW-4**: Create Search Method Constants (CLI) - 20 min, eliminates duplication across 6+ files
