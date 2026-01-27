@@ -26,7 +26,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
         private Button clearGitUrlButton;
         private Toggle debugLogsToggle;
         private Toggle devModeForceRefreshToggle;
-        private Toggle useTestPyPIToggle;
+        private Toggle useBetaServerToggle;
         private TextField deploySourcePath;
         private Button browseDeploySourceButton;
         private Button clearDeploySourceButton;
@@ -66,7 +66,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             clearGitUrlButton = Root.Q<Button>("clear-git-url-button");
             debugLogsToggle = Root.Q<Toggle>("debug-logs-toggle");
             devModeForceRefreshToggle = Root.Q<Toggle>("dev-mode-force-refresh-toggle");
-            useTestPyPIToggle = Root.Q<Toggle>("use-testpypi-toggle");
+            useBetaServerToggle = Root.Q<Toggle>("use-beta-server-toggle");
             deploySourcePath = Root.Q<TextField>("deploy-source-path");
             browseDeploySourceButton = Root.Q<Button>("browse-deploy-source-button");
             clearDeploySourceButton = Root.Q<Button>("clear-deploy-source-button");
@@ -101,12 +101,12 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
                 if (forceRefreshLabel != null)
                     forceRefreshLabel.tooltip = devModeForceRefreshToggle.tooltip;
             }
-            if (useTestPyPIToggle != null)
+            if (useBetaServerToggle != null)
             {
-                useTestPyPIToggle.tooltip = "When enabled, uvx will fetch the latest beta server version from PyPI. Enable this on the beta branch to get the matching server version.";
-                var testPyPILabel = useTestPyPIToggle?.parent?.Q<Label>();
-                if (testPyPILabel != null)
-                    testPyPILabel.tooltip = useTestPyPIToggle.tooltip;
+                useBetaServerToggle.tooltip = "When enabled, uvx will fetch the latest beta server version from PyPI. Enable this on the beta branch to get the matching server version.";
+                var betaServerLabel = useBetaServerToggle?.parent?.Q<Label>();
+                if (betaServerLabel != null)
+                    betaServerLabel.tooltip = useBetaServerToggle.tooltip;
             }
             if (testConnectionButton != null)
                 testConnectionButton.tooltip = "Test the connection between Unity and the MCP server.";
@@ -138,7 +138,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             McpLog.SetDebugLoggingEnabled(debugEnabled);
 
             devModeForceRefreshToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
-            useTestPyPIToggle.value = EditorPrefs.GetBool(EditorPrefKeys.UseTestPyPI, true);
+            useBetaServerToggle.value = EditorPrefs.GetBool(EditorPrefKeys.UseBetaServer, true);
             UpdatePathOverrides();
             UpdateDeploymentSection();
         }
@@ -183,9 +183,9 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
                 OnHttpServerCommandUpdateRequested?.Invoke();
             });
 
-            useTestPyPIToggle.RegisterValueChangedCallback(evt =>
+            useBetaServerToggle.RegisterValueChangedCallback(evt =>
             {
-                EditorPrefs.SetBool(EditorPrefKeys.UseTestPyPI, evt.newValue);
+                EditorPrefs.SetBool(EditorPrefKeys.UseBetaServer, evt.newValue);
                 OnHttpServerCommandUpdateRequested?.Invoke();
                 OnBetaModeChanged?.Invoke(evt.newValue);
             });
@@ -292,7 +292,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
             debugLogsToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
             devModeForceRefreshToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
-            useTestPyPIToggle.value = EditorPrefs.GetBool(EditorPrefKeys.UseTestPyPI, true);
+            useBetaServerToggle.value = EditorPrefs.GetBool(EditorPrefKeys.UseBetaServer, true);
             UpdateDeploymentSection();
         }
 

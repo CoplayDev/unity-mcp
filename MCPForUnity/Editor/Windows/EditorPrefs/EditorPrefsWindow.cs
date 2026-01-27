@@ -42,7 +42,7 @@ namespace MCPForUnity.Editor.Windows
             { EditorPrefKeys.CustomToolRegistrationEnabled, EditorPrefType.Bool },
             { EditorPrefKeys.TelemetryDisabled, EditorPrefType.Bool },
             { EditorPrefKeys.DevModeForceServerRefresh, EditorPrefType.Bool },
-            { EditorPrefKeys.UseTestPyPI, EditorPrefType.Bool },
+            { EditorPrefKeys.UseBetaServer, EditorPrefType.Bool },
             { EditorPrefKeys.ProjectScopedToolsLocalHttp, EditorPrefType.Bool },
             
             // Integer prefs
@@ -113,7 +113,7 @@ namespace MCPForUnity.Editor.Windows
             var searchContainer = new VisualElement();
             searchContainer.style.flexDirection = FlexDirection.Row;
             searchContainer.style.marginTop = 8;
-            searchContainer.style.marginBottom = 10;
+            searchContainer.style.marginBottom = 20;
             searchContainer.style.marginLeft = 4;
             searchContainer.style.marginRight = 4;
 

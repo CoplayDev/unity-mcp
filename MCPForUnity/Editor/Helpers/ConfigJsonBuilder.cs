@@ -176,7 +176,7 @@ namespace MCPForUnity.Editor.Helpers
             // Defaults to true on beta branch to ensure server schema matches C# client.
             // Use --prerelease explicit with version specifier to only get prereleases of our package,
             // not of dependencies (which can be broken on PyPI).
-            bool usePreRelease = EditorPrefs.GetBool(EditorPrefKeys.UseTestPyPI, true);
+            bool usePreRelease = EditorPrefs.GetBool(EditorPrefKeys.UseBetaServer, true);
             if (usePreRelease)
             {
                 args.Add("--prerelease");

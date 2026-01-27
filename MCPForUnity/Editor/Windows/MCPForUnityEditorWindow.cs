@@ -182,7 +182,7 @@ namespace MCPForUnity.Editor.Windows
             }
 
             // Initialize version label
-            UpdateVersionLabel(EditorPrefs.GetBool(EditorPrefKeys.UseTestPyPI, true));
+            UpdateVersionLabel(EditorPrefs.GetBool(EditorPrefKeys.UseBetaServer, true));
 
             SetupTabs();
 
