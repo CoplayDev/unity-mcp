@@ -171,23 +171,10 @@ namespace MCPForUnity.Editor.Helpers
                 args.Add("--refresh");
             }
 
-            // Beta server mode: allow beta versions from PyPI
-            // Beta server versions are published to PyPI as beta versions (e.g., 9.3.0b20260127)
-            // Defaults to true on beta branch to ensure server schema matches C# client.
-            // Use --prerelease explicit with version specifier to only get prereleases of our package,
-            // not of dependencies (which can be broken on PyPI).
-            bool usePreRelease = EditorPrefs.GetBool(EditorPrefKeys.UseBetaServer, true);
-            if (usePreRelease)
+            // Use centralized helper for beta server / prerelease args
+            foreach (var arg in AssetPathUtility.GetBetaServerFromArgsList())
             {
-                args.Add("--prerelease");
-                args.Add("explicit");
-                args.Add("--from");
-                args.Add("mcpforunityserver>=0.0.0a0");
-            }
-            else if (!string.IsNullOrEmpty(fromUrl))
-            {
-                args.Add("--from");
-                args.Add(fromUrl);
+                args.Add(arg);
             }
             args.Add(packageName);
 

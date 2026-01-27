@@ -126,6 +126,9 @@ except Exception:
 _unity_connection_pool: UnityConnectionPool | None = None
 _plugin_registry: PluginRegistry | None = None
 
+# Cached server version (set at startup to avoid repeated I/O)
+_server_version: str | None = None
+
 # In-memory custom tool service initialized after MCP construction
 custom_tool_service: CustomToolService | None = None
 
@@ -133,9 +136,9 @@ custom_tool_service: CustomToolService | None = None
 @asynccontextmanager
 async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     """Handle server startup and shutdown."""
-    global _unity_connection_pool
-    server_version = get_package_version()
-    logger.info(f"MCP for Unity Server v{server_version} starting up")
+    global _unity_connection_pool, _server_version
+    _server_version = get_package_version()
+    logger.info(f"MCP for Unity Server v{_server_version} starting up")
 
     # Register custom tool management endpoints with FastMCP
     # Routes are declared globally below after FastMCP initialization
@@ -164,7 +167,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     def _emit_startup():
         try:
             record_telemetry(RecordType.STARTUP, {
-                "server_version": server_version,
+                "server_version": _server_version,
                 "startup_time": start_time,
             })
             record_milestone(MilestoneType.FIRST_STARTUP)
@@ -325,7 +328,7 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
         return JSONResponse({
             "status": "healthy",
             "timestamp": time.time(),
-            "version": get_package_version(),
+            "version": _server_version or "unknown",
             "message": "MCP for Unity server is running"
         })
 

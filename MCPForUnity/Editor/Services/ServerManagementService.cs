@@ -1318,24 +1318,8 @@ namespace MCPForUnity.Editor.Services
             );
             string scopedFlag = projectScopedTools ? " --project-scoped-tools" : string.Empty;
 
-            // Beta server mode: allow beta versions from PyPI
-            // Beta server versions are published to PyPI as beta versions (e.g., 9.3.0b20260127)
-            // Use --prerelease explicit with version specifier to only get prereleases of our package,
-            // not of dependencies (which can be broken on PyPI).
-            bool usePreRelease = EditorPrefs.GetBool(EditorPrefKeys.UseBetaServer, true);
-            string fromArgs;
-            if (usePreRelease)
-            {
-                fromArgs = "--prerelease explicit --from \"mcpforunityserver>=0.0.0a0\"";
-            }
-            else if (!string.IsNullOrEmpty(fromUrl))
-            {
-                fromArgs = $"--from {fromUrl}";
-            }
-            else
-            {
-                fromArgs = "";
-            }
+            // Use centralized helper for beta server / prerelease args
+            string fromArgs = AssetPathUtility.GetBetaServerFromArgs(quoteFromPath: true);
 
             string args = string.IsNullOrEmpty(fromArgs)
                 ? $"{devFlags}{packageName} --transport http --http-url {httpUrl}{scopedFlag}"

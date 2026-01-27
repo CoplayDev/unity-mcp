@@ -38,13 +38,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          BASE_VERSION=$(grep -oP '(?<=version = ")[^"]+' Server/pyproject.toml)
+          RAW_VERSION=$(grep -oP '(?<=version = ")[^"]+' Server/pyproject.toml)
+          # Strip any existing pre-release suffix (a, b, rc, dev, post) for safe parsing
+          # e.g., "9.2.0b1" -> "9.2.0", "9.2.0.dev1" -> "9.2.0"
+          BASE_VERSION=$(echo "$RAW_VERSION" | sed -E 's/(a|b|rc|\.dev|\.post)[0-9]+$//')
+          # Validate we have a proper X.Y.Z format
+          if ! [[ "$BASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Could not parse version '$RAW_VERSION' -> '$BASE_VERSION'" >&2
+            exit 1
+          fi
           # Bump minor version and use beta suffix (PEP 440 compliant: X.Y+1.0bN)
           # This ensures beta is "newer" than the stable release
           IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
           NEXT_MINOR=$((MINOR + 1))
           BETA_NUMBER="$(date +%Y%m%d%H%M%S)"
           BETA_VERSION="${MAJOR}.${NEXT_MINOR}.0b${BETA_NUMBER}"
+          echo "Raw version: $RAW_VERSION"
           echo "Base version: $BASE_VERSION"
           echo "Beta version: $BETA_VERSION"
           echo "beta_version=$BETA_VERSION" >> "$GITHUB_OUTPUT"
