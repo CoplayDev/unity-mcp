@@ -21,6 +21,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 import os
+import sys
 import threading
 import time
 from typing import AsyncIterator, Any
@@ -111,6 +112,13 @@ for noisy in ("httpx", "urllib3", "mcp.server.lowlevel.server"):
         logging.getLogger(noisy).propagate = False
     except Exception:
         pass
+
+# Suppress asyncio ERROR logs for Windows socket accept errors (WinError 64)
+# This occurs when clients disconnect during accept, which is normal during reconnects
+if sys.platform == 'win32':
+    asyncio_logger = logging.getLogger("asyncio")
+    asyncio_logger.setLevel(logging.WARNING)
+    logger.info("Suppressed asyncio ERROR logs for Windows socket accept errors")
 
 # Import telemetry only after logging is configured to ensure its logs use stderr and proper levels
 # Ensure a slightly higher telemetry timeout unless explicitly overridden by env

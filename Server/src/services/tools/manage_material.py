@@ -74,8 +74,8 @@ async def manage_material(
 
     # create
     shader: Annotated[str, "Shader name (default: Standard)"] | None = None,
-    properties: Annotated[dict[str, Any],
-                          "Initial properties to set as {name: value} dict."] | None = None,
+    properties: Annotated[dict[str, Any] | str,
+                          "Initial properties to set as {name: value} dict (can be a dict or JSON string)."] | None = None,
 
     # set_material_shader_property
     value: Annotated[list | float | int | str | bool | None,
@@ -89,7 +89,7 @@ async def manage_material(
     target: Annotated[str,
                       "Target GameObject (name, path, or find instruction)"] | None = None,
     search_method: Annotated[Literal["by_name", "by_path", "by_tag",
-                                     "by_layer", "by_component"], "Search method for target"] | None = None,
+                                     "by_layer", "by_component", "by_id"], "Search method for target"] | None = None,
     slot: Annotated[int, "Material slot index (0-based)"] | None = None,
     mode: Annotated[Literal["shared", "instance", "property_block"],
                     "Assignment/modification mode"] | None = None,
