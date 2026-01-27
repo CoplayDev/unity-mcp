@@ -20,6 +20,17 @@ namespace MCPForUnity.Editor.Tools
         {
             try
             {
+                // Check for clear_stuck action first
+                var clearStuckToken = @params?["clear_stuck"];
+                if (clearStuckToken != null && bool.TryParse(clearStuckToken.ToString(), out var clearStuck) && clearStuck)
+                {
+                    bool wasCleared = TestJobManager.ClearStuckJob();
+                    return Task.FromResult<object>(new SuccessResponse(
+                        wasCleared ? "Stuck job cleared." : "No running job to clear.",
+                        new { cleared = wasCleared }
+                    ));
+                }
+
                 string modeStr = @params?["mode"]?.ToString();
                 if (string.IsNullOrWhiteSpace(modeStr))
                 {

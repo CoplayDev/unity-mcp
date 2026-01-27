@@ -84,6 +84,36 @@ namespace MCPForUnity.Editor.Services
             }
         }
 
+        /// <summary>
+        /// Force-clears any stuck or orphaned test job. Call this when tests get stuck due to
+        /// assembly reloads or other interruptions.
+        /// </summary>
+        /// <returns>True if a job was cleared, false if no running job exists.</returns>
+        public static bool ClearStuckJob()
+        {
+            lock (LockObj)
+            {
+                if (string.IsNullOrEmpty(_currentJobId))
+                {
+                    return false;
+                }
+
+                if (Jobs.TryGetValue(_currentJobId, out var job) && job.Status == TestJobStatus.Running)
+                {
+                    long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    job.Status = TestJobStatus.Failed;
+                    job.Error = "Job cleared manually (stuck or orphaned)";
+                    job.FinishedUnixMs = now;
+                    job.LastUpdateUnixMs = now;
+                    McpLog.Warn($"[TestJobManager] Manually cleared stuck job {_currentJobId}");
+                }
+
+                _currentJobId = null;
+            }
+            PersistToSessionState(force: true);
+            return true;
+        }
+
         private sealed class PersistedState
         {
             public string current_job_id { get; set; }
