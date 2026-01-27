@@ -111,22 +111,29 @@ def parse_json_list_or_exit(value: str, context: str) -> list[Any]:
 
 **Note**: Many more opportunities exist in ManageVFX.cs and other files, but focused on highest-duplication patterns first
 
-### QW-4: Create Search Method Constants (CLI)
-**Status**: ❌ Does NOT exist - duplicated across 6+ files (audited 2026-01-27)
-**Impact**: Single source of truth, easier to extend
-**Effort**: 20 minutes
+### QW-4: Create Search Method Constants (CLI) ✅ COMPLETE (2026-01-27)
+**Status**: ✅ Created `Server/src/cli/utils/constants.py`
+**Impact**: Eliminated ~30+ lines of duplicated Click.Choice declarations
+**Effort**: 25 minutes (actual)
 **Risk**: Very low
 
-**Current duplication**: vfx.py (14 times!), gameobject.py, component.py, material.py, animation.py, audio.py
-
+**Created constants:**
 ```python
 # cli/utils/constants.py
 SEARCH_METHODS_FULL = ["by_name", "by_path", "by_id", "by_tag", "by_layer", "by_component"]
-SEARCH_METHODS_BASIC = ["by_name", "by_path", "by_id"]
+SEARCH_METHODS_BASIC = ["by_id", "by_name", "by_path"]
+SEARCH_METHODS_RENDERER = ["by_name", "by_path", "by_tag", "by_layer", "by_component"]
 SEARCH_METHODS_TAGGED = ["by_name", "by_path", "by_id", "by_tag"]
+
+SEARCH_METHOD_CHOICE_FULL = click.Choice(SEARCH_METHODS_FULL)
+SEARCH_METHOD_CHOICE_BASIC = click.Choice(SEARCH_METHODS_BASIC)
+SEARCH_METHOD_CHOICE_RENDERER = click.Choice(SEARCH_METHODS_RENDERER)
+SEARCH_METHOD_CHOICE_TAGGED = click.Choice(SEARCH_METHODS_TAGGED)
 ```
 
-**Files to update**: `commands/vfx.py` (14 occurrences), `commands/material.py`, `commands/component.py`, `commands/gameobject.py`, `commands/animation.py`, `commands/audio.py`
+**Files updated**: `vfx.py` (14 occurrences!), `gameobject.py`, `component.py`, `material.py`, `animation.py`, `audio.py`
+
+**Tests**: All 49 CLI commands characterization tests passing
 
 ### QW-5: Create Confirmation Dialog Utility (CLI)
 **Status**: ❌ Does NOT exist - duplicated in 5 files (audited 2026-01-27)
