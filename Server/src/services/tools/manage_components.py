@@ -37,7 +37,7 @@ async def manage_components(
     # For set_property action - single property
     property: Annotated[str,
                         "Property name to set (for set_property action)"] | None = None,
-    value: Annotated[Any,
+    value: Annotated[str | int | float | bool | dict | list ,
                      "Value to set (for set_property action)"] | None = None,
     # For add/set_property - multiple properties
     properties: Annotated[
