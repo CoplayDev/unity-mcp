@@ -41,6 +41,11 @@
                 <ui:Toggle name="dev-mode-force-refresh-toggle" class="setting-toggle" />
             </ui:VisualElement>
 
+            <ui:VisualElement class="setting-row">
+                <ui:Label text="Use TestPyPI:" class="setting-label" />
+                <ui:Toggle name="use-testpypi-toggle" class="setting-toggle" />
+            </ui:VisualElement>
+
             <ui:VisualElement class="override-row" style="margin-top: 8px;">
                 <ui:Label text="Package Source:" class="override-label" />
             </ui:VisualElement>

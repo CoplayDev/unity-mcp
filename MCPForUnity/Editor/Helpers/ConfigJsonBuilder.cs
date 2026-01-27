@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Clients.Configurators;
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
 using Newtonsoft.Json;
@@ -170,7 +170,19 @@ namespace MCPForUnity.Editor.Helpers
                 args.Add("--no-cache");
                 args.Add("--refresh");
             }
-            if (!string.IsNullOrEmpty(fromUrl))
+
+            // TestPyPI mode: use test.pypi.org as the default index for pre-release testing
+            // When using TestPyPI, don't pin version since TestPyPI versions may differ from PyPI
+            bool useTestPyPI = EditorPrefs.GetBool(EditorPrefKeys.UseTestPyPI, false);
+            if (useTestPyPI)
+            {
+                args.Add("--default-index");
+                args.Add("https://test.pypi.org/simple/");
+                // Use unversioned package name to get latest from TestPyPI
+                args.Add("--from");
+                args.Add("mcpforunityserver");
+            }
+            else if (!string.IsNullOrEmpty(fromUrl))
             {
                 args.Add("--from");
                 args.Add(fromUrl);

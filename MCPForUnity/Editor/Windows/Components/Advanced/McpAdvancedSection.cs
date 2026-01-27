@@ -26,6 +26,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
         private Button clearGitUrlButton;
         private Toggle debugLogsToggle;
         private Toggle devModeForceRefreshToggle;
+        private Toggle useTestPyPIToggle;
         private TextField deploySourcePath;
         private Button browseDeploySourceButton;
         private Button clearDeploySourceButton;
@@ -64,6 +65,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             clearGitUrlButton = Root.Q<Button>("clear-git-url-button");
             debugLogsToggle = Root.Q<Toggle>("debug-logs-toggle");
             devModeForceRefreshToggle = Root.Q<Toggle>("dev-mode-force-refresh-toggle");
+            useTestPyPIToggle = Root.Q<Toggle>("use-testpypi-toggle");
             deploySourcePath = Root.Q<TextField>("deploy-source-path");
             browseDeploySourceButton = Root.Q<Button>("browse-deploy-source-button");
             clearDeploySourceButton = Root.Q<Button>("clear-deploy-source-button");
@@ -98,6 +100,13 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
                 if (forceRefreshLabel != null)
                     forceRefreshLabel.tooltip = devModeForceRefreshToggle.tooltip;
             }
+            if (useTestPyPIToggle != null)
+            {
+                useTestPyPIToggle.tooltip = "When enabled, uvx will use TestPyPI (test.pypi.org) instead of PyPI to fetch the server package. Useful for testing pre-release versions.";
+                var testPyPILabel = useTestPyPIToggle?.parent?.Q<Label>();
+                if (testPyPILabel != null)
+                    testPyPILabel.tooltip = useTestPyPIToggle.tooltip;
+            }
             if (testConnectionButton != null)
                 testConnectionButton.tooltip = "Test the connection between Unity and the MCP server.";
             if (deploySourcePath != null)
@@ -128,6 +137,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             McpLog.SetDebugLoggingEnabled(debugEnabled);
 
             devModeForceRefreshToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
+            useTestPyPIToggle.value = EditorPrefs.GetBool(EditorPrefKeys.UseTestPyPI, false);
             UpdatePathOverrides();
             UpdateDeploymentSection();
         }
@@ -169,6 +179,12 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             devModeForceRefreshToggle.RegisterValueChangedCallback(evt =>
             {
                 EditorPrefs.SetBool(EditorPrefKeys.DevModeForceServerRefresh, evt.newValue);
+                OnHttpServerCommandUpdateRequested?.Invoke();
+            });
+
+            useTestPyPIToggle.RegisterValueChangedCallback(evt =>
+            {
+                EditorPrefs.SetBool(EditorPrefKeys.UseTestPyPI, evt.newValue);
                 OnHttpServerCommandUpdateRequested?.Invoke();
             });
 
@@ -274,6 +290,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
             debugLogsToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
             devModeForceRefreshToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
+            useTestPyPIToggle.value = EditorPrefs.GetBool(EditorPrefKeys.UseTestPyPI, false);
             UpdateDeploymentSection();
         }
 
