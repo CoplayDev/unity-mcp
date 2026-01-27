@@ -189,16 +189,19 @@ namespace MCPForUnity.Editor.Windows
             
             // Sort keys
             allKeys.Sort();
-            
+
+            // Pre-trim filter once outside the loop
+            var filter = searchFilter?.Trim();
+
             // Create items for existing prefs
             foreach (var key in allKeys)
             {
                 // Skip Customer UUID but show everything else that's defined
                 if (key != EditorPrefKeys.CustomerUuid)
                 {
-                    // Apply search filter
-                    if (!string.IsNullOrEmpty(searchFilter) &&
-                        !key.ToLowerInvariant().Contains(searchFilter.ToLowerInvariant()))
+                    // Apply search filter using OrdinalIgnoreCase for fewer allocations
+                    if (!string.IsNullOrEmpty(filter) &&
+                        key.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
                     {
                         continue;
                     }
