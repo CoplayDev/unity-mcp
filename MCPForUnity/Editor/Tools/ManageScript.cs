@@ -60,10 +60,10 @@ namespace MCPForUnity.Editor.Tools
         /// </summary>
         private static bool TryResolveUnderAssets(string relDir, out string fullPathDir, out string relPathSafe)
         {
-            string assets = Application.dataPath.Replace('\\', '/');
+            string assets = AssetPathUtility.NormalizeSeparators(Application.dataPath);
 
             // Normalize caller path: allow both "Scripts/..." and "Assets/Scripts/..."
-            string rel = (relDir ?? "Scripts").Replace('\\', '/').Trim();
+            string rel = AssetPathUtility.NormalizeSeparators(relDir ?? "Scripts").Trim();
             if (string.IsNullOrEmpty(rel)) rel = "Scripts";
 
             // Handle both "Assets" and "Assets/" prefixes
@@ -78,8 +78,8 @@ namespace MCPForUnity.Editor.Tools
 
             rel = rel.TrimStart('/');
 
-            string targetDir = Path.Combine(assets, rel).Replace('\\', '/');
-            string full = Path.GetFullPath(targetDir).Replace('\\', '/');
+            string targetDir = AssetPathUtility.NormalizeSeparators(Path.Combine(assets, rel));
+            string full = AssetPathUtility.NormalizeSeparators(Path.GetFullPath(targetDir));
 
             bool underAssets = full.StartsWith(assets + "/", StringComparison.OrdinalIgnoreCase)
                                || string.Equals(full, assets, StringComparison.OrdinalIgnoreCase);
@@ -182,7 +182,7 @@ namespace MCPForUnity.Editor.Tools
             // Construct file paths
             string scriptFileName = $"{name}.cs";
             string fullPath = Path.Combine(fullPathDir, scriptFileName);
-            string relativePath = Path.Combine(relPathSafeDir, scriptFileName).Replace('\\', '/');
+            string relativePath = AssetPathUtility.NormalizeSeparators(Path.Combine(relPathSafeDir, scriptFileName));
 
             // Ensure the target directory exists for create/update
             if (action == "create" || action == "update")
@@ -2636,7 +2636,7 @@ namespace MCPForUnity.Editor.Tools
         public static string SanitizeAssetsPath(string p)
         {
             if (string.IsNullOrEmpty(p)) return p;
-            p = p.Replace('\\', '/').Trim();
+            p = AssetPathUtility.NormalizeSeparators(p).Trim();
             if (p.StartsWith("mcpforunity://path/", StringComparison.OrdinalIgnoreCase))
                 p = p.Substring("mcpforunity://path/".Length);
             while (p.StartsWith("Assets/Assets/", StringComparison.OrdinalIgnoreCase))

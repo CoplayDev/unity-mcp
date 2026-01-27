@@ -101,7 +101,7 @@ namespace MCPForUnity.Editor.Tools
             string relativeDir = path ?? string.Empty;
             if (!string.IsNullOrEmpty(relativeDir))
             {
-                relativeDir = relativeDir.Replace('\\', '/').Trim('/');
+                relativeDir = AssetPathUtility.NormalizeSeparators(relativeDir).Trim('/');
                 if (relativeDir.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
                 {
                     relativeDir = relativeDir.Substring("Assets/".Length).TrimStart('/');
@@ -128,7 +128,7 @@ namespace MCPForUnity.Editor.Tools
             // Ensure relativePath always starts with "Assets/" and uses forward slashes
             string relativePath = string.IsNullOrEmpty(sceneFileName)
                 ? null
-                : Path.Combine("Assets", relativeDir, sceneFileName).Replace('\\', '/');
+                : AssetPathUtility.NormalizeSeparators(Path.Combine("Assets", relativeDir, sceneFileName));
 
             // Ensure directory exists for 'create'
             if (action == "create" && !string.IsNullOrEmpty(fullPathDir))
