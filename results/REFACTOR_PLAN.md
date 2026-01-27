@@ -89,10 +89,10 @@ def parse_json_list_or_exit(value: str, context: str) -> list[Any]:
 
 **Tests**: All 23 material/component CLI tests passing
 
-### QW-3: Patch In AssetPathUtility (Editor Tools)
-**Status**: ✅ Already exists as `Helpers/AssetPathUtility.cs` (audited 2026-01-27)
-**Impact**: Eliminates ~100 lines duplicated across 8+ tools
-**Effort**: 45 minutes
+### QW-3: Patch In AssetPathUtility (Editor Tools) ✅ COMPLETE (2026-01-27)
+**Status**: ✅ Patched into 5 files (audited 2026-01-27)
+**Impact**: Eliminated 10+ duplicated path normalization patterns
+**Effort**: 20 minutes (actual)
 **Risk**: Very low
 
 **Existing utility** provides:
@@ -100,9 +100,16 @@ def parse_json_list_or_exit(value: str, context: str) -> list[Any]:
 - `SanitizeAssetPath(string path)` - Removes leading/trailing slashes, ensures Assets/ prefix
 - `IsValidAssetPath(string path)` - Validates path format
 
-**Action**: Replace duplicated path normalization logic with calls to AssetPathUtility
+**Files updated**:
+- `ManageScene.cs` - 2 patterns replaced (lines 104, 131)
+- `ManageShader.cs` - 2 patterns replaced (lines 69, 85)
+- `ManageScript.cs` - 4 patterns replaced (lines 63, 66, 81, 82, 185, 2639)
+- `GameObjectModify.cs` - 1 pattern replaced (line 50)
+- `ManageScriptableObject.cs` - 1 pattern replaced (line 1444)
 
-**Files to update**: `ManageScene.cs`, `ManageShader.cs`, `ManageMaterial.cs`, `ManagePrefabs.cs`, and others with inline path normalization
+**Total**: 10+ `path.Replace('\\', '/')` patterns replaced with centralized utility calls
+
+**Note**: Many more opportunities exist in ManageVFX.cs and other files, but focused on highest-duplication patterns first
 
 ### QW-4: Create Search Method Constants (CLI)
 **Status**: ❌ Does NOT exist - duplicated across 6+ files (audited 2026-01-27)

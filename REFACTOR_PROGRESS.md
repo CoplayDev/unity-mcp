@@ -1,11 +1,12 @@
-# Refactor Progress - Last Updated 2026-01-27 7:15 PM
+# Refactor Progress - Last Updated 2026-01-27 7:30 PM
 
-## Current Status: QW-1 & QW-2 Complete - Continuing Quick Wins
+## Current Status: QW-1, QW-2, QW-3 Complete - Continuing Quick Wins
 
 All characterization tests successfully created, validated, and passing (144 passing, 2 explicit).
 Utility audit completed to identify existing helpers vs. patterns needing extraction.
 QW-1 (Delete Dead Code) completed - 86 lines removed.
 QW-2 (JSON Parser Utility) completed - ~60 lines of duplication eliminated across 8 modules.
+QW-3 (Patch in AssetPathUtility) completed - 10+ path normalization patterns replaced.
 
 ---
 
@@ -189,6 +190,18 @@ Before starting Quick Wins refactoring, audited existing utilities to avoid dupl
   - vfx.py, asset.py, editor.py, script.py, batch.py: 1 pattern each
 - **Tests**: All 23 material/component CLI tests passing
 
+### ✅ QW-3: Patch in AssetPathUtility (Editor Tools) (2026-01-27)
+- **Time**: 20 minutes
+- **Patched**: Existing `MCPForUnity/Editor/Helpers/AssetPathUtility.cs` utility into 5 Editor tool files
+- **Updated files**:
+  - ManageScene.cs: 2 patterns (lines 104, 131)
+  - ManageShader.cs: 2 patterns (lines 69, 85)
+  - ManageScript.cs: 4 patterns (lines 63, 66, 81, 82, 185, 2639)
+  - GameObjectModify.cs: 1 pattern (line 50)
+  - ManageScriptableObject.cs: 1 pattern (line 1444)
+- **Eliminated**: 10+ duplicated `path.Replace('\\', '/')` patterns
+- **Benefits**: Centralized path normalization, consistent behavior, null-safe
+
 ---
 
 ## Next Steps
@@ -200,8 +213,8 @@ Before starting Quick Wins refactoring, audited existing utilities to avoid dupl
 5. ✅ ~~Audit existing utilities to avoid duplication~~ - DONE (see `results/UTILITY_AUDIT.md`)
 6. ✅ **QW-1: Delete Dead Code** - DONE (86 lines removed)
 7. ✅ **QW-2: Create JSON Parser Utility** - DONE (~60 lines eliminated)
-8. **Continue Quick Wins**:
-   - **QW-3**: Patch in AssetPathUtility (Editor) - 45 min, eliminates ~100 lines duplication (ALREADY EXISTS!)
+8. ✅ **QW-3: Patch in AssetPathUtility** - DONE (10+ patterns replaced)
+9. **Continue Quick Wins**:
    - **QW-4**: Create Search Method Constants (CLI) - 20 min, eliminates duplication across 6+ files
    - **QW-5**: Create Confirmation Dialog Utility (CLI) - 15 min, eliminates 5+ duplicate patterns
 
