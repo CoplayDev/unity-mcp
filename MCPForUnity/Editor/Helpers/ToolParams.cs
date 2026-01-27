@@ -1,0 +1,168 @@
+using Newtonsoft.Json.Linq;
+using System;
+
+namespace MCPForUnity.Editor.Helpers
+{
+    /// <summary>
+    /// Unified parameter validation and extraction wrapper for MCP tools.
+    /// Eliminates repetitive IsNullOrEmpty checks and provides consistent error messages.
+    /// </summary>
+    public class ToolParams
+    {
+        private readonly JObject _params;
+
+        public ToolParams(JObject @params)
+        {
+            _params = @params ?? throw new ArgumentNullException(nameof(@params));
+        }
+
+        /// <summary>
+        /// Get required string parameter. Returns ErrorResponse if missing or empty.
+        /// </summary>
+        public Result<string> GetRequired(string key, string errorMessage = null)
+        {
+            var value = GetString(key);
+            if (string.IsNullOrEmpty(value))
+            {
+                return Result<string>.Error(
+                    errorMessage ?? $"'{key}' parameter is required."
+                );
+            }
+            return Result<string>.Success(value);
+        }
+
+        /// <summary>
+        /// Get optional string parameter with default value.
+        /// Supports both snake_case and camelCase automatically.
+        /// </summary>
+        public string Get(string key, string defaultValue = null)
+        {
+            return GetString(key) ?? defaultValue;
+        }
+
+        /// <summary>
+        /// Get optional int parameter.
+        /// </summary>
+        public int? GetInt(string key, int? defaultValue = null)
+        {
+            var str = GetString(key);
+            if (string.IsNullOrEmpty(str)) return defaultValue;
+            return int.TryParse(str, out var result) ? result : defaultValue;
+        }
+
+        /// <summary>
+        /// Get optional bool parameter.
+        /// </summary>
+        public bool GetBool(string key, bool defaultValue = false)
+        {
+            return ParamCoercion.CoerceBool(_params[key], defaultValue);
+        }
+
+        /// <summary>
+        /// Get optional float parameter.
+        /// </summary>
+        public float? GetFloat(string key, float? defaultValue = null)
+        {
+            var str = GetString(key);
+            if (string.IsNullOrEmpty(str)) return defaultValue;
+            return float.TryParse(str, out var result) ? result : defaultValue;
+        }
+
+        /// <summary>
+        /// Check if parameter exists (even if null).
+        /// </summary>
+        public bool Has(string key)
+        {
+            return _params[key] != null;
+        }
+
+        /// <summary>
+        /// Get raw JToken for complex types.
+        /// </summary>
+        public JToken GetRaw(string key)
+        {
+            return _params[key];
+        }
+
+        private string GetString(string key)
+        {
+            // Try exact match first
+            var value = _params[key]?.ToString();
+            if (value != null) return value;
+
+            // Try snake_case if camelCase was provided
+            var snakeKey = ToSnakeCase(key);
+            if (snakeKey != key)
+            {
+                value = _params[snakeKey]?.ToString();
+                if (value != null) return value;
+            }
+
+            // Try camelCase if snake_case was provided
+            var camelKey = ToCamelCase(key);
+            if (camelKey != key)
+            {
+                value = _params[camelKey]?.ToString();
+            }
+
+            return value;
+        }
+
+        private static string ToSnakeCase(string str)
+        {
+            // Simple conversion: searchMethod -> search_method
+            return System.Text.RegularExpressions.Regex.Replace(
+                str, "([a-z])([A-Z])", "$1_$2"
+            ).ToLower();
+        }
+
+        private static string ToCamelCase(string str)
+        {
+            // Simple conversion: search_method -> searchMethod
+            if (!str.Contains("_")) return str;
+            var parts = str.Split('_');
+            for (int i = 1; i < parts.Length; i++)
+            {
+                if (parts[i].Length > 0)
+                {
+                    parts[i] = char.ToUpper(parts[i][0]) + parts[i].Substring(1);
+                }
+            }
+            return string.Join("", parts);
+        }
+    }
+
+    /// <summary>
+    /// Result type for operations that can fail with an error message.
+    /// </summary>
+    public class Result<T>
+    {
+        public bool IsSuccess { get; }
+        public T Value { get; }
+        public string Error { get; }
+
+        private Result(bool isSuccess, T value, string error)
+        {
+            IsSuccess = isSuccess;
+            Value = value;
+            Error = error;
+        }
+
+        public static Result<T> Success(T value) => new Result<T>(true, value, null);
+        public static Result<T> Error(string error) => new Result<T>(false, default, error);
+
+        /// <summary>
+        /// Get value or return ErrorResponse.
+        /// </summary>
+        public object GetOrError(out T value)
+        {
+            if (IsSuccess)
+            {
+                value = Value;
+                return null;
+            }
+            value = default;
+            return new ErrorResponse(Error);
+        }
+    }
+}
