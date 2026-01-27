@@ -25,6 +25,7 @@ namespace MCPForUnity.Editor.Windows
         private Label installationInstructions;
         private Button openPythonLinkButton;
         private Button openUvLinkButton;
+        private Button autoInstallUvButton;
         private Button refreshButton;
         private Button doneButton;
 
@@ -68,6 +69,7 @@ namespace MCPForUnity.Editor.Windows
             installationInstructions = rootVisualElement.Q<Label>("installation-instructions");
             openPythonLinkButton = rootVisualElement.Q<Button>("open-python-link-button");
             openUvLinkButton = rootVisualElement.Q<Button>("open-uv-link-button");
+            autoInstallUvButton = rootVisualElement.Q<Button>("auto-install-uv-button");
             refreshButton = rootVisualElement.Q<Button>("refresh-button");
             doneButton = rootVisualElement.Q<Button>("done-button");
 
@@ -76,6 +78,7 @@ namespace MCPForUnity.Editor.Windows
             doneButton.clicked += OnDoneClicked;
             openPythonLinkButton.clicked += OnOpenPythonInstallClicked;
             openUvLinkButton.clicked += OnOpenUvInstallClicked;
+            autoInstallUvButton.clicked += OnAutoInstallUvClicked;
 
             // Initial update
             UpdateUI();
@@ -111,6 +114,40 @@ namespace MCPForUnity.Editor.Windows
         {
             var (_, uvUrl) = DependencyManager.GetInstallationUrls();
             Application.OpenURL(uvUrl);
+        }
+
+        private void OnAutoInstallUvClicked()
+        {
+            var detector = DependencyManager.GetCurrentPlatformDetector();
+            if (detector.InstallUv())
+            {
+                _dependencyResult = DependencyManager.CheckAllDependencies();
+                UpdateUI();
+
+                var uvDep = _dependencyResult.Dependencies.Find(d => d.Name == "uv Package Manager");
+                if (uvDep != null && !uvDep.IsAvailable)
+                {
+                    EditorUtility.DisplayDialog(
+                        "Installation Incomplete",
+                        "uv was installed, but it is not yet detected in the current process PATH. " +
+                        "You may need to restart Unity for the changes to take effect.",
+                        "OK");
+                }
+                else
+                {
+                    EditorUtility.DisplayDialog(
+                        "Installation Successful",
+                        "uv package manager has been installed successfully.",
+                        "OK");
+                }
+            }
+            else
+            {
+                EditorUtility.DisplayDialog(
+                    "Installation Failed",
+                    "Failed to automatically install uv. Please install it manually.",
+                    "OK");
+            }
         }
 
         private void UpdateUI()
