@@ -16,7 +16,7 @@ from services.tools import get_unity_instance_from_context
 from services.tools.preflight import preflight
 import transport.unity_transport as unity_transport
 from transport.legacy.unity_connection import async_send_command_with_retry
-from utils.focus_nudge import nudge_unity_focus, should_nudge
+from utils.focus_nudge import nudge_unity_focus, should_nudge, reset_nudge_backoff
 
 logger = logging.getLogger(__name__)
 
@@ -200,6 +200,7 @@ async def get_test_job(
     if wait_timeout and wait_timeout > 0:
         deadline = asyncio.get_event_loop().time() + wait_timeout
         poll_interval = 2.0  # Poll Unity every 2 seconds
+        prev_last_update_unix_ms = None
 
         while True:
             response = await _fetch_status()
@@ -216,12 +217,20 @@ async def get_test_job(
             if status in ("succeeded", "failed", "cancelled"):
                 return GetTestJobResponse(**response)
 
+            # Detect progress and reset exponential backoff
+            last_update_unix_ms = data.get("last_update_unix_ms")
+            if prev_last_update_unix_ms is not None and last_update_unix_ms != prev_last_update_unix_ms:
+                # Progress detected - reset exponential backoff for next potential stall
+                reset_nudge_backoff()
+                logger.debug(f"Test job {job_id} made progress - reset nudge backoff")
+            prev_last_update_unix_ms = last_update_unix_ms
+
             # Check if Unity needs a focus nudge to make progress
             # This handles OS-level throttling (e.g., macOS App Nap) that can
             # stall PlayMode tests when Unity is in the background.
+            # Uses exponential backoff: 1s, 2s, 4s, 8s, 10s max between nudges.
             progress = data.get("progress", {})
             editor_is_focused = progress.get("editor_is_focused", True)
-            last_update_unix_ms = data.get("last_update_unix_ms")
             current_time_ms = int(time.time() * 1000)
 
             if should_nudge(
@@ -229,10 +238,11 @@ async def get_test_job(
                 editor_is_focused=editor_is_focused,
                 last_update_unix_ms=last_update_unix_ms,
                 current_time_ms=current_time_ms,
-                stall_threshold_ms=10_000,  # 10 seconds without progress
+                # Use default stall_threshold_ms (3s)
             ):
                 logger.info(f"Test job {job_id} appears stalled (unfocused Unity), attempting nudge...")
-                nudged = await nudge_unity_focus(focus_duration_s=0.5)
+                # Use default focus_duration_s (3s)
+                nudged = await nudge_unity_focus()
                 if nudged:
                     logger.info(f"Test job {job_id} nudge completed")
 
