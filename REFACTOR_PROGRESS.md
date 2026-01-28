@@ -1,12 +1,10 @@
 # Refactor Progress - Last Updated 2026-01-27
 
-## Current Status: QW-1, QW-2, QW-3 Complete - Continuing Quick Wins
+## Current Status: P1-5, P3-1 Complete - Major Refactors Done
 
-All characterization tests successfully created, validated, and passing (144 passing, 2 explicit).
-Utility audit completed to identify existing helpers vs. patterns needing extraction.
-QW-1 (Delete Dead Code) completed - 86 lines removed.
-QW-2 (JSON Parser Utility) completed - ~60 lines of duplication eliminated across 8 modules.
-QW-3 (Patch in AssetPathUtility) completed - 10+ path normalization patterns replaced.
+All characterization tests successfully created, validated, and passing (600+ tests).
+P3-1 (ServerManagementService decomposition) completed - 1489 lines → ~300 lines orchestrator + 5 focused services.
+P1-5 (EditorConfigurationCache) completed - 25 scattered EditorPrefs reads centralized into cache singleton.
 
 ---
 
@@ -38,6 +36,38 @@ QW-3 (Patch in AssetPathUtility) completed - 10+ path normalization patterns rep
 ---
 
 ## Recently Completed
+
+### P3-1: ServerManagementService Decomposition ✅ (2026-01-27)
+- **Goal**: Decompose 1489-line monolith into focused, testable components
+- **Time**: ~4 hours
+- **Created 5 new services**:
+  - `ProcessDetector.cs` (~200 lines) - Platform-specific process inspection
+  - `PidFileManager.cs` (~120 lines) - PID file and handshake state management
+  - `ProcessTerminator.cs` (~80 lines) - Platform-specific process termination
+  - `ServerCommandBuilder.cs` (~150 lines) - Build uvx/server commands
+  - `TerminalLauncher.cs` (~120 lines) - Launch commands in platform-specific terminals
+- **Created 5 interfaces** for DI/testability
+- **Refactored** `ServerManagementService.cs` from 1489 → ~300 lines (orchestrator only)
+- **Added** 50+ unit tests for extracted components
+- **Critical bug fixed**: ProcessTerminator now validates PID before kill (prevents `kill -1` catastrophe)
+- **Tests**: All 600 tests passing
+
+### P1-5: EditorConfigurationCache ✅ (2026-01-27)
+- **Goal**: Eliminate scattered EditorPrefs reads throughout codebase
+- **Time**: ~2 hours
+- **Created**: `EditorConfigurationCache.cs` singleton
+  - Centralized cache for frequently-read settings
+  - `UseHttpTransport` property (most frequently read - 25 occurrences)
+  - Change notification event (`OnConfigurationChanged`)
+  - `Refresh()` method for explicit cache invalidation
+- **Updated 13 files** to use cache instead of direct EditorPrefs reads:
+  - ServerManagementService, BridgeControlService, ConfigJsonBuilder
+  - McpClientConfiguratorBase, McpConnectionSection, McpClientConfigSection
+  - StdioBridgeHost, StdioBridgeReloadHandler, HttpBridgeReloadHandler
+  - McpEditorShutdownCleanup, ServerCommandBuilder
+  - ClaudeDesktopConfigurator, CherryStudioConfigurator
+- **Added** 13 unit tests for cache behavior
+- **Tests**: All 600 tests passing
 
 ### 4. Characterization Test Validation ✅ (2026-01-27)
 - **Goal**: Validate existing characterization tests capture CURRENT behavior accurately
@@ -136,8 +166,9 @@ Before starting Quick Wins refactoring, audited existing utilities to avoid dupl
 
 ### C# Tests (Unity) ✅
 - **280 existing regression tests** (Tools, Services, Helpers, Resources, stress tests, play mode tests)
-- **144 characterization tests** (37 EditorTools + 25 Services + 29 Windows/UI + 53 Models) - validated and passing
-- **Total C# tests**: 424 passing, 2 explicit
+- **144 characterization tests** (37 EditorTools + 25 Services + 29 Windows/UI + 53 Models)
+- **50+ new component tests** (ProcessDetector, PidFileManager, ServerCommandBuilder, TerminalLauncher, EditorConfigurationCache)
+- **Total C# tests**: 594 passing, 6 explicit (600 total)
 
 ### Python Tests ✅
 
@@ -258,6 +289,8 @@ Before starting Quick Wins refactoring, audited existing utilities to avoid dupl
     - ✅ Verified all `--force` flags have `-f` short option
     - ⏸️ VFX `clear` commands intentionally left without confirmation (ephemeral, not destructive)
     - 📋 Remaining optional: Command aliases, CLI README documentation, better error messages
+19. ✅ **P3-1: ServerManagementService Decomposition** - DONE (1489 → ~300 lines, 5 new services, 50+ tests)
+20. ✅ **P1-5: EditorConfigurationCache** - DONE (25 EditorPrefs reads centralized, 13 files updated, 13 tests)
 
 ---
 
