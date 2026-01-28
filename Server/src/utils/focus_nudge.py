@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import platform
 import shutil
 import subprocess
@@ -18,7 +19,13 @@ import time
 logger = logging.getLogger(__name__)
 
 # Minimum seconds between nudges to avoid focus thrashing
-_MIN_NUDGE_INTERVAL_S = 5.0
+# Can be overridden via UNITY_MCP_NUDGE_INTERVAL_S environment variable
+_MIN_NUDGE_INTERVAL_S = float(os.environ.get("UNITY_MCP_NUDGE_INTERVAL_S", "2.0"))
+
+# Default duration to keep Unity focused during a nudge
+# Can be overridden via UNITY_MCP_NUDGE_DURATION_S environment variable
+_DEFAULT_FOCUS_DURATION_S = float(os.environ.get("UNITY_MCP_NUDGE_DURATION_S", "2.0"))
+
 _last_nudge_time: float = 0.0
 
 
@@ -225,19 +232,23 @@ def _focus_app(app_or_window: str) -> bool:
 
 
 async def nudge_unity_focus(
-    focus_duration_s: float = 0.5,
+    focus_duration_s: float | None = None,
     force: bool = False,
 ) -> bool:
     """
     Temporarily focus Unity to allow it to process, then return focus.
 
     Args:
-        focus_duration_s: How long to keep Unity focused (seconds)
+        focus_duration_s: How long to keep Unity focused (seconds).
+            Defaults to _DEFAULT_FOCUS_DURATION_S (configurable via
+            UNITY_MCP_NUDGE_DURATION_S environment variable).
         force: If True, ignore the minimum interval between nudges
 
     Returns:
         True if nudge was performed, False if skipped or failed
     """
+    if focus_duration_s is None:
+        focus_duration_s = _DEFAULT_FOCUS_DURATION_S
     global _last_nudge_time
 
     if not _is_available():
