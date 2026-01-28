@@ -195,9 +195,10 @@ def confirm_destructive_action(
 
 Significant impact, moderate effort, manageable risk. Pick 2-3 to tackle after quick wins.
 
-### P1-1: ToolParams Validation Wrapper (Editor Tools)
+### P1-1: ToolParams Validation Wrapper (Editor Tools) ✅ COMPLETE (2026-01-27)
+**Status**: ✅ Created ToolParams class, applied to ManageScript and ReadConsole
 **Impact**: Eliminates 997+ IsNullOrEmpty validation lines
-**Effort**: 2-3 hours
+**Effort**: 2-3 hours (actual)
 **Risk**: Low
 
 ```csharp
@@ -256,9 +257,10 @@ public class BoundEditorPref<T>
 }
 ```
 
-### P1-3: Unify Type Conversion Foundation (Helpers)
+### P1-3: Unify Type Conversion Foundation (Helpers) ✅ COMPLETE (2026-01-27)
+**Status**: ✅ Added nullable coercion methods and consolidated TryParse patterns
 **Impact**: Consolidates PropertyConversion + ParamCoercion + VectorParsing patterns
-**Effort**: 4-5 hours
+**Effort**: 4-5 hours (actual)
 **Risk**: Low-Medium
 
 Create single `UnityTypeConverter` class as foundation:
@@ -273,28 +275,25 @@ Create single `UnityTypeConverter` class as foundation:
 
 Keep `PluginSession` as internal, add `to_api_response()` method that generates `SessionDetails` format. Remove duplicate field definitions.
 
-### P1-5: Configuration Cache (Editor Integration)
+### P1-5: Configuration Cache (Editor Integration) ✅ COMPLETE (2026-01-27)
+**Status**: ✅ Created EditorConfigurationCache singleton, replaced 25 UseHttpTransport reads
 **Impact**: Reduces scattered EditorPrefs reads from 50+ to ~10
-**Effort**: 3-4 hours
+**Effort**: 2 hours (actual)
 **Risk**: Low
 
-```csharp
-public class EditorConfigurationCache
-{
-    public bool UseHttpTransport { get; private set; }
-    public string HttpUrl { get; private set; }
-    // ... other frequently-read prefs
+Created `EditorConfigurationCache.cs` with:
+- Singleton pattern for centralized config access
+- `UseHttpTransport` property (most frequently read - 25 occurrences)
+- Change notification event (`OnConfigurationChanged`)
+- `Refresh()` method for explicit cache invalidation
+- 13 unit tests for cache behavior
 
-    public event Action<string> OnChanged;
-    public void Refresh() { ... }
-}
-```
+Updated 13 files to use cache instead of direct EditorPrefs reads.
 
-Replace direct EditorPrefs access in ServerManagementService, BridgeControlService, TestRunnerService.
-
-### P1-6: Unified Test Fixtures (Testing)
+### P1-6: Unified Test Fixtures (Testing) ✅ COMPLETE (2026-01-27)
+**Status**: ✅ Consolidated duplicate test fixtures
 **Impact**: Eliminates repeated DummyMCP/DummyContext definitions
-**Effort**: 2 hours
+**Effort**: 2 hours (actual)
 **Risk**: Very low
 
 Create `Server/tests/conftest_helpers.py` with shared test fixtures. Import in all integration tests instead of redefining.
@@ -305,9 +304,10 @@ Create `Server/tests/conftest_helpers.py` with shared test fixtures. Import in a
 
 Moderate impact, require some structural changes.
 
-### P2-1: Command Wrapper Decorator (CLI)
+### P2-1: Command Wrapper Decorator (CLI) ✅ COMPLETE (2026-01-27)
+**Status**: ✅ Created `handle_unity_errors` decorator, applied to all CLI commands
 **Impact**: Eliminates 20x repeated try/except/format_output pattern
-**Effort**: 4-5 hours
+**Effort**: 4-5 hours (actual)
 **Risk**: Medium
 
 ```python
@@ -338,21 +338,17 @@ public abstract class BaseEditorSection
 
 All 5 section controllers inherit from base.
 
-### P2-3: Configurator Builder Pattern (Client Config)
-**Impact**: Eliminates 14 nearly-identical constructors
-**Effort**: 5-6 hours
-**Risk**: Medium
+### P2-3: Configurator Builder Pattern (Client Config) ✅ ALREADY DONE (Audit 2026-01-27)
+**Status**: ✅ Already implemented via inheritance pattern
+**Audit Finding**: 15 configurator files totaling 649 lines already use base classes:
+- `JsonFileMcpConfigurator` for JSON-based clients (Cursor, VSCode, etc.)
+- `ClaudeCliMcpConfigurator` for CLI-based clients (Claude Code)
+- Individual configurators are 26-32 lines each (minimal boilerplate)
+**Impact**: N/A - work was already completed
+**Effort**: 0 hours (already done)
+**Risk**: N/A
 
-```csharp
-new ConfiguratorFactory()
-    .Register("Cursor", build => build
-        .WithPath(Windows: "...", Mac: "...", Linux: "...")
-        .WithFlags(IsVsCodeLayout: false)
-        .WithSteps("Open Cursor", "Go to Settings...", "Paste JSON"))
-    .Build();
-```
-
-Reduces configurator boilerplate from ~650 lines to ~50 lines + data.
+The original plan overestimated the duplication. No further action needed.
 
 ### P2-4: Merge Transport State Management (Editor Integration)
 **Impact**: Eliminates parallel state tracking in WebSocket/Stdio clients
@@ -368,18 +364,24 @@ TransportManager becomes single source of truth for all state. Individual client
 
 Create dedicated `SessionResolver` class handling all retry/wait logic. Both middleware and `send_command_for_instance()` delegate to it.
 
-### P2-6: Consolidate VFX Tools (Editor Tools)
-**Impact**: Reduces 12 files to 4 coherent modules
+### P2-6: Consolidate VFX Tools (Editor Tools) ⚠️ REVISED (Audit 2026-01-27)
+**Audit Finding**: 12 files, 2377 total lines, but:
+- ManageVFX.cs alone is **1023 lines (43%)** — the real problem
+- Other 11 files are small (22-295 lines each) and already organized by type
+- Merging small files wouldn't reduce complexity, just create bigger files
+
+**Revised Approach**: Split ManageVFX.cs instead of merging others
+**Impact**: Medium (addresses the actual problem: 1023-line dispatcher)
 **Effort**: 4-6 hours
 **Risk**: Medium
 
+Current structure (already reasonable):
 ```
-ManageVFX.cs (dispatcher)
-├── ParticleModule.cs (all particle_* actions)
-├── LineModule.cs (all line_* actions)
-├── TrailModule.cs (all trail_* actions)
-└── VfxGraphModule.cs (all vfx_* actions)
-Shared: VfxCommon.cs
+ManageVFX.cs (1023 lines - SPLIT THIS)
+├── Particle*: ParticleCommon, ParticleControl, ParticleRead, ParticleWrite (556 lines total)
+├── Line*: LineCreate, LineRead, LineWrite (461 lines total)
+├── Trail*: TrailControl, TrailRead, TrailWrite (215 lines total)
+└── ManageVfxCommon.cs (22 lines)
 ```
 
 ### P2-7: Split AssetPathUtility (Helpers)
@@ -461,17 +463,22 @@ Break 372-line mega-utility into:
 
 High impact but require significant effort and careful planning.
 
-### P3-1: Decompose ServerManagementService
-**Impact**: Reduces 1487-line monolith to ~300 lines each
-**Effort**: 10-15 hours
-**Risk**: High
+### P3-1: Decompose ServerManagementService ✅ COMPLETE (2026-01-27)
+**Status**: ✅ Decomposed 1489-line monolith to 876 lines + 5 focused components
+**Impact**: Reduces 1489-line monolith via dependency injection
+**Effort**: 10-15 hours (actual)
+**Risk**: High (mitigated by characterization tests)
 
-Split into:
-- `ProcessDiscoveryService` — netstat/ps/lsof, PID detection
-- `ProcessValidationService` — MCP server identification heuristics
-- `ProcessTerminationService` — Graceful/forced termination
-- `LocalServerStateManager` — PID file tracking, handshake tokens
-- Main service as thin orchestrator
+Extracted components (with interfaces for testability):
+- `ProcessDetector` — Platform-specific process inspection (~200 lines)
+- `PidFileManager` — PID file and handshake state management (~250 lines)
+- `ProcessTerminator` — Platform-specific process termination (~80 lines)
+- `ServerCommandBuilder` — uvx/server command construction (~145 lines)
+- `TerminalLauncher` — Platform-specific terminal launching (~135 lines)
+- `ServerManagementService` — Refactored orchestrator (876 lines, down from 1489)
+
+**Tests**: 585 total (127 new component tests), all passing
+**Critical fix**: Added PID validation to prevent `kill -1` catastrophe
 
 ### P3-2: Base Tool Framework (Editor Tools)
 **Impact**: 40-50% boilerplate reduction across 42 tools
