@@ -1,4 +1,4 @@
-# Refactor Progress - Last Updated 2026-01-27 7:30 PM
+# Refactor Progress - Last Updated 2026-01-27
 
 ## Current Status: QW-1, QW-2, QW-3 Complete - Continuing Quick Wins
 
@@ -217,7 +217,7 @@ Before starting Quick Wins refactoring, audited existing utilities to avoid dupl
 9. ✅ **QW-4: Create Search Method Constants** - DONE (~30+ lines eliminated)
 10. ✅ **QW-5: Create Confirmation Dialog Utility** - DONE (5+ patterns eliminated)
 11. ✅ **P1-1: ToolParams Validation Wrapper** - DONE (foundation + 4 tools refactored, 31 tests)
-12. **P1-1.5: Python MCP Parameter Aliasing** - Extend parameter flexibility to Python layer
+12. ✅ **P1-1.5: Python MCP Parameter Aliasing** - DONE (pattern established in find_gameobjects; expand to other tools if models struggle with snake_case)
 13. **P1-2**: EditorPrefs Binding Helper - consolidates 50+ patterns
 
 ---
@@ -257,69 +257,43 @@ parameter names for improved developer experience.
 
 ### Implementation Approach
 
-**Option A: Parameter Normalizer Decorator** (Recommended)
-Create a decorator that normalizes incoming kwargs before passing to the tool function:
+**DISCOVERY**: Options A (decorator) and middleware approaches **do not work** because FastMCP validates
+parameters during JSON-RPC message parsing, BEFORE decorators or middleware run.
+
+**Working Solution: Pydantic AliasChoices**
+Use `Field(validation_alias=AliasChoices(...))` directly in function signatures:
 
 ```python
-# Server/src/services/tools/utils.py
-import functools
-import asyncio
-import re
+from pydantic import Field, AliasChoices
+from typing import Annotated
 
-def camel_to_snake(name: str) -> str:
-    """Convert camelCase to snake_case, handling edge cases."""
-    # Handle consecutive capitals (e.g., "searchHTMLContent" -> "search_html_content")
-    s1 = re.sub(r'([A-Z]+)([A-Z][a-z])', r'\1_\2', name)
-    # Handle standard camelCase (e.g., "searchMethod" -> "search_method")
-    s2 = re.sub(r'([a-z\d])([A-Z])', r'\1_\2', s1)
-    return s2.lower()
-
-def normalize_params(func):
-    """Decorator that normalizes camelCase params to snake_case.
-
-    Handles both sync and async functions.
-    Detects conflicts when both naming conventions are provided.
-    """
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        normalized = {}
-        seen_snake_keys = set()
-
-        for key, value in kwargs.items():
-            snake_key = camel_to_snake(key)
-
-            # Conflict detection: warn if both conventions provided
-            if snake_key in seen_snake_keys and snake_key != key:
-                # Prefer explicit snake_case over converted camelCase
-                continue
-
-            normalized[snake_key] = value
-            seen_snake_keys.add(snake_key)
-
-        # Handle both sync and async functions
-        if asyncio.iscoroutinefunction(func):
-            async def async_call():
-                return await func(*args, **normalized)
-            return async_call()
-        else:
-            return func(*args, **normalized)
-
-    return wrapper
+@mcp_for_unity_tool(description="Search for GameObjects")
+async def find_gameobjects(
+    ctx: Context,
+    search_term: Annotated[
+        str,
+        Field(
+            description="The value to search for",
+            validation_alias=AliasChoices("search_term", "searchTerm")
+        )
+    ],
+    search_method: Annotated[
+        Literal["by_name", "by_tag", "by_layer"],
+        Field(
+            default="by_name",
+            description="How to search",
+            validation_alias=AliasChoices("search_method", "searchMethod")
+        )
+    ] = "by_name",
+    # ... other parameters
+) -> dict[str, Any]:
 ```
 
-Apply in tool registration:
-```python
-# Server/src/services/tools/__init__.py
-wrapped = normalize_params(func)  # Add before other wrappers
-wrapped = log_execution(tool_name, "Tool")(wrapped)
-# ...
-```
-
-**Option B: Pydantic Model with Aliases**
-More complex, requires changing all tool signatures to use Pydantic models.
-
-**Option C: FastMCP Configuration**
-Check if FastMCP supports `populate_by_name=True` or similar Pydantic config.
+This works because:
+1. Pydantic validates parameters during FastMCP's JSON-RPC parsing
+2. `AliasChoices` allows Pydantic to accept multiple names for the same parameter
+3. Snake_case is listed first, so it takes precedence when both are provided
+4. No runtime overhead - validation happens at the same point it always did
 
 ### Implementation Plan
 
@@ -377,3 +351,15 @@ Check if FastMCP supports `populate_by_name=True` or similar Pydantic config.
 - **Time**: 2.5 hours (increased for edge case handling)
 - **Risk**: Low (additive change, doesn't modify existing behavior)
 - **Impact**: High (eliminates entire class of user errors)
+
+### Status: Pattern Established, Expansion Bookmarked
+
+**Completed:**
+- ✅ Discovered decorator/middleware approaches don't work (FastMCP validates before they run)
+- ✅ Identified working solution: Pydantic `AliasChoices` with `Field(validation_alias=...)`
+- ✅ Implemented proof-of-concept in `find_gameobjects.py`
+- ✅ Added unit tests for AliasChoices pattern (`Server/tests/test_param_normalizer.py`)
+
+**Decision:** Bookmarked full rollout to other tools. The pattern adds verbosity (~3-4 lines per parameter).
+Will expand to more tools if we observe models (especially smaller ones) frequently sending camelCase
+parameters. For now, snake_case is the documented convention and the pattern is ready if needed.
