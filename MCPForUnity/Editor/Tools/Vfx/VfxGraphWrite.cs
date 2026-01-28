@@ -272,11 +272,19 @@ namespace MCPForUnity.Editor.Tools.Vfx
             }
             if (@params["size"] != null)
             {
-                attr.SetFloat("size", @params["size"].ToObject<float>());
+                float? sizeValue = @params["size"].Value<float?>();
+                if (sizeValue.HasValue)
+                {
+                    attr.SetFloat("size", sizeValue.Value);
+                }
             }
             if (@params["lifetime"] != null)
             {
-                attr.SetFloat("lifetime", @params["lifetime"].ToObject<float>());
+                float? lifetimeValue = @params["lifetime"].Value<float?>();
+                if (lifetimeValue.HasValue)
+                {
+                    attr.SetFloat("lifetime", lifetimeValue.Value);
+                }
             }
 
             vfx.SendEvent(eventName, attr);

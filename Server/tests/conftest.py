@@ -39,7 +39,7 @@ def fresh_telemetry():
     yield
 
 
-def pytest_collection_modifyitems(session, config, items):
+def pytest_collection_modifyitems(session, config, items):  # noqa: ARG001
     """Reorder tests so characterization tests run before integration tests.
 
     This prevents integration tests from initializing the telemetry singleton

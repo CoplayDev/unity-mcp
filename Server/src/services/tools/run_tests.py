@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import time
 from typing import Annotated, Any, Literal
 
@@ -56,13 +55,14 @@ async def _get_unity_project_path(unity_instance: str | None) -> str | None:
         if not session:
             return None
 
+    except (AttributeError, KeyError) as e:
+        logger.debug(f"Could not get Unity project path: {e}")
+        return None
+    else:
         # Return full path if available, otherwise fall back to project name
         if session.project_path:
             return session.project_path
         return session.project_name if session.project_name else None
-    except Exception as e:
-        logger.debug(f"Could not get Unity project path: {e}")
-        return None
 
 
 class RunTestsSummary(BaseModel):
