@@ -104,7 +104,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             }
 
             transportDropdown.Init(TransportProtocol.HTTPLocal);
-            bool useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
             if (!useHttpTransport)
             {
                 transportDropdown.value = TransportProtocol.Stdio;
@@ -271,7 +271,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             bool debugMode = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
             // Use EditorPrefs as source of truth for stdio selection - more reliable after domain reload
             // than checking the dropdown which may not be initialized yet
-            bool stdioSelected = !EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool stdioSelected = !EditorConfigurationCache.Instance.UseHttpTransport;
 
             // Keep the Start/Stop Server button label in sync even when the session is not running
             // (e.g., orphaned server after a domain reload).
@@ -811,7 +811,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             }
 
             // Determine the server's current transport setting
-            bool serverUsesHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool serverUsesHttp = EditorConfigurationCache.Instance.UseHttpTransport;
             ConfiguredTransport serverTransport = serverUsesHttp ? ConfiguredTransport.Http : ConfiguredTransport.Stdio;
 
             // Check for mismatch

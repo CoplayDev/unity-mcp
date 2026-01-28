@@ -270,7 +270,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 
             // Capture ALL main-thread-only values before async task
             string projectDir = Path.GetDirectoryName(Application.dataPath);
-            bool useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
             string claudePath = MCPServiceLocator.Paths.GetClaudeCliPath();
             string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
             var (uvxPath, gitUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
@@ -453,7 +453,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 
                 // Capture main-thread-only values before async task
                 string projectDir = Path.GetDirectoryName(Application.dataPath);
-                bool useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+                bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
                 string claudePath = MCPServiceLocator.Paths.GetClaudeCliPath();
 
                 Task.Run(() =>
@@ -529,7 +529,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
             bool hasTransportMismatch = false;
             if (client.ConfiguredTransport != ConfiguredTransport.Unknown)
             {
-                bool serverUsesHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+                bool serverUsesHttp = EditorConfigurationCache.Instance.UseHttpTransport;
                 ConfiguredTransport serverTransport = serverUsesHttp ? ConfiguredTransport.Http : ConfiguredTransport.Stdio;
                 hasTransportMismatch = client.ConfiguredTransport != serverTransport;
             }

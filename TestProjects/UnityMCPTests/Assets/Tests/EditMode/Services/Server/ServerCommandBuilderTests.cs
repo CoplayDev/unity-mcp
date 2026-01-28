@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Services.Server;
 using MCPForUnity.Editor.Constants;
 using UnityEditor;
@@ -37,6 +38,8 @@ namespace MCPForUnityTests.Editor.Services.Server
             {
                 EditorPrefs.DeleteKey(EditorPrefKeys.HttpBaseUrl);
             }
+            // Refresh cache to reflect restored values
+            EditorConfigurationCache.Instance.Refresh();
         }
 
         #region QuoteIfNeeded Tests
@@ -214,6 +217,7 @@ namespace MCPForUnityTests.Editor.Services.Server
             // Arrange
             EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
             EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://localhost:8080");
+            EditorConfigurationCache.Instance.Refresh();
 
             // Act
             bool result = _builder.TryBuildCommand(out string fileName, out string arguments, out string displayCommand, out string error);

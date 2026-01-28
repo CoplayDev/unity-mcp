@@ -864,7 +864,7 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         public bool CanStartLocalServer()
         {
-            bool useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
             return useHttpTransport && IsLocalUrl();
         }
 

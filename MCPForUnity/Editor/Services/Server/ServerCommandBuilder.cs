@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Services;
 using UnityEditor;
 using UnityEngine;
 
@@ -22,7 +23,7 @@ namespace MCPForUnity.Editor.Services.Server
             displayCommand = null;
             error = null;
 
-            bool useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
             if (!useHttpTransport)
             {
                 error = "HTTP transport is disabled. Enable it in the MCP For Unity window first.";

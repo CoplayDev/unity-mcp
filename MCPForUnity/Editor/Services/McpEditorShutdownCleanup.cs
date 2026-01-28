@@ -43,7 +43,7 @@ namespace MCPForUnity.Editor.Services
             // 2) Stop local HTTP server if it was Unity-managed (best-effort).
             try
             {
-                bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+                bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
                 string scope = string.Empty;
                 try { scope = EditorPrefs.GetString(EditorPrefKeys.HttpTransportScope, string.Empty); } catch { }
 

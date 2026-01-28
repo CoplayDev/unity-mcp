@@ -24,7 +24,7 @@ namespace MCPForUnity.Editor.Services
             try
             {
                 // Only persist resume intent when stdio is the active transport and the bridge is running.
-                bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+                bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
                 // Check both TransportManager AND StdioBridgeHost directly, because CI starts via StdioBridgeHost
                 // bypassing TransportManager state.
                 bool tmRunning = MCPServiceLocator.TransportManager.IsRunning(TransportMode.Stdio);
@@ -62,7 +62,7 @@ namespace MCPForUnity.Editor.Services
             try
             {
                 bool resumeFlag = EditorPrefs.GetBool(EditorPrefKeys.ResumeStdioAfterReload, false);
-                bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+                bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
                 resume = resumeFlag && !useHttp;
 
                 // If we're not going to resume, clear the flag immediately to avoid stuck "Resuming..." state
