@@ -156,6 +156,28 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
         loop = asyncio.get_running_loop()
         PluginHub.configure(_plugin_registry, loop)
 
+        # Set up event loop exception handler for Windows socket errors
+        # On Windows, OSError [WinError 64] can occur in asyncio IOCP proactor
+        # when clients disconnect during WebSocket accept. This prevents
+        # the exception from crashing the server.
+        def _asyncio_exception_handler(loop: asyncio.AbstractEventLoop, context: dict[str, Any]) -> None:
+            exception = context.get("exception")
+            if isinstance(exception, OSError):
+                winerror = getattr(exception, "winerror", None)
+                if sys.platform == 'win32' and winerror == 64:
+                    # This is a normal Windows socket error during client disconnect
+                    # Log as DEBUG to avoid cluttering logs
+                    logger.debug(
+                        f"Asyncio caught OSError WinError 64 during {context.get('task', 'unknown operation')}: "
+                        "client disconnected during socket operation (normal during Unity domain reloads)"
+                    )
+                    return
+            # For all other exceptions, use the default handler
+            loop.default_exception_handler(context)
+
+        loop.set_exception_handler(_asyncio_exception_handler)
+        logger.info("Registered asyncio exception handler for Windows socket errors")
+
     # Record server startup telemetry
     start_time = time.time()
     start_clk = time.perf_counter()
