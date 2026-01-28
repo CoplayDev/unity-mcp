@@ -190,6 +190,21 @@ Before starting Quick Wins refactoring, audited existing utilities to avoid dupl
   - vfx.py, asset.py, editor.py, script.py, batch.py: 1 pattern each
 - **Tests**: All 23 material/component CLI tests passing
 
+### ✅ P2-1: CLI Command Wrapper (2026-01-27)
+- **Time**: 1 hour
+- **Created**: `@handle_unity_errors` decorator in `Server/src/cli/utils/connection.py`
+- **Updated**: 18 CLI command files, 83 commands total
+  - animation.py, asset.py, audio.py, batch.py, code.py, component.py
+  - editor.py, gameobject.py, instance.py, lighting.py, material.py
+  - prefab.py, script.py, shader.py, texture.py, tool.py, ui.py, vfx.py
+- **Eliminated**: ~296 lines of repetitive try/except UnityConnectionError boilerplate
+- **Pattern**: Decorator catches `UnityConnectionError`, prints error, exits with code 1
+- **Intentional exceptions kept**:
+  - editor.py:446 - Silent catch for suggestion lookup
+  - gameobject.py:191 - Track component failures in loop
+  - main.py - Special handling for status/ping/interactive commands
+- **Tests**: All 23 material/component CLI tests passing
+
 ### ✅ QW-3: Patch in AssetPathUtility (Editor Tools) (2026-01-27)
 - **Time**: 20 minutes
 - **Patched**: Existing `MCPForUnity/Editor/Helpers/AssetPathUtility.cs` utility into 5 Editor tool files
@@ -221,7 +236,7 @@ Before starting Quick Wins refactoring, audited existing utilities to avoid dupl
 13. ⏸️ **P1-2**: EditorPrefs Binding Helper - skipped (low impact per pattern, keys already centralized)
 14. ✅ **P1-6: Unified Test Fixtures** - DONE (~95 lines removed, 4 files consolidated)
 15. ⏸️ **P2-3**: Configurator Builder Pattern - skipped (configurators already well-factored, ~26-32 lines each)
-16. 🔄 **P2-1: CLI Command Wrapper** - IN PROGRESS (decorator created, scene.py refactored as proof-of-concept, ~200 lines potential when fully applied)
+16. ✅ **P2-1: CLI Command Wrapper** - DONE (~296 lines eliminated, decorator applied to 83 commands across 18 files)
 
 ---
 
