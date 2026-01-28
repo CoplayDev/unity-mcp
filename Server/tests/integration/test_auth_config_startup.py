@@ -11,6 +11,17 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 
+@pytest.fixture(autouse=True)
+def _restore_config(monkeypatch):
+    """Prevent main() side effects on the global config from leaking to other tests."""
+    monkeypatch.setattr(config, "http_remote_hosted", config.http_remote_hosted)
+    monkeypatch.setattr(config, "api_key_validation_url", config.api_key_validation_url)
+    monkeypatch.setattr(config, "api_key_login_url", config.api_key_login_url)
+    monkeypatch.setattr(config, "api_key_cache_ttl", config.api_key_cache_ttl)
+    monkeypatch.setattr(config, "api_key_service_token_header", config.api_key_service_token_header)
+    monkeypatch.setattr(config, "api_key_service_token", config.api_key_service_token)
+
+
 class TestStartupConfigValidation:
     def test_remote_hosted_flag_without_validation_url_exits(self, monkeypatch):
         """--http-remote-hosted without --api-key-validation-url should SystemExit(1)."""
