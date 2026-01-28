@@ -442,6 +442,11 @@ class TestTelemetryDecoratorDuplication:
 class TestTelemetryDecoratorExceptionHandling:
     """Tests for exception handling in telemetry decorators."""
 
+    @pytest.fixture(autouse=True)
+    def setup(self, fresh_telemetry):
+        """Reset telemetry before each test in this class."""
+        pass
+
     def test_telemetry_tool_exception_recorded(self):
         """Verify telemetry records exceptions in tool execution."""
         @telemetry_tool("failing_tool")
@@ -494,6 +499,12 @@ class TestTelemetryDecoratorExceptionHandling:
 
 
 class TestTelemetrySubAction:
+
+    @pytest.fixture(autouse=True)
+    def setup(self, fresh_telemetry):
+        """Reset telemetry before each test in this class."""
+        pass
+
     """Tests for sub-action extraction in telemetry decorators."""
 
     def test_telemetry_tool_extracts_action_parameter(self):
@@ -575,6 +586,12 @@ class TestTelemetrySubAction:
 
 
 class TestTelemetryDuration:
+
+    @pytest.fixture(autouse=True)
+    def setup(self, fresh_telemetry):
+        """Reset telemetry before each test in this class."""
+        pass
+
     """Tests for duration measurement in telemetry decorators."""
 
     def test_telemetry_measures_duration_sync(self):
@@ -711,6 +728,12 @@ class TestServerConfigLogging:
 
 
 class TestTelemetryConfigPrecedence:
+
+    @pytest.fixture(autouse=True)
+    def setup(self, fresh_telemetry):
+        """Reset telemetry before each test in this class."""
+        pass
+
     """Tests for TelemetryConfig configuration precedence.
 
     Pattern: config file -> env variable override
@@ -808,6 +831,12 @@ class TestTelemetryConfigPrecedence:
 # =============================================================================
 
 class TestTelemetryCollection:
+
+    @pytest.fixture(autouse=True)
+    def setup(self, fresh_telemetry):
+        """Reset telemetry before each test in this class."""
+        pass
+
     """Tests for TelemetryCollector basic functionality."""
 
     def test_telemetry_collector_initialization(self, mock_telemetry_config, temp_telemetry_data):
@@ -894,6 +923,12 @@ class TestTelemetryCollection:
 
 
 class TestTelemetryRecordTypes:
+
+    @pytest.fixture(autouse=True)
+    def setup(self, fresh_telemetry):
+        """Reset telemetry before each test in this class."""
+        pass
+
     """Tests for telemetry record types and data structures."""
 
     def test_telemetry_record_type_enum(self):
@@ -1007,6 +1042,12 @@ class TestTelemetryRecordTypes:
 
 
 class TestTelemetryMilestones:
+
+    @pytest.fixture(autouse=True)
+    def setup(self, fresh_telemetry):
+        """Reset telemetry before each test in this class."""
+        pass
+
     """Tests for milestone tracking in telemetry."""
 
     def test_record_milestone_first_occurrence(self, mock_telemetry_config, temp_telemetry_data):
@@ -1141,6 +1182,12 @@ class TestTelemetryDisabled:
 # =============================================================================
 
 class TestDecoratorTelemetryIntegration:
+
+    @pytest.fixture(autouse=True)
+    def setup(self, fresh_telemetry):
+        """Reset telemetry before each test in this class."""
+        pass
+
     """Tests for interaction between decorators and telemetry system."""
 
     def test_logging_decorator_independent_of_telemetry(self, caplog_fixture):
@@ -1218,6 +1265,12 @@ class TestConfigurationEnvironmentInteraction:
 # =============================================================================
 
 class TestErrorHandlingEdgeCases:
+
+    @pytest.fixture(autouse=True)
+    def setup(self, fresh_telemetry):
+        """Reset telemetry before each test in this class."""
+        pass
+
     """Tests for edge cases and error handling."""
 
     def test_decorator_with_none_return_value(self, caplog_fixture):
