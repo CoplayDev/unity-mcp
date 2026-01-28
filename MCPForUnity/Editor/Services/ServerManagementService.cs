@@ -2,10 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Net.Sockets;
-using System.Security.Cryptography;
-using System.Text;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services.Server;
@@ -19,8 +16,6 @@ namespace MCPForUnity.Editor.Services
     /// </summary>
     public class ServerManagementService : IServerManagementService
     {
-        private static readonly HashSet<int> LoggedStopDiagnosticsPids = new HashSet<int>();
-
         private readonly IProcessDetector _processDetector;
         private readonly IPidFileManager _pidFileManager;
         private readonly IProcessTerminator _processTerminator;
@@ -52,11 +47,6 @@ namespace MCPForUnity.Editor.Services
             _processTerminator = processTerminator ?? new ProcessTerminator(_processDetector);
             _commandBuilder = commandBuilder ?? new ServerCommandBuilder();
             _terminalLauncher = terminalLauncher ?? new TerminalLauncher();
-        }
-
-        private string GetProjectRootPath()
-        {
-            return _terminalLauncher.GetProjectRootPath();
         }
 
         private string QuoteIfNeeded(string s)
@@ -126,11 +116,6 @@ namespace MCPForUnity.Editor.Services
             catch { }
 
             return false;
-        }
-
-        private void StoreLocalServerPidTracking(int pid, int port, string argsHash = null)
-        {
-            _pidFileManager.StoreTracking(pid, port, argsHash);
         }
 
         private string ComputeShortHash(string input)
@@ -817,28 +802,6 @@ namespace MCPForUnity.Editor.Services
         private bool LooksLikeMcpServerProcess(int pid)
         {
             return _processDetector.LooksLikeMcpServerProcess(pid);
-        }
-
-        private static void LogStopDiagnosticsOnce(int pid, string details)
-        {
-            try
-            {
-                if (LoggedStopDiagnosticsPids.Contains(pid))
-                {
-                    return;
-                }
-                LoggedStopDiagnosticsPids.Add(pid);
-                McpLog.Debug($"[StopLocalHttpServer] PID {pid} did not match server heuristics. {details}");
-            }
-            catch { }
-        }
-
-        private static string TrimForLog(string s)
-        {
-            if (string.IsNullOrEmpty(s)) return string.Empty;
-            const int max = 500;
-            if (s.Length <= max) return s;
-            return s.Substring(0, max) + "...(truncated)";
         }
 
         private bool TerminateProcess(int pid)
