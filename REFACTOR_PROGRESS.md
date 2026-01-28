@@ -1,10 +1,11 @@
-# Refactor Progress - Last Updated 2026-01-27
+# Refactor Progress - Last Updated 2026-01-28
 
-## Current Status: P1-5, P3-1 Complete - Major Refactors Done
+## Current Status: P2-6 Complete - VFX Graph Split + Utility Consolidation
 
 All characterization tests successfully created, validated, and passing (600+ tests).
 P3-1 (ServerManagementService decomposition) completed - 1489 lines → ~300 lines orchestrator + 5 focused services.
 P1-5 (EditorConfigurationCache) completed - 25 scattered EditorPrefs reads centralized into cache singleton.
+P2-6 (ManageVFX split + StringCaseUtility) completed - ManageVFX.cs 1006 → 411 lines (59% reduction).
 
 ---
 
@@ -36,6 +37,34 @@ P1-5 (EditorConfigurationCache) completed - 25 scattered EditorPrefs reads centr
 ---
 
 ## Recently Completed
+
+### P2-6: ManageVFX Split + StringCaseUtility Consolidation ✅ (2026-01-28)
+- **Goal**: Extract VFX Graph code from ManageVFX.cs and consolidate string case utilities
+- **Time**: ~1 hour
+
+**Part 1: Extract VFX Graph Code**
+- Created 5 new files in `MCPForUnity/Editor/Tools/Vfx/`:
+  - `VfxGraphAssets.cs` (447 lines) - Asset management (create, assign, list templates/assets)
+  - `VfxGraphRead.cs` (47 lines) - Read operations (get_info)
+  - `VfxGraphWrite.cs` (282 lines) - Parameter setters (set_float/int/bool/vector/color/gradient/texture/mesh/curve, send_event)
+  - `VfxGraphControl.cs` (87 lines) - Playback control (play/stop/pause/reinit, set_playback_speed, set_seed)
+  - `VfxGraphCommon.cs` (26 lines) - Shared utilities (FindVisualEffect)
+- ManageVFX.cs reduced from 1006 to 411 lines (59% reduction)
+
+**Part 2: Consolidate String Case Utilities**
+- Created `MCPForUnity/Editor/Helpers/StringCaseUtility.cs` with:
+  - `ToSnakeCase()` - camelCase → snake_case conversion
+  - `ToCamelCase()` - snake_case → camelCase conversion
+- Updated 5 files to use shared utility:
+  - `ToolParams.cs` - removed ~20 lines of private methods
+  - `BatchExecute.cs` - removed ~30 lines of private ToCamelCase
+  - `ManageVFX.cs` - removed ~18 lines of private ToCamelCase
+  - `CommandRegistry.cs` - removed ~9 lines of private ToSnakeCase
+  - `ToolDiscoveryService.cs` - removed ~13 lines of private ConvertToSnakeCase
+- Eliminated 6 duplicate implementations (~90 lines total)
+- Also removed unused imports (System.Text.RegularExpressions from 2 files)
+
+**Tests**: All 600 Unity tests passing
 
 ### P3-1: ServerManagementService Decomposition ✅ (2026-01-27)
 - **Goal**: Decompose 1489-line monolith into focused, testable components
@@ -291,6 +320,8 @@ Before starting Quick Wins refactoring, audited existing utilities to avoid dupl
     - 📋 Remaining optional: Command aliases, CLI README documentation, better error messages
 19. ✅ **P3-1: ServerManagementService Decomposition** - DONE (1489 → ~300 lines, 5 new services, 50+ tests)
 20. ✅ **P1-5: EditorConfigurationCache** - DONE (25 EditorPrefs reads centralized, 13 files updated, 13 tests)
+21. ⏸️ **P1-4: Session Model Consolidation** - SKIPPED (only 4 lines of code to move, low impact)
+22. ✅ **P2-6: ManageVFX Split + StringCaseUtility** - DONE (ManageVFX 1006 → 411 lines, 6 duplicate implementations eliminated)
 
 ---
 
