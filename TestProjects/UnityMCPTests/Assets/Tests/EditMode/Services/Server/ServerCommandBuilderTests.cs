@@ -120,6 +120,13 @@ namespace MCPForUnityTests.Editor.Services.Server
         [Test]
         public void BuildUvPathFromUvx_WindowsPath_ConvertsCorrectly()
         {
+            // This test only makes sense on Windows where backslash paths are native
+            if (UnityEngine.Application.platform != UnityEngine.RuntimePlatform.WindowsEditor)
+            {
+                Assert.Pass("Skipped on non-Windows platform");
+                return;
+            }
+
             // Arrange
             string uvxPath = @"C:\Program Files\uv\uvx.exe";
 
