@@ -25,11 +25,12 @@ namespace MCPForUnity.Editor.Services
         private readonly IPidFileManager _pidFileManager;
         private readonly IProcessTerminator _processTerminator;
         private readonly IServerCommandBuilder _commandBuilder;
+        private readonly ITerminalLauncher _terminalLauncher;
 
         /// <summary>
         /// Creates a new ServerManagementService with default dependencies.
         /// </summary>
-        public ServerManagementService() : this(null, null, null, null) { }
+        public ServerManagementService() : this(null, null, null, null, null) { }
 
         /// <summary>
         /// Creates a new ServerManagementService with injected dependencies (for testing).
@@ -38,29 +39,24 @@ namespace MCPForUnity.Editor.Services
         /// <param name="pidFileManager">PID file manager implementation (null for default)</param>
         /// <param name="processTerminator">Process terminator implementation (null for default)</param>
         /// <param name="commandBuilder">Server command builder implementation (null for default)</param>
+        /// <param name="terminalLauncher">Terminal launcher implementation (null for default)</param>
         public ServerManagementService(
             IProcessDetector processDetector,
             IPidFileManager pidFileManager = null,
             IProcessTerminator processTerminator = null,
-            IServerCommandBuilder commandBuilder = null)
+            IServerCommandBuilder commandBuilder = null,
+            ITerminalLauncher terminalLauncher = null)
         {
             _processDetector = processDetector ?? new ProcessDetector();
             _pidFileManager = pidFileManager ?? new PidFileManager();
             _processTerminator = processTerminator ?? new ProcessTerminator(_processDetector);
             _commandBuilder = commandBuilder ?? new ServerCommandBuilder();
+            _terminalLauncher = terminalLauncher ?? new TerminalLauncher();
         }
 
-        private static string GetProjectRootPath()
+        private string GetProjectRootPath()
         {
-            try
-            {
-                // Application.dataPath is ".../<Project>/Assets"
-                return Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-            }
-            catch
-            {
-                return Application.dataPath;
-            }
+            return _terminalLauncher.GetProjectRootPath();
         }
 
         private string QuoteIfNeeded(string s)
@@ -909,122 +905,9 @@ namespace MCPForUnity.Editor.Services
             return useHttpTransport && IsLocalUrl();
         }
 
-        /// <summary>
-        /// Creates a ProcessStartInfo for opening a terminal window with the given command
-        /// Works cross-platform: macOS, Windows, and Linux
-        /// </summary>
         private System.Diagnostics.ProcessStartInfo CreateTerminalProcessStartInfo(string command)
         {
-            if (string.IsNullOrWhiteSpace(command))
-                throw new ArgumentException("Command cannot be empty", nameof(command));
-
-            command = command.Replace("\r", "").Replace("\n", "");
-
-#if UNITY_EDITOR_OSX
-            // macOS: Avoid AppleScript (automation permission prompts). Use a .command script and open it.
-            string scriptsDir = Path.Combine(GetProjectRootPath(), "Library", "MCPForUnity", "TerminalScripts");
-            Directory.CreateDirectory(scriptsDir);
-            string scriptPath = Path.Combine(scriptsDir, "mcp-terminal.command");
-            File.WriteAllText(
-                scriptPath,
-                "#!/bin/bash\n" +
-                "set -e\n" +
-                "clear\n" +
-                $"{command}\n");
-            ExecPath.TryRun("/bin/chmod", $"+x \"{scriptPath}\"", Application.dataPath, out _, out _, 3000);
-            return new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "/usr/bin/open",
-                Arguments = $"-a Terminal \"{scriptPath}\"",
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-#elif UNITY_EDITOR_WIN
-            // Windows: Avoid brittle nested-quote escaping by writing a .cmd script and starting it in a new window.
-            string scriptsDir = Path.Combine(GetProjectRootPath(), "Library", "MCPForUnity", "TerminalScripts");
-            Directory.CreateDirectory(scriptsDir);
-            string scriptPath = Path.Combine(scriptsDir, "mcp-terminal.cmd");
-            File.WriteAllText(
-                scriptPath,
-                "@echo off\r\n" +
-                "cls\r\n" +
-                command + "\r\n");
-            return new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "cmd.exe",
-                Arguments = $"/c start \"MCP Server\" cmd.exe /k \"{scriptPath}\"",
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-#else
-            // Linux: Try common terminal emulators
-            // We use bash -c to execute the command, so we must properly quote/escape for bash
-            // Escape single quotes for the inner bash string
-            string escapedCommandLinux = command.Replace("'", "'\\''");
-            // Wrap the command in single quotes for bash -c
-            string script = $"'{escapedCommandLinux}; exec bash'";
-            // Escape double quotes for the outer Process argument string
-            string escapedScriptForArg = script.Replace("\"", "\\\"");
-            string bashCmdArgs = $"bash -c \"{escapedScriptForArg}\"";
-            
-            string[] terminals = { "gnome-terminal", "xterm", "konsole", "xfce4-terminal" };
-            string terminalCmd = null;
-            
-            foreach (var term in terminals)
-            {
-                try
-                {
-                    var which = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = "which",
-                        Arguments = term,
-                        UseShellExecute = false,
-                        RedirectStandardOutput = true,
-                        CreateNoWindow = true
-                    });
-                    which.WaitForExit(5000); // Wait for up to 5 seconds, the command is typically instantaneous
-                    if (which.ExitCode == 0)
-                    {
-                        terminalCmd = term;
-                        break;
-                    }
-                }
-                catch { }
-            }
-            
-            if (terminalCmd == null)
-            {
-                terminalCmd = "xterm"; // Fallback
-            }
-            
-            // Different terminals have different argument formats
-            string args;
-            if (terminalCmd == "gnome-terminal")
-            {
-                args = $"-- {bashCmdArgs}";
-            }
-            else if (terminalCmd == "konsole")
-            {
-                args = $"-e {bashCmdArgs}";
-            }
-            else if (terminalCmd == "xfce4-terminal")
-            {
-                // xfce4-terminal expects -e "command string" or -e command arg
-                args = $"--hold -e \"{bashCmdArgs.Replace("\"", "\\\"")}\"";
-            }
-            else // xterm and others
-            {
-                args = $"-hold -e {bashCmdArgs}";
-            }
-            
-            return new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = terminalCmd,
-                Arguments = args,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-#endif
+            return _terminalLauncher.CreateTerminalProcessStartInfo(command);
         }
     }
 }
