@@ -244,6 +244,83 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
+        /// Builds the uvx package source arguments for the MCP server.
+        /// Handles beta server mode (prerelease from PyPI) vs standard mode (pinned version or override).
+        /// Centralizes the prerelease logic to avoid duplication between HTTP and stdio transports.
+        /// Priority: explicit fromUrl override > beta server mode > default package.
+        /// </summary>
+        /// <param name="quoteFromPath">Whether to quote the --from path (needed for command-line strings, not for arg lists)</param>
+        /// <returns>The package source arguments (e.g., "--prerelease explicit --from mcpforunityserver>=0.0.0a0")</returns>
+        public static string GetBetaServerFromArgs(bool quoteFromPath = false)
+        {
+            // Explicit override (local path, git URL, etc.) always wins
+            string fromUrl = GetMcpServerPackageSource();
+            string overrideUrl = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
+            if (!string.IsNullOrEmpty(overrideUrl))
+            {
+                return $"--from {fromUrl}";
+            }
+
+            // Beta server mode: use prerelease from PyPI
+            bool useBetaServer = EditorPrefs.GetBool(EditorPrefKeys.UseBetaServer, true);
+            if (useBetaServer)
+            {
+                // Use --prerelease explicit with version specifier to only get prereleases of our package,
+                // not of dependencies (which can be broken on PyPI).
+                string fromValue = quoteFromPath ? "\"mcpforunityserver>=0.0.0a0\"" : "mcpforunityserver>=0.0.0a0";
+                return $"--prerelease explicit --from {fromValue}";
+            }
+
+            // Standard mode: use pinned version from package.json
+            if (!string.IsNullOrEmpty(fromUrl))
+            {
+                return $"--from {fromUrl}";
+            }
+
+            return string.Empty;
+        }
+
+        /// <summary>
+        /// Builds the uvx package source arguments as a list (for JSON config builders).
+        /// Priority: explicit fromUrl override > beta server mode > default package.
+        /// </summary>
+        /// <returns>List of arguments to add to uvx command</returns>
+        public static System.Collections.Generic.IList<string> GetBetaServerFromArgsList()
+        {
+            var args = new System.Collections.Generic.List<string>();
+
+            // Explicit override (local path, git URL, etc.) always wins
+            string fromUrl = GetMcpServerPackageSource();
+            string overrideUrl = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
+            if (!string.IsNullOrEmpty(overrideUrl))
+            {
+                args.Add("--from");
+                args.Add(fromUrl);
+                return args;
+            }
+
+            // Beta server mode: use prerelease from PyPI
+            bool useBetaServer = EditorPrefs.GetBool(EditorPrefKeys.UseBetaServer, true);
+            if (useBetaServer)
+            {
+                args.Add("--prerelease");
+                args.Add("explicit");
+                args.Add("--from");
+                args.Add("mcpforunityserver>=0.0.0a0");
+                return args;
+            }
+
+            // Standard mode: use pinned version from package.json
+            if (!string.IsNullOrEmpty(fromUrl))
+            {
+                args.Add("--from");
+                args.Add(fromUrl);
+            }
+
+            return args;
+        }
+
+        /// <summary>
         /// Determines whether uvx should use --no-cache --refresh flags.
         /// Returns true if DevModeForceServerRefresh is enabled OR if the server URL is a local path.
         /// Local paths (file:// or absolute) always need fresh builds to avoid stale uvx cache.

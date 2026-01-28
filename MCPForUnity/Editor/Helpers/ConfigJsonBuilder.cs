@@ -183,10 +183,11 @@ namespace MCPForUnity.Editor.Helpers
                 args.Add("--no-cache");
                 args.Add("--refresh");
             }
-            if (!string.IsNullOrEmpty(fromUrl))
+
+            // Use centralized helper for beta server / prerelease args
+            foreach (var arg in AssetPathUtility.GetBetaServerFromArgsList())
             {
-                args.Add("--from");
-                args.Add(fromUrl);
+                args.Add(arg);
             }
             args.Add(packageName);
 

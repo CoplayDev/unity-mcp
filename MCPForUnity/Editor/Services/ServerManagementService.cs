@@ -1317,9 +1317,13 @@ namespace MCPForUnity.Editor.Services
                 true
             );
             string scopedFlag = projectScopedTools ? " --project-scoped-tools" : string.Empty;
-            string args = string.IsNullOrEmpty(fromUrl)
+
+            // Use centralized helper for beta server / prerelease args
+            string fromArgs = AssetPathUtility.GetBetaServerFromArgs(quoteFromPath: true);
+
+            string args = string.IsNullOrEmpty(fromArgs)
                 ? $"{devFlags}{packageName} --transport http --http-url {httpUrl}{scopedFlag}"
-                : $"{devFlags}--from {fromUrl} {packageName} --transport http --http-url {httpUrl}{scopedFlag}";
+                : $"{devFlags}{fromArgs} {packageName} --transport http --http-url {httpUrl}{scopedFlag}";
 
             fileName = uvxPath;
             arguments = args;

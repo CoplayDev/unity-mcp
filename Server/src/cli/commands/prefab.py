@@ -137,7 +137,8 @@ def info(path: str, compact: bool):
             click.echo(f"  Type: {data.get('prefabType', 'Unknown')}")
             click.echo(f"  Root: {data.get('rootObjectName', 'N/A')}")
             click.echo(f"  GUID: {data.get('guid', 'N/A')}")
-            click.echo(f"  Components: {len(data.get('rootComponentTypes', []))}")
+            click.echo(
+                f"  Components: {len(data.get('rootComponentTypes', []))}")
             click.echo(f"  Children: {data.get('childCount', 0)}")
             if data.get('isVariant'):
                 click.echo(f"  Variant of: {data.get('parentPrefab', 'N/A')}")
