@@ -30,7 +30,7 @@ The window has four areas: Server Status, Unity Bridge, MCP Client Configuration
 - Actions:
   - Auto-Setup: Registers/updates your selected MCP client(s), ensures bridge connectivity. Shows “Connected ✓” after success.
   - Rebuild MCP Server: Rebuilds the Python based MCP server
-  - Select server folder…: Choose the folder containing `server.py`.
+  - Select server folder…: Choose the local `Server` folder (dev only; usually not needed when using uvx).
   - Verify again: Re-checks server presence.
   - If Python isn’t detected, use “Open Install Instructions”.
 - HTTP Server Command foldout:

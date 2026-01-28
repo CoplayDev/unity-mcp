@@ -19,6 +19,8 @@ namespace MCPForUnity.Editor.Windows
         // UI Elements
         private ScrollView scrollView;
         private VisualElement prefsContainer;
+        private TextField searchField;
+        private string searchFilter = "";
         
         // Data
         private List<EditorPrefItem> currentPrefs = new List<EditorPrefItem>();
@@ -40,6 +42,7 @@ namespace MCPForUnity.Editor.Windows
             { EditorPrefKeys.CustomToolRegistrationEnabled, EditorPrefType.Bool },
             { EditorPrefKeys.TelemetryDisabled, EditorPrefType.Bool },
             { EditorPrefKeys.DevModeForceServerRefresh, EditorPrefType.Bool },
+            { EditorPrefKeys.UseBetaServer, EditorPrefType.Bool },
             { EditorPrefKeys.ProjectScopedToolsLocalHttp, EditorPrefType.Bool },
             
             // Integer prefs
@@ -105,7 +108,39 @@ namespace MCPForUnity.Editor.Windows
             }
             
             visualTree.CloneTree(rootVisualElement);
-            
+
+            // Add search bar container at the top
+            var searchContainer = new VisualElement();
+            searchContainer.style.flexDirection = FlexDirection.Row;
+            searchContainer.style.marginTop = 8;
+            searchContainer.style.marginBottom = 20;
+            searchContainer.style.marginLeft = 4;
+            searchContainer.style.marginRight = 4;
+
+            searchField = new TextField("Search");
+            searchField.style.flexGrow = 1;
+            searchField.style.height = 28;
+            searchField.style.paddingTop = 2;
+            searchField.style.paddingBottom = 2;
+            searchField.labelElement.style.unityFontStyleAndWeight = FontStyle.Bold;
+            searchField.RegisterValueChangedCallback(evt =>
+            {
+                searchFilter = evt.newValue ?? "";
+                RefreshPrefs();
+            });
+
+            var refreshButton = new Button(RefreshPrefs);
+            refreshButton.text = "↻";
+            refreshButton.tooltip = "Refresh prefs";
+            refreshButton.style.width = 30;
+            refreshButton.style.height = 28;
+            refreshButton.style.marginLeft = 6;
+            refreshButton.style.backgroundColor = new Color(0.9f, 0.5f, 0.1f);
+
+            searchContainer.Add(searchField);
+            searchContainer.Add(refreshButton);
+            rootVisualElement.Insert(0, searchContainer);
+
             // Get references
             scrollView = rootVisualElement.Q<ScrollView>("scroll-view");
             prefsContainer = rootVisualElement.Q<VisualElement>("prefs-container");
@@ -154,13 +189,23 @@ namespace MCPForUnity.Editor.Windows
             
             // Sort keys
             allKeys.Sort();
-            
+
+            // Pre-trim filter once outside the loop
+            var filter = searchFilter?.Trim();
+
             // Create items for existing prefs
             foreach (var key in allKeys)
             {
                 // Skip Customer UUID but show everything else that's defined
                 if (key != EditorPrefKeys.CustomerUuid)
                 {
+                    // Apply search filter using OrdinalIgnoreCase for fewer allocations
+                    if (!string.IsNullOrEmpty(filter) &&
+                        key.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+                    {
+                        continue;
+                    }
+
                     var item = CreateEditorPrefItem(key);
                     if (item != null)
                     {

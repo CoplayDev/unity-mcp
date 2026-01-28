@@ -474,7 +474,8 @@ def custom_tool(tool_name: str, params: str):
     except json.JSONDecodeError as e:
         print_error(f"Invalid JSON for params: {e}")
         print_info("Example: --params '{\"key\":\"value\"}'")
-        print_info("Tip: wrap JSON in single quotes to avoid shell escaping issues.")
+        print_info(
+            "Tip: wrap JSON in single quotes to avoid shell escaping issues.")
         sys.exit(1)
 
     try:
@@ -486,14 +487,16 @@ def custom_tool(tool_name: str, params: str):
         if result.get("success"):
             print_success(f"Executed custom tool: {tool_name}")
         else:
-            message = (result.get("message") or result.get("error") or "").lower()
+            message = (result.get("message")
+                       or result.get("error") or "").lower()
             if "not found" in message and "tool" in message:
                 try:
                     tools_result = run_list_custom_tools(config)
                     tools = tools_result.get("tools")
                     if tools is None:
                         data = tools_result.get("data", {})
-                        tools = data.get("tools") if isinstance(data, dict) else None
+                        tools = data.get("tools") if isinstance(
+                            data, dict) else None
                     names = [
                         t.get("name") for t in tools if isinstance(t, dict) and t.get("name")
                     ] if isinstance(tools, list) else []

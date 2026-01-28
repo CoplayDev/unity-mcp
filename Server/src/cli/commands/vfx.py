@@ -64,7 +64,8 @@ def particle_info(target: str, search_method: Optional[str]):
         params["searchMethod"] = search_method
 
     try:
-        result = run_command("manage_vfx", _normalize_vfx_params(params), config)
+        result = run_command(
+            "manage_vfx", _normalize_vfx_params(params), config)
         click.echo(format_output(result, config.format))
     except UnityConnectionError as e:
         print_error(str(e))
@@ -91,7 +92,8 @@ def particle_play(target: str, with_children: bool, search_method: Optional[str]
         params["searchMethod"] = search_method
 
     try:
-        result = run_command("manage_vfx", _normalize_vfx_params(params), config)
+        result = run_command(
+            "manage_vfx", _normalize_vfx_params(params), config)
         click.echo(format_output(result, config.format))
         if result.get("success"):
             print_success(f"Playing particle system: {target}")
@@ -114,7 +116,8 @@ def particle_stop(target: str, with_children: bool, search_method: Optional[str]
         params["searchMethod"] = search_method
 
     try:
-        result = run_command("manage_vfx", _normalize_vfx_params(params), config)
+        result = run_command(
+            "manage_vfx", _normalize_vfx_params(params), config)
         click.echo(format_output(result, config.format))
         if result.get("success"):
             print_success(f"Stopped particle system: {target}")
@@ -134,7 +137,8 @@ def particle_pause(target: str, search_method: Optional[str]):
         params["searchMethod"] = search_method
 
     try:
-        result = run_command("manage_vfx", _normalize_vfx_params(params), config)
+        result = run_command(
+            "manage_vfx", _normalize_vfx_params(params), config)
         click.echo(format_output(result, config.format))
     except UnityConnectionError as e:
         print_error(str(e))
@@ -155,7 +159,8 @@ def particle_restart(target: str, with_children: bool, search_method: Optional[s
         params["searchMethod"] = search_method
 
     try:
-        result = run_command("manage_vfx", _normalize_vfx_params(params), config)
+        result = run_command(
+            "manage_vfx", _normalize_vfx_params(params), config)
         click.echo(format_output(result, config.format))
     except UnityConnectionError as e:
         print_error(str(e))
@@ -176,7 +181,8 @@ def particle_clear(target: str, with_children: bool, search_method: Optional[str
         params["searchMethod"] = search_method
 
     try:
-        result = run_command("manage_vfx", _normalize_vfx_params(params), config)
+        result = run_command(
+            "manage_vfx", _normalize_vfx_params(params), config)
         click.echo(format_output(result, config.format))
     except UnityConnectionError as e:
         print_error(str(e))
@@ -209,7 +215,8 @@ def line_info(target: str, search_method: Optional[str]):
         params["searchMethod"] = search_method
 
     try:
-        result = run_command("manage_vfx", _normalize_vfx_params(params), config)
+        result = run_command(
+            "manage_vfx", _normalize_vfx_params(params), config)
         click.echo(format_output(result, config.format))
     except UnityConnectionError as e:
         print_error(str(e))
@@ -244,7 +251,8 @@ def line_set_positions(target: str, positions: str, search_method: Optional[str]
         params["searchMethod"] = search_method
 
     try:
-        result = run_command("manage_vfx", _normalize_vfx_params(params), config)
+        result = run_command(
+            "manage_vfx", _normalize_vfx_params(params), config)
         click.echo(format_output(result, config.format))
     except UnityConnectionError as e:
         print_error(str(e))
@@ -274,7 +282,8 @@ def line_create_line(target: str, start: Tuple[float, float, float], end: Tuple[
         params["searchMethod"] = search_method
 
     try:
-        result = run_command("manage_vfx", _normalize_vfx_params(params), config)
+        result = run_command(
+            "manage_vfx", _normalize_vfx_params(params), config)
         click.echo(format_output(result, config.format))
     except UnityConnectionError as e:
         print_error(str(e))
@@ -307,7 +316,8 @@ def line_create_circle(target: str, center: Tuple[float, float, float], radius: 
         params["searchMethod"] = search_method
 
     try:
-        result = run_command("manage_vfx", _normalize_vfx_params(params), config)
+        result = run_command(
+            "manage_vfx", _normalize_vfx_params(params), config)
         click.echo(format_output(result, config.format))
     except UnityConnectionError as e:
         print_error(str(e))
@@ -325,7 +335,8 @@ def line_clear(target: str, search_method: Optional[str]):
         params["searchMethod"] = search_method
 
     try:
-        result = run_command("manage_vfx", _normalize_vfx_params(params), config)
+        result = run_command(
+            "manage_vfx", _normalize_vfx_params(params), config)
         click.echo(format_output(result, config.format))
     except UnityConnectionError as e:
         print_error(str(e))
@@ -353,7 +364,8 @@ def trail_info(target: str, search_method: Optional[str]):
         params["searchMethod"] = search_method
 
     try:
-        result = run_command("manage_vfx", _normalize_vfx_params(params), config)
+        result = run_command(
+            "manage_vfx", _normalize_vfx_params(params), config)
         click.echo(format_output(result, config.format))
     except UnityConnectionError as e:
         print_error(str(e))
@@ -381,7 +393,8 @@ def trail_set_time(target: str, duration: float, search_method: Optional[str]):
         params["searchMethod"] = search_method
 
     try:
-        result = run_command("manage_vfx", _normalize_vfx_params(params), config)
+        result = run_command(
+            "manage_vfx", _normalize_vfx_params(params), config)
         click.echo(format_output(result, config.format))
     except UnityConnectionError as e:
         print_error(str(e))
@@ -399,7 +412,8 @@ def trail_clear(target: str, search_method: Optional[str]):
         params["searchMethod"] = search_method
 
     try:
-        result = run_command("manage_vfx", _normalize_vfx_params(params), config)
+        result = run_command(
+            "manage_vfx", _normalize_vfx_params(params), config)
         click.echo(format_output(result, config.format))
     except UnityConnectionError as e:
         print_error(str(e))
@@ -453,7 +467,8 @@ def vfx_raw(action: str, target: Optional[str], params: str, search_method: Opti
     # Merge extra params
     request_params.update(extra_params)
     try:
-        result = run_command("manage_vfx", _normalize_vfx_params(request_params), config)
+        result = run_command(
+            "manage_vfx", _normalize_vfx_params(request_params), config)
         click.echo(format_output(result, config.format))
     except UnityConnectionError as e:
         print_error(str(e))

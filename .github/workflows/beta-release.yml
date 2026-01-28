@@ -1,0 +1,79 @@
+name: Beta Release (PyPI Pre-release)
+
+concurrency:
+  group: beta-release
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - beta
+    paths:
+      - "Server/**"
+
+jobs:
+  publish_pypi_prerelease:
+    name: Publish beta to PyPI (pre-release)
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mcpforunityserver
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+          enable-cache: true
+          cache-dependency-glob: "Server/uv.lock"
+
+      - name: Generate beta version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          RAW_VERSION=$(grep -oP '(?<=version = ")[^"]+' Server/pyproject.toml)
+          # Strip any existing pre-release suffix (a, b, rc, dev, post) for safe parsing
+          # e.g., "9.2.0b1" -> "9.2.0", "9.2.0.dev1" -> "9.2.0"
+          BASE_VERSION=$(echo "$RAW_VERSION" | sed -E 's/(a|b|rc|\.dev|\.post)[0-9]+$//')
+          # Validate we have a proper X.Y.Z format
+          if ! [[ "$BASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Could not parse version '$RAW_VERSION' -> '$BASE_VERSION'" >&2
+            exit 1
+          fi
+          # Bump minor version and use beta suffix (PEP 440 compliant: X.Y+1.0bN)
+          # This ensures beta is "newer" than the stable release
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
+          NEXT_MINOR=$((MINOR + 1))
+          BETA_NUMBER="$(date +%Y%m%d%H%M%S)"
+          BETA_VERSION="${MAJOR}.${NEXT_MINOR}.0b${BETA_NUMBER}"
+          echo "Raw version: $RAW_VERSION"
+          echo "Base version: $BASE_VERSION"
+          echo "Beta version: $BETA_VERSION"
+          echo "beta_version=$BETA_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Update version for beta release
+        env:
+          BETA_VERSION: ${{ steps.version.outputs.beta_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i "s/^version = .*/version = \"${BETA_VERSION}\"/" Server/pyproject.toml
+          echo "Updated pyproject.toml:"
+          grep "^version" Server/pyproject.toml
+
+      - name: Build a binary wheel and a source tarball
+        shell: bash
+        run: uv build
+        working-directory: ./Server
+
+      - name: Publish distribution to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: Server/dist/

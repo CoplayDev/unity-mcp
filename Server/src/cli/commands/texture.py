@@ -17,7 +17,8 @@ def try_parse_json(value: str, context: str) -> Any:
     except json.JSONDecodeError:
         # Try to fix common shell quoting issues (single quotes, Python bools)
         try:
-            fixed = value.replace("'", '"').replace("True", "true").replace("False", "false")
+            fixed = value.replace("'", '"').replace(
+                "True", "true").replace("False", "false")
             return json.loads(fixed)
         except json.JSONDecodeError as e:
             print_error(f"Invalid JSON for {context}: {e}")
@@ -52,7 +53,8 @@ _WRAP_MODES = {
     "mirror_once": "MirrorOnce",
 }
 
-_FILTER_MODES = {"point": "Point", "bilinear": "Bilinear", "trilinear": "Trilinear"}
+_FILTER_MODES = {"point": "Point",
+                 "bilinear": "Bilinear", "trilinear": "Trilinear"}
 
 _COMPRESSIONS = {
     "none": "Uncompressed",
@@ -61,7 +63,8 @@ _COMPRESSIONS = {
     "high_quality": "CompressedHQ",
 }
 
-_SPRITE_MODES = {"single": "Single", "multiple": "Multiple", "polygon": "Polygon"}
+_SPRITE_MODES = {"single": "Single",
+                 "multiple": "Multiple", "polygon": "Polygon"}
 
 _SPRITE_MESH_TYPES = {"full_rect": "FullRect", "tight": "Tight"}
 
@@ -76,10 +79,12 @@ def _validate_texture_dimensions(width: int, height: int) -> list[str]:
         raise ValueError("width and height must be positive")
     warnings: list[str] = []
     if width > _MAX_TEXTURE_DIMENSION or height > _MAX_TEXTURE_DIMENSION:
-        warnings.append(f"width and height should be <= {_MAX_TEXTURE_DIMENSION} (got {width}x{height})")
+        warnings.append(
+            f"width and height should be <= {_MAX_TEXTURE_DIMENSION} (got {width}x{height})")
     total_pixels = width * height
     if total_pixels > _MAX_TEXTURE_PIXELS:
-        warnings.append(f"width*height should be <= {_MAX_TEXTURE_PIXELS} (got {width}x{height})")
+        warnings.append(
+            f"width*height should be <= {_MAX_TEXTURE_PIXELS} (got {width}x{height})")
     return warnings
 
 
@@ -129,8 +134,10 @@ def _normalize_color(value: Any, context: str) -> list[int]:
                     return [int(round(float(c) * 255)) for c in value]
                 return [int(c) for c in value]
             except (TypeError, ValueError):
-                raise ValueError(f"{context} values must be numeric, got {value}")
-        raise ValueError(f"{context} must have 3 or 4 components, got {len(value)}")
+                raise ValueError(
+                    f"{context} values must be numeric, got {value}")
+        raise ValueError(
+            f"{context} must have 3 or 4 components, got {len(value)}")
 
     raise ValueError(f"{context} must be a list or hex string")
 
@@ -159,7 +166,8 @@ def _normalize_pixels(value: Any, width: int, height: int, context: str) -> list
     if isinstance(value, list):
         expected_count = width * height
         if len(value) != expected_count:
-            raise ValueError(f"{context} must have {expected_count} entries, got {len(value)}")
+            raise ValueError(
+                f"{context} must have {expected_count} entries, got {len(value)}")
         return [_normalize_color(pixel, f"{context} pixel") for pixel in value]
     raise ValueError(f"{context} must be a list or base64 string")
 
@@ -178,14 +186,16 @@ def _normalize_set_pixels(value: Any) -> dict[str, Any]:
         width = value.get("width")
         height = value.get("height")
         if width is None or height is None:
-            raise ValueError("set-pixels requires width and height when pixels are provided")
+            raise ValueError(
+                "set-pixels requires width and height when pixels are provided")
         width = int(width)
         height = int(height)
         if width <= 0 or height <= 0:
             raise ValueError("set-pixels width and height must be positive")
         result["width"] = width
         result["height"] = height
-        result["pixels"] = _normalize_pixels(value["pixels"], width, height, "set-pixels pixels")
+        result["pixels"] = _normalize_pixels(
+            value["pixels"], width, height, "set-pixels pixels")
 
     if "color" in value:
         result["color"] = _normalize_color(value["color"], "set-pixels color")
@@ -242,9 +252,11 @@ def _normalize_import_settings(value: Any) -> dict[str, Any]:
     result: dict[str, Any] = {}
 
     if "texture_type" in value:
-        result["textureType"] = _map_enum(value["texture_type"], _TEXTURE_TYPES)
+        result["textureType"] = _map_enum(
+            value["texture_type"], _TEXTURE_TYPES)
     if "texture_shape" in value:
-        result["textureShape"] = _map_enum(value["texture_shape"], _TEXTURE_SHAPES)
+        result["textureShape"] = _map_enum(
+            value["texture_shape"], _TEXTURE_SHAPES)
 
     for snake, camel in [
         ("srgb", "sRGBTexture"),
@@ -257,7 +269,8 @@ def _normalize_import_settings(value: Any) -> dict[str, Any]:
             result[camel] = _coerce_bool(value[snake], snake)
 
     if "alpha_source" in value:
-        result["alphaSource"] = _map_enum(value["alpha_source"], _ALPHA_SOURCES)
+        result["alphaSource"] = _map_enum(
+            value["alpha_source"], _ALPHA_SOURCES)
 
     for snake, camel in [("wrap_mode", "wrapMode"), ("wrap_mode_u", "wrapModeU"), ("wrap_mode_v", "wrapModeV")]:
         if snake in value:
@@ -266,9 +279,11 @@ def _normalize_import_settings(value: Any) -> dict[str, Any]:
     if "filter_mode" in value:
         result["filterMode"] = _map_enum(value["filter_mode"], _FILTER_MODES)
     if "mipmap_filter" in value:
-        result["mipmapFilter"] = _map_enum(value["mipmap_filter"], _MIPMAP_FILTERS)
+        result["mipmapFilter"] = _map_enum(
+            value["mipmap_filter"], _MIPMAP_FILTERS)
     if "compression" in value:
-        result["textureCompression"] = _map_enum(value["compression"], _COMPRESSIONS)
+        result["textureCompression"] = _map_enum(
+            value["compression"], _COMPRESSIONS)
 
     if "aniso_level" in value:
         result["anisoLevel"] = int(value["aniso_level"])
@@ -278,13 +293,15 @@ def _normalize_import_settings(value: Any) -> dict[str, Any]:
         result["compressionQuality"] = int(value["compression_quality"])
 
     if "sprite_mode" in value:
-        result["spriteImportMode"] = _map_enum(value["sprite_mode"], _SPRITE_MODES)
+        result["spriteImportMode"] = _map_enum(
+            value["sprite_mode"], _SPRITE_MODES)
     if "sprite_pixels_per_unit" in value:
         result["spritePixelsPerUnit"] = float(value["sprite_pixels_per_unit"])
     if "sprite_pivot" in value:
         result["spritePivot"] = value["sprite_pivot"]
     if "sprite_mesh_type" in value:
-        result["spriteMeshType"] = _map_enum(value["sprite_mesh_type"], _SPRITE_MESH_TYPES)
+        result["spriteMeshType"] = _map_enum(
+            value["sprite_mesh_type"], _SPRITE_MESH_TYPES)
     if "sprite_extrude" in value:
         result["spriteExtrude"] = int(value["sprite_extrude"])
 
@@ -302,6 +319,7 @@ def _normalize_import_settings(value: Any) -> dict[str, Any]:
             result[key] = val
 
     return result
+
 
 @click.group()
 def texture():
@@ -334,7 +352,8 @@ def create(path: str, width: int, height: int, image_path: Optional[str], color:
     config = get_config()
     if image_path:
         if color or pattern or palette:
-            print_error("image-path cannot be combined with color, pattern, or palette.")
+            print_error(
+                "image-path cannot be combined with color, pattern, or palette.")
             sys.exit(1)
     else:
         try:
@@ -374,7 +393,8 @@ def create(path: str, width: int, height: int, image_path: Optional[str], color:
 
     if import_settings:
         try:
-            params["importSettings"] = _normalize_import_settings(import_settings)
+            params["importSettings"] = _normalize_import_settings(
+                import_settings)
         except ValueError as e:
             print_error(str(e))
             sys.exit(1)
@@ -446,7 +466,7 @@ def sprite(path: str, width: int, height: int, image_path: Optional[str], color:
         except ValueError as e:
             print_error(str(e))
             sys.exit(1)
-    
+
     # Only default pattern if no color is specified
     if pattern:
         params["pattern"] = pattern
@@ -483,7 +503,7 @@ def modify(path: str, set_pixels: str):
         "action": "modify",
         "path": path,
     }
-    
+
     try:
         params["setPixels"] = _normalize_set_pixels(set_pixels)
     except ValueError as e:
@@ -508,7 +528,8 @@ def delete(path: str):
     config = get_config()
 
     try:
-        result = run_command("manage_texture", {"action": "delete", "path": path}, config)
+        result = run_command("manage_texture", {
+                             "action": "delete", "path": path}, config)
         click.echo(format_output(result, config.format))
         if result.get("success"):
             print_success(f"Deleted texture: {path}")

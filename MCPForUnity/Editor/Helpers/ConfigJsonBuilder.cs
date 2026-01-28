@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Clients.Configurators;
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
 using Newtonsoft.Json;
@@ -170,10 +170,11 @@ namespace MCPForUnity.Editor.Helpers
                 args.Add("--no-cache");
                 args.Add("--refresh");
             }
-            if (!string.IsNullOrEmpty(fromUrl))
+
+            // Use centralized helper for beta server / prerelease args
+            foreach (var arg in AssetPathUtility.GetBetaServerFromArgsList())
             {
-                args.Add("--from");
-                args.Add(fromUrl);
+                args.Add(arg);
             }
             args.Add(packageName);
 

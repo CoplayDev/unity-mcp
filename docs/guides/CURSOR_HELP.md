@@ -31,12 +31,13 @@ This sets an override stored in the Editor (key: `MCPForUnity.UvPath`) so MCP fo
 {
   "mcpServers": {
     "unityMCP": {
-      "command": "C:\\Users\\YOU\\AppData\\Local\\Microsoft\\WinGet\\Links\\uv.exe",
+      "command": "C:\\Users\\YOU\\AppData\\Local\\Microsoft\\WinGet\\Links\\uvx.exe",
       "args": [
-        "--directory",
-        "C:\\Users\\YOU\\AppData\\Local\\Programs\\UnityMCP\\UnityMcpServer\\src",
-        "run",
-        "server.py"
+        "--from",
+        "mcpforunityserver",
+        "mcp-for-unity",
+        "--transport",
+        "stdio"
       ]
     }
   }
@@ -46,7 +47,7 @@ This sets an override stored in the Editor (key: `MCPForUnity.UvPath`) so MCP fo
 - Manually run the same command in PowerShell to confirm it launches:
 
 ```powershell
-"C:\Users\YOU\AppData\Local\Microsoft\WinGet\Links\uv.exe" --directory "C:\Users\YOU\AppData\Local\Programs\UnityMCP\UnityMcpServer\src" run server.py
+"C:\Users\YOU\AppData\Local\Microsoft\WinGet\Links\uvx.exe" --from mcpforunityserver mcp-for-unity --transport stdio
 ```
 
 If that runs without error, restart Cursor and it should connect.
@@ -81,5 +82,4 @@ References
 - WinGet install locations: [Super User](https://superuser.com/questions/1739292/how-to-know-where-winget-installed-a-program)
 - GUI client PATH caveats (Cursor): [Cursor community thread](https://forum.cursor.com/t/mcp-feature-client-closed-fix/54651?page=4)
 - uv tools install location (`~/.local/bin`): [Astral docs](https://docs.astral.sh/uv/concepts/tools/)
-
 
