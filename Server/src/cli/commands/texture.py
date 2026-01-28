@@ -1,7 +1,6 @@
 """Texture CLI commands."""
 
 import sys
-import json
 import click
 from typing import Optional, Any
 

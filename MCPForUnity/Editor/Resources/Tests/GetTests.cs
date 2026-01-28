@@ -71,21 +71,27 @@ namespace MCPForUnity.Editor.Resources.Tests
                 filteredTests = allTests.ToList();
             }
 
-            // Parse pagination with custom max
-            var pagination = PaginationRequest.FromParams(@params, DEFAULT_PAGE_SIZE);
+            // Clamp page_size before parsing pagination to ensure cursor is computed correctly
+            int requestedPageSize = ParamCoercion.CoerceInt(
+                @params?["page_size"] ?? @params?["pageSize"],
+                DEFAULT_PAGE_SIZE
+            );
+            int clampedPageSize = System.Math.Min(requestedPageSize, MAX_PAGE_SIZE);
+            if (clampedPageSize <= 0) clampedPageSize = DEFAULT_PAGE_SIZE;
 
-            // Clamp page size to max
-            if (pagination.PageSize > MAX_PAGE_SIZE)
-            {
-                pagination.PageSize = MAX_PAGE_SIZE;
-            }
+            // Create modified params with clamped page_size for cursor calculation
+            var paginationParams = new JObject(@params);
+            paginationParams["page_size"] = clampedPageSize;
+
+            // Parse pagination with clamped page size
+            var pagination = PaginationRequest.FromParams(paginationParams, DEFAULT_PAGE_SIZE);
 
             // Create paginated response
             var response = PaginationResponse<Dictionary<string, string>>.Create(filteredTests, pagination);
 
-            string message = nameFilter != null
-                ? $"Retrieved {response.Items.Count} of {response.TotalCount} tests matching '{nameFilter}' (page {response.Cursor}/{response.TotalCount})"
-                : $"Retrieved {response.Items.Count} of {response.TotalCount} tests (page {response.Cursor}/{response.TotalCount})";
+            string message = !string.IsNullOrEmpty(nameFilter)
+                ? $"Retrieved {response.Items.Count} of {response.TotalCount} tests matching '{nameFilter}' (cursor {response.Cursor})"
+                : $"Retrieved {response.Items.Count} of {response.TotalCount} tests (cursor {response.Cursor})";
 
             return new SuccessResponse(message, response);
         }
@@ -153,14 +159,20 @@ namespace MCPForUnity.Editor.Resources.Tests
                 filteredTests = allTests.ToList();
             }
 
-            // Parse pagination with custom max
-            var pagination = PaginationRequest.FromParams(@params, DEFAULT_PAGE_SIZE);
+            // Clamp page_size before parsing pagination to ensure cursor is computed correctly
+            int requestedPageSize = ParamCoercion.CoerceInt(
+                @params?["page_size"] ?? @params?["pageSize"],
+                DEFAULT_PAGE_SIZE
+            );
+            int clampedPageSize = System.Math.Min(requestedPageSize, MAX_PAGE_SIZE);
+            if (clampedPageSize <= 0) clampedPageSize = DEFAULT_PAGE_SIZE;
 
-            // Clamp page size to max
-            if (pagination.PageSize > MAX_PAGE_SIZE)
-            {
-                pagination.PageSize = MAX_PAGE_SIZE;
-            }
+            // Create modified params with clamped page_size for cursor calculation
+            var paginationParams = new JObject(@params);
+            paginationParams["page_size"] = clampedPageSize;
+
+            // Parse pagination with clamped page size
+            var pagination = PaginationRequest.FromParams(paginationParams, DEFAULT_PAGE_SIZE);
 
             // Create paginated response
             var response = PaginationResponse<Dictionary<string, string>>.Create(filteredTests, pagination);
