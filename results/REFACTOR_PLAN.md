@@ -428,6 +428,32 @@ Break 372-line mega-utility into:
 - `script.py` — verify `--force` consistency
 - All command files — audit for `-f` short flag availability
 
+### P2-9: Focus Nudge Improvements (Utils)
+**Impact**: More reliable automated testing, less manual intervention
+**Effort**: 1-2 hours
+**Risk**: Low
+
+**Problem**: Focus nudge mechanism fails to keep Unity responsive during test runs:
+
+1. **Short focus duration**: `focus_duration_s = 0.5` is too short
+   - macOS re-throttles Unity almost immediately after focus returns to terminal
+   - Unity doesn't get enough time to make meaningful test progress
+
+2. **Rate limiter too aggressive**: `_MIN_NUDGE_INTERVAL_S = 5.0`
+   - After a nudge, Unity gets throttled again within seconds
+   - Rate limiter prevents re-nudging for 5 seconds
+   - Creates cycle where Unity is throttled most of the time
+
+3. **Symptom**: Tests get stuck requiring manual Unity focus
+
+**Proposed fixes**:
+1. Increase `focus_duration_s` from 0.5s to 2-3s
+2. Reduce rate limit from 5s to 2-3s
+3. Consider keeping Unity focused during entire test run (focus once at start, restore at end)
+4. Add configuration option for focus behavior during tests
+
+**File to update**: `Server/src/utils/focus_nudge.py`
+
 ---
 
 ## P3: Long-term / Larger Refactors
