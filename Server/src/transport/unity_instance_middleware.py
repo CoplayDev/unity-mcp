@@ -188,6 +188,8 @@ class UnityInstanceMiddleware(Middleware):
 
     async def _resolve_user_id(self) -> str | None:
         """Extract user_id from the current HTTP request's API key."""
+        if not config.http_remote_hosted:
+            return None
         # Lazy import to avoid circular dependencies (same pattern as _maybe_autoselect_instance).
         from transport.unity_transport import _resolve_user_id_from_request
         return await _resolve_user_id_from_request()
