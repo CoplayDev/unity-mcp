@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Clients.Configurators;
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
 using Newtonsoft.Json;
@@ -72,6 +72,19 @@ namespace MCPForUnity.Editor.Helpers
                 // Remove command/args if they exist from previous config
                 if (unity["command"] != null) unity.Remove("command");
                 if (unity["args"] != null) unity.Remove("args");
+
+                // Add API key header if configured (for remote-hosted mode)
+                string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
+                if (!string.IsNullOrEmpty(apiKey))
+                {
+                    var headers = new JObject { ["X-API-Key"] = apiKey };
+                    unity["headers"] = headers;
+                }
+                else
+                {
+                    // Remove headers if API key is not set
+                    if (unity["headers"] != null) unity.Remove("headers");
+                }
 
                 if (isVSCode)
                 {

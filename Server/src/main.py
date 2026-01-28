@@ -3,6 +3,7 @@ from transport.unity_instance_middleware import (
     UnityInstanceMiddleware,
     get_unity_instance_middleware
 )
+from services.api_key_service import ApiKeyService
 from transport.legacy.unity_connection import get_unity_connection_pool, UnityConnectionPool
 from services.tools import register_all_tools
 from core.telemetry import record_milestone, record_telemetry, MilestoneType, RecordType, get_package_version
@@ -308,6 +309,7 @@ Payload sizing & paging (important):
   - Keep `generate_preview=false` unless you explicitly need thumbnails (previews may include large base64 payloads).
 """
 
+
 def _normalize_instance_token(instance_token: str | None) -> tuple[str | None, str | None]:
     if not instance_token:
         return None, None
@@ -315,6 +317,7 @@ def _normalize_instance_token(instance_token: str | None) -> tuple[str | None, s
         name_part, _, hash_part = instance_token.partition("@")
         return (name_part or None), (hash_part or None)
     return None, instance_token
+
 
 def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
     mcp = FastMCP(
@@ -333,6 +336,22 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
             "status": "healthy",
             "timestamp": time.time(),
             "message": "MCP for Unity server is running"
+        })
+
+    @mcp.custom_route("/api/auth/login-url", methods=["GET"])
+    async def auth_login_url(_: Request) -> JSONResponse:
+        """Return the login URL for users to obtain/manage API keys."""
+        if not config.api_key_login_url:
+            return JSONResponse(
+                {
+                    "success": False,
+                    "error": "API key management not configured. Contact your server administrator.",
+                },
+                status_code=404,
+            )
+        return JSONResponse({
+            "success": True,
+            "login_url": config.api_key_login_url,
         })
 
     # Only expose CLI routes if running locally (not in remote hosted mode)
@@ -361,7 +380,8 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
                 # Find target session
                 session_id = None
                 session_details = None
-                instance_name, instance_hash = _normalize_instance_token(unity_instance)
+                instance_name, instance_hash = _normalize_instance_token(
+                    unity_instance)
                 if unity_instance:
                     # Try to match by hash or project name
                     for sid, details in sessions.sessions.items():
@@ -388,19 +408,23 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
                         tool_name = None
                         tool_params = {}
                         if isinstance(params, dict):
-                            tool_name = params.get("tool_name") or params.get("name")
-                            tool_params = params.get("parameters") or params.get("params") or {}
+                            tool_name = params.get(
+                                "tool_name") or params.get("name")
+                            tool_params = params.get(
+                                "parameters") or params.get("params") or {}
 
                         if not tool_name:
                             return JSONResponse(
-                                {"success": False, "error": "Missing 'tool_name' for execute_custom_tool"},
+                                {"success": False,
+                                    "error": "Missing 'tool_name' for execute_custom_tool"},
                                 status_code=400,
                             )
                         if tool_params is None:
                             tool_params = {}
                         if not isinstance(tool_params, dict):
                             return JSONResponse(
-                                {"success": False, "error": "Tool parameters must be an object/dict"},
+                                {"success": False,
+                                    "error": "Tool parameters must be an object/dict"},
                                 status_code=400,
                             )
 
@@ -413,7 +437,8 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
                             unity_instance_hint)
                         if not project_id:
                             return JSONResponse(
-                                {"success": False, "error": "Could not resolve project id for custom tool"},
+                                {"success": False,
+                                    "error": "Could not resolve project id for custom tool"},
                                 status_code=400,
                             )
 
@@ -448,13 +473,14 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
                 return JSONResponse({"success": True, "instances": instances})
             except Exception as e:
                 return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-        
+
         @mcp.custom_route("/api/custom-tools", methods=["GET"])
         async def cli_custom_tools_route(request: Request) -> JSONResponse:
             """REST endpoint to list custom tools for the active Unity project."""
             try:
                 unity_instance = request.query_params.get("instance")
-                instance_name, instance_hash = _normalize_instance_token(unity_instance)
+                instance_name, instance_hash = _normalize_instance_token(
+                    unity_instance)
 
                 sessions = await PluginHub.get_sessions()
                 if not sessions.sessions:
@@ -490,7 +516,8 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
                     unity_instance_hint)
                 if not project_id:
                     return JSONResponse(
-                        {"success": False, "error": "Could not resolve project id for custom tools"},
+                        {"success": False,
+                            "error": "Could not resolve project id for custom tools"},
                         status_code=400,
                     )
 
@@ -515,6 +542,20 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
     unity_middleware = get_unity_instance_middleware()
     mcp.add_middleware(unity_middleware)
     logger.info("Registered Unity instance middleware for session-based routing")
+
+    # Initialize API key authentication if in remote-hosted mode
+    if config.http_remote_hosted and config.api_key_validation_url:
+        ApiKeyService(
+            validation_url=config.api_key_validation_url,
+            cache_ttl=config.api_key_cache_ttl,
+            service_token_header=config.api_key_service_token_header,
+            service_token=config.api_key_service_token,
+        )
+        logger.info(
+            "Initialized API key authentication service (validation URL: %s, TTL: %.0fs)",
+            config.api_key_validation_url,
+            config.api_key_cache_ttl,
+        )
 
     # Mount plugin websocket hub at /hub/plugin when HTTP transport is active
     existing_routes = [
@@ -608,6 +649,48 @@ Examples:
         help="Treat HTTP transport as remotely hosted (forces explicit Unity instance selection)."
     )
     parser.add_argument(
+        "--api-key-validation-url",
+        type=str,
+        default=None,
+        metavar="URL",
+        help="External URL to validate API keys (POST with {'api_key': '...'}). "
+             "Required when --http-remote-hosted is set. "
+             "Can also set via UNITY_MCP_API_KEY_VALIDATION_URL."
+    )
+    parser.add_argument(
+        "--api-key-login-url",
+        type=str,
+        default=None,
+        metavar="URL",
+        help="URL where users can obtain/manage API keys. "
+             "Returned by /api/auth/login-url endpoint. "
+             "Can also set via UNITY_MCP_API_KEY_LOGIN_URL."
+    )
+    parser.add_argument(
+        "--api-key-cache-ttl",
+        type=float,
+        default=300.0,
+        metavar="SECONDS",
+        help="Cache TTL for validated API keys in seconds (default: 300). "
+             "Can also set via UNITY_MCP_API_KEY_CACHE_TTL."
+    )
+    parser.add_argument(
+        "--api-key-service-token-header",
+        type=str,
+        default=None,
+        metavar="HEADER",
+        help="Header name for service token sent to validation endpoint (e.g. X-Service-Token). "
+             "Can also set via UNITY_MCP_API_KEY_SERVICE_TOKEN_HEADER."
+    )
+    parser.add_argument(
+        "--api-key-service-token",
+        type=str,
+        default=None,
+        metavar="TOKEN",
+        help="Service token value sent to validation endpoint for server authentication. "
+             "Can also set via UNITY_MCP_API_KEY_SERVICE_TOKEN."
+    )
+    parser.add_argument(
         "--unity-instance-token",
         type=str,
         default=None,
@@ -632,6 +715,44 @@ Examples:
     args = parser.parse_args()
 
     config.http_remote_hosted = bool(args.http_remote_hosted)
+
+    # API key authentication configuration
+    config.api_key_validation_url = (
+        args.api_key_validation_url
+        or os.environ.get("UNITY_MCP_API_KEY_VALIDATION_URL")
+    )
+    config.api_key_login_url = (
+        args.api_key_login_url
+        or os.environ.get("UNITY_MCP_API_KEY_LOGIN_URL")
+    )
+    try:
+        cache_ttl_env = os.environ.get("UNITY_MCP_API_KEY_CACHE_TTL")
+        config.api_key_cache_ttl = (
+            float(cache_ttl_env) if cache_ttl_env else args.api_key_cache_ttl
+        )
+    except ValueError:
+        logger.warning(
+            "Invalid UNITY_MCP_API_KEY_CACHE_TTL value, using default 300.0"
+        )
+        config.api_key_cache_ttl = 300.0
+
+    # Service token for authenticating to validation endpoint
+    config.api_key_service_token_header = (
+        args.api_key_service_token_header
+        or os.environ.get("UNITY_MCP_API_KEY_SERVICE_TOKEN_HEADER")
+    )
+    config.api_key_service_token = (
+        args.api_key_service_token
+        or os.environ.get("UNITY_MCP_API_KEY_SERVICE_TOKEN")
+    )
+
+    # Validate: remote-hosted mode requires API key validation URL
+    if config.http_remote_hosted and not config.api_key_validation_url:
+        logger.error(
+            "--http-remote-hosted requires --api-key-validation-url or "
+            "UNITY_MCP_API_KEY_VALIDATION_URL environment variable"
+        )
+        raise SystemExit(1)
 
     # Set environment variables from command line args
     if args.default_instance:

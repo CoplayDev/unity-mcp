@@ -14,6 +14,16 @@
                 <ui:Label text="HTTP URL:" class="setting-label" />
                 <ui:TextField name="http-url" class="url-field" />
             </ui:VisualElement>
+            <ui:VisualElement name="api-key-row" style="margin-bottom: 4px;">
+                <ui:VisualElement class="setting-row">
+                    <ui:Label text="API Key:" class="setting-label" />
+                    <ui:TextField name="api-key-field" password="true" class="url-field" />
+                </ui:VisualElement>
+                <ui:VisualElement style="flex-direction: row; justify-content: flex-end;">
+                    <ui:Button name="get-api-key-button" text="Get API Key" class="action-button" />
+                    <ui:Button name="clear-api-key-button" text="Clear" class="action-button" />
+                </ui:VisualElement>
+            </ui:VisualElement>
             <ui:VisualElement class="setting-row" name="http-server-control-row">
                 <ui:Label text="Local Server:" class="setting-label" />
                 <ui:Button name="start-http-server-button" text="Start Server" class="action-button start-server-button" />

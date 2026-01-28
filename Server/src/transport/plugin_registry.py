@@ -22,6 +22,7 @@ class PluginSession:
     connected_at: datetime
     tools: dict[str, ToolDefinitionModel] = field(default_factory=dict)
     project_id: str | None = None
+    user_id: str | None = None  # Associated user id (None for local mode)
 
 
 class PluginRegistry:
@@ -30,11 +31,17 @@ class PluginRegistry:
     The registry is optimised for quick lookup by either ``session_id`` or
     ``project_hash`` (which is used as the canonical "instance id" across the
     HTTP command routing stack).
+
+    In remote-hosted mode, sessions are scoped by (user_id, project_hash) composite key
+    to ensure session isolation between users.
     """
 
     def __init__(self) -> None:
         self._sessions: dict[str, PluginSession] = {}
+        # In local mode: project_hash -> session_id
+        # In remote mode: (user_id, project_hash) -> session_id
         self._hash_to_session: dict[str, str] = {}
+        self._user_hash_to_session: dict[tuple[str, str], str] = {}
         self._lock = asyncio.Lock()
 
     async def register(
@@ -43,12 +50,13 @@ class PluginRegistry:
         project_name: str,
         project_hash: str,
         unity_version: str,
+        user_id: str | None = None,
     ) -> PluginSession:
         """Register (or replace) a plugin session.
 
-        If an existing session already claims the same ``project_hash`` it will be
-        replaced, ensuring that reconnect scenarios always map to the latest
-        WebSocket connection.
+        If an existing session already claims the same ``project_hash`` (and ``user_id``
+        in remote-hosted mode) it will be replaced, ensuring that reconnect scenarios
+        always map to the latest WebSocket connection.
         """
 
         async with self._lock:
@@ -60,15 +68,26 @@ class PluginRegistry:
                 unity_version=unity_version,
                 registered_at=now,
                 connected_at=now,
+                user_id=user_id,
             )
 
             # Remove old mapping for this hash if it existed under a different session
-            previous_session_id = self._hash_to_session.get(project_hash)
-            if previous_session_id and previous_session_id != session_id:
-                self._sessions.pop(previous_session_id, None)
+            if user_id:
+                # Remote-hosted mode: use composite key (user_id, project_hash)
+                composite_key = (user_id, project_hash)
+                previous_session_id = self._user_hash_to_session.get(
+                    composite_key)
+                if previous_session_id and previous_session_id != session_id:
+                    self._sessions.pop(previous_session_id, None)
+                self._user_hash_to_session[composite_key] = session_id
+            else:
+                # Local mode: use project_hash only
+                previous_session_id = self._hash_to_session.get(project_hash)
+                if previous_session_id and previous_session_id != session_id:
+                    self._sessions.pop(previous_session_id, None)
+                self._hash_to_session[project_hash] = session_id
 
             self._sessions[session_id] = session
-            self._hash_to_session[project_hash] = session_id
             return session
 
     async def touch(self, session_id: str) -> None:
@@ -84,11 +103,20 @@ class PluginRegistry:
 
         async with self._lock:
             session = self._sessions.pop(session_id, None)
-            if session and session.project_hash in self._hash_to_session:
-                # Only delete the mapping if it still points at the removed session.
-                mapped = self._hash_to_session.get(session.project_hash)
-                if mapped == session_id:
-                    del self._hash_to_session[session.project_hash]
+            if session:
+                # Clean up hash mappings
+                if session.project_hash in self._hash_to_session:
+                    mapped = self._hash_to_session.get(session.project_hash)
+                    if mapped == session_id:
+                        del self._hash_to_session[session.project_hash]
+
+                # Clean up user-scoped mappings
+                if session.user_id:
+                    composite_key = (session.user_id, session.project_hash)
+                    if composite_key in self._user_hash_to_session:
+                        mapped = self._user_hash_to_session.get(composite_key)
+                        if mapped == session_id:
+                            del self._user_hash_to_session[composite_key]
 
     async def register_tools_for_session(self, session_id: str, tools: list[ToolDefinitionModel]) -> None:
         """Register tools for a specific session."""
@@ -108,16 +136,43 @@ class PluginRegistry:
             return self._sessions.get(session_id)
 
     async def get_session_id_by_hash(self, project_hash: str) -> str | None:
-        """Resolve a ``project_hash`` (Unity instance id) to a session id."""
+        """Resolve a ``project_hash`` (Unity instance id) to a session id.
+
+        For local mode (no user scoping). Use get_session_id_by_user_hash for
+        remote-hosted mode with user isolation.
+        """
 
         async with self._lock:
             return self._hash_to_session.get(project_hash)
 
-    async def list_sessions(self) -> dict[str, PluginSession]:
-        """Return a shallow copy of all known sessions."""
+    async def get_session_id_by_user_hash(
+        self, user_id: str, project_hash: str
+    ) -> str | None:
+        """Resolve a (user_id, project_hash) pair to a session id.
+
+        For remote-hosted mode with user isolation.
+        """
 
         async with self._lock:
-            return dict(self._sessions)
+            return self._user_hash_to_session.get((user_id, project_hash))
+
+    async def list_sessions(self, user_id: str | None = None) -> dict[str, PluginSession]:
+        """Return a shallow copy of sessions.
+
+        Args:
+            user_id: If provided, only return sessions for this user (remote-hosted mode).
+                     If None, return all sessions (local mode).
+        """
+
+        async with self._lock:
+            if user_id is None:
+                return dict(self._sessions)
+            else:
+                return {
+                    sid: session
+                    for sid, session in self._sessions.items()
+                    if session.user_id == user_id
+                }
 
 
 __all__ = ["PluginRegistry", "PluginSession"]

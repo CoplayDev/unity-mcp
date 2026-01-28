@@ -604,7 +604,16 @@ namespace MCPForUnity.Editor.Clients
             string args;
             if (useHttpTransport)
             {
-                args = $"mcp add --transport http UnityMCP {httpUrl}";
+                // Add API key header if configured (for remote-hosted mode)
+                string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
+                if (!string.IsNullOrEmpty(apiKey))
+                {
+                    args = $"mcp add --transport http UnityMCP {httpUrl} --header \"X-API-Key: {apiKey}\"";
+                }
+                else
+                {
+                    args = $"mcp add --transport http UnityMCP {httpUrl}";
+                }
             }
             else
             {
@@ -664,7 +673,16 @@ namespace MCPForUnity.Editor.Clients
             if (useHttpTransport)
             {
                 string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
-                args = $"mcp add --transport http UnityMCP {httpUrl}";
+                // Add API key header if configured (for remote-hosted mode)
+                string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
+                if (!string.IsNullOrEmpty(apiKey))
+                {
+                    args = $"mcp add --transport http UnityMCP {httpUrl} --header \"X-API-Key: {apiKey}\"";
+                }
+                else
+                {
+                    args = $"mcp add --transport http UnityMCP {httpUrl}";
+                }
             }
             else
             {
@@ -757,8 +775,10 @@ namespace MCPForUnity.Editor.Clients
             if (useHttpTransport)
             {
                 string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
+                string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
+                string headerArg = !string.IsNullOrEmpty(apiKey) ? $" --header \"X-API-Key: {apiKey}\"" : "";
                 return "# Register the MCP server with Claude Code:\n" +
-                       $"claude mcp add --transport http UnityMCP {httpUrl}\n\n" +
+                       $"claude mcp add --transport http UnityMCP {httpUrl}{headerArg}\n\n" +
                        "# Unregister the MCP server:\n" +
                        "claude mcp remove UnityMCP\n\n" +
                        "# List registered servers:\n" +

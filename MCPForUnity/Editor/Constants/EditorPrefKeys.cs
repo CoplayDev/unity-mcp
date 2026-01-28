@@ -54,5 +54,7 @@ namespace MCPForUnity.Editor.Constants
 
         internal const string TelemetryDisabled = "MCPForUnity.TelemetryDisabled";
         internal const string CustomerUuid = "MCPForUnity.CustomerUUID";
+
+        internal const string ApiKey = "MCPForUnity.ApiKey";
     }
 }
