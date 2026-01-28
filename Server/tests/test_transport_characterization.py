@@ -14,6 +14,7 @@ The tests serve as regression detectors for any future changes to the transport 
 
 import asyncio
 import pytest
+import pytest_asyncio
 from unittest.mock import AsyncMock, Mock, MagicMock, patch, call
 from datetime import datetime, timezone
 import uuid
@@ -68,10 +69,10 @@ def plugin_registry():
     return PluginRegistry()
 
 
-@pytest.fixture
-def configured_plugin_hub(plugin_registry):
+@pytest_asyncio.fixture
+async def configured_plugin_hub(plugin_registry):
     """Configure PluginHub with a registry and event loop."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     PluginHub.configure(plugin_registry, loop)
     yield
     # Cleanup
