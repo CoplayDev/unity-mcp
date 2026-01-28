@@ -23,21 +23,27 @@ namespace MCPForUnity.Editor.Services
 
         private readonly IProcessDetector _processDetector;
         private readonly IPidFileManager _pidFileManager;
+        private readonly IProcessTerminator _processTerminator;
 
         /// <summary>
         /// Creates a new ServerManagementService with default dependencies.
         /// </summary>
-        public ServerManagementService() : this(null, null) { }
+        public ServerManagementService() : this(null, null, null) { }
 
         /// <summary>
         /// Creates a new ServerManagementService with injected dependencies (for testing).
         /// </summary>
         /// <param name="processDetector">Process detector implementation (null for default)</param>
         /// <param name="pidFileManager">PID file manager implementation (null for default)</param>
-        public ServerManagementService(IProcessDetector processDetector, IPidFileManager pidFileManager = null)
+        /// <param name="processTerminator">Process terminator implementation (null for default)</param>
+        public ServerManagementService(
+            IProcessDetector processDetector,
+            IPidFileManager pidFileManager = null,
+            IProcessTerminator processTerminator = null)
         {
             _processDetector = processDetector ?? new ProcessDetector();
             _pidFileManager = pidFileManager ?? new PidFileManager();
+            _processTerminator = processTerminator ?? new ProcessTerminator(_processDetector);
         }
 
         private static string GetProjectRootPath()
@@ -882,54 +888,7 @@ namespace MCPForUnity.Editor.Services
 
         private bool TerminateProcess(int pid)
         {
-            try
-            {
-                string stdout, stderr;
-                if (Application.platform == RuntimePlatform.WindowsEditor)
-                {
-                    // taskkill without /F first; fall back to /F if needed.
-                    bool ok = ExecPath.TryRun("taskkill", $"/PID {pid} /T", Application.dataPath, out stdout, out stderr);
-                    if (!ok)
-                    {
-                        ok = ExecPath.TryRun("taskkill", $"/F /PID {pid} /T", Application.dataPath, out stdout, out stderr);
-                    }
-                    return ok;
-                }
-                else
-                {
-                    // Try a graceful termination first, then escalate if the process is still alive.
-                    // Note: `kill -15` can succeed (exit 0) even if the process takes time to exit,
-                    // so we verify and only escalate when needed.
-                    string killPath = "/bin/kill";
-                    if (!File.Exists(killPath)) killPath = "kill";
-                    ExecPath.TryRun(killPath, $"-15 {pid}", Application.dataPath, out stdout, out stderr);
-
-                    // Wait briefly for graceful shutdown.
-                    var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(8);
-                    while (DateTime.UtcNow < deadline)
-                    {
-                        if (!ProcessExistsUnix(pid))
-                        {
-                            return true;
-                        }
-                        System.Threading.Thread.Sleep(100);
-                    }
-
-                    // Escalate.
-                    ExecPath.TryRun(killPath, $"-9 {pid}", Application.dataPath, out stdout, out stderr);
-                    return !ProcessExistsUnix(pid);
-                }
-            }
-            catch (Exception ex)
-            {
-                McpLog.Error($"Error killing process {pid}: {ex.Message}");
-                return false;
-            }
-        }
-
-        private bool ProcessExistsUnix(int pid)
-        {
-            return _processDetector.ProcessExists(pid);
+            return _processTerminator.Terminate(pid);
         }
 
         /// <summary>
