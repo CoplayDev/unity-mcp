@@ -6,7 +6,7 @@ from typing import Optional
 
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success
-from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.connection import run_command, handle_unity_errors
 from cli.utils.confirmation import confirm_destructive_action
 
 
@@ -18,6 +18,7 @@ def shader():
 
 @shader.command("read")
 @click.argument("path")
+@handle_unity_errors
 def read_shader(path: str):
     """Read a shader file.
 
@@ -32,21 +33,17 @@ def read_shader(path: str):
     name = os.path.splitext(os.path.basename(path))[0]
     directory = os.path.dirname(path)
 
-    try:
-        result = run_command("manage_shader", {
-            "action": "read",
-            "name": name,
-            "path": directory or "Assets/",
-        }, config)
+    result = run_command("manage_shader", {
+        "action": "read",
+        "name": name,
+        "path": directory or "Assets/",
+    }, config)
 
-        # If successful, display the contents nicely
-        if result.get("success") and result.get("data", {}).get("contents"):
-            click.echo(result["data"]["contents"])
-        else:
-            click.echo(format_output(result, config.format))
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    # If successful, display the contents nicely
+    if result.get("success") and result.get("data", {}).get("contents"):
+        click.echo(result["data"]["contents"])
+    else:
+        click.echo(format_output(result, config.format))
 
 
 @shader.command("create")
@@ -68,6 +65,7 @@ def read_shader(path: str):
     type=click.Path(exists=True),
     help="Read shader code from file."
 )
+@handle_unity_errors
 def create_shader(name: str, path: str, contents: Optional[str], file_path: Optional[str]):
     """Create a new shader.
 
@@ -128,19 +126,15 @@ def create_shader(name: str, path: str, contents: Optional[str], file_path: Opti
 }}
 '''
 
-    try:
-        result = run_command("manage_shader", {
-            "action": "create",
-            "name": name,
-            "path": path,
-            "contents": shader_contents,
-        }, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Created shader: {path}/{name}.shader")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_shader", {
+        "action": "create",
+        "name": name,
+        "path": path,
+        "contents": shader_contents,
+    }, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Created shader: {path}/{name}.shader")
 
 
 @shader.command("update")
@@ -157,6 +151,7 @@ def create_shader(name: str, path: str, contents: Optional[str], file_path: Opti
     type=click.Path(exists=True),
     help="Read shader code from file."
 )
+@handle_unity_errors
 def update_shader(path: str, contents: Optional[str], file_path: Optional[str]):
     """Update an existing shader.
 
@@ -186,19 +181,15 @@ def update_shader(path: str, contents: Optional[str], file_path: Optional[str]):
                 "No shader contents provided. Use --contents, --file, or pipe via stdin.")
             sys.exit(1)
 
-    try:
-        result = run_command("manage_shader", {
-            "action": "update",
-            "name": name,
-            "path": directory or "Assets/",
-            "contents": shader_contents,
-        }, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Updated shader: {path}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_shader", {
+        "action": "update",
+        "name": name,
+        "path": directory or "Assets/",
+        "contents": shader_contents,
+    }, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Updated shader: {path}")
 
 
 @shader.command("delete")
@@ -208,6 +199,7 @@ def update_shader(path: str, contents: Optional[str], file_path: Optional[str]):
     is_flag=True,
     help="Skip confirmation prompt."
 )
+@handle_unity_errors
 def delete_shader(path: str, force: bool):
     """Delete a shader.
 
@@ -224,15 +216,11 @@ def delete_shader(path: str, force: bool):
     name = os.path.splitext(os.path.basename(path))[0]
     directory = os.path.dirname(path)
 
-    try:
-        result = run_command("manage_shader", {
-            "action": "delete",
-            "name": name,
-            "path": directory or "Assets/",
-        }, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Deleted shader: {path}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_shader", {
+        "action": "delete",
+        "name": name,
+        "path": directory or "Assets/",
+    }, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Deleted shader: {path}")

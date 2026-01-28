@@ -1,12 +1,11 @@
 """Animation CLI commands - placeholder for future implementation."""
 
-import sys
 import click
 from typing import Optional, Any
 
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_info
-from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.connection import run_command, handle_unity_errors
 from cli.utils.constants import SEARCH_METHOD_CHOICE_BASIC
 
 
@@ -31,6 +30,7 @@ def animation():
     default=None,
     help="How to find the target."
 )
+@handle_unity_errors
 def play(target: str, state_name: str, layer: int, search_method: Optional[str]):
     """Play an animation state on a target's Animator.
 
@@ -54,12 +54,8 @@ def play(target: str, state_name: str, layer: int, search_method: Optional[str])
     if search_method:
         params["searchMethod"] = search_method
 
-    try:
-        result = run_command("manage_components", params, config)
-        click.echo(format_output(result, config.format))
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_components", params, config)
+    click.echo(format_output(result, config.format))
 
 
 @animation.command("set-parameter")

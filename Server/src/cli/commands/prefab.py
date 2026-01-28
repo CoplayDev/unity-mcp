@@ -6,7 +6,7 @@ from typing import Optional, Any
 
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success
-from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.connection import run_command, handle_unity_errors
 
 
 @click.group()
@@ -17,6 +17,7 @@ def prefab():
 
 @prefab.command("open")
 @click.argument("path")
+@handle_unity_errors
 def open_stage(path: str):
     """Open a prefab in the prefab stage for editing.
 
@@ -31,14 +32,10 @@ def open_stage(path: str):
         "prefabPath": path,
     }
 
-    try:
-        result = run_command("manage_prefabs", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Opened prefab: {path}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_prefabs", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Opened prefab: {path}")
 
 
 @prefab.command("close")
@@ -47,6 +44,7 @@ def open_stage(path: str):
     is_flag=True,
     help="Save the prefab before closing."
 )
+@handle_unity_errors
 def close_stage(save: bool):
     """Close the current prefab stage.
 
@@ -63,14 +61,10 @@ def close_stage(save: bool):
     if save:
         params["saveBeforeClose"] = True
 
-    try:
-        result = run_command("manage_prefabs", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success("Closed prefab stage")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_prefabs", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success("Closed prefab stage")
 
 
 @prefab.command("save")
@@ -79,6 +73,7 @@ def close_stage(save: bool):
     is_flag=True,
     help="Force save even if no changes detected. Useful for automated workflows."
 )
+@handle_unity_errors
 def save_stage(force: bool):
     """Save the currently open prefab stage.
 
@@ -95,14 +90,10 @@ def save_stage(force: bool):
     if force:
         params["force"] = True
 
-    try:
-        result = run_command("manage_prefabs", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success("Saved prefab")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_prefabs", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success("Saved prefab")
 
 
 @prefab.command("info")
@@ -112,6 +103,7 @@ def save_stage(force: bool):
     is_flag=True,
     help="Show compact output (key values only)."
 )
+@handle_unity_errors
 def info(path: str, compact: bool):
     """Get information about a prefab asset.
 
@@ -127,26 +119,22 @@ def info(path: str, compact: bool):
         "prefabPath": path,
     }
 
-    try:
-        result = run_command("manage_prefabs", params, config)
-        # Get the actual response data from the wrapped result structure
-        response_data = result.get("result", result)
-        if compact and response_data.get("success") and response_data.get("data"):
-            data = response_data["data"]
-            click.echo(f"Prefab: {data.get('assetPath', path)}")
-            click.echo(f"  Type: {data.get('prefabType', 'Unknown')}")
-            click.echo(f"  Root: {data.get('rootObjectName', 'N/A')}")
-            click.echo(f"  GUID: {data.get('guid', 'N/A')}")
-            click.echo(
-                f"  Components: {len(data.get('rootComponentTypes', []))}")
-            click.echo(f"  Children: {data.get('childCount', 0)}")
-            if data.get('isVariant'):
-                click.echo(f"  Variant of: {data.get('parentPrefab', 'N/A')}")
-        else:
-            click.echo(format_output(result, config.format))
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_prefabs", params, config)
+    # Get the actual response data from the wrapped result structure
+    response_data = result.get("result", result)
+    if compact and response_data.get("success") and response_data.get("data"):
+        data = response_data["data"]
+        click.echo(f"Prefab: {data.get('assetPath', path)}")
+        click.echo(f"  Type: {data.get('prefabType', 'Unknown')}")
+        click.echo(f"  Root: {data.get('rootObjectName', 'N/A')}")
+        click.echo(f"  GUID: {data.get('guid', 'N/A')}")
+        click.echo(
+            f"  Components: {len(data.get('rootComponentTypes', []))}")
+        click.echo(f"  Children: {data.get('childCount', 0)}")
+        if data.get('isVariant'):
+            click.echo(f"  Variant of: {data.get('parentPrefab', 'N/A')}")
+    else:
+        click.echo(format_output(result, config.format))
 
 
 @prefab.command("hierarchy")
@@ -161,6 +149,7 @@ def info(path: str, compact: bool):
     is_flag=True,
     help="Show prefab nesting information."
 )
+@handle_unity_errors
 def hierarchy(path: str, compact: bool, show_prefab_info: bool):
     """Get the hierarchical structure of a prefab.
 
@@ -177,41 +166,37 @@ def hierarchy(path: str, compact: bool, show_prefab_info: bool):
         "prefabPath": path,
     }
 
-    try:
-        result = run_command("manage_prefabs", params, config)
-        # Get the actual response data from the wrapped result structure
-        response_data = result.get("result", result)
-        if compact and response_data.get("success") and response_data.get("data"):
+    result = run_command("manage_prefabs", params, config)
+    # Get the actual response data from the wrapped result structure
+    response_data = result.get("result", result)
+    if compact and response_data.get("success") and response_data.get("data"):
+        data = response_data["data"]
+        items = data.get("items", [])
+        for item in items:
+            indent = "  " * item.get("path", "").count("/")
+            prefab_info = ""
+            if show_prefab_info and item.get("prefab", {}).get("isNestedRoot"):
+                prefab_info = f" [nested: {item['prefab']['assetPath']}]"
+            click.echo(f"{indent}{item.get('name')}{prefab_info}")
+        click.echo(f"\nTotal: {data.get('total', 0)} objects")
+    elif show_prefab_info:
+        # Show prefab info in readable format
+        if response_data.get("success") and response_data.get("data"):
             data = response_data["data"]
             items = data.get("items", [])
             for item in items:
-                indent = "  " * item.get("path", "").count("/")
+                prefab = item.get("prefab", {})
                 prefab_info = ""
-                if show_prefab_info and item.get("prefab", {}).get("isNestedRoot"):
-                    prefab_info = f" [nested: {item['prefab']['assetPath']}]"
-                click.echo(f"{indent}{item.get('name')}{prefab_info}")
+                if prefab.get("isRoot"):
+                    prefab_info = " [root]"
+                elif prefab.get("isNestedRoot"):
+                    prefab_info = f" [nested: {prefab.get('nestingDepth', 0)}]"
+                click.echo(f"{item.get('path')}{prefab_info}")
             click.echo(f"\nTotal: {data.get('total', 0)} objects")
-        elif show_prefab_info:
-            # Show prefab info in readable format
-            if response_data.get("success") and response_data.get("data"):
-                data = response_data["data"]
-                items = data.get("items", [])
-                for item in items:
-                    prefab = item.get("prefab", {})
-                    prefab_info = ""
-                    if prefab.get("isRoot"):
-                        prefab_info = " [root]"
-                    elif prefab.get("isNestedRoot"):
-                        prefab_info = f" [nested: {prefab.get('nestingDepth', 0)}]"
-                    click.echo(f"{item.get('path')}{prefab_info}")
-                click.echo(f"\nTotal: {data.get('total', 0)} objects")
-            else:
-                click.echo(format_output(result, config.format))
         else:
             click.echo(format_output(result, config.format))
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    else:
+        click.echo(format_output(result, config.format))
 
 
 @prefab.command("create")
@@ -232,6 +217,7 @@ def hierarchy(path: str, compact: bool, show_prefab_info: bool):
     is_flag=True,
     help="Unlink from existing prefab before creating new one."
 )
+@handle_unity_errors
 def create(target: str, path: str, overwrite: bool, include_inactive: bool, unlink_if_instance: bool):
     """Create a prefab from a scene GameObject.
 
@@ -256,11 +242,7 @@ def create(target: str, path: str, overwrite: bool, include_inactive: bool, unli
     if unlink_if_instance:
         params["unlinkIfInstance"] = True
 
-    try:
-        result = run_command("manage_prefabs", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Created prefab: {path}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_prefabs", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Created prefab: {path}")

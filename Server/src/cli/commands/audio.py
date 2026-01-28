@@ -6,7 +6,7 @@ from typing import Optional, Any
 
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_info
-from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.connection import run_command, handle_unity_errors
 from cli.utils.constants import SEARCH_METHOD_CHOICE_BASIC
 
 
@@ -29,6 +29,7 @@ def audio():
     default=None,
     help="How to find the target."
 )
+@handle_unity_errors
 def play(target: str, clip: Optional[str], search_method: Optional[str]):
     """Play audio on a target's AudioSource.
 
@@ -53,12 +54,8 @@ def play(target: str, clip: Optional[str], search_method: Optional[str]):
     if search_method:
         params["searchMethod"] = search_method
 
-    try:
-        result = run_command("manage_components", params, config)
-        click.echo(format_output(result, config.format))
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_components", params, config)
+    click.echo(format_output(result, config.format))
 
 
 @audio.command("stop")
@@ -69,6 +66,7 @@ def play(target: str, clip: Optional[str], search_method: Optional[str]):
     default=None,
     help="How to find the target."
 )
+@handle_unity_errors
 def stop(target: str, search_method: Optional[str]):
     """Stop audio on a target's AudioSource.
 
@@ -89,12 +87,8 @@ def stop(target: str, search_method: Optional[str]):
     if search_method:
         params["searchMethod"] = search_method
 
-    try:
-        result = run_command("manage_components", params, config)
-        click.echo(format_output(result, config.format))
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_components", params, config)
+    click.echo(format_output(result, config.format))
 
 
 @audio.command("volume")
@@ -106,6 +100,7 @@ def stop(target: str, search_method: Optional[str]):
     default=None,
     help="How to find the target."
 )
+@handle_unity_errors
 def volume(target: str, level: float, search_method: Optional[str]):
     """Set audio volume on a target's AudioSource.
 
@@ -126,9 +121,5 @@ def volume(target: str, level: float, search_method: Optional[str]):
     if search_method:
         params["searchMethod"] = search_method
 
-    try:
-        result = run_command("manage_components", params, config)
-        click.echo(format_output(result, config.format))
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_components", params, config)
+    click.echo(format_output(result, config.format))
