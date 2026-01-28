@@ -86,6 +86,7 @@ class PluginHub(WebSocketEndpoint):
         """
         try:
             await websocket.accept()
+            logger.debug("WebSocket connection accepted successfully")
         except OSError as exc:
             # Windows-specific error: client disconnected during accept
             # This is common during Unity domain reloads
@@ -104,12 +105,29 @@ class PluginHub(WebSocketEndpoint):
             except Exception:
                 pass
             return
+        except Exception as exc:
+            # Catch any other unexpected errors during accept
+            logger.error(f"Unexpected error during WebSocket accept: {exc}", exc_info=exc)
+            try:
+                await websocket.close(code=1011, reason="Internal error")
+            except Exception:
+                pass
+            return
 
         msg = WelcomeMessage(
             serverTimeout=self.SERVER_TIMEOUT,
             keepAliveInterval=self.KEEP_ALIVE_INTERVAL,
         )
-        await websocket.send_json(msg.model_dump())
+        try:
+            await websocket.send_json(msg.model_dump())
+            logger.debug("WelcomeMessage sent to client")
+        except Exception as exc:
+            logger.error(f"Failed to send WelcomeMessage: {exc}", exc_info=exc)
+            try:
+                await websocket.close(code=1011, reason="Failed to send welcome")
+            except Exception:
+                pass
+            return
 
     async def on_receive(self, websocket: WebSocket, data: Any) -> None:
         if not isinstance(data, dict):
