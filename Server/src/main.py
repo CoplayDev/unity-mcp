@@ -158,22 +158,29 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
 
         # Set up event loop exception handler for Windows socket errors
         # On Windows, OSError [WinError 64] can occur in asyncio IOCP proactor
-        # when clients disconnect during WebSocket accept. This prevents
-        # the exception from crashing the server.
+        # when clients disconnect during WebSocket accept. We suppress the ERROR
+        # log spam but still allow the exception to propagate normally so the
+        # WebSocket connection fails cleanly and Unity can reconnect.
+        original_handler = loop.get_exception_handler()
         def _asyncio_exception_handler(loop: asyncio.AbstractEventLoop, context: dict[str, Any]) -> None:
             exception = context.get("exception")
             if isinstance(exception, OSError):
                 winerror = getattr(exception, "winerror", None)
                 if sys.platform == 'win32' and winerror == 64:
-                    # This is a normal Windows socket error during client disconnect
-                    # Log as DEBUG to avoid cluttering logs
+                    # Suppress the ERROR log for this common Windows socket error
+                    # The exception will still propagate, failing the WebSocket cleanly
                     logger.debug(
-                        f"Asyncio caught OSError WinError 64 during {context.get('task', 'unknown operation')}: "
-                        "client disconnected during socket operation (normal during Unity domain reloads)"
+                        f"Asyncio: OSError WinError 64 during {context.get('task', 'operation')} "
+                        "(normal during Unity domain reloads, connection will fail cleanly)"
                     )
+                    # Don't call default handler to avoid ERROR log
+                    # Exception still propagates to the caller
                     return
-            # For all other exceptions, use the default handler
-            loop.default_exception_handler(context)
+            # For all other exceptions, use the original handler
+            if original_handler:
+                original_handler(loop, context)
+            else:
+                loop.default_exception_handler(context)
 
         loop.set_exception_handler(_asyncio_exception_handler)
         logger.info("Registered asyncio exception handler for Windows socket errors")

@@ -80,54 +80,21 @@ class PluginHub(WebSocketEndpoint):
     async def on_connect(self, websocket: WebSocket) -> None:
         """Handle incoming WebSocket connection.
 
-        On Windows, OSError [WinError 64] can occur when Unity disconnects
+        Note: On Windows, OSError [WinError 64] can occur when Unity disconnects
         during domain reload while we're trying to accept the connection.
-        We catch and log this gracefully to avoid crashing the endpoint.
+        This is handled by the asyncio event loop exception handler in main.py
+        to prevent the error from crashing the server. The connection will fail
+        normally and Unity will attempt to reconnect.
         """
-        try:
-            await websocket.accept()
-            logger.debug("WebSocket connection accepted successfully")
-        except OSError as exc:
-            # Windows-specific error: client disconnected during accept
-            # This is common during Unity domain reloads
-            winerror = getattr(exc, 'winerror', None)
-            if sys.platform == 'win32' and winerror == 64:
-                logger.debug(
-                    "WebSocket accept failed: client disconnected during accept (WinError 64). "
-                    "This is normal during Unity domain reloads."
-                )
-            else:
-                logger.warning(f"WebSocket accept failed: {exc}")
-            # Close the websocket cleanly without calling on_disconnect
-            # since the connection was never fully established
-            try:
-                await websocket.close(code=1006, reason="Accept failed")
-            except Exception:
-                pass
-            return
-        except Exception as exc:
-            # Catch any other unexpected errors during accept
-            logger.error(f"Unexpected error during WebSocket accept: {exc}", exc_info=exc)
-            try:
-                await websocket.close(code=1011, reason="Internal error")
-            except Exception:
-                pass
-            return
+        await websocket.accept()
+        logger.debug("WebSocket connection accepted successfully")
 
         msg = WelcomeMessage(
             serverTimeout=self.SERVER_TIMEOUT,
             keepAliveInterval=self.KEEP_ALIVE_INTERVAL,
         )
-        try:
-            await websocket.send_json(msg.model_dump())
-            logger.debug("WelcomeMessage sent to client")
-        except Exception as exc:
-            logger.error(f"Failed to send WelcomeMessage: {exc}", exc_info=exc)
-            try:
-                await websocket.close(code=1011, reason="Failed to send welcome")
-            except Exception:
-                pass
-            return
+        await websocket.send_json(msg.model_dump())
+        logger.debug("WelcomeMessage sent to client")
 
     async def on_receive(self, websocket: WebSocket, data: Any) -> None:
         if not isinstance(data, dict):
