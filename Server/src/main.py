@@ -113,12 +113,41 @@ for noisy in ("httpx", "urllib3", "mcp.server.lowlevel.server"):
     except Exception:
         pass
 
-# Suppress asyncio ERROR logs for Windows socket accept errors (WinError 64)
-# This occurs when clients disconnect during accept, which is normal during reconnects
+# Filter for Windows-specific socket accept errors (WinError 64)
+# This occurs when clients disconnect during WebSocket accept, which is normal during reconnects
+class WindowsSocketErrorFilter(logging.Filter):
+    """Filter to suppress only Windows WinError 64 socket accept errors from asyncio logs."""
+
+    def filter(self, record):
+        # Only apply on Windows
+        if sys.platform != 'win32':
+            return True
+
+        # Check if this is an ERROR level log with exception info
+        if record.levelno >= logging.ERROR and record.exc_info:
+            exc_type, exc_value, _ = record.exc_info[:3]
+            if exc_value is None:
+                return True
+
+            # Check for OSError with winerror == 64 (network name no longer available)
+            # This specific error occurs during WebSocket accept when client disconnects
+            if OSError in exc_type.__mro__:
+                winerror = getattr(exc_value, 'winerror', None)
+                if winerror == 64:
+                    # Check for common asyncio accept patterns in the message
+                    msg_lower = record.getMessage().lower()
+                    if 'accept' in msg_lower or 'socket' in msg_lower:
+                        record.levelno = logging.DEBUG
+                        record.levelname = 'DEBUG'
+                        return False
+
+        return True
+
+
 if sys.platform == 'win32':
     asyncio_logger = logging.getLogger("asyncio")
-    asyncio_logger.setLevel(logging.WARNING)
-    logger.info("Suppressed asyncio ERROR logs for Windows socket accept errors")
+    asyncio_logger.addFilter(WindowsSocketErrorFilter())
+    logger.info("Added filter to suppress Windows WinError 64 socket accept errors from asyncio logs")
 
 # Import telemetry only after logging is configured to ensure its logs use stderr and proper levels
 # Ensure a slightly higher telemetry timeout unless explicitly overridden by env
