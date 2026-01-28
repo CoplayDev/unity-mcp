@@ -22,19 +22,22 @@ namespace MCPForUnity.Editor.Services
         private static readonly HashSet<int> LoggedStopDiagnosticsPids = new HashSet<int>();
 
         private readonly IProcessDetector _processDetector;
+        private readonly IPidFileManager _pidFileManager;
 
         /// <summary>
         /// Creates a new ServerManagementService with default dependencies.
         /// </summary>
-        public ServerManagementService() : this(null) { }
+        public ServerManagementService() : this(null, null) { }
 
         /// <summary>
         /// Creates a new ServerManagementService with injected dependencies (for testing).
         /// </summary>
         /// <param name="processDetector">Process detector implementation (null for default)</param>
-        public ServerManagementService(IProcessDetector processDetector)
+        /// <param name="pidFileManager">PID file manager implementation (null for default)</param>
+        public ServerManagementService(IProcessDetector processDetector, IPidFileManager pidFileManager = null)
         {
             _processDetector = processDetector ?? new ProcessDetector();
+            _pidFileManager = pidFileManager ?? new PidFileManager();
         }
 
         private static string GetProjectRootPath()
@@ -61,105 +64,29 @@ namespace MCPForUnity.Editor.Services
             return _processDetector.NormalizeForMatch(s);
         }
 
-        private static void ClearLocalServerPidTracking()
+        private void ClearLocalServerPidTracking()
         {
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPid); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPort); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerStartedUtc); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPidArgsHash); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPidFilePath); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerInstanceToken); } catch { }
+            _pidFileManager.ClearTracking();
         }
 
-        private static void StoreLocalHttpServerHandshake(string pidFilePath, string instanceToken)
+        private void StoreLocalHttpServerHandshake(string pidFilePath, string instanceToken)
         {
-            try
-            {
-                if (!string.IsNullOrEmpty(pidFilePath))
-                {
-                    EditorPrefs.SetString(EditorPrefKeys.LastLocalHttpServerPidFilePath, pidFilePath);
-                }
-            }
-            catch { }
-
-            try
-            {
-                if (!string.IsNullOrEmpty(instanceToken))
-                {
-                    EditorPrefs.SetString(EditorPrefKeys.LastLocalHttpServerInstanceToken, instanceToken);
-                }
-            }
-            catch { }
+            _pidFileManager.StoreHandshake(pidFilePath, instanceToken);
         }
 
-        private static bool TryGetLocalHttpServerHandshake(out string pidFilePath, out string instanceToken)
+        private bool TryGetLocalHttpServerHandshake(out string pidFilePath, out string instanceToken)
         {
-            pidFilePath = null;
-            instanceToken = null;
-            try
-            {
-                pidFilePath = EditorPrefs.GetString(EditorPrefKeys.LastLocalHttpServerPidFilePath, string.Empty);
-                instanceToken = EditorPrefs.GetString(EditorPrefKeys.LastLocalHttpServerInstanceToken, string.Empty);
-                if (string.IsNullOrEmpty(pidFilePath) || string.IsNullOrEmpty(instanceToken))
-                {
-                    pidFilePath = null;
-                    instanceToken = null;
-                    return false;
-                }
-                return true;
-            }
-            catch
-            {
-                pidFilePath = null;
-                instanceToken = null;
-                return false;
-            }
+            return _pidFileManager.TryGetHandshake(out pidFilePath, out instanceToken);
         }
 
-        private static string GetLocalHttpServerPidDirectory()
+        private string GetLocalHttpServerPidFilePath(int port)
         {
-            // Keep it project-scoped and out of version control.
-            return Path.Combine(GetProjectRootPath(), "Library", "MCPForUnity", "RunState");
+            return _pidFileManager.GetPidFilePath(port);
         }
 
-        private static string GetLocalHttpServerPidFilePath(int port)
+        private bool TryReadPidFromPidFile(string pidFilePath, out int pid)
         {
-            string dir = GetLocalHttpServerPidDirectory();
-            Directory.CreateDirectory(dir);
-            return Path.Combine(dir, $"mcp_http_{port}.pid");
-        }
-
-        private static bool TryReadPidFromPidFile(string pidFilePath, out int pid)
-        {
-            pid = 0;
-            try
-            {
-                if (string.IsNullOrEmpty(pidFilePath) || !File.Exists(pidFilePath))
-                {
-                    return false;
-                }
-
-                string text = File.ReadAllText(pidFilePath).Trim();
-                if (int.TryParse(text, out pid))
-                {
-                    return pid > 0;
-                }
-
-                // Best-effort: tolerate accidental extra whitespace/newlines.
-                var firstLine = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-                if (int.TryParse(firstLine, out pid))
-                {
-                    return pid > 0;
-                }
-
-                pid = 0;
-                return false;
-            }
-            catch
-            {
-                pid = 0;
-                return false;
-            }
+            return _pidFileManager.TryReadPid(pidFilePath, out pid);
         }
 
         private bool TryProcessCommandLineContainsInstanceToken(int pid, string instanceToken, out bool containsToken)
@@ -196,79 +123,24 @@ namespace MCPForUnity.Editor.Services
             return false;
         }
 
-        private static void StoreLocalServerPidTracking(int pid, int port, string argsHash = null)
+        private void StoreLocalServerPidTracking(int pid, int port, string argsHash = null)
         {
-            try { EditorPrefs.SetInt(EditorPrefKeys.LastLocalHttpServerPid, pid); } catch { }
-            try { EditorPrefs.SetInt(EditorPrefKeys.LastLocalHttpServerPort, port); } catch { }
-            try { EditorPrefs.SetString(EditorPrefKeys.LastLocalHttpServerStartedUtc, DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture)); } catch { }
-            try
-            {
-                if (!string.IsNullOrEmpty(argsHash))
-                {
-                    EditorPrefs.SetString(EditorPrefKeys.LastLocalHttpServerPidArgsHash, argsHash);
-                }
-                else
-                {
-                    EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPidArgsHash);
-                }
-            }
-            catch { }
+            _pidFileManager.StoreTracking(pid, port, argsHash);
         }
 
-        private static string ComputeShortHash(string input)
+        private string ComputeShortHash(string input)
         {
-            if (string.IsNullOrEmpty(input)) return string.Empty;
-            try
-            {
-                using var sha = SHA256.Create();
-                byte[] bytes = Encoding.UTF8.GetBytes(input);
-                byte[] hash = sha.ComputeHash(bytes);
-                // 8 bytes => 16 hex chars is plenty as a stable fingerprint for our purposes.
-                var sb = new StringBuilder(16);
-                for (int i = 0; i < 8 && i < hash.Length; i++)
-                {
-                    sb.Append(hash[i].ToString("x2"));
-                }
-                return sb.ToString();
-            }
-            catch
-            {
-                return string.Empty;
-            }
+            return _pidFileManager.ComputeShortHash(input);
         }
 
-        private static bool TryGetStoredLocalServerPid(int expectedPort, out int pid)
+        private bool TryGetStoredLocalServerPid(int expectedPort, out int pid)
         {
-            pid = 0;
-            try
-            {
-                int storedPid = EditorPrefs.GetInt(EditorPrefKeys.LastLocalHttpServerPid, 0);
-                int storedPort = EditorPrefs.GetInt(EditorPrefKeys.LastLocalHttpServerPort, 0);
-                string storedUtc = EditorPrefs.GetString(EditorPrefKeys.LastLocalHttpServerStartedUtc, string.Empty);
+            return _pidFileManager.TryGetStoredPid(expectedPort, out pid);
+        }
 
-                if (storedPid <= 0 || storedPort != expectedPort)
-                {
-                    return false;
-                }
-
-                // Only trust the stored PID for a short window to avoid PID reuse issues.
-                // (We still verify the PID is listening on the expected port before killing.)
-                if (!string.IsNullOrEmpty(storedUtc)
-                    && DateTime.TryParse(storedUtc, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var startedAt))
-                {
-                    if ((DateTime.UtcNow - startedAt) > TimeSpan.FromHours(6))
-                    {
-                        return false;
-                    }
-                }
-
-                pid = storedPid;
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
+        private string GetStoredArgsHash()
+        {
+            return _pidFileManager.GetStoredArgsHash();
         }
 
         /// <summary>
@@ -485,7 +357,7 @@ namespace MCPForUnity.Editor.Services
                     {
                         if (!string.IsNullOrEmpty(pidFilePath) && File.Exists(pidFilePath))
                         {
-                            File.Delete(pidFilePath);
+                            DeletePidFile(pidFilePath);
                         }
                     }
                     catch { }
@@ -761,7 +633,7 @@ namespace MCPForUnity.Editor.Services
                             if (listeners.Count == 0)
                             {
                                 // Nothing is listening anymore; clear stale handshake state.
-                                try { File.Delete(pidFilePath); } catch { }
+                                try { DeletePidFile(pidFilePath); } catch { }
                                 ClearLocalServerPidTracking();
                                 if (!quiet)
                                 {
@@ -788,7 +660,7 @@ namespace MCPForUnity.Editor.Services
                                 if (TerminateProcess(pidFromFile))
                                 {
                                     stoppedAny = true;
-                                    try { File.Delete(pidFilePath); } catch { }
+                                    try { DeletePidFile(pidFilePath); } catch { }
                                     ClearLocalServerPidTracking();
                                     if (!quiet)
                                     {
@@ -841,7 +713,7 @@ namespace MCPForUnity.Editor.Services
                     if (pids.Contains(storedPid))
                     {
                         string expectedHash = string.Empty;
-                        try { expectedHash = EditorPrefs.GetString(EditorPrefKeys.LastLocalHttpServerPidArgsHash, string.Empty); } catch { }
+                        expectedHash = GetStoredArgsHash();
 
                         // Prefer a fingerprint match (reduces PID reuse risk). If missing (older installs),
                         // fall back to a looser check to avoid leaving orphaned servers after domain reload.
@@ -961,36 +833,14 @@ namespace MCPForUnity.Editor.Services
             return _processDetector.TryGetProcessCommandLine(pid, out argsLower);
         }
 
-        private static bool TryGetPortFromPidFilePath(string pidFilePath, out int port)
+        private bool TryGetPortFromPidFilePath(string pidFilePath, out int port)
         {
-            port = 0;
-            if (string.IsNullOrEmpty(pidFilePath))
-            {
-                return false;
-            }
+            return _pidFileManager.TryGetPortFromPidFilePath(pidFilePath, out port);
+        }
 
-            try
-            {
-                string fileName = Path.GetFileNameWithoutExtension(pidFilePath);
-                if (string.IsNullOrEmpty(fileName))
-                {
-                    return false;
-                }
-
-                const string prefix = "mcp_http_";
-                if (!fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                {
-                    return false;
-                }
-
-                string portText = fileName.Substring(prefix.Length);
-                return int.TryParse(portText, out port) && port > 0;
-            }
-            catch
-            {
-                port = 0;
-                return false;
-            }
+        private void DeletePidFile(string pidFilePath)
+        {
+            _pidFileManager.DeletePidFile(pidFilePath);
         }
 
         private List<int> GetListeningProcessIdsForPort(int port)
