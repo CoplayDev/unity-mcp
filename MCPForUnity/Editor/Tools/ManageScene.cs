@@ -40,47 +40,23 @@ namespace MCPForUnity.Editor.Tools
         private static SceneCommand ToSceneCommand(JObject p)
         {
             if (p == null) return new SceneCommand();
-            int? BI(JToken t)
-            {
-                if (t == null || t.Type == JTokenType.Null) return null;
-                var s = t.ToString().Trim();
-                if (s.Length == 0) return null;
-                if (int.TryParse(s, out var i)) return i;
-                if (double.TryParse(s, out var d)) return (int)d;
-                return t.Type == JTokenType.Integer ? t.Value<int>() : (int?)null;
-            }
-            bool? BB(JToken t)
-            {
-                if (t == null || t.Type == JTokenType.Null) return null;
-                try
-                {
-                    if (t.Type == JTokenType.Boolean) return t.Value<bool>();
-                    var s = t.ToString().Trim();
-                    if (s.Length == 0) return null;
-                    if (bool.TryParse(s, out var b)) return b;
-                    if (s == "1") return true;
-                    if (s == "0") return false;
-                }
-                catch { }
-                return null;
-            }
             return new SceneCommand
             {
                 action = (p["action"]?.ToString() ?? string.Empty).Trim().ToLowerInvariant(),
                 name = p["name"]?.ToString() ?? string.Empty,
                 path = p["path"]?.ToString() ?? string.Empty,
-                buildIndex = BI(p["buildIndex"] ?? p["build_index"]),
+                buildIndex = ParamCoercion.CoerceIntNullable(p["buildIndex"] ?? p["build_index"]),
                 fileName = (p["fileName"] ?? p["filename"])?.ToString() ?? string.Empty,
-                superSize = BI(p["superSize"] ?? p["super_size"] ?? p["supersize"]),
+                superSize = ParamCoercion.CoerceIntNullable(p["superSize"] ?? p["super_size"] ?? p["supersize"]),
 
                 // get_hierarchy paging + safety
                 parent = p["parent"],
-                pageSize = BI(p["pageSize"] ?? p["page_size"]),
-                cursor = BI(p["cursor"]),
-                maxNodes = BI(p["maxNodes"] ?? p["max_nodes"]),
-                maxDepth = BI(p["maxDepth"] ?? p["max_depth"]),
-                maxChildrenPerNode = BI(p["maxChildrenPerNode"] ?? p["max_children_per_node"]),
-                includeTransform = BB(p["includeTransform"] ?? p["include_transform"]),
+                pageSize = ParamCoercion.CoerceIntNullable(p["pageSize"] ?? p["page_size"]),
+                cursor = ParamCoercion.CoerceIntNullable(p["cursor"]),
+                maxNodes = ParamCoercion.CoerceIntNullable(p["maxNodes"] ?? p["max_nodes"]),
+                maxDepth = ParamCoercion.CoerceIntNullable(p["maxDepth"] ?? p["max_depth"]),
+                maxChildrenPerNode = ParamCoercion.CoerceIntNullable(p["maxChildrenPerNode"] ?? p["max_children_per_node"]),
+                includeTransform = ParamCoercion.CoerceBoolNullable(p["includeTransform"] ?? p["include_transform"]),
             };
         }
 
