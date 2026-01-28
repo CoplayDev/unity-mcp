@@ -51,7 +51,7 @@ def pytest_collection_modifyitems(session, config, items):  # noqa: ARG001
 
     for item in items:
         # Check if test is in integration/ directory
-        if "integration" in str(item.fspath):
+        if "integration" in str(item.path):
             integration_tests.append(item)
         else:
             other_tests.append(item)

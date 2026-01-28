@@ -65,8 +65,11 @@ namespace MCPForUnity.Editor.Clients.Configurators
             }
             catch (JsonException ex)
             {
-                // Malformed JSON - log warning but return null so caller knows it's invalid
-                // The Configure() method will handle preserving other sections if possible
+                // Malformed JSON - log warning and return null.
+                // When Configure() receives null, it will do: TryLoadConfig(path) ?? new JObject()
+                // This creates a fresh empty JObject, which replaces the entire file with only the unityMCP section.
+                // Existing config sections are lost. To preserve sections, a different recovery strategy
+                // (e.g., line-by-line parsing, JSON repair, or manual user intervention) would be needed.
                 UnityEngine.Debug.LogWarning($"[OpenCodeConfigurator] Malformed JSON in {path}: {ex.Message}");
                 return null;
             }

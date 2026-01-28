@@ -55,7 +55,10 @@ async def _get_unity_project_path(unity_instance: str | None) -> str | None:
         if not session:
             return None
 
-    except (AttributeError, KeyError) as e:
+    except Exception as e:
+        # Re-raise cancellation errors so task cancellation propagates
+        if isinstance(e, asyncio.CancelledError):
+            raise
         logger.debug(f"Could not get Unity project path: {e}")
         return None
     else:
@@ -288,6 +291,9 @@ async def get_test_job(
                 # Use default stall_threshold_ms (3s)
             ):
                 logger.info(f"Test job {job_id} appears stalled (unfocused Unity), attempting nudge...")
+                # Lazily resolve project path if not yet available (registry may have become ready)
+                if project_path is None:
+                    project_path = await _get_unity_project_path(unity_instance)
                 # Pass project path for multi-instance support
                 nudged = await nudge_unity_focus(unity_project_path=project_path)
                 if nudged:
