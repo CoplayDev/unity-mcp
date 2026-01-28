@@ -498,11 +498,24 @@ def modify(path: str, set_pixels: str):
 
 @texture.command("delete")
 @click.argument("path")
+@click.option(
+    "--force", "-f",
+    is_flag=True,
+    help="Skip confirmation prompt."
+)
 @handle_unity_errors
-def delete(path: str):
+def delete(path: str, force: bool):
     """Delete a texture.
+
+    \\b
+    Examples:
+        unity-mcp texture delete "Assets/Textures/Old.png"
+        unity-mcp texture delete "Assets/Textures/Old.png" --force
     """
+    from cli.utils.confirmation import confirm_destructive_action
     config = get_config()
+
+    confirm_destructive_action("Delete", "texture", path, force)
 
     result = run_command("manage_texture", {
                          "action": "delete", "path": path}, config)
