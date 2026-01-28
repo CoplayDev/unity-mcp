@@ -1,286 +1,151 @@
-"""Tests for parameter normalization utility."""
+"""Tests for parameter aliasing using Pydantic AliasChoices.
+
+P1-1.5 uses Pydantic's AliasChoices with Field(validation_alias=...) to accept
+both snake_case and camelCase parameter names at the FastMCP validation layer.
+"""
 import pytest
-from transport.param_normalizer_middleware import camel_to_snake, normalize_arguments
-from services.tools.param_normalizer import normalize_params
+from pydantic import AliasChoices, BaseModel, Field
+from typing import Annotated
 
 
-class TestNormalizeArguments:
-    """Tests for normalize_arguments function (middleware version)."""
+class TestAliasChoicesPattern:
+    """Tests demonstrating the AliasChoices pattern for parameter aliasing."""
 
-    def test_camel_case_to_snake_case(self):
-        """camelCase arguments are normalized to snake_case."""
-        result = normalize_arguments({
-            "searchMethod": "by_name",
+    def test_alias_choices_accepts_snake_case(self):
+        """AliasChoices accepts snake_case parameter names."""
+
+        class TestModel(BaseModel):
+            search_term: Annotated[
+                str,
+                Field(validation_alias=AliasChoices("search_term", "searchTerm"))
+            ]
+
+        m = TestModel.model_validate({"search_term": "test"})
+        assert m.search_term == "test"
+
+    def test_alias_choices_accepts_camel_case(self):
+        """AliasChoices accepts camelCase parameter names."""
+
+        class TestModel(BaseModel):
+            search_term: Annotated[
+                str,
+                Field(validation_alias=AliasChoices("search_term", "searchTerm"))
+            ]
+
+        m = TestModel.model_validate({"searchTerm": "test"})
+        assert m.search_term == "test"
+
+    def test_snake_case_takes_precedence(self):
+        """When both are provided, the first alias choice wins."""
+
+        class TestModel(BaseModel):
+            search_term: Annotated[
+                str,
+                Field(validation_alias=AliasChoices("search_term", "searchTerm"))
+            ]
+
+        # First matching alias wins
+        m = TestModel.model_validate({"search_term": "snake", "searchTerm": "camel"})
+        assert m.search_term == "snake"
+
+    def test_alias_choices_with_default_value(self):
+        """AliasChoices works with optional parameters that have defaults."""
+
+        class TestModel(BaseModel):
+            search_method: Annotated[
+                str,
+                Field(
+                    default="by_name",
+                    validation_alias=AliasChoices("search_method", "searchMethod")
+                )
+            ]
+
+        # Default is used when not provided
+        m1 = TestModel.model_validate({})
+        assert m1.search_method == "by_name"
+
+        # snake_case overrides default
+        m2 = TestModel.model_validate({"search_method": "by_tag"})
+        assert m2.search_method == "by_tag"
+
+        # camelCase overrides default
+        m3 = TestModel.model_validate({"searchMethod": "by_id"})
+        assert m3.search_method == "by_id"
+
+    def test_alias_choices_with_optional_none(self):
+        """AliasChoices works with Optional parameters defaulting to None."""
+
+        class TestModel(BaseModel):
+            page_size: Annotated[
+                int | None,
+                Field(
+                    default=None,
+                    validation_alias=AliasChoices("page_size", "pageSize")
+                )
+            ]
+
+        # None default
+        m1 = TestModel.model_validate({})
+        assert m1.page_size is None
+
+        # snake_case
+        m2 = TestModel.model_validate({"page_size": 50})
+        assert m2.page_size == 50
+
+        # camelCase
+        m3 = TestModel.model_validate({"pageSize": 100})
+        assert m3.page_size == 100
+
+    def test_alias_choices_with_bool_coercion(self):
+        """AliasChoices works with boolean parameters."""
+
+        class TestModel(BaseModel):
+            include_inactive: Annotated[
+                bool | str | None,
+                Field(
+                    default=None,
+                    validation_alias=AliasChoices("include_inactive", "includeInactive")
+                )
+            ]
+
+        # camelCase with bool
+        m1 = TestModel.model_validate({"includeInactive": True})
+        assert m1.include_inactive is True
+
+        # snake_case with string (common from JSON)
+        m2 = TestModel.model_validate({"include_inactive": "true"})
+        assert m2.include_inactive == "true"  # Note: string coercion happens in tool
+
+    def test_alias_choices_multiple_params(self):
+        """Multiple parameters can each have AliasChoices."""
+
+        class TestModel(BaseModel):
+            search_term: Annotated[
+                str,
+                Field(validation_alias=AliasChoices("search_term", "searchTerm"))
+            ]
+            search_method: Annotated[
+                str,
+                Field(
+                    default="by_name",
+                    validation_alias=AliasChoices("search_method", "searchMethod")
+                )
+            ]
+            page_size: Annotated[
+                int | None,
+                Field(
+                    default=None,
+                    validation_alias=AliasChoices("page_size", "pageSize")
+                )
+            ]
+
+        # Mix of snake_case and camelCase
+        m = TestModel.model_validate({
             "searchTerm": "Player",
-            "pageSize": 50
+            "search_method": "by_tag",
+            "pageSize": 25
         })
-        assert result == {
-            "search_method": "by_name",
-            "search_term": "Player",
-            "page_size": 50
-        }
 
-    def test_snake_case_unchanged(self):
-        """snake_case arguments pass through unchanged."""
-        result = normalize_arguments({
-            "search_method": "by_name",
-            "search_term": "Player"
-        })
-        assert result == {
-            "search_method": "by_name",
-            "search_term": "Player"
-        }
-
-    def test_mixed_conventions(self):
-        """Mixed camelCase and snake_case are handled."""
-        result = normalize_arguments({
-            "searchMethod": "by_name",
-            "search_term": "Player"
-        })
-        assert result == {
-            "search_method": "by_name",
-            "search_term": "Player"
-        }
-
-    def test_conflict_prefers_snake_case(self):
-        """When both conventions provided, snake_case wins."""
-        result = normalize_arguments({
-            "searchMethod": "by_id",
-            "search_method": "by_name"
-        })
-        assert result["search_method"] == "by_name"
-
-    def test_none_returns_none(self):
-        """None input returns None."""
-        assert normalize_arguments(None) is None
-
-    def test_empty_dict(self):
-        """Empty dict returns empty dict."""
-        assert normalize_arguments({}) == {}
-
-
-class TestCamelToSnake:
-    """Tests for camel_to_snake conversion function."""
-
-    def test_standard_camel_case(self):
-        """Standard camelCase converts correctly."""
-        assert camel_to_snake("searchMethod") == "search_method"
-        assert camel_to_snake("searchTerm") == "search_term"
-        assert camel_to_snake("includeInactive") == "include_inactive"
-        assert camel_to_snake("pageSize") == "page_size"
-
-    def test_already_snake_case(self):
-        """Already snake_case passes through unchanged."""
-        assert camel_to_snake("search_method") == "search_method"
-        assert camel_to_snake("page_size") == "page_size"
-        assert camel_to_snake("include_inactive") == "include_inactive"
-
-    def test_single_word(self):
-        """Single lowercase word passes through unchanged."""
-        assert camel_to_snake("action") == "action"
-        assert camel_to_snake("path") == "path"
-        assert camel_to_snake("name") == "name"
-
-    def test_consecutive_capitals(self):
-        """Consecutive capitals (acronyms) are handled."""
-        assert camel_to_snake("HTMLParser") == "html_parser"
-        assert camel_to_snake("parseHTML") == "parse_html"
-        assert camel_to_snake("XMLHTTPRequest") == "xmlhttp_request"
-
-    def test_numbers_in_name(self):
-        """Numbers in parameter names are handled."""
-        assert camel_to_snake("filter2D") == "filter2_d"
-        assert camel_to_snake("vector3") == "vector3"
-        assert camel_to_snake("point2d") == "point2d"
-
-    def test_mixed_case_words(self):
-        """Multiple camelCase words convert correctly."""
-        assert camel_to_snake("componentProperties") == "component_properties"
-        assert camel_to_snake("generatePreview") == "generate_preview"
-        assert camel_to_snake("filterDateAfter") == "filter_date_after"
-
-
-class TestNormalizeParamsSync:
-    """Tests for normalize_params decorator with sync functions."""
-
-    def test_sync_function_camel_case_params(self):
-        """Sync function receives normalized snake_case params."""
-        received_kwargs = {}
-
-        @normalize_params
-        def sync_tool(**kwargs):
-            received_kwargs.update(kwargs)
-            return "ok"
-
-        result = sync_tool(searchMethod="by_name", searchTerm="Player")
-
-        assert result == "ok"
-        assert received_kwargs == {
-            "search_method": "by_name",
-            "search_term": "Player"
-        }
-
-    def test_sync_function_snake_case_params(self):
-        """Sync function passes through snake_case params unchanged."""
-        received_kwargs = {}
-
-        @normalize_params
-        def sync_tool(**kwargs):
-            received_kwargs.update(kwargs)
-            return "ok"
-
-        result = sync_tool(search_method="by_name", search_term="Player")
-
-        assert result == "ok"
-        assert received_kwargs == {
-            "search_method": "by_name",
-            "search_term": "Player"
-        }
-
-    def test_sync_function_mixed_params(self):
-        """Sync function handles mixed camelCase and snake_case."""
-        received_kwargs = {}
-
-        @normalize_params
-        def sync_tool(**kwargs):
-            received_kwargs.update(kwargs)
-            return "ok"
-
-        result = sync_tool(searchMethod="by_name", search_term="Player", pageSize=50)
-
-        assert result == "ok"
-        assert received_kwargs == {
-            "search_method": "by_name",
-            "search_term": "Player",
-            "page_size": 50
-        }
-
-    def test_sync_function_conflict_prefers_snake_case(self):
-        """When both conventions provided, snake_case wins."""
-        received_kwargs = {}
-
-        @normalize_params
-        def sync_tool(**kwargs):
-            received_kwargs.update(kwargs)
-            return "ok"
-
-        # Both searchMethod and search_method provided
-        result = sync_tool(searchMethod="by_id", search_method="by_name")
-
-        assert result == "ok"
-        # snake_case value should win
-        assert received_kwargs["search_method"] == "by_name"
-
-
-class TestNormalizeParamsAsync:
-    """Tests for normalize_params decorator with async functions."""
-
-    @pytest.mark.asyncio
-    async def test_async_function_camel_case_params(self):
-        """Async function receives normalized snake_case params."""
-        received_kwargs = {}
-
-        @normalize_params
-        async def async_tool(**kwargs):
-            received_kwargs.update(kwargs)
-            return "ok"
-
-        result = await async_tool(searchMethod="by_name", searchTerm="Player")
-
-        assert result == "ok"
-        assert received_kwargs == {
-            "search_method": "by_name",
-            "search_term": "Player"
-        }
-
-    @pytest.mark.asyncio
-    async def test_async_function_snake_case_params(self):
-        """Async function passes through snake_case params unchanged."""
-        received_kwargs = {}
-
-        @normalize_params
-        async def async_tool(**kwargs):
-            received_kwargs.update(kwargs)
-            return "ok"
-
-        result = await async_tool(search_method="by_name", search_term="Player")
-
-        assert result == "ok"
-        assert received_kwargs == {
-            "search_method": "by_name",
-            "search_term": "Player"
-        }
-
-    @pytest.mark.asyncio
-    async def test_async_function_mixed_params(self):
-        """Async function handles mixed camelCase and snake_case."""
-        received_kwargs = {}
-
-        @normalize_params
-        async def async_tool(**kwargs):
-            received_kwargs.update(kwargs)
-            return "ok"
-
-        result = await async_tool(searchMethod="by_name", search_term="Player", pageSize=50)
-
-        assert result == "ok"
-        assert received_kwargs == {
-            "search_method": "by_name",
-            "search_term": "Player",
-            "page_size": 50
-        }
-
-    @pytest.mark.asyncio
-    async def test_async_function_conflict_prefers_snake_case(self):
-        """When both conventions provided, snake_case wins."""
-        received_kwargs = {}
-
-        @normalize_params
-        async def async_tool(**kwargs):
-            received_kwargs.update(kwargs)
-            return "ok"
-
-        # Both searchMethod and search_method provided
-        result = await async_tool(searchMethod="by_id", search_method="by_name")
-
-        assert result == "ok"
-        # snake_case value should win
-        assert received_kwargs["search_method"] == "by_name"
-
-
-class TestNormalizeParamsPreservesFunction:
-    """Tests that normalize_params preserves function metadata."""
-
-    def test_preserves_function_name(self):
-        """Decorated function keeps its original name."""
-        @normalize_params
-        def my_tool(**kwargs):
-            pass
-
-        assert my_tool.__name__ == "my_tool"
-
-    def test_preserves_docstring(self):
-        """Decorated function keeps its docstring."""
-        @normalize_params
-        def my_tool(**kwargs):
-            """This is my docstring."""
-            pass
-
-        assert my_tool.__doc__ == "This is my docstring."
-
-    def test_preserves_positional_args(self):
-        """Positional args are passed through unchanged."""
-        received_args = []
-        received_kwargs = {}
-
-        @normalize_params
-        def my_tool(ctx, *args, **kwargs):
-            received_args.extend(args)
-            received_kwargs.update(kwargs)
-            return ctx
-
-        result = my_tool("context_value", "arg1", "arg2", searchMethod="by_name")
-
-        assert result == "context_value"
-        assert received_args == ["arg1", "arg2"]
-        assert received_kwargs == {"search_method": "by_name"}
+        assert m.search_term == "Player"
+        assert m.search_method == "by_tag"
+        assert m.page_size == 25

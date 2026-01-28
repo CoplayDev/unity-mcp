@@ -3,7 +3,6 @@ from transport.unity_instance_middleware import (
     UnityInstanceMiddleware,
     get_unity_instance_middleware
 )
-from transport.param_normalizer_middleware import ParamNormalizerMiddleware
 from transport.legacy.unity_connection import get_unity_connection_pool, UnityConnectionPool
 from services.tools import register_all_tools
 from core.telemetry import record_milestone, record_telemetry, MilestoneType, RecordType, get_package_version
@@ -518,12 +517,6 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
     async def plugin_sessions_route(_: Request) -> JSONResponse:
         data = await PluginHub.get_sessions()
         return JSONResponse(data.model_dump())
-
-    # Register parameter normalizer middleware first (innermost)
-    # This converts camelCase params to snake_case before FastMCP validation
-    param_normalizer = ParamNormalizerMiddleware()
-    mcp.add_middleware(param_normalizer)
-    logger.info("Registered parameter normalizer middleware for camelCase support")
 
     # Initialize and register middleware for session-based Unity instance routing
     # Using the singleton getter ensures we use the same instance everywhere
