@@ -392,6 +392,42 @@ Break 372-line mega-utility into:
 2. `PackageVersionUtility` — Package.json reading, version checks (90 lines)
 3. `UvxCommandBuilder` — uvx argument construction (70 lines)
 
+### P2-8: CLI Consistency Pass (CLI)
+**Impact**: Reduces user errors, improves discoverability, consistent UX
+**Effort**: 3-4 hours
+**Risk**: Low
+
+**Problem**: CLI commands have inconsistent patterns leading to user errors:
+
+1. **Confirmation flags inconsistency**:
+   - `gameobject delete --force` ✓
+   - `asset delete --force` ✓
+   - `texture delete` — NO confirmation flag
+   - `shader delete` — NO confirmation flag
+   - Some use `-f`, some only `--force`
+
+2. **Subcommand structure confusion**:
+   - `vfx particle info` (3 levels) — easy to guess `vfx particle-info` incorrectly
+   - `editor console` (2 levels)
+
+3. **Positional vs named args inconsistency**:
+   - `material create PATH` (positional)
+   - `shader read PATH` (positional)
+   - Inconsistent between similar commands
+
+**Actions**:
+1. Add `--force`/`-f` to ALL destructive commands (texture delete, shader delete, etc.)
+2. Add command aliases where reasonable (accept both `vfx particle-info` and `vfx particle info`)
+3. Audit all commands for consistent flag naming (`-f`/`--force` everywhere)
+4. Document standard patterns in CLI README
+5. Consider adding better error messages that suggest correct syntax
+
+**Files to update**:
+- `texture.py` — add `--force` to delete
+- `shader.py` — add `--force` to delete
+- `script.py` — verify `--force` consistency
+- All command files — audit for `-f` short flag availability
+
 ---
 
 ## P3: Long-term / Larger Refactors
