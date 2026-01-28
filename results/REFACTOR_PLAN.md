@@ -268,12 +268,17 @@ Create single `UnityTypeConverter` class as foundation:
 - Import from 36+ tool files
 - Reduces 300+ lines to ~200 in one place
 
-### P1-4: Consolidate Session Models (Models)
-**Impact**: Eliminates PluginSession/SessionDetails duplication
+### P1-4: Consolidate Session Models (Models) ⏸️ SKIPPED (2026-01-28)
+**Status**: ⏸️ Skipped - Low impact after evaluation
+**Original Impact**: Eliminates PluginSession/SessionDetails duplication
 **Effort**: 2 hours
 **Risk**: Low
 
-Keep `PluginSession` as internal, add `to_api_response()` method that generates `SessionDetails` format. Remove duplicate field definitions.
+**Evaluation Finding**: Models aren't truly duplicate - they serve different purposes:
+- `PluginSession` = internal runtime storage (datetime objects, tools dict)
+- `SessionDetails` = API serialization (string timestamps, minimal fields)
+- Only 1 conversion site exists (4 lines in plugin_hub.py)
+- Adding `to_api_response()` just moves code, doesn't reduce complexity
 
 ### P1-5: Configuration Cache (Editor Integration) ✅ COMPLETE (2026-01-27)
 **Status**: ✅ Created EditorConfigurationCache singleton, replaced 25 UseHttpTransport reads
@@ -364,25 +369,74 @@ TransportManager becomes single source of truth for all state. Individual client
 
 Create dedicated `SessionResolver` class handling all retry/wait logic. Both middleware and `send_command_for_instance()` delegate to it.
 
-### P2-6: Consolidate VFX Tools (Editor Tools) ⚠️ REVISED (Audit 2026-01-27)
-**Audit Finding**: 12 files, 2377 total lines, but:
-- ManageVFX.cs alone is **1023 lines (43%)** — the real problem
-- Other 11 files are small (22-295 lines each) and already organized by type
-- Merging small files wouldn't reduce complexity, just create bigger files
+### P2-6: Split ManageVFX.cs + Consolidate String Case Utilities ⚠️ REVISED (2026-01-28)
 
-**Revised Approach**: Split ManageVFX.cs instead of merging others
-**Impact**: Medium (addresses the actual problem: 1023-line dispatcher)
+**Problem Analysis**:
+- ManageVFX.cs is 1023 lines (43% of VFX folder)
+- VFX Graph code (~585 lines) is inline while Particle/Line/Trail have separate files
+- `ToCamelCase()` duplicated in 3 places: ToolParams.cs, BatchExecute.cs, ManageVFX.cs
+- `ToSnakeCase()` duplicated in 3 places: ToolParams.cs, CommandRegistry.cs, ToolDiscoveryService.cs
+
+**Revised Approach**: Two-part refactor
+1. Extract VFX Graph code into separate files (pattern consistency)
+2. Consolidate string case utilities (eliminate 6x duplication)
+
+**Impact**: Medium-High
 **Effort**: 4-6 hours
 **Risk**: Medium
 
-Current structure (already reasonable):
+#### Part 1: Extract VFX Graph Code
+
+Create new files following existing Particle/Line/Trail pattern:
+
+| New File | Methods | Est. Lines |
+|----------|---------|------------|
+| `VfxGraphAssets.cs` | `VFXCreateAsset`, `VFXAssignAsset`, `VFXListTemplates`, `VFXListAssets`, `FindVFXTemplate` | ~280 |
+| `VfxGraphRead.cs` | `VFXGetInfo`, `FindVisualEffect` | ~50 |
+| `VfxGraphWrite.cs` | `VFXSetParameter`, `VFXSetVector`, `VFXSetColor`, `VFXSetGradient`, `VFXSetTexture`, `VFXSetMesh`, `VFXSetCurve` | ~180 |
+| `VfxGraphControl.cs` | `VFXControl`, `VFXSetPlaybackSpeed`, `VFXSetSeed`, `VFXSendEvent` | ~80 |
+
+Result: ManageVFX.cs 1023 → ~430 lines
+
+#### Part 2: Consolidate String Case Utilities
+
+Create `StringCaseUtility.cs` in Helpers with public methods:
+```csharp
+public static class StringCaseUtility
+{
+    public static string ToCamelCase(string snakeCase);
+    public static string ToSnakeCase(string camelCase);
+}
 ```
-ManageVFX.cs (1023 lines - SPLIT THIS)
-├── Particle*: ParticleCommon, ParticleControl, ParticleRead, ParticleWrite (556 lines total)
-├── Line*: LineCreate, LineRead, LineWrite (461 lines total)
-├── Trail*: TrailControl, TrailRead, TrailWrite (215 lines total)
-└── ManageVfxCommon.cs (22 lines)
+
+Update files to use shared utility:
+- `ToolParams.cs` - make private methods call shared utility
+- `BatchExecute.cs` - remove private `ToCamelCase`, use utility
+- `ManageVFX.cs` - remove private `ToCamelCase`, use utility
+- `CommandRegistry.cs` - remove private `ToSnakeCase`, use utility
+- `ToolDiscoveryService.cs` - remove private `ConvertToSnakeCase`, use utility
+
+Result: ~60 lines of duplicated code eliminated
+
+#### Final Structure
 ```
+MCPForUnity/Editor/
+├── Helpers/
+│   └── StringCaseUtility.cs (NEW - ~30 lines)
+└── Tools/VFX/
+    ├── ManageVFX.cs (1023 → ~350 lines)
+    ├── VfxGraphAssets.cs (NEW - ~280 lines)
+    ├── VfxGraphRead.cs (NEW - ~50 lines)
+    ├── VfxGraphWrite.cs (NEW - ~180 lines)
+    ├── VfxGraphControl.cs (NEW - ~80 lines)
+    └── [existing Particle/Line/Trail files unchanged]
+```
+
+#### Success Criteria
+- [ ] ManageVFX.cs reduced to ~350 lines (dispatcher + param normalization only)
+- [ ] All VFX Graph actions work identically (characterization tests pass)
+- [ ] `ToCamelCase`/`ToSnakeCase` consolidated to single source
+- [ ] All 600+ tests pass
 
 ### P2-7: Split AssetPathUtility (Helpers)
 **Impact**: Single responsibility, easier to test/maintain
