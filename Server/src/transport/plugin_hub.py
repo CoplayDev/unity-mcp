@@ -86,15 +86,18 @@ class PluginHub(WebSocketEndpoint):
         to prevent the error from crashing the server. The connection will fail
         normally and Unity will attempt to reconnect.
         """
+        client_host = websocket.client.host if websocket.client else "unknown"
+        logger.info(f"[DEBUG] on_connect called: client={client_host}")
+
         await websocket.accept()
-        logger.debug("WebSocket connection accepted successfully")
+        logger.info(f"[DEBUG] WebSocket accept() successful for client={client_host}")
 
         msg = WelcomeMessage(
             serverTimeout=self.SERVER_TIMEOUT,
             keepAliveInterval=self.KEEP_ALIVE_INTERVAL,
         )
         await websocket.send_json(msg.model_dump())
-        logger.debug("WelcomeMessage sent to client")
+        logger.info(f"[DEBUG] WelcomeMessage sent to client={client_host}")
 
     async def on_receive(self, websocket: WebSocket, data: Any) -> None:
         if not isinstance(data, dict):
@@ -119,12 +122,15 @@ class PluginHub(WebSocketEndpoint):
     async def on_disconnect(self, websocket: WebSocket, close_code: int) -> None:
         cls = type(self)
         lock = cls._lock
+        logger.info(f"[DEBUG] on_disconnect called: close_code={close_code}")
         if lock is None:
+            logger.warning("[DEBUG] on_disconnect: lock is None, returning")
             return
         async with lock:
             session_id = next(
                 (sid for sid, ws in cls._connections.items() if ws is websocket), None)
             if session_id:
+                logger.info(f"[DEBUG] on_disconnect: removing session {session_id}")
                 cls._connections.pop(session_id, None)
                 # Fail-fast any in-flight commands for this session to avoid waiting for COMMAND_TIMEOUT.
                 pending_ids = [
@@ -145,7 +151,8 @@ class PluginHub(WebSocketEndpoint):
                 if cls._registry:
                     await cls._registry.unregister(session_id)
                 logger.info(
-                    f"Plugin session {session_id} disconnected ({close_code})")
+                    f"[DEBUG] Plugin session {session_id} disconnected ({close_code}), "
+                    f"remaining sessions: {len(cls._connections)}")
 
     # ------------------------------------------------------------------
     # Public API
@@ -284,6 +291,7 @@ class PluginHub(WebSocketEndpoint):
         cls = type(self)
         registry = cls._registry
         lock = cls._lock
+        logger.info(f"[DEBUG] _handle_register called: project_name={payload.project_name}")
         if registry is None or lock is None:
             await websocket.close(code=1011)
             raise RuntimeError("PluginHub not configured")
@@ -298,6 +306,7 @@ class PluginHub(WebSocketEndpoint):
                 "Plugin registration missing project_hash")
 
         session_id = str(uuid.uuid4())
+        logger.info(f"[DEBUG] Generated session_id={session_id} for {project_name}")
         # Inform the plugin of its assigned session ID
         response = RegisteredMessage(session_id=session_id)
         await websocket.send_json(response.model_dump())
@@ -305,7 +314,8 @@ class PluginHub(WebSocketEndpoint):
         session = await registry.register(session_id, project_name, project_hash, unity_version)
         async with lock:
             cls._connections[session.session_id] = websocket
-        logger.info(f"Plugin registered: {project_name} ({project_hash})")
+        logger.info(f"[DEBUG] Plugin registered: {project_name} ({project_hash}), session={session_id}, "
+                   f"total connections={len(cls._connections)}")
 
     async def _handle_register_tools(self, websocket: WebSocket, payload: RegisterToolsMessage) -> None:
         cls = type(self)

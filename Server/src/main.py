@@ -170,20 +170,22 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
                     # Suppress the ERROR log for this common Windows socket error
                     # The exception will still propagate, failing the WebSocket cleanly
                     logger.debug(
-                        f"Asyncio: OSError WinError 64 during {context.get('task', 'operation')} "
+                        f"[DEBUG] Asyncio: OSError WinError 64 during {context.get('task', 'operation')} "
                         "(normal during Unity domain reloads, connection will fail cleanly)"
                     )
                     # Don't call default handler to avoid ERROR log
                     # Exception still propagates to the caller
                     return
             # For all other exceptions, use the original handler
+            logger.info(f"[DEBUG] Asyncio exception handler: exception={type(exception).__name__ if exception else 'None'}, "
+                       f"task={context.get('task', 'unknown')}")
             if original_handler:
                 original_handler(loop, context)
             else:
                 loop.default_exception_handler(context)
 
         loop.set_exception_handler(_asyncio_exception_handler)
-        logger.info("Registered asyncio exception handler for Windows socket errors")
+        logger.info("[DEBUG] Registered asyncio exception handler for Windows socket errors")
 
     # Record server startup telemetry
     start_time = time.time()
@@ -726,11 +728,12 @@ Examples:
         host = args.http_host or os.environ.get(
             "UNITY_MCP_HTTP_HOST") or parsed_url.hostname or "localhost"
         port = args.http_port or _env_port or parsed_url.port or 8080
-        logger.info(f"Starting FastMCP with HTTP transport on {host}:{port}")
+        logger.info(f"[DEBUG] Starting FastMCP with HTTP transport on {host}:{port}")
+        logger.info(f"[DEBUG] WebSocket hub endpoint will be at ws://{host}:{port}/hub/plugin")
         mcp.run(transport=transport, host=host, port=port)
     else:
         # Use stdio transport for traditional MCP
-        logger.info("Starting FastMCP with stdio transport")
+        logger.info("[DEBUG] Starting FastMCP with stdio transport")
         mcp.run(transport='stdio')
 
 
