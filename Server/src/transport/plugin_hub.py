@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import sys
 import time
 import uuid
 from typing import Any
@@ -77,7 +78,33 @@ class PluginHub(WebSocketEndpoint):
         return cls._registry is not None and cls._lock is not None
 
     async def on_connect(self, websocket: WebSocket) -> None:
-        await websocket.accept()
+        """Handle incoming WebSocket connection.
+
+        On Windows, OSError [WinError 64] can occur when Unity disconnects
+        during domain reload while we're trying to accept the connection.
+        We catch and log this gracefully to avoid crashing the endpoint.
+        """
+        try:
+            await websocket.accept()
+        except OSError as exc:
+            # Windows-specific error: client disconnected during accept
+            # This is common during Unity domain reloads
+            winerror = getattr(exc, 'winerror', None)
+            if sys.platform == 'win32' and winerror == 64:
+                logger.debug(
+                    "WebSocket accept failed: client disconnected during accept (WinError 64). "
+                    "This is normal during Unity domain reloads."
+                )
+            else:
+                logger.warning(f"WebSocket accept failed: {exc}")
+            # Close the websocket cleanly without calling on_disconnect
+            # since the connection was never fully established
+            try:
+                await websocket.close(code=1006, reason="Accept failed")
+            except Exception:
+                pass
+            return
+
         msg = WelcomeMessage(
             serverTimeout=self.SERVER_TIMEOUT,
             keepAliveInterval=self.KEEP_ALIVE_INTERVAL,
