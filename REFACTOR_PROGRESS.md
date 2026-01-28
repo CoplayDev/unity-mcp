@@ -221,6 +221,7 @@ Before starting Quick Wins refactoring, audited existing utilities to avoid dupl
 13. ⏸️ **P1-2**: EditorPrefs Binding Helper - skipped (low impact per pattern, keys already centralized)
 14. ✅ **P1-6: Unified Test Fixtures** - DONE (~95 lines removed, 4 files consolidated)
 15. ⏸️ **P2-3**: Configurator Builder Pattern - skipped (configurators already well-factored, ~26-32 lines each)
+16. 🔄 **P2-1: CLI Command Wrapper** - IN PROGRESS (decorator created, scene.py refactored as proof-of-concept, ~200 lines potential when fully applied)
 
 ---
 
