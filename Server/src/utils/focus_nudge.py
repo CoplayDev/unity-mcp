@@ -66,6 +66,26 @@ def _get_current_nudge_interval() -> float:
     return min(interval, _MAX_NUDGE_INTERVAL_S)
 
 
+def _get_current_focus_duration() -> float:
+    """
+    Calculate current focus duration using exponential backoff.
+
+    Returns focus duration based on consecutive nudges without progress:
+    - 0 nudges: 3s (quick stall recovery)
+    - 1 nudge: 5s (compilation might be starting)
+    - 2 nudges: 8s (deep compilation)
+    - 3+ nudges: 12s (domain reload/heavy compilation)
+    """
+    if _consecutive_nudges == 0:
+        return 3.0
+    elif _consecutive_nudges == 1:
+        return 5.0
+    elif _consecutive_nudges == 2:
+        return 8.0
+    else:
+        return 12.0
+
+
 def reset_nudge_backoff() -> None:
     """
     Reset exponential backoff when progress is detected.
@@ -274,20 +294,23 @@ async def nudge_unity_focus(
     """
     Temporarily focus Unity to allow it to process, then return focus.
 
-    Uses exponential backoff: interval starts at base (1.0s) and doubles
-    with each consecutive nudge up to max (10.0s). Resets on progress.
+    Uses exponential backoff for both interval and duration:
+    - Interval: 1s, 2s, 4s, 8s, 10s (time between nudges)
+    - Duration: 3s, 5s, 8s, 12s (how long Unity stays focused)
+    Resets on progress.
 
     Args:
         focus_duration_s: How long to keep Unity focused (seconds).
-            Defaults to _DEFAULT_FOCUS_DURATION_S (configurable via
-            UNITY_MCP_NUDGE_DURATION_S environment variable).
+            If None, uses exponential backoff (3s/5s/8s/12s based on consecutive nudges).
+            Can be overridden with UNITY_MCP_NUDGE_DURATION_S env var.
         force: If True, ignore the minimum interval between nudges
 
     Returns:
         True if nudge was performed, False if skipped or failed
     """
     if focus_duration_s is None:
-        focus_duration_s = _DEFAULT_FOCUS_DURATION_S
+        # Use exponential backoff for focus duration
+        focus_duration_s = _get_current_focus_duration()
     global _last_nudge_time, _consecutive_nudges
 
     if not _is_available():
@@ -312,7 +335,7 @@ async def nudge_unity_focus(
         logger.debug("Unity already focused, no nudge needed")
         return False
 
-    logger.info(f"Nudging Unity focus (interval: {current_interval:.1f}s, consecutive: {_consecutive_nudges}, will return to {original_app})")
+    logger.info(f"Nudging Unity focus (interval: {current_interval:.1f}s, consecutive: {_consecutive_nudges}, duration: {focus_duration_s:.1f}s, will return to {original_app})")
     _last_nudge_time = now
     _consecutive_nudges += 1
 
@@ -321,13 +344,23 @@ async def nudge_unity_focus(
         logger.warning("Failed to focus Unity")
         return False
 
-    # Wait for Unity to process
+    # Wait for window switch animation to complete before starting timer
+    # macOS activate is asynchronous, so Unity might not be visible yet
+    await asyncio.sleep(0.5)
+
+    # Verify Unity is actually focused now
+    current_app = _get_frontmost_app()
+    if current_app and "Unity" not in current_app:
+        logger.warning(f"Unity activation didn't complete - current app is {current_app}")
+        # Continue anyway in case Unity is processing in background
+
+    # Wait for Unity to process (actual working time)
     await asyncio.sleep(focus_duration_s)
 
     # Return focus to original app
     if original_app and original_app != "Unity":
         if _focus_app(original_app):
-            logger.info(f"Returned focus to {original_app}")
+            logger.info(f"Returned focus to {original_app} after {focus_duration_s:.1f}s Unity focus")
         else:
             logger.warning(f"Failed to return focus to {original_app}")
 
