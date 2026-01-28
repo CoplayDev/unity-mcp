@@ -35,25 +35,18 @@ class GetTestsResponse(MCPResponse):
 @mcp_for_unity_resource(
     uri="mcpforunity://tests",
     name="get_tests",
-    description="Provides a paginated list of Unity tests with optional filtering. "
-                "Supports mode, filter, page_size (default 50, max 200), and cursor parameters.\n\nURI: mcpforunity://tests"
+    description="Provides the first page of Unity tests (default 50 items). "
+                "For filtering or pagination, use the run_tests tool instead.\n\nURI: mcpforunity://tests"
 )
 async def get_tests(ctx: Context) -> GetTestsResponse | MCPResponse:
-    """Provides a paginated list of all Unity tests with optional filtering.
+    """Provides a paginated list of all Unity tests.
 
-    The Unity C# handler accepts these parameters:
-    - mode: Optional test mode filter (EditMode or PlayMode)
-    - filter: Optional name filter pattern (case-insensitive)
-    - page_size: Number of tests per page (default: 50, max: 200)
-    - cursor: 0-based cursor position for pagination
-    - page_number: 1-based page number (alternative to cursor)
-
-    Parameters are passed through to Unity and handled there.
+    Returns the first page of tests using Unity's default pagination (50 items).
+    For advanced filtering or pagination control, use the run_tests tool which
+    accepts mode, filter, page_size, and cursor parameters.
     """
     unity_instance = get_unity_instance_from_context(ctx)
 
-    # For now, just pass empty params - Unity will handle pagination defaults
-    # In the future, we could extract params from ctx if needed
     response = await send_with_unity_instance(
         async_send_command_with_retry,
         unity_instance,
@@ -66,7 +59,8 @@ async def get_tests(ctx: Context) -> GetTestsResponse | MCPResponse:
 @mcp_for_unity_resource(
     uri="mcpforunity://tests/{mode}",
     name="get_tests_for_mode",
-    description="Provides a paginated list of tests for a specific mode (EditMode or PlayMode).\n\nURI: mcpforunity://tests/{mode}"
+    description="Provides the first page of tests for a specific mode (EditMode or PlayMode). "
+                "For filtering or pagination, use the run_tests tool instead.\n\nURI: mcpforunity://tests/{mode}"
 )
 async def get_tests_for_mode(
     ctx: Context,
@@ -74,15 +68,13 @@ async def get_tests_for_mode(
         description="The mode to filter tests by (EditMode or PlayMode)."
     )],
 ) -> GetTestsResponse | MCPResponse:
-    """Provides a paginated list of tests for a specific mode.
+    """Provides the first page of tests for a specific mode.
 
     Args:
         mode: The test mode to filter by (EditMode or PlayMode)
 
-    The Unity C# handler also accepts optional parameters:
-    - filter: Filter test names by pattern (case-insensitive contains)
-    - page_size: Number of tests per page (default: 50, max: 200)
-    - cursor: 0-based cursor position for pagination
+    Returns the first page of tests using Unity's default pagination (50 items).
+    For advanced filtering or pagination control, use the run_tests tool.
     """
     unity_instance = get_unity_instance_from_context(ctx)
 
