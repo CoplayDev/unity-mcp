@@ -29,11 +29,15 @@ namespace MCPForUnityTests.Editor.Tools.Characterization
         /// This is the standard pattern - tests verify all sampled tools follow it.
         /// </summary>
         [Test]
-        public void HandleCommand_ManageEditor_WithNullParams_ThrowsNullReferenceException()
+        public void HandleCommand_ManageEditor_WithNullParams_ReturnsErrorResponse()
         {
-            // CURRENT BEHAVIOR: ManageEditor does NOT handle null params gracefully - it throws NullReferenceException
-            // This documents actual behavior before refactoring. After refactoring, this should be fixed.
-            Assert.Throws<NullReferenceException>(() => ManageEditor.HandleCommand(null));
+            // FIXED BEHAVIOR (P1-1 ToolParams refactoring): ManageEditor now handles null params gracefully
+            // Returns ErrorResponse instead of throwing NullReferenceException
+            var result = ManageEditor.HandleCommand(null);
+            var jo = ToJO(result);
+            Assert.IsFalse((bool)jo["success"], "Should return error for null params");
+            Assert.IsNotNull(jo["error"], "Should have error message");
+            Assert.That((string)jo["error"], Does.Contain("cannot be null"), "Should indicate parameters are null");
         }
 
         [Test]
