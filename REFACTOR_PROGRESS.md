@@ -1,11 +1,18 @@
 # Refactor Progress - Last Updated 2026-01-28
 
-## Current Status: P2-6 Complete - VFX Graph Split + Utility Consolidation
+## Current Status: Refactor Plan Complete ✅
 
-All characterization tests successfully created, validated, and passing (600+ tests).
-P3-1 (ServerManagementService decomposition) completed - 1489 lines → ~300 lines orchestrator + 5 focused services.
-P1-5 (EditorConfigurationCache) completed - 25 scattered EditorPrefs reads centralized into cache singleton.
-P2-6 (ManageVFX split + StringCaseUtility) completed - ManageVFX.cs 1006 → 411 lines (59% reduction).
+All planned refactors evaluated and completed or intentionally skipped.
+
+**Completed (15 items)**:
+- All P0 Quick Wins (QW-1 through QW-5)
+- P1-1, P1-3, P1-5, P1-6
+- P2-1, P2-6, P2-8, P2-9
+- P3-1
+
+**Skipped (12 items)**: Low impact or high risk relative to effort.
+
+All 600+ tests passing. Significant code reduction achieved across the codebase.
 
 ---
 
@@ -37,6 +44,17 @@ P2-6 (ManageVFX split + StringCaseUtility) completed - ManageVFX.cs 1006 → 411
 ---
 
 ## Recently Completed
+
+### P2-9: Focus Nudge Improvements ✅ (2026-01-28)
+- **Goal**: Improve focus nudge timing for better automated test reliability
+- **Time**: ~15 minutes
+- **Changes**:
+  - Increased default focus duration from 0.5s to 2.0s
+  - Reduced minimum nudge interval from 5.0s to 2.0s
+  - Added environment variable configuration:
+    - `UNITY_MCP_NUDGE_DURATION_S` - focus duration
+    - `UNITY_MCP_NUDGE_INTERVAL_S` - min interval between nudges
+- **Also fixed**: `test_texture_delete` test to include `--force` flag (from P2-8)
 
 ### P2-6: ManageVFX Split + StringCaseUtility Consolidation ✅ (2026-01-28)
 - **Goal**: Extract VFX Graph code from ManageVFX.cs and consolidate string case utilities
@@ -322,6 +340,15 @@ Before starting Quick Wins refactoring, audited existing utilities to avoid dupl
 20. ✅ **P1-5: EditorConfigurationCache** - DONE (25 EditorPrefs reads centralized, 13 files updated, 13 tests)
 21. ⏸️ **P1-4: Session Model Consolidation** - SKIPPED (only 4 lines of code to move, low impact)
 22. ✅ **P2-6: ManageVFX Split + StringCaseUtility** - DONE (ManageVFX 1006 → 411 lines, 6 duplicate implementations eliminated)
+23. ⏸️ **P2-2: Base Section Controller** - SKIPPED (UI pattern already consistent, base class adds overhead without code reduction)
+24. ⏸️ **P2-4: Merge Transport State** - SKIPPED (P1-5 and P3-1 addressed core issues)
+25. ⏸️ **P2-5: Extract SessionResolver** - SKIPPED (low payoff for medium effort)
+26. ⏸️ **P2-7: Split AssetPathUtility** - SKIPPED (works fine as-is, 430 lines not causing issues)
+27. ✅ **P2-9: Focus Nudge Improvements** - DONE (duration 0.5→2.0s, interval 5.0→2.0s, env var config added)
+28. ⏸️ **P3-2: Base Tool Framework** - SKIPPED (15-20 hours, diminishing returns)
+29. ⏸️ **P3-3: Unified Instrumentation Layer** - SKIPPED (working system, risk outweighs benefit)
+30. ⏸️ **P3-4: Separate WebSocket Lifecycle** - SKIPPED (high risk to working system)
+31. ⏸️ **P3-5: Code Generation for Tools** - SKIPPED (20-25 hours, too large for current scope)
 
 ---
 
