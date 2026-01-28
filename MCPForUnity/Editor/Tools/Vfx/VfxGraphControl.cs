@@ -43,6 +43,8 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 case "stop": vfx.Stop(); break;
                 case "pause": vfx.pause = !vfx.pause; break;
                 case "reinit": vfx.Reinit(); break;
+                default:
+                    return new { success = false, message = $"Unknown VFX action: {action}" };
             }
 
             return new { success = true, message = $"VFX {action}", isPaused = vfx.pause };

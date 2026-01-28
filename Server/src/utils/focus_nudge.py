@@ -157,13 +157,13 @@ def _find_unity_pid_by_project_path(project_path: str) -> int | None:
                     continue
             else:
                 # Match if path ends with project name (e.g., ".../UnityMCPTests")
-                if f"-projectpath" in line:
+                if "-projectpath" in line:
                     # Extract the path after -projectpath
                     try:
                         parts = line.split("-projectpath", 1)[1].split()[0]
                         if not parts.endswith(f"/{project_path}") and not parts.endswith(f"\\{project_path}") and parts != project_path:
                             continue
-                    except:
+                    except (IndexError, ValueError):
                         continue
 
             # Extract PID (second column in ps aux output)

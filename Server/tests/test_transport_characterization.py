@@ -210,12 +210,12 @@ class TestUnityInstanceMiddlewareInjection:
         middleware_ctx.fastmcp_context = mock_context
 
         call_next_called = False
-        async def mock_call_next(ctx):
+        async def mock_call_next(_ctx):
             nonlocal call_next_called
             call_next_called = True
             return {"status": "ok"}
 
-        result = await middleware.on_call_tool(middleware_ctx, mock_call_next)
+        await middleware.on_call_tool(middleware_ctx, mock_call_next)
 
         assert call_next_called, "Middleware must call next handler"
         mock_context.set_state.assert_called_with("unity_instance", instance_id)
@@ -234,7 +234,7 @@ class TestUnityInstanceMiddlewareInjection:
         middleware_ctx = Mock()
         middleware_ctx.fastmcp_context = mock_context
 
-        async def mock_call_next(ctx):
+        async def mock_call_next(_ctx):
             return {"status": "ok"}
 
         await middleware.on_read_resource(middleware_ctx, mock_call_next)
@@ -253,7 +253,7 @@ class TestUnityInstanceMiddlewareInjection:
         middleware_ctx = Mock()
         middleware_ctx.fastmcp_context = mock_context
 
-        async def mock_call_next(ctx):
+        async def mock_call_next(_ctx):
             return {"status": "ok"}
 
         # Mock PluginHub as unavailable - this is sufficient for auto-select to fail
@@ -431,7 +431,7 @@ class TestPluginRegistryFunctionality:
         Current behavior: register_tools_for_session() stores tool definitions
         keyed by tool name on the session.
         """
-        session = await plugin_registry.register(
+        await plugin_registry.register(
             session_id="sess-x",
             project_name="Project",
             project_hash="hash-x",
@@ -689,12 +689,15 @@ class TestSessionResolution:
             )
 
         # Schedule registration
-        asyncio.create_task(delayed_register())
+        task = asyncio.create_task(delayed_register())
 
         # Resolve with short timeout
         session_id = await PluginHub._resolve_session_id(target_hash)
 
         assert session_id == "sess-delayed"
+
+        # Ensure background task completes
+        await task
 
         # Cleanup
         PluginHub._registry = None

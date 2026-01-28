@@ -429,7 +429,7 @@ class TestTelemetryDecoratorDuplication:
             return "result"
 
         # Call multiple times
-        for i in range(15):
+        for _ in range(15):
             func_limited()
 
         # Count how many times the decorator logged
