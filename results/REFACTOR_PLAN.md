@@ -392,9 +392,10 @@ Break 372-line mega-utility into:
 2. `PackageVersionUtility` — Package.json reading, version checks (90 lines)
 3. `UvxCommandBuilder` — uvx argument construction (70 lines)
 
-### P2-8: CLI Consistency Pass (CLI)
+### P2-8: CLI Consistency Pass (CLI) ✅ CORE COMPLETE (2026-01-27)
+**Status**: Core consistency issues fixed, optional enhancements remain
 **Impact**: Reduces user errors, improves discoverability, consistent UX
-**Effort**: 3-4 hours
+**Effort**: 1 hour (actual for core items)
 **Risk**: Low
 
 **Problem**: CLI commands have inconsistent patterns leading to user errors:

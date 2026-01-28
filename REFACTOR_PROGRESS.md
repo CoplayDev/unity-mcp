@@ -252,8 +252,11 @@ Before starting Quick Wins refactoring, audited existing utilities to avoid dupl
 15. ⏸️ **P2-3**: Configurator Builder Pattern - skipped (configurators already well-factored, ~26-32 lines each)
 16. ✅ **P2-1: CLI Command Wrapper** - DONE (~296 lines eliminated, decorator applied to 83 commands across 18 files)
 17. ✅ **P1-3: Type Conversion Consolidation** - DONE (nullable coercion methods added, ~87 lines of duplicated TryParse code eliminated)
-18. 🔄 **P2-8: CLI Consistency Pass** - IN PROGRESS
+18. ✅ **P2-8: CLI Consistency Pass** - DONE (core items)
     - ✅ `texture delete` - Added `--force` flag and confirmation prompt (was the only delete command missing this)
+    - ✅ Verified all `--force` flags have `-f` short option
+    - ⏸️ VFX `clear` commands intentionally left without confirmation (ephemeral, not destructive)
+    - 📋 Remaining optional: Command aliases, CLI README documentation, better error messages
 
 ---
 
