@@ -30,3 +30,24 @@ def fresh_telemetry():
     except Exception:
         pass
     yield
+
+
+def pytest_collection_modifyitems(session, config, items):
+    """Reorder tests so characterization tests run before integration tests.
+
+    This prevents integration tests from initializing the telemetry singleton
+    before characterization tests can mock it.
+    """
+    # Separate integration tests from other tests
+    integration_tests = []
+    other_tests = []
+
+    for item in items:
+        # Check if test is in integration/ directory
+        if "integration" in str(item.fspath):
+            integration_tests.append(item)
+        else:
+            other_tests.append(item)
+
+    # Reorder: characterization/unit tests first, then integration tests
+    items[:] = other_tests + integration_tests
