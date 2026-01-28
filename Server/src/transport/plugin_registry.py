@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 import asyncio
 
+from core.config import config
 from models.models import ToolDefinitionModel
 
 
@@ -161,8 +162,16 @@ class PluginRegistry:
 
         Args:
             user_id: If provided, only return sessions for this user (remote-hosted mode).
-                     If None, return all sessions (local mode).
+                     If None, return all sessions (local mode only).
+
+        Raises:
+            ValueError: If ``user_id`` is None while running in remote-hosted mode.
+                        This prevents accidentally leaking sessions across users.
         """
+        if user_id is None and config.http_remote_hosted:
+            raise ValueError(
+                "list_sessions requires user_id in remote-hosted mode"
+            )
 
         async with self._lock:
             if user_id is None:
