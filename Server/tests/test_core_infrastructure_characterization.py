@@ -442,14 +442,13 @@ class TestTelemetryDecoratorDuplication:
 class TestTelemetryDecoratorExceptionHandling:
     """Tests for exception handling in telemetry decorators."""
 
-    @pytest.mark.skip(reason="TODO: Fix telemetry mock patching - decorator imports at module level")
     def test_telemetry_tool_exception_recorded(self):
         """Verify telemetry records exceptions in tool execution."""
         @telemetry_tool("failing_tool")
         def failing_tool():
             raise ValueError("Tool error")
 
-        with patch("core.telemetry.record_tool_usage") as mock_record:
+        with patch("core.telemetry_decorator.record_tool_usage") as mock_record:
             with pytest.raises(ValueError, match="Tool error"):
                 failing_tool()
 
@@ -465,7 +464,7 @@ class TestTelemetryDecoratorExceptionHandling:
         def failing_resource():
             raise RuntimeError("Resource error")
 
-        with patch("core.telemetry.record_resource_usage") as mock_record:
+        with patch("core.telemetry_decorator.record_resource_usage") as mock_record:
             with pytest.raises(RuntimeError, match="Resource error"):
                 failing_resource()
 
@@ -485,7 +484,7 @@ class TestTelemetryDecoratorExceptionHandling:
         def func_with_recording_error():
             return "result"
 
-        with patch("core.telemetry.record_tool_usage", side_effect=Exception("Recording failed")):
+        with patch("core.telemetry_decorator.record_tool_usage", side_effect=Exception("Recording failed")):
             # Should not raise despite record_tool_usage error
             result = func_with_recording_error()
             assert result == "result"
@@ -503,7 +502,7 @@ class TestTelemetrySubAction:
         def tool_with_action(name, action=None):
             return f"result_{action}"
 
-        with patch("core.telemetry.record_tool_usage") as mock_record:
+        with patch("core.telemetry_decorator.record_tool_usage") as mock_record:
             result = tool_with_action("test", action="create")
 
             assert result == "result_create"
@@ -518,7 +517,7 @@ class TestTelemetrySubAction:
         def tool_no_action(name):
             return "result"
 
-        with patch("core.telemetry.record_tool_usage") as mock_record:
+        with patch("core.telemetry_decorator.record_tool_usage") as mock_record:
             result = tool_no_action("test")
 
             assert result == "result"
@@ -532,7 +531,7 @@ class TestTelemetrySubAction:
         def create_script(name, action=None):
             return "created"
 
-        with patch("core.telemetry.record_milestone") as mock_milestone:
+        with patch("core.telemetry_decorator.record_milestone") as mock_milestone:
             result = create_script("test", action="create")
 
             assert result == "created"
@@ -548,7 +547,7 @@ class TestTelemetrySubAction:
         def modify_scene(name, action=None):
             return "modified"
 
-        with patch("core.telemetry.record_milestone") as mock_milestone:
+        with patch("core.telemetry_decorator.record_milestone") as mock_milestone:
             result = modify_scene("test", action="edit")
 
             assert result == "modified"
@@ -564,7 +563,7 @@ class TestTelemetrySubAction:
         def any_tool():
             return "done"
 
-        with patch("core.telemetry.record_milestone") as mock_milestone:
+        with patch("core.telemetry_decorator.record_milestone") as mock_milestone:
             result = any_tool()
 
             assert result == "done"
@@ -585,7 +584,7 @@ class TestTelemetryDuration:
             time.sleep(0.05)  # 50ms
             return "done"
 
-        with patch("core.telemetry.record_tool_usage") as mock_record:
+        with patch("core.telemetry_decorator.record_tool_usage") as mock_record:
             result = slow_tool()
 
             assert result == "done"
@@ -601,7 +600,7 @@ class TestTelemetryDuration:
             await asyncio.sleep(0.05)
             return "done"
 
-        with patch("core.telemetry.record_tool_usage") as mock_record:
+        with patch("core.telemetry_decorator.record_tool_usage") as mock_record:
             result = asyncio.run(slow_async_tool())
 
             assert result == "done"
@@ -616,7 +615,7 @@ class TestTelemetryDuration:
             time.sleep(0.02)
             raise ValueError("Error")
 
-        with patch("core.telemetry.record_tool_usage") as mock_record:
+        with patch("core.telemetry_decorator.record_tool_usage") as mock_record:
             with pytest.raises(ValueError):
                 error_tool()
 
@@ -1166,7 +1165,7 @@ class TestDecoratorTelemetryIntegration:
         def stacked_func():
             return "result"
 
-        with patch("core.telemetry.record_tool_usage"):
+        with patch("core.telemetry_decorator.record_tool_usage"):
             result = stacked_func()
 
             assert result == "result"
@@ -1182,7 +1181,7 @@ class TestDecoratorTelemetryIntegration:
         def tool2():
             return "result2"
 
-        with patch("core.telemetry.record_tool_usage") as mock_record:
+        with patch("core.telemetry_decorator.record_tool_usage") as mock_record:
             result1 = tool1()
             result2 = tool2()
 
