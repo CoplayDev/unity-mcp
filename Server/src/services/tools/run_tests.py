@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from typing import Annotated, Any, Literal
 
@@ -16,9 +17,45 @@ from services.tools import get_unity_instance_from_context
 from services.tools.preflight import preflight
 import transport.unity_transport as unity_transport
 from transport.legacy.unity_connection import async_send_command_with_retry
+from transport.plugin_hub import PluginHub
 from utils.focus_nudge import nudge_unity_focus, should_nudge, reset_nudge_backoff
 
 logger = logging.getLogger(__name__)
+
+
+async def _get_unity_project_path(unity_instance: str | None) -> str | None:
+    """Get the project root path for a Unity instance (for focus nudging).
+
+    Args:
+        unity_instance: Unity instance hash or None
+
+    Returns:
+        Project root path (e.g., "/Users/name/project"), or falls back to project_name if path unavailable
+    """
+    if not unity_instance:
+        return None
+
+    try:
+        registry = PluginHub._registry
+        if not registry:
+            return None
+
+        # Get session by hash
+        session_id = await registry.get_session_id_by_hash(unity_instance)
+        if not session_id:
+            return None
+
+        session = await registry.get_session(session_id)
+        if not session:
+            return None
+
+        # Return full path if available, otherwise fall back to project name
+        if session.project_path:
+            return session.project_path
+        return session.project_name if session.project_name else None
+    except Exception as e:
+        logger.debug(f"Could not get Unity project path: {e}")
+        return None
 
 
 class RunTestsSummary(BaseModel):
@@ -202,6 +239,9 @@ async def get_test_job(
         poll_interval = 2.0  # Poll Unity every 2 seconds
         prev_last_update_unix_ms = None
 
+        # Get project path once for focus nudging (multi-instance support)
+        project_path = await _get_unity_project_path(unity_instance)
+
         while True:
             response = await _fetch_status()
 
@@ -241,8 +281,8 @@ async def get_test_job(
                 # Use default stall_threshold_ms (3s)
             ):
                 logger.info(f"Test job {job_id} appears stalled (unfocused Unity), attempting nudge...")
-                # Use default focus_duration_s (3s)
-                nudged = await nudge_unity_focus()
+                # Pass project path for multi-instance support
+                nudged = await nudge_unity_focus(unity_project_path=project_path)
                 if nudged:
                     logger.info(f"Test job {job_id} nudge completed")
 

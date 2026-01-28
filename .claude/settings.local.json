@@ -5,7 +5,8 @@
       "mcp__UnityMCP__get_test_job",
       "mcp__UnityMCP__run_tests",
       "mcp__UnityMCP__read_console",
-      "mcp__UnityMCP__find_gameobjects"
+      "mcp__UnityMCP__find_gameobjects",
+      "mcp__UnityMCP__refresh_unity"
     ],
     "ask": [
       "Bash(git push*)"

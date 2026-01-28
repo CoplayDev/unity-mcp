@@ -117,19 +117,149 @@ def _get_frontmost_app_macos() -> str | None:
     return None
 
 
-def _focus_app_macos(app_name: str) -> bool:
-    """Focus an application by name on macOS."""
+def _find_unity_pid_by_project_path(project_path: str) -> int | None:
+    """Find Unity Editor PID by matching project path in command line args.
+
+    Args:
+        project_path: Full path to Unity project root, OR just the project name.
+            - Full path: "/Users/davidsarno/unity-mcp-refactor/TestProjects/UnityMCPTests"
+            - Project name: "UnityMCPTests" (will match any path ending with this)
+
+    Returns:
+        PID of matching Unity process, or None if not found
+    """
     try:
+        # Use ps to find Unity processes with -projectpath argument
         result = subprocess.run(
-            ["osascript", "-e", f'tell application "{app_name}" to activate'],
+            ["ps", "aux"],
             capture_output=True,
             text=True,
             timeout=5,
         )
-        return result.returncode == 0
+        if result.returncode != 0:
+            return None
+
+        # Determine if project_path is a full path or just a name
+        is_full_path = "/" in project_path or "\\" in project_path
+
+        # Look for Unity.app processes with matching -projectpath
+        for line in result.stdout.splitlines():
+            if "Unity.app/Contents/MacOS/Unity" not in line:
+                continue
+
+            # Check for -projectpath argument
+            if "-projectpath" not in line:
+                continue
+
+            if is_full_path:
+                # Exact match for full path
+                if f"-projectpath {project_path}" not in line:
+                    continue
+            else:
+                # Match if path ends with project name (e.g., ".../UnityMCPTests")
+                if f"-projectpath" in line:
+                    # Extract the path after -projectpath
+                    try:
+                        parts = line.split("-projectpath", 1)[1].split()[0]
+                        if not parts.endswith(f"/{project_path}") and not parts.endswith(f"\\{project_path}") and parts != project_path:
+                            continue
+                    except:
+                        continue
+
+            # Extract PID (second column in ps aux output)
+            parts = line.split()
+            if len(parts) >= 2:
+                try:
+                    pid = int(parts[1])
+                    logger.debug(f"Found Unity PID {pid} for project path/name {project_path}")
+                    return pid
+                except ValueError:
+                    continue
+
+        logger.warning(f"No Unity process found with project path/name {project_path}")
+        return None
+    except Exception as e:
+        logger.debug(f"Failed to find Unity PID: {e}")
+        return None
+
+
+def _focus_app_macos(app_name: str, unity_project_path: str | None = None) -> bool:
+    """Focus an application by name on macOS.
+
+    For Unity, can target a specific instance by project path (multi-instance support).
+
+    Args:
+        app_name: Application name to focus ("Unity" or specific app name)
+        unity_project_path: For Unity apps, the full project root path to match against
+            -projectpath command line arg (e.g., "/path/to/project" NOT "/path/to/project/Assets")
+    """
+    try:
+        # For Unity, use PID-based activation for precise targeting
+        if app_name == "Unity":
+            if unity_project_path:
+                # Find specific Unity instance by project path
+                pid = _find_unity_pid_by_project_path(unity_project_path)
+                if pid is None:
+                    logger.warning(f"Could not find Unity PID for project {unity_project_path}, falling back to any Unity")
+                    return _focus_any_unity_macos()
+
+                # Activate by PID using System Events
+                script = f'''
+tell application "System Events"
+    set targetProc to first process whose unix id is {pid}
+    set frontmost of targetProc to true
+end tell
+'''
+                result = subprocess.run(
+                    ["osascript", "-e", script],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                if result.returncode != 0:
+                    logger.debug(f"Failed to activate Unity PID {pid}: {result.stderr}")
+                    return False
+                logger.info(f"Activated Unity instance with PID {pid} for project {unity_project_path}")
+                return True
+            else:
+                # No project path provided - activate any Unity process
+                return _focus_any_unity_macos()
+        else:
+            # For other apps, use direct activation
+            result = subprocess.run(
+                ["osascript", "-e", f'tell application "{app_name}" to activate'],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            return result.returncode == 0
     except Exception as e:
         logger.debug(f"Failed to focus app {app_name}: {e}")
     return False
+
+
+def _focus_any_unity_macos() -> bool:
+    """Focus any Unity process on macOS (fallback when no project path specified)."""
+    try:
+        script = '''
+tell application "System Events"
+    set unityProc to first process whose name contains "Unity"
+    set frontmost of unityProc to true
+end tell
+'''
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            logger.debug(f"Failed to activate Unity via System Events: {result.stderr}")
+            return False
+        return True
+    except Exception as e:
+        logger.debug(f"Failed to focus Unity: {e}")
+        return False
 
 
 def _get_frontmost_app_windows() -> str | None:
@@ -275,11 +405,17 @@ def _get_frontmost_app() -> str | None:
     return None
 
 
-def _focus_app(app_or_window: str) -> bool:
-    """Focus an application/window (platform-specific)."""
+def _focus_app(app_or_window: str, unity_project_path: str | None = None) -> bool:
+    """Focus an application/window (platform-specific).
+
+    Args:
+        app_or_window: Application name to focus
+        unity_project_path: For Unity apps on macOS, the full project root path for
+            multi-instance support
+    """
     system = platform.system()
     if system == "Darwin":
-        return _focus_app_macos(app_or_window)
+        return _focus_app_macos(app_or_window, unity_project_path)
     elif system == "Windows":
         return _focus_app_windows(app_or_window)
     elif system == "Linux":
@@ -290,6 +426,7 @@ def _focus_app(app_or_window: str) -> bool:
 async def nudge_unity_focus(
     focus_duration_s: float | None = None,
     force: bool = False,
+    unity_project_path: str | None = None,
 ) -> bool:
     """
     Temporarily focus Unity to allow it to process, then return focus.
@@ -304,6 +441,9 @@ async def nudge_unity_focus(
             If None, uses exponential backoff (3s/5s/8s/12s based on consecutive nudges).
             Can be overridden with UNITY_MCP_NUDGE_DURATION_S env var.
         force: If True, ignore the minimum interval between nudges
+        unity_project_path: Full path to Unity project root for multi-instance support.
+            e.g., "/Users/name/project" (NOT "/Users/name/project/Assets")
+            If None, targets any Unity process.
 
     Returns:
         True if nudge was performed, False if skipped or failed
@@ -335,13 +475,14 @@ async def nudge_unity_focus(
         logger.debug("Unity already focused, no nudge needed")
         return False
 
-    logger.info(f"Nudging Unity focus (interval: {current_interval:.1f}s, consecutive: {_consecutive_nudges}, duration: {focus_duration_s:.1f}s, will return to {original_app})")
+    project_info = f" for {unity_project_path}" if unity_project_path else ""
+    logger.info(f"Nudging Unity focus{project_info} (interval: {current_interval:.1f}s, consecutive: {_consecutive_nudges}, duration: {focus_duration_s:.1f}s, will return to {original_app})")
     _last_nudge_time = now
     _consecutive_nudges += 1
 
-    # Focus Unity
-    if not _focus_app("Unity"):
-        logger.warning("Failed to focus Unity")
+    # Focus Unity (with optional project path for multi-instance support)
+    if not _focus_app("Unity", unity_project_path):
+        logger.warning(f"Failed to focus Unity{project_info}")
         return False
 
     # Wait for window switch animation to complete before starting timer

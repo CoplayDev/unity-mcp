@@ -49,6 +49,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private string _sessionId;
         private string _projectHash;
         private string _projectName;
+        private string _projectPath;
         private string _unityVersion;
         private TimeSpan _keepAliveInterval = DefaultKeepAliveInterval;
         private TimeSpan _socketKeepAliveInterval = DefaultKeepAliveInterval;
@@ -79,6 +80,24 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             _projectName = ProjectIdentityUtility.GetProjectName();
             _projectHash = ProjectIdentityUtility.GetProjectHash();
             _unityVersion = Application.unityVersion;
+
+            // Get project root path (strip /Assets from dataPath) for focus nudging
+            string dataPath = Application.dataPath;
+            if (!string.IsNullOrEmpty(dataPath))
+            {
+                if (dataPath.EndsWith("/Assets") || dataPath.EndsWith("\\Assets"))
+                {
+                    _projectPath = dataPath.Substring(0, dataPath.Length - 7);
+                }
+                else if (dataPath.EndsWith(System.IO.Path.DirectorySeparatorChar + "Assets"))
+                {
+                    _projectPath = dataPath.Substring(0, dataPath.Length - 7);
+                }
+                else
+                {
+                    _projectPath = dataPath;  // Fallback if path doesn't end with Assets
+                }
+            }
 
             await StopAsync();
 
@@ -576,7 +595,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 // session_id is now server-authoritative; omitted here or sent as null
                 ["project_name"] = _projectName,
                 ["project_hash"] = _projectHash,
-                ["unity_version"] = _unityVersion
+                ["unity_version"] = _unityVersion,
+                ["project_path"] = _projectPath
             };
 
             await SendJsonAsync(registerPayload, token).ConfigureAwait(false);
