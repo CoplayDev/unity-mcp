@@ -159,7 +159,8 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 var selected = (TransportProtocol)evt.newValue;
                 bool useHttp = selected != TransportProtocol.Stdio;
                 EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, useHttp);
-                
+                EditorConfigurationCache.Instance.Refresh();
+
                 // Clear any stale resume flags when user manually changes transport
                 try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeStdioAfterReload); } catch { }
                 try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeHttpAfterReload); } catch { }
