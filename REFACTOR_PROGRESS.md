@@ -140,6 +140,7 @@ Before starting Quick Wins refactoring, audited existing utilities to avoid dupl
 - **Total C# tests**: 424 passing, 2 explicit
 
 ### Python Tests ✅
+
 | Domain | Tests | Status |
 |--------|-------|--------|
 | CLI Commands | 49 | Complete |
@@ -276,7 +277,8 @@ parameter names for improved developer experience.
 
 ### Scope Analysis
 
-**Tools with multi-word parameters (need aliasing):**
+#### Tools with multi-word parameters (need aliasing)
+
 | Tool | Parameters Needing Aliases |
 |------|---------------------------|
 | find_gameobjects | search_method, search_term, include_inactive, page_size |
@@ -291,7 +293,9 @@ parameter names for improved developer experience.
 | run_tests | include_details, include_failed_tests, assembly_names, category_names, group_names, test_names |
 | get_test_job | include_details, include_failed_tests, wait_timeout |
 
-**Total: ~20 tools, ~50+ parameters**
+#### Summary
+
+~20 tools, ~50+ parameters total
 
 ### Implementation Approach
 

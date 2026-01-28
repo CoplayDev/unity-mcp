@@ -46,12 +46,19 @@ def create_canvas(name: str, render_mode: str):
         return
 
     # Step 2: Add Canvas components
+    failed_components = []
     for component in ["Canvas", "CanvasScaler", "GraphicRaycaster"]:
-        run_command("manage_components", {
+        comp_result = run_command("manage_components", {
             "action": "add",
             "target": name,
             "componentType": component,
         }, config)
+        if not (comp_result.get("success") or comp_result.get("data")):
+            failed_components.append((component, comp_result.get("error", "Unknown error")))
+
+    if failed_components:
+        error_details = "; ".join([f"{c}: {e}" for c, e in failed_components])
+        print_error(f"Failed to add components: {error_details}")
 
     # Step 3: Set render mode
     render_mode_value = {"ScreenSpaceOverlay": 0,

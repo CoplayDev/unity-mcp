@@ -356,7 +356,7 @@ namespace MCPForUnityTests.Editor.Tools.Characterization
             // Current behavior: FindGameObjects returns pagination info
             var result = FindGameObjects.HandleCommand(new JObject
             {
-                ["query"] = "*",
+                ["searchTerm"] = "*",
                 ["pageSize"] = 10
             });
             var jo = ToJO(result);
@@ -393,12 +393,12 @@ namespace MCPForUnityTests.Editor.Tools.Characterization
             // Test with boundary values
             var minResult = FindGameObjects.HandleCommand(new JObject
             {
-                ["query"] = "Test",
+                ["searchTerm"] = "Test",
                 ["pageSize"] = 0  // Should clamp to 1
             });
             var maxResult = FindGameObjects.HandleCommand(new JObject
             {
-                ["query"] = "Test",
+                ["searchTerm"] = "Test",
                 ["pageSize"] = 1000  // Should clamp to 500
             });
 
