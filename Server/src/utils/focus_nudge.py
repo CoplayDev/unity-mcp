@@ -247,8 +247,10 @@ tell application id bundleID to activate
                 return _focus_any_unity_macos()
         else:
             # For other apps, use direct activation
+            # Escape double quotes in app_name to prevent AppleScript injection
+            escaped_app_name = app_name.replace('"', '\\"')
             result = subprocess.run(
-                ["osascript", "-e", f'tell application "{app_name}" to activate'],
+                ["osascript", "-e", f'tell application "{escaped_app_name}" to activate'],
                 capture_output=True,
                 text=True,
                 timeout=5,
