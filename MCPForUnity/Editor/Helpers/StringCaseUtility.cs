@@ -12,7 +12,7 @@ namespace MCPForUnity.Editor.Helpers
     {
         /// <summary>
         /// Converts a camelCase string to snake_case.
-        /// Example: "searchMethod" -> "search_method"
+        /// Example: "searchMethod" -> "search_method", "param1Value" -> "param1_value"
         /// </summary>
         /// <param name="str">The camelCase string to convert</param>
         /// <returns>The snake_case equivalent, or original string if null/empty</returns>
@@ -21,7 +21,7 @@ namespace MCPForUnity.Editor.Helpers
             if (string.IsNullOrEmpty(str))
                 return str;
 
-            return Regex.Replace(str, "([a-z])([A-Z])", "$1_$2").ToLowerInvariant();
+            return Regex.Replace(str, "([a-z0-9])([A-Z])", "$1_$2").ToLowerInvariant();
         }
 
         /// <summary>

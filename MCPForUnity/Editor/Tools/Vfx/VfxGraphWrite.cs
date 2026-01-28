@@ -99,6 +99,11 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 return new { success = false, message = "Parameter name required" };
             }
 
+            if (dims != 2 && dims != 3 && dims != 4)
+            {
+                return new { success = false, message = $"Unsupported vector dimension: {dims}. Expected 2, 3, or 4." };
+            }
+
             Vector4 vec = ManageVfxCommon.ParseVector4(@params["value"]);
             Undo.RecordObject(vfx, $"Set VFX {param}");
 

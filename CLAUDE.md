@@ -6,7 +6,7 @@
 
 ## Architecture
 
-```
+```text
 AI Assistant (Claude/Cursor)
         ↓ MCP Protocol (stdio/SSE)
 Python Server (Server/src/)
@@ -22,7 +22,7 @@ Scene, Assets, Scripts
 
 ## Directory Structure
 
-```
+```text
 ├── Server/                     # Python MCP Server
 │   ├── src/
 │   │   ├── cli/commands/       # Tool implementations (20 domain modules)
@@ -59,7 +59,7 @@ Every new feature needs tests. We have 1100+ tests across Python and C#. Run the
 Each MCP tool does one thing well. Resist the urge to add "convenient" parameters that bloat the API surface.
 
 ### 6. Use Resources for reading.
-Keep them smart and "read everything" type resources. That way resource are quick and LLM-friendly. There are plenty of examples in the codebase to model on (gameobject, prefab, etc)
+Keep them smart and "read everything" type resources. That way resource are quick and LLM-friendly. There are plenty of examples in the codebase to model on (gameobject, prefab, etc.)
 
 ## Key Patterns
 
