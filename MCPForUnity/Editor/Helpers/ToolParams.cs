@@ -52,10 +52,11 @@ namespace MCPForUnity.Editor.Helpers
 
         /// <summary>
         /// Get optional bool parameter.
+        /// Supports both snake_case and camelCase automatically.
         /// </summary>
         public bool GetBool(string key, bool defaultValue = false)
         {
-            return ParamCoercion.CoerceBool(_params[key], defaultValue);
+            return ParamCoercion.CoerceBool(GetToken(key), defaultValue);
         }
 
         /// <summary>
@@ -70,18 +71,47 @@ namespace MCPForUnity.Editor.Helpers
 
         /// <summary>
         /// Check if parameter exists (even if null).
+        /// Supports both snake_case and camelCase automatically.
         /// </summary>
         public bool Has(string key)
         {
-            return _params[key] != null;
+            return GetToken(key) != null;
         }
 
         /// <summary>
         /// Get raw JToken for complex types.
+        /// Supports both snake_case and camelCase automatically.
         /// </summary>
         public JToken GetRaw(string key)
         {
-            return _params[key];
+            return GetToken(key);
+        }
+
+        /// <summary>
+        /// Get raw JToken with snake_case/camelCase fallback.
+        /// </summary>
+        private JToken GetToken(string key)
+        {
+            // Try exact match first
+            var token = _params[key];
+            if (token != null) return token;
+
+            // Try snake_case if camelCase was provided
+            var snakeKey = ToSnakeCase(key);
+            if (snakeKey != key)
+            {
+                token = _params[snakeKey];
+                if (token != null) return token;
+            }
+
+            // Try camelCase if snake_case was provided
+            var camelKey = ToCamelCase(key);
+            if (camelKey != key)
+            {
+                token = _params[camelKey];
+            }
+
+            return token;
         }
 
         private string GetString(string key)

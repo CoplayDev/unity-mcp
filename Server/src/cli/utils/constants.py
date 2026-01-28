@@ -11,7 +11,7 @@ SEARCH_METHODS_FULL = ["by_name", "by_path", "by_id", "by_tag", "by_layer", "by_
 SEARCH_METHODS_BASIC = ["by_id", "by_name", "by_path"]
 
 # Extended search methods for renderer-based commands (material commands)
-SEARCH_METHODS_RENDERER = ["by_name", "by_path", "by_tag", "by_layer", "by_component"]
+SEARCH_METHODS_RENDERER = ["by_id", "by_name", "by_path", "by_tag", "by_layer", "by_component"]
 
 # Tagged search methods (used by VFX commands)
 SEARCH_METHODS_TAGGED = ["by_name", "by_path", "by_id", "by_tag"]

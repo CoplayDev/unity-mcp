@@ -290,6 +290,30 @@ namespace MCPForUnityTests.Editor.Helpers
             Assert.IsTrue(value);
         }
 
+        [Test]
+        public void GetBool_SnakeCaseParameter_FindsWithCamelCaseKey()
+        {
+            var json = new JObject { ["include_inactive"] = true };
+            var p = new ToolParams(json);
+
+            // Asking for camelCase should find snake_case
+            var value = p.GetBool("includeInactive");
+
+            Assert.IsTrue(value);
+        }
+
+        [Test]
+        public void GetBool_CamelCaseParameter_FindsWithSnakeCaseKey()
+        {
+            var json = new JObject { ["includeInactive"] = true };
+            var p = new ToolParams(json);
+
+            // Asking for snake_case should find camelCase
+            var value = p.GetBool("include_inactive");
+
+            Assert.IsTrue(value);
+        }
+
         #endregion
 
         #region Has Tests
@@ -310,6 +334,26 @@ namespace MCPForUnityTests.Editor.Helpers
             var p = new ToolParams(json);
 
             Assert.IsFalse(p.Has("key"));
+        }
+
+        [Test]
+        public void Has_SnakeCaseParameter_FindsWithCamelCaseKey()
+        {
+            var json = new JObject { ["search_term"] = "Player" };
+            var p = new ToolParams(json);
+
+            // Asking for camelCase should find snake_case
+            Assert.IsTrue(p.Has("searchTerm"));
+        }
+
+        [Test]
+        public void Has_CamelCaseParameter_FindsWithSnakeCaseKey()
+        {
+            var json = new JObject { ["searchTerm"] = "Player" };
+            var p = new ToolParams(json);
+
+            // Asking for snake_case should find camelCase
+            Assert.IsTrue(p.Has("search_term"));
         }
 
         #endregion
@@ -340,6 +384,34 @@ namespace MCPForUnityTests.Editor.Helpers
             Assert.IsNotNull(raw);
             Assert.IsInstanceOf<JArray>(raw);
             Assert.AreEqual(3, ((JArray)raw).Count);
+        }
+
+        [Test]
+        public void GetRaw_SnakeCaseParameter_FindsWithCamelCaseKey()
+        {
+            var json = new JObject { ["component_properties"] = new JObject { ["mass"] = 1.5 } };
+            var p = new ToolParams(json);
+
+            // Asking for camelCase should find snake_case
+            var raw = p.GetRaw("componentProperties");
+
+            Assert.IsNotNull(raw);
+            Assert.IsInstanceOf<JObject>(raw);
+            Assert.AreEqual(1.5, raw["mass"]?.Value<double>());
+        }
+
+        [Test]
+        public void GetRaw_CamelCaseParameter_FindsWithSnakeCaseKey()
+        {
+            var json = new JObject { ["componentProperties"] = new JObject { ["mass"] = 1.5 } };
+            var p = new ToolParams(json);
+
+            // Asking for snake_case should find camelCase
+            var raw = p.GetRaw("component_properties");
+
+            Assert.IsNotNull(raw);
+            Assert.IsInstanceOf<JObject>(raw);
+            Assert.AreEqual(1.5, raw["mass"]?.Value<double>());
         }
 
         #endregion

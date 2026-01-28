@@ -228,10 +228,10 @@ namespace MCPForUnity.Editor.Tools
                     {
                         var textEdits = p.GetRaw("edits") as JArray;
                         string precondition = p.Get("precondition_sha256");
-                        // Respect optional options
-                        var optionsToken = p.GetRaw("options");
-                        string refreshOpt = optionsToken?["refresh"]?.ToString()?.ToLowerInvariant();
-                        string validateOpt = optionsToken?["validate"]?.ToString()?.ToLowerInvariant();
+                        // Respect optional options (guard type before indexing)
+                        var optionsObj = p.GetRaw("options") as JObject;
+                        string refreshOpt = optionsObj?["refresh"]?.ToString()?.ToLowerInvariant();
+                        string validateOpt = optionsObj?["validate"]?.ToString()?.ToLowerInvariant();
                         return ApplyTextEdits(fullPath, relativePath, name, textEdits, precondition, refreshOpt, validateOpt);
                     }
                 case "validate":
