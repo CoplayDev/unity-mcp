@@ -10,40 +10,23 @@ namespace MCPForUnity.Editor.Tools.Vfx
     {
         public static object SetPositions(JObject @params)
         {
-            McpLog.Warn("=== SetPositions CALLED ===");
-
             LineRenderer lr = LineRead.FindLineRenderer(@params);
-            McpLog.Warn($"LineRenderer found: {(lr != null ? lr.gameObject.name : "NULL")}");
             if (lr == null) return new { success = false, message = "LineRenderer not found" };
 
             RendererHelpers.EnsureMaterial(lr);
 
             JArray posArr = @params["positions"] as JArray;
-            McpLog.Warn($"Positions array: {(posArr != null ? posArr.Count + " items" : "NULL")}");
             if (posArr == null) return new { success = false, message = "Positions array required" };
 
             var positions = new Vector3[posArr.Count];
             for (int i = 0; i < posArr.Count; i++)
             {
                 positions[i] = ManageVfxCommon.ParseVector3(posArr[i]);
-                McpLog.Warn($"  [{i}] parsed to {positions[i]}");
             }
 
             Undo.RecordObject(lr, "Set Line Positions");
             lr.positionCount = positions.Length;
-            McpLog.Warn($"Set positionCount to {positions.Length}");
-
             lr.SetPositions(positions);
-            McpLog.Warn($"Called SetPositions()");
-
-            // Verify positions were actually set
-            var readbackPositions = new Vector3[lr.positionCount];
-            lr.GetPositions(readbackPositions);
-            for (int i = 0; i < readbackPositions.Length; i++)
-            {
-                McpLog.Warn($"  GetPositions[{i}] = {readbackPositions[i]}");
-            }
-
             EditorUtility.SetDirty(lr);
 
             return new { success = true, message = $"Set {positions.Length} positions" };
