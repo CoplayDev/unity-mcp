@@ -248,24 +248,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
             return token;
         }
 
-        private static string ToCamelCase(string key)
-        {
-            if (string.IsNullOrEmpty(key) || key.IndexOf('_') < 0)
-            {
-                return key;
-            }
-
-            var parts = key.Split('_');
-            if (parts.Length == 0)
-            {
-                return key;
-            }
-
-            var first = parts[0];
-            var rest = string.Concat(parts.Skip(1).Select(part =>
-                string.IsNullOrEmpty(part) ? "" : char.ToUpperInvariant(part[0]) + part.Substring(1)));
-            return first + rest;
-        }
+        private static string ToCamelCase(string key) => StringCaseUtility.ToCamelCase(key);
 
         public static object HandleCommand(JObject @params)
         {

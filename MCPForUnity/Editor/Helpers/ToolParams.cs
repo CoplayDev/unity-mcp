@@ -138,28 +138,9 @@ namespace MCPForUnity.Editor.Helpers
             return value;
         }
 
-        private static string ToSnakeCase(string str)
-        {
-            // Simple conversion: searchMethod -> search_method
-            return System.Text.RegularExpressions.Regex.Replace(
-                str, "([a-z])([A-Z])", "$1_$2"
-            ).ToLower();
-        }
+        private static string ToSnakeCase(string str) => StringCaseUtility.ToSnakeCase(str);
 
-        private static string ToCamelCase(string str)
-        {
-            // Simple conversion: search_method -> searchMethod
-            if (!str.Contains("_")) return str;
-            var parts = str.Split('_');
-            for (int i = 1; i < parts.Length; i++)
-            {
-                if (parts[i].Length > 0)
-                {
-                    parts[i] = char.ToUpper(parts[i][0]) + parts[i].Substring(1);
-                }
-            }
-            return string.Join("", parts);
-        }
+        private static string ToCamelCase(string str) => StringCaseUtility.ToCamelCase(str);
     }
 
     /// <summary>
