@@ -203,12 +203,20 @@ def _focus_app_macos(app_name: str, unity_project_path: str | None = None) -> bo
                     logger.warning(f"Could not find Unity PID for project {unity_project_path}, falling back to any Unity")
                     return _focus_any_unity_macos()
 
-                # Activate by PID using System Events
+                # Two-step activation for full Unity wake-up:
+                # 1. Bring window to front
+                # 2. Activate the application bundle (triggers full app activation like cmd+tab or clicking)
                 script = f'''
 tell application "System Events"
     set targetProc to first process whose unix id is {pid}
     set frontmost of targetProc to true
+
+    -- Get bundle identifier to activate the app properly
+    set bundleID to bundle identifier of targetProc
 end tell
+
+-- Activate using bundle identifier (ensures Unity wakes up and starts processing)
+tell application id bundleID to activate
 '''
                 result = subprocess.run(
                     ["osascript", "-e", script],
