@@ -27,7 +27,7 @@ async def _get_unity_project_path(unity_instance: str | None) -> str | None:
     """Get the project root path for a Unity instance (for focus nudging).
 
     Args:
-        unity_instance: Unity instance hash or None
+        unity_instance: Unity instance hash or "Name@hash" format or None
 
     Returns:
         Project root path (e.g., "/Users/name/project"), or falls back to project_name if path unavailable
@@ -40,8 +40,15 @@ async def _get_unity_project_path(unity_instance: str | None) -> str | None:
         if not registry:
             return None
 
+        # Parse Name@hash format if present (middleware stores instances as "Name@hash")
+        target_hash = unity_instance
+        if "@" in target_hash:
+            _, _, target_hash = target_hash.rpartition("@")
+        if not target_hash:
+            return None
+
         # Get session by hash
-        session_id = await registry.get_session_id_by_hash(unity_instance)
+        session_id = await registry.get_session_id_by_hash(target_hash)
         if not session_id:
             return None
 

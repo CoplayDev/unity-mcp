@@ -85,17 +85,14 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             string dataPath = Application.dataPath;
             if (!string.IsNullOrEmpty(dataPath))
             {
-                if (dataPath.EndsWith("/Assets") || dataPath.EndsWith("\\Assets"))
+                string normalized = dataPath.TrimEnd('/', '\\');
+                if (string.Equals(System.IO.Path.GetFileName(normalized), "Assets", StringComparison.Ordinal))
                 {
-                    _projectPath = dataPath.Substring(0, dataPath.Length - 7);
-                }
-                else if (dataPath.EndsWith(System.IO.Path.DirectorySeparatorChar + "Assets"))
-                {
-                    _projectPath = dataPath.Substring(0, dataPath.Length - 7);
+                    _projectPath = System.IO.Path.GetDirectoryName(normalized) ?? normalized;
                 }
                 else
                 {
-                    _projectPath = dataPath;  // Fallback if path doesn't end with Assets
+                    _projectPath = normalized;  // Fallback if path doesn't end with Assets
                 }
             }
 

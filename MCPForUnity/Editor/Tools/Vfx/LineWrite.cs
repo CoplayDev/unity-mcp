@@ -19,14 +19,25 @@ namespace MCPForUnity.Editor.Tools.Vfx
             if (posArr == null) return new { success = false, message = "Positions array required" };
 
             var positions = new Vector3[posArr.Count];
+            McpLog.Info($"[LineWrite.SetPositions] Parsing {posArr.Count} positions from JSON");
             for (int i = 0; i < posArr.Count; i++)
             {
                 positions[i] = ManageVfxCommon.ParseVector3(posArr[i]);
+                McpLog.Info($"[LineWrite.SetPositions] Position {i}: {posArr[i]} -> {positions[i]}");
             }
 
+            McpLog.Info($"[LineWrite.SetPositions] Setting positionCount to {positions.Length}");
             Undo.RecordObject(lr, "Set Line Positions");
             lr.positionCount = positions.Length;
+
+            McpLog.Info($"[LineWrite.SetPositions] Calling SetPositions with {positions.Length} positions");
             lr.SetPositions(positions);
+
+            // Verify positions were actually set
+            var readbackPositions = new Vector3[lr.positionCount];
+            lr.GetPositions(readbackPositions);
+            McpLog.Info($"[LineWrite.SetPositions] After SetPositions, GetPositions returned: {string.Join(", ", System.Linq.Enumerable.Select(readbackPositions, p => p.ToString()))}");
+
             EditorUtility.SetDirty(lr);
 
             return new { success = true, message = $"Set {positions.Length} positions" };

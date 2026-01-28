@@ -18,6 +18,9 @@ namespace MCPForUnity.Editor.Tools.Vfx
         /// </summary>
         public static VisualEffect FindVisualEffect(JObject @params)
         {
+            if (@params == null)
+                return null;
+
             GameObject go = ManageVfxCommon.FindTargetGameObject(@params);
             return go?.GetComponent<VisualEffect>();
         }

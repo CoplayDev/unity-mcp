@@ -18,17 +18,30 @@ import time
 
 logger = logging.getLogger(__name__)
 
+
+def _parse_env_float(env_var: str, default: float) -> float:
+    """Safely parse environment variable as float, logging warnings on failure."""
+    value = os.environ.get(env_var)
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (ValueError, TypeError) as e:
+        logger.warning(f"Invalid {env_var}={value!r}, using default {default}: {e}")
+        return default
+
+
 # Base interval between nudges (exponentially increases with consecutive nudges)
 # Can be overridden via UNITY_MCP_NUDGE_BASE_INTERVAL_S environment variable
-_BASE_NUDGE_INTERVAL_S = float(os.environ.get("UNITY_MCP_NUDGE_BASE_INTERVAL_S", "1.0"))
+_BASE_NUDGE_INTERVAL_S = _parse_env_float("UNITY_MCP_NUDGE_BASE_INTERVAL_S", 1.0)
 
 # Maximum interval between nudges (cap for exponential backoff)
 # Can be overridden via UNITY_MCP_NUDGE_MAX_INTERVAL_S environment variable
-_MAX_NUDGE_INTERVAL_S = float(os.environ.get("UNITY_MCP_NUDGE_MAX_INTERVAL_S", "10.0"))
+_MAX_NUDGE_INTERVAL_S = _parse_env_float("UNITY_MCP_NUDGE_MAX_INTERVAL_S", 10.0)
 
 # Default duration to keep Unity focused during a nudge
 # Can be overridden via UNITY_MCP_NUDGE_DURATION_S environment variable
-_DEFAULT_FOCUS_DURATION_S = float(os.environ.get("UNITY_MCP_NUDGE_DURATION_S", "3.0"))
+_DEFAULT_FOCUS_DURATION_S = _parse_env_float("UNITY_MCP_NUDGE_DURATION_S", 3.0)
 
 _last_nudge_time: float = 0.0
 _consecutive_nudges: int = 0
