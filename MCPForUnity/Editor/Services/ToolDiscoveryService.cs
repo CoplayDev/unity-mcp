@@ -50,7 +50,7 @@ namespace MCPForUnity.Editor.Services
                 }
             }
 
-            McpLog.Info($"Discovered {_cachedTools.Count} MCP tools via reflection");
+            McpLog.Info($"Discovered {_cachedTools.Count} MCP tools via reflection", false);
             return _cachedTools.Values.ToList();
         }
 

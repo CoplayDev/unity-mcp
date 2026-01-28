@@ -438,7 +438,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 _sessionId = newSessionId;
                 ProjectIdentityUtility.SetSessionId(_sessionId);
                 _state = TransportState.Connected(TransportDisplayName, sessionId: _sessionId, details: _endpointUri.ToString());
-                McpLog.Info($"[WebSocket] Registered with session ID: {_sessionId}");
+                McpLog.Info($"[WebSocket] Registered with session ID: {_sessionId}", false);
 
                 await SendRegisterToolsAsync(token).ConfigureAwait(false);
             }
@@ -451,7 +451,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             token.ThrowIfCancellationRequested();
             var tools = await GetEnabledToolsOnMainThreadAsync(token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
-            McpLog.Info($"[WebSocket] Preparing to register {tools.Count} tool(s) with the bridge.");
+            McpLog.Info($"[WebSocket] Preparing to register {tools.Count} tool(s) with the bridge.", false);
             var toolsArray = new JArray();
 
             foreach (var tool in tools)
@@ -491,7 +491,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             };
 
             await SendJsonAsync(payload, token).ConfigureAwait(false);
-            McpLog.Info($"[WebSocket] Sent {tools.Count} tools registration");
+            McpLog.Info($"[WebSocket] Sent {tools.Count} tools registration", false);
         }
 
         private async Task HandleExecuteAsync(JObject payload, CancellationToken token)
@@ -682,7 +682,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     {
                         _state = TransportState.Connected(TransportDisplayName, sessionId: _sessionId, details: _endpointUri.ToString());
                         _isConnected = true;
-                        McpLog.Info("[WebSocket] Reconnected to MCP server");
+                        McpLog.Info("[WebSocket] Reconnected to MCP server", false);
                         return;
                     }
                 }
