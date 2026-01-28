@@ -10,33 +10,39 @@ namespace MCPForUnity.Editor.Tools.Vfx
     {
         public static object SetPositions(JObject @params)
         {
+            McpLog.Warn("=== SetPositions CALLED ===");
+
             LineRenderer lr = LineRead.FindLineRenderer(@params);
+            McpLog.Warn($"LineRenderer found: {(lr != null ? lr.gameObject.name : "NULL")}");
             if (lr == null) return new { success = false, message = "LineRenderer not found" };
 
             RendererHelpers.EnsureMaterial(lr);
 
             JArray posArr = @params["positions"] as JArray;
+            McpLog.Warn($"Positions array: {(posArr != null ? posArr.Count + " items" : "NULL")}");
             if (posArr == null) return new { success = false, message = "Positions array required" };
 
             var positions = new Vector3[posArr.Count];
-            McpLog.Info($"[LineWrite.SetPositions] Parsing {posArr.Count} positions from JSON");
             for (int i = 0; i < posArr.Count; i++)
             {
                 positions[i] = ManageVfxCommon.ParseVector3(posArr[i]);
-                McpLog.Info($"[LineWrite.SetPositions] Position {i}: {posArr[i]} -> {positions[i]}");
+                McpLog.Warn($"  [{i}] parsed to {positions[i]}");
             }
 
-            McpLog.Info($"[LineWrite.SetPositions] Setting positionCount to {positions.Length}");
             Undo.RecordObject(lr, "Set Line Positions");
             lr.positionCount = positions.Length;
+            McpLog.Warn($"Set positionCount to {positions.Length}");
 
-            McpLog.Info($"[LineWrite.SetPositions] Calling SetPositions with {positions.Length} positions");
             lr.SetPositions(positions);
+            McpLog.Warn($"Called SetPositions()");
 
             // Verify positions were actually set
             var readbackPositions = new Vector3[lr.positionCount];
             lr.GetPositions(readbackPositions);
-            McpLog.Info($"[LineWrite.SetPositions] After SetPositions, GetPositions returned: {string.Join(", ", System.Linq.Enumerable.Select(readbackPositions, p => p.ToString()))}");
+            for (int i = 0; i < readbackPositions.Length; i++)
+            {
+                McpLog.Warn($"  GetPositions[{i}] = {readbackPositions[i]}");
+            }
 
             EditorUtility.SetDirty(lr);
 
