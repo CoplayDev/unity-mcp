@@ -218,7 +218,9 @@ Before starting Quick Wins refactoring, audited existing utilities to avoid dupl
 10. ✅ **QW-5: Create Confirmation Dialog Utility** - DONE (5+ patterns eliminated)
 11. ✅ **P1-1: ToolParams Validation Wrapper** - DONE (foundation + 4 tools refactored, 31 tests)
 12. ✅ **P1-1.5: Python MCP Parameter Aliasing** - DONE (pattern established in find_gameobjects; expand to other tools if models struggle with snake_case)
-13. **P1-2**: EditorPrefs Binding Helper - consolidates 50+ patterns
+13. ⏸️ **P1-2**: EditorPrefs Binding Helper - skipped (low impact per pattern, keys already centralized)
+14. ✅ **P1-6: Unified Test Fixtures** - DONE (~95 lines removed, 4 files consolidated)
+15. ⏸️ **P2-3**: Configurator Builder Pattern - skipped (configurators already well-factored, ~26-32 lines each)
 
 ---
 
