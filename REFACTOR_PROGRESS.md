@@ -262,17 +262,48 @@ Create a decorator that normalizes incoming kwargs before passing to the tool fu
 
 ```python
 # Server/src/services/tools/utils.py
+import functools
+import asyncio
+import re
+
+def camel_to_snake(name: str) -> str:
+    """Convert camelCase to snake_case, handling edge cases."""
+    # Handle consecutive capitals (e.g., "searchHTMLContent" -> "search_html_content")
+    s1 = re.sub(r'([A-Z]+)([A-Z][a-z])', r'\1_\2', name)
+    # Handle standard camelCase (e.g., "searchMethod" -> "search_method")
+    s2 = re.sub(r'([a-z\d])([A-Z])', r'\1_\2', s1)
+    return s2.lower()
 
 def normalize_params(func):
-    """Decorator that normalizes camelCase params to snake_case."""
+    """Decorator that normalizes camelCase params to snake_case.
+
+    Handles both sync and async functions.
+    Detects conflicts when both naming conventions are provided.
+    """
     @functools.wraps(func)
-    async def wrapper(*args, **kwargs):
+    def wrapper(*args, **kwargs):
         normalized = {}
+        seen_snake_keys = set()
+
         for key, value in kwargs.items():
-            # Convert camelCase to snake_case
-            snake_key = re.sub(r'([a-z])([A-Z])', r'\1_\2', key).lower()
+            snake_key = camel_to_snake(key)
+
+            # Conflict detection: warn if both conventions provided
+            if snake_key in seen_snake_keys and snake_key != key:
+                # Prefer explicit snake_case over converted camelCase
+                continue
+
             normalized[snake_key] = value
-        return await func(*args, **normalized)
+            seen_snake_keys.add(snake_key)
+
+        # Handle both sync and async functions
+        if asyncio.iscoroutinefunction(func):
+            async def async_call():
+                return await func(*args, **normalized)
+            return async_call()
+        else:
+            return func(*args, **normalized)
+
     return wrapper
 ```
 
@@ -292,19 +323,29 @@ Check if FastMCP supports `populate_by_name=True` or similar Pydantic config.
 
 ### Implementation Plan
 
+0. **Audit tool function signatures** (~15 min)
+   - Check if any tools in `Server/src/services/tools/` are sync functions
+   - Document which tools are async vs sync
+   - Inform decorator implementation approach
+
 1. **Create normalize_params utility** (~30 min)
    - Add to `Server/src/services/tools/utils.py`
    - Handles camelCase → snake_case conversion
    - Preserves already-snake_case params
+   - Handles both sync and async functions
+   - Includes conflict detection (prefers snake_case when both provided)
 
 2. **Integrate into tool registration** (~15 min)
    - Modify `Server/src/services/tools/__init__.py`
    - Apply normalizer before other decorators
 
-3. **Add unit tests** (~30 min)
+3. **Add unit tests** (~45 min)
    - Test camelCase → snake_case conversion
    - Test that snake_case params pass through unchanged
    - Test mixed case params in same call
+   - Test decorator works with both sync and async functions
+   - Test conflict scenario (both `searchMethod` and `search_method` passed)
+   - Test edge cases: consecutive capitals ("HTMLParser"), numbers ("filter2D")
 
 4. **Integration testing** (~30 min)
    - Test actual tool calls with both naming conventions
@@ -314,14 +355,25 @@ Check if FastMCP supports `populate_by_name=True` or similar Pydantic config.
    - Update tool descriptions to note both conventions are accepted
    - Add examples showing both styles
 
+### Edge Cases to Handle
+
+| Input | Expected Output | Notes |
+|-------|----------------|-------|
+| `searchMethod` | `search_method` | Standard camelCase |
+| `search_method` | `search_method` | Already snake_case (pass through) |
+| `HTMLParser` | `html_parser` | Consecutive capitals |
+| `filter2D` | `filter2_d` | Numbers in name |
+| `searchMethod` + `search_method` | `search_method` value wins | Conflict: prefer explicit snake_case |
+
 ### Success Criteria
 - `find_gameobjects(searchMethod="by_name", searchTerm="Player")` works ✓
 - `find_gameobjects(search_method="by_name", search_term="Player")` works ✓
 - Mixed: `find_gameobjects(searchMethod="by_name", search_term="Player")` works ✓
+- Conflict: `find_gameobjects(searchMethod="by_id", search_method="by_name")` uses `by_name` ✓
 - All existing tests pass
 - No performance regression
 
 ### Estimated Effort
-- **Time**: 2 hours
+- **Time**: 2.5 hours (increased for edge case handling)
 - **Risk**: Low (additive change, doesn't modify existing behavior)
 - **Impact**: High (eliminates entire class of user errors)
