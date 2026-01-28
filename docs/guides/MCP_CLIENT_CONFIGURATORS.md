@@ -4,7 +4,7 @@ This guide explains how MCP client configurators work in this repo and how to ad
 
 It covers:
 
-- **Typical JSON-file clients** (Cursor, VSCode GitHub Copilot, VSCode Insiders, Windsurf, Kiro, Trae, Antigravity, etc.).
+- **Typical JSON-file clients** (Cursor, VSCode GitHub Copilot, VSCode Insiders, GitHub Copilot CLI, Windsurf, Kiro, Trae, Antigravity, etc.).
 - **Special clients** like **Claude CLI** and **Codex** that require custom logic.
 - **How to add a new configurator class** so it shows up automatically in the MCP for Unity window.
 
@@ -91,6 +91,7 @@ Most MCP clients use a JSON config file that defines one or more MCP servers. Ex
 - **Cursor** – `JsonFileMcpConfigurator` (global `~/.cursor/mcp.json`).
 - **VSCode GitHub Copilot** – `JsonFileMcpConfigurator` with `IsVsCodeLayout = true`.
 - **VSCode Insiders GitHub Copilot** – `JsonFileMcpConfigurator` with `IsVsCodeLayout = true` and Insider-specific `Code - Insiders/User/mcp.json` paths.
+- **GitHub Copilot CLI** – `JsonFileMcpConfigurator` with standard HTTP transport.
 - **Windsurf** – `JsonFileMcpConfigurator` with Windsurf-specific flags (`HttpUrlProperty = "serverUrl"`, `DefaultUnityFields["disabled"] = false`, etc.).
 - **Kiro**, **Trae**, **Antigravity (Gemini)** – JSON configs with project-specific paths and flags.
 
