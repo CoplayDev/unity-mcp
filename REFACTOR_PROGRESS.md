@@ -214,10 +214,114 @@ Before starting Quick Wins refactoring, audited existing utilities to avoid dupl
 6. ✅ **QW-1: Delete Dead Code** - DONE (86 lines removed)
 7. ✅ **QW-2: Create JSON Parser Utility** - DONE (~60 lines eliminated)
 8. ✅ **QW-3: Patch in AssetPathUtility** - DONE (10+ patterns replaced)
-9. **Continue Quick Wins**:
-   - **QW-4**: Create Search Method Constants (CLI) - 20 min, eliminates duplication across 6+ files
-   - **QW-5**: Create Confirmation Dialog Utility (CLI) - 15 min, eliminates 5+ duplicate patterns
+9. ✅ **QW-4: Create Search Method Constants** - DONE (~30+ lines eliminated)
+10. ✅ **QW-5: Create Confirmation Dialog Utility** - DONE (5+ patterns eliminated)
+11. ✅ **P1-1: ToolParams Validation Wrapper** - DONE (foundation + 4 tools refactored, 31 tests)
+12. **P1-1.5: Python MCP Parameter Aliasing** - Extend parameter flexibility to Python layer
+13. **P1-2**: EditorPrefs Binding Helper - consolidates 50+ patterns
 
-   Or jump to higher-impact items:
-   - **P1-1**: ToolParams Validation Wrapper - eliminates 997+ validation lines
-   - **P1-2**: EditorPrefs Binding Helper - consolidates 50+ patterns
+---
+
+## P1-1.5: Python MCP Parameter Aliasing
+
+### Problem Statement
+The C# ToolParams wrapper provides snake_case/camelCase flexibility, but the Python MCP layer (FastMCP)
+rejects parameters that don't exactly match the schema. This creates a mismatch where:
+- Python schema defines `search_method` (snake_case)
+- User tries `searchMethod` (camelCase)
+- FastMCP/pydantic rejects it before it reaches C# code
+- User gets unhelpful "unexpected keyword argument" error
+
+### Goal
+Make the Python MCP tool layer as forgiving as the C# layer, accepting both snake_case and camelCase
+parameter names for improved developer experience.
+
+### Scope Analysis
+
+**Tools with multi-word parameters (need aliasing):**
+| Tool | Parameters Needing Aliases |
+|------|---------------------------|
+| find_gameobjects | search_method, search_term, include_inactive, page_size |
+| manage_components | component_type, search_method |
+| manage_material | search_method |
+| manage_vfx | search_method |
+| manage_scene | page_size, max_depth, max_nodes, include_transform |
+| manage_asset | page_size, page_number, filter_type, filter_date_after, search_pattern, generate_preview |
+| manage_gameobject | search_method, primitive_type, prefab_path, set_active, components_to_add, etc. |
+| manage_prefabs | prefab_path, set_active, components_to_add, components_to_remove |
+| read_console | page_size, filter_text, include_stacktrace, since_timestamp |
+| run_tests | include_details, include_failed_tests, assembly_names, category_names, group_names, test_names |
+| get_test_job | include_details, include_failed_tests, wait_timeout |
+
+**Total: ~20 tools, ~50+ parameters**
+
+### Implementation Approach
+
+**Option A: Parameter Normalizer Decorator** (Recommended)
+Create a decorator that normalizes incoming kwargs before passing to the tool function:
+
+```python
+# Server/src/services/tools/utils.py
+
+def normalize_params(func):
+    """Decorator that normalizes camelCase params to snake_case."""
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        normalized = {}
+        for key, value in kwargs.items():
+            # Convert camelCase to snake_case
+            snake_key = re.sub(r'([a-z])([A-Z])', r'\1_\2', key).lower()
+            normalized[snake_key] = value
+        return await func(*args, **normalized)
+    return wrapper
+```
+
+Apply in tool registration:
+```python
+# Server/src/services/tools/__init__.py
+wrapped = normalize_params(func)  # Add before other wrappers
+wrapped = log_execution(tool_name, "Tool")(wrapped)
+# ...
+```
+
+**Option B: Pydantic Model with Aliases**
+More complex, requires changing all tool signatures to use Pydantic models.
+
+**Option C: FastMCP Configuration**
+Check if FastMCP supports `populate_by_name=True` or similar Pydantic config.
+
+### Implementation Plan
+
+1. **Create normalize_params utility** (~30 min)
+   - Add to `Server/src/services/tools/utils.py`
+   - Handles camelCase → snake_case conversion
+   - Preserves already-snake_case params
+
+2. **Integrate into tool registration** (~15 min)
+   - Modify `Server/src/services/tools/__init__.py`
+   - Apply normalizer before other decorators
+
+3. **Add unit tests** (~30 min)
+   - Test camelCase → snake_case conversion
+   - Test that snake_case params pass through unchanged
+   - Test mixed case params in same call
+
+4. **Integration testing** (~30 min)
+   - Test actual tool calls with both naming conventions
+   - Verify error messages are still helpful
+
+5. **Documentation** (~15 min)
+   - Update tool descriptions to note both conventions are accepted
+   - Add examples showing both styles
+
+### Success Criteria
+- `find_gameobjects(searchMethod="by_name", searchTerm="Player")` works ✓
+- `find_gameobjects(search_method="by_name", search_term="Player")` works ✓
+- Mixed: `find_gameobjects(searchMethod="by_name", search_term="Player")` works ✓
+- All existing tests pass
+- No performance regression
+
+### Estimated Effort
+- **Time**: 2 hours
+- **Risk**: Low (additive change, doesn't modify existing behavior)
+- **Impact**: High (eliminates entire class of user errors)
