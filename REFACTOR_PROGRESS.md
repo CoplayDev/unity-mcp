@@ -190,6 +190,20 @@ Before starting Quick Wins refactoring, audited existing utilities to avoid dupl
   - vfx.py, asset.py, editor.py, script.py, batch.py: 1 pattern each
 - **Tests**: All 23 material/component CLI tests passing
 
+### ✅ P1-3: Type Conversion Consolidation (2026-01-27)
+- **Time**: 30 minutes
+- **Added**: Nullable coercion methods to `ParamCoercion.cs`
+  - `CoerceIntNullable(JToken)` - returns `int?` for optional params
+  - `CoerceBoolNullable(JToken)` - returns `bool?` for optional params
+  - `CoerceFloatNullable(JToken)` - returns `float?` for optional params
+- **Refactored**: 4 tool files to use centralized coercion
+  - ManageScene.cs: Removed local `BI()`/`BB()` functions (~27 lines)
+  - RunTests.cs: Simplified bool parsing (~15 lines)
+  - GetTestJob.cs: Simplified bool parsing (~17 lines)
+  - RefreshUnity.cs: Simplified bool parsing (~10 lines)
+- **Eliminated**: ~87 lines of duplicated TryParse code
+- **Tests**: All 458 Unity tests passing
+
 ### ✅ P2-1: CLI Command Wrapper (2026-01-27)
 - **Time**: 1 hour
 - **Created**: `@handle_unity_errors` decorator in `Server/src/cli/utils/connection.py`
@@ -237,6 +251,7 @@ Before starting Quick Wins refactoring, audited existing utilities to avoid dupl
 14. ✅ **P1-6: Unified Test Fixtures** - DONE (~95 lines removed, 4 files consolidated)
 15. ⏸️ **P2-3**: Configurator Builder Pattern - skipped (configurators already well-factored, ~26-32 lines each)
 16. ✅ **P2-1: CLI Command Wrapper** - DONE (~296 lines eliminated, decorator applied to 83 commands across 18 files)
+17. ✅ **P1-3: Type Conversion Consolidation** - DONE (nullable coercion methods added, ~87 lines of duplicated TryParse code eliminated)
 
 ---
 
