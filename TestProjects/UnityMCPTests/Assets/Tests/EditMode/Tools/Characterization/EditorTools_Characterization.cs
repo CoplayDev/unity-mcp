@@ -249,10 +249,10 @@ namespace MCPForUnityTests.Editor.Tools.Characterization
         }
 
         [Test]
-        public void HandleCommand_AllTools_SafelyHandleNullTokens()
+        public void HandleCommand_ManageEditor_SafelyHandlesNullTokens()
         {
             // Current behavior: Null-safe token access pattern prevents NullReferenceException
-            // This test verifies tools don't crash on partial params
+            // This test verifies ManageEditor doesn't crash on partial params
             Assert.DoesNotThrow(() =>
             {
                 ManageEditor.HandleCommand(new JObject { ["action"] = null });
@@ -377,12 +377,12 @@ namespace MCPForUnityTests.Editor.Tools.Characterization
             {
                 var result = FindGameObjects.HandleCommand(new JObject
                 {
-                    ["query"] = "TestQuery",
+                    ["searchTerm"] = "TestQuery",
                     ["searchMethod"] = method
                 });
                 var jo = ToJO(result);
-                // All methods should be recognized
-                Assert.IsTrue(jo.ContainsKey("success"), $"Method {method} should be recognized");
+                // All methods should be recognized and succeed
+                Assert.IsTrue((bool)jo["success"], $"Method {method} should be recognized and succeed");
             }
         }
 
