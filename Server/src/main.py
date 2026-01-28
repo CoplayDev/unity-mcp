@@ -646,7 +646,8 @@ Examples:
     parser.add_argument(
         "--http-remote-hosted",
         action="store_true",
-        help="Treat HTTP transport as remotely hosted (forces explicit Unity instance selection)."
+        help="Treat HTTP transport as remotely hosted (forces explicit Unity instance selection). "
+             "Can also set via UNITY_MCP_HTTP_REMOTE_HOSTED=true."
     )
     parser.add_argument(
         "--api-key-validation-url",
@@ -714,7 +715,10 @@ Examples:
 
     args = parser.parse_args()
 
-    config.http_remote_hosted = bool(args.http_remote_hosted)
+    config.http_remote_hosted = (
+        bool(args.http_remote_hosted)
+        or os.environ.get("UNITY_MCP_HTTP_REMOTE_HOSTED", "").lower() in ("true", "1", "yes")
+    )
 
     # API key authentication configuration
     config.api_key_validation_url = (
