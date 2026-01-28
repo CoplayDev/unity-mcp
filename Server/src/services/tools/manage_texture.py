@@ -482,8 +482,8 @@ async def manage_texture(
     height: Annotated[int, "Texture height in pixels (default: 64)"] | None = None,
 
     # Solid fill (accepts both 0-255 integers and 0.0-1.0 normalized floats)
-    fill_color: Annotated[list[int | float] | str,
-                          "Fill color as [r, g, b] or [r, g, b, a] (list or JSON string). Accepts both 0-255 range (e.g., [255, 0, 0]) or 0.0-1.0 normalized range (e.g., [1.0, 0, 0])"] | None = None,
+    fill_color: Annotated[list[int | float],
+                          "Fill color as [r, g, b] or [r, g, b, a]. Accepts both 0-255 range (e.g., [255, 0, 0]) or 0.0-1.0 normalized range (e.g., [1.0, 0, 0])"] | None = None,
 
     # Pattern-based generation
     pattern: Annotated[Literal[
@@ -491,8 +491,8 @@ async def manage_texture(
         "dots", "grid", "brick"
     ], "Pattern type for apply_pattern action"] | None = None,
 
-    palette: Annotated[list[list[int | float]] | str,
-                       "Color palette as [[r,g,b,a], ...] (list or JSON string). Accepts both 0-255 range or 0.0-1.0 normalized range"] | None = None,
+    palette: Annotated[list[list[int | float]],
+                       "Color palette as [[r,g,b,a], ...]. Accepts both 0-255 range or 0.0-1.0 normalized range"] | None = None,
 
     pattern_size: Annotated[int,
                             "Pattern cell size in pixels (default: 8)"] | None = None,
@@ -517,8 +517,8 @@ async def manage_texture(
                        "Number of noise octaves for detail (default: 1)"] | None = None,
 
     # Modify action
-    set_pixels: Annotated[dict | str,
-                          "Region to modify: {x, y, width, height, color or pixels} (dict or JSON string)"] | None = None,
+    set_pixels: Annotated[dict,
+                          "Region to modify: {x, y, width, height, color or pixels}"] | None = None,
 
     # Sprite creation (legacy, prefer import_settings)
     as_sprite: Annotated[dict | bool,

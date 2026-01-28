@@ -94,36 +94,6 @@ def _normalize_component_properties(value: Any) -> tuple[dict[str, dict[str, Any
     return None, f"component_properties must be a dict or JSON string, got {type(value).__name__}"
 
 
-def _normalize_component_list(value: Any, param_name: str = "component_list") -> tuple[list[str] | None, str | None]:
-    """
-    Robustly normalize a component list parameter.
-    Handles: list, tuple, JSON string.
-    Returns (parsed_list, error_message). If error_message is set, parsed_list is None.
-    """
-    if value is None:
-        return None, None
-
-    # Already a list/tuple - validate it's a list of strings
-    if isinstance(value, (list, tuple)):
-        if all(isinstance(item, str) for item in value):
-            return list(value), None
-        return None, f"{param_name} must be a list of strings, got mixed types in {value}"
-
-    # Try parsing as JSON string
-    if isinstance(value, str):
-        # Check for obviously invalid values
-        if value in ("[object Object]", "undefined", "null", ""):
-            return None, f"{param_name} received invalid value: '{value}'. Expected a list of component type names (list or JSON string)"
-
-        parsed = parse_json_payload(value)
-        if isinstance(parsed, list) and all(isinstance(item, str) for item in parsed):
-            return parsed, None
-
-        return None, f"{param_name} must be a list of strings (component names), got string that parsed to {type(parsed).__name__ if not isinstance(parsed, list) else 'list with non-string items'}"
-
-    return None, f"{param_name} must be a list or JSON string, got {type(value).__name__}"
-
-
 @mcp_for_unity_tool(
     description="Performs CRUD operations on GameObjects. Actions: create, modify, delete, duplicate, move_relative. For finding GameObjects use find_gameobjects tool. For component operations use manage_components tool.",
     annotations=ToolAnnotations(
@@ -151,8 +121,8 @@ async def manage_gameobject(
                         "Rotation as [x, y, z] euler angles array (list or JSON string)"] | None = None,
     scale: Annotated[list[float] | str,
                      "Scale as [x, y, z] array (list or JSON string)"] | None = None,
-    components_to_add: Annotated[list[str] | str,
-                                 "List of component names to add (list or JSON string)"] | None = None,
+    components_to_add: Annotated[list[str],
+                                 "List of component names to add"] | None = None,
     primitive_type: Annotated[str,
                               "Primitive type for 'create' action"] | None = None,
     save_as_prefab: Annotated[bool | str,
@@ -164,10 +134,10 @@ async def manage_gameobject(
     set_active: Annotated[bool | str,
                           "If True, sets the GameObject active (accepts true/false or 'true'/'false')"] | None = None,
     layer: Annotated[str, "Layer name"] | None = None,
-    components_to_remove: Annotated[list[str] | str,
-                                    "List of component names to remove (list or JSON string)"] | None = None,
-    component_properties: Annotated[dict[str, dict[str, Any]] | str,
-                                    """Dictionary of component names to their properties to set (can be a dict or JSON string). For example:
+    components_to_remove: Annotated[list[str],
+                                    "List of component names to remove"] | None = None,
+    component_properties: Annotated[dict[str, dict[str, Any]],
+                                    """Dictionary of component names to their properties to set. For example:
                                     `{"MyScript": {"otherObject": {"find": "Player", "method": "by_name"}}}` assigns GameObject
                                     `{"MyScript": {"playerHealth": {"find": "Player", "component": "HealthComponent"}}}` assigns Component
                                     Example set nested property:
@@ -259,15 +229,6 @@ async def manage_gameobject(
         component_properties)
     if comp_props_error:
         return {"success": False, "message": comp_props_error}
-
-    # --- Normalize component lists with detailed error handling ---
-    components_to_add, add_error = _normalize_component_list(components_to_add, "components_to_add")
-    if add_error:
-        return {"success": False, "message": add_error}
-
-    components_to_remove, remove_error = _normalize_component_list(components_to_remove, "components_to_remove")
-    if remove_error:
-        return {"success": False, "message": remove_error}
 
     try:
         # Validate parameter usage to prevent silent failures

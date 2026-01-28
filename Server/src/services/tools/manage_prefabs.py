@@ -1,4 +1,3 @@
-import math
 from typing import Annotated, Any, Literal
 
 from fastmcp import Context
@@ -6,80 +5,10 @@ from mcp.types import ToolAnnotations
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
-from services.tools.utils import coerce_bool, parse_json_payload
+from services.tools.utils import coerce_bool
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 from services.tools.preflight import preflight
-
-
-def _normalize_vector(value: Any, param_name: str = "vector") -> tuple[list[float] | None, str | None]:
-    """
-    Robustly normalize a vector parameter to [x, y, z] format.
-    Handles: list, tuple, JSON string.
-    Returns (parsed_vector, error_message). If error_message is set, parsed_vector is None.
-    """
-    if value is None:
-        return None, None
-
-    # If already a list/tuple with 3 elements, convert to floats
-    if isinstance(value, (list, tuple)) and len(value) == 3:
-        try:
-            vec = [float(value[0]), float(value[1]), float(value[2])]
-            if all(math.isfinite(n) for n in vec):
-                return vec, None
-            return None, f"{param_name} values must be finite numbers, got {value}"
-        except (ValueError, TypeError):
-            return None, f"{param_name} values must be numbers, got {value}"
-
-    # Try parsing as JSON string
-    if isinstance(value, str):
-        # Check for obviously invalid values
-        if value in ("[object Object]", "undefined", "null", ""):
-            return None, f"{param_name} received invalid value: '{value}'. Expected [x, y, z] array (list or JSON string)"
-
-        parsed = parse_json_payload(value)
-        if isinstance(parsed, list) and len(parsed) == 3:
-            try:
-                vec = [float(parsed[0]), float(parsed[1]), float(parsed[2])]
-                if all(math.isfinite(n) for n in vec):
-                    return vec, None
-                return None, f"{param_name} values must be finite numbers, got {parsed}"
-            except (ValueError, TypeError):
-                return None, f"{param_name} values must be numbers, got {parsed}"
-
-        return None, f"{param_name} must be a [x, y, z] array (list or JSON string), got: {value}"
-
-    return None, f"{param_name} must be a list or JSON string, got {type(value).__name__}"
-
-
-def _normalize_component_list(value: Any, param_name: str = "component_list") -> tuple[list[str] | None, str | None]:
-    """
-    Robustly normalize a component list parameter.
-    Handles: list, tuple, JSON string.
-    Returns (parsed_list, error_message). If error_message is set, parsed_list is None.
-    """
-    if value is None:
-        return None, None
-
-    # Already a list/tuple - validate it's a list of strings
-    if isinstance(value, (list, tuple)):
-        if all(isinstance(item, str) for item in value):
-            return list(value), None
-        return None, f"{param_name} must be a list of strings, got mixed types in {value}"
-
-    # Try parsing as JSON string
-    if isinstance(value, str):
-        # Check for obviously invalid values
-        if value in ("[object Object]", "undefined", "null", ""):
-            return None, f"{param_name} received invalid value: '{value}'. Expected a list of component type names (list or JSON string)"
-
-        parsed = parse_json_payload(value)
-        if isinstance(parsed, list) and all(isinstance(item, str) for item in parsed):
-            return parsed, None
-
-        return None, f"{param_name} must be a list of strings (component names), got string that parsed to {type(parsed).__name__ if not isinstance(parsed, list) else 'list with non-string items'}"
-
-    return None, f"{param_name} must be a list or JSON string, got {type(value).__name__}"
 
 
 # Required parameters for each action
@@ -120,16 +49,16 @@ async def manage_prefabs(
     search_inactive: Annotated[bool, "Include inactive GameObjects in search."] | None = None,
     unlink_if_instance: Annotated[bool, "Unlink from existing prefab before creating new one."] | None = None,
     # modify_contents parameters
-    position: Annotated[list[float] | str, "New local position [x, y, z] for modify_contents (list or JSON string)."] | None = None,
-    rotation: Annotated[list[float] | str, "New local rotation (euler angles) [x, y, z] for modify_contents (list or JSON string)."] | None = None,
-    scale: Annotated[list[float] | str, "New local scale [x, y, z] for modify_contents (list or JSON string)."] | None = None,
+    position: Annotated[list[float], "New local position [x, y, z] for modify_contents."] | None = None,
+    rotation: Annotated[list[float], "New local rotation (euler angles) [x, y, z] for modify_contents."] | None = None,
+    scale: Annotated[list[float], "New local scale [x, y, z] for modify_contents."] | None = None,
     name: Annotated[str, "New name for the target object in modify_contents."] | None = None,
     tag: Annotated[str, "New tag for the target object in modify_contents."] | None = None,
     layer: Annotated[str, "New layer name for the target object in modify_contents."] | None = None,
     set_active: Annotated[bool, "Set active state of target object in modify_contents."] | None = None,
     parent: Annotated[str, "New parent object name/path within prefab for modify_contents."] | None = None,
-    components_to_add: Annotated[list[str] | str, "Component types to add in modify_contents (list or JSON string)."] | None = None,
-    components_to_remove: Annotated[list[str] | str, "Component types to remove in modify_contents (list or JSON string)."] | None = None,
+    components_to_add: Annotated[list[str], "Component types to add in modify_contents."] | None = None,
+    components_to_remove: Annotated[list[str], "Component types to remove in modify_contents."] | None = None,
 ) -> dict[str, Any]:
     # Back-compat: map 'name' → 'target' for create_from_gameobject (Unity accepts both)
     if action == "create_from_gameobject" and target is None and name is not None:
@@ -148,28 +77,6 @@ async def manage_prefabs(
             }
 
     unity_instance = get_unity_instance_from_context(ctx)
-
-    # --- Normalize vector parameters ---
-    position, position_error = _normalize_vector(position, "position")
-    if position_error:
-        return {"success": False, "message": position_error}
-
-    rotation, rotation_error = _normalize_vector(rotation, "rotation")
-    if rotation_error:
-        return {"success": False, "message": rotation_error}
-
-    scale, scale_error = _normalize_vector(scale, "scale")
-    if scale_error:
-        return {"success": False, "message": scale_error}
-
-    # --- Normalize component lists ---
-    components_to_add, add_error = _normalize_component_list(components_to_add, "components_to_add")
-    if add_error:
-        return {"success": False, "message": add_error}
-
-    components_to_remove, remove_error = _normalize_component_list(components_to_remove, "components_to_remove")
-    if remove_error:
-        return {"success": False, "message": remove_error}
 
     # Preflight check for operations to ensure Unity is ready
     try:
