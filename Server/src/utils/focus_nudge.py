@@ -122,8 +122,8 @@ def _find_unity_pid_by_project_path(project_path: str) -> int | None:
 
     Args:
         project_path: Full path to Unity project root, OR just the project name.
-            - Full path: "/Users/davidsarno/unity-mcp-refactor/TestProjects/UnityMCPTests"
-            - Project name: "UnityMCPTests" (will match any path ending with this)
+            - Full path: "/Users/name/Projects/MyGame"
+            - Project name: "MyGame" (will match any path ending with this)
 
     Returns:
         PID of matching Unity process, or None if not found
