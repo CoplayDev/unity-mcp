@@ -67,6 +67,29 @@ namespace MCPForUnityTests.Editor.Services.Server
         }
 
         [Test]
+        public void Terminate_Pid1_ReturnsFalse()
+        {
+            // PID 1 is init/launchd and must never be killed
+            // Act
+            bool result = _terminator.Terminate(1);
+
+            // Assert
+            Assert.IsFalse(result, "PID 1 (init/launchd) should never be terminated");
+        }
+
+        [Test]
+        public void Terminate_CurrentProcessPid_ReturnsFalse()
+        {
+            // Should never kill the Unity Editor process
+            // Act
+            int currentPid = _detector.GetCurrentProcessId();
+            bool result = _terminator.Terminate(currentPid);
+
+            // Assert
+            Assert.IsFalse(result, "Current process PID should never be terminated");
+        }
+
+        [Test]
         public void Terminate_NonExistentPid_ReturnsFalseOrHandlesGracefully()
         {
             // Act - Use a very high PID unlikely to exist
@@ -84,16 +107,6 @@ namespace MCPForUnityTests.Editor.Services.Server
             {
                 _terminator.Terminate(12345);
             });
-        }
-
-        [Test]
-        [Explicit("This test would terminate the Unity process - DO NOT RUN")]
-        public void Terminate_CurrentProcess_WouldTerminateUnity()
-        {
-            // This test documents that terminating the current process would kill Unity
-            // It is marked [Explicit] to prevent accidental execution
-            int currentPid = _detector.GetCurrentProcessId();
-            Assert.Pass($"Current process PID is {currentPid} - test is explicit to prevent termination");
         }
 
         #endregion

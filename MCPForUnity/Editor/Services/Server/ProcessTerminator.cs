@@ -24,6 +24,23 @@ namespace MCPForUnity.Editor.Services.Server
         /// <inheritdoc/>
         public bool Terminate(int pid)
         {
+            // CRITICAL: Validate PID before any kill operation.
+            // On Unix, kill(-1) kills ALL processes the user can signal!
+            // On Unix, kill(0) signals all processes in the process group.
+            // PID 1 is init/launchd and must never be killed.
+            // Only positive PIDs > 1 are valid for targeted termination.
+            if (pid <= 1)
+            {
+                return false;
+            }
+
+            // Never kill the current Unity process
+            int currentPid = _processDetector.GetCurrentProcessId();
+            if (currentPid > 0 && pid == currentPid)
+            {
+                return false;
+            }
+
             try
             {
                 string stdout, stderr;
