@@ -7,7 +7,8 @@ from typing import Optional, Any
 
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success, print_info
-from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.connection import run_command, handle_unity_errors
+from cli.utils.parsers import parse_json_list_or_exit
 
 
 @click.group()
@@ -20,6 +21,7 @@ def batch():
 @click.argument("file", type=click.Path(exists=True))
 @click.option("--parallel", is_flag=True, help="Execute read-only commands in parallel.")
 @click.option("--fail-fast", is_flag=True, help="Stop on first failure.")
+@handle_unity_errors
 def batch_run(file: str, parallel: bool, fail_fast: bool):
     """Execute commands from a JSON file.
 
@@ -67,29 +69,26 @@ def batch_run(file: str, parallel: bool, fail_fast: bool):
 
     click.echo(f"Executing {len(commands)} commands...")
 
-    try:
-        result = run_command("batch_execute", params, config)
-        click.echo(format_output(result, config.format))
+    result = run_command("batch_execute", params, config)
+    click.echo(format_output(result, config.format))
 
-        if isinstance(result, dict):
-            results = result.get("data", {}).get("results", [])
-            succeeded = sum(1 for r in results if r.get("success"))
-            failed = len(results) - succeeded
+    if isinstance(result, dict):
+        results = result.get("data", {}).get("results", [])
+        succeeded = sum(1 for r in results if r.get("success"))
+        failed = len(results) - succeeded
 
-            if failed == 0:
-                print_success(
-                    f"All {succeeded} commands completed successfully")
-            else:
-                print_info(f"{succeeded} succeeded, {failed} failed")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+        if failed == 0:
+            print_success(
+                f"All {succeeded} commands completed successfully")
+        else:
+            print_info(f"{succeeded} succeeded, {failed} failed")
 
 
 @batch.command("inline")
 @click.argument("commands_json")
 @click.option("--parallel", is_flag=True, help="Execute read-only commands in parallel.")
 @click.option("--fail-fast", is_flag=True, help="Stop on first failure.")
+@handle_unity_errors
 def batch_inline(commands_json: str, parallel: bool, fail_fast: bool):
     """Execute commands from inline JSON.
 
@@ -104,15 +103,7 @@ def batch_inline(commands_json: str, parallel: bool, fail_fast: bool):
     """
     config = get_config()
 
-    try:
-        commands = json.loads(commands_json)
-    except json.JSONDecodeError as e:
-        print_error(f"Invalid JSON: {e}")
-        sys.exit(1)
-
-    if not isinstance(commands, list):
-        print_error("Commands must be an array")
-        sys.exit(1)
+    commands = parse_json_list_or_exit(commands_json, "commands")
 
     if len(commands) > 25:
         print_error(f"Maximum 25 commands per batch, got {len(commands)}")
@@ -124,12 +115,8 @@ def batch_inline(commands_json: str, parallel: bool, fail_fast: bool):
     if fail_fast:
         params["failFast"] = True
 
-    try:
-        result = run_command("batch_execute", params, config)
-        click.echo(format_output(result, config.format))
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("batch_execute", params, config)
+    click.echo(format_output(result, config.format))
 
 
 @batch.command("template")

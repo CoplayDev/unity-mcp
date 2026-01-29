@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
+using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Services.Transport;
 using MCPForUnity.Editor.Tools;
 using MCPForUnity.Editor.Tools.Prefabs;
@@ -210,7 +211,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         {
             try
             {
-                bool useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+                bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
                 return !useHttpTransport;
             }
             catch

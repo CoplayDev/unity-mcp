@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Models;
+using MCPForUnity.Editor.Services;
 using UnityEditor;
 
 namespace MCPForUnity.Editor.Clients.Configurators
@@ -32,7 +33,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
         public override void Configure()
         {
-            bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
             if (useHttp)
             {
                 throw new InvalidOperationException("Claude Desktop does not support HTTP transport. Switch to stdio in settings before configuring.");
@@ -43,7 +44,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
         public override string GetManualSnippet()
         {
-            bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
             if (useHttp)
             {
                 return "# Claude Desktop does not support HTTP transport.\n" +

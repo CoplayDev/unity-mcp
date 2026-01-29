@@ -16,7 +16,7 @@ class TagsResponse(MCPResponse):
 @mcp_for_unity_resource(
     uri="mcpforunity://project/tags",
     name="project_tags",
-    description="All tags defined in the project's TagManager. Read this before using add_tag or remove_tag tools."
+    description="All tags defined in the project's TagManager. Read this before using add_tag or remove_tag tools.\n\nURI: mcpforunity://project/tags"
 )
 async def get_tags(ctx: Context) -> TagsResponse | MCPResponse:
     """Get all project tags."""

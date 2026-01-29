@@ -20,6 +20,16 @@ namespace MCPForUnity.Editor.Tools
         {
             try
             {
+                // Check for clear_stuck action first
+                if (ParamCoercion.CoerceBool(@params?["clear_stuck"], false))
+                {
+                    bool wasCleared = TestJobManager.ClearStuckJob();
+                    return Task.FromResult<object>(new SuccessResponse(
+                        wasCleared ? "Stuck job cleared." : "No running job to clear.",
+                        new { cleared = wasCleared }
+                    ));
+                }
+
                 string modeStr = @params?["mode"]?.ToString();
                 if (string.IsNullOrWhiteSpace(modeStr))
                 {
@@ -31,26 +41,8 @@ namespace MCPForUnity.Editor.Tools
                     return Task.FromResult<object>(new ErrorResponse(parseError));
                 }
 
-                bool includeDetails = false;
-                bool includeFailedTests = false;
-                try
-                {
-                    var includeDetailsToken = @params?["includeDetails"];
-                    if (includeDetailsToken != null && bool.TryParse(includeDetailsToken.ToString(), out var parsedIncludeDetails))
-                    {
-                        includeDetails = parsedIncludeDetails;
-                    }
-
-                    var includeFailedTestsToken = @params?["includeFailedTests"];
-                    if (includeFailedTestsToken != null && bool.TryParse(includeFailedTestsToken.ToString(), out var parsedIncludeFailedTests))
-                    {
-                        includeFailedTests = parsedIncludeFailedTests;
-                    }
-                }
-                catch
-                {
-                    // ignore parse failures
-                }
+                bool includeDetails = ParamCoercion.CoerceBool(@params?["includeDetails"], false);
+                bool includeFailedTests = ParamCoercion.CoerceBool(@params?["includeFailedTests"], false);
 
                 var filterOptions = GetFilterOptions(@params);
                 string jobId = TestJobManager.StartJob(parsedMode.Value, filterOptions);

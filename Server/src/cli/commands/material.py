@@ -7,7 +7,9 @@ from typing import Optional, Any, Tuple
 
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success
-from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.connection import run_command, handle_unity_errors
+from cli.utils.parsers import parse_value_safe, parse_json_dict_or_exit
+from cli.utils.constants import SEARCH_METHOD_CHOICE_RENDERER
 
 
 @click.group()
@@ -18,6 +20,7 @@ def material():
 
 @material.command("info")
 @click.argument("path")
+@handle_unity_errors
 def info(path: str):
     """Get information about a material.
 
@@ -27,15 +30,11 @@ def info(path: str):
     """
     config = get_config()
 
-    try:
-        result = run_command("manage_material", {
-            "action": "get_material_info",
-            "materialPath": path,
-        }, config)
-        click.echo(format_output(result, config.format))
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_material", {
+        "action": "get_material_info",
+        "materialPath": path,
+    }, config)
+    click.echo(format_output(result, config.format))
 
 
 @material.command("create")
@@ -50,6 +49,7 @@ def info(path: str):
     default=None,
     help='Initial properties as JSON.'
 )
+@handle_unity_errors
 def create(path: str, shader: str, properties: Optional[str]):
     """Create a new material.
 
@@ -68,20 +68,12 @@ def create(path: str, shader: str, properties: Optional[str]):
     }
 
     if properties:
-        try:
-            params["properties"] = json.loads(properties)
-        except json.JSONDecodeError as e:
-            print_error(f"Invalid JSON for properties: {e}")
-            sys.exit(1)
+        params["properties"] = parse_json_dict_or_exit(properties, "properties")
 
-    try:
-        result = run_command("manage_material", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Created material: {path}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_material", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Created material: {path}")
 
 
 @material.command("set-color")
@@ -95,6 +87,7 @@ def create(path: str, shader: str, properties: Optional[str]):
     default="_Color",
     help="Color property name (default: _Color)."
 )
+@handle_unity_errors
 def set_color(path: str, r: float, g: float, b: float, a: float, property: str):
     """Set a material's color.
 
@@ -113,20 +106,17 @@ def set_color(path: str, r: float, g: float, b: float, a: float, property: str):
         "color": [r, g, b, a],
     }
 
-    try:
-        result = run_command("manage_material", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Set color on: {path}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_material", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Set color on: {path}")
 
 
 @material.command("set-property")
 @click.argument("path")
 @click.argument("property_name")
 @click.argument("value")
+@handle_unity_errors
 def set_property(path: str, property_name: str, value: str):
     """Set a shader property on a material.
 
@@ -139,14 +129,7 @@ def set_property(path: str, property_name: str, value: str):
     config = get_config()
 
     # Try to parse value as JSON for complex types
-    try:
-        parsed_value = json.loads(value)
-    except json.JSONDecodeError:
-        # Try to parse as number
-        try:
-            parsed_value = float(value)
-        except ValueError:
-            parsed_value = value
+    parsed_value = parse_value_safe(value)
 
     params: dict[str, Any] = {
         "action": "set_material_shader_property",
@@ -155,14 +138,10 @@ def set_property(path: str, property_name: str, value: str):
         "value": parsed_value,
     }
 
-    try:
-        result = run_command("manage_material", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Set {property_name} on: {path}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_material", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Set {property_name} on: {path}")
 
 
 @material.command("assign")
@@ -170,8 +149,7 @@ def set_property(path: str, property_name: str, value: str):
 @click.argument("target")
 @click.option(
     "--search-method",
-    type=click.Choice(["by_name", "by_path", "by_tag",
-                      "by_layer", "by_component"]),
+    type=SEARCH_METHOD_CHOICE_RENDERER,
     default=None,
     help="How to find the target GameObject."
 )
@@ -187,6 +165,7 @@ def set_property(path: str, property_name: str, value: str):
     default="shared",
     help="Assignment mode."
 )
+@handle_unity_errors
 def assign(material_path: str, target: str, search_method: Optional[str], slot: int, mode: str):
     """Assign a material to a GameObject's renderer.
 
@@ -209,14 +188,10 @@ def assign(material_path: str, target: str, search_method: Optional[str], slot: 
     if search_method:
         params["searchMethod"] = search_method
 
-    try:
-        result = run_command("manage_material", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Assigned material to: {target}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_material", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Assigned material to: {target}")
 
 
 @material.command("set-renderer-color")
@@ -227,8 +202,7 @@ def assign(material_path: str, target: str, search_method: Optional[str], slot: 
 @click.argument("a", type=float, default=1.0)
 @click.option(
     "--search-method",
-    type=click.Choice(["by_name", "by_path", "by_tag",
-                      "by_layer", "by_component"]),
+    type=SEARCH_METHOD_CHOICE_RENDERER,
     default=None,
     help="How to find the target GameObject."
 )
@@ -238,6 +212,7 @@ def assign(material_path: str, target: str, search_method: Optional[str], slot: 
     default="property_block",
     help="Modification mode."
 )
+@handle_unity_errors
 def set_renderer_color(target: str, r: float, g: float, b: float, a: float, search_method: Optional[str], mode: str):
     """Set a renderer's material color directly.
 
@@ -258,11 +233,7 @@ def set_renderer_color(target: str, r: float, g: float, b: float, a: float, sear
     if search_method:
         params["searchMethod"] = search_method
 
-    try:
-        result = run_command("manage_material", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Set renderer color on: {target}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_material", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Set renderer color on: {target}")

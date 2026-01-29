@@ -1,9 +1,9 @@
 """Connection utilities for CLI to communicate with Unity via MCP server."""
 
 import asyncio
-import json
+import functools
 import sys
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional, TypeVar
 
 import httpx
 
@@ -13,6 +13,36 @@ from cli.utils.config import get_config, CLIConfig
 class UnityConnectionError(Exception):
     """Raised when connection to Unity fails."""
     pass
+
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def handle_unity_errors(func: F) -> F:
+    """Decorator that handles UnityConnectionError consistently.
+
+    Wraps a CLI command function and catches UnityConnectionError,
+    printing a formatted error message and exiting with code 1.
+
+    Usage:
+        @scene.command("active")
+        @handle_unity_errors
+        def active():
+            config = get_config()
+            result = run_command("manage_scene", {"action": "get_active"}, config)
+            click.echo(format_output(result, config.format))
+    """
+    from cli.utils.output import print_error
+
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return func(*args, **kwargs)
+        except UnityConnectionError as e:
+            print_error(str(e))
+            sys.exit(1)
+
+    return wrapper  # type: ignore[return-value]
 
 
 def warn_if_remote_host(config: CLIConfig) -> None:

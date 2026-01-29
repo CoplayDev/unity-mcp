@@ -7,7 +7,10 @@ from typing import Optional, Any
 
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success
-from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.connection import run_command, handle_unity_errors
+from cli.utils.parsers import parse_value_safe, parse_json_dict_or_exit
+from cli.utils.constants import SEARCH_METHOD_CHOICE_BASIC
+from cli.utils.confirmation import confirm_destructive_action
 
 
 @click.group()
@@ -21,7 +24,7 @@ def component():
 @click.argument("component_type")
 @click.option(
     "--search-method",
-    type=click.Choice(["by_id", "by_name", "by_path"]),
+    type=SEARCH_METHOD_CHOICE_BASIC,
     default=None,
     help="How to find the target GameObject."
 )
@@ -30,6 +33,7 @@ def component():
     default=None,
     help='Initial properties as JSON (e.g., \'{"mass": 5.0}\').'
 )
+@handle_unity_errors
 def add(target: str, component_type: str, search_method: Optional[str], properties: Optional[str]):
     """Add a component to a GameObject.
 
@@ -50,20 +54,12 @@ def add(target: str, component_type: str, search_method: Optional[str], properti
     if search_method:
         params["searchMethod"] = search_method
     if properties:
-        try:
-            params["properties"] = json.loads(properties)
-        except json.JSONDecodeError as e:
-            print_error(f"Invalid JSON for properties: {e}")
-            sys.exit(1)
+        params["properties"] = parse_json_dict_or_exit(properties, "properties")
 
-    try:
-        result = run_command("manage_components", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Added {component_type} to '{target}'")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_components", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Added {component_type} to '{target}'")
 
 
 @component.command("remove")
@@ -71,7 +67,7 @@ def add(target: str, component_type: str, search_method: Optional[str], properti
 @click.argument("component_type")
 @click.option(
     "--search-method",
-    type=click.Choice(["by_id", "by_name", "by_path"]),
+    type=SEARCH_METHOD_CHOICE_BASIC,
     default=None,
     help="How to find the target GameObject."
 )
@@ -80,6 +76,7 @@ def add(target: str, component_type: str, search_method: Optional[str], properti
     is_flag=True,
     help="Skip confirmation prompt."
 )
+@handle_unity_errors
 def remove(target: str, component_type: str, search_method: Optional[str], force: bool):
     """Remove a component from a GameObject.
 
@@ -90,8 +87,7 @@ def remove(target: str, component_type: str, search_method: Optional[str], force
     """
     config = get_config()
 
-    if not force:
-        click.confirm(f"Remove {component_type} from '{target}'?", abort=True)
+    confirm_destructive_action("Remove", component_type, target, force, "from")
 
     params: dict[str, Any] = {
         "action": "remove",
@@ -102,14 +98,10 @@ def remove(target: str, component_type: str, search_method: Optional[str], force
     if search_method:
         params["searchMethod"] = search_method
 
-    try:
-        result = run_command("manage_components", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Removed {component_type} from '{target}'")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_components", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Removed {component_type} from '{target}'")
 
 
 @component.command("set")
@@ -119,10 +111,11 @@ def remove(target: str, component_type: str, search_method: Optional[str], force
 @click.argument("value")
 @click.option(
     "--search-method",
-    type=click.Choice(["by_id", "by_name", "by_path"]),
+    type=SEARCH_METHOD_CHOICE_BASIC,
     default=None,
     help="How to find the target GameObject."
 )
+@handle_unity_errors
 def set_property(target: str, component_type: str, property_name: str, value: str, search_method: Optional[str]):
     """Set a single property on a component.
 
@@ -135,11 +128,7 @@ def set_property(target: str, component_type: str, property_name: str, value: st
     config = get_config()
 
     # Try to parse value as JSON for complex types
-    try:
-        parsed_value = json.loads(value)
-    except json.JSONDecodeError:
-        # Keep as string if not valid JSON
-        parsed_value = value
+    parsed_value = parse_value_safe(value)
 
     params: dict[str, Any] = {
         "action": "set_property",
@@ -152,14 +141,10 @@ def set_property(target: str, component_type: str, property_name: str, value: st
     if search_method:
         params["searchMethod"] = search_method
 
-    try:
-        result = run_command("manage_components", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Set {component_type}.{property_name} = {value}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_components", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Set {component_type}.{property_name} = {value}")
 
 
 @component.command("modify")
@@ -172,10 +157,11 @@ def set_property(target: str, component_type: str, property_name: str, value: st
 )
 @click.option(
     "--search-method",
-    type=click.Choice(["by_id", "by_name", "by_path"]),
+    type=SEARCH_METHOD_CHOICE_BASIC,
     default=None,
     help="How to find the target GameObject."
 )
+@handle_unity_errors
 def modify(target: str, component_type: str, properties: str, search_method: Optional[str]):
     """Set multiple properties on a component at once.
 
@@ -186,11 +172,7 @@ def modify(target: str, component_type: str, properties: str, search_method: Opt
     """
     config = get_config()
 
-    try:
-        props_dict = json.loads(properties)
-    except json.JSONDecodeError as e:
-        print_error(f"Invalid JSON for properties: {e}")
-        sys.exit(1)
+    props_dict = parse_json_dict_or_exit(properties, "properties")
 
     params: dict[str, Any] = {
         "action": "set_property",
@@ -202,11 +184,7 @@ def modify(target: str, component_type: str, properties: str, search_method: Opt
     if search_method:
         params["searchMethod"] = search_method
 
-    try:
-        result = run_command("manage_components", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Modified {component_type} on '{target}'")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_components", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Modified {component_type} on '{target}'")

@@ -9,42 +9,9 @@ from mcp.types import ToolAnnotations
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
-from services.tools.utils import parse_json_payload, coerce_int, normalize_properties
+from services.tools.utils import parse_json_payload, coerce_int, normalize_properties, normalize_color
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
-
-
-def _normalize_color(value: Any) -> tuple[list[float] | None, str | None]:
-    """
-    Normalize color parameter to [r, g, b] or [r, g, b, a] format.
-    Returns (parsed_color, error_message).
-    """
-    if value is None:
-        return None, None
-
-    # Already a list - validate
-    if isinstance(value, (list, tuple)):
-        if len(value) in (3, 4):
-            try:
-                return [float(c) for c in value], None
-            except (ValueError, TypeError):
-                return None, f"color values must be numbers, got {value}"
-        return None, f"color must have 3 or 4 components, got {len(value)}"
-
-    # Try parsing as string
-    if isinstance(value, str):
-        if value in ("[object Object]", "undefined", "null", ""):
-            return None, f"color received invalid value: '{value}'. Expected [r, g, b] or [r, g, b, a]"
-
-        parsed = parse_json_payload(value)
-        if isinstance(parsed, (list, tuple)) and len(parsed) in (3, 4):
-            try:
-                return [float(c) for c in parsed], None
-            except (ValueError, TypeError):
-                return None, f"color values must be numbers, got {parsed}"
-        return None, f"Failed to parse color string: {value}"
-
-    return None, f"color must be a list or JSON string, got {type(value).__name__}"
 
 
 @mcp_for_unity_tool(
@@ -82,8 +49,8 @@ async def manage_material(
                      "Value to set (color array, float, texture path/instruction)"] | None = None,
 
     # set_material_color / set_renderer_color
-    color: Annotated[list[float] | str,
-                     "Color as [r, g, b] or [r, g, b, a] array (list or JSON string)."] | None = None,
+    color: Annotated[list[float] | dict[str, float] | str,
+                     "Color as [r, g, b] or [r, g, b, a] array, {r, g, b, a} object, or JSON string."] | None = None,
 
     # assign_material_to_renderer / set_renderer_color
     target: Annotated[str,
@@ -98,7 +65,7 @@ async def manage_material(
     unity_instance = get_unity_instance_from_context(ctx)
 
     # --- Normalize color with validation ---
-    color, color_error = _normalize_color(color)
+    color, color_error = normalize_color(color, output_range="float")
     if color_error:
         return {"success": False, "message": color_error}
 

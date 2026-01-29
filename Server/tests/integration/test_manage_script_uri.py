@@ -1,37 +1,11 @@
 import pytest
 
-from .test_helpers import DummyContext
-
-
-class DummyMCP:
-    def __init__(self):
-        self.tools = {}
-
-    def tool(self, *args, **kwargs):  # ignore decorator kwargs like description
-        def _decorator(fn):
-            self.tools[fn.__name__] = fn
-            return fn
-        return _decorator
-
-
-def _register_tools():
-    mcp = DummyMCP()
-    # Import the tools module to trigger decorator registration
-    import services.tools.manage_script  # trigger decorator registration
-    # Get the registered tools from the registry
-    from services.registry import get_registered_tools
-    registered_tools = get_registered_tools()
-    # Add all script-related tools to our dummy MCP
-    for tool_info in registered_tools:
-        tool_name = tool_info['name']
-        if any(keyword in tool_name for keyword in ['script', 'apply_text', 'create_script', 'delete_script', 'validate_script', 'get_sha']):
-            mcp.tools[tool_name] = tool_info['func']
-    return mcp.tools
+from .test_helpers import DummyContext, setup_script_tools
 
 
 @pytest.mark.asyncio
 async def test_split_uri_unity_path(monkeypatch):
-    test_tools = _register_tools()
+    test_tools = setup_script_tools()
     captured = {}
 
     async def fake_send(cmd, params, **kwargs):  # capture params and return success
@@ -71,7 +45,7 @@ async def test_split_uri_unity_path(monkeypatch):
     ],
 )
 async def test_split_uri_file_urls(monkeypatch, uri, expected_name, expected_path):
-    test_tools = _register_tools()
+    test_tools = setup_script_tools()
     captured = {}
 
     async def fake_send(_cmd, params, **kwargs):
@@ -97,7 +71,7 @@ async def test_split_uri_file_urls(monkeypatch, uri, expected_name, expected_pat
 
 @pytest.mark.asyncio
 async def test_split_uri_plain_path(monkeypatch):
-    test_tools = _register_tools()
+    test_tools = setup_script_tools()
     captured = {}
 
     async def fake_send(_cmd, params, **kwargs):

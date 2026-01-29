@@ -6,7 +6,7 @@ from typing import Optional, Any
 
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success
-from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.connection import run_command, handle_unity_errors
 
 
 @click.group()
@@ -44,6 +44,7 @@ def scene():
     type=int,
     help="Pagination cursor."
 )
+@handle_unity_errors
 def hierarchy(
     parent: Optional[str],
     max_depth: Optional[int],
@@ -75,25 +76,17 @@ def hierarchy(
     if include_transform:
         params["includeTransform"] = True
 
-    try:
-        result = run_command("manage_scene", params, config)
-        click.echo(format_output(result, config.format))
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_scene", params, config)
+    click.echo(format_output(result, config.format))
 
 
 @scene.command("active")
+@handle_unity_errors
 def active():
     """Get information about the active scene."""
     config = get_config()
-
-    try:
-        result = run_command("manage_scene", {"action": "get_active"}, config)
-        click.echo(format_output(result, config.format))
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_scene", {"action": "get_active"}, config)
+    click.echo(format_output(result, config.format))
 
 
 @scene.command("load")
@@ -103,6 +96,7 @@ def active():
     is_flag=True,
     help="Load by build index instead of path/name."
 )
+@handle_unity_errors
 def load(scene: str, by_index: bool):
     """Load a scene.
 
@@ -128,14 +122,10 @@ def load(scene: str, by_index: bool):
         else:
             params["name"] = scene
 
-    try:
-        result = run_command("manage_scene", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Loaded scene: {scene}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_scene", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Loaded scene: {scene}")
 
 
 @scene.command("save")
@@ -144,6 +134,7 @@ def load(scene: str, by_index: bool):
     default=None,
     help="Path to save the scene to (for new scenes)."
 )
+@handle_unity_errors
 def save(path: Optional[str]):
     """Save the current scene.
 
@@ -158,14 +149,10 @@ def save(path: Optional[str]):
     if path:
         params["path"] = path
 
-    try:
-        result = run_command("manage_scene", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success("Scene saved")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_scene", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success("Scene saved")
 
 
 @scene.command("create")
@@ -175,6 +162,7 @@ def save(path: Optional[str]):
     default=None,
     help="Path to create the scene at."
 )
+@handle_unity_errors
 def create(name: str, path: Optional[str]):
     """Create a new scene.
 
@@ -192,28 +180,19 @@ def create(name: str, path: Optional[str]):
     if path:
         params["path"] = path
 
-    try:
-        result = run_command("manage_scene", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Created scene: {name}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_scene", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Created scene: {name}")
 
 
 @scene.command("build-settings")
+@handle_unity_errors
 def build_settings():
     """Get scenes in build settings."""
     config = get_config()
-
-    try:
-        result = run_command(
-            "manage_scene", {"action": "get_build_settings"}, config)
-        click.echo(format_output(result, config.format))
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_scene", {"action": "get_build_settings"}, config)
+    click.echo(format_output(result, config.format))
 
 
 @scene.command("screenshot")
@@ -228,6 +207,7 @@ def build_settings():
     type=int,
     help="Supersize multiplier (1-4)."
 )
+@handle_unity_errors
 def screenshot(filename: Optional[str], supersize: int):
     """Capture a screenshot of the scene.
 
@@ -245,11 +225,7 @@ def screenshot(filename: Optional[str], supersize: int):
     if supersize > 1:
         params["superSize"] = supersize
 
-    try:
-        result = run_command("manage_scene", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success("Screenshot captured")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_scene", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success("Screenshot captured")

@@ -24,7 +24,7 @@ namespace MCPForUnity.Editor.Services
 
         private TransportMode ResolvePreferredMode()
         {
-            bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
             _preferredMode = useHttp ? TransportMode.Http : TransportMode.Stdio;
             return _preferredMode;
         }

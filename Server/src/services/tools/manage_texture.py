@@ -10,39 +10,10 @@ from mcp.types import ToolAnnotations
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
-from services.tools.utils import parse_json_payload, coerce_bool, coerce_int
+from services.tools.utils import parse_json_payload, coerce_bool, coerce_int, normalize_color
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 from services.tools.preflight import preflight
-
-
-def _is_normalized_color(values: list) -> bool:
-    """
-    Check if color values appear to be in normalized 0.0-1.0 range.
-    Returns True if all values are <= 1.0 and at least one is a float or between 0-1 exclusive.
-    """
-    if not values:
-        return False
-    
-    try:
-        numeric_values = [float(v) for v in values]
-    except (TypeError, ValueError):
-        return False
-
-    # Check if all values are <= 1.0
-    all_small = all(0 <= v <= 1.0 for v in numeric_values)
-    if not all_small:
-        return False
-    
-    # If any non-zero value is less than 1, it's likely normalized (e.g., 0.5)
-    has_fractional = any(0 < v < 1 for v in numeric_values)
-    
-    # If all values are 0 or 1, and they're all integers, could be either format
-    # In this ambiguous case (like [1, 0, 0, 1]), assume normalized since that's
-    # what graphics programmers typically use
-    all_binary = all(v in (0, 1, 0.0, 1.0) for v in numeric_values)
-    
-    return has_fractional or all_binary
 
 
 def _normalize_dimension(value: Any, name: str, default: int = 64) -> tuple[int | None, str | None]:
@@ -65,66 +36,9 @@ def _normalize_positive_int(value: Any, name: str) -> tuple[int | None, str | No
     return coerced, None
 
 
-def _normalize_color(value: Any) -> tuple[list[int] | None, str | None]:
-    """
-    Normalize color parameter to [r, g, b, a] format (0-255).
-    Auto-detects normalized float colors (0.0-1.0) and converts to 0-255.
-    Returns (parsed_color, error_message).
-    """
-    if value is None:
-        return None, None
-
-    # Already a list - validate
-    if isinstance(value, (list, tuple)):
-        if len(value) == 3:
-            value = list(value) + [1.0 if _is_normalized_color(value) else 255]
-        if len(value) == 4:
-            try:
-                # Check if values appear to be normalized (0.0-1.0 range)
-                if _is_normalized_color(value):
-                    # Convert from 0.0-1.0 to 0-255
-                    return [int(round(float(c) * 255)) for c in value], None
-                else:
-                    # Already in 0-255 range
-                    return [int(c) for c in value], None
-            except (ValueError, TypeError):
-                return None, f"color values must be numeric, got {value}"
-        return None, f"color must have 3 or 4 components, got {len(value)}"
-
-    # Try parsing as string
-    if isinstance(value, str):
-        if value in ("[object Object]", "undefined", "null", ""):
-            return None, f"color received invalid value: '{value}'. Expected [r, g, b] or [r, g, b, a]"
-
-        # Handle Hex Colors
-        if value.startswith("#"):
-            h = value.lstrip("#")
-            try:
-                if len(h) == 6:
-                    return [int(h[i:i+2], 16) for i in (0, 2, 4)] + [255], None
-                elif len(h) == 8:
-                    return [int(h[i:i+2], 16) for i in (0, 2, 4, 6)], None
-            except ValueError:
-                return None, f"Invalid hex color: {value}"
-
-        parsed = parse_json_payload(value)
-        if isinstance(parsed, (list, tuple)):
-            if len(parsed) == 3:
-                parsed = list(parsed) + [1.0 if _is_normalized_color(parsed) else 255]
-            if len(parsed) == 4:
-                try:
-                    # Check if values appear to be normalized (0.0-1.0 range)
-                    if _is_normalized_color(parsed):
-                        # Convert from 0.0-1.0 to 0-255
-                        return [int(round(float(c) * 255)) for c in parsed], None
-                    else:
-                        # Already in 0-255 range
-                        return [int(c) for c in parsed], None
-                except (ValueError, TypeError):
-                    return None, f"color values must be numeric, got {parsed}"
-        return None, f"Failed to parse color string: {value}"
-
-    return None, f"color must be a list or JSON string, got {type(value).__name__}"
+def _normalize_color_int(value: Any) -> tuple[list[int] | None, str | None]:
+    """Thin wrapper for normalize_color with int output for texture operations."""
+    return normalize_color(value, output_range="int")
 
 
 def _normalize_palette(value: Any) -> tuple[list[list[int]] | None, str | None]:
@@ -146,7 +60,7 @@ def _normalize_palette(value: Any) -> tuple[list[list[int]] | None, str | None]:
 
     normalized = []
     for i, color in enumerate(value):
-        parsed, error = _normalize_color(color)
+        parsed, error = _normalize_color_int(color)
         if error:
             return None, f"palette[{i}]: {error}"
         normalized.append(parsed)
@@ -181,7 +95,7 @@ def _normalize_pixels(value: Any, width: int, height: int) -> tuple[list[list[in
 
         normalized = []
         for i, pixel in enumerate(value):
-            parsed, error = _normalize_color(pixel)
+            parsed, error = _normalize_color_int(pixel)
             if error:
                 return None, f"pixels[{i}]: {error}"
             normalized.append(parsed)
@@ -482,8 +396,8 @@ async def manage_texture(
     height: Annotated[int, "Texture height in pixels (default: 64)"] | None = None,
 
     # Solid fill (accepts both 0-255 integers and 0.0-1.0 normalized floats)
-    fill_color: Annotated[list[int | float],
-                          "Fill color as [r, g, b] or [r, g, b, a]. Accepts both 0-255 range (e.g., [255, 0, 0]) or 0.0-1.0 normalized range (e.g., [1.0, 0, 0])"] | None = None,
+    fill_color: Annotated[list[int | float] | dict[str, int | float] | str,
+                          "Fill color as [r, g, b] or [r, g, b, a] array, {r, g, b, a} object, or hex string. Accepts both 0-255 range (e.g., [255, 0, 0]) or 0.0-1.0 normalized range (e.g., [1.0, 0, 0])"] | None = None,
 
     # Pattern-based generation
     pattern: Annotated[Literal[
@@ -544,7 +458,7 @@ async def manage_texture(
         return gate.model_dump()
 
     # --- Normalize parameters ---
-    fill_color, fill_error = _normalize_color(fill_color)
+    fill_color, fill_error = _normalize_color_int(fill_color)
     if fill_error:
         return {"success": False, "message": fill_error}
 
@@ -613,7 +527,7 @@ async def manage_texture(
 
         set_pixels_normalized = set_pixels.copy()
         if "color" in set_pixels_normalized:
-            color, error = _normalize_color(set_pixels_normalized["color"])
+            color, error = _normalize_color_int(set_pixels_normalized["color"])
             if error:
                 return {"success": False, "message": f"set_pixels.color: {error}"}
             set_pixels_normalized["color"] = color

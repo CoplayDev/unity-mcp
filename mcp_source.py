@@ -4,12 +4,13 @@ Generic helper to switch the MCP for Unity package source in a Unity project's
 Packages/manifest.json.  This is useful for switching between upstream and local repos while working on the MCP.
 
 Usage:
-  python mcp_source.py [--manifest /abs/path/to/manifest.json] [--repo /abs/path/to/unity-mcp] [--choice 1|2|3]
+  python mcp_source.py [--manifest /abs/path/to/manifest.json] [--repo /abs/path/to/unity-mcp] [--choice 1|2|3|4]
 
 Choices:
   1) Upstream main (CoplayDev/unity-mcp)
-  2) Your remote current branch (derived from `origin` and current branch)
-  3) Local repo workspace (file: URL to MCPForUnity in your checkout)
+  2) Upstream beta (CoplayDev/unity-mcp#beta)
+  3) Your remote current branch (derived from `origin` and current branch)
+  4) Local repo workspace (file: URL to MCPForUnity in your checkout)
 """
 
 from __future__ import annotations
@@ -91,20 +92,22 @@ def write_json(path: pathlib.Path, data: dict) -> None:
 
 
 def build_options(repo_root: pathlib.Path, branch: str, origin_https: str):
-    upstream = "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity"
+    upstream_main = "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity"
+    upstream_beta = "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#beta"
     # Ensure origin is https
     origin = origin_https
     # If origin is a local file path or non-https, try to coerce to https github if possible
     if origin.startswith("file:"):
         # Not meaningful for remote option; keep upstream
-        origin_remote = upstream
+        origin_remote = upstream_main
     else:
         origin_remote = origin
     return [
-        ("[1] Upstream main", upstream),
-        (f"[2] Remote {branch}",
+        ("[1] Upstream main", upstream_main),
+        ("[2] Upstream beta", upstream_beta),
+        (f"[3] Remote {branch}",
          f"{origin_remote}?path=/{BRIDGE_SUBPATH}#{branch}"),
-        (f"[3] Local {branch}",
+        (f"[4] Local {branch}",
          f"file:{(repo_root / BRIDGE_SUBPATH).as_posix()}"),
     ]
 
@@ -116,7 +119,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--repo", help="Path to unity-mcp repo root (for local file option)")
     p.add_argument(
-        "--choice", choices=["1", "2", "3"], help="Pick option non-interactively")
+        "--choice", choices=["1", "2", "3", "4"], help="Pick option non-interactively")
     return p.parse_args()
 
 
@@ -145,9 +148,9 @@ def main() -> None:
     if args.choice:
         choice = args.choice
     else:
-        choice = input("Enter 1-3: ").strip()
+        choice = input("Enter 1-4: ").strip()
 
-    if choice not in {"1", "2", "3"}:
+    if choice not in {"1", "2", "3", "4"}:
         print("Invalid selection.", file=sys.stderr)
         sys.exit(1)
 

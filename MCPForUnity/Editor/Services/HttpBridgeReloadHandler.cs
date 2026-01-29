@@ -60,7 +60,7 @@ namespace MCPForUnity.Editor.Services
             try
             {
                 // Only resume HTTP if it is still the selected transport.
-                bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+                bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
                 resume = useHttp && EditorPrefs.GetBool(EditorPrefKeys.ResumeHttpAfterReload, false);
                 if (resume)
                 {

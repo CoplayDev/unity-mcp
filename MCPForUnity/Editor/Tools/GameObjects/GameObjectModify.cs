@@ -47,7 +47,7 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                     // Rename the prefab asset file to match the new name (avoids Unity dialog)
                     string assetPath = prefabStageForRename.assetPath;
                     string directory = System.IO.Path.GetDirectoryName(assetPath);
-                    string newAssetPath = System.IO.Path.Combine(directory, name + ".prefab").Replace('\\', '/');
+                    string newAssetPath = AssetPathUtility.NormalizeSeparators(System.IO.Path.Combine(directory, name + ".prefab"));
 
                     // Only rename if the path actually changes
                     if (newAssetPath != assetPath)

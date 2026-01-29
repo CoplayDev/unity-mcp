@@ -25,7 +25,7 @@ class PrefabStageResponse(MCPResponse):
 @mcp_for_unity_resource(
     uri="mcpforunity://editor/prefab-stage",
     name="editor_prefab_stage",
-    description="Current prefab editing context if a prefab is open in isolation mode. Returns isOpen=false if no prefab is being edited."
+    description="Current prefab editing context if a prefab is open in isolation mode. Returns isOpen=false if no prefab is being edited.\n\nURI: mcpforunity://editor/prefab-stage"
 )
 async def get_prefab_stage(ctx: Context) -> PrefabStageResponse | MCPResponse:
     """Get current prefab stage information."""

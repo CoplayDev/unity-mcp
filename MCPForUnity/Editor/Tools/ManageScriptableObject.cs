@@ -1441,7 +1441,7 @@ namespace MCPForUnity.Editor.Tools
                 return path;
             }
 
-            var s = path.Replace('\\', '/');
+            var s = AssetPathUtility.NormalizeSeparators(path);
             while (s.IndexOf("//", StringComparison.Ordinal) >= 0)
             {
                 s = s.Replace("//", "/", StringComparison.Ordinal);

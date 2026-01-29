@@ -9,6 +9,7 @@ using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Services;
+using EditorConfigCache = MCPForUnity.Editor.Services.EditorConfigurationCache;
 
 namespace MCPForUnityTests.Editor.Helpers
 {
@@ -473,6 +474,7 @@ namespace MCPForUnityTests.Editor.Helpers
         {
             bool original = EditorPrefs.GetBool(UseHttpTransportPrefKey, true);
             EditorPrefs.SetBool(UseHttpTransportPrefKey, useHttp);
+            EditorConfigCache.Instance.Refresh();
             try
             {
                 action();
@@ -480,6 +482,7 @@ namespace MCPForUnityTests.Editor.Helpers
             finally
             {
                 EditorPrefs.SetBool(UseHttpTransportPrefKey, original);
+                EditorConfigCache.Instance.Refresh();
             }
         }
     }

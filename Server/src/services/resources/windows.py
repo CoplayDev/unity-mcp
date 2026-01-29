@@ -33,7 +33,7 @@ class WindowsResponse(MCPResponse):
 @mcp_for_unity_resource(
     uri="mcpforunity://editor/windows",
     name="editor_windows",
-    description="All currently open editor windows with their titles, types, positions, and focus state."
+    description="All currently open editor windows with their titles, types, positions, and focus state.\n\nURI: mcpforunity://editor/windows"
 )
 async def get_windows(ctx: Context) -> WindowsResponse | MCPResponse:
     """Get all open editor windows."""

@@ -24,16 +24,27 @@ namespace MCPForUnity.Editor.Tools
         /// </summary>
         public static object HandleCommand(JObject @params)
         {
-            string action = @params["action"]?.ToString()?.ToLowerInvariant();
-            // Parameters for specific actions
-            string tagName = @params["tagName"]?.ToString();
-            string layerName = @params["layerName"]?.ToString();
-            bool waitForCompletion = @params["waitForCompletion"]?.ToObject<bool>() ?? false; // Example - not used everywhere
-
-            if (string.IsNullOrEmpty(action))
+            // Step 1: Null parameter guard (consistent across all tools)
+            if (@params == null)
             {
-                return new ErrorResponse("Action parameter is required.");
+                return new ErrorResponse("Parameters cannot be null.");
             }
+
+            // Step 2: Wrap parameters
+            var p = new ToolParams(@params);
+
+            // Step 3: Extract and validate required parameters
+            var actionResult = p.GetRequired("action");
+            if (!actionResult.IsSuccess)
+            {
+                return new ErrorResponse(actionResult.ErrorMessage);
+            }
+            string action = actionResult.Value.ToLowerInvariant();
+
+            // Parameters for specific actions
+            string tagName = p.Get("tagName");
+            string layerName = p.Get("layerName");
+            bool waitForCompletion = p.GetBool("waitForCompletion", false);
 
             // Route action
             switch (action)
@@ -86,29 +97,33 @@ namespace MCPForUnity.Editor.Tools
 
                 // Tool Control
                 case "set_active_tool":
-                    string toolName = @params["toolName"]?.ToString();
-                    if (string.IsNullOrEmpty(toolName))
-                        return new ErrorResponse("'toolName' parameter required for set_active_tool.");
-                    return SetActiveTool(toolName);
+                    var toolNameResult = p.GetRequired("toolName", "'toolName' parameter required for set_active_tool.");
+                    if (!toolNameResult.IsSuccess)
+                        return new ErrorResponse(toolNameResult.ErrorMessage);
+                    return SetActiveTool(toolNameResult.Value);
 
                 // Tag Management
                 case "add_tag":
-                    if (string.IsNullOrEmpty(tagName))
-                        return new ErrorResponse("'tagName' parameter required for add_tag.");
-                    return AddTag(tagName);
+                    var addTagResult = p.GetRequired("tagName", "'tagName' parameter required for add_tag.");
+                    if (!addTagResult.IsSuccess)
+                        return new ErrorResponse(addTagResult.ErrorMessage);
+                    return AddTag(addTagResult.Value);
                 case "remove_tag":
-                    if (string.IsNullOrEmpty(tagName))
-                        return new ErrorResponse("'tagName' parameter required for remove_tag.");
-                    return RemoveTag(tagName);
+                    var removeTagResult = p.GetRequired("tagName", "'tagName' parameter required for remove_tag.");
+                    if (!removeTagResult.IsSuccess)
+                        return new ErrorResponse(removeTagResult.ErrorMessage);
+                    return RemoveTag(removeTagResult.Value);
                 // Layer Management
                 case "add_layer":
-                    if (string.IsNullOrEmpty(layerName))
-                        return new ErrorResponse("'layerName' parameter required for add_layer.");
-                    return AddLayer(layerName);
+                    var addLayerResult = p.GetRequired("layerName", "'layerName' parameter required for add_layer.");
+                    if (!addLayerResult.IsSuccess)
+                        return new ErrorResponse(addLayerResult.ErrorMessage);
+                    return AddLayer(addLayerResult.Value);
                 case "remove_layer":
-                    if (string.IsNullOrEmpty(layerName))
-                        return new ErrorResponse("'layerName' parameter required for remove_layer.");
-                    return RemoveLayer(layerName);
+                    var removeLayerResult = p.GetRequired("layerName", "'layerName' parameter required for remove_layer.");
+                    if (!removeLayerResult.IsSuccess)
+                        return new ErrorResponse(removeLayerResult.ErrorMessage);
+                    return RemoveLayer(removeLayerResult.Value);
                 // --- Settings (Example) ---
                 // case "set_resolution":
                 //     int? width = @params["width"]?.ToObject<int?>();

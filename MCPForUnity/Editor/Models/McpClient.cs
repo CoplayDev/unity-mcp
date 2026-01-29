@@ -34,7 +34,7 @@ namespace MCPForUnity.Editor.Models
                 McpStatus.NoResponse => "No Response",
                 McpStatus.UnsupportedOS => "Unsupported OS",
                 McpStatus.MissingConfig => "Missing MCPForUnity Config",
-                McpStatus.Error => configStatus.StartsWith("Error:") ? configStatus : "Error",
+                McpStatus.Error => configStatus?.StartsWith("Error:") == true ? configStatus : "Error",
                 _ => "Unknown",
             };
         }

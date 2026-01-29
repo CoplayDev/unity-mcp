@@ -1,44 +1,15 @@
 import pytest
 import asyncio
 
-from .test_helpers import DummyContext
+from .test_helpers import DummyContext, DummyMCP, setup_script_tools
 
 
-class DummyMCP:
-    def __init__(self):
-        self.tools = {}
-
-    def tool(self, *args, **kwargs):  # accept decorator kwargs like description
-        def decorator(func):
-            self.tools[func.__name__] = func
-            return func
-        return decorator
-
-
-def setup_manage_script():
+def setup_asset_tools():
+    """Setup asset-related tools for testing."""
     mcp = DummyMCP()
-    # Import the tools module to trigger decorator registration
-    import services.tools.manage_script
-    # Get the registered tools from the registry
-    from services.registry import get_registered_tools
-    tools = get_registered_tools()
-    # Add all script-related tools to our dummy MCP
-    for tool_info in tools:
-        tool_name = tool_info['name']
-        if any(keyword in tool_name for keyword in ['script', 'apply_text', 'create_script', 'delete_script', 'validate_script', 'get_sha']):
-            mcp.tools[tool_name] = tool_info['func']
-    return mcp.tools
-
-
-def setup_manage_asset():
-    mcp = DummyMCP()
-    # Import the tools module to trigger decorator registration
     import services.tools.manage_asset
-    # Get the registered tools from the registry
     from services.registry import get_registered_tools
-    tools = get_registered_tools()
-    # Add all asset-related tools to our dummy MCP
-    for tool_info in tools:
+    for tool_info in get_registered_tools():
         tool_name = tool_info['name']
         if any(keyword in tool_name for keyword in ['asset', 'manage_asset']):
             mcp.tools[tool_name] = tool_info['func']
@@ -47,7 +18,7 @@ def setup_manage_asset():
 
 @pytest.mark.asyncio
 async def test_apply_text_edits_long_file(monkeypatch):
-    tools = setup_manage_script()
+    tools = setup_script_tools()
     apply_edits = tools["apply_text_edits"]
     captured = {}
 
@@ -77,7 +48,7 @@ async def test_apply_text_edits_long_file(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_sequential_edits_use_precondition(monkeypatch):
-    tools = setup_manage_script()
+    tools = setup_script_tools()
     apply_edits = tools["apply_text_edits"]
     calls = []
 
@@ -112,7 +83,7 @@ async def test_sequential_edits_use_precondition(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_apply_text_edits_forwards_options(monkeypatch):
-    tools = setup_manage_script()
+    tools = setup_script_tools()
     apply_edits = tools["apply_text_edits"]
     captured = {}
 
@@ -141,7 +112,7 @@ async def test_apply_text_edits_forwards_options(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_apply_text_edits_defaults_atomic_for_multi_span(monkeypatch):
-    tools = setup_manage_script()
+    tools = setup_script_tools()
     apply_edits = tools["apply_text_edits"]
     captured = {}
 
@@ -175,7 +146,7 @@ async def test_apply_text_edits_defaults_atomic_for_multi_span(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_manage_asset_prefab_modify_request(monkeypatch):
-    tools = setup_manage_asset()
+    tools = setup_asset_tools()
     manage_asset = tools["manage_asset"]
     captured = {}
 

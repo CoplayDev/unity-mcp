@@ -7,7 +7,9 @@ from typing import Optional, Any
 
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success
-from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.connection import run_command, handle_unity_errors
+from cli.utils.parsers import parse_json_dict_or_exit
+from cli.utils.confirmation import confirm_destructive_action
 
 
 @click.group()
@@ -41,6 +43,7 @@ def asset():
     type=int,
     help="Page number (1-based)."
 )
+@handle_unity_errors
 def search(pattern: str, path: str, filter_type: Optional[str], limit: int, page: int):
     """Search for assets.
 
@@ -64,12 +67,8 @@ def search(pattern: str, path: str, filter_type: Optional[str], limit: int, page
     if filter_type:
         params["filterType"] = filter_type
 
-    try:
-        result = run_command("manage_asset", params, config)
-        click.echo(format_output(result, config.format))
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_asset", params, config)
+    click.echo(format_output(result, config.format))
 
 
 @asset.command("info")
@@ -79,6 +78,7 @@ def search(pattern: str, path: str, filter_type: Optional[str], limit: int, page
     is_flag=True,
     help="Generate preview thumbnail (may be large)."
 )
+@handle_unity_errors
 def info(path: str, preview: bool):
     """Get detailed information about an asset.
 
@@ -95,12 +95,8 @@ def info(path: str, preview: bool):
         "generatePreview": preview,
     }
 
-    try:
-        result = run_command("manage_asset", params, config)
-        click.echo(format_output(result, config.format))
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_asset", params, config)
+    click.echo(format_output(result, config.format))
 
 
 @asset.command("create")
@@ -111,6 +107,7 @@ def info(path: str, preview: bool):
     default=None,
     help='Initial properties as JSON.'
 )
+@handle_unity_errors
 def create(path: str, asset_type: str, properties: Optional[str]):
     """Create a new asset.
 
@@ -129,20 +126,12 @@ def create(path: str, asset_type: str, properties: Optional[str]):
     }
 
     if properties:
-        try:
-            params["properties"] = json.loads(properties)
-        except json.JSONDecodeError as e:
-            print_error(f"Invalid JSON for properties: {e}")
-            sys.exit(1)
+        params["properties"] = parse_json_dict_or_exit(properties, "properties")
 
-    try:
-        result = run_command("manage_asset", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Created {asset_type}: {path}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_asset", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Created {asset_type}: {path}")
 
 
 @asset.command("delete")
@@ -152,6 +141,7 @@ def create(path: str, asset_type: str, properties: Optional[str]):
     is_flag=True,
     help="Skip confirmation prompt."
 )
+@handle_unity_errors
 def delete(path: str, force: bool):
     """Delete an asset.
 
@@ -162,23 +152,19 @@ def delete(path: str, force: bool):
     """
     config = get_config()
 
-    if not force:
-        click.confirm(f"Delete asset '{path}'?", abort=True)
+    confirm_destructive_action("Delete", "asset", path, force)
 
-    try:
-        result = run_command(
-            "manage_asset", {"action": "delete", "path": path}, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Deleted: {path}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command(
+        "manage_asset", {"action": "delete", "path": path}, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Deleted: {path}")
 
 
 @asset.command("duplicate")
 @click.argument("source")
 @click.argument("destination")
+@handle_unity_errors
 def duplicate(source: str, destination: str):
     """Duplicate an asset.
 
@@ -194,19 +180,16 @@ def duplicate(source: str, destination: str):
         "destination": destination,
     }
 
-    try:
-        result = run_command("manage_asset", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Duplicated to: {destination}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_asset", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Duplicated to: {destination}")
 
 
 @asset.command("move")
 @click.argument("source")
 @click.argument("destination")
+@handle_unity_errors
 def move(source: str, destination: str):
     """Move an asset to a new location.
 
@@ -222,19 +205,16 @@ def move(source: str, destination: str):
         "destination": destination,
     }
 
-    try:
-        result = run_command("manage_asset", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Moved to: {destination}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_asset", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Moved to: {destination}")
 
 
 @asset.command("rename")
 @click.argument("path")
 @click.argument("new_name")
+@handle_unity_errors
 def rename(path: str, new_name: str):
     """Rename an asset.
 
@@ -255,18 +235,15 @@ def rename(path: str, new_name: str):
         "destination": destination,
     }
 
-    try:
-        result = run_command("manage_asset", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Renamed to: {new_name}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_asset", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Renamed to: {new_name}")
 
 
 @asset.command("import")
 @click.argument("path")
+@handle_unity_errors
 def import_asset(path: str):
     """Import/reimport an asset.
 
@@ -276,19 +253,16 @@ def import_asset(path: str):
     """
     config = get_config()
 
-    try:
-        result = run_command(
-            "manage_asset", {"action": "import", "path": path}, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Imported: {path}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command(
+        "manage_asset", {"action": "import", "path": path}, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Imported: {path}")
 
 
 @asset.command("mkdir")
 @click.argument("path")
+@handle_unity_errors
 def mkdir(path: str):
     """Create a folder.
 
@@ -299,12 +273,8 @@ def mkdir(path: str):
     """
     config = get_config()
 
-    try:
-        result = run_command(
-            "manage_asset", {"action": "create_folder", "path": path}, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Created folder: {path}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command(
+        "manage_asset", {"action": "create_folder", "path": path}, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Created folder: {path}")

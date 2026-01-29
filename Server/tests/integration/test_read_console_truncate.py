@@ -1,28 +1,14 @@
 import pytest
 
-from .test_helpers import DummyContext
+from .test_helpers import DummyContext, DummyMCP
 
 
-class DummyMCP:
-    def __init__(self):
-        self.tools = {}
-
-    def tool(self, *args, **kwargs):
-        def deco(fn):
-            self.tools[fn.__name__] = fn
-            return fn
-        return deco
-
-
-def setup_tools():
+def setup_console_tools():
+    """Setup console-related tools for testing."""
     mcp = DummyMCP()
-    # Import the tools module to trigger decorator registration
     import services.tools.read_console
-    # Get the registered tools from the registry
     from services.registry import get_registered_tools
-    registered_tools = get_registered_tools()
-    # Add all console-related tools to our dummy MCP
-    for tool_info in registered_tools:
+    for tool_info in get_registered_tools():
         tool_name = tool_info['name']
         if any(keyword in tool_name for keyword in ['read_console', 'console']):
             mcp.tools[tool_name] = tool_info['func']
@@ -31,7 +17,7 @@ def setup_tools():
 
 @pytest.mark.asyncio
 async def test_read_console_full_default(monkeypatch):
-    tools = setup_tools()
+    tools = setup_console_tools()
     read_console = tools["read_console"]
 
     captured = {}
@@ -62,7 +48,7 @@ async def test_read_console_full_default(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_read_console_truncated(monkeypatch):
-    tools = setup_tools()
+    tools = setup_console_tools()
     read_console = tools["read_console"]
 
     captured = {}
@@ -91,7 +77,7 @@ async def test_read_console_truncated(monkeypatch):
 @pytest.mark.asyncio
 async def test_read_console_default_count(monkeypatch):
     """Test that read_console defaults to count=10 when not specified."""
-    tools = setup_tools()
+    tools = setup_console_tools()
     read_console = tools["read_console"]
 
     captured = {}
@@ -121,7 +107,7 @@ async def test_read_console_default_count(monkeypatch):
 @pytest.mark.asyncio
 async def test_read_console_paging(monkeypatch):
     """Test that read_console paging works with page_size and cursor."""
-    tools = setup_tools()
+    tools = setup_console_tools()
     read_console = tools["read_console"]
 
     captured = {}
@@ -188,7 +174,7 @@ async def test_read_console_paging(monkeypatch):
 @pytest.mark.asyncio
 async def test_read_console_types_json_string(monkeypatch):
     """Test that read_console handles types parameter as JSON string (fixes issue #561)."""
-    tools = setup_tools()
+    tools = setup_console_tools()
     read_console = tools["read_console"]
 
     captured = {}
@@ -231,7 +217,7 @@ async def test_read_console_types_json_string(monkeypatch):
 @pytest.mark.asyncio
 async def test_read_console_types_validation(monkeypatch):
     """Test that read_console validates types entries and rejects invalid values."""
-    tools = setup_tools()
+    tools = setup_console_tools()
     read_console = tools["read_console"]
 
     captured = {}

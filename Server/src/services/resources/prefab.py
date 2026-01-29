@@ -43,7 +43,7 @@ def _decode_prefab_path(encoded_path: str) -> str:
 @mcp_for_unity_resource(
     uri="mcpforunity://prefab-api",
     name="prefab_api",
-    description="Documentation for Prefab resources. Use manage_asset action=search filterType=Prefab to find prefabs, then access resources below."
+    description="Documentation for Prefab resources. Use manage_asset action=search filterType=Prefab to find prefabs, then access resources below.\n\nURI: mcpforunity://prefab-api"
 )
 async def get_prefab_api_docs(_ctx: Context) -> MCPResponse:
     """
@@ -117,7 +117,7 @@ class PrefabInfoResponse(MCPResponse):
 @mcp_for_unity_resource(
     uri="mcpforunity://prefab/{encoded_path}",
     name="prefab_info",
-    description="Get detailed information about a prefab asset by URL-encoded path. Returns prefab type, root object name, component types, child count, and variant info."
+    description="Get detailed information about a prefab asset by URL-encoded path. Returns prefab type, root object name, component types, child count, and variant info.\n\nURI: mcpforunity://prefab/{encoded_path}"
 )
 async def get_prefab_info(ctx: Context, encoded_path: str) -> MCPResponse:
     """Get prefab asset info by path."""
@@ -169,7 +169,7 @@ class PrefabHierarchyResponse(MCPResponse):
 @mcp_for_unity_resource(
     uri="mcpforunity://prefab/{encoded_path}/hierarchy",
     name="prefab_hierarchy",
-    description="Get the full hierarchy of a prefab with nested prefab information. Returns all GameObjects with their components and nesting depth."
+    description="Get the full hierarchy of a prefab with nested prefab information. Returns all GameObjects with their components and nesting depth.\n\nURI: mcpforunity://prefab/{encoded_path}/hierarchy"
 )
 async def get_prefab_hierarchy(ctx: Context, encoded_path: str) -> MCPResponse:
     """Get prefab hierarchy by path."""

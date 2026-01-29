@@ -39,7 +39,6 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         private Label httpServerCommandHint;
         private TextField httpUrlField;
         private Button startHttpServerButton;
-        private Button stopHttpServerButton;
         private VisualElement unitySocketPortRow;
         private TextField unityPortField;
         private VisualElement statusIndicator;
@@ -89,7 +88,6 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             httpServerCommandHint = Root.Q<Label>("http-server-command-hint");
             httpUrlField = Root.Q<TextField>("http-url");
             startHttpServerButton = Root.Q<Button>("start-http-server-button");
-            stopHttpServerButton = Root.Q<Button>("stop-http-server-button");
             unitySocketPortRow = Root.Q<VisualElement>("unity-socket-port-row");
             unityPortField = Root.Q<TextField>("unity-port");
             statusIndicator = Root.Q<VisualElement>("status-indicator");
@@ -106,7 +104,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             }
 
             transportDropdown.Init(TransportProtocol.HTTPLocal);
-            bool useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
             if (!useHttpTransport)
             {
                 transportDropdown.value = TransportProtocol.Stdio;
@@ -161,7 +159,8 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 var selected = (TransportProtocol)evt.newValue;
                 bool useHttp = selected != TransportProtocol.Stdio;
                 EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, useHttp);
-                
+                EditorConfigurationCache.Instance.Refresh();
+
                 // Clear any stale resume flags when user manually changes transport
                 try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeStdioAfterReload); } catch { }
                 try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeHttpAfterReload); } catch { }
@@ -226,18 +225,6 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 startHttpServerButton.clicked += OnHttpServerToggleClicked;
             }
 
-            if (stopHttpServerButton != null)
-            {
-                // Stop button removed from UXML as part of consolidated Start/Stop UX.
-                // Kept null-check for backward compatibility if older UXML is loaded.
-                stopHttpServerButton.clicked += () =>
-                {
-                    // In older UXML layouts, route the stop button to the consolidated toggle behavior.
-                    // If a session is active, this will end it and attempt to stop the local server.
-                    OnHttpServerToggleClicked();
-                };
-            }
-
             if (copyHttpServerCommandButton != null)
             {
                 copyHttpServerCommandButton.clicked += () =>
@@ -283,9 +270,9 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             bool isRunning = bridgeService.IsRunning;
             bool showLocalServerControls = IsHttpLocalSelected();
             bool debugMode = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
-            // Use EditorPrefs as source of truth for stdio selection - more reliable after domain reload
-            // than checking the dropdown which may not be initialized yet
-            bool stdioSelected = !EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            // EditorConfigurationCache is the source of truth for transport selection after domain reload
+            // (EditorPrefs is still used for debugMode and other UI-only state)
+            bool stdioSelected = !EditorConfigurationCache.Instance.UseHttpTransport;
 
             // Keep the Start/Stop Server button label in sync even when the session is not running
             // (e.g., orphaned server after a domain reload).
@@ -505,9 +492,6 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             startHttpServerButton.tooltip = httpLocalSelected
                 ? (canStartLocalServer ? string.Empty : "HTTP Local requires a localhost URL (localhost/127.0.0.1/0.0.0.0/::1).")
                 : string.Empty;
-
-            // Stop button is no longer used; it may be null depending on UXML version.
-            stopHttpServerButton?.SetEnabled(false);
         }
 
         private void RefreshHttpUi()
@@ -828,7 +812,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             }
 
             // Determine the server's current transport setting
-            bool serverUsesHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool serverUsesHttp = EditorConfigurationCache.Instance.UseHttpTransport;
             ConfiguredTransport serverTransport = serverUsesHttp ? ConfiguredTransport.Http : ConfiguredTransport.Stdio;
 
             // Check for mismatch

@@ -1,12 +1,11 @@
 """Instance CLI commands for managing Unity instances."""
 
-import sys
 import click
 from typing import Optional
 
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success, print_info
-from cli.utils.connection import run_command, run_list_instances, UnityConnectionError
+from cli.utils.connection import run_command, run_list_instances, handle_unity_errors
 
 
 @click.group()
@@ -16,6 +15,7 @@ def instance():
 
 
 @instance.command("list")
+@handle_unity_errors
 def list_instances():
     """List available Unity instances.
 
@@ -25,35 +25,31 @@ def list_instances():
     """
     config = get_config()
 
-    try:
-        result = run_list_instances(config)
-        instances = result.get("instances", []) if isinstance(
-            result, dict) else []
+    result = run_list_instances(config)
+    instances = result.get("instances", []) if isinstance(
+        result, dict) else []
 
-        if not instances:
-            print_info("No Unity instances currently connected")
-            return
+    if not instances:
+        print_info("No Unity instances currently connected")
+        return
 
-        click.echo("Available Unity instances:")
-        for inst in instances:
-            project = inst.get("project", "Unknown")
-            version = inst.get("unity_version", "Unknown")
-            hash_id = inst.get("hash", "")
-            session_id = inst.get("session_id", "")
+    click.echo("Available Unity instances:")
+    for inst in instances:
+        project = inst.get("project", "Unknown")
+        version = inst.get("unity_version", "Unknown")
+        hash_id = inst.get("hash", "")
+        session_id = inst.get("session_id", "")
 
-            # Format: ProjectName@hash (Unity version)
-            display_id = f"{project}@{hash_id}" if hash_id else project
-            click.echo(f"  • {display_id} (Unity {version})")
-            if session_id:
-                click.echo(f"    Session: {session_id[:8]}...")
-
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+        # Format: ProjectName@hash (Unity version)
+        display_id = f"{project}@{hash_id}" if hash_id else project
+        click.echo(f"  • {display_id} (Unity {version})")
+        if session_id:
+            click.echo(f"    Session: {session_id[:8]}...")
 
 
 @instance.command("set")
 @click.argument("instance_id")
+@handle_unity_errors
 def set_instance(instance_id: str):
     """Set the active Unity instance.
 
@@ -66,18 +62,14 @@ def set_instance(instance_id: str):
     """
     config = get_config()
 
-    try:
-        result = run_command("set_active_instance", {
-            "instance": instance_id,
-        }, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            data = result.get("data", {})
-            active = data.get("instance", instance_id)
-            print_success(f"Active instance set to: {active}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("set_active_instance", {
+        "instance": instance_id,
+    }, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        data = result.get("data", {})
+        active = data.get("instance", instance_id)
+        print_success(f"Active instance set to: {active}")
 
 
 @instance.command("current")

@@ -66,7 +66,7 @@ namespace MCPForUnity.Editor.Tools
             string relativeDir = path ?? "Shaders"; // Default to "Shaders" if path is null
             if (!string.IsNullOrEmpty(relativeDir))
             {
-                relativeDir = relativeDir.Replace('\\', '/').Trim('/');
+                relativeDir = AssetPathUtility.NormalizeSeparators(relativeDir).Trim('/');
                 if (relativeDir.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
                 {
                     relativeDir = relativeDir.Substring("Assets/".Length).TrimStart('/');
@@ -82,8 +82,9 @@ namespace MCPForUnity.Editor.Tools
             string shaderFileName = $"{name}.shader";
             string fullPathDir = Path.Combine(Application.dataPath, relativeDir);
             string fullPath = Path.Combine(fullPathDir, shaderFileName);
-            string relativePath = Path.Combine("Assets", relativeDir, shaderFileName)
-                .Replace('\\', '/'); // Ensure "Assets/" prefix and forward slashes
+            string relativePath = AssetPathUtility.NormalizeSeparators(
+                Path.Combine("Assets", relativeDir, shaderFileName)
+            ); // Ensure "Assets/" prefix and forward slashes
 
             // Ensure the target directory exists for create/update
             if (action == "create" || action == "update")

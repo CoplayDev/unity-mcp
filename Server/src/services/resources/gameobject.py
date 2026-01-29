@@ -42,7 +42,7 @@ def _validate_instance_id(instance_id: str) -> tuple[int | None, MCPResponse | N
 @mcp_for_unity_resource(
     uri="mcpforunity://scene/gameobject-api",
     name="gameobject_api",
-    description="Documentation for GameObject resources. Use find_gameobjects tool to get instance IDs, then access resources below."
+    description="Documentation for GameObject resources. Use find_gameobjects tool to get instance IDs, then access resources below.\n\nURI: mcpforunity://scene/gameobject-api"
 )
 async def get_gameobject_api_docs(_ctx: Context) -> MCPResponse:
     """
@@ -129,7 +129,7 @@ class GameObjectResponse(MCPResponse):
 @mcp_for_unity_resource(
     uri="mcpforunity://scene/gameobject/{instance_id}",
     name="gameobject",
-    description="Get detailed information about a single GameObject by instance ID. Returns name, tag, layer, active state, transform data, parent/children IDs, and component type list (no full component properties)."
+    description="Get detailed information about a single GameObject by instance ID. Returns name, tag, layer, active state, transform data, parent/children IDs, and component type list (no full component properties).\n\nURI: mcpforunity://scene/gameobject/{instance_id}"
 )
 async def get_gameobject(ctx: Context, instance_id: str) -> MCPResponse:
     """Get GameObject data by instance ID."""
@@ -170,7 +170,7 @@ class ComponentsResponse(MCPResponse):
 @mcp_for_unity_resource(
     uri="mcpforunity://scene/gameobject/{instance_id}/components",
     name="gameobject_components",
-    description="Get all components on a GameObject with full property serialization. Supports pagination with pageSize and cursor parameters."
+    description="Get all components on a GameObject with full property serialization. Supports pagination with pageSize and cursor parameters.\n\nURI: mcpforunity://scene/gameobject/{instance_id}/components"
 )
 async def get_gameobject_components(
     ctx: Context,
@@ -216,7 +216,7 @@ class SingleComponentResponse(MCPResponse):
 @mcp_for_unity_resource(
     uri="mcpforunity://scene/gameobject/{instance_id}/component/{component_name}",
     name="gameobject_component",
-    description="Get a specific component on a GameObject by type name. Returns the fully serialized component with all properties."
+    description="Get a specific component on a GameObject by type name. Returns the fully serialized component with all properties.\n\nURI: mcpforunity://scene/gameobject/{instance_id}/component/{component_name}"
 )
 async def get_gameobject_component(
     ctx: Context,

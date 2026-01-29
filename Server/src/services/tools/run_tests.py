@@ -16,9 +16,56 @@ from services.tools import get_unity_instance_from_context
 from services.tools.preflight import preflight
 import transport.unity_transport as unity_transport
 from transport.legacy.unity_connection import async_send_command_with_retry
-from utils.focus_nudge import nudge_unity_focus, should_nudge
+from transport.plugin_hub import PluginHub
+from utils.focus_nudge import nudge_unity_focus, should_nudge, reset_nudge_backoff
 
 logger = logging.getLogger(__name__)
+
+
+async def _get_unity_project_path(unity_instance: str | None) -> str | None:
+    """Get the project root path for a Unity instance (for focus nudging).
+
+    Args:
+        unity_instance: Unity instance hash or "Name@hash" format or None
+
+    Returns:
+        Project root path (e.g., "/Users/name/project"), or falls back to project_name if path unavailable
+    """
+    if not unity_instance:
+        return None
+
+    try:
+        registry = PluginHub._registry
+        if not registry:
+            return None
+
+        # Parse Name@hash format if present (middleware stores instances as "Name@hash")
+        target_hash = unity_instance
+        if "@" in target_hash:
+            _, _, target_hash = target_hash.rpartition("@")
+        if not target_hash:
+            return None
+
+        # Get session by hash
+        session_id = await registry.get_session_id_by_hash(target_hash)
+        if not session_id:
+            return None
+
+        session = await registry.get_session(session_id)
+        if not session:
+            return None
+
+    except Exception as e:
+        # Re-raise cancellation errors so task cancellation propagates
+        if isinstance(e, asyncio.CancelledError):
+            raise
+        logger.debug(f"Could not get Unity project path: {e}")
+        return None
+    else:
+        # Return full path if available, otherwise fall back to project name
+        if session.project_path:
+            return session.project_path
+        return session.project_name if session.project_name else None
 
 
 class RunTestsSummary(BaseModel):
@@ -200,6 +247,10 @@ async def get_test_job(
     if wait_timeout and wait_timeout > 0:
         deadline = asyncio.get_event_loop().time() + wait_timeout
         poll_interval = 2.0  # Poll Unity every 2 seconds
+        prev_last_update_unix_ms = None
+
+        # Get project path once for focus nudging (multi-instance support)
+        project_path = await _get_unity_project_path(unity_instance)
 
         while True:
             response = await _fetch_status()
@@ -216,12 +267,20 @@ async def get_test_job(
             if status in ("succeeded", "failed", "cancelled"):
                 return GetTestJobResponse(**response)
 
+            # Detect progress and reset exponential backoff
+            last_update_unix_ms = data.get("last_update_unix_ms")
+            if prev_last_update_unix_ms is not None and last_update_unix_ms != prev_last_update_unix_ms:
+                # Progress detected - reset exponential backoff for next potential stall
+                reset_nudge_backoff()
+                logger.debug(f"Test job {job_id} made progress - reset nudge backoff")
+            prev_last_update_unix_ms = last_update_unix_ms
+
             # Check if Unity needs a focus nudge to make progress
             # This handles OS-level throttling (e.g., macOS App Nap) that can
             # stall PlayMode tests when Unity is in the background.
+            # Uses exponential backoff: 1s, 2s, 4s, 8s, 10s max between nudges.
             progress = data.get("progress", {})
             editor_is_focused = progress.get("editor_is_focused", True)
-            last_update_unix_ms = data.get("last_update_unix_ms")
             current_time_ms = int(time.time() * 1000)
 
             if should_nudge(
@@ -229,10 +288,14 @@ async def get_test_job(
                 editor_is_focused=editor_is_focused,
                 last_update_unix_ms=last_update_unix_ms,
                 current_time_ms=current_time_ms,
-                stall_threshold_ms=10_000,  # 10 seconds without progress
+                # Use default stall_threshold_ms (3s)
             ):
                 logger.info(f"Test job {job_id} appears stalled (unfocused Unity), attempting nudge...")
-                nudged = await nudge_unity_focus(focus_duration_s=0.5)
+                # Lazily resolve project path if not yet available (registry may have become ready)
+                if project_path is None:
+                    project_path = await _get_unity_project_path(unity_instance)
+                # Pass project path for multi-instance support
+                nudged = await nudge_unity_focus(unity_project_path=project_path)
                 if nudged:
                     logger.info(f"Test job {job_id} nudge completed")
 

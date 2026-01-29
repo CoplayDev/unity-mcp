@@ -249,6 +249,7 @@ class TelemetryCollector:
         self._lock: threading.Lock = threading.Lock()
         # Bounded queue with single background worker (records only; no context propagation)
         self._queue: "queue.Queue[TelemetryRecord]" = queue.Queue(maxsize=1000)
+        self._shutdown: bool = False
         # Load persistent data before starting worker so first events have UUID
         self._load_persistent_data()
         self._worker: threading.Thread = threading.Thread(
@@ -349,8 +350,11 @@ class TelemetryCollector:
 
     def _worker_loop(self):
         """Background worker that serializes telemetry sends."""
-        while True:
-            rec = self._queue.get()
+        while not self._shutdown:
+            try:
+                rec = self._queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
             try:
                 # Run sender directly; do not reuse caller context/thread-locals
                 self._send_telemetry(rec)
@@ -359,6 +363,12 @@ class TelemetryCollector:
             finally:
                 with contextlib.suppress(Exception):
                     self._queue.task_done()
+
+    def shutdown(self):
+        """Shutdown the telemetry collector and worker thread."""
+        self._shutdown = True
+        if self._worker and self._worker.is_alive():
+            self._worker.join(timeout=2.0)
 
     def _send_telemetry(self, record: TelemetryRecord):
         """Send telemetry data to endpoint"""
@@ -438,6 +448,14 @@ def get_telemetry() -> TelemetryCollector:
     if _telemetry_collector is None:
         _telemetry_collector = TelemetryCollector()
     return _telemetry_collector
+
+
+def reset_telemetry():
+    """Reset the global telemetry collector. For testing only."""
+    global _telemetry_collector
+    if _telemetry_collector is not None:
+        _telemetry_collector.shutdown()
+        _telemetry_collector = None
 
 
 def record_telemetry(record_type: RecordType,

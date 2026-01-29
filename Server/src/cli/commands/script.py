@@ -7,7 +7,9 @@ from typing import Optional, Any
 
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success
-from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.connection import run_command, handle_unity_errors
+from cli.utils.parsers import parse_json_list_or_exit
+from cli.utils.confirmation import confirm_destructive_action
 
 
 @click.group()
@@ -41,6 +43,7 @@ def script():
     default=None,
     help="Full script contents (overrides template)."
 )
+@handle_unity_errors
 def create(name: str, path: str, script_type: str, namespace: Optional[str], contents: Optional[str]):
     """Create a new C# script.
 
@@ -65,14 +68,10 @@ def create(name: str, path: str, script_type: str, namespace: Optional[str], con
     if contents:
         params["contents"] = contents
 
-    try:
-        result = run_command("manage_script", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Created script: {name}.cs")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_script", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Created script: {name}.cs")
 
 
 @script.command("read")
@@ -89,6 +88,7 @@ def create(name: str, path: str, script_type: str, namespace: Optional[str], con
     type=int,
     help="Number of lines to read."
 )
+@handle_unity_errors
 def read(path: str, start_line: Optional[int], line_count: Optional[int]):
     """Read a C# script file.
 
@@ -115,20 +115,16 @@ def read(path: str, start_line: Optional[int], line_count: Optional[int]):
     if line_count:
         params["lineCount"] = line_count
 
-    try:
-        result = run_command("manage_script", params, config)
-        # For read, just output the content directly
-        if result.get("success") and result.get("data"):
-            data = result.get("data", {})
-            if isinstance(data, dict) and "contents" in data:
-                click.echo(data["contents"])
-            else:
-                click.echo(format_output(result, config.format))
+    result = run_command("manage_script", params, config)
+    # For read, just output the content directly
+    if result.get("success") and result.get("data"):
+        data = result.get("data", {})
+        if isinstance(data, dict) and "contents" in data:
+            click.echo(data["contents"])
         else:
             click.echo(format_output(result, config.format))
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    else:
+        click.echo(format_output(result, config.format))
 
 
 @script.command("delete")
@@ -138,6 +134,7 @@ def read(path: str, start_line: Optional[int], line_count: Optional[int]):
     is_flag=True,
     help="Skip confirmation prompt."
 )
+@handle_unity_errors
 def delete(path: str, force: bool):
     """Delete a C# script.
 
@@ -147,8 +144,7 @@ def delete(path: str, force: bool):
     """
     config = get_config()
 
-    if not force:
-        click.confirm(f"Delete script '{path}'?", abort=True)
+    confirm_destructive_action("Delete", "script", path, force)
 
     parts = path.rsplit("/", 1)
     filename = parts[-1]
@@ -161,14 +157,10 @@ def delete(path: str, force: bool):
         "path": directory,
     }
 
-    try:
-        result = run_command("manage_script", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Deleted: {path}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_script", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Deleted: {path}")
 
 
 @script.command("edit")
@@ -178,6 +170,7 @@ def delete(path: str, force: bool):
     required=True,
     help='Edits as JSON array of {startLine, startCol, endLine, endCol, newText}.'
 )
+@handle_unity_errors
 def edit(path: str, edits: str):
     """Apply text edits to a script.
 
@@ -187,25 +180,17 @@ def edit(path: str, edits: str):
     """
     config = get_config()
 
-    try:
-        edits_list = json.loads(edits)
-    except json.JSONDecodeError as e:
-        print_error(f"Invalid JSON for edits: {e}")
-        sys.exit(1)
+    edits_list = parse_json_list_or_exit(edits, "edits")
 
     params: dict[str, Any] = {
         "uri": path,
         "edits": edits_list,
     }
 
-    try:
-        result = run_command("apply_text_edits", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Applied edits to: {path}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("apply_text_edits", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Applied edits to: {path}")
 
 
 @script.command("validate")
@@ -216,6 +201,7 @@ def edit(path: str, edits: str):
     default="basic",
     help="Validation level."
 )
+@handle_unity_errors
 def validate(path: str, level: str):
     """Validate a C# script for errors.
 
@@ -232,9 +218,5 @@ def validate(path: str, level: str):
         "include_diagnostics": True,
     }
 
-    try:
-        result = run_command("validate_script", params, config)
-        click.echo(format_output(result, config.format))
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("validate_script", params, config)
+    click.echo(format_output(result, config.format))

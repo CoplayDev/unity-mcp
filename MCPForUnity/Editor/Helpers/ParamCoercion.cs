@@ -45,6 +45,40 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
+        /// Coerces a JToken to a nullable integer value.
+        /// Returns null if token is null, empty, or cannot be parsed.
+        /// </summary>
+        /// <param name="token">The JSON token to coerce</param>
+        /// <returns>The coerced integer value or null</returns>
+        public static int? CoerceIntNullable(JToken token)
+        {
+            if (token == null || token.Type == JTokenType.Null)
+                return null;
+
+            try
+            {
+                if (token.Type == JTokenType.Integer)
+                    return token.Value<int>();
+
+                var s = token.ToString().Trim();
+                if (s.Length == 0)
+                    return null;
+
+                if (int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var i))
+                    return i;
+
+                if (double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var d))
+                    return (int)d;
+            }
+            catch
+            {
+                // Swallow and return null
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// Coerces a JToken to a boolean value, handling strings like "true", "1", etc.
         /// </summary>
         /// <param name="token">The JSON token to coerce</param>
@@ -82,6 +116,43 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
+        /// Coerces a JToken to a nullable boolean value.
+        /// Returns null if token is null, empty, or cannot be parsed.
+        /// </summary>
+        /// <param name="token">The JSON token to coerce</param>
+        /// <returns>The coerced boolean value or null</returns>
+        public static bool? CoerceBoolNullable(JToken token)
+        {
+            if (token == null || token.Type == JTokenType.Null)
+                return null;
+
+            try
+            {
+                if (token.Type == JTokenType.Boolean)
+                    return token.Value<bool>();
+
+                var s = token.ToString().Trim().ToLowerInvariant();
+                if (s.Length == 0)
+                    return null;
+
+                if (bool.TryParse(s, out var b))
+                    return b;
+
+                if (s == "1" || s == "yes" || s == "on")
+                    return true;
+
+                if (s == "0" || s == "no" || s == "off")
+                    return false;
+            }
+            catch
+            {
+                // Swallow and return null
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// Coerces a JToken to a float value, handling strings and integers.
         /// </summary>
         /// <param name="token">The JSON token to coerce</param>
@@ -110,6 +181,37 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             return defaultValue;
+        }
+
+        /// <summary>
+        /// Coerces a JToken to a nullable float value.
+        /// Returns null if token is null, empty, or cannot be parsed.
+        /// </summary>
+        /// <param name="token">The JSON token to coerce</param>
+        /// <returns>The coerced float value or null</returns>
+        public static float? CoerceFloatNullable(JToken token)
+        {
+            if (token == null || token.Type == JTokenType.Null)
+                return null;
+
+            try
+            {
+                if (token.Type == JTokenType.Float || token.Type == JTokenType.Integer)
+                    return token.Value<float>();
+
+                var s = token.ToString().Trim();
+                if (s.Length == 0)
+                    return null;
+
+                if (float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var f))
+                    return f;
+            }
+            catch
+            {
+                // Swallow and return null
+            }
+
+            return null;
         }
 
         /// <summary>

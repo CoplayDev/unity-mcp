@@ -24,9 +24,6 @@ namespace MCPForUnity.Editor.Services.Transport
                 () => new StdioTransportClient());
         }
 
-        public IMcpTransportClient ActiveTransport => null; // Deprecated single-transport accessor
-        public TransportMode? ActiveMode => null; // Deprecated single-transport accessor
-
         public void Configure(
             Func<IMcpTransportClient> webSocketFactory,
             Func<IMcpTransportClient> stdioFactory)
