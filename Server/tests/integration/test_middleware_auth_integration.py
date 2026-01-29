@@ -68,7 +68,7 @@ class TestMiddlewareAuthEnforcement:
 
 
 class TestMiddlewareSessionKey:
-    def test_get_session_key_uses_user_id_fallback(self, monkeypatch):
+    def test_get_session_key_uses_user_id_fallback(self):
         """When no client_id, middleware should use user:$user_id as session key."""
         from transport.unity_instance_middleware import UnityInstanceMiddleware
 
