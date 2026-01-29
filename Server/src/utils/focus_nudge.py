@@ -83,20 +83,18 @@ def _get_current_focus_duration() -> float:
     """
     Calculate current focus duration using exponential backoff.
 
-    Scales from the configured _DEFAULT_FOCUS_DURATION_S:
-    - 0 nudges: base duration (quick stall recovery)
-    - 1 nudge: base + 2s (compilation might be starting)
-    - 2 nudges: base + 5s (deep compilation)
-    - 3+ nudges: base + 9s (domain reload/heavy compilation)
+    Base durations (3, 5, 8, 12 seconds) are scaled proportionally by the
+    configured UNITY_MCP_NUDGE_DURATION_S relative to _DEFAULT_FOCUS_DURATION_S.
+    For example, if UNITY_MCP_NUDGE_DURATION_S=6.0 (2x default), all durations
+    are doubled: (6, 10, 16, 24 seconds).
     """
-    if _consecutive_nudges == 0:
-        return _DEFAULT_FOCUS_DURATION_S
-    elif _consecutive_nudges == 1:
-        return _DEFAULT_FOCUS_DURATION_S + 2.0
-    elif _consecutive_nudges == 2:
-        return _DEFAULT_FOCUS_DURATION_S + 5.0
-    else:
-        return _DEFAULT_FOCUS_DURATION_S + 9.0
+    # Base durations for each nudge level
+    base_durations = [3.0, 5.0, 8.0, 12.0]
+    base_duration = base_durations[min(_consecutive_nudges, len(base_durations) - 1)]
+
+    # Scale by ratio of configured to default duration
+    scale = _DEFAULT_FOCUS_DURATION_S / 3.0  # 3.0 is the base for 0 consecutive nudges
+    return base_duration * scale
 
 
 def reset_nudge_backoff() -> None:
@@ -500,7 +498,6 @@ async def nudge_unity_focus(
 
     project_info = f" for {unity_project_path}" if unity_project_path else ""
     logger.info(f"Nudging Unity focus{project_info} (interval: {current_interval:.1f}s, consecutive: {_consecutive_nudges}, duration: {focus_duration_s:.1f}s, will return to {original_app})")
-    _last_nudge_time = now
 
     # Focus Unity (with optional project path for multi-instance support)
     if not _focus_app("Unity", unity_project_path):
@@ -517,7 +514,8 @@ async def nudge_unity_focus(
         logger.warning(f"Unity activation didn't complete - current app is {current_app}")
         # Continue anyway in case Unity is processing in background
 
-    # Only increment consecutive nudges counter after successful activation attempt
+    # Only update state after successful activation attempt
+    _last_nudge_time = now
     _consecutive_nudges += 1
 
     # Wait for Unity to process (actual working time)

@@ -228,7 +228,13 @@ namespace MCPForUnity.Editor.Tools.Vfx
             string[] guids = AssetDatabase.FindAssets("t:VisualEffectAsset " + templateName);
             if (guids.Length > 0)
             {
-                return AssetDatabase.GUIDToAssetPath(guids[0]);
+                string assetPath = AssetDatabase.GUIDToAssetPath(guids[0]);
+                // Convert asset path (e.g., "Assets/...") to absolute filesystem path
+                if (!string.IsNullOrEmpty(assetPath) && assetPath.StartsWith("Assets/"))
+                {
+                    return System.IO.Path.Combine(UnityEngine.Application.dataPath, assetPath.Substring("Assets/".Length));
+                }
+                return assetPath;
             }
 
             return null;
@@ -251,7 +257,13 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 return new { success = false, message = "assetPath is required" };
             }
 
-            // Normalize path
+            // Validate and normalize path
+            // Reject absolute paths, parent directory traversal, and backslashes
+            if (assetPath.Contains("\\") || assetPath.Contains("..") || System.IO.Path.IsPathRooted(assetPath))
+            {
+                return new { success = false, message = "Invalid assetPath: traversal and absolute paths are not allowed" };
+            }
+
             if (!assetPath.StartsWith("Assets/") && !assetPath.StartsWith("Packages/"))
             {
                 assetPath = "Assets/" + assetPath;
@@ -259,6 +271,16 @@ namespace MCPForUnity.Editor.Tools.Vfx
             if (!assetPath.EndsWith(".vfx"))
             {
                 assetPath += ".vfx";
+            }
+
+            // Verify the normalized path doesn't escape the project
+            string fullPath = System.IO.Path.Combine(UnityEngine.Application.dataPath, assetPath.Substring("Assets/".Length));
+            string canonicalProjectRoot = System.IO.Path.GetFullPath(UnityEngine.Application.dataPath);
+            string canonicalAssetPath = System.IO.Path.GetFullPath(fullPath);
+            if (!canonicalAssetPath.StartsWith(canonicalProjectRoot + System.IO.Path.DirectorySeparatorChar) &&
+                canonicalAssetPath != canonicalProjectRoot)
+            {
+                return new { success = false, message = "Invalid assetPath: would escape project directory" };
             }
 
             var asset = AssetDatabase.LoadAssetAtPath<VisualEffectAsset>(assetPath);

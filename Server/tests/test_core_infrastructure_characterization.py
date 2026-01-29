@@ -81,11 +81,14 @@ def mock_telemetry_config(temp_telemetry_data):
 
 @pytest.fixture
 def reset_telemetry():
-    """Reset global telemetry instance between tests."""
+    """Reset global telemetry instance between tests, properly shutting down worker."""
     import core.telemetry
     original = core.telemetry._telemetry_collector
-    core.telemetry._telemetry_collector = None
+    # Properly reset telemetry to shut down any running worker thread
+    core.telemetry.reset_telemetry()
     yield
+    # Restore original state after test
+    core.telemetry.reset_telemetry()
     core.telemetry._telemetry_collector = original
 
 
@@ -884,6 +887,8 @@ class TestTelemetryCollection:
 
     def test_telemetry_collector_records_event(self, mock_telemetry_config, temp_telemetry_data):
         """Verify TelemetryCollector.record queues events."""
+        # Explicitly reference fixture to suppress unused parameter warning
+        _ = mock_telemetry_config
         data_path = Path(temp_telemetry_data)
         (data_path / "customer_uuid.txt").write_text("test-uuid")
         (data_path / "milestones.json").write_text("{}")
@@ -895,12 +900,17 @@ class TestTelemetryCollection:
             mock_config.enabled = True
             mock_config_cls.return_value = mock_config
 
-            collector = TelemetryCollector()
+            # Mock the worker thread to prevent it from consuming queued events
+            with patch("core.telemetry.threading.Thread") as mock_thread_cls:
+                mock_thread = MagicMock()
+                mock_thread_cls.return_value = mock_thread
 
-            collector.record(RecordType.USAGE, {"tool": "test"})
+                collector = TelemetryCollector()
 
-            # Event should be queued
-            assert not collector._queue.empty()
+                collector.record(RecordType.USAGE, {"tool": "test"})
+
+                # Event should be queued (won't be consumed since worker thread is mocked)
+                assert not collector._queue.empty()
 
     def test_telemetry_collector_queue_full_drops_events(self, mock_telemetry_config, caplog_fixture, temp_telemetry_data):
         """Verify TelemetryCollector drops events when queue is full."""

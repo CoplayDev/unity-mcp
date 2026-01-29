@@ -77,8 +77,22 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 return new { success = false, message = "Value required" };
             }
 
+            // Safely deserialize the value
+            T value;
+            try
+            {
+                value = valueToken.ToObject<T>();
+            }
+            catch (JsonException ex)
+            {
+                return new { success = false, message = $"Invalid value for {param}: {ex.Message}" };
+            }
+            catch (InvalidCastException ex)
+            {
+                return new { success = false, message = $"Invalid value type for {param}: {ex.Message}" };
+            }
+
             Undo.RecordObject(vfx, $"Set VFX {param}");
-            T value = valueToken.ToObject<T>();
             setter(vfx, param, value);
             EditorUtility.SetDirty(vfx);
 
