@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -40,6 +39,8 @@ namespace MCPForUnity.Editor.Tools.Vfx
             return new { success = false, message = "VFX Graph package (com.unity.visualeffectgraph) not installed" };
         }
 #else
+        private static readonly string[] SupportedVfxGraphVersions = { "12.1.13" };
+
         /// <summary>
         /// Creates a new VFX Graph asset file from a template.
         /// </summary>
@@ -52,6 +53,12 @@ namespace MCPForUnity.Editor.Tools.Vfx
             if (string.IsNullOrEmpty(assetName))
             {
                 return new { success = false, message = "assetName is required" };
+            }
+
+            string versionError = ValidateVfxGraphVersion();
+            if (!string.IsNullOrEmpty(versionError))
+            {
+                return new { success = false, message = versionError };
             }
 
             // Ensure folder exists
@@ -83,68 +90,24 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 AssetDatabase.DeleteAsset(assetPath);
             }
 
-            // Find and copy template
+            // Find template asset and copy it
             string templatePath = FindTemplate(template);
+            string templateAssetPath = TryGetAssetPathFromFileSystem(templatePath);
             VisualEffectAsset newAsset = null;
 
-            if (!string.IsNullOrEmpty(templatePath) && System.IO.File.Exists(templatePath))
+            if (!string.IsNullOrEmpty(templateAssetPath))
             {
-                // templatePath is a full filesystem path, need to copy file directly
-                // Get the full destination path
-                string projectRoot = System.IO.Path.GetDirectoryName(Application.dataPath);
-                string fullDestPath = System.IO.Path.Combine(projectRoot, assetPath);
-
-                // Ensure directory exists
-                string destDir = System.IO.Path.GetDirectoryName(fullDestPath);
-                if (!System.IO.Directory.Exists(destDir))
+                // Copy the asset to create a new VFX Graph asset
+                if (!AssetDatabase.CopyAsset(templateAssetPath, assetPath))
                 {
-                    System.IO.Directory.CreateDirectory(destDir);
+                    return new { success = false, message = $"Failed to copy VFX template from {templateAssetPath}" };
                 }
-
-                // Copy the file
-                System.IO.File.Copy(templatePath, fullDestPath, true);
                 AssetDatabase.Refresh();
                 newAsset = AssetDatabase.LoadAssetAtPath<VisualEffectAsset>(assetPath);
             }
             else
             {
-                // Create empty VFX asset using reflection to access internal API
-                try
-                {
-                    // Try to use VisualEffectAssetEditorUtility.CreateNewAsset if available
-                    var utilityType = Type.GetType("UnityEditor.VFX.VisualEffectAssetEditorUtility, Unity.VisualEffectGraph.Editor");
-                    if (utilityType != null)
-                    {
-                        var createMethod = utilityType.GetMethod("CreateNewAsset", BindingFlags.Public | BindingFlags.Static);
-                        if (createMethod != null)
-                        {
-                            createMethod.Invoke(null, new object[] { assetPath });
-                            AssetDatabase.Refresh();
-                            newAsset = AssetDatabase.LoadAssetAtPath<VisualEffectAsset>(assetPath);
-                        }
-                    }
-
-                    // Fallback: Create a ScriptableObject-based asset
-                    if (newAsset == null)
-                    {
-                        // Try direct creation via internal constructor
-                        var resourceType = Type.GetType("UnityEditor.VFX.VisualEffectResource, Unity.VisualEffectGraph.Editor");
-                        if (resourceType != null)
-                        {
-                            var createMethod = resourceType.GetMethod("CreateNewAsset", BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
-                            if (createMethod != null)
-                            {
-                                createMethod.Invoke(null, new object[] { assetPath });
-                                AssetDatabase.Refresh();
-                                newAsset = AssetDatabase.LoadAssetAtPath<VisualEffectAsset>(assetPath);
-                            }
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    return new { success = false, message = $"Failed to create VFX asset: {ex.Message}" };
-                }
+                return new { success = false, message = "VFX template not found. Add a .vfx template asset or install VFX Graph templates." };
             }
 
             if (newAsset == null)
@@ -195,14 +158,20 @@ namespace MCPForUnity.Editor.Tools.Vfx
 
             foreach (string basePath in searchPaths)
             {
-                if (!System.IO.Directory.Exists(basePath))
+                string searchRoot = basePath;
+                if (basePath.StartsWith("Assets/"))
+                {
+                    searchRoot = System.IO.Path.Combine(UnityEngine.Application.dataPath, basePath.Substring("Assets/".Length));
+                }
+
+                if (!System.IO.Directory.Exists(searchRoot))
                 {
                     continue;
                 }
 
                 foreach (string pattern in templatePatterns)
                 {
-                    string[] files = System.IO.Directory.GetFiles(basePath, pattern, System.IO.SearchOption.AllDirectories);
+                    string[] files = System.IO.Directory.GetFiles(searchRoot, pattern, System.IO.SearchOption.AllDirectories);
                     if (files.Length > 0)
                     {
                         return files[0];
@@ -212,7 +181,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 // Also search by partial match
                 try
                 {
-                    string[] allVfxFiles = System.IO.Directory.GetFiles(basePath, "*.vfx", System.IO.SearchOption.AllDirectories);
+                    string[] allVfxFiles = System.IO.Directory.GetFiles(searchRoot, "*.vfx", System.IO.SearchOption.AllDirectories);
                     foreach (string file in allVfxFiles)
                     {
                         if (System.IO.Path.GetFileNameWithoutExtension(file).ToLower().Contains(templateName.ToLower()))
@@ -234,7 +203,16 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 {
                     return System.IO.Path.Combine(UnityEngine.Application.dataPath, assetPath.Substring("Assets/".Length));
                 }
-                return assetPath;
+                if (!string.IsNullOrEmpty(assetPath) && assetPath.StartsWith("Packages/"))
+                {
+                    var info = UnityEditor.PackageManager.PackageInfo.FindForAssetPath(assetPath);
+                    if (info != null)
+                    {
+                        string relPath = assetPath.Substring(("Packages/" + info.name + "/").Length);
+                        return System.IO.Path.Combine(info.resolvedPath, relPath);
+                    }
+                }
+                return null;
             }
 
             return null;
@@ -264,7 +242,12 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 return new { success = false, message = "Invalid assetPath: traversal and absolute paths are not allowed" };
             }
 
-            if (!assetPath.StartsWith("Assets/") && !assetPath.StartsWith("Packages/"))
+            if (assetPath.StartsWith("Packages/"))
+            {
+                return new { success = false, message = "Invalid assetPath: VFX assets must live under Assets/." };
+            }
+
+            if (!assetPath.StartsWith("Assets/"))
             {
                 assetPath = "Assets/" + assetPath;
             }
@@ -463,6 +446,51 @@ namespace MCPForUnity.Editor.Tools.Vfx
                     assets = assets
                 }
             };
+        }
+
+        private static string ValidateVfxGraphVersion()
+        {
+            var info = UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.visualeffectgraph");
+            if (info == null)
+            {
+                return "VFX Graph package (com.unity.visualeffectgraph) not installed";
+            }
+
+            if (SupportedVfxGraphVersions.Contains(info.version))
+            {
+                return null;
+            }
+
+            string supported = string.Join(", ", SupportedVfxGraphVersions);
+            return $"Unsupported VFX Graph version {info.version}. Supported versions: {supported}.";
+        }
+
+        private static string TryGetAssetPathFromFileSystem(string templatePath)
+        {
+            if (string.IsNullOrEmpty(templatePath))
+            {
+                return null;
+            }
+
+            string normalized = templatePath.Replace("\\", "/");
+            string assetsRoot = Application.dataPath.Replace("\\", "/");
+
+            if (normalized.StartsWith(assetsRoot + "/"))
+            {
+                return "Assets/" + normalized.Substring(assetsRoot.Length + 1);
+            }
+
+            var packageInfo = UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.visualeffectgraph");
+            if (packageInfo != null)
+            {
+                string packageRoot = packageInfo.resolvedPath.Replace("\\", "/");
+                if (normalized.StartsWith(packageRoot + "/"))
+                {
+                    return "Packages/" + packageInfo.name + "/" + normalized.Substring(packageRoot.Length + 1);
+                }
+            }
+
+            return null;
         }
 #endif
     }

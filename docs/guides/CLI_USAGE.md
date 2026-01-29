@@ -203,6 +203,8 @@ unity-mcp material assign "Assets/Materials/Red.mat" "Cube"
 
 ### VFX Operations
 
+Note: VFX Graph tooling is tested against com.unity.visualeffectgraph 12.1.13. Install VFX Graph and use URP/HDRP (set the Render Pipeline Asset) to avoid Unity warnings; other versions may be unsupported.
+
 ```bash
 # Particle systems
 unity-mcp vfx particle info "Fire"
