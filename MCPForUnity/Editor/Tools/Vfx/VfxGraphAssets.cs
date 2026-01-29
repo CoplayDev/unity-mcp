@@ -307,6 +307,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
         public static object ListTemplates(JObject @params)
         {
             var templates = new List<object>();
+            var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             // Get the actual filesystem path for the VFX Graph package using PackageManager API
             var packageInfo = UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.visualeffectgraph");
@@ -368,7 +369,11 @@ namespace MCPForUnity.Editor.Tools.Vfx
                             projectRelativePath = absolutePath;
                         }
 
-                        templates.Add(new { name = name, path = projectRelativePath, source = isPackage ? "package" : "project" });
+                        string normalizedPath = projectRelativePath.Replace("\\", "/");
+                        if (seenPaths.Add(normalizedPath))
+                        {
+                            templates.Add(new { name = name, path = projectRelativePath, source = isPackage ? "package" : "project" });
+                        }
                     }
                 }
                 catch { }
@@ -379,7 +384,8 @@ namespace MCPForUnity.Editor.Tools.Vfx
             foreach (string guid in guids)
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
-                if (!templates.Any(t => ((dynamic)t).path == path))
+                string normalizedPath = path.Replace("\\", "/");
+                if (seenPaths.Add(normalizedPath))
                 {
                     string name = System.IO.Path.GetFileNameWithoutExtension(path);
                     templates.Add(new { name = name, path = path, source = "project" });

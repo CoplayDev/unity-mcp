@@ -898,6 +898,7 @@ jobs:
                 return tid
             return n
 
+          # Guard is GO-specific; only parse GO fragments here.
           def id_from_filename(p: Path):
             n = p.name
             m = re.match(r'NL-?(\d+)_results\.xml$', n, re.I)
