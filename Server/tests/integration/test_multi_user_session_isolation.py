@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from core.config import config
-from transport.plugin_hub import PluginHub
+from transport.plugin_hub import NoUnitySessionError, PluginHub
 from transport.plugin_registry import PluginRegistry
 
 
@@ -99,7 +99,7 @@ class TestResolveSessionIdIsolation:
         await _setup_two_user_registry()
 
         # userA tries to resolve userB's hash -> should not find it
-        with pytest.raises(RuntimeError):
+        with pytest.raises(NoUnitySessionError):
             await PluginHub._resolve_session_id("hashB1", user_id="userA")
 
 
