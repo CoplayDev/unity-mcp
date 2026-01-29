@@ -25,7 +25,11 @@ def _parse_env_float(env_var: str, default: float) -> float:
     if value is None:
         return default
     try:
-        return float(value)
+        parsed = float(value)
+        if parsed <= 0:
+            logger.warning(f"Invalid {env_var}={value!r}, using default {default}: must be > 0")
+            return default
+        return parsed
     except (ValueError, TypeError) as e:
         logger.warning(f"Invalid {env_var}={value!r}, using default {default}: {e}")
         return default
@@ -94,7 +98,10 @@ def _get_current_focus_duration() -> float:
 
     # Scale by ratio of configured to default duration
     scale = _DEFAULT_FOCUS_DURATION_S / 3.0  # 3.0 is the base for 0 consecutive nudges
-    return base_duration * scale
+    duration = base_duration * scale
+    if duration <= 0:
+        return _DEFAULT_FOCUS_DURATION_S
+    return duration
 
 
 def reset_nudge_backoff() -> None:
@@ -472,6 +479,8 @@ async def nudge_unity_focus(
     if focus_duration_s is None:
         # Use exponential backoff for focus duration
         focus_duration_s = _get_current_focus_duration()
+    if focus_duration_s <= 0:
+        focus_duration_s = _DEFAULT_FOCUS_DURATION_S
     global _last_nudge_time, _consecutive_nudges
 
     if not _is_available():

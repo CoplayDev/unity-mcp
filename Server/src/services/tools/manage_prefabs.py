@@ -5,7 +5,7 @@ from mcp.types import ToolAnnotations
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
-from services.tools.utils import coerce_bool
+from services.tools.utils import coerce_bool, normalize_vector3
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 from services.tools.preflight import preflight
@@ -114,11 +114,20 @@ async def manage_prefabs(
 
         # modify_contents parameters
         if position is not None:
-            params["position"] = position
+            position_value, position_error = normalize_vector3(position, "position")
+            if position_error:
+                return {"success": False, "message": position_error}
+            params["position"] = position_value
         if rotation is not None:
-            params["rotation"] = rotation
+            rotation_value, rotation_error = normalize_vector3(rotation, "rotation")
+            if rotation_error:
+                return {"success": False, "message": rotation_error}
+            params["rotation"] = rotation_value
         if scale is not None:
-            params["scale"] = scale
+            scale_value, scale_error = normalize_vector3(scale, "scale")
+            if scale_error:
+                return {"success": False, "message": scale_error}
+            params["scale"] = scale_value
         if name is not None:
             params["name"] = name
         if tag is not None:

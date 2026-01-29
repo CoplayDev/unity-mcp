@@ -92,6 +92,7 @@ namespace MCPForUnity.Editor.Services
         /// <returns>True if a job was cleared, false if no running job exists.</returns>
         public static bool ClearStuckJob()
         {
+            bool cleared = false;
             lock (LockObj)
             {
                 if (string.IsNullOrEmpty(_currentJobId))
@@ -107,12 +108,13 @@ namespace MCPForUnity.Editor.Services
                     job.FinishedUnixMs = now;
                     job.LastUpdateUnixMs = now;
                     McpLog.Warn($"[TestJobManager] Manually cleared stuck job {_currentJobId}");
+                    cleared = true;
                 }
 
                 _currentJobId = null;
             }
             PersistToSessionState(force: true);
-            return true;
+            return cleared;
         }
 
         private sealed class PersistedState
@@ -489,7 +491,7 @@ namespace MCPForUnity.Editor.Services
                 if (job.Status == TestJobStatus.Running && job.TotalTests == null)
                 {
                     long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                    if (now - job.StartedUnixMs > InitializationTimeoutMs)
+                    if (!EditorApplication.isCompiling && !EditorApplication.isUpdating && now - job.StartedUnixMs > InitializationTimeoutMs)
                     {
                         McpLog.Warn($"[TestJobManager] Job {jobId} failed to initialize within {InitializationTimeoutMs}ms, auto-failing");
                         job.Status = TestJobStatus.Failed;
@@ -668,5 +670,4 @@ namespace MCPForUnity.Editor.Services
         }
     }
 }
-
 

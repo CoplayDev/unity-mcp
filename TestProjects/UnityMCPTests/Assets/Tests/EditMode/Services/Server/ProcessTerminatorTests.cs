@@ -97,8 +97,8 @@ namespace MCPForUnityTests.Editor.Services.Server
             // Act - Use a very high PID unlikely to exist
             bool result = _terminator.Terminate(9999999);
 
-            // Assert - Should not throw, result depends on platform behavior
-            Assert.Pass($"Terminate returned {result} for non-existent PID (handles gracefully)");
+            // Assert - Should not terminate non-existent PID
+            Assert.IsFalse(result, $"Terminate returned {result} for non-existent PID");
         }
 
         [Test]
@@ -107,7 +107,7 @@ namespace MCPForUnityTests.Editor.Services.Server
             // Act & Assert - Should handle any PID gracefully
             Assert.DoesNotThrow(() =>
             {
-                _terminator.Terminate(12345);
+                _terminator.Terminate(int.MaxValue);
             });
         }
 
