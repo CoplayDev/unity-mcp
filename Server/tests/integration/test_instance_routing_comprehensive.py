@@ -28,6 +28,7 @@ class TestInstanceRoutingBasics:
         middleware = UnityInstanceMiddleware()
         ctx = Mock(spec=Context)
         ctx.session_id = "test-session-1"
+        ctx.client_id = "test-client-1"
 
         # Set active instance
         middleware.set_active_instance(ctx, "TestProject@abc123")
@@ -73,6 +74,7 @@ class TestInstanceRoutingBasics:
         ctx = Mock(spec=Context)
         ctx.session_id = None
         ctx.client_id = None
+        ctx.get_state = Mock(return_value=None)
 
         middleware.set_active_instance(ctx, "Project@global")
         assert middleware.get_active_instance(ctx) == "Project@global"

@@ -6,6 +6,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Services.Transport;
@@ -197,6 +198,13 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             _socket?.Dispose();
             _socket = new ClientWebSocket();
             _socket.Options.KeepAliveInterval = _socketKeepAliveInterval;
+
+            // Add API key header if configured (for remote-hosted mode)
+            string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
+            if (!string.IsNullOrEmpty(apiKey))
+            {
+                _socket.Options.SetRequestHeader("X-API-Key", apiKey);
+            }
 
             try
             {
