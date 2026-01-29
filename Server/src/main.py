@@ -720,6 +720,18 @@ Examples:
 
     args = parser.parse_args()
 
+    # Set environment variables from command line args
+    if args.default_instance:
+        os.environ["UNITY_MCP_DEFAULT_INSTANCE"] = args.default_instance
+        logger.info(
+            f"Using default Unity instance from command-line: {args.default_instance}")
+
+    # Set transport mode
+    transport_mode = args.transport or os.environ.get(
+        "UNITY_MCP_TRANSPORT", "stdio")
+    os.environ["UNITY_MCP_TRANSPORT"] = transport_mode
+    logger.info(f"Transport mode: {transport_mode}")
+
     config.http_remote_hosted = (
         bool(args.http_remote_hosted)
         or os.environ.get("UNITY_MCP_HTTP_REMOTE_HOSTED", "").lower() in ("true", "1", "yes", "on")
@@ -755,25 +767,13 @@ Examples:
         or os.environ.get("UNITY_MCP_API_KEY_SERVICE_TOKEN")
     )
 
-    # Validate: remote-hosted mode requires API key validation URL
-    if config.http_remote_hosted and not config.api_key_validation_url:
+    # Validate: remote-hosted HTTP mode requires API key validation URL
+    if config.http_remote_hosted and transport_mode == "http" and not config.api_key_validation_url:
         logger.error(
             "--http-remote-hosted requires --api-key-validation-url or "
             "UNITY_MCP_API_KEY_VALIDATION_URL environment variable"
         )
         raise SystemExit(1)
-
-    # Set environment variables from command line args
-    if args.default_instance:
-        os.environ["UNITY_MCP_DEFAULT_INSTANCE"] = args.default_instance
-        logger.info(
-            f"Using default Unity instance from command-line: {args.default_instance}")
-
-    # Set transport mode
-    transport_mode = args.transport or os.environ.get(
-        "UNITY_MCP_TRANSPORT", "stdio")
-    os.environ["UNITY_MCP_TRANSPORT"] = transport_mode
-    logger.info(f"Transport mode: {transport_mode}")
 
     http_url = os.environ.get("UNITY_MCP_HTTP_URL", args.http_url)
     parsed_url = urlparse(http_url)
