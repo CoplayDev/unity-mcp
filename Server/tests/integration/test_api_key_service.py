@@ -80,7 +80,7 @@ class TestBasicValidation:
             instance.post = AsyncMock(return_value=mock_resp)
             MockClient.return_value = instance
 
-            result = await svc.validate("sk-valid-key-12345678")
+            result = await svc.validate("test-valid-key-12345678")
 
         assert result.valid is True
         assert result.user_id == "user-1"
@@ -99,7 +99,7 @@ class TestBasicValidation:
             instance.post = AsyncMock(return_value=mock_resp)
             MockClient.return_value = instance
 
-            result = await svc.validate("sk-invalid-key-1234")
+            result = await svc.validate("test-invalid-key-1234")
 
         assert result.valid is False
         assert result.error == "Key revoked"
@@ -116,7 +116,7 @@ class TestBasicValidation:
             instance.post = AsyncMock(return_value=mock_resp)
             MockClient.return_value = instance
 
-            result = await svc.validate("sk-bad-key-12345678")
+            result = await svc.validate("test-bad-key-12345678")
 
         assert result.valid is False
         assert "Invalid API key" in result.error
@@ -158,8 +158,8 @@ class TestCaching:
             instance.post = counting_post
             MockClient.return_value = instance
 
-            r1 = await svc.validate("sk-cached-valid-key1")
-            r2 = await svc.validate("sk-cached-valid-key1")
+            r1 = await svc.validate("test-cached-valid-key1")
+            r2 = await svc.validate("test-cached-valid-key1")
 
         assert r1.valid is True
         assert r2.valid is True
@@ -184,8 +184,8 @@ class TestCaching:
             instance.post = counting_post
             MockClient.return_value = instance
 
-            r1 = await svc.validate("sk-cached-bad-key12")
-            r2 = await svc.validate("sk-cached-bad-key12")
+            r1 = await svc.validate("test-cached-bad-key12")
+            r2 = await svc.validate("test-cached-bad-key12")
 
         assert r1.valid is False
         assert r2.valid is False
@@ -209,16 +209,16 @@ class TestCaching:
             instance.post = counting_post
             MockClient.return_value = instance
 
-            await svc.validate("sk-expiry-key-12345")
+            await svc.validate("test-expiry-key-12345")
             assert call_count == 1
 
             # Manually expire the cache entry by manipulating the stored tuple
             async with svc._cache_lock:
-                key = "sk-expiry-key-12345"
+                key = "test-expiry-key-12345"
                 valid, user_id, metadata, _expires = svc._cache[key]
                 svc._cache[key] = (valid, user_id, metadata, time.time() - 1)
 
-            await svc.validate("sk-expiry-key-12345")
+            await svc.validate("test-expiry-key-12345")
             assert call_count == 2  # Had to re-validate
 
     @pytest.mark.asyncio
@@ -239,12 +239,12 @@ class TestCaching:
             instance.post = counting_post
             MockClient.return_value = instance
 
-            await svc.validate("sk-invalidate-key12")
+            await svc.validate("test-invalidate-key12")
             assert call_count == 1
 
-            await svc.invalidate_cache("sk-invalidate-key12")
+            await svc.invalidate_cache("test-invalidate-key12")
 
-            await svc.validate("sk-invalidate-key12")
+            await svc.validate("test-invalidate-key12")
             assert call_count == 2
 
     @pytest.mark.asyncio
@@ -265,14 +265,14 @@ class TestCaching:
             instance.post = counting_post
             MockClient.return_value = instance
 
-            await svc.validate("sk-clear-key1-12345")
-            await svc.validate("sk-clear-key2-12345")
+            await svc.validate("test-clear-key1-12345")
+            await svc.validate("test-clear-key2-12345")
             assert call_count == 2
 
             await svc.clear_cache()
 
-            await svc.validate("sk-clear-key1-12345")
-            await svc.validate("sk-clear-key2-12345")
+            await svc.validate("test-clear-key1-12345")
+            await svc.validate("test-clear-key2-12345")
             assert call_count == 4  # Both had to re-validate
 
 
@@ -304,12 +304,12 @@ class TestTransientFailures:
             MockClient.return_value = instance
 
             # First call: 500 -> not cached
-            r1 = await svc.validate("sk-5xx-test-key1234")
+            r1 = await svc.validate("test-5xx-test-key1234")
             assert r1.valid is False
             assert r1.cacheable is False
 
             # Second call should hit HTTP again (not cached)
-            r2 = await svc.validate("sk-5xx-test-key1234")
+            r2 = await svc.validate("test-5xx-test-key1234")
             # Second call also gets 500 from our mock sequence
             assert r2.valid is False
 
@@ -333,7 +333,7 @@ class TestTransientFailures:
             instance.post = timeout_then_ok
             MockClient.return_value = instance
 
-            result = await svc.validate("sk-timeout-retry-ok")
+            result = await svc.validate("test-timeout-retry-ok")
 
         assert result.valid is True
         assert result.user_id == "u1"
@@ -353,7 +353,7 @@ class TestTransientFailures:
             instance.post = always_timeout
             MockClient.return_value = instance
 
-            result = await svc.validate("sk-timeout-exhaust1")
+            result = await svc.validate("test-timeout-exhaust1")
 
         assert result.valid is False
         assert "timeout" in result.error.lower()
@@ -379,7 +379,7 @@ class TestTransientFailures:
             instance.post = error_then_ok
             MockClient.return_value = instance
 
-            result = await svc.validate("sk-reqerr-retry-ok1")
+            result = await svc.validate("test-reqerr-retry-ok1")
 
         assert result.valid is True
         assert attempt == 2
@@ -398,7 +398,7 @@ class TestTransientFailures:
             instance.post = always_error
             MockClient.return_value = instance
 
-            result = await svc.validate("sk-reqerr-exhaust1")
+            result = await svc.validate("test-reqerr-exhaust1")
 
         assert result.valid is False
         assert "unavailable" in result.error.lower()
@@ -418,7 +418,7 @@ class TestTransientFailures:
             instance.post = unexpected
             MockClient.return_value = instance
 
-            result = await svc.validate("sk-unexpected-err12")
+            result = await svc.validate("test-unexpected-err12")
 
         assert result.valid is False
         assert result.cacheable is False
@@ -434,7 +434,7 @@ class TestServiceToken:
     async def test_service_token_sent_in_headers(self):
         svc = _make_service(
             service_token_header="X-Service-Token",
-            service_token="svc-secret-123",
+            service_token="test-svc-token-123",
         )
         mock_resp = _mock_response(200, {"valid": True, "user_id": "u1"})
         captured_headers = {}
@@ -450,7 +450,7 @@ class TestServiceToken:
             instance.post = capture_post
             MockClient.return_value = instance
 
-            await svc.validate("sk-svctoken-key1234")
+            await svc.validate("test-svctoken-key1234")
 
-        assert captured_headers.get("X-Service-Token") == "svc-secret-123"
+        assert captured_headers.get("X-Service-Token") == "test-svc-token-123"
         assert captured_headers.get("Content-Type") == "application/json"
