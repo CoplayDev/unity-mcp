@@ -78,8 +78,14 @@ class PluginHub(WebSocketEndpoint):
         return cls._registry is not None and cls._lock is not None
 
     async def on_connect(self, websocket: WebSocket) -> None:
-        # Validate API key in remote-hosted mode
-        if config.http_remote_hosted and ApiKeyService.is_initialized():
+        # Validate API key in remote-hosted mode (fail closed)
+        if config.http_remote_hosted:
+            if not ApiKeyService.is_initialized():
+                logger.debug(
+                    "WebSocket connection rejected: auth service not initialized")
+                await websocket.close(code=1013, reason="Try again later")
+                return
+
             api_key = websocket.headers.get("X-API-Key")
 
             if not api_key:
@@ -91,14 +97,24 @@ class PluginHub(WebSocketEndpoint):
             result = await service.validate(api_key)
 
             if not result.valid:
-                # Check if it's an auth service issue
-                if result.error and "unavailable" in result.error.lower():
+                # Transient auth failures are retryable (1013)
+                if result.error and any(
+                    indicator in result.error.lower()
+                    for indicator in ("unavailable", "timeout", "service error")
+                ):
                     logger.debug(
                         "WebSocket connection rejected: auth service unavailable")
                     await websocket.close(code=1013, reason="Try again later")
                     return
 
                 logger.debug("WebSocket connection rejected: invalid API key")
+                await websocket.close(code=4403, reason="Invalid API key")
+                return
+
+            # Both valid and user_id must be present to accept
+            if not result.user_id:
+                logger.debug(
+                    "WebSocket connection rejected: validated key missing user_id")
                 await websocket.close(code=4403, reason="Invalid API key")
                 return
 
