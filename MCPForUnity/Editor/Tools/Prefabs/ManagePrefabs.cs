@@ -723,7 +723,182 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 }
             }
 
+            // Create child GameObjects (supports single object or array)
+            JToken createChildToken = @params["createChild"] ?? @params["create_child"];
+            if (createChildToken != null)
+            {
+                // Handle array of children
+                if (createChildToken is JArray childArray)
+                {
+                    foreach (var childToken in childArray)
+                    {
+                        var childResult = CreateSingleChildInPrefab(childToken, targetGo, prefabRoot);
+                        if (childResult.error != null)
+                        {
+                            return (false, childResult.error);
+                        }
+                        if (childResult.created)
+                        {
+                            modified = true;
+                        }
+                    }
+                }
+                else
+                {
+                    // Handle single child object
+                    var childResult = CreateSingleChildInPrefab(createChildToken, targetGo, prefabRoot);
+                    if (childResult.error != null)
+                    {
+                        return (false, childResult.error);
+                    }
+                    if (childResult.created)
+                    {
+                        modified = true;
+                    }
+                }
+            }
+
             return (modified, null);
+        }
+
+        /// <summary>
+        /// Creates a single child GameObject within the prefab contents.
+        /// </summary>
+        private static (bool created, ErrorResponse error) CreateSingleChildInPrefab(JToken createChildToken, GameObject defaultParent, GameObject prefabRoot)
+        {
+            JObject childParams;
+            if (createChildToken is JObject obj)
+            {
+                childParams = obj;
+            }
+            else
+            {
+                return (false, new ErrorResponse("'create_child' must be an object with child properties."));
+            }
+
+            // Required: name
+            string childName = childParams["name"]?.ToString();
+            if (string.IsNullOrEmpty(childName))
+            {
+                return (false, new ErrorResponse("'create_child.name' is required."));
+            }
+
+            // Optional: parent (defaults to the target object)
+            string parentName = childParams["parent"]?.ToString();
+            Transform parentTransform = defaultParent.transform;
+            if (!string.IsNullOrEmpty(parentName))
+            {
+                GameObject parentGo = FindInPrefabContents(prefabRoot, parentName);
+                if (parentGo == null)
+                {
+                    return (false, new ErrorResponse($"Parent '{parentName}' not found in prefab for create_child."));
+                }
+                parentTransform = parentGo.transform;
+            }
+
+            // Create the GameObject
+            GameObject newChild;
+            string primitiveType = childParams["primitiveType"]?.ToString() ?? childParams["primitive_type"]?.ToString();
+            if (!string.IsNullOrEmpty(primitiveType))
+            {
+                try
+                {
+                    PrimitiveType type = (PrimitiveType)Enum.Parse(typeof(PrimitiveType), primitiveType, true);
+                    newChild = GameObject.CreatePrimitive(type);
+                    newChild.name = childName;
+                }
+                catch (ArgumentException)
+                {
+                    return (false, new ErrorResponse($"Invalid primitive type: '{primitiveType}'. Valid types: {string.Join(", ", Enum.GetNames(typeof(PrimitiveType)))}"));
+                }
+            }
+            else
+            {
+                newChild = new GameObject(childName);
+            }
+
+            // Set parent
+            newChild.transform.SetParent(parentTransform, false);
+
+            // Apply transform properties
+            Vector3? position = VectorParsing.ParseVector3(childParams["position"]);
+            Vector3? rotation = VectorParsing.ParseVector3(childParams["rotation"]);
+            Vector3? scale = VectorParsing.ParseVector3(childParams["scale"]);
+
+            if (position.HasValue)
+            {
+                newChild.transform.localPosition = position.Value;
+            }
+            if (rotation.HasValue)
+            {
+                newChild.transform.localEulerAngles = rotation.Value;
+            }
+            if (scale.HasValue)
+            {
+                newChild.transform.localScale = scale.Value;
+            }
+
+            // Add components
+            JArray componentsToAdd = childParams["componentsToAdd"] as JArray ?? childParams["components_to_add"] as JArray;
+            if (componentsToAdd != null)
+            {
+                foreach (var compToken in componentsToAdd)
+                {
+                    string typeName = compToken.Type == JTokenType.String
+                        ? compToken.ToString()
+                        : (compToken as JObject)?["typeName"]?.ToString();
+
+                    if (!string.IsNullOrEmpty(typeName))
+                    {
+                        if (!ComponentResolver.TryResolve(typeName, out Type componentType, out string error))
+                        {
+                            // Clean up partially created child
+                            UnityEngine.Object.DestroyImmediate(newChild);
+                            return (false, new ErrorResponse($"Component type '{typeName}' not found for create_child: {error}"));
+                        }
+                        newChild.AddComponent(componentType);
+                    }
+                }
+            }
+
+            // Set tag if specified
+            string tag = childParams["tag"]?.ToString();
+            if (!string.IsNullOrEmpty(tag))
+            {
+                try
+                {
+                    newChild.tag = tag;
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Warn($"[ManagePrefabs] Failed to set tag '{tag}' on child '{childName}': {ex.Message}");
+                }
+            }
+
+            // Set layer if specified
+            string layerName = childParams["layer"]?.ToString();
+            if (!string.IsNullOrEmpty(layerName))
+            {
+                int layerId = LayerMask.NameToLayer(layerName);
+                if (layerId != -1)
+                {
+                    newChild.layer = layerId;
+                }
+                else
+                {
+                    McpLog.Warn($"[ManagePrefabs] Invalid layer '{layerName}' for child '{childName}'.");
+                }
+            }
+
+            // Set active state
+            bool? setActive = childParams["setActive"]?.ToObject<bool?>() ?? childParams["set_active"]?.ToObject<bool?>();
+            if (setActive.HasValue)
+            {
+                newChild.SetActive(setActive.Value);
+            }
+
+            McpLog.Info($"[ManagePrefabs] Created child '{childName}' under '{parentTransform.name}' in prefab.");
+            return (true, null);
         }
 
         #endregion

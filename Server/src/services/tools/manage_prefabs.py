@@ -25,6 +25,10 @@ REQUIRED_PARAMS = {
         "Manages Unity Prefab assets via headless operations (no UI, no prefab stages). "
         "Actions: get_info, get_hierarchy, create_from_gameobject, modify_contents. "
         "Use modify_contents for headless prefab editing - ideal for automated workflows. "
+        "Use create_child parameter with modify_contents to add child GameObjects to a prefab "
+        "(single object or array for batch creation in one save). "
+        "Example: create_child=[{\"name\": \"Child1\", \"primitive_type\": \"Sphere\", \"position\": [1,0,0]}, "
+        "{\"name\": \"Child2\", \"primitive_type\": \"Cube\", \"parent\": \"Child1\"}]. "
         "Use manage_asset action=search filterType=Prefab to list prefabs."
     ),
     annotations=ToolAnnotations(
@@ -59,6 +63,7 @@ async def manage_prefabs(
     parent: Annotated[str, "New parent object name/path within prefab for modify_contents."] | None = None,
     components_to_add: Annotated[list[str], "Component types to add in modify_contents."] | None = None,
     components_to_remove: Annotated[list[str], "Component types to remove in modify_contents."] | None = None,
+    create_child: Annotated[dict[str, Any] | list[dict[str, Any]], "Create child GameObject(s) in the prefab. Single object or array of objects, each with: name (required), parent (optional, defaults to target), primitive_type (optional: Cube, Sphere, Capsule, Cylinder, Plane, Quad), position, rotation, scale, components_to_add, tag, layer, set_active."] | None = None,
 ) -> dict[str, Any]:
     # Back-compat: map 'name' → 'target' for create_from_gameobject (Unity accepts both)
     if action == "create_from_gameobject" and target is None and name is not None:
@@ -143,6 +148,34 @@ async def manage_prefabs(
             params["componentsToAdd"] = components_to_add
         if components_to_remove is not None:
             params["componentsToRemove"] = components_to_remove
+        if create_child is not None:
+            # Normalize vector fields within create_child (handles single object or array)
+            def normalize_child_params(child: dict, index: int | None = None) -> tuple[dict, str | None]:
+                child_params = dict(child)
+                prefix = f"create_child[{index}]" if index is not None else "create_child"
+                for vec_field in ("position", "rotation", "scale"):
+                    if vec_field in child_params and child_params[vec_field] is not None:
+                        vec_val, vec_err = normalize_vector3(child_params[vec_field], f"{prefix}.{vec_field}")
+                        if vec_err:
+                            return None, vec_err
+                        child_params[vec_field] = vec_val
+                return child_params, None
+
+            if isinstance(create_child, list):
+                # Array of children
+                normalized_children = []
+                for i, child in enumerate(create_child):
+                    child_params, err = normalize_child_params(child, i)
+                    if err:
+                        return {"success": False, "message": err}
+                    normalized_children.append(child_params)
+                params["createChild"] = normalized_children
+            else:
+                # Single child object
+                child_params, err = normalize_child_params(create_child)
+                if err:
+                    return {"success": False, "message": err}
+                params["createChild"] = child_params
 
         # Send command to Unity
         response = await send_with_unity_instance(
