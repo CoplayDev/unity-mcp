@@ -49,9 +49,9 @@ async def manage_prefabs(
     search_inactive: Annotated[bool, "Include inactive GameObjects in search."] | None = None,
     unlink_if_instance: Annotated[bool, "Unlink from existing prefab before creating new one."] | None = None,
     # modify_contents parameters
-    position: Annotated[list[float], "New local position [x, y, z] for modify_contents."] | None = None,
-    rotation: Annotated[list[float], "New local rotation (euler angles) [x, y, z] for modify_contents."] | None = None,
-    scale: Annotated[list[float], "New local scale [x, y, z] for modify_contents."] | None = None,
+    position: Annotated[list[float] | dict[str, float] | str, "New local position [x, y, z] or {x, y, z} for modify_contents."] | None = None,
+    rotation: Annotated[list[float] | dict[str, float] | str, "New local rotation (euler angles) [x, y, z] or {x, y, z} for modify_contents."] | None = None,
+    scale: Annotated[list[float] | dict[str, float] | str, "New local scale [x, y, z] or {x, y, z} for modify_contents."] | None = None,
     name: Annotated[str, "New name for the target object in modify_contents."] | None = None,
     tag: Annotated[str, "New tag for the target object in modify_contents."] | None = None,
     layer: Annotated[str, "New layer name for the target object in modify_contents."] | None = None,

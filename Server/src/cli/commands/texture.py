@@ -110,6 +110,22 @@ def _normalize_color(value: Any, context: str) -> list[int]:
             return _parse_hex_color(value)
         value = try_parse_json(value, context)
 
+    # Handle dict with r/g/b keys (e.g., {"r": 1, "g": 0, "b": 0} or {"r": 1, "g": 0, "b": 0, "a": 1})
+    if isinstance(value, dict):
+        if all(k in value for k in ("r", "g", "b")):
+            try:
+                color = [value["r"], value["g"], value["b"]]
+                if "a" in value:
+                    color.append(value["a"])
+                else:
+                    color.append(1.0 if _is_normalized_color(color) else 255)
+                if _is_normalized_color(color):
+                    return [int(round(float(c) * 255)) for c in color]
+                return [int(c) for c in color]
+            except (TypeError, ValueError):
+                raise ValueError(f"{context} dict values must be numeric, got {value}")
+        raise ValueError(f"{context} dict must have 'r', 'g', 'b' keys, got {list(value.keys())}")
+
     if isinstance(value, (list, tuple)):
         if len(value) == 3:
             value = list(value) + [1.0 if _is_normalized_color(value) else 255]
