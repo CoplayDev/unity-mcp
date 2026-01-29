@@ -99,7 +99,7 @@ class TestResolveSessionIdIsolation:
         await _setup_two_user_registry()
 
         # userA tries to resolve userB's hash -> should not find it
-        with pytest.raises(Exception):
+        with pytest.raises(RuntimeError):
             await PluginHub._resolve_session_id("hashB1", user_id="userA")
 
 
