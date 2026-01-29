@@ -33,7 +33,7 @@ In Unity: `Window > Package Manager > + > Add package from git URL...`
 
 > [!TIP]
 > ```text
-> https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity
+> https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#main
 > ```
 
 **Want the latest beta?** Use the beta branch:
