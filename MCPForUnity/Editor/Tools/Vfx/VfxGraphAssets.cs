@@ -39,7 +39,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
             return new { success = false, message = "VFX Graph package (com.unity.visualeffectgraph) not installed" };
         }
 #else
-        private static readonly string[] SupportedVfxGraphVersions = { "12.1.13" };
+        private static readonly string[] SupportedVfxGraphVersions = { "12.1" };
 
         /// <summary>
         /// Creates a new VFX Graph asset file from a template.
@@ -190,7 +190,10 @@ namespace MCPForUnity.Editor.Tools.Vfx
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"Failed to search VFX templates under '{searchRoot}': {ex.Message}");
+                }
             }
 
             // Search in project assets
@@ -376,7 +379,10 @@ namespace MCPForUnity.Editor.Tools.Vfx
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"Failed to list VFX templates under '{basePath}': {ex.Message}");
+                }
             }
 
             // Also search project assets
@@ -420,6 +426,30 @@ namespace MCPForUnity.Editor.Tools.Vfx
             string[] guids;
             if (!string.IsNullOrEmpty(searchFolder))
             {
+                if (searchFolder.Contains("\\") || searchFolder.Contains("..") || System.IO.Path.IsPathRooted(searchFolder))
+                {
+                    return new { success = false, message = "Invalid folder: traversal and absolute paths are not allowed" };
+                }
+
+                if (searchFolder.StartsWith("Packages/"))
+                {
+                    return new { success = false, message = "Invalid folder: VFX assets must live under Assets/." };
+                }
+
+                if (!searchFolder.StartsWith("Assets/"))
+                {
+                    searchFolder = "Assets/" + searchFolder;
+                }
+
+                string fullPath = System.IO.Path.Combine(UnityEngine.Application.dataPath, searchFolder.Substring("Assets/".Length));
+                string canonicalProjectRoot = System.IO.Path.GetFullPath(UnityEngine.Application.dataPath);
+                string canonicalSearchFolder = System.IO.Path.GetFullPath(fullPath);
+                if (!canonicalSearchFolder.StartsWith(canonicalProjectRoot + System.IO.Path.DirectorySeparatorChar) &&
+                    canonicalSearchFolder != canonicalProjectRoot)
+                {
+                    return new { success = false, message = "Invalid folder: would escape project directory" };
+                }
+
                 guids = AssetDatabase.FindAssets(filter, new[] { searchFolder });
             }
             else
@@ -462,13 +492,48 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 return "VFX Graph package (com.unity.visualeffectgraph) not installed";
             }
 
-            if (SupportedVfxGraphVersions.Contains(info.version))
+            if (IsVersionSupported(info.version))
             {
                 return null;
             }
 
-            string supported = string.Join(", ", SupportedVfxGraphVersions);
+            string supported = string.Join(", ", SupportedVfxGraphVersions.Select(version => $"{version}.x"));
             return $"Unsupported VFX Graph version {info.version}. Supported versions: {supported}.";
+        }
+
+        private static bool IsVersionSupported(string installedVersion)
+        {
+            if (string.IsNullOrEmpty(installedVersion))
+            {
+                return false;
+            }
+
+            string normalized = installedVersion;
+            int suffixIndex = normalized.IndexOfAny(new[] { '-', '+' });
+            if (suffixIndex >= 0)
+            {
+                normalized = normalized.Substring(0, suffixIndex);
+            }
+
+            if (!Version.TryParse(normalized, out Version installed))
+            {
+                return false;
+            }
+
+            foreach (string supported in SupportedVfxGraphVersions)
+            {
+                if (!Version.TryParse(supported, out Version target))
+                {
+                    continue;
+                }
+
+                if (installed.Major == target.Major && installed.Minor == target.Minor)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static string TryGetAssetPathFromFileSystem(string templatePath)

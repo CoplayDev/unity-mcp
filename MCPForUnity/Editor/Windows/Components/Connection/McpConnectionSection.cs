@@ -158,8 +158,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 var previous = (TransportProtocol)evt.previousValue;
                 var selected = (TransportProtocol)evt.newValue;
                 bool useHttp = selected != TransportProtocol.Stdio;
-                EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, useHttp);
-                EditorConfigurationCache.Instance.Refresh();
+                EditorConfigurationCache.Instance.SetUseHttpTransport(useHttp);
 
                 // Clear any stale resume flags when user manually changes transport
                 try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeStdioAfterReload); } catch { }
@@ -168,7 +167,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 if (useHttp)
                 {
                     string scope = selected == TransportProtocol.HTTPRemote ? "remote" : "local";
-                    EditorPrefs.SetString(EditorPrefKeys.HttpTransportScope, scope);
+                    EditorConfigurationCache.Instance.SetHttpTransportScope(scope);
                 }
 
                 UpdateHttpFieldVisibility();

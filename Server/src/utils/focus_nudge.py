@@ -96,8 +96,12 @@ def _get_current_focus_duration() -> float:
     base_durations = [3.0, 5.0, 8.0, 12.0]
     base_duration = base_durations[min(_consecutive_nudges, len(base_durations) - 1)]
 
-    # Scale by ratio of configured to default duration
-    scale = _DEFAULT_FOCUS_DURATION_S / 3.0  # 3.0 is the base for 0 consecutive nudges
+    # Scale by ratio of configured to default duration (if UNITY_MCP_NUDGE_DURATION_S is set)
+    scale = 1.0
+    if os.environ.get("UNITY_MCP_NUDGE_DURATION_S") is not None:
+        configured_duration = _parse_env_float("UNITY_MCP_NUDGE_DURATION_S", _DEFAULT_FOCUS_DURATION_S)
+        if _DEFAULT_FOCUS_DURATION_S > 0:
+            scale = configured_duration / _DEFAULT_FOCUS_DURATION_S
     duration = base_duration * scale
     if duration <= 0:
         return _DEFAULT_FOCUS_DURATION_S
