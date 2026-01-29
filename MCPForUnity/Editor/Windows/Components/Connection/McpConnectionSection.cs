@@ -158,7 +158,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 apiKeyField.value = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
                 apiKeyField.tooltip = "API key for remote-hosted MCP server authentication";
                 apiKeyField.isPasswordField = true;
-                apiKeyField.passwordCharacter = '*';
+                apiKeyField.maskChar = '*';
             }
 
             int unityPort = EditorPrefs.GetInt(EditorPrefKeys.UnitySocketPort, 0);

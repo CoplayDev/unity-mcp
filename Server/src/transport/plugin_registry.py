@@ -23,7 +23,8 @@ class PluginSession:
     connected_at: datetime
     tools: dict[str, ToolDefinitionModel] = field(default_factory=dict)
     project_id: str | None = None
-    project_path: str | None = None  # Full path to project root (for focus nudging)
+    # Full path to project root (for focus nudging)
+    project_path: str | None = None
     user_id: str | None = None  # Associated user id (None for local mode)
 
 

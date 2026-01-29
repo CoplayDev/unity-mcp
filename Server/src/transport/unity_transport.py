@@ -13,6 +13,7 @@ from models.models import MCPResponse
 from models.unity_response import normalize_unity_response
 
 T = TypeVar("T")
+logger = logging.getLogger("mcp-for-unity-server")
 
 
 def _is_http_transport() -> bool:
@@ -39,7 +40,8 @@ async def _resolve_user_id_from_request() -> str | None:
         service = ApiKeyService.get_instance()
         result = await service.validate(api_key)
         return result.user_id if result.valid else None
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to resolve user_id from HTTP request: %s", e)
         return None
 
 

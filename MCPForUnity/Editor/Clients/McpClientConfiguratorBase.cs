@@ -610,7 +610,8 @@ namespace MCPForUnity.Editor.Clients
                 // Add API key header if configured (for remote-hosted mode)
                 if (!string.IsNullOrEmpty(apiKey))
                 {
-                    args = $"mcp add --transport http UnityMCP {httpUrl} --header \"X-API-Key: {apiKey}\"";
+                    string safeKey = SanitizeShellHeaderValue(apiKey);
+                    args = $"mcp add --transport http UnityMCP {httpUrl} --header \"X-API-Key: {safeKey}\"";
                 }
                 else
                 {
@@ -679,7 +680,8 @@ namespace MCPForUnity.Editor.Clients
                 string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
                 if (!string.IsNullOrEmpty(apiKey))
                 {
-                    args = $"mcp add --transport http UnityMCP {httpUrl} --header \"X-API-Key: {apiKey}\"";
+                    string safeKey = SanitizeShellHeaderValue(apiKey);
+                    args = $"mcp add --transport http UnityMCP {httpUrl} --header \"X-API-Key: {safeKey}\"";
                 }
                 else
                 {
@@ -778,7 +780,7 @@ namespace MCPForUnity.Editor.Clients
             {
                 string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
                 string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
-                string headerArg = !string.IsNullOrEmpty(apiKey) ? $" --header \"X-API-Key: {apiKey}\"" : "";
+                string headerArg = !string.IsNullOrEmpty(apiKey) ? $" --header \"X-API-Key: {SanitizeShellHeaderValue(apiKey)}\"" : "";
                 return "# Register the MCP server with Claude Code:\n" +
                        $"claude mcp add --transport http UnityMCP {httpUrl}{headerArg}\n\n" +
                        "# Unregister the MCP server:\n" +
@@ -811,6 +813,37 @@ namespace MCPForUnity.Editor.Clients
             "Use Register to add UnityMCP (or run claude mcp add UnityMCP)",
             "Restart Claude Code"
         };
+
+        /// <summary>
+        /// Sanitizes a value for safe inclusion inside a double-quoted shell argument.
+        /// Escapes characters that are special within double quotes (", \, `, $, !)
+        /// to prevent shell injection or argument splitting.
+        /// </summary>
+        private static string SanitizeShellHeaderValue(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return value;
+
+            var sb = new System.Text.StringBuilder(value.Length);
+            foreach (char c in value)
+            {
+                switch (c)
+                {
+                    case '"':
+                    case '\\':
+                    case '`':
+                    case '$':
+                    case '!':
+                        sb.Append('\\');
+                        sb.Append(c);
+                        break;
+                    default:
+                        sb.Append(c);
+                        break;
+                }
+            }
+            return sb.ToString();
+        }
 
         /// <summary>
         /// Extracts the package source (--from argument value) from claude mcp get output.
