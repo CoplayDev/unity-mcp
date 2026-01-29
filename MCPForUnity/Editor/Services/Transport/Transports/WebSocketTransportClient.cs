@@ -220,7 +220,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             // Add API key header if configured (for remote-hosted mode)
             if (!string.IsNullOrEmpty(_apiKey))
             {
-                _socket.Options.SetRequestHeader("X-API-Key", _apiKey);
+                _socket.Options.SetRequestHeader(AuthConstants.ApiKeyHeader, _apiKey);
             }
 
             try

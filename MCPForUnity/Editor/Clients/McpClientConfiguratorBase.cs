@@ -611,7 +611,7 @@ namespace MCPForUnity.Editor.Clients
                 if (!string.IsNullOrEmpty(apiKey))
                 {
                     string safeKey = SanitizeShellHeaderValue(apiKey);
-                    args = $"mcp add --transport http UnityMCP {httpUrl} --header \"X-API-Key: {safeKey}\"";
+                    args = $"mcp add --transport http UnityMCP {httpUrl} --header \"{AuthConstants.ApiKeyHeader}: {safeKey}\"";
                 }
                 else
                 {
@@ -681,7 +681,7 @@ namespace MCPForUnity.Editor.Clients
                 if (!string.IsNullOrEmpty(apiKey))
                 {
                     string safeKey = SanitizeShellHeaderValue(apiKey);
-                    args = $"mcp add --transport http UnityMCP {httpUrl} --header \"X-API-Key: {safeKey}\"";
+                    args = $"mcp add --transport http UnityMCP {httpUrl} --header \"{AuthConstants.ApiKeyHeader}: {safeKey}\"";
                 }
                 else
                 {
@@ -780,7 +780,7 @@ namespace MCPForUnity.Editor.Clients
             {
                 string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
                 string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
-                string headerArg = !string.IsNullOrEmpty(apiKey) ? $" --header \"X-API-Key: {SanitizeShellHeaderValue(apiKey)}\"" : "";
+                string headerArg = !string.IsNullOrEmpty(apiKey) ? $" --header \"{AuthConstants.ApiKeyHeader}: {SanitizeShellHeaderValue(apiKey)}\"" : "";
                 return "# Register the MCP server with Claude Code:\n" +
                        $"claude mcp add --transport http UnityMCP {httpUrl}{headerArg}\n\n" +
                        "# Unregister the MCP server:\n" +

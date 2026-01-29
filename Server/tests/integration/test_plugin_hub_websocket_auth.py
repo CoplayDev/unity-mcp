@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from core.config import config
+from core.constants import API_KEY_HEADER
 from services.api_key_service import ApiKeyService, ValidationResult
 from transport.plugin_hub import PluginHub
 from transport.plugin_registry import PluginRegistry
@@ -84,7 +85,7 @@ class TestWebSocketAuthGate:
         _init_api_key_service(ValidationResult(
             valid=False, error="Invalid API key"))
 
-        ws = _make_mock_websocket(headers={"X-API-Key": "sk-bad-key"})
+        ws = _make_mock_websocket(headers={API_KEY_HEADER: "sk-bad-key"})
         hub = _make_hub()
 
         await hub.on_connect(ws)
@@ -101,7 +102,7 @@ class TestWebSocketAuthGate:
                              metadata={"plan": "pro"})
         )
 
-        ws = _make_mock_websocket(headers={"X-API-Key": "sk-valid-key"})
+        ws = _make_mock_websocket(headers={API_KEY_HEADER: "sk-valid-key"})
         hub = _make_hub()
 
         await hub.on_connect(ws)
@@ -122,7 +123,7 @@ class TestWebSocketAuthGate:
                 valid=False, error="Auth service unavailable", cacheable=False)
         )
 
-        ws = _make_mock_websocket(headers={"X-API-Key": "sk-some-key"})
+        ws = _make_mock_websocket(headers={API_KEY_HEADER: "sk-some-key"})
         hub = _make_hub()
 
         await hub.on_connect(ws)
@@ -158,7 +159,7 @@ class TestUserIdFlowsToRegistration:
         PluginHub.configure(registry, loop)
 
         # Simulate full flow: connect, then register
-        ws = _make_mock_websocket(headers={"X-API-Key": "sk-valid-key"})
+        ws = _make_mock_websocket(headers={API_KEY_HEADER: "sk-valid-key"})
         hub = _make_hub()
 
         await hub.on_connect(ws)

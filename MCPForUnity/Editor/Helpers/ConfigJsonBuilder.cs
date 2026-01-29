@@ -77,7 +77,7 @@ namespace MCPForUnity.Editor.Helpers
                 string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
                 if (!string.IsNullOrEmpty(apiKey))
                 {
-                    var headers = new JObject { ["X-API-Key"] = apiKey };
+                    var headers = new JObject { [AuthConstants.ApiKeyHeader] = apiKey };
                     unity["headers"] = headers;
                 }
                 else

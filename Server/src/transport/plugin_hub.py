@@ -13,6 +13,7 @@ from starlette.endpoints import WebSocketEndpoint
 from starlette.websockets import WebSocket
 
 from core.config import config
+from core.constants import API_KEY_HEADER
 from models.models import MCPResponse
 from transport.plugin_registry import PluginRegistry
 from services.api_key_service import ApiKeyService
@@ -102,7 +103,7 @@ class PluginHub(WebSocketEndpoint):
                 await websocket.close(code=1013, reason="Try again later")
                 return
 
-            api_key = websocket.headers.get("X-API-Key")
+            api_key = websocket.headers.get(API_KEY_HEADER)
 
             if not api_key:
                 logger.debug("WebSocket connection rejected: API key required")

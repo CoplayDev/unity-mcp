@@ -8,6 +8,7 @@ from fastmcp import Context
 
 from transport.plugin_hub import PluginHub
 from core.config import config
+from core.constants import API_KEY_HEADER
 from services.api_key_service import ApiKeyService
 from models.models import MCPResponse
 from models.unity_response import normalize_unity_response
@@ -34,7 +35,7 @@ async def _resolve_user_id_from_request() -> str | None:
     try:
         from fastmcp.server.dependencies import get_http_headers
         headers = get_http_headers(include_all=True)
-        api_key = headers.get("x-api-key")
+        api_key = headers.get(API_KEY_HEADER.lower())
         if not api_key:
             return None
         service = ApiKeyService.get_instance()
