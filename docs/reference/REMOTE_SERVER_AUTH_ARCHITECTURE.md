@@ -111,7 +111,7 @@ Key methods:
 
 - `register(session_id, project_name, project_hash, unity_version, user_id=None)` - Registers a session and updates the appropriate index. If an existing session claims the same key, it is evicted.
 - `get_session_id_by_hash(project_hash)` - Local-mode lookup.
-- `get_session_id_by_user_hash(user_id, project_hash)` - Remote-mode lookup.
+- `get_session_id_by_hash(project_hash, user_id)` - Remote-mode lookup.
 - `list_sessions(user_id=None)` - Returns sessions filtered by user. Raises `ValueError` if `user_id` is `None` while `config.http_remote_hosted` is `True`, preventing accidental cross-user leaks.
 
 ### UnityInstanceMiddleware
@@ -180,7 +180,7 @@ A complete authenticated MCP tool call follows this path:
 
 9. **Tool executes**, reading the instance from `ctx.get_state("unity_instance")`.
 
-10. **Command routed** through `PluginHub.send_command_for_instance(unity_instance, ..., user_id=user_id)`, which resolves the session using `PluginRegistry.get_session_id_by_user_hash(user_id, hash)`.
+10. **Command routed** through `PluginHub.send_command_for_instance(unity_instance, ..., user_id=user_id)`, which resolves the session using `PluginRegistry.get_session_id_by_hash(project_hash, user_id)`.
 
 ## WebSocket Auth Flow
 

@@ -142,26 +142,15 @@ class PluginRegistry:
         async with self._lock:
             return self._sessions.get(session_id)
 
-    async def get_session_id_by_hash(self, project_hash: str) -> str | None:
-        """Resolve a ``project_hash`` (Unity instance id) to a session id.
+    async def get_session_id_by_hash(self, project_hash: str, user_id: str | None = None) -> str | None:
+        """Resolve a ``project_hash`` (Unity instance id) to a session id."""
 
-        For local mode (no user scoping). Use get_session_id_by_user_hash for
-        remote-hosted mode with user isolation.
-        """
-
-        async with self._lock:
-            return self._hash_to_session.get(project_hash)
-
-    async def get_session_id_by_user_hash(
-        self, user_id: str, project_hash: str
-    ) -> str | None:
-        """Resolve a (user_id, project_hash) pair to a session id.
-
-        For remote-hosted mode with user isolation.
-        """
-
-        async with self._lock:
-            return self._user_hash_to_session.get((user_id, project_hash))
+        if user_id:
+            async with self._lock:
+                return self._user_hash_to_session.get((user_id, project_hash))
+        else:
+            async with self._lock:
+                return self._hash_to_session.get(project_hash)
 
     async def list_sessions(self, user_id: str | None = None) -> dict[str, PluginSession]:
         """Return a shallow copy of sessions.

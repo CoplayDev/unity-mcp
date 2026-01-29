@@ -18,15 +18,15 @@ class TestRegistryUserIsolation:
         assert registry._user_hash_to_session[("user-A", "hash1")] == "sess-1"
 
     @pytest.mark.asyncio
-    async def test_get_session_id_by_user_hash(self):
+    async def test_get_session_id_by_hash(self):
         registry = PluginRegistry()
         await registry.register("sess-1", "Proj", "h1", "2022", user_id="uA")
 
-        found = await registry.get_session_id_by_user_hash("uA", "h1")
+        found = await registry.get_session_id_by_hash("h1", "uA")
         assert found == "sess-1"
 
         # Different user, same hash -> not found
-        not_found = await registry.get_session_id_by_user_hash("uB", "h1")
+        not_found = await registry.get_session_id_by_hash("h1", "uB")
         assert not_found is None
 
     @pytest.mark.asyncio
@@ -40,8 +40,8 @@ class TestRegistryUserIsolation:
         assert sess_b.session_id == "sB"
 
         # Each user resolves to their own session
-        assert await registry.get_session_id_by_user_hash("userA", "hash1") == "sA"
-        assert await registry.get_session_id_by_user_hash("userB", "hash1") == "sB"
+        assert await registry.get_session_id_by_hash("hash1", "userA") == "sA"
+        assert await registry.get_session_id_by_hash("hash1", "userB") == "sB"
 
         # Both sessions exist
         all_sessions = await registry.list_sessions()
@@ -101,10 +101,10 @@ class TestRegistryUserIsolation:
         """Same (user_id, hash) re-registered evicts old session, stores new one."""
         registry = PluginRegistry()
         await registry.register("old-sess", "Proj", "h1", "2022", user_id="uA")
-        assert await registry.get_session_id_by_user_hash("uA", "h1") == "old-sess"
+        assert await registry.get_session_id_by_hash("h1", "uA") == "old-sess"
 
         await registry.register("new-sess", "Proj", "h1", "2022", user_id="uA")
-        assert await registry.get_session_id_by_user_hash("uA", "h1") == "new-sess"
+        assert await registry.get_session_id_by_hash("h1", "uA") == "new-sess"
 
         # Old session should be evicted
         all_sessions = await registry.list_sessions()

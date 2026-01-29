@@ -496,7 +496,7 @@ class PluginHub(WebSocketEndpoint):
             if target_hash:
                 # In remote-hosted mode with user_id, use user-scoped lookup
                 if config.http_remote_hosted and user_id:
-                    session_id = await cls._registry.get_session_id_by_user_hash(user_id, target_hash)
+                    session_id = await cls._registry.get_session_id_by_hash(target_hash, user_id)
                     sessions = await cls._registry.list_sessions(user_id=user_id)
                 else:
                     session_id = await cls._registry.get_session_id_by_hash(target_hash)
