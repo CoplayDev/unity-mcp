@@ -501,7 +501,6 @@ async def nudge_unity_focus(
     project_info = f" for {unity_project_path}" if unity_project_path else ""
     logger.info(f"Nudging Unity focus{project_info} (interval: {current_interval:.1f}s, consecutive: {_consecutive_nudges}, duration: {focus_duration_s:.1f}s, will return to {original_app})")
     _last_nudge_time = now
-    _consecutive_nudges += 1
 
     # Focus Unity (with optional project path for multi-instance support)
     if not _focus_app("Unity", unity_project_path):
@@ -517,6 +516,9 @@ async def nudge_unity_focus(
     if current_app and "Unity" not in current_app:
         logger.warning(f"Unity activation didn't complete - current app is {current_app}")
         # Continue anyway in case Unity is processing in background
+
+    # Only increment consecutive nudges counter after successful activation attempt
+    _consecutive_nudges += 1
 
     # Wait for Unity to process (actual working time)
     await asyncio.sleep(focus_duration_s)
