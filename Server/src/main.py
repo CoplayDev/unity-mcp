@@ -457,7 +457,7 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
                 return JSONResponse(result)
 
             except Exception as e:
-                logger.error(f"CLI command error: {e}")
+                logger.exception("CLI command error: %s", e)
                 return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
         @mcp.custom_route("/api/instances", methods=["GET"])
