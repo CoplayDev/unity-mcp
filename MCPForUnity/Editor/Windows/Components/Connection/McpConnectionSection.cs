@@ -270,8 +270,8 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             bool isRunning = bridgeService.IsRunning;
             bool showLocalServerControls = IsHttpLocalSelected();
             bool debugMode = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
-            // Use EditorPrefs as source of truth for stdio selection - more reliable after domain reload
-            // than checking the dropdown which may not be initialized yet
+            // EditorConfigurationCache is the source of truth for transport selection after domain reload
+            // (EditorPrefs is still used for debugMode and other UI-only state)
             bool stdioSelected = !EditorConfigurationCache.Instance.UseHttpTransport;
 
             // Keep the Start/Stop Server button label in sync even when the session is not running

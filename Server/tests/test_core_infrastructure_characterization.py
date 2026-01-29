@@ -71,7 +71,7 @@ def temp_telemetry_data():
 
 
 @pytest.fixture
-def mock_telemetry_config(monkeypatch, temp_telemetry_data):
+def mock_telemetry_config(temp_telemetry_data):
     """Mock telemetry configuration for testing."""
     # Point data directory to temp location
     with patch("core.telemetry.TelemetryConfig._get_data_directory") as mock_dir:
@@ -227,13 +227,15 @@ class TestLoggingDecoratorExceptionHandling:
         """Verify decorator handles all exception types."""
         caplog_fixture.clear()
 
+        class CustomError(Exception):
+            """Custom exception for testing."""
+            pass
+
         @log_execution("any_exc", "AnyExc")
         def func_raises_custom():
-            class CustomError(Exception):
-                pass
             raise CustomError("Custom")
 
-        with pytest.raises(Exception):
+        with pytest.raises(CustomError):
             func_raises_custom()
 
         assert "Custom" in caplog_fixture.text
@@ -841,6 +843,8 @@ class TestTelemetryCollection:
 
     def test_telemetry_collector_initialization(self, mock_telemetry_config, temp_telemetry_data):
         """Verify TelemetryCollector initializes with config."""
+        # Explicitly reference fixture to suppress unused parameter warning
+        _ = mock_telemetry_config
         # Create minimal path files to avoid file I/O errors
         data_path = Path(temp_telemetry_data)
         (data_path / "customer_uuid.txt").write_text("test-uuid")
@@ -860,6 +864,8 @@ class TestTelemetryCollection:
 
     def test_telemetry_collector_has_worker_thread(self, mock_telemetry_config, temp_telemetry_data):
         """Verify TelemetryCollector starts background worker thread."""
+        # Explicitly reference fixture to suppress unused parameter warning
+        _ = mock_telemetry_config
         data_path = Path(temp_telemetry_data)
         (data_path / "customer_uuid.txt").write_text("test-uuid")
         (data_path / "milestones.json").write_text("{}")

@@ -5,7 +5,7 @@ Returns only instance IDs with pagination support for efficient searches.
 from typing import Annotated, Any, Literal
 
 from fastmcp import Context
-from pydantic import Field, AliasChoices
+from pydantic import Field
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
@@ -21,33 +21,27 @@ async def find_gameobjects(
     ctx: Context,
     search_term: Annotated[
         str,
-        Field(
-            description="The value to search for (name, tag, layer name, component type, or path)",
-            validation_alias=AliasChoices("search_term", "searchTerm")
-        )
+        Field(description="The value to search for (name, tag, layer name, component type, or path)")
     ],
     search_method: Annotated[
         Literal["by_name", "by_tag", "by_layer", "by_component", "by_path", "by_id"],
         Field(
             default="by_name",
-            description="How to search for GameObjects",
-            validation_alias=AliasChoices("search_method", "searchMethod")
+            description="How to search for GameObjects"
         )
     ] = "by_name",
     include_inactive: Annotated[
         bool | str | None,
         Field(
             default=None,
-            description="Include inactive GameObjects in search",
-            validation_alias=AliasChoices("include_inactive", "includeInactive")
+            description="Include inactive GameObjects in search"
         )
     ] = None,
     page_size: Annotated[
         int | str | None,
         Field(
             default=None,
-            description="Number of results per page (default: 50, max: 500)",
-            validation_alias=AliasChoices("page_size", "pageSize")
+            description="Number of results per page (default: 50, max: 500)"
         )
     ] = None,
     cursor: Annotated[

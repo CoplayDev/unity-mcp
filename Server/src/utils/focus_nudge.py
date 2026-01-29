@@ -83,20 +83,20 @@ def _get_current_focus_duration() -> float:
     """
     Calculate current focus duration using exponential backoff.
 
-    Returns focus duration based on consecutive nudges without progress:
-    - 0 nudges: 3s (quick stall recovery)
-    - 1 nudge: 5s (compilation might be starting)
-    - 2 nudges: 8s (deep compilation)
-    - 3+ nudges: 12s (domain reload/heavy compilation)
+    Scales from the configured _DEFAULT_FOCUS_DURATION_S:
+    - 0 nudges: base duration (quick stall recovery)
+    - 1 nudge: base + 2s (compilation might be starting)
+    - 2 nudges: base + 5s (deep compilation)
+    - 3+ nudges: base + 9s (domain reload/heavy compilation)
     """
     if _consecutive_nudges == 0:
-        return 3.0
+        return _DEFAULT_FOCUS_DURATION_S
     elif _consecutive_nudges == 1:
-        return 5.0
+        return _DEFAULT_FOCUS_DURATION_S + 2.0
     elif _consecutive_nudges == 2:
-        return 8.0
+        return _DEFAULT_FOCUS_DURATION_S + 5.0
     else:
-        return 12.0
+        return _DEFAULT_FOCUS_DURATION_S + 9.0
 
 
 def reset_nudge_backoff() -> None:
