@@ -721,7 +721,7 @@ Examples:
 
     config.http_remote_hosted = (
         bool(args.http_remote_hosted)
-        or os.environ.get("UNITY_MCP_HTTP_REMOTE_HOSTED", "").lower() in ("true", "1", "yes")
+        or os.environ.get("UNITY_MCP_HTTP_REMOTE_HOSTED", "").lower() in ("true", "1", "yes", "on")
     )
 
     # API key authentication configuration
