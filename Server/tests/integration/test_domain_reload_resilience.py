@@ -161,7 +161,7 @@ async def test_read_console_during_simulated_reload(monkeypatch):
 @pytest.mark.asyncio
 async def test_plugin_hub_respects_unity_instance_preference():
     """Test that _resolve_session_id prefers a specific Unity instance if requested."""
-    from transport.plugin_hub import PluginHub
+    from transport.plugin_hub import PluginHub, InstanceSelectionRequiredError
     from transport.plugin_registry import PluginRegistry, PluginSession
 
     # Create a mock registry with two sessions
@@ -213,9 +213,8 @@ async def test_plugin_hub_respects_unity_instance_preference():
         assert session_id == "session-2"
 
         # Request default (no specific instance)
-        with pytest.raises(RuntimeError) as exc:
+        with pytest.raises(InstanceSelectionRequiredError, match="Multiple Unity instances"):
             await PluginHub._resolve_session_id(unity_instance=None)
-        assert "Multiple Unity instances are connected" in str(exc.value)
 
     finally:
         # Clean up: restore original PluginHub state
