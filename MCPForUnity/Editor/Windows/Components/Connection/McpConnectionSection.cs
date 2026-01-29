@@ -317,6 +317,8 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             HttpEndpointUtility.SaveBaseUrl(httpUrlField.text);
             // Update displayed value to normalized form without re-triggering callbacks/caret jumps.
             httpUrlField.SetValueWithoutNotify(HttpEndpointUtility.GetBaseUrl());
+            // Invalidate cached login URL so it is re-fetched for the new base URL.
+            cachedLoginUrl = null;
             OnManualConfigUpdateRequested?.Invoke();
             RefreshHttpUi();
         }
