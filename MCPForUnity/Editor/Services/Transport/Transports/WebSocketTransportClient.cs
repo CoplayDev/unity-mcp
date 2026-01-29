@@ -56,6 +56,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private volatile bool _isConnected;
         private int _isReconnectingFlag;
         private TransportState _state = TransportState.Disconnected(TransportDisplayName, "Transport not started");
+        private string _apiKey;
         private bool _disposed;
 
         public WebSocketTransportClient(IToolDiscoveryService toolDiscoveryService = null)
@@ -80,6 +81,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             _projectName = ProjectIdentityUtility.GetProjectName();
             _projectHash = ProjectIdentityUtility.GetProjectHash();
             _unityVersion = Application.unityVersion;
+            _apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
 
             await StopAsync();
 
@@ -200,10 +202,9 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             _socket.Options.KeepAliveInterval = _socketKeepAliveInterval;
 
             // Add API key header if configured (for remote-hosted mode)
-            string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
-            if (!string.IsNullOrEmpty(apiKey))
+            if (!string.IsNullOrEmpty(_apiKey))
             {
-                _socket.Options.SetRequestHeader("X-API-Key", apiKey);
+                _socket.Options.SetRequestHeader("X-API-Key", _apiKey);
             }
 
             try
