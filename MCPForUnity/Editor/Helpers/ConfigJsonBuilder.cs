@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using MCPForUnity.Editor.Clients.Configurators;
 using MCPForUnity.Editor.Constants;
-using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -51,7 +51,7 @@ namespace MCPForUnity.Editor.Helpers
         private static void PopulateUnityNode(JObject unity, string uvPath, McpClient client, bool isVSCode)
         {
             // Get transport preference (default to HTTP)
-            bool prefValue = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool prefValue = EditorConfigurationCache.Instance.UseHttpTransport;
             bool clientSupportsHttp = client?.SupportsHttpTransport != false;
             bool useHttpTransport = clientSupportsHttp && prefValue;
             string httpProperty = string.IsNullOrEmpty(client?.HttpUrlProperty) ? "url" : client.HttpUrlProperty;

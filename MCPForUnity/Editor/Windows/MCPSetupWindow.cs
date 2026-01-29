@@ -34,7 +34,6 @@ namespace MCPForUnity.Editor.Windows
         {
             var window = GetWindow<MCPSetupWindow>("MCP Setup");
             window.minSize = new Vector2(480, 320);
-            // window.maxSize = new Vector2(600, 700);
             window._dependencyResult = dependencyResult ?? DependencyManager.CheckAllDependencies();
             window.Show();
         }

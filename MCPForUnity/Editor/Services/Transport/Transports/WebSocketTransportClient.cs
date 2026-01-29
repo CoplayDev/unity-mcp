@@ -50,6 +50,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private string _sessionId;
         private string _projectHash;
         private string _projectName;
+        private string _projectPath;
         private string _unityVersion;
         private TimeSpan _keepAliveInterval = DefaultKeepAliveInterval;
         private TimeSpan _socketKeepAliveInterval = DefaultKeepAliveInterval;
@@ -82,6 +83,21 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             _projectHash = ProjectIdentityUtility.GetProjectHash();
             _unityVersion = Application.unityVersion;
             _apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
+
+            // Get project root path (strip /Assets from dataPath) for focus nudging
+            string dataPath = Application.dataPath;
+            if (!string.IsNullOrEmpty(dataPath))
+            {
+                string normalized = dataPath.TrimEnd('/', '\\');
+                if (string.Equals(System.IO.Path.GetFileName(normalized), "Assets", StringComparison.Ordinal))
+                {
+                    _projectPath = System.IO.Path.GetDirectoryName(normalized) ?? normalized;
+                }
+                else
+                {
+                    _projectPath = normalized;  // Fallback if path doesn't end with Assets
+                }
+            }
 
             await StopAsync();
 
@@ -428,7 +444,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 _sessionId = newSessionId;
                 ProjectIdentityUtility.SetSessionId(_sessionId);
                 _state = TransportState.Connected(TransportDisplayName, sessionId: _sessionId, details: _endpointUri.ToString());
-                McpLog.Info($"[WebSocket] Registered with session ID: {_sessionId}");
+                McpLog.Info($"[WebSocket] Registered with session ID: {_sessionId}", false);
 
                 await SendRegisterToolsAsync(token).ConfigureAwait(false);
             }
@@ -441,7 +457,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             token.ThrowIfCancellationRequested();
             var tools = await GetEnabledToolsOnMainThreadAsync(token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
-            McpLog.Info($"[WebSocket] Preparing to register {tools.Count} tool(s) with the bridge.");
+            McpLog.Info($"[WebSocket] Preparing to register {tools.Count} tool(s) with the bridge.", false);
             var toolsArray = new JArray();
 
             foreach (var tool in tools)
@@ -481,7 +497,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             };
 
             await SendJsonAsync(payload, token).ConfigureAwait(false);
-            McpLog.Info($"[WebSocket] Sent {tools.Count} tools registration");
+            McpLog.Info($"[WebSocket] Sent {tools.Count} tools registration", false);
         }
 
         private async Task HandleExecuteAsync(JObject payload, CancellationToken token)
@@ -585,7 +601,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 // session_id is now server-authoritative; omitted here or sent as null
                 ["project_name"] = _projectName,
                 ["project_hash"] = _projectHash,
-                ["unity_version"] = _unityVersion
+                ["unity_version"] = _unityVersion,
+                ["project_path"] = _projectPath
             };
 
             await SendJsonAsync(registerPayload, token).ConfigureAwait(false);
@@ -671,7 +688,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     {
                         _state = TransportState.Connected(TransportDisplayName, sessionId: _sessionId, details: _endpointUri.ToString());
                         _isConnected = true;
-                        McpLog.Info("[WebSocket] Reconnected to MCP server");
+                        McpLog.Info("[WebSocket] Reconnected to MCP server", false);
                         return;
                     }
                 }

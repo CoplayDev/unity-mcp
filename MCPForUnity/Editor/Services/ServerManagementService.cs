@@ -2,12 +2,10 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Net.Sockets;
-using System.Security.Cryptography;
-using System.Text;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Services.Server;
 using UnityEditor;
 using UnityEngine;
 
@@ -18,138 +16,72 @@ namespace MCPForUnity.Editor.Services
     /// </summary>
     public class ServerManagementService : IServerManagementService
     {
-        private static readonly HashSet<int> LoggedStopDiagnosticsPids = new HashSet<int>();
+        private readonly IProcessDetector _processDetector;
+        private readonly IPidFileManager _pidFileManager;
+        private readonly IProcessTerminator _processTerminator;
+        private readonly IServerCommandBuilder _commandBuilder;
+        private readonly ITerminalLauncher _terminalLauncher;
 
-        private static string GetProjectRootPath()
+        /// <summary>
+        /// Creates a new ServerManagementService with default dependencies.
+        /// </summary>
+        public ServerManagementService() : this(null, null, null, null, null) { }
+
+        /// <summary>
+        /// Creates a new ServerManagementService with injected dependencies (for testing).
+        /// </summary>
+        /// <param name="processDetector">Process detector implementation (null for default)</param>
+        /// <param name="pidFileManager">PID file manager implementation (null for default)</param>
+        /// <param name="processTerminator">Process terminator implementation (null for default)</param>
+        /// <param name="commandBuilder">Server command builder implementation (null for default)</param>
+        /// <param name="terminalLauncher">Terminal launcher implementation (null for default)</param>
+        public ServerManagementService(
+            IProcessDetector processDetector,
+            IPidFileManager pidFileManager = null,
+            IProcessTerminator processTerminator = null,
+            IServerCommandBuilder commandBuilder = null,
+            ITerminalLauncher terminalLauncher = null)
         {
-            try
-            {
-                // Application.dataPath is ".../<Project>/Assets"
-                return Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-            }
-            catch
-            {
-                return Application.dataPath;
-            }
+            _processDetector = processDetector ?? new ProcessDetector();
+            _pidFileManager = pidFileManager ?? new PidFileManager();
+            _processTerminator = processTerminator ?? new ProcessTerminator(_processDetector);
+            _commandBuilder = commandBuilder ?? new ServerCommandBuilder();
+            _terminalLauncher = terminalLauncher ?? new TerminalLauncher();
         }
 
-        private static string QuoteIfNeeded(string s)
+        private string QuoteIfNeeded(string s)
         {
-            if (string.IsNullOrEmpty(s)) return s;
-            return s.IndexOf(' ') >= 0 ? $"\"{s}\"" : s;
+            return _commandBuilder.QuoteIfNeeded(s);
         }
 
-        private static string NormalizeForMatch(string s)
+        private string NormalizeForMatch(string s)
         {
-            if (string.IsNullOrEmpty(s)) return string.Empty;
-            var sb = new StringBuilder(s.Length);
-            foreach (char c in s)
-            {
-                if (char.IsWhiteSpace(c)) continue;
-                sb.Append(char.ToLowerInvariant(c));
-            }
-            return sb.ToString();
+            return _processDetector.NormalizeForMatch(s);
         }
 
-        private static void ClearLocalServerPidTracking()
+        private void ClearLocalServerPidTracking()
         {
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPid); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPort); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerStartedUtc); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPidArgsHash); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPidFilePath); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerInstanceToken); } catch { }
+            _pidFileManager.ClearTracking();
         }
 
-        private static void StoreLocalHttpServerHandshake(string pidFilePath, string instanceToken)
+        private void StoreLocalHttpServerHandshake(string pidFilePath, string instanceToken)
         {
-            try
-            {
-                if (!string.IsNullOrEmpty(pidFilePath))
-                {
-                    EditorPrefs.SetString(EditorPrefKeys.LastLocalHttpServerPidFilePath, pidFilePath);
-                }
-            }
-            catch { }
-
-            try
-            {
-                if (!string.IsNullOrEmpty(instanceToken))
-                {
-                    EditorPrefs.SetString(EditorPrefKeys.LastLocalHttpServerInstanceToken, instanceToken);
-                }
-            }
-            catch { }
+            _pidFileManager.StoreHandshake(pidFilePath, instanceToken);
         }
 
-        private static bool TryGetLocalHttpServerHandshake(out string pidFilePath, out string instanceToken)
+        private bool TryGetLocalHttpServerHandshake(out string pidFilePath, out string instanceToken)
         {
-            pidFilePath = null;
-            instanceToken = null;
-            try
-            {
-                pidFilePath = EditorPrefs.GetString(EditorPrefKeys.LastLocalHttpServerPidFilePath, string.Empty);
-                instanceToken = EditorPrefs.GetString(EditorPrefKeys.LastLocalHttpServerInstanceToken, string.Empty);
-                if (string.IsNullOrEmpty(pidFilePath) || string.IsNullOrEmpty(instanceToken))
-                {
-                    pidFilePath = null;
-                    instanceToken = null;
-                    return false;
-                }
-                return true;
-            }
-            catch
-            {
-                pidFilePath = null;
-                instanceToken = null;
-                return false;
-            }
+            return _pidFileManager.TryGetHandshake(out pidFilePath, out instanceToken);
         }
 
-        private static string GetLocalHttpServerPidDirectory()
+        private string GetLocalHttpServerPidFilePath(int port)
         {
-            // Keep it project-scoped and out of version control.
-            return Path.Combine(GetProjectRootPath(), "Library", "MCPForUnity", "RunState");
+            return _pidFileManager.GetPidFilePath(port);
         }
 
-        private static string GetLocalHttpServerPidFilePath(int port)
+        private bool TryReadPidFromPidFile(string pidFilePath, out int pid)
         {
-            string dir = GetLocalHttpServerPidDirectory();
-            Directory.CreateDirectory(dir);
-            return Path.Combine(dir, $"mcp_http_{port}.pid");
-        }
-
-        private static bool TryReadPidFromPidFile(string pidFilePath, out int pid)
-        {
-            pid = 0;
-            try
-            {
-                if (string.IsNullOrEmpty(pidFilePath) || !File.Exists(pidFilePath))
-                {
-                    return false;
-                }
-
-                string text = File.ReadAllText(pidFilePath).Trim();
-                if (int.TryParse(text, out pid))
-                {
-                    return pid > 0;
-                }
-
-                // Best-effort: tolerate accidental extra whitespace/newlines.
-                var firstLine = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-                if (int.TryParse(firstLine, out pid))
-                {
-                    return pid > 0;
-                }
-
-                pid = 0;
-                return false;
-            }
-            catch
-            {
-                pid = 0;
-                return false;
-            }
+            return _pidFileManager.TryReadPid(pidFilePath, out pid);
         }
 
         private bool TryProcessCommandLineContainsInstanceToken(int pid, string instanceToken, out bool containsToken)
@@ -186,79 +118,19 @@ namespace MCPForUnity.Editor.Services
             return false;
         }
 
-        private static void StoreLocalServerPidTracking(int pid, int port, string argsHash = null)
+        private string ComputeShortHash(string input)
         {
-            try { EditorPrefs.SetInt(EditorPrefKeys.LastLocalHttpServerPid, pid); } catch { }
-            try { EditorPrefs.SetInt(EditorPrefKeys.LastLocalHttpServerPort, port); } catch { }
-            try { EditorPrefs.SetString(EditorPrefKeys.LastLocalHttpServerStartedUtc, DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture)); } catch { }
-            try
-            {
-                if (!string.IsNullOrEmpty(argsHash))
-                {
-                    EditorPrefs.SetString(EditorPrefKeys.LastLocalHttpServerPidArgsHash, argsHash);
-                }
-                else
-                {
-                    EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPidArgsHash);
-                }
-            }
-            catch { }
+            return _pidFileManager.ComputeShortHash(input);
         }
 
-        private static string ComputeShortHash(string input)
+        private bool TryGetStoredLocalServerPid(int expectedPort, out int pid)
         {
-            if (string.IsNullOrEmpty(input)) return string.Empty;
-            try
-            {
-                using var sha = SHA256.Create();
-                byte[] bytes = Encoding.UTF8.GetBytes(input);
-                byte[] hash = sha.ComputeHash(bytes);
-                // 8 bytes => 16 hex chars is plenty as a stable fingerprint for our purposes.
-                var sb = new StringBuilder(16);
-                for (int i = 0; i < 8 && i < hash.Length; i++)
-                {
-                    sb.Append(hash[i].ToString("x2"));
-                }
-                return sb.ToString();
-            }
-            catch
-            {
-                return string.Empty;
-            }
+            return _pidFileManager.TryGetStoredPid(expectedPort, out pid);
         }
 
-        private static bool TryGetStoredLocalServerPid(int expectedPort, out int pid)
+        private string GetStoredArgsHash()
         {
-            pid = 0;
-            try
-            {
-                int storedPid = EditorPrefs.GetInt(EditorPrefKeys.LastLocalHttpServerPid, 0);
-                int storedPort = EditorPrefs.GetInt(EditorPrefKeys.LastLocalHttpServerPort, 0);
-                string storedUtc = EditorPrefs.GetString(EditorPrefKeys.LastLocalHttpServerStartedUtc, string.Empty);
-
-                if (storedPid <= 0 || storedPort != expectedPort)
-                {
-                    return false;
-                }
-
-                // Only trust the stored PID for a short window to avoid PID reuse issues.
-                // (We still verify the PID is listening on the expected port before killing.)
-                if (!string.IsNullOrEmpty(storedUtc)
-                    && DateTime.TryParse(storedUtc, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var startedAt))
-                {
-                    if ((DateTime.UtcNow - startedAt) > TimeSpan.FromHours(6))
-                    {
-                        return false;
-                    }
-                }
-
-                pid = storedPid;
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
+            return _pidFileManager.GetStoredArgsHash();
         }
 
         /// <summary>
@@ -347,58 +219,14 @@ namespace MCPForUnity.Editor.Services
             return ExecPath.TryRun(uvPath, args, Application.dataPath, out stdout, out stderr, 30000, extraPathPrepend);
         }
 
-        private static string BuildUvPathFromUvx(string uvxPath)
+        private string BuildUvPathFromUvx(string uvxPath)
         {
-            if (string.IsNullOrWhiteSpace(uvxPath))
-            {
-                return uvxPath;
-            }
-
-            string directory = Path.GetDirectoryName(uvxPath);
-            string extension = Path.GetExtension(uvxPath);
-            string uvFileName = "uv" + extension;
-
-            return string.IsNullOrEmpty(directory)
-                ? uvFileName
-                : Path.Combine(directory, uvFileName);
+            return _commandBuilder.BuildUvPathFromUvx(uvxPath);
         }
 
         private string GetPlatformSpecificPathPrepend()
         {
-            if (Application.platform == RuntimePlatform.OSXEditor)
-            {
-                return string.Join(Path.PathSeparator.ToString(), new[]
-                {
-                    "/opt/homebrew/bin",
-                    "/usr/local/bin",
-                    "/usr/bin",
-                    "/bin"
-                });
-            }
-
-            if (Application.platform == RuntimePlatform.LinuxEditor)
-            {
-                return string.Join(Path.PathSeparator.ToString(), new[]
-                {
-                    "/usr/local/bin",
-                    "/usr/bin",
-                    "/bin"
-                });
-            }
-
-            if (Application.platform == RuntimePlatform.WindowsEditor)
-            {
-                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-
-                return string.Join(Path.PathSeparator.ToString(), new[]
-                {
-                    !string.IsNullOrEmpty(localAppData) ? Path.Combine(localAppData, "Programs", "uv") : null,
-                    !string.IsNullOrEmpty(programFiles) ? Path.Combine(programFiles, "uv") : null
-                }.Where(p => !string.IsNullOrEmpty(p)).ToArray());
-            }
-
-            return null;
+            return _commandBuilder.GetPlatformSpecificPathPrepend();
         }
 
         /// <summary>
@@ -475,7 +303,7 @@ namespace MCPForUnity.Editor.Services
                     {
                         if (!string.IsNullOrEmpty(pidFilePath) && File.Exists(pidFilePath))
                         {
-                            File.Delete(pidFilePath);
+                            DeletePidFile(pidFilePath);
                         }
                     }
                     catch { }
@@ -751,7 +579,7 @@ namespace MCPForUnity.Editor.Services
                             if (listeners.Count == 0)
                             {
                                 // Nothing is listening anymore; clear stale handshake state.
-                                try { File.Delete(pidFilePath); } catch { }
+                                try { DeletePidFile(pidFilePath); } catch { }
                                 ClearLocalServerPidTracking();
                                 if (!quiet)
                                 {
@@ -778,7 +606,7 @@ namespace MCPForUnity.Editor.Services
                                 if (TerminateProcess(pidFromFile))
                                 {
                                     stoppedAny = true;
-                                    try { File.Delete(pidFilePath); } catch { }
+                                    try { DeletePidFile(pidFilePath); } catch { }
                                     ClearLocalServerPidTracking();
                                     if (!quiet)
                                     {
@@ -831,7 +659,7 @@ namespace MCPForUnity.Editor.Services
                     if (pids.Contains(storedPid))
                     {
                         string expectedHash = string.Empty;
-                        try { expectedHash = EditorPrefs.GetString(EditorPrefKeys.LastLocalHttpServerPidArgsHash, string.Empty); } catch { }
+                        expectedHash = GetStoredArgsHash();
 
                         // Prefer a fingerprint match (reduces PID reuse risk). If missing (older installs),
                         // fall back to a looser check to avoid leaving orphaned servers after domain reload.
@@ -946,322 +774,39 @@ namespace MCPForUnity.Editor.Services
             }
         }
 
-        private static bool TryGetUnixProcessArgs(int pid, out string argsLower)
+        private bool TryGetUnixProcessArgs(int pid, out string argsLower)
         {
-            argsLower = string.Empty;
-            try
-            {
-                if (Application.platform == RuntimePlatform.WindowsEditor)
-                {
-                    return false;
-                }
-
-                string psPath = "/bin/ps";
-                if (!File.Exists(psPath)) psPath = "ps";
-
-                bool ok = ExecPath.TryRun(psPath, $"-p {pid} -ww -o args=", Application.dataPath, out var stdout, out var stderr, 5000);
-                if (!ok && string.IsNullOrWhiteSpace(stdout))
-                {
-                    return false;
-                }
-                string combined = ((stdout ?? string.Empty) + "\n" + (stderr ?? string.Empty)).Trim();
-                if (string.IsNullOrEmpty(combined)) return false;
-                // Normalize for matching to tolerate ps wrapping/newlines.
-                argsLower = NormalizeForMatch(combined);
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
+            return _processDetector.TryGetProcessCommandLine(pid, out argsLower);
         }
 
-        private static bool TryGetPortFromPidFilePath(string pidFilePath, out int port)
+        private bool TryGetPortFromPidFilePath(string pidFilePath, out int port)
         {
-            port = 0;
-            if (string.IsNullOrEmpty(pidFilePath))
-            {
-                return false;
-            }
+            return _pidFileManager.TryGetPortFromPidFilePath(pidFilePath, out port);
+        }
 
-            try
-            {
-                string fileName = Path.GetFileNameWithoutExtension(pidFilePath);
-                if (string.IsNullOrEmpty(fileName))
-                {
-                    return false;
-                }
-
-                const string prefix = "mcp_http_";
-                if (!fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                {
-                    return false;
-                }
-
-                string portText = fileName.Substring(prefix.Length);
-                return int.TryParse(portText, out port) && port > 0;
-            }
-            catch
-            {
-                port = 0;
-                return false;
-            }
+        private void DeletePidFile(string pidFilePath)
+        {
+            _pidFileManager.DeletePidFile(pidFilePath);
         }
 
         private List<int> GetListeningProcessIdsForPort(int port)
         {
-            var results = new List<int>();
-            try
-            {
-                string stdout, stderr;
-                bool success;
-
-                if (Application.platform == RuntimePlatform.WindowsEditor)
-                {
-                    // Run netstat -ano directly (without findstr) and filter in C#.
-                    // Using findstr in a pipe causes the entire command to return exit code 1 when no matches are found,
-                    // which ExecPath.TryRun interprets as failure. Running netstat alone gives us exit code 0 on success.
-                    success = ExecPath.TryRun("netstat.exe", "-ano", Application.dataPath, out stdout, out stderr);
-
-                    // Process stdout regardless of success flag - netstat might still produce valid output
-                    if (!string.IsNullOrEmpty(stdout))
-                    {
-                        string portSuffix = $":{port}";
-                        var lines = stdout.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                        foreach (var line in lines)
-                        {
-                            // Windows netstat format: Proto  Local Address          Foreign Address        State           PID
-                            // Example: TCP    0.0.0.0:8080           0.0.0.0:0              LISTENING       12345
-                            if (line.Contains("LISTENING") && line.Contains(portSuffix))
-                            {
-                                var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                                // Verify the local address column actually ends with :{port}
-                                // parts[0] = Proto (TCP), parts[1] = Local Address, parts[2] = Foreign Address, parts[3] = State, parts[4] = PID
-                                if (parts.Length >= 5)
-                                {
-                                    string localAddr = parts[1];
-                                    if (localAddr.EndsWith(portSuffix) && int.TryParse(parts[parts.Length - 1], out int pid))
-                                    {
-                                        results.Add(pid);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    // lsof: only return LISTENers (avoids capturing random clients)
-                    // Use /usr/sbin/lsof directly as it might not be in PATH for Unity
-                    string lsofPath = "/usr/sbin/lsof";
-                    if (!System.IO.File.Exists(lsofPath)) lsofPath = "lsof"; // Fallback
-
-                    // -nP: avoid DNS/service name lookups; faster and less error-prone
-                    success = ExecPath.TryRun(lsofPath, $"-nP -iTCP:{port} -sTCP:LISTEN -t", Application.dataPath, out stdout, out stderr);
-                    if (success && !string.IsNullOrWhiteSpace(stdout))
-                    {
-                        var pidStrings = stdout.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                        foreach (var pidString in pidStrings)
-                        {
-                            if (int.TryParse(pidString.Trim(), out int pid))
-                            {
-                                results.Add(pid);
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                McpLog.Warn($"Error checking port {port}: {ex.Message}");
-            }
-            return results.Distinct().ToList();
+            return _processDetector.GetListeningProcessIdsForPort(port);
         }
 
-        private static int GetCurrentProcessIdSafe()
+        private int GetCurrentProcessIdSafe()
         {
-            try { return System.Diagnostics.Process.GetCurrentProcess().Id; }
-            catch { return -1; }
+            return _processDetector.GetCurrentProcessId();
         }
 
         private bool LooksLikeMcpServerProcess(int pid)
         {
-            try
-            {
-                // Windows best-effort: First check process name with tasklist, then try to get command line with wmic
-                if (Application.platform == RuntimePlatform.WindowsEditor)
-                {
-                    // Step 1: Check if process name matches known server executables
-                    ExecPath.TryRun("cmd.exe", $"/c tasklist /FI \"PID eq {pid}\"", Application.dataPath, out var tasklistOut, out var tasklistErr, 5000);
-                    string tasklistCombined = ((tasklistOut ?? string.Empty) + "\n" + (tasklistErr ?? string.Empty)).ToLowerInvariant();
-
-                    // Check for common process names
-                    bool isPythonOrUv = tasklistCombined.Contains("python") || tasklistCombined.Contains("uvx") || tasklistCombined.Contains("uv.exe");
-                    if (!isPythonOrUv)
-                    {
-                        return false;
-                    }
-
-                    // Step 2: Try to get command line with wmic for better validation
-                    ExecPath.TryRun("cmd.exe", $"/c wmic process where \"ProcessId={pid}\" get CommandLine /value", Application.dataPath, out var wmicOut, out var wmicErr, 5000);
-                    string wmicCombined = ((wmicOut ?? string.Empty) + "\n" + (wmicErr ?? string.Empty)).ToLowerInvariant();
-                    string wmicCompact = NormalizeForMatch(wmicOut ?? string.Empty);
-
-                    // If we can see the command line, validate it's our server
-                    if (!string.IsNullOrEmpty(wmicCombined) && wmicCombined.Contains("commandline="))
-                    {
-                        bool mentionsMcp = wmicCompact.Contains("mcp-for-unity")
-                                           || wmicCompact.Contains("mcp_for_unity")
-                                           || wmicCompact.Contains("mcpforunity")
-                                           || wmicCompact.Contains("mcpforunityserver");
-                        bool mentionsTransport = wmicCompact.Contains("--transporthttp") || (wmicCompact.Contains("--transport") && wmicCompact.Contains("http"));
-                        bool mentionsUvicorn = wmicCombined.Contains("uvicorn");
-
-                        if (mentionsMcp || mentionsTransport || mentionsUvicorn)
-                        {
-                            return true;
-                        }
-                    }
-
-                    // Fall back to just checking for python/uv processes if wmic didn't give us details
-                    // This is less precise but necessary for cases where wmic access is restricted
-                    return isPythonOrUv;
-                }
-
-                // macOS/Linux: ps -p pid -ww -o comm= -o args=
-                // Use -ww to avoid truncating long command lines (important for reliably spotting 'mcp-for-unity').
-                // Use an absolute ps path to avoid relying on PATH inside the Unity Editor process.
-                string psPath = "/bin/ps";
-                if (!File.Exists(psPath)) psPath = "ps";
-                // Important: ExecPath.TryRun returns false when exit code != 0, but ps output can still be useful.
-                // Always parse stdout/stderr regardless of exit code to avoid false negatives.
-                ExecPath.TryRun(psPath, $"-p {pid} -ww -o comm= -o args=", Application.dataPath, out var psOut, out var psErr, 5000);
-                string raw = ((psOut ?? string.Empty) + "\n" + (psErr ?? string.Empty)).Trim();
-                string s = raw.ToLowerInvariant();
-                string sCompact = NormalizeForMatch(raw);
-                if (!string.IsNullOrEmpty(s))
-                {
-                    bool mentionsMcp = sCompact.Contains("mcp-for-unity")
-                                       || sCompact.Contains("mcp_for_unity")
-                                       || sCompact.Contains("mcpforunity");
-
-                    // If it explicitly mentions the server package/entrypoint, that is sufficient.
-                    // Note: Check before Unity exclusion since "mcp-for-unity" contains "unity".
-                    if (mentionsMcp)
-                    {
-                        return true;
-                    }
-
-                    // Explicitly never kill Unity / Unity Hub processes
-                    // Note: explicit !mentionsMcp is defensive; we already return early for mentionsMcp above.
-                    if (s.Contains("unityhub") || s.Contains("unity hub") || (s.Contains("unity") && !mentionsMcp))
-                    {
-                        return false;
-                    }
-
-                    // Positive indicators
-                    bool mentionsUvx = s.Contains("uvx") || s.Contains(" uvx ");
-                    bool mentionsUv = s.Contains("uv ") || s.Contains("/uv");
-                    bool mentionsPython = s.Contains("python");
-                    bool mentionsUvicorn = s.Contains("uvicorn");
-                    bool mentionsTransport = sCompact.Contains("--transporthttp") || (sCompact.Contains("--transport") && sCompact.Contains("http"));
-
-                    // Accept if it looks like uv/uvx/python launching our server package/entrypoint
-                    if ((mentionsUvx || mentionsUv || mentionsPython || mentionsUvicorn) && mentionsTransport)
-                    {
-                        return true;
-                    }
-                }
-            }
-            catch { }
-
-            return false;
-        }
-
-        private static void LogStopDiagnosticsOnce(int pid, string details)
-        {
-            try
-            {
-                if (LoggedStopDiagnosticsPids.Contains(pid))
-                {
-                    return;
-                }
-                LoggedStopDiagnosticsPids.Add(pid);
-                McpLog.Debug($"[StopLocalHttpServer] PID {pid} did not match server heuristics. {details}");
-            }
-            catch { }
-        }
-
-        private static string TrimForLog(string s)
-        {
-            if (string.IsNullOrEmpty(s)) return string.Empty;
-            const int max = 500;
-            if (s.Length <= max) return s;
-            return s.Substring(0, max) + "...(truncated)";
+            return _processDetector.LooksLikeMcpServerProcess(pid);
         }
 
         private bool TerminateProcess(int pid)
         {
-            try
-            {
-                string stdout, stderr;
-                if (Application.platform == RuntimePlatform.WindowsEditor)
-                {
-                    // taskkill without /F first; fall back to /F if needed.
-                    bool ok = ExecPath.TryRun("taskkill", $"/PID {pid} /T", Application.dataPath, out stdout, out stderr);
-                    if (!ok)
-                    {
-                        ok = ExecPath.TryRun("taskkill", $"/F /PID {pid} /T", Application.dataPath, out stdout, out stderr);
-                    }
-                    return ok;
-                }
-                else
-                {
-                    // Try a graceful termination first, then escalate if the process is still alive.
-                    // Note: `kill -15` can succeed (exit 0) even if the process takes time to exit,
-                    // so we verify and only escalate when needed.
-                    string killPath = "/bin/kill";
-                    if (!File.Exists(killPath)) killPath = "kill";
-                    ExecPath.TryRun(killPath, $"-15 {pid}", Application.dataPath, out stdout, out stderr);
-
-                    // Wait briefly for graceful shutdown.
-                    var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(8);
-                    while (DateTime.UtcNow < deadline)
-                    {
-                        if (!ProcessExistsUnix(pid))
-                        {
-                            return true;
-                        }
-                        System.Threading.Thread.Sleep(100);
-                    }
-
-                    // Escalate.
-                    ExecPath.TryRun(killPath, $"-9 {pid}", Application.dataPath, out stdout, out stderr);
-                    return !ProcessExistsUnix(pid);
-                }
-            }
-            catch (Exception ex)
-            {
-                McpLog.Error($"Error killing process {pid}: {ex.Message}");
-                return false;
-            }
-        }
-
-        private static bool ProcessExistsUnix(int pid)
-        {
-            try
-            {
-                // ps exits non-zero when PID is not found.
-                string psPath = "/bin/ps";
-                if (!File.Exists(psPath)) psPath = "ps";
-                ExecPath.TryRun(psPath, $"-p {pid} -o pid=", Application.dataPath, out var stdout, out var stderr, 2000);
-                string combined = ((stdout ?? string.Empty) + "\n" + (stderr ?? string.Empty)).Trim();
-                return !string.IsNullOrEmpty(combined) && combined.Any(char.IsDigit);
-            }
-            catch
-            {
-                return true; // Assume it exists if we cannot verify.
-            }
+            return _processTerminator.Terminate(pid);
         }
 
         /// <summary>
@@ -1283,52 +828,7 @@ namespace MCPForUnity.Editor.Services
 
         private bool TryGetLocalHttpServerCommandParts(out string fileName, out string arguments, out string displayCommand, out string error)
         {
-            fileName = null;
-            arguments = null;
-            displayCommand = null;
-            error = null;
-
-            bool useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
-            if (!useHttpTransport)
-            {
-                error = "HTTP transport is disabled. Enable it in the MCP For Unity window first.";
-                return false;
-            }
-
-            string httpUrl = HttpEndpointUtility.GetBaseUrl();
-            if (!IsLocalUrl())
-            {
-                error = $"The configured URL ({httpUrl}) is not a local address. Local server launch only works for localhost.";
-                return false;
-            }
-
-            var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
-            if (string.IsNullOrEmpty(uvxPath))
-            {
-                error = "uv is not installed or found in PATH. Install it or set an override in Advanced Settings.";
-                return false;
-            }
-
-            // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
-            // Note: --reinstall is not supported by uvx, use --no-cache --refresh instead
-            string devFlags = AssetPathUtility.ShouldForceUvxRefresh() ? "--no-cache --refresh " : string.Empty;
-            bool projectScopedTools = EditorPrefs.GetBool(
-                EditorPrefKeys.ProjectScopedToolsLocalHttp,
-                true
-            );
-            string scopedFlag = projectScopedTools ? " --project-scoped-tools" : string.Empty;
-
-            // Use centralized helper for beta server / prerelease args
-            string fromArgs = AssetPathUtility.GetBetaServerFromArgs(quoteFromPath: true);
-
-            string args = string.IsNullOrEmpty(fromArgs)
-                ? $"{devFlags}{packageName} --transport http --http-url {httpUrl}{scopedFlag}"
-                : $"{devFlags}{fromArgs} {packageName} --transport http --http-url {httpUrl}{scopedFlag}";
-
-            fileName = uvxPath;
-            arguments = args;
-            displayCommand = $"{QuoteIfNeeded(uvxPath)} {args}";
-            return true;
+            return _commandBuilder.TryBuildCommand(out fileName, out arguments, out displayCommand, out error);
         }
 
         /// <summary>
@@ -1364,126 +864,13 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         public bool CanStartLocalServer()
         {
-            bool useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
             return useHttpTransport && IsLocalUrl();
         }
 
-        /// <summary>
-        /// Creates a ProcessStartInfo for opening a terminal window with the given command
-        /// Works cross-platform: macOS, Windows, and Linux
-        /// </summary>
         private System.Diagnostics.ProcessStartInfo CreateTerminalProcessStartInfo(string command)
         {
-            if (string.IsNullOrWhiteSpace(command))
-                throw new ArgumentException("Command cannot be empty", nameof(command));
-
-            command = command.Replace("\r", "").Replace("\n", "");
-
-#if UNITY_EDITOR_OSX
-            // macOS: Avoid AppleScript (automation permission prompts). Use a .command script and open it.
-            string scriptsDir = Path.Combine(GetProjectRootPath(), "Library", "MCPForUnity", "TerminalScripts");
-            Directory.CreateDirectory(scriptsDir);
-            string scriptPath = Path.Combine(scriptsDir, "mcp-terminal.command");
-            File.WriteAllText(
-                scriptPath,
-                "#!/bin/bash\n" +
-                "set -e\n" +
-                "clear\n" +
-                $"{command}\n");
-            ExecPath.TryRun("/bin/chmod", $"+x \"{scriptPath}\"", Application.dataPath, out _, out _, 3000);
-            return new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "/usr/bin/open",
-                Arguments = $"-a Terminal \"{scriptPath}\"",
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-#elif UNITY_EDITOR_WIN
-            // Windows: Avoid brittle nested-quote escaping by writing a .cmd script and starting it in a new window.
-            string scriptsDir = Path.Combine(GetProjectRootPath(), "Library", "MCPForUnity", "TerminalScripts");
-            Directory.CreateDirectory(scriptsDir);
-            string scriptPath = Path.Combine(scriptsDir, "mcp-terminal.cmd");
-            File.WriteAllText(
-                scriptPath,
-                "@echo off\r\n" +
-                "cls\r\n" +
-                command + "\r\n");
-            return new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "cmd.exe",
-                Arguments = $"/c start \"MCP Server\" cmd.exe /k \"{scriptPath}\"",
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-#else
-            // Linux: Try common terminal emulators
-            // We use bash -c to execute the command, so we must properly quote/escape for bash
-            // Escape single quotes for the inner bash string
-            string escapedCommandLinux = command.Replace("'", "'\\''");
-            // Wrap the command in single quotes for bash -c
-            string script = $"'{escapedCommandLinux}; exec bash'";
-            // Escape double quotes for the outer Process argument string
-            string escapedScriptForArg = script.Replace("\"", "\\\"");
-            string bashCmdArgs = $"bash -c \"{escapedScriptForArg}\"";
-            
-            string[] terminals = { "gnome-terminal", "xterm", "konsole", "xfce4-terminal" };
-            string terminalCmd = null;
-            
-            foreach (var term in terminals)
-            {
-                try
-                {
-                    var which = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = "which",
-                        Arguments = term,
-                        UseShellExecute = false,
-                        RedirectStandardOutput = true,
-                        CreateNoWindow = true
-                    });
-                    which.WaitForExit(5000); // Wait for up to 5 seconds, the command is typically instantaneous
-                    if (which.ExitCode == 0)
-                    {
-                        terminalCmd = term;
-                        break;
-                    }
-                }
-                catch { }
-            }
-            
-            if (terminalCmd == null)
-            {
-                terminalCmd = "xterm"; // Fallback
-            }
-            
-            // Different terminals have different argument formats
-            string args;
-            if (terminalCmd == "gnome-terminal")
-            {
-                args = $"-- {bashCmdArgs}";
-            }
-            else if (terminalCmd == "konsole")
-            {
-                args = $"-e {bashCmdArgs}";
-            }
-            else if (terminalCmd == "xfce4-terminal")
-            {
-                // xfce4-terminal expects -e "command string" or -e command arg
-                args = $"--hold -e \"{bashCmdArgs.Replace("\"", "\\\"")}\"";
-            }
-            else // xterm and others
-            {
-                args = $"-hold -e {bashCmdArgs}";
-            }
-            
-            return new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = terminalCmd,
-                Arguments = args,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-#endif
+            return _terminalLauncher.CreateTerminalProcessStartInfo(command);
         }
     }
 }

@@ -613,7 +613,7 @@ async def manage_script_capabilities(ctx: Context) -> dict[str, Any]:
 
 
 @mcp_for_unity_tool(
-    description="Get SHA256 and basic metadata for a Unity C# script without returning file contents",
+    description="Get SHA256 and basic metadata for a Unity C# script without returning file contents. Requires uri (script path under Assets/ or mcpforunity://path/Assets/... or file://...).",
     annotations=ToolAnnotations(
         title="Get SHA",
         readOnlyHint=True,

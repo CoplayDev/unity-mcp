@@ -1,28 +1,13 @@
 """Texture CLI commands."""
 
 import sys
-import json
 import click
 from typing import Optional, Any
 
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success
-from cli.utils.connection import run_command, UnityConnectionError
-
-
-def try_parse_json(value: str, context: str) -> Any:
-    """Try to parse JSON, with fallback for single quotes and Python bools."""
-    try:
-        return json.loads(value)
-    except json.JSONDecodeError:
-        # Try to fix common shell quoting issues (single quotes, Python bools)
-        try:
-            fixed = value.replace("'", '"').replace(
-                "True", "true").replace("False", "false")
-            return json.loads(fixed)
-        except json.JSONDecodeError as e:
-            print_error(f"Invalid JSON for {context}: {e}")
-            sys.exit(1)
+from cli.utils.connection import run_command, handle_unity_errors
+from cli.utils.parsers import parse_json_or_exit as try_parse_json
 
 
 _TEXTURE_TYPES = {
@@ -124,6 +109,22 @@ def _normalize_color(value: Any, context: str) -> list[int]:
         if value.startswith("#"):
             return _parse_hex_color(value)
         value = try_parse_json(value, context)
+
+    # Handle dict with r/g/b keys (e.g., {"r": 1, "g": 0, "b": 0} or {"r": 1, "g": 0, "b": 0, "a": 1})
+    if isinstance(value, dict):
+        if all(k in value for k in ("r", "g", "b")):
+            try:
+                color = [value["r"], value["g"], value["b"]]
+                if "a" in value:
+                    color.append(value["a"])
+                else:
+                    color.append(1.0 if _is_normalized_color(color) else 255)
+                if _is_normalized_color(color):
+                    return [int(round(float(c) * 255)) for c in color]
+                return [int(c) for c in color]
+            except (TypeError, ValueError):
+                raise ValueError(f"{context} dict values must be numeric, got {value}")
+        raise ValueError(f"{context} dict must have 'r', 'g', 'b' keys, got {list(value.keys())}")
 
     if isinstance(value, (list, tuple)):
         if len(value) == 3:
@@ -339,6 +340,7 @@ def texture():
 ]), help="Pattern type")
 @click.option("--palette", help="Color palette for pattern (JSON array of colors)")
 @click.option("--import-settings", help="TextureImporter settings (JSON)")
+@handle_unity_errors
 def create(path: str, width: int, height: int, image_path: Optional[str], color: Optional[str],
            pattern: Optional[str], palette: Optional[str], import_settings: Optional[str]):
     """Create a new procedural texture.
@@ -402,14 +404,10 @@ def create(path: str, width: int, height: int, image_path: Optional[str], color:
     if image_path:
         params["imagePath"] = image_path
 
-    try:
-        result = run_command("manage_texture", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Created texture: {path}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_texture", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Created texture: {path}")
 
 
 @texture.command("sprite")
@@ -423,6 +421,7 @@ def create(path: str, width: int, height: int, image_path: Optional[str], color:
 ]), help="Pattern type (defaults to checkerboard if no color specified)")
 @click.option("--ppu", default=100.0, help="Pixels Per Unit")
 @click.option("--pivot", help="Pivot as [x,y] (default: [0.5, 0.5])")
+@handle_unity_errors
 def sprite(path: str, width: int, height: int, image_path: Optional[str], color: Optional[str], pattern: Optional[str], ppu: float, pivot: Optional[str]):
     """Quickly create a sprite texture.
 
@@ -476,19 +475,16 @@ def sprite(path: str, width: int, height: int, image_path: Optional[str], color:
     if image_path:
         params["imagePath"] = image_path
 
-    try:
-        result = run_command("manage_texture", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Created sprite: {path}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_texture", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Created sprite: {path}")
 
 
 @texture.command("modify")
 @click.argument("path")
 @click.option("--set-pixels", required=True, help="Modification args as JSON")
+@handle_unity_errors
 def modify(path: str, set_pixels: str):
     """Modify an existing texture.
 
@@ -510,29 +506,35 @@ def modify(path: str, set_pixels: str):
         print_error(str(e))
         sys.exit(1)
 
-    try:
-        result = run_command("manage_texture", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Modified texture: {path}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_texture", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Modified texture: {path}")
 
 
 @texture.command("delete")
 @click.argument("path")
-def delete(path: str):
+@click.option(
+    "--force", "-f",
+    is_flag=True,
+    help="Skip confirmation prompt."
+)
+@handle_unity_errors
+def delete(path: str, force: bool):
     """Delete a texture.
+
+    \\b
+    Examples:
+        unity-mcp texture delete "Assets/Textures/Old.png"
+        unity-mcp texture delete "Assets/Textures/Old.png" --force
     """
+    from cli.utils.confirmation import confirm_destructive_action
     config = get_config()
 
-    try:
-        result = run_command("manage_texture", {
-                             "action": "delete", "path": path}, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Deleted texture: {path}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    confirm_destructive_action("Delete", "texture", path, force)
+
+    result = run_command("manage_texture", {
+                         "action": "delete", "path": path}, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Deleted texture: {path}")

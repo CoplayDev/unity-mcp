@@ -50,7 +50,7 @@ namespace MCPForUnity.Editor.Services
                 }
             }
 
-            McpLog.Info($"Discovered {_cachedTools.Count} MCP tools via reflection");
+            McpLog.Info($"Discovered {_cachedTools.Count} MCP tools via reflection", false);
             return _cachedTools.Values.ToList();
         }
 
@@ -202,20 +202,7 @@ namespace MCPForUnity.Editor.Services
             return "object";
         }
 
-        private string ConvertToSnakeCase(string input)
-        {
-            if (string.IsNullOrEmpty(input))
-                return input;
-
-            // Convert PascalCase to snake_case
-            var result = System.Text.RegularExpressions.Regex.Replace(
-                input,
-                "([a-z0-9])([A-Z])",
-                "$1_$2"
-            ).ToLower();
-
-            return result;
-        }
+        private string ConvertToSnakeCase(string input) => StringCaseUtility.ToSnakeCase(input);
 
         public void InvalidateCache()
         {

@@ -217,7 +217,7 @@ def _enrich_advice_and_staleness(state_v2: dict[str, Any]) -> dict[str, Any]:
 @mcp_for_unity_resource(
     uri="mcpforunity://editor/state",
     name="editor_state",
-    description="Canonical editor readiness snapshot. Includes advice and server-computed staleness.",
+    description="Canonical editor readiness snapshot. Includes advice and server-computed staleness.\n\nURI: mcpforunity://editor/state",
 )
 async def get_editor_state(ctx: Context) -> MCPResponse:
     unity_instance = get_unity_instance_from_context(ctx)

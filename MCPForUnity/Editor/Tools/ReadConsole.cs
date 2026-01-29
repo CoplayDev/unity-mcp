@@ -152,7 +152,13 @@ namespace MCPForUnity.Editor.Tools
                 );
             }
 
-            string action = @params["action"]?.ToString().ToLower() ?? "get";
+            if (@params == null)
+            {
+                return new ErrorResponse("Parameters cannot be null.");
+            }
+
+            var p = new ToolParams(@params);
+            string action = p.Get("action", "get").ToLower();
 
             try
             {
@@ -164,18 +170,15 @@ namespace MCPForUnity.Editor.Tools
                 {
                     // Extract parameters for 'get'
                     var types =
-                        (@params["types"] as JArray)?.Select(t => t.ToString().ToLower()).ToList()
+                        (p.GetRaw("types") as JArray)?.Select(t => t.ToString().ToLower()).ToList()
                         ?? new List<string> { "error", "warning" };
-                    int? count = @params["count"]?.ToObject<int?>();
-                    int? pageSize =
-                        @params["pageSize"]?.ToObject<int?>()
-                        ?? @params["page_size"]?.ToObject<int?>();
-                    int? cursor = @params["cursor"]?.ToObject<int?>();
-                    string filterText = @params["filterText"]?.ToString();
-                    string sinceTimestampStr = @params["sinceTimestamp"]?.ToString(); // TODO: Implement timestamp filtering
-                    string format = (@params["format"]?.ToString() ?? "plain").ToLower();
-                    bool includeStacktrace =
-                        @params["includeStacktrace"]?.ToObject<bool?>() ?? false;
+                    int? count = p.GetInt("count");
+                    int? pageSize = p.GetInt("pageSize");
+                    int? cursor = p.GetInt("cursor");
+                    string filterText = p.Get("filterText");
+                    string sinceTimestampStr = p.Get("sinceTimestamp"); // TODO: Implement timestamp filtering
+                    string format = p.Get("format", "plain").ToLower();
+                    bool includeStacktrace = p.GetBool("includeStacktrace", false);
 
                     if (types.Contains("all"))
                     {

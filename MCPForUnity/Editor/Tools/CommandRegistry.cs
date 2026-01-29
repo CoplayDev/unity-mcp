@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Resources;
@@ -51,18 +50,7 @@ namespace MCPForUnity.Editor.Tools
             _initialized = true;
         }
 
-        /// <summary>
-        /// Convert PascalCase or camelCase to snake_case
-        /// </summary>
-        private static string ToSnakeCase(string name)
-        {
-            if (string.IsNullOrEmpty(name)) return name;
-
-            // Insert underscore before uppercase letters (except first)
-            var s1 = Regex.Replace(name, "(.)([A-Z][a-z]+)", "$1_$2");
-            var s2 = Regex.Replace(s1, "([a-z0-9])([A-Z])", "$1_$2");
-            return s2.ToLower();
-        }
+        private static string ToSnakeCase(string name) => StringCaseUtility.ToSnakeCase(name);
 
         /// <summary>
         /// Auto-discover all types with [McpForUnityTool] or [McpForUnityResource] attributes
@@ -98,7 +86,7 @@ namespace MCPForUnity.Editor.Tools
                         resourceCount++;
                 }
 
-                McpLog.Info($"Auto-discovered {toolCount} tools and {resourceCount} resources ({_handlers.Count} total handlers)");
+                McpLog.Info($"Auto-discovered {toolCount} tools and {resourceCount} resources ({_handlers.Count} total handlers)", false);
             }
             catch (Exception ex)
             {

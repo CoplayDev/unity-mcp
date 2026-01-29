@@ -1285,7 +1285,7 @@ class TestTextureCommands:
         """Test texture delete command."""
         with patch("cli.commands.texture.run_command", return_value=mock_unity_response):
             result = runner.invoke(cli, [
-                "texture", "delete", "Assets/Textures/Old.png"
+                "texture", "delete", "Assets/Textures/Old.png", "--force"
             ])
             assert result.exit_code == 0
 

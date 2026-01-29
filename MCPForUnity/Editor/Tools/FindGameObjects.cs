@@ -28,9 +28,17 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse("Parameters cannot be null.");
             }
 
+            var p = new ToolParams(@params);
+
             // Parse search parameters
-            string searchMethod = ParamCoercion.CoerceString(@params["searchMethod"] ?? @params["search_method"], "by_name");
-            string searchTerm = ParamCoercion.CoerceString(@params["searchTerm"] ?? @params["search_term"] ?? @params["target"], null);
+            string searchMethod = p.Get("searchMethod", "by_name");
+
+            // Try searchTerm, search_term, or target (for backwards compatibility)
+            string searchTerm = p.Get("searchTerm");
+            if (string.IsNullOrEmpty(searchTerm))
+            {
+                searchTerm = p.Get("target");
+            }
 
             if (string.IsNullOrEmpty(searchTerm))
             {
@@ -41,8 +49,9 @@ namespace MCPForUnity.Editor.Tools
             var pagination = PaginationRequest.FromParams(@params, defaultPageSize: 50);
             pagination.PageSize = Mathf.Clamp(pagination.PageSize, 1, 500);
 
-            // Search options
-            bool includeInactive = ParamCoercion.CoerceBool(@params["includeInactive"] ?? @params["searchInactive"] ?? @params["include_inactive"], false);
+            // Search options (supports multiple parameter name variants)
+            bool includeInactive = p.GetBool("includeInactive", false) ||
+                                   p.GetBool("searchInactive", false);
 
             try
             {

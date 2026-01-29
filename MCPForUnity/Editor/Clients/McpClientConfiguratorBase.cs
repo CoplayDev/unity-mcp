@@ -190,7 +190,7 @@ namespace MCPForUnity.Editor.Clients
                     {
                         client.SetStatus(McpStatus.Configured);
                         // Update transport after rewrite based on current server setting
-                        bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+                        bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
                         client.configuredTransport = useHttp ? Models.ConfiguredTransport.Http : Models.ConfiguredTransport.Stdio;
                     }
                     else
@@ -221,7 +221,7 @@ namespace MCPForUnity.Editor.Clients
             {
                 client.SetStatus(McpStatus.Configured);
                 // Set transport based on current server setting
-                bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+                bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
                 client.configuredTransport = useHttp ? Models.ConfiguredTransport.Http : Models.ConfiguredTransport.Stdio;
             }
             else
@@ -314,7 +314,7 @@ namespace MCPForUnity.Editor.Clients
                     {
                         client.SetStatus(McpStatus.Configured);
                         // Update transport after rewrite based on current server setting
-                        bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+                        bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
                         client.configuredTransport = useHttp ? Models.ConfiguredTransport.Http : Models.ConfiguredTransport.Stdio;
                     }
                     else
@@ -345,7 +345,7 @@ namespace MCPForUnity.Editor.Clients
             {
                 client.SetStatus(McpStatus.Configured);
                 // Set transport based on current server setting
-                bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+                bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
                 client.configuredTransport = useHttp ? Models.ConfiguredTransport.Http : Models.ConfiguredTransport.Stdio;
             }
             else
@@ -393,7 +393,7 @@ namespace MCPForUnity.Editor.Clients
         {
             // Capture main-thread-only values before delegating to thread-safe method
             string projectDir = Path.GetDirectoryName(Application.dataPath);
-            bool useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
             // Resolve claudePath on the main thread (EditorPrefs access)
             string claudePath = MCPServiceLocator.Paths.GetClaudeCliPath();
             return CheckStatusWithProjectDir(projectDir, useHttpTransport, claudePath, attemptAutoRewrite);
@@ -669,7 +669,7 @@ namespace MCPForUnity.Editor.Clients
                 throw new InvalidOperationException("Claude CLI not found. Please install Claude Code first.");
             }
 
-            bool useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
 
             string args;
             if (useHttpTransport)
@@ -772,7 +772,7 @@ namespace MCPForUnity.Editor.Clients
         public override string GetManualSnippet()
         {
             string uvxPath = MCPServiceLocator.Paths.GetUvxPath();
-            bool useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
 
             if (useHttpTransport)
             {

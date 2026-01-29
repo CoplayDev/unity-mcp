@@ -60,10 +60,10 @@ namespace MCPForUnity.Editor.Tools
         /// </summary>
         private static bool TryResolveUnderAssets(string relDir, out string fullPathDir, out string relPathSafe)
         {
-            string assets = Application.dataPath.Replace('\\', '/');
+            string assets = AssetPathUtility.NormalizeSeparators(Application.dataPath);
 
             // Normalize caller path: allow both "Scripts/..." and "Assets/Scripts/..."
-            string rel = (relDir ?? "Scripts").Replace('\\', '/').Trim();
+            string rel = AssetPathUtility.NormalizeSeparators(relDir ?? "Scripts").Trim();
             if (string.IsNullOrEmpty(rel)) rel = "Scripts";
 
             // Handle both "Assets" and "Assets/" prefixes
@@ -78,8 +78,8 @@ namespace MCPForUnity.Editor.Tools
 
             rel = rel.TrimStart('/');
 
-            string targetDir = Path.Combine(assets, rel).Replace('\\', '/');
-            string full = Path.GetFullPath(targetDir).Replace('\\', '/');
+            string targetDir = AssetPathUtility.NormalizeSeparators(Path.Combine(assets, rel));
+            string full = AssetPathUtility.NormalizeSeparators(Path.GetFullPath(targetDir));
 
             bool underAssets = full.StartsWith(assets + "/", StringComparison.OrdinalIgnoreCase)
                                || string.Equals(full, assets, StringComparison.OrdinalIgnoreCase);
@@ -129,19 +129,34 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse("invalid_params", "Parameters cannot be null.");
             }
 
-            // Extract parameters
-            string action = @params["action"]?.ToString()?.ToLowerInvariant();
-            string name = @params["name"]?.ToString();
-            string path = @params["path"]?.ToString(); // Relative to Assets/
+            var p = new ToolParams(@params);
+
+            // Extract and validate required parameters
+            var actionResult = p.GetRequired("action");
+            if (!actionResult.IsSuccess)
+            {
+                return new ErrorResponse(actionResult.ErrorMessage);
+            }
+            string action = actionResult.Value.ToLowerInvariant();
+
+            var nameResult = p.GetRequired("name");
+            if (!nameResult.IsSuccess)
+            {
+                return new ErrorResponse(nameResult.ErrorMessage);
+            }
+            string name = nameResult.Value;
+
+            // Optional parameters
+            string path = p.Get("path"); // Relative to Assets/
             string contents = null;
 
             // Check if we have base64 encoded contents
-            bool contentsEncoded = @params["contentsEncoded"]?.ToObject<bool>() ?? false;
-            if (contentsEncoded && @params["encodedContents"] != null)
+            bool contentsEncoded = p.GetBool("contentsEncoded", false);
+            if (contentsEncoded && p.Has("encodedContents"))
             {
                 try
                 {
-                    contents = DecodeBase64(@params["encodedContents"].ToString());
+                    contents = DecodeBase64(p.Get("encodedContents"));
                 }
                 catch (Exception e)
                 {
@@ -150,21 +165,11 @@ namespace MCPForUnity.Editor.Tools
             }
             else
             {
-                contents = @params["contents"]?.ToString();
+                contents = p.Get("contents");
             }
 
-            string scriptType = @params["scriptType"]?.ToString(); // For templates/validation
-            string namespaceName = @params["namespace"]?.ToString(); // For organizing code
-
-            // Validate required parameters
-            if (string.IsNullOrEmpty(action))
-            {
-                return new ErrorResponse("Action parameter is required.");
-            }
-            if (string.IsNullOrEmpty(name))
-            {
-                return new ErrorResponse("Name parameter is required.");
-            }
+            string scriptType = p.Get("scriptType"); // For templates/validation
+            string namespaceName = p.Get("namespace"); // For organizing code
             // Basic name validation (alphanumeric, underscores, cannot start with number)
             if (!Regex.IsMatch(name, @"^[a-zA-Z_][a-zA-Z0-9_]*$", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2)))
             {
@@ -182,7 +187,7 @@ namespace MCPForUnity.Editor.Tools
             // Construct file paths
             string scriptFileName = $"{name}.cs";
             string fullPath = Path.Combine(fullPathDir, scriptFileName);
-            string relativePath = Path.Combine(relPathSafeDir, scriptFileName).Replace('\\', '/');
+            string relativePath = AssetPathUtility.NormalizeSeparators(Path.Combine(relPathSafeDir, scriptFileName));
 
             // Ensure the target directory exists for create/update
             if (action == "create" || action == "update")
@@ -221,16 +226,17 @@ namespace MCPForUnity.Editor.Tools
                     return DeleteScript(fullPath, relativePath);
                 case "apply_text_edits":
                     {
-                        var textEdits = @params["edits"] as JArray;
-                        string precondition = @params["precondition_sha256"]?.ToString();
-                        // Respect optional options
-                        string refreshOpt = @params["options"]?["refresh"]?.ToString()?.ToLowerInvariant();
-                        string validateOpt = @params["options"]?["validate"]?.ToString()?.ToLowerInvariant();
+                        var textEdits = p.GetRaw("edits") as JArray;
+                        string precondition = p.Get("precondition_sha256");
+                        // Respect optional options (guard type before indexing)
+                        var optionsObj = p.GetRaw("options") as JObject;
+                        string refreshOpt = optionsObj?["refresh"]?.ToString()?.ToLowerInvariant();
+                        string validateOpt = optionsObj?["validate"]?.ToString()?.ToLowerInvariant();
                         return ApplyTextEdits(fullPath, relativePath, name, textEdits, precondition, refreshOpt, validateOpt);
                     }
                 case "validate":
                     {
-                        string level = @params["level"]?.ToString()?.ToLowerInvariant() ?? "standard";
+                        string level = p.Get("level", "standard").ToLowerInvariant();
                         var chosen = level switch
                         {
                             "basic" => ValidationLevel.Basic,
@@ -2636,7 +2642,7 @@ namespace MCPForUnity.Editor.Tools
         public static string SanitizeAssetsPath(string p)
         {
             if (string.IsNullOrEmpty(p)) return p;
-            p = p.Replace('\\', '/').Trim();
+            p = AssetPathUtility.NormalizeSeparators(p).Trim();
             if (p.StartsWith("mcpforunity://path/", StringComparison.OrdinalIgnoreCase))
                 p = p.Substring("mcpforunity://path/".Length);
             while (p.StartsWith("Assets/Assets/", StringComparison.OrdinalIgnoreCase))

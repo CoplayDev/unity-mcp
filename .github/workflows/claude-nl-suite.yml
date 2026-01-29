@@ -1047,13 +1047,13 @@ jobs:
 
           def id_from_filename(p: Path):
               n = p.name
-              m = re.match(r'NL(\d+)_results\.xml$', n, re.I)
+              m = re.match(r'NL-?(\d+)_results\.xml$', n, re.I)
               if m:
                   return f"NL-{int(m.group(1))}"
-              m = re.match(r'T([A-J])_results\.xml$', n, re.I)
+              m = re.match(r'T-?([A-J])_results\.xml$', n, re.I)
               if m:
                   return f"T-{m.group(1).upper()}"
-              m = re.match(r'GO(\d+)_results\.xml$', n, re.I)
+              m = re.match(r'GO-?(\d+)_results\.xml$', n, re.I)
               if m:
                   return f"GO-{int(m.group(1))}"
               return None
@@ -1067,6 +1067,10 @@ jobs:
               return None
 
           fragments = sorted(Path('reports').glob('*_results.xml'))
+          report_names = {p.name for p in fragments}
+          fragments += sorted(p for p in Path('reports/_staging').glob('*_results.xml') if p.name not in report_names)
+          if fragments:
+              print("merge fragments:", ", ".join(p.as_posix() for p in fragments))
           added = 0
           renamed = 0
 
@@ -1110,6 +1114,7 @@ jobs:
                       renamed += 1
                   suite.append(tc)
                   added += 1
+                  print(f"merge add: {frag.name} -> {tc.get('name')}")
 
           if added:
               # Drop bootstrap placeholder and recompute counts
@@ -1124,6 +1129,55 @@ jobs:
               suite.set('skipped', '0')
               tree.write(src, encoding='utf-8', xml_declaration=True)
               print(f"Appended {added} testcase(s); renamed {renamed} to canonical NL/T names.")
+          PY
+
+      # Guard is GO-specific; only parse GO fragments here.
+      - name: "Guard: ensure GO fragments merged into JUnit"
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          import os, re
+
+          def localname(tag: str) -> str:
+              return tag.rsplit('}', 1)[-1] if '}' in tag else tag
+
+          junit_path = Path(os.environ.get('JUNIT_OUT', 'reports/junit-nl-suite.xml'))
+          if not junit_path.exists():
+              raise SystemExit(0)
+
+          tree = ET.parse(junit_path)
+          root = tree.getroot()
+          suite = root.find('./*') if localname(root.tag) == 'testsuites' else root
+          if suite is None:
+              raise SystemExit(0)
+
+          def id_from_filename(p: Path):
+              n = p.name
+              m = re.match(r'GO-?(\d+)_results\.xml$', n, re.I)
+              if m:
+                  return f"GO-{int(m.group(1))}"
+              return None
+
+          expected = set()
+          for p in list(Path("reports").glob("GO-*_results.xml")) + list(Path("reports/_staging").glob("GO-*_results.xml")):
+              fid = id_from_filename(p)
+              if fid:
+                  expected.add(fid)
+
+          seen = set()
+          for tc in suite.findall('.//testcase'):
+              name = (tc.get('name') or '').strip()
+              m = re.match(r'(GO-\d+)\b', name)
+              if m:
+                  seen.add(m.group(1))
+
+          missing = sorted(expected - seen)
+          if missing:
+              print(f"::error::GO fragments present but not merged into JUnit: {' '.join(missing)}")
+              raise SystemExit(1)
           PY
 
       # ---------- Markdown summary from JUnit ----------

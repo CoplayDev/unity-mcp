@@ -7,7 +7,9 @@ from typing import Optional, Tuple, Any
 
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success, print_warning
-from cli.utils.connection import run_command, UnityConnectionError
+from cli.utils.connection import run_command, handle_unity_errors, UnityConnectionError
+from cli.utils.constants import SEARCH_METHOD_CHOICE_FULL, SEARCH_METHOD_CHOICE_TAGGED
+from cli.utils.confirmation import confirm_destructive_action
 
 
 @click.group()
@@ -20,8 +22,7 @@ def gameobject():
 @click.argument("search_term")
 @click.option(
     "--method", "-m",
-    type=click.Choice(["by_name", "by_tag", "by_layer",
-                      "by_component", "by_path", "by_id"]),
+    type=SEARCH_METHOD_CHOICE_FULL,
     default="by_name",
     help="Search method."
 )
@@ -42,6 +43,7 @@ def gameobject():
     type=int,
     help="Pagination cursor (offset)."
 )
+@handle_unity_errors
 def find(search_term: str, method: str, include_inactive: bool, limit: int, cursor: int):
     """Find GameObjects by search criteria.
 
@@ -54,19 +56,14 @@ def find(search_term: str, method: str, include_inactive: bool, limit: int, curs
         unity-mcp gameobject find "/Canvas/Panel" --method by_path
     """
     config = get_config()
-
-    try:
-        result = run_command("find_gameobjects", {
-            "searchMethod": method,
-            "searchTerm": search_term,
-            "includeInactive": include_inactive,
-            "pageSize": limit,
-            "cursor": cursor,
-        }, config)
-        click.echo(format_output(result, config.format))
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("find_gameobjects", {
+        "searchMethod": method,
+        "searchTerm": search_term,
+        "includeInactive": include_inactive,
+        "pageSize": limit,
+        "cursor": cursor,
+    }, config)
+    click.echo(format_output(result, config.format))
 
 
 @gameobject.command("create")
@@ -128,6 +125,7 @@ def find(search_term: str, method: str, include_inactive: bool, limit: int, curs
     default=None,
     help="Path for prefab (e.g., Assets/Prefabs/MyPrefab.prefab)."
 )
+@handle_unity_errors
 def create(
     name: str,
     primitive: Optional[str],
@@ -177,32 +175,27 @@ def create(
     if prefab_path:
         params["prefabPath"] = prefab_path
 
-    try:
-        result = run_command("manage_gameobject", params, config)
+    result = run_command("manage_gameobject", params, config)
 
-        # Add components separately since componentsToAdd doesn't work
-        if components and (result.get("success") or result.get("data") or result.get("result")):
-            component_list = [c.strip() for c in components.split(",")]
-            failed_components = []
-            for component in component_list:
-                try:
-                    run_command("manage_components", {
-                        "action": "add",
-                        "target": name,
-                        "componentType": component,
-                    }, config)
-                except UnityConnectionError:
-                    failed_components.append(component)
-            if failed_components:
-                print_warning(
-                    f"Failed to add components: {', '.join(failed_components)}")
+    # Add components separately since componentsToAdd doesn't work
+    if components and (result.get("success") or result.get("data") or result.get("result")):
+        component_list = [c.strip() for c in components.split(",")]
+        failed_components = []
+        for component in component_list:
+            try:
+                run_command("manage_components", {
+                    "action": "add",
+                    "target": name,
+                    "componentType": component,
+                }, config)
+            except UnityConnectionError:
+                failed_components.append(component)
+        if failed_components:
+            print_warning(f"Failed to add components: {', '.join(failed_components)}")
 
-        click.echo(format_output(result, config.format))
-        if result.get("success") or result.get("result"):
-            print_success(f"Created GameObject '{name}'")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    click.echo(format_output(result, config.format))
+    if result.get("success") or result.get("result"):
+        print_success(f"Created GameObject '{name}'")
 
 
 @gameobject.command("modify")
@@ -265,10 +258,11 @@ def create(
 )
 @click.option(
     "--search-method",
-    type=click.Choice(["by_name", "by_path", "by_tag", "by_id"]),
+    type=SEARCH_METHOD_CHOICE_TAGGED,
     default=None,
     help="How to find the target GameObject."
 )
+@handle_unity_errors
 def modify(
     target: str,
     name: Optional[str],
@@ -319,27 +313,21 @@ def modify(
     if active is not None:
         params["setActive"] = active
     if add_components:
-        params["componentsToAdd"] = [c.strip()
-                                     for c in add_components.split(",")]
+        params["componentsToAdd"] = [c.strip() for c in add_components.split(",")]
     if remove_components:
-        params["componentsToRemove"] = [c.strip()
-                                        for c in remove_components.split(",")]
+        params["componentsToRemove"] = [c.strip() for c in remove_components.split(",")]
     if search_method:
         params["searchMethod"] = search_method
 
-    try:
-        result = run_command("manage_gameobject", params, config)
-        click.echo(format_output(result, config.format))
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_gameobject", params, config)
+    click.echo(format_output(result, config.format))
 
 
 @gameobject.command("delete")
 @click.argument("target")
 @click.option(
     "--search-method",
-    type=click.Choice(["by_name", "by_path", "by_tag", "by_id"]),
+    type=SEARCH_METHOD_CHOICE_TAGGED,
     default=None,
     help="How to find the target GameObject."
 )
@@ -348,6 +336,7 @@ def modify(
     is_flag=True,
     help="Skip confirmation prompt."
 )
+@handle_unity_errors
 def delete(target: str, search_method: Optional[str], force: bool):
     """Delete a GameObject.
 
@@ -359,8 +348,7 @@ def delete(target: str, search_method: Optional[str], force: bool):
     """
     config = get_config()
 
-    if not force:
-        click.confirm(f"Delete GameObject '{target}'?", abort=True)
+    confirm_destructive_action("Delete", "GameObject", target, force)
 
     params = {
         "action": "delete",
@@ -370,14 +358,10 @@ def delete(target: str, search_method: Optional[str], force: bool):
     if search_method:
         params["searchMethod"] = search_method
 
-    try:
-        result = run_command("manage_gameobject", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Deleted GameObject '{target}'")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_gameobject", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Deleted GameObject '{target}'")
 
 
 @gameobject.command("duplicate")
@@ -396,10 +380,11 @@ def delete(target: str, search_method: Optional[str], force: bool):
 )
 @click.option(
     "--search-method",
-    type=click.Choice(["by_name", "by_path", "by_tag", "by_id"]),
+    type=SEARCH_METHOD_CHOICE_TAGGED,
     default=None,
     help="How to find the target GameObject."
 )
+@handle_unity_errors
 def duplicate(
     target: str,
     name: Optional[str],
@@ -428,14 +413,10 @@ def duplicate(
     if search_method:
         params["searchMethod"] = search_method
 
-    try:
-        result = run_command("manage_gameobject", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Duplicated GameObject '{target}'")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_gameobject", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Duplicated GameObject '{target}'")
 
 
 @gameobject.command("move")
@@ -465,10 +446,11 @@ def duplicate(
 )
 @click.option(
     "--search-method",
-    type=click.Choice(["by_name", "by_path", "by_tag", "by_id"]),
+    type=SEARCH_METHOD_CHOICE_TAGGED,
     default=None,
     help="How to find the target GameObject."
 )
+@handle_unity_errors
 def move(
     target: str,
     reference: str,
@@ -499,12 +481,7 @@ def move(
     if search_method:
         params["searchMethod"] = search_method
 
-    try:
-        result = run_command("manage_gameobject", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(
-                f"Moved '{target}' {direction} of '{reference}' by {distance} units")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_gameobject", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Moved '{target}' {direction} of '{reference}' by {distance} units")

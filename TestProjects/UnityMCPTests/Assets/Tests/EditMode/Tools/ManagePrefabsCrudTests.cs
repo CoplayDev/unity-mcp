@@ -532,6 +532,194 @@ namespace MCPForUnityTests.Editor.Tools
             }
         }
 
+        [Test]
+        public void ModifyContents_CreateChild_AddsSingleChildWithPrimitive()
+        {
+            string prefabPath = CreateTestPrefab("CreateChildTest");
+
+            try
+            {
+                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["createChild"] = new JObject
+                    {
+                        ["name"] = "NewSphere",
+                        ["primitive_type"] = "Sphere",
+                        ["position"] = new JArray(1f, 2f, 3f),
+                        ["scale"] = new JArray(0.5f, 0.5f, 0.5f)
+                    }
+                }));
+
+                Assert.IsTrue(result.Value<bool>("success"));
+
+                GameObject reloaded = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                Transform child = reloaded.transform.Find("NewSphere");
+                Assert.IsNotNull(child, "Child should exist");
+                Assert.AreEqual(new Vector3(1f, 2f, 3f), child.localPosition);
+                Assert.AreEqual(new Vector3(0.5f, 0.5f, 0.5f), child.localScale);
+                Assert.IsNotNull(child.GetComponent<SphereCollider>(), "Sphere primitive should have SphereCollider");
+            }
+            finally
+            {
+                SafeDeleteAsset(prefabPath);
+            }
+        }
+
+        [Test]
+        public void ModifyContents_CreateChild_AddsEmptyGameObject()
+        {
+            string prefabPath = CreateTestPrefab("EmptyChildTest");
+
+            try
+            {
+                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["createChild"] = new JObject
+                    {
+                        ["name"] = "EmptyChild",
+                        ["position"] = new JArray(0f, 5f, 0f)
+                    }
+                }));
+
+                Assert.IsTrue(result.Value<bool>("success"));
+
+                GameObject reloaded = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                Transform child = reloaded.transform.Find("EmptyChild");
+                Assert.IsNotNull(child, "Empty child should exist");
+                Assert.AreEqual(new Vector3(0f, 5f, 0f), child.localPosition);
+                // Empty GO should only have Transform
+                Assert.AreEqual(1, child.GetComponents<Component>().Length, "Empty child should only have Transform");
+            }
+            finally
+            {
+                SafeDeleteAsset(prefabPath);
+            }
+        }
+
+        [Test]
+        public void ModifyContents_CreateChild_AddsMultipleChildrenFromArray()
+        {
+            string prefabPath = CreateTestPrefab("MultiChildTest");
+
+            try
+            {
+                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["createChild"] = new JArray
+                    {
+                        new JObject { ["name"] = "Child1", ["primitive_type"] = "Cube", ["position"] = new JArray(1f, 0f, 0f) },
+                        new JObject { ["name"] = "Child2", ["primitive_type"] = "Sphere", ["position"] = new JArray(-1f, 0f, 0f) },
+                        new JObject { ["name"] = "Child3", ["position"] = new JArray(0f, 1f, 0f) }
+                    }
+                }));
+
+                Assert.IsTrue(result.Value<bool>("success"));
+
+                GameObject reloaded = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                Assert.IsNotNull(reloaded.transform.Find("Child1"), "Child1 should exist");
+                Assert.IsNotNull(reloaded.transform.Find("Child2"), "Child2 should exist");
+                Assert.IsNotNull(reloaded.transform.Find("Child3"), "Child3 should exist");
+                Assert.IsNotNull(reloaded.transform.Find("Child1").GetComponent<BoxCollider>(), "Child1 should be Cube");
+                Assert.IsNotNull(reloaded.transform.Find("Child2").GetComponent<SphereCollider>(), "Child2 should be Sphere");
+            }
+            finally
+            {
+                SafeDeleteAsset(prefabPath);
+            }
+        }
+
+        [Test]
+        public void ModifyContents_CreateChild_SupportsNestedParenting()
+        {
+            string prefabPath = CreateNestedTestPrefab("NestedCreateChildTest");
+
+            try
+            {
+                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["createChild"] = new JObject
+                    {
+                        ["name"] = "NewGrandchild",
+                        ["parent"] = "Child1",
+                        ["primitive_type"] = "Capsule"
+                    }
+                }));
+
+                Assert.IsTrue(result.Value<bool>("success"));
+
+                GameObject reloaded = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                Transform newChild = reloaded.transform.Find("Child1/NewGrandchild");
+                Assert.IsNotNull(newChild, "NewGrandchild should be under Child1");
+                Assert.IsNotNull(newChild.GetComponent<CapsuleCollider>(), "Should be Capsule primitive");
+            }
+            finally
+            {
+                SafeDeleteAsset(prefabPath);
+            }
+        }
+
+        [Test]
+        public void ModifyContents_CreateChild_ReturnsErrorForInvalidInput()
+        {
+            string prefabPath = CreateTestPrefab("InvalidChildTest");
+
+            try
+            {
+                // Missing required 'name' field
+                var missingName = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["createChild"] = new JObject
+                    {
+                        ["primitive_type"] = "Cube"
+                    }
+                }));
+                Assert.IsFalse(missingName.Value<bool>("success"));
+                Assert.IsTrue(missingName.Value<string>("error").Contains("name"));
+
+                // Invalid parent
+                var invalidParent = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["createChild"] = new JObject
+                    {
+                        ["name"] = "TestChild",
+                        ["parent"] = "NonexistentParent"
+                    }
+                }));
+                Assert.IsFalse(invalidParent.Value<bool>("success"));
+                Assert.IsTrue(invalidParent.Value<string>("error").Contains("not found"));
+
+                // Invalid primitive type
+                var invalidPrimitive = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["createChild"] = new JObject
+                    {
+                        ["name"] = "TestChild",
+                        ["primitive_type"] = "InvalidType"
+                    }
+                }));
+                Assert.IsFalse(invalidPrimitive.Value<bool>("success"));
+                Assert.IsTrue(invalidPrimitive.Value<string>("error").Contains("Invalid primitive type"));
+            }
+            finally
+            {
+                SafeDeleteAsset(prefabPath);
+            }
+        }
+
         #endregion
 
         #region Error Handling

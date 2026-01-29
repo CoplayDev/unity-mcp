@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "UnityMCP": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${workspaceFolder}/Server",
+        "src/main.py",
+        "--transport",
+        "stdio"
+      ]
+    }
+  }
+}

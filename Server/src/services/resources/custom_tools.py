@@ -24,7 +24,7 @@ class CustomToolsResourceResponse(MCPResponse):
 @mcp_for_unity_resource(
     uri="mcpforunity://custom-tools",
     name="custom_tools",
-    description="Lists custom tools available for the active Unity project.",
+    description="Lists custom tools available for the active Unity project.\n\nURI: mcpforunity://custom-tools",
 )
 async def get_custom_tools(ctx: Context) -> CustomToolsResourceResponse | MCPResponse:
     unity_instance = get_unity_instance_from_context(ctx)

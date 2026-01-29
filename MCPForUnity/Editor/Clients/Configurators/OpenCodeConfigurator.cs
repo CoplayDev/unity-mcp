@@ -39,25 +39,39 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
         /// <summary>
         /// Attempts to load and parse the config file.
-        /// Returns null if file doesn't exist.
-        /// Returns empty JObject if file exists but contains malformed JSON (logs warning).
-        /// Throws on I/O errors (permission denied, etc.).
+        /// Returns null if file doesn't exist or cannot be read.
+        /// Returns parsed JObject if valid JSON found.
+        /// Logs warning if file exists but contains malformed JSON.
         /// </summary>
         private JObject TryLoadConfig(string path)
         {
             if (!File.Exists(path))
                 return null;
 
-            string content = File.ReadAllText(path);
+            string content;
+            try
+            {
+                content = File.ReadAllText(path);
+            }
+            catch (Exception ex)
+            {
+                UnityEngine.Debug.LogWarning($"[OpenCodeConfigurator] Failed to read config file {path}: {ex.Message}");
+                return null;
+            }
+
             try
             {
                 return JsonConvert.DeserializeObject<JObject>(content) ?? new JObject();
             }
-            catch (JsonException)
+            catch (JsonException ex)
             {
-                // Malformed JSON - return empty object so caller can overwrite with valid config
-                UnityEngine.Debug.LogWarning($"[OpenCodeConfigurator] Malformed JSON in {path}, will overwrite with valid config");
-                return new JObject();
+                // Malformed JSON - log warning and return null.
+                // When Configure() receives null, it will do: TryLoadConfig(path) ?? new JObject()
+                // This creates a fresh empty JObject, which replaces the entire file with only the unityMCP section.
+                // Existing config sections are lost. To preserve sections, a different recovery strategy
+                // (e.g., line-by-line parsing, JSON repair, or manual user intervention) would be needed.
+                UnityEngine.Debug.LogWarning($"[OpenCodeConfigurator] Malformed JSON in {path}: {ex.Message}");
+                return null;
             }
         }
 
@@ -113,8 +127,16 @@ namespace MCPForUnity.Editor.Clients.Configurators
                 string path = GetConfigPath();
                 McpConfigurationHelper.EnsureConfigDirectoryExists(path);
 
-                var config = TryLoadConfig(path) ?? new JObject { ["$schema"] = SchemaUrl };
+                // Load existing config or start fresh, preserving all other properties and MCP servers
+                var config = TryLoadConfig(path) ?? new JObject();
 
+                // Only add $schema if creating a new file
+                if (!File.Exists(path))
+                {
+                    config["$schema"] = SchemaUrl;
+                }
+
+                // Preserve existing mcp section and only update our server entry
                 var mcpSection = config["mcp"] as JObject ?? new JObject();
                 config["mcp"] = mcpSection;
 

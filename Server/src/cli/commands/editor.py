@@ -6,8 +6,9 @@ from typing import Optional, Any
 
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success, print_info
-from cli.utils.connection import run_command, run_list_custom_tools, UnityConnectionError
+from cli.utils.connection import run_command, run_list_custom_tools, handle_unity_errors, UnityConnectionError
 from cli.utils.suggestions import suggest_matches, format_suggestions
+from cli.utils.parsers import parse_json_dict_or_exit
 
 
 @click.group()
@@ -17,48 +18,36 @@ def editor():
 
 
 @editor.command("play")
+@handle_unity_errors
 def play():
     """Enter play mode."""
     config = get_config()
-
-    try:
-        result = run_command("manage_editor", {"action": "play"}, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success("Entered play mode")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_editor", {"action": "play"}, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success("Entered play mode")
 
 
 @editor.command("pause")
+@handle_unity_errors
 def pause():
     """Pause play mode."""
     config = get_config()
-
-    try:
-        result = run_command("manage_editor", {"action": "pause"}, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success("Paused play mode")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_editor", {"action": "pause"}, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success("Paused play mode")
 
 
 @editor.command("stop")
+@handle_unity_errors
 def stop():
     """Stop play mode."""
     config = get_config()
-
-    try:
-        result = run_command("manage_editor", {"action": "stop"}, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success("Stopped play mode")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("manage_editor", {"action": "stop"}, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success("Stopped play mode")
 
 
 @editor.command("console")
@@ -92,6 +81,7 @@ def stop():
     is_flag=True,
     help="Clear the console instead of reading."
 )
+@handle_unity_errors
 def console(log_types: tuple, count: int, filter_text: Optional[str], stacktrace: bool, clear: bool):
     """Read or clear the Unity console.
 
@@ -105,14 +95,10 @@ def console(log_types: tuple, count: int, filter_text: Optional[str], stacktrace
     config = get_config()
 
     if clear:
-        try:
-            result = run_command("read_console", {"action": "clear"}, config)
-            click.echo(format_output(result, config.format))
-            if result.get("success"):
-                print_success("Console cleared")
-        except UnityConnectionError as e:
-            print_error(str(e))
-            sys.exit(1)
+        result = run_command("read_console", {"action": "clear"}, config)
+        click.echo(format_output(result, config.format))
+        if result.get("success"):
+            print_success("Console cleared")
         return
 
     params: dict[str, Any] = {
@@ -125,16 +111,13 @@ def console(log_types: tuple, count: int, filter_text: Optional[str], stacktrace
     if filter_text:
         params["filter_text"] = filter_text
 
-    try:
-        result = run_command("read_console", params, config)
-        click.echo(format_output(result, config.format))
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("read_console", params, config)
+    click.echo(format_output(result, config.format))
 
 
 @editor.command("add-tag")
 @click.argument("tag_name")
+@handle_unity_errors
 def add_tag(tag_name: str):
     """Add a new tag.
 
@@ -144,20 +127,16 @@ def add_tag(tag_name: str):
         unity-mcp editor add-tag "Collectible"
     """
     config = get_config()
-
-    try:
-        result = run_command(
-            "manage_editor", {"action": "add_tag", "tagName": tag_name}, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Added tag: {tag_name}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command(
+        "manage_editor", {"action": "add_tag", "tagName": tag_name}, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Added tag: {tag_name}")
 
 
 @editor.command("remove-tag")
 @click.argument("tag_name")
+@handle_unity_errors
 def remove_tag(tag_name: str):
     """Remove a tag.
 
@@ -166,20 +145,16 @@ def remove_tag(tag_name: str):
         unity-mcp editor remove-tag "OldTag"
     """
     config = get_config()
-
-    try:
-        result = run_command(
-            "manage_editor", {"action": "remove_tag", "tagName": tag_name}, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Removed tag: {tag_name}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command(
+        "manage_editor", {"action": "remove_tag", "tagName": tag_name}, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Removed tag: {tag_name}")
 
 
 @editor.command("add-layer")
 @click.argument("layer_name")
+@handle_unity_errors
 def add_layer(layer_name: str):
     """Add a new layer.
 
@@ -188,20 +163,16 @@ def add_layer(layer_name: str):
         unity-mcp editor add-layer "Interactable"
     """
     config = get_config()
-
-    try:
-        result = run_command(
-            "manage_editor", {"action": "add_layer", "layerName": layer_name}, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Added layer: {layer_name}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command(
+        "manage_editor", {"action": "add_layer", "layerName": layer_name}, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Added layer: {layer_name}")
 
 
 @editor.command("remove-layer")
 @click.argument("layer_name")
+@handle_unity_errors
 def remove_layer(layer_name: str):
     """Remove a layer.
 
@@ -210,20 +181,16 @@ def remove_layer(layer_name: str):
         unity-mcp editor remove-layer "OldLayer"
     """
     config = get_config()
-
-    try:
-        result = run_command(
-            "manage_editor", {"action": "remove_layer", "layerName": layer_name}, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Removed layer: {layer_name}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command(
+        "manage_editor", {"action": "remove_layer", "layerName": layer_name}, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Removed layer: {layer_name}")
 
 
 @editor.command("tool")
 @click.argument("tool_name")
+@handle_unity_errors
 def set_tool(tool_name: str):
     """Set the active editor tool.
 
@@ -234,20 +201,16 @@ def set_tool(tool_name: str):
         unity-mcp editor tool "Scale"
     """
     config = get_config()
-
-    try:
-        result = run_command(
-            "manage_editor", {"action": "set_active_tool", "toolName": tool_name}, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Set active tool: {tool_name}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command(
+        "manage_editor", {"action": "set_active_tool", "toolName": tool_name}, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Set active tool: {tool_name}")
 
 
 @editor.command("menu")
 @click.argument("menu_path")
+@handle_unity_errors
 def execute_menu(menu_path: str):
     """Execute a menu item.
 
@@ -258,16 +221,10 @@ def execute_menu(menu_path: str):
         unity-mcp editor menu "GameObject/Create Empty"
     """
     config = get_config()
-
-    try:
-        result = run_command("execute_menu_item", {
-                             "menu_path": menu_path}, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Executed: {menu_path}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("execute_menu_item", {"menu_path": menu_path}, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Executed: {menu_path}")
 
 
 @editor.command("tests")
@@ -298,6 +255,7 @@ def execute_menu(menu_path: str):
     is_flag=True,
     help="Include details for failed/skipped tests only."
 )
+@handle_unity_errors
 def run_tests(mode: str, async_mode: bool, wait: Optional[int], details: bool, failed_only: bool):
     """Run Unity tests.
 
@@ -318,21 +276,17 @@ def run_tests(mode: str, async_mode: bool, wait: Optional[int], details: bool, f
     if failed_only:
         params["include_failed_tests"] = True
 
-    try:
-        result = run_command("run_tests", params, config)
+    result = run_command("run_tests", params, config)
 
-        # For async mode, just show job ID
-        if async_mode and result.get("success"):
-            job_id = result.get("data", {}).get("job_id")
-            if job_id:
-                click.echo(f"Test job started: {job_id}")
-                print_info("Poll with: unity-mcp editor poll-test " + job_id)
-                return
+    # For async mode, just show job ID
+    if async_mode and result.get("success"):
+        job_id = result.get("data", {}).get("job_id")
+        if job_id:
+            click.echo(f"Test job started: {job_id}")
+            print_info("Poll with: unity-mcp editor poll-test " + job_id)
+            return
 
-        click.echo(format_output(result, config.format))
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    click.echo(format_output(result, config.format))
 
 
 @editor.command("poll-test")
@@ -353,6 +307,7 @@ def run_tests(mode: str, async_mode: bool, wait: Optional[int], details: bool, f
     is_flag=True,
     help="Include details for failed/skipped tests only."
 )
+@handle_unity_errors
 def poll_test(job_id: str, wait: int, details: bool, failed_only: bool):
     """Poll an async test job for status/results.
 
@@ -372,27 +327,23 @@ def poll_test(job_id: str, wait: int, details: bool, failed_only: bool):
     if failed_only:
         params["include_failed_tests"] = True
 
-    try:
-        result = run_command("get_test_job", params, config)
-        click.echo(format_output(result, config.format))
+    result = run_command("get_test_job", params, config)
+    click.echo(format_output(result, config.format))
 
-        if isinstance(result, dict) and result.get("success"):
-            data = result.get("data", {})
-            status = data.get("status", "unknown")
-            if status == "succeeded":
-                print_success("Tests completed successfully")
-            elif status == "failed":
-                summary = data.get("result", {}).get("summary", {})
-                failed = summary.get("failed", 0)
-                print_error(f"Tests failed: {failed} failures")
-            elif status == "running":
-                progress = data.get("progress", {})
-                completed = progress.get("completed", 0)
-                total = progress.get("total", 0)
-                print_info(f"Tests running: {completed}/{total}")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    if isinstance(result, dict) and result.get("success"):
+        data = result.get("data", {})
+        status = data.get("status", "unknown")
+        if status == "succeeded":
+            print_success("Tests completed successfully")
+        elif status == "failed":
+            summary = data.get("result", {}).get("summary", {})
+            failed = summary.get("failed", 0)
+            print_error(f"Tests failed: {failed} failures")
+        elif status == "running":
+            progress = data.get("progress", {})
+            completed = progress.get("completed", 0)
+            total = progress.get("total", 0)
+            print_info(f"Tests running: {completed}/{total}")
 
 
 @editor.command("refresh")
@@ -418,6 +369,7 @@ def poll_test(job_id: str, wait: int, details: bool, failed_only: bool):
     is_flag=True,
     help="Don't wait for refresh to complete."
 )
+@handle_unity_errors
 def refresh(mode: str, scope: str, compile: bool, no_wait: bool):
     """Force Unity to refresh assets/scripts.
 
@@ -438,15 +390,11 @@ def refresh(mode: str, scope: str, compile: bool, no_wait: bool):
     if compile:
         params["compile"] = "request"
 
-    try:
-        click.echo("Refreshing Unity...")
-        result = run_command("refresh_unity", params, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success("Unity refreshed")
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    click.echo("Refreshing Unity...")
+    result = run_command("refresh_unity", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success("Unity refreshed")
 
 
 @editor.command("custom-tool")
@@ -456,6 +404,7 @@ def refresh(mode: str, scope: str, compile: bool, no_wait: bool):
     default="{}",
     help="Tool parameters as JSON."
 )
+@handle_unity_errors
 def custom_tool(tool_name: str, params: str):
     """Execute a custom Unity tool.
 
@@ -466,48 +415,33 @@ def custom_tool(tool_name: str, params: str):
         unity-mcp editor custom-tool "MyCustomTool"
         unity-mcp editor custom-tool "BuildPipeline" --params '{"target": "Android"}'
     """
-    import json
     config = get_config()
 
-    try:
-        params_dict = json.loads(params)
-    except json.JSONDecodeError as e:
-        print_error(f"Invalid JSON for params: {e}")
-        print_info("Example: --params '{\"key\":\"value\"}'")
-        print_info(
-            "Tip: wrap JSON in single quotes to avoid shell escaping issues.")
-        sys.exit(1)
+    params_dict = parse_json_dict_or_exit(params, "params")
 
-    try:
-        result = run_command("execute_custom_tool", {
-            "tool_name": tool_name,
-            "parameters": params_dict,
-        }, config)
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success(f"Executed custom tool: {tool_name}")
-        else:
-            message = (result.get("message")
-                       or result.get("error") or "").lower()
-            if "not found" in message and "tool" in message:
-                try:
-                    tools_result = run_list_custom_tools(config)
-                    tools = tools_result.get("tools")
-                    if tools is None:
-                        data = tools_result.get("data", {})
-                        tools = data.get("tools") if isinstance(
-                            data, dict) else None
-                    names = [
-                        t.get("name") for t in tools if isinstance(t, dict) and t.get("name")
-                    ] if isinstance(tools, list) else []
-                    matches = suggest_matches(tool_name, names)
-                    suggestion = format_suggestions(matches)
-                    if suggestion:
-                        print_info(suggestion)
-                        print_info(
-                            f'Example: unity-mcp editor custom-tool "{matches[0]}"')
-                except UnityConnectionError:
-                    pass
-    except UnityConnectionError as e:
-        print_error(str(e))
-        sys.exit(1)
+    result = run_command("execute_custom_tool", {
+        "tool_name": tool_name,
+        "parameters": params_dict,
+    }, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Executed custom tool: {tool_name}")
+    else:
+        message = (result.get("message") or result.get("error") or "").lower()
+        if "not found" in message and "tool" in message:
+            try:
+                tools_result = run_list_custom_tools(config)
+                tools = tools_result.get("tools")
+                if tools is None:
+                    data = tools_result.get("data", {})
+                    tools = data.get("tools") if isinstance(data, dict) else None
+                names = [
+                    t.get("name") for t in tools if isinstance(t, dict) and t.get("name")
+                ] if isinstance(tools, list) else []
+                matches = suggest_matches(tool_name, names)
+                suggestion = format_suggestions(matches)
+                if suggestion:
+                    print_info(suggestion)
+                    print_info(f'Example: unity-mcp editor custom-tool "{matches[0]}"')
+            except UnityConnectionError:
+                pass

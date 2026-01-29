@@ -11,15 +11,15 @@ namespace MCPForUnityTests.Editor.Tools
 {
     /// <summary>
     /// Tests for domain reload resilience - ensuring MCP requests succeed even during Unity domain reloads.
-    /// 
-    /// These tests are marked [Explicit] because they trigger script compilation which can stall
-    /// subsequent tests' internal coroutine waits when Unity is backgrounded. The MCP workflow
-    /// itself is unaffected - socket messages provide external stimulus that keeps Unity responsive.
-    /// 
-    /// Run these explicitly when needed, ideally with Unity foregrounded or first in the run.
+    ///
+    /// These tests trigger script compilation which can cause test timing issues when Unity is
+    /// backgrounded, but the MCP workflow itself is unaffected - socket messages provide external
+    /// stimulus that keeps Unity responsive.
+    ///
+    /// Note: Focus nudge improvements (P2-9) should help with background test reliability.
     /// </summary>
     [Category("domain_reload")]
-    [Explicit("Triggers compilation that can stall subsequent tests. MCP workflow unaffected - see class docs.")]
+    [Explicit("Domain reload stress tests; run manually when needed.")]
     public class DomainReloadResilienceTests
     {
         private const string TempDir = "Assets/Temp/DomainReloadTests";

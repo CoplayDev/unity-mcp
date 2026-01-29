@@ -1,10 +1,9 @@
-# AI-related files
+# AI-related files (user-specific)
 .cursorrules
 .cursorignore
 .windsurf
 .codeiumignore
 .kiro
-CLAUDE.md
 
 # Code-copy related files
 .clipignore
@@ -58,3 +57,4 @@ reports/
 
 # Local testing harness
 scripts/local-test/
+.claude/settings.local.json

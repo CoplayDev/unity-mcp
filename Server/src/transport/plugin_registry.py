@@ -23,6 +23,7 @@ class PluginSession:
     connected_at: datetime
     tools: dict[str, ToolDefinitionModel] = field(default_factory=dict)
     project_id: str | None = None
+    project_path: str | None = None  # Full path to project root (for focus nudging)
     user_id: str | None = None  # Associated user id (None for local mode)
 
 
@@ -51,6 +52,7 @@ class PluginRegistry:
         project_name: str,
         project_hash: str,
         unity_version: str,
+        project_path: str | None = None,
         user_id: str | None = None,
     ) -> PluginSession:
         """Register (or replace) a plugin session.
@@ -69,6 +71,7 @@ class PluginRegistry:
                 unity_version=unity_version,
                 registered_at=now,
                 connected_at=now,
+                project_path=project_path,
                 user_id=user_id,
             )
 

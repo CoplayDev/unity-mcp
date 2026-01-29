@@ -33,7 +33,7 @@ class ActiveToolResponse(MCPResponse):
 @mcp_for_unity_resource(
     uri="mcpforunity://editor/active-tool",
     name="editor_active_tool",
-    description="Currently active editor tool (Move, Rotate, Scale, etc.) and transform handle settings."
+    description="Currently active editor tool (Move, Rotate, Scale, etc.) and transform handle settings.\n\nURI: mcpforunity://editor/active-tool"
 )
 async def get_active_tool(ctx: Context) -> ActiveToolResponse | MCPResponse:
     """Get active editor tool information."""

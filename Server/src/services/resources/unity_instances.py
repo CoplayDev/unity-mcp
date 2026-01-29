@@ -14,7 +14,7 @@ from core.config import config
 @mcp_for_unity_resource(
     uri="mcpforunity://instances",
     name="unity_instances",
-    description="Lists all running Unity Editor instances with their details."
+    description="Lists all running Unity Editor instances with their details.\n\nURI: mcpforunity://instances"
 )
 async def unity_instances(ctx: Context) -> dict[str, Any]:
     """

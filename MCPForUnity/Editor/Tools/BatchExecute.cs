@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
@@ -217,36 +216,6 @@ namespace MCPForUnity.Editor.Tools
             };
         }
 
-        private static string ToCamelCase(string key)
-        {
-            if (string.IsNullOrEmpty(key) || key.IndexOf('_') < 0)
-            {
-                return key;
-            }
-
-            var parts = key.Split(new[] { '_' }, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length == 0)
-            {
-                return key;
-            }
-
-            var builder = new StringBuilder(parts[0]);
-            for (int i = 1; i < parts.Length; i++)
-            {
-                var part = parts[i];
-                if (string.IsNullOrEmpty(part))
-                {
-                    continue;
-                }
-
-                builder.Append(char.ToUpperInvariant(part[0]));
-                if (part.Length > 1)
-                {
-                    builder.Append(part.AsSpan(1));
-                }
-            }
-
-            return builder.ToString();
-        }
+        private static string ToCamelCase(string key) => StringCaseUtility.ToCamelCase(key);
     }
 }
