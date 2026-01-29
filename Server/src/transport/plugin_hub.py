@@ -500,15 +500,12 @@ class PluginHub(WebSocketEndpoint):
                     sessions = await cls._registry.list_sessions(user_id=user_id)
                 else:
                     session_id = await cls._registry.get_session_id_by_hash(target_hash)
-                    sessions = await cls._registry.list_sessions()
+                    sessions = await cls._registry.list_sessions(user_id=user_id)
                 return session_id, len(sessions), explicit_required
 
             # No target provided: determine if we can auto-select
             # In remote-hosted mode, filter sessions by user_id
-            if config.http_remote_hosted and user_id:
-                sessions = await cls._registry.list_sessions(user_id=user_id)
-            else:
-                sessions = await cls._registry.list_sessions()
+            sessions = await cls._registry.list_sessions(user_id=user_id)
             count = len(sessions)
             if count == 0:
                 return None, count, explicit_required
