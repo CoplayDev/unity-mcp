@@ -1,9 +1,12 @@
 using System;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using NUnit.Framework;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Constants;
 using UnityEditor;
+using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace MCPForUnityTests.Editor.Services.Characterization
 {
@@ -337,11 +340,33 @@ namespace MCPForUnityTests.Editor.Services.Characterization
             // Arrange
             _service = new ServerManagementService();
 
+            string lastLog = null;
+            Application.LogCallback handler = (condition, stackTrace, type) =>
+            {
+                if (condition != null && condition.Contains("uv cache"))
+                {
+                    lastLog = condition;
+                }
+            };
+
             // Act & Assert - Should not throw even if uvx is not installed
             Assert.DoesNotThrow(() =>
             {
-                _service.ClearUvxCache();
+                LogAssert.ignoreFailingMessages = true;
+                Application.logMessageReceived += handler;
+                try
+                {
+                    _service.ClearUvxCache();
+                }
+                finally
+                {
+                    Application.logMessageReceived -= handler;
+                    LogAssert.ignoreFailingMessages = false;
+                }
             }, "ClearUvxCache should handle missing uvx gracefully");
+
+            Assert.IsNotNull(lastLog, "Expected a uv cache log message.");
+            StringAssert.Contains("uv cache", lastLog);
         }
 
         #endregion
