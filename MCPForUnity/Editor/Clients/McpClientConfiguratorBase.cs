@@ -575,7 +575,8 @@ namespace MCPForUnity.Editor.Clients
         public void ConfigureWithCapturedValues(
             string projectDir, string claudePath, string pathPrepend,
             bool useHttpTransport, string httpUrl,
-            string uvxPath, string gitUrl, string packageName, bool shouldForceRefresh)
+            string uvxPath, string gitUrl, string packageName, bool shouldForceRefresh,
+            string apiKey)
         {
             if (client.status == McpStatus.Configured)
             {
@@ -584,7 +585,8 @@ namespace MCPForUnity.Editor.Clients
             else
             {
                 RegisterWithCapturedValues(projectDir, claudePath, pathPrepend,
-                    useHttpTransport, httpUrl, uvxPath, gitUrl, packageName, shouldForceRefresh);
+                    useHttpTransport, httpUrl, uvxPath, gitUrl, packageName, shouldForceRefresh,
+                    apiKey);
             }
         }
 
@@ -594,7 +596,8 @@ namespace MCPForUnity.Editor.Clients
         private void RegisterWithCapturedValues(
             string projectDir, string claudePath, string pathPrepend,
             bool useHttpTransport, string httpUrl,
-            string uvxPath, string gitUrl, string packageName, bool shouldForceRefresh)
+            string uvxPath, string gitUrl, string packageName, bool shouldForceRefresh,
+            string apiKey)
         {
             if (string.IsNullOrEmpty(claudePath))
             {
@@ -605,7 +608,6 @@ namespace MCPForUnity.Editor.Clients
             if (useHttpTransport)
             {
                 // Add API key header if configured (for remote-hosted mode)
-                string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
                 if (!string.IsNullOrEmpty(apiKey))
                 {
                     args = $"mcp add --transport http UnityMCP {httpUrl} --header \"X-API-Key: {apiKey}\"";

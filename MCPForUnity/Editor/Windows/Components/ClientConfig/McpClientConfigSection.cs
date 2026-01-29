@@ -275,6 +275,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
             string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
             var (uvxPath, gitUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
             bool shouldForceRefresh = AssetPathUtility.ShouldForceUvxRefresh();
+            string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
 
             // Compute pathPrepend on main thread
             string pathPrepend = null;
@@ -299,7 +300,8 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                         cliConfigurator.ConfigureWithCapturedValues(
                             projectDir, claudePath, pathPrepend,
                             useHttpTransport, httpUrl,
-                            uvxPath, gitUrl, packageName, shouldForceRefresh);
+                            uvxPath, gitUrl, packageName, shouldForceRefresh,
+                            apiKey);
                     }
                     return (success: true, error: (string)null);
                 }
