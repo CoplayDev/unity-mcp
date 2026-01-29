@@ -2,9 +2,8 @@
 from __future__ import annotations
 
 import os
+import logging
 from typing import Awaitable, Callable, TypeVar
-
-from fastmcp import Context
 
 from transport.plugin_hub import PluginHub
 from core.config import config
