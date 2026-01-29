@@ -27,7 +27,7 @@ API key authentication is only available when running with HTTP transport (`--tr
 ### CLI Arguments
 
 | Argument | Environment Variable | Default | Description |
-|----------|---------------------|---------|-------------|
+| -------- | -------------------- | ------- | ----------- |
 | `--http-remote-hosted` | `UNITY_MCP_HTTP_REMOTE_HOSTED` | `false` | Enable remote-hosted mode. Requires API key auth. |
 | `--api-key-validation-url URL` | `UNITY_MCP_API_KEY_VALIDATION_URL` | None | External endpoint to validate API keys (required). |
 | `--api-key-login-url URL` | `UNITY_MCP_API_KEY_LOGIN_URL` | None | URL where users can obtain or manage API keys. |
@@ -134,7 +134,7 @@ All MCP tool and resource calls require a valid API key. The `X-API-Key` header 
 Unity plugins connecting via WebSocket (`/hub/plugin`) are validated during the handshake:
 
 | Scenario | WebSocket Close Code | Reason |
-|----------|---------------------|--------|
+| -------- | -------------------- | ------ |
 | No API key header | `4401` | API key required |
 | Invalid API key | `4403` | Invalid API key |
 | Auth service unavailable | `1013` | Try again later |
@@ -161,7 +161,7 @@ The following REST endpoints are disabled in remote-hosted mode to prevent unaut
 These endpoints remain accessible regardless of auth:
 
 | Endpoint | Method | Purpose |
-|----------|--------|---------|
+| -------- | ------ | ------- |
 | `/health` | GET | Health check for load balancers and monitoring |
 | `/api/auth/login-url` | GET | Returns the login URL for API key management |
 
@@ -169,7 +169,7 @@ These endpoints remain accessible regardless of auth:
 
 ### Request
 
-```
+```http
 POST <api-key-validation-url>
 Content-Type: application/json
 
@@ -180,7 +180,7 @@ Content-Type: application/json
 
 If a service token is configured, an additional header is sent:
 
-```
+```http
 <service-token-header>: <service-token-value>
 ```
 
@@ -218,14 +218,14 @@ A `401` status code is also treated as an invalid key (no body parsing required)
 
 - Request timeout: 5 seconds
 - Retries: 1 (with 100ms backoff)
-- Failure mode: fail closed (treated as invalid on any error)
+- Failure mode: deny by default (treated as invalid on any error)
 
 Transient failures (5xx, timeouts, network errors) are **not cached**, so subsequent requests will retry the auth service.
 
 ## Error Reference
 
 | Context | Condition | Response |
-|---------|-----------|----------|
+| ------- | --------- | -------- |
 | MCP tool/resource | Missing API key (remote-hosted) | `RuntimeError` → MCP `isError: true` |
 | MCP tool/resource | Invalid API key | `RuntimeError` → MCP `isError: true` |
 | WebSocket connect | Missing API key | Close `4401` "API key required" |
