@@ -714,7 +714,8 @@ Examples:
     parser.add_argument(
         "--project-scoped-tools",
         action="store_true",
-        help="Keep custom tools scoped to the active Unity project and enable the custom tools resource."
+        help="Keep custom tools scoped to the active Unity project and enable the custom tools resource. "
+             "Can also set via UNITY_MCP_PROJECT_SCOPED_TOOLS=true."
     )
 
     args = parser.parse_args()
@@ -816,7 +817,11 @@ Examples:
     if args.http_port:
         logger.info(f"HTTP port override: {http_port}")
 
-    mcp = create_mcp_server(args.project_scoped_tools)
+    project_scoped_tools = (
+        bool(args.project_scoped_tools)
+        or os.environ.get("UNITY_MCP_PROJECT_SCOPED_TOOLS", "").lower() in ("true", "1", "yes", "on")
+    )
+    mcp = create_mcp_server(project_scoped_tools)
 
     # Determine transport mode
     if transport_mode == 'http':
