@@ -5,8 +5,11 @@ namespace MCPForUnityTests.Editor.Services.Server
 {
     /// <summary>
     /// Unit tests for ProcessDetector component.
+    /// These tests execute subprocess commands (ps, lsof, tasklist, wmic) which can be slow.
+    /// Marked as [Explicit] to exclude from normal test runs.
     /// </summary>
     [TestFixture]
+    [Explicit]
     public class ProcessDetectorTests
     {
         private ProcessDetector _detector;

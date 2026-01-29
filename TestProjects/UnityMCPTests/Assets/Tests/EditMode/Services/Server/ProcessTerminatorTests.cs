@@ -6,8 +6,10 @@ namespace MCPForUnityTests.Editor.Services.Server
     /// <summary>
     /// Unit tests for ProcessTerminator component.
     /// Note: Most tests avoid actually terminating processes to prevent test instability.
+    /// Uses ProcessDetector which executes subprocess commands (ps, tasklist, etc.), so marked as [Explicit].
     /// </summary>
     [TestFixture]
+    [Explicit]
     public class ProcessTerminatorTests
     {
         private ProcessTerminator _terminator;
