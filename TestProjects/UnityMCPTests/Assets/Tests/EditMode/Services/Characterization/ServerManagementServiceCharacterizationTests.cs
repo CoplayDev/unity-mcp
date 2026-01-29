@@ -215,6 +215,7 @@ namespace MCPForUnityTests.Editor.Services.Characterization
             // Arrange
             EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
             EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://remote.server.com:8080");
+            EditorConfigurationCache.Instance.Refresh();
             _service = new ServerManagementService();
 
             // Act

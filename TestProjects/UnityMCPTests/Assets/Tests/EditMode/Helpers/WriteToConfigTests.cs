@@ -66,6 +66,7 @@ namespace MCPForUnityTests.Editor.Helpers
             // Force HTTP transport defaults so expectations match current behavior
             EditorPrefs.SetBool(UseHttpTransportPrefKey, true);
             EditorPrefs.SetString(HttpUrlPrefKey, "http://localhost:8080");
+            EditorConfigCache.Instance.Refresh();
         }
 
         [TearDown]
