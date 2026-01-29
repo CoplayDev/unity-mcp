@@ -1,3 +1,4 @@
+import logging
 import types
 import threading
 import time
@@ -7,7 +8,12 @@ import core.telemetry as telemetry
 
 
 def test_telemetry_queue_backpressure_and_single_worker(monkeypatch, caplog):
-    caplog.set_level("DEBUG")
+    # Directly attach caplog's handler to the telemetry logger so that
+    # earlier tests calling logging.basicConfig() can't steal the records
+    # via a root handler before caplog sees them.
+    tel_logger = logging.getLogger("unity-mcp-telemetry")
+    tel_logger.addHandler(caplog.handler)
+    caplog.set_level("DEBUG", logger="unity-mcp-telemetry")
 
     collector = telemetry.TelemetryCollector()
     # Force-enable telemetry regardless of env settings from conftest
@@ -18,8 +24,9 @@ def test_telemetry_queue_backpressure_and_single_worker(monkeypatch, caplog):
     # Replace queue with tiny one to trigger backpressure quickly
     small_q = q.Queue(maxsize=2)
     collector._queue = small_q
-    # Give the worker a moment to switch queues
-    time.sleep(0.02)
+    # Give the worker time to finish processing the seeded item and
+    # re-enter _queue.get() on the new small queue
+    time.sleep(0.2)
 
     # Make sends slow to build backlog and exercise worker
     def slow_send(self, rec):
