@@ -1068,7 +1068,8 @@ jobs:
               return None
 
           fragments = sorted(Path('reports').glob('*_results.xml'))
-          fragments += sorted(Path('reports/_staging').glob('*_results.xml'))
+          report_names = {p.name for p in fragments}
+          fragments += sorted(p for p in Path('reports/_staging').glob('*_results.xml') if p.name not in report_names)
           if fragments:
               print("merge fragments:", ", ".join(p.as_posix() for p in fragments))
           added = 0
@@ -1161,7 +1162,7 @@ jobs:
               return None
 
           expected = set()
-          for p in Path("reports").glob("GO-*_results.xml"):
+          for p in list(Path("reports").glob("GO-*_results.xml")) + list(Path("reports/_staging").glob("GO-*_results.xml")):
               fid = id_from_filename(p)
               if fid:
                   expected.add(fid)
