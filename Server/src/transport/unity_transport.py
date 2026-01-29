@@ -1,7 +1,6 @@
 """Transport helpers for routing commands to Unity."""
 from __future__ import annotations
 
-import asyncio
 import os
 from typing import Awaitable, Callable, TypeVar
 
@@ -12,7 +11,6 @@ from core.config import config
 from services.api_key_service import ApiKeyService
 from models.models import MCPResponse
 from models.unity_response import normalize_unity_response
-from services.tools import get_unity_instance_from_context
 
 T = TypeVar("T")
 
@@ -66,6 +64,16 @@ async def send_with_unity_instance(
         # Auto-resolve user_id from HTTP request API key (remote-hosted mode)
         if user_id is None:
             user_id = await _resolve_user_id_from_request()
+
+        # Auth check
+        if config.http_remote_hosted and not user_id:
+            return normalize_unity_response(
+                MCPResponse(
+                    success=False,
+                    error="auth_required",
+                    message="API key required",
+                ).model_dump()
+            )
 
         try:
             raw = await PluginHub.send_command_for_instance(

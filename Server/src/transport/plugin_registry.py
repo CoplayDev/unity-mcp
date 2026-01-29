@@ -61,6 +61,8 @@ class PluginRegistry:
         in remote-hosted mode) it will be replaced, ensuring that reconnect scenarios
         always map to the latest WebSocket connection.
         """
+        if config.http_remote_hosted and not user_id:
+            raise ValueError("user_id is required in remote-hosted mode")
 
         async with self._lock:
             now = datetime.now(timezone.utc)
