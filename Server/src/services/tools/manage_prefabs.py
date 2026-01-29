@@ -150,9 +150,11 @@ async def manage_prefabs(
             params["componentsToRemove"] = components_to_remove
         if create_child is not None:
             # Normalize vector fields within create_child (handles single object or array)
-            def normalize_child_params(child: dict, index: int | None = None) -> tuple[dict, str | None]:
-                child_params = dict(child)
+            def normalize_child_params(child: Any, index: int | None = None) -> tuple[dict | None, str | None]:
                 prefix = f"create_child[{index}]" if index is not None else "create_child"
+                if not isinstance(child, dict):
+                    return None, f"{prefix} must be a dict with child properties (name, primitive_type, position, etc.), got {type(child).__name__}"
+                child_params = dict(child)
                 for vec_field in ("position", "rotation", "scale"):
                     if vec_field in child_params and child_params[vec_field] is not None:
                         vec_val, vec_err = normalize_vector3(child_params[vec_field], f"{prefix}.{vec_field}")

@@ -842,22 +842,27 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             JArray componentsToAdd = childParams["componentsToAdd"] as JArray ?? childParams["components_to_add"] as JArray;
             if (componentsToAdd != null)
             {
-                foreach (var compToken in componentsToAdd)
+                for (int i = 0; i < componentsToAdd.Count; i++)
                 {
+                    var compToken = componentsToAdd[i];
                     string typeName = compToken.Type == JTokenType.String
                         ? compToken.ToString()
                         : (compToken as JObject)?["typeName"]?.ToString();
 
-                    if (!string.IsNullOrEmpty(typeName))
+                    if (string.IsNullOrEmpty(typeName))
                     {
-                        if (!ComponentResolver.TryResolve(typeName, out Type componentType, out string error))
-                        {
-                            // Clean up partially created child
-                            UnityEngine.Object.DestroyImmediate(newChild);
-                            return (false, new ErrorResponse($"Component type '{typeName}' not found for create_child: {error}"));
-                        }
-                        newChild.AddComponent(componentType);
+                        // Clean up partially created child
+                        UnityEngine.Object.DestroyImmediate(newChild);
+                        return (false, new ErrorResponse($"create_child.components_to_add[{i}] must be a string or object with 'typeName' field, got {compToken.Type}"));
                     }
+
+                    if (!ComponentResolver.TryResolve(typeName, out Type componentType, out string error))
+                    {
+                        // Clean up partially created child
+                        UnityEngine.Object.DestroyImmediate(newChild);
+                        return (false, new ErrorResponse($"Component type '{typeName}' not found for create_child: {error}"));
+                    }
+                    newChild.AddComponent(componentType);
                 }
             }
 
@@ -871,7 +876,8 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 }
                 catch (Exception ex)
                 {
-                    McpLog.Warn($"[ManagePrefabs] Failed to set tag '{tag}' on child '{childName}': {ex.Message}");
+                    UnityEngine.Object.DestroyImmediate(newChild);
+                    return (false, new ErrorResponse($"Failed to set tag '{tag}' on child '{childName}': {ex.Message}"));
                 }
             }
 
@@ -880,14 +886,12 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             if (!string.IsNullOrEmpty(layerName))
             {
                 int layerId = LayerMask.NameToLayer(layerName);
-                if (layerId != -1)
+                if (layerId == -1)
                 {
-                    newChild.layer = layerId;
+                    UnityEngine.Object.DestroyImmediate(newChild);
+                    return (false, new ErrorResponse($"Invalid layer '{layerName}' for child '{childName}'. Use a valid layer name."));
                 }
-                else
-                {
-                    McpLog.Warn($"[ManagePrefabs] Invalid layer '{layerName}' for child '{childName}'.");
-                }
+                newChild.layer = layerId;
             }
 
             // Set active state
