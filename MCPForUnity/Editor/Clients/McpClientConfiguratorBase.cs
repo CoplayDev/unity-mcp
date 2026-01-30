@@ -156,7 +156,17 @@ namespace MCPForUnity.Editor.Clients
                 }
                 else if (!string.IsNullOrEmpty(configuredUrl))
                 {
-                    client.configuredTransport = Models.ConfiguredTransport.Http;
+                    // Distinguish HTTP Local from HTTP Remote by matching against both URLs
+                    string localRpcUrl = HttpEndpointUtility.GetLocalMcpRpcUrl();
+                    string remoteRpcUrl = HttpEndpointUtility.GetRemoteMcpRpcUrl();
+                    if (!string.IsNullOrEmpty(remoteRpcUrl) && UrlsEqual(configuredUrl, remoteRpcUrl))
+                    {
+                        client.configuredTransport = Models.ConfiguredTransport.HttpRemote;
+                    }
+                    else
+                    {
+                        client.configuredTransport = Models.ConfiguredTransport.Http;
+                    }
                 }
                 else
                 {
@@ -173,6 +183,7 @@ namespace MCPForUnity.Editor.Clients
                 }
                 else if (!string.IsNullOrEmpty(configuredUrl))
                 {
+                    // Match against the active scope's URL
                     string expectedUrl = HttpEndpointUtility.GetMcpRpcUrl();
                     matches = UrlsEqual(configuredUrl, expectedUrl);
                 }
@@ -189,9 +200,7 @@ namespace MCPForUnity.Editor.Clients
                     if (result == "Configured successfully")
                     {
                         client.SetStatus(McpStatus.Configured);
-                        // Update transport after rewrite based on current server setting
-                        bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
-                        client.configuredTransport = useHttp ? Models.ConfiguredTransport.Http : Models.ConfiguredTransport.Stdio;
+                        client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
                     }
                     else
                     {
@@ -220,9 +229,7 @@ namespace MCPForUnity.Editor.Clients
             if (result == "Configured successfully")
             {
                 client.SetStatus(McpStatus.Configured);
-                // Set transport based on current server setting
-                bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
-                client.configuredTransport = useHttp ? Models.ConfiguredTransport.Http : Models.ConfiguredTransport.Stdio;
+                client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
             }
             else
             {
@@ -272,7 +279,16 @@ namespace MCPForUnity.Editor.Clients
                     // Determine and set the configured transport type
                     if (!string.IsNullOrEmpty(url))
                     {
-                        client.configuredTransport = Models.ConfiguredTransport.Http;
+                        // Distinguish HTTP Local from HTTP Remote
+                        string remoteRpcUrl = HttpEndpointUtility.GetRemoteMcpRpcUrl();
+                        if (!string.IsNullOrEmpty(remoteRpcUrl) && UrlsEqual(url, remoteRpcUrl))
+                        {
+                            client.configuredTransport = Models.ConfiguredTransport.HttpRemote;
+                        }
+                        else
+                        {
+                            client.configuredTransport = Models.ConfiguredTransport.Http;
+                        }
                     }
                     else if (args != null && args.Length > 0)
                     {
@@ -286,6 +302,7 @@ namespace MCPForUnity.Editor.Clients
                     bool matches = false;
                     if (!string.IsNullOrEmpty(url))
                     {
+                        // Match against the active scope's URL
                         matches = UrlsEqual(url, HttpEndpointUtility.GetMcpRpcUrl());
                     }
                     else if (args != null && args.Length > 0)
@@ -313,9 +330,7 @@ namespace MCPForUnity.Editor.Clients
                     if (result == "Configured successfully")
                     {
                         client.SetStatus(McpStatus.Configured);
-                        // Update transport after rewrite based on current server setting
-                        bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
-                        client.configuredTransport = useHttp ? Models.ConfiguredTransport.Http : Models.ConfiguredTransport.Stdio;
+                        client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
                     }
                     else
                     {
@@ -344,9 +359,7 @@ namespace MCPForUnity.Editor.Clients
             if (result == "Configured successfully")
             {
                 client.SetStatus(McpStatus.Configured);
-                // Set transport based on current server setting
-                bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
-                client.configuredTransport = useHttp ? Models.ConfiguredTransport.Http : Models.ConfiguredTransport.Stdio;
+                client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
             }
             else
             {
@@ -468,9 +481,13 @@ namespace MCPForUnity.Editor.Clients
                             bool registeredWithStdio = getStdout.Contains("Type: stdio", StringComparison.OrdinalIgnoreCase);
 
                             // Set the configured transport based on what we detected
+                            // For HTTP, we can't distinguish local/remote from CLI output alone,
+                            // so infer from the current scope setting when HTTP is detected.
                             if (registeredWithHttp)
                             {
-                                client.configuredTransport = Models.ConfiguredTransport.Http;
+                                client.configuredTransport = HttpEndpointUtility.IsRemoteScope()
+                                    ? Models.ConfiguredTransport.HttpRemote
+                                    : Models.ConfiguredTransport.Http;
                             }
                             else if (registeredWithStdio)
                             {
@@ -481,7 +498,7 @@ namespace MCPForUnity.Editor.Clients
                                 client.configuredTransport = Models.ConfiguredTransport.Unknown;
                             }
 
-                            // Check for transport mismatch
+                            // Check for transport mismatch (3-way: Stdio, Http, HttpRemote)
                             bool hasTransportMismatch = (currentUseHttp && registeredWithStdio) || (!currentUseHttp && registeredWithHttp);
 
                             // For stdio transport, also check package version
@@ -576,7 +593,8 @@ namespace MCPForUnity.Editor.Clients
             string projectDir, string claudePath, string pathPrepend,
             bool useHttpTransport, string httpUrl,
             string uvxPath, string gitUrl, string packageName, bool shouldForceRefresh,
-            string apiKey)
+            string apiKey,
+            Models.ConfiguredTransport serverTransport)
         {
             if (client.status == McpStatus.Configured)
             {
@@ -586,7 +604,7 @@ namespace MCPForUnity.Editor.Clients
             {
                 RegisterWithCapturedValues(projectDir, claudePath, pathPrepend,
                     useHttpTransport, httpUrl, uvxPath, gitUrl, packageName, shouldForceRefresh,
-                    apiKey);
+                    apiKey, serverTransport);
             }
         }
 
@@ -597,7 +615,8 @@ namespace MCPForUnity.Editor.Clients
             string projectDir, string claudePath, string pathPrepend,
             bool useHttpTransport, string httpUrl,
             string uvxPath, string gitUrl, string packageName, bool shouldForceRefresh,
-            string apiKey)
+            string apiKey,
+            Models.ConfiguredTransport serverTransport)
         {
             if (string.IsNullOrEmpty(claudePath))
             {
@@ -638,7 +657,7 @@ namespace MCPForUnity.Editor.Clients
 
             McpLog.Info($"Successfully registered with Claude Code using {(useHttpTransport ? "HTTP" : "stdio")} transport.");
             client.SetStatus(McpStatus.Configured);
-            client.configuredTransport = useHttpTransport ? Models.ConfiguredTransport.Http : Models.ConfiguredTransport.Stdio;
+            client.configuredTransport = serverTransport;
         }
 
         /// <summary>
@@ -737,7 +756,7 @@ namespace MCPForUnity.Editor.Clients
             // Set status to Configured immediately after successful registration
             // The UI will trigger an async verification check separately to avoid blocking
             client.SetStatus(McpStatus.Configured);
-            client.configuredTransport = useHttpTransport ? Models.ConfiguredTransport.Http : Models.ConfiguredTransport.Stdio;
+            client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
         }
 
         private void Unregister()

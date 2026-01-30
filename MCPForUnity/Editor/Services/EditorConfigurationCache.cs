@@ -53,6 +53,7 @@ namespace MCPForUnity.Editor.Services
         private string _uvxPathOverride;
         private string _gitUrlOverride;
         private string _httpBaseUrl;
+        private string _httpRemoteBaseUrl;
         private string _claudeCliPathOverride;
         private string _httpTransportScope;
         private int _unitySocketPort;
@@ -94,10 +95,16 @@ namespace MCPForUnity.Editor.Services
         public string GitUrlOverride => _gitUrlOverride;
 
         /// <summary>
-        /// HTTP base URL for the MCP server.
+        /// HTTP base URL for the local MCP server.
         /// Default: empty string
         /// </summary>
         public string HttpBaseUrl => _httpBaseUrl;
+
+        /// <summary>
+        /// HTTP base URL for the remote-hosted MCP server.
+        /// Default: empty string
+        /// </summary>
+        public string HttpRemoteBaseUrl => _httpRemoteBaseUrl;
 
         /// <summary>
         /// Custom path override for Claude CLI executable.
@@ -135,6 +142,7 @@ namespace MCPForUnity.Editor.Services
             _uvxPathOverride = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
             _gitUrlOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, string.Empty);
             _httpBaseUrl = EditorPrefs.GetString(EditorPrefKeys.HttpBaseUrl, string.Empty);
+            _httpRemoteBaseUrl = EditorPrefs.GetString(EditorPrefKeys.HttpRemoteBaseUrl, string.Empty);
             _claudeCliPathOverride = EditorPrefs.GetString(EditorPrefKeys.ClaudeCliPathOverride, string.Empty);
             _httpTransportScope = EditorPrefs.GetString(EditorPrefKeys.HttpTransportScope, string.Empty);
             _unitySocketPort = EditorPrefs.GetInt(EditorPrefKeys.UnitySocketPort, 0);
@@ -235,6 +243,20 @@ namespace MCPForUnity.Editor.Services
         }
 
         /// <summary>
+        /// Set HttpRemoteBaseUrl and update cache + EditorPrefs atomically.
+        /// </summary>
+        public void SetHttpRemoteBaseUrl(string value)
+        {
+            value = value ?? string.Empty;
+            if (_httpRemoteBaseUrl != value)
+            {
+                _httpRemoteBaseUrl = value;
+                EditorPrefs.SetString(EditorPrefKeys.HttpRemoteBaseUrl, value);
+                OnConfigurationChanged?.Invoke(nameof(HttpRemoteBaseUrl));
+            }
+        }
+
+        /// <summary>
         /// Set ClaudeCliPathOverride and update cache + EditorPrefs atomically.
         /// </summary>
         public void SetClaudeCliPathOverride(string value)
@@ -303,6 +325,9 @@ namespace MCPForUnity.Editor.Services
                     break;
                 case nameof(HttpBaseUrl):
                     _httpBaseUrl = EditorPrefs.GetString(EditorPrefKeys.HttpBaseUrl, string.Empty);
+                    break;
+                case nameof(HttpRemoteBaseUrl):
+                    _httpRemoteBaseUrl = EditorPrefs.GetString(EditorPrefKeys.HttpRemoteBaseUrl, string.Empty);
                     break;
                 case nameof(ClaudeCliPathOverride):
                     _claudeCliPathOverride = EditorPrefs.GetString(EditorPrefKeys.ClaudeCliPathOverride, string.Empty);

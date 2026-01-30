@@ -30,7 +30,7 @@ namespace MCPForUnity.Editor.Services.Server
                 return false;
             }
 
-            string httpUrl = HttpEndpointUtility.GetBaseUrl();
+            string httpUrl = HttpEndpointUtility.GetLocalBaseUrl();
             if (!IsLocalUrl(httpUrl))
             {
                 error = $"The configured URL ({httpUrl}) is not a local address. Local server launch only works for localhost.";

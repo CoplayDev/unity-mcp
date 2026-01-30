@@ -192,6 +192,8 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                     EditorConfigurationCache.Instance.SetHttpTransportScope(scope);
                 }
 
+                // Swap the displayed URL to match the newly selected scope
+                SyncUrlFieldToScope();
                 UpdateHttpFieldVisibility();
                 RefreshHttpUi();
                 UpdateConnectionStatus();
@@ -501,6 +503,13 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         private bool IsHttpLocalSelected()
         {
             return transportDropdown != null && (TransportProtocol)transportDropdown.value == TransportProtocol.HTTPLocal;
+        }
+
+        private void SyncUrlFieldToScope()
+        {
+            if (httpUrlField == null) return;
+            httpUrlField.SetValueWithoutNotify(HttpEndpointUtility.GetBaseUrl());
+            cachedLoginUrl = null;
         }
 
         private void UpdateStartHttpButtonState()
@@ -965,17 +974,16 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 return;
             }
 
-            // Determine the server's current transport setting
-            bool serverUsesHttp = EditorConfigurationCache.Instance.UseHttpTransport;
-            ConfiguredTransport serverTransport = serverUsesHttp ? ConfiguredTransport.Http : ConfiguredTransport.Stdio;
+            // Determine the server's current transport setting (3-way: Stdio, Http, HttpRemote)
+            ConfiguredTransport serverTransport = HttpEndpointUtility.GetCurrentServerTransport();
 
             // Check for mismatch
             bool hasMismatch = clientTransport != serverTransport;
 
             if (hasMismatch)
             {
-                string clientTransportName = clientTransport == ConfiguredTransport.Http ? "HTTP" : "stdio";
-                string serverTransportName = serverTransport == ConfiguredTransport.Http ? "HTTP" : "stdio";
+                string clientTransportName = TransportDisplayName(clientTransport);
+                string serverTransportName = TransportDisplayName(serverTransport);
 
                 transportMismatchText.text = $"⚠ {clientName} is configured for \"{clientTransportName}\" but server is set to \"{serverTransportName}\". " +
                     "Click \"Configure\" in Client Configuration to update.";
@@ -993,6 +1001,17 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         public void ClearTransportMismatchWarning()
         {
             transportMismatchWarning?.RemoveFromClassList("visible");
+        }
+
+        private static string TransportDisplayName(ConfiguredTransport transport)
+        {
+            return transport switch
+            {
+                ConfiguredTransport.Stdio => "stdio",
+                ConfiguredTransport.Http => "HTTP Local",
+                ConfiguredTransport.HttpRemote => "HTTP Remote",
+                _ => "unknown"
+            };
         }
     }
 }
