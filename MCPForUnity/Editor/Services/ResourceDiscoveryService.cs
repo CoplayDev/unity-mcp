@@ -124,7 +124,8 @@ namespace MCPForUnity.Editor.Services
                     AssemblyName = type.Assembly.GetName().Name
                 };
 
-                metadata.IsBuiltIn = DetermineIsBuiltIn(type, metadata);
+                metadata.IsBuiltIn = StringCaseUtility.IsBuiltInMcpType(
+                    type, metadata.AssemblyName, "MCPForUnity.Editor.Resources");
 
                 return metadata;
             }
@@ -152,26 +153,6 @@ namespace MCPForUnity.Editor.Services
         private static string GetResourcePreferenceKey(string resourceName)
         {
             return EditorPrefKeys.ResourceEnabledPrefix + resourceName;
-        }
-
-        private bool DetermineIsBuiltIn(Type type, ResourceMetadata metadata)
-        {
-            if (metadata == null)
-            {
-                return false;
-            }
-
-            if (type != null && !string.IsNullOrEmpty(type.Namespace) && type.Namespace.StartsWith("MCPForUnity.Editor.Resources", StringComparison.Ordinal))
-            {
-                return true;
-            }
-
-            if (!string.IsNullOrEmpty(metadata.AssemblyName) && metadata.AssemblyName.Equals("MCPForUnity.Editor", StringComparison.Ordinal))
-            {
-                return true;
-            }
-
-            return false;
         }
     }
 }

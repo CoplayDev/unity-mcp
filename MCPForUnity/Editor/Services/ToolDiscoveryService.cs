@@ -131,7 +131,8 @@ namespace MCPForUnity.Editor.Services
                     PollAction = string.IsNullOrEmpty(toolAttr.PollAction) ? "status" : toolAttr.PollAction
                 };
 
-                metadata.IsBuiltIn = DetermineIsBuiltIn(type, metadata);
+                metadata.IsBuiltIn = StringCaseUtility.IsBuiltInMcpType(
+                    type, metadata.AssemblyName, "MCPForUnity.Editor.Tools");
 
                 return metadata;
 
@@ -239,24 +240,5 @@ namespace MCPForUnity.Editor.Services
             return EditorPrefKeys.ToolEnabledPrefix + toolName;
         }
 
-        private bool DetermineIsBuiltIn(Type type, ToolMetadata metadata)
-        {
-            if (metadata == null)
-            {
-                return false;
-            }
-
-            if (type != null && !string.IsNullOrEmpty(type.Namespace) && type.Namespace.StartsWith("MCPForUnity.Editor.Tools", StringComparison.Ordinal))
-            {
-                return true;
-            }
-
-            if (!string.IsNullOrEmpty(metadata.AssemblyName) && metadata.AssemblyName.Equals("MCPForUnity.Editor", StringComparison.Ordinal))
-            {
-                return true;
-            }
-
-            return false;
-        }
     }
 }

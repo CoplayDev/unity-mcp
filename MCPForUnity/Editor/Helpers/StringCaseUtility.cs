@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Text.RegularExpressions;
 
@@ -10,6 +11,28 @@ namespace MCPForUnity.Editor.Helpers
     /// </summary>
     public static class StringCaseUtility
     {
+        /// <summary>
+        /// Checks whether a type belongs to the built-in MCP for Unity package.
+        /// Returns true when the type's namespace starts with
+        /// <paramref name="builtInNamespacePrefix"/> or its assembly is MCPForUnity.Editor.
+        /// </summary>
+        public static bool IsBuiltInMcpType(Type type, string assemblyName, string builtInNamespacePrefix)
+        {
+            if (type != null && !string.IsNullOrEmpty(type.Namespace)
+                && type.Namespace.StartsWith(builtInNamespacePrefix, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (!string.IsNullOrEmpty(assemblyName)
+                && assemblyName.Equals("MCPForUnity.Editor", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
         /// <summary>
         /// Converts a camelCase string to snake_case.
         /// Example: "searchMethod" -> "search_method", "param1Value" -> "param1_value"
