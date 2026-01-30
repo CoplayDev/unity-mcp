@@ -158,7 +158,7 @@ namespace MCPForUnity.Editor.Services
 
                 if (success)
                 {
-                    McpLog.Debug($"uv cache cleared successfully: {stdout}");
+                    McpLog.Info($"uv cache cleared successfully: {stdout}");
                     return true;
                 }
                 string combinedOutput = string.Join(
