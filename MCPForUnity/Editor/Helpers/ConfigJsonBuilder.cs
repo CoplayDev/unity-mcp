@@ -73,16 +73,23 @@ namespace MCPForUnity.Editor.Helpers
                 if (unity["command"] != null) unity.Remove("command");
                 if (unity["args"] != null) unity.Remove("args");
 
-                // Add API key header if configured (for remote-hosted mode)
-                string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
-                if (!string.IsNullOrEmpty(apiKey))
+                // Only include API key header for remote-hosted mode
+                if (HttpEndpointUtility.IsRemoteScope())
                 {
-                    var headers = new JObject { [AuthConstants.ApiKeyHeader] = apiKey };
-                    unity["headers"] = headers;
+                    string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
+                    if (!string.IsNullOrEmpty(apiKey))
+                    {
+                        var headers = new JObject { [AuthConstants.ApiKeyHeader] = apiKey };
+                        unity["headers"] = headers;
+                    }
+                    else
+                    {
+                        if (unity["headers"] != null) unity.Remove("headers");
+                    }
                 }
                 else
                 {
-                    // Remove headers if API key is not set
+                    // Local HTTP doesn't use API keys; remove any stale headers
                     if (unity["headers"] != null) unity.Remove("headers");
                 }
 

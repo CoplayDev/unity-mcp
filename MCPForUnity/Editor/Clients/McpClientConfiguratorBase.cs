@@ -626,8 +626,8 @@ namespace MCPForUnity.Editor.Clients
             string args;
             if (useHttpTransport)
             {
-                // Add API key header if configured (for remote-hosted mode)
-                if (!string.IsNullOrEmpty(apiKey))
+                // Only include API key header for remote-hosted mode
+                if (serverTransport == Models.ConfiguredTransport.HttpRemote && !string.IsNullOrEmpty(apiKey))
                 {
                     string safeKey = SanitizeShellHeaderValue(apiKey);
                     args = $"mcp add --transport http UnityMCP {httpUrl} --header \"{AuthConstants.ApiKeyHeader}: {safeKey}\"";
@@ -695,12 +695,19 @@ namespace MCPForUnity.Editor.Clients
             if (useHttpTransport)
             {
                 string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
-                // Add API key header if configured (for remote-hosted mode)
-                string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
-                if (!string.IsNullOrEmpty(apiKey))
+                // Only include API key header for remote-hosted mode
+                if (HttpEndpointUtility.IsRemoteScope())
                 {
-                    string safeKey = SanitizeShellHeaderValue(apiKey);
-                    args = $"mcp add --transport http UnityMCP {httpUrl} --header \"{AuthConstants.ApiKeyHeader}: {safeKey}\"";
+                    string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
+                    if (!string.IsNullOrEmpty(apiKey))
+                    {
+                        string safeKey = SanitizeShellHeaderValue(apiKey);
+                        args = $"mcp add --transport http UnityMCP {httpUrl} --header \"{AuthConstants.ApiKeyHeader}: {safeKey}\"";
+                    }
+                    else
+                    {
+                        args = $"mcp add --transport http UnityMCP {httpUrl}";
+                    }
                 }
                 else
                 {
@@ -798,8 +805,13 @@ namespace MCPForUnity.Editor.Clients
             if (useHttpTransport)
             {
                 string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
-                string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
-                string headerArg = !string.IsNullOrEmpty(apiKey) ? $" --header \"{AuthConstants.ApiKeyHeader}: {SanitizeShellHeaderValue(apiKey)}\"" : "";
+                // Only include API key header for remote-hosted mode
+                string headerArg = "";
+                if (HttpEndpointUtility.IsRemoteScope())
+                {
+                    string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
+                    headerArg = !string.IsNullOrEmpty(apiKey) ? $" --header \"{AuthConstants.ApiKeyHeader}: {SanitizeShellHeaderValue(apiKey)}\"" : "";
+                }
                 return "# Register the MCP server with Claude Code:\n" +
                        $"claude mcp add --transport http UnityMCP {httpUrl}{headerArg}\n\n" +
                        "# Unregister the MCP server:\n" +

@@ -82,7 +82,9 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             _projectName = ProjectIdentityUtility.GetProjectName();
             _projectHash = ProjectIdentityUtility.GetProjectHash();
             _unityVersion = Application.unityVersion;
-            _apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
+            _apiKey = HttpEndpointUtility.IsRemoteScope()
+                ? EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty)
+                : string.Empty;
 
             // Get project root path (strip /Assets from dataPath) for focus nudging
             string dataPath = Application.dataPath;
