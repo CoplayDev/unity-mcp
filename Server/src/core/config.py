@@ -3,7 +3,6 @@ Configuration settings for the MCP for Unity Server.
 This file contains all configurable parameters for the server.
 """
 
-import logging
 from dataclasses import dataclass
 
 

@@ -538,7 +538,7 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
                     "tools": tools_payload,
                 })
             except Exception as e:
-                logger.error(f"CLI custom tools error: {e}")
+                logger.exception("CLI custom tools error: %s", e)
                 return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
     # Initialize and register middleware for session-based Unity instance routing
@@ -693,7 +693,7 @@ Examples:
         default=None,
         metavar="TOKEN",
         help="Service token value sent to validation endpoint for server authentication. "
-             "Can also set via UNITY_MCP_API_KEY_SERVICE_TOKEN."
+             "WARNING: Prefer UNITY_MCP_API_KEY_SERVICE_TOKEN env var in production to avoid process listing exposure."
     )
     parser.add_argument(
         "--unity-instance-token",
