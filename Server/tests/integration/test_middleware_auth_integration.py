@@ -123,3 +123,50 @@ class TestAutoSelectDisabledRemoteHosted:
         result = await middleware._maybe_autoselect_instance(ctx)
         # Remote-hosted mode should NOT auto-select (early return at the transport check)
         assert result is None
+
+
+class TestHttpAuthBehavior:
+    @pytest.mark.asyncio
+    async def test_http_local_does_not_require_user_id(self, monkeypatch):
+        """HTTP local mode should allow requests without user_id."""
+        monkeypatch.setattr(config, "http_remote_hosted", False)
+        monkeypatch.setattr(config, "transport_mode", "http")
+
+        from transport import unity_transport
+
+        async def fake_send_command_for_instance(*_args, **_kwargs):
+            return {"success": True, "data": {"ok": True}}
+
+        monkeypatch.setattr(
+            unity_transport.PluginHub,
+            "send_command_for_instance",
+            fake_send_command_for_instance,
+        )
+
+        async def _unused_send_fn(*_args, **_kwargs):
+            raise AssertionError("send_fn should not be used in HTTP mode")
+
+        result = await unity_transport.send_with_unity_instance(
+            _unused_send_fn, None, "ping", {}
+        )
+
+        assert result["success"] is True
+        assert result["data"] == {"ok": True}
+
+    @pytest.mark.asyncio
+    async def test_http_remote_requires_user_id(self, monkeypatch):
+        """HTTP remote-hosted mode should reject requests without user_id."""
+        monkeypatch.setattr(config, "http_remote_hosted", True)
+        monkeypatch.setattr(config, "transport_mode", "http")
+
+        from transport import unity_transport
+
+        async def _unused_send_fn(*_args, **_kwargs):
+            raise AssertionError("send_fn should not be used in HTTP mode")
+
+        result = await unity_transport.send_with_unity_instance(
+            _unused_send_fn, None, "ping", {}
+        )
+
+        assert result["success"] is False
+        assert result["error"] == "auth_required"
