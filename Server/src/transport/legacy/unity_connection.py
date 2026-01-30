@@ -241,8 +241,6 @@ class UnityConnection:
             params: Command parameters
             max_attempts: Maximum retry attempts (None = use config default, 0 = no retries)
         """
-        t0 = time.time()
-        logger.info("[TIMING-STDIO] send_command START: command=%s", command_type)
         # Defensive guard: catch empty/placeholder invocations early
         if not command_type:
             raise ValueError("MCP call missing command_type")
@@ -427,7 +425,7 @@ class UnityConnection:
 
                     # Cap backoff depending on state
                     if status and status.get('reloading'):
-                        # Domain reload can take 10-30s; use longer waits
+                        # Domain reload can take 10-20s; use longer waits
                         cap = 5.0
                     elif fast_error:
                         cap = 0.25
@@ -779,18 +777,27 @@ def send_command_with_retry(
         max_retries = getattr(config, "reload_max_retries", 40)
     if retry_ms is None:
         retry_ms = getattr(config, "reload_retry_ms", 250)
+    # Default to 20s to handle domain reloads (which can take 10-20s after tests or script changes).
+    #
+    # NOTE: This wait can impact agentic workflows where domain reloads happen
+    # frequently (e.g., after test runs, script compilation). The 20s default
+    # balances handling slow reloads vs. avoiding unnecessary delays.
+    #
+    # TODO: Make this more deterministic by detecting Unity's actual reload state
+    # rather than blindly waiting up to 20s. See Issue #657.
+    #
+    # Configurable via: UNITY_MCP_RELOAD_MAX_WAIT_S (default: 20.0, max: 20.0)
     try:
-        # Default to 30s to handle domain reloads (which can take 10-30s after tests or script changes)
         max_wait_s = float(os.environ.get(
-            "UNITY_MCP_RELOAD_MAX_WAIT_S", "30.0"))
+            "UNITY_MCP_RELOAD_MAX_WAIT_S", "20.0"))
     except ValueError as e:
-        raw_val = os.environ.get("UNITY_MCP_RELOAD_MAX_WAIT_S", "30.0")
+        raw_val = os.environ.get("UNITY_MCP_RELOAD_MAX_WAIT_S", "20.0")
         logger.warning(
-            "Invalid UNITY_MCP_RELOAD_MAX_WAIT_S=%r, using default 30.0: %s",
+            "Invalid UNITY_MCP_RELOAD_MAX_WAIT_S=%r, using default 20.0: %s",
             raw_val, e)
-        max_wait_s = 30.0
-    # Clamp to [0, 30] to prevent misconfiguration from causing excessive waits
-    max_wait_s = max(0.0, min(max_wait_s, 30.0))
+        max_wait_s = 20.0
+    # Clamp to [0, 20] to prevent misconfiguration from causing excessive waits
+    max_wait_s = max(0.0, min(max_wait_s, 20.0))
 
     # If retry_on_reload=False, disable connection-level retries too (issue #577)
     # Commands that trigger compilation/reload shouldn't retry on disconnect

@@ -653,9 +653,9 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
         private async Task HandleSocketClosureAsync(string reason)
         {
-            // DEBUG: Capture stack trace to identify what triggers disconnection (Issue #654 investigation)
+            // Capture stack trace for debugging disconnection triggers
             var stackTrace = new System.Diagnostics.StackTrace(true);
-            McpLog.Warn($"[WebSocket] HandleSocketClosureAsync called. Reason: {reason}\nStack trace:\n{stackTrace}");
+            McpLog.Debug($"[WebSocket] HandleSocketClosureAsync called. Reason: {reason}\nStack trace:\n{stackTrace}");
 
             if (_lifecycleCts == null || _lifecycleCts.IsCancellationRequested)
             {

@@ -7,7 +7,7 @@ import logging
 import os
 import time
 import uuid
-from typing import Any
+from typing import Any, ClassVar
 
 from starlette.endpoints import WebSocketEndpoint
 from starlette.websockets import WebSocket
@@ -84,9 +84,9 @@ class PluginHub(WebSocketEndpoint):
     _lock: asyncio.Lock | None = None
     _loop: asyncio.AbstractEventLoop | None = None
     # session_id -> last pong timestamp (monotonic)
-    _last_pong: dict[str, float] = {}
+    _last_pong: ClassVar[dict[str, float]] = {}
     # session_id -> ping task
-    _ping_tasks: dict[str, asyncio.Task] = {}
+    _ping_tasks: ClassVar[dict[str, asyncio.Task]] = {}
 
     @classmethod
     def configure(
@@ -454,13 +454,16 @@ class PluginHub(WebSocketEndpoint):
     async def _handle_pong(self, payload: PongMessage) -> None:
         cls = type(self)
         registry = cls._registry
+        lock = cls._lock
         if registry is None:
             return
         session_id = payload.session_id
         if session_id:
             await registry.touch(session_id)
-            # Record last pong time for staleness detection
-            cls._last_pong[session_id] = time.monotonic()
+            # Record last pong time for staleness detection (under lock for consistency)
+            if lock is not None:
+                async with lock:
+                    cls._last_pong[session_id] = time.monotonic()
 
     @classmethod
     async def _ping_loop(cls, session_id: str, websocket: WebSocket) -> None:
@@ -475,7 +478,7 @@ class PluginHub(WebSocketEndpoint):
             while True:
                 await asyncio.sleep(cls.PING_INTERVAL)
 
-                # Check if we're still supposed to be running
+                # Check if we're still supposed to be running and get last pong time (under lock)
                 lock = cls._lock
                 if lock is None:
                     break
@@ -483,9 +486,10 @@ class PluginHub(WebSocketEndpoint):
                     if session_id not in cls._connections:
                         logger.debug(f"[Ping] Session {session_id} no longer in connections, stopping ping loop")
                         break
+                    # Read last pong time under lock for consistency
+                    last_pong = cls._last_pong.get(session_id, 0)
 
                 # Check staleness: has it been too long since we got a pong?
-                last_pong = cls._last_pong.get(session_id, 0)
                 elapsed = time.monotonic() - last_pong
                 if elapsed > cls.PING_TIMEOUT:
                     logger.warning(
@@ -552,20 +556,30 @@ class PluginHub(WebSocketEndpoint):
         if cls._registry is None:
             raise RuntimeError("Plugin registry not configured")
 
-        # Bound waiting for Unity sessions. Default to 30s to handle domain reloads
-        # (which can take 10-30s after test runs or script changes).
+        # Bound waiting for Unity sessions. Default to 20s to handle domain reloads
+        # (which can take 10-20s after test runs or script changes).
+        #
+        # NOTE: This wait can impact agentic workflows where domain reloads happen
+        # frequently (e.g., after test runs, script compilation). The 20s default
+        # balances handling slow reloads vs. avoiding unnecessary delays.
+        #
+        # TODO: Make this more deterministic by detecting Unity's actual reload state
+        # (e.g., via status file, heartbeat, or explicit "reloading" signal from Unity)
+        # rather than blindly waiting up to 20s. See Issue #657.
+        #
+        # Configurable via: UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S (default: 20.0, max: 20.0)
         try:
             max_wait_s = float(
-                os.environ.get("UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S", "30.0"))
+                os.environ.get("UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S", "20.0"))
         except ValueError as e:
             raw_val = os.environ.get(
-                "UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S", "2.0")
+                "UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S", "20.0")
             logger.warning(
-                "Invalid UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S=%r, using default 2.0: %s",
+                "Invalid UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S=%r, using default 20.0: %s",
                 raw_val, e)
-            max_wait_s = 2.0
-        # Clamp to [0, 30] to prevent misconfiguration from causing excessive waits
-        max_wait_s = max(0.0, min(max_wait_s, 30.0))
+            max_wait_s = 20.0
+        # Clamp to [0, 20] to prevent misconfiguration from causing excessive waits
+        max_wait_s = max(0.0, min(max_wait_s, 20.0))
         retry_ms = float(getattr(config, "reload_retry_ms", 250))
         sleep_seconds = max(0.05, min(0.25, retry_ms / 1000.0))
 
@@ -701,7 +715,7 @@ class PluginHub(WebSocketEndpoint):
                     "Invalid UNITY_MCP_SESSION_READY_WAIT_SECONDS=%r, using default 6.0: %s",
                     raw_val, e)
                 max_wait_s = 6.0
-            max_wait_s = max(0.0, min(max_wait_s, 30.0))
+            max_wait_s = max(0.0, min(max_wait_s, 20.0))
             if max_wait_s > 0:
                 deadline = time.monotonic() + max_wait_s
                 while time.monotonic() < deadline:
