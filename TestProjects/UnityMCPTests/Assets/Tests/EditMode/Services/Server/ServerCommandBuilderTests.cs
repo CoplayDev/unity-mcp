@@ -237,6 +237,7 @@ namespace MCPForUnityTests.Editor.Services.Server
             // Arrange
             EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
             EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://remote.server.com:8080");
+            EditorConfigurationCache.Instance.Refresh();
 
             // Act
             bool result = _builder.TryBuildCommand(out string fileName, out string arguments, out string displayCommand, out string error);
@@ -253,6 +254,7 @@ namespace MCPForUnityTests.Editor.Services.Server
             // Arrange
             EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
             EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://localhost:8080");
+            EditorConfigurationCache.Instance.Refresh();
 
             // Act
             bool result = _builder.TryBuildCommand(out string fileName, out string arguments, out string displayCommand, out string error);

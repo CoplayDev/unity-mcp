@@ -48,16 +48,16 @@ namespace MCPForUnity.Editor.Helpers
             else
             {
                 // Stdio mode: Use command and args
-                var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
+                var (uvxPath, _, packageName) = AssetPathUtility.GetUvxCommandParts();
 
                 unityMCP["command"] = uvxPath;
 
                 var args = new TomlArray();
                 AddDevModeArgs(args);
-                if (!string.IsNullOrEmpty(fromUrl))
+                // Use centralized helper for beta server / prerelease args
+                foreach (var arg in AssetPathUtility.GetBetaServerFromArgsList())
                 {
-                    args.Add(new TomlString { Value = "--from" });
-                    args.Add(new TomlString { Value = fromUrl });
+                    args.Add(new TomlString { Value = arg });
                 }
                 args.Add(new TomlString { Value = packageName });
                 args.Add(new TomlString { Value = "--transport" });
@@ -73,6 +73,9 @@ namespace MCPForUnity.Editor.Helpers
                     envTable["SystemRoot"] = new TomlString { Value = platformService.GetSystemRoot() };
                     unityMCP["env"] = envTable;
                 }
+
+                // Allow extra time for uvx to download packages on first run
+                unityMCP["startup_timeout_sec"] = new TomlInteger { Value = 60 };
             }
 
             mcpServers["unityMCP"] = unityMCP;
@@ -197,16 +200,16 @@ namespace MCPForUnity.Editor.Helpers
             else
             {
                 // Stdio mode: Use command and args
-                var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
+                var (uvxPath, _, packageName) = AssetPathUtility.GetUvxCommandParts();
 
                 unityMCP["command"] = new TomlString { Value = uvxPath };
 
                 var argsArray = new TomlArray();
                 AddDevModeArgs(argsArray);
-                if (!string.IsNullOrEmpty(fromUrl))
+                // Use centralized helper for beta server / prerelease args
+                foreach (var arg in AssetPathUtility.GetBetaServerFromArgsList())
                 {
-                    argsArray.Add(new TomlString { Value = "--from" });
-                    argsArray.Add(new TomlString { Value = fromUrl });
+                    argsArray.Add(new TomlString { Value = arg });
                 }
                 argsArray.Add(new TomlString { Value = packageName });
                 argsArray.Add(new TomlString { Value = "--transport" });
@@ -221,6 +224,9 @@ namespace MCPForUnity.Editor.Helpers
                     envTable["SystemRoot"] = new TomlString { Value = platformService.GetSystemRoot() };
                     unityMCP["env"] = envTable;
                 }
+
+                // Allow extra time for uvx to download packages on first run
+                unityMCP["startup_timeout_sec"] = new TomlInteger { Value = 60 };
             }
 
             return unityMCP;

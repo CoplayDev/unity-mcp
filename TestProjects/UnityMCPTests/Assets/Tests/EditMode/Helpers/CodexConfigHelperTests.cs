@@ -241,15 +241,19 @@ namespace MCPForUnityTests.Editor.Helpers
 
             // Verify args contains the proper uvx command structure
             var args = argsNode as TomlArray;
-            Assert.IsTrue(args.ChildrenCount >= 3, "Args should contain --from, git URL, and package name");
-            
+            Assert.IsTrue(args.ChildrenCount >= 5, "Args should contain --prerelease, explicit, --from, PyPI package reference, and package name");
+
             var firstArg = (args[0] as TomlString).Value;
             var secondArg = (args[1] as TomlString).Value;
             var thirdArg = (args[2] as TomlString).Value;
-            
-            Assert.AreEqual("--from", firstArg, "First arg should be --from");
-            Assert.IsTrue(secondArg.Contains("mcpforunityserver"), "Second arg should be PyPI package reference");
-            Assert.AreEqual("mcp-for-unity", thirdArg, "Third arg should be mcp-for-unity");
+            var fourthArg = (args[3] as TomlString).Value;
+            var fifthArg = (args[4] as TomlString).Value;
+
+            Assert.AreEqual("--prerelease", firstArg, "First arg should be --prerelease");
+            Assert.AreEqual("explicit", secondArg, "Second arg should be explicit");
+            Assert.AreEqual("--from", thirdArg, "Third arg should be --from");
+            Assert.IsTrue(fourthArg.Contains("mcpforunityserver"), "Fourth arg should be PyPI package reference");
+            Assert.AreEqual("mcp-for-unity", fifthArg, "Fifth arg should be mcp-for-unity");
 
             // Verify env.SystemRoot is present on Windows
             bool hasEnv = unityMcp.TryGetNode("env", out var envNode);
@@ -306,15 +310,19 @@ namespace MCPForUnityTests.Editor.Helpers
 
             // Verify args contains the proper uvx command structure
             var args = argsNode as TomlArray;
-            Assert.IsTrue(args.ChildrenCount >= 3, "Args should contain --from, git URL, and package name");
-            
+            Assert.IsTrue(args.ChildrenCount >= 5, "Args should contain --prerelease, explicit, --from, PyPI package reference, and package name");
+
             var firstArg = (args[0] as TomlString).Value;
             var secondArg = (args[1] as TomlString).Value;
             var thirdArg = (args[2] as TomlString).Value;
-            
-            Assert.AreEqual("--from", firstArg, "First arg should be --from");
-            Assert.IsTrue(secondArg.Contains("mcpforunityserver"), "Second arg should be PyPI package reference");
-            Assert.AreEqual("mcp-for-unity", thirdArg, "Third arg should be mcp-for-unity");
+            var fourthArg = (args[3] as TomlString).Value;
+            var fifthArg = (args[4] as TomlString).Value;
+
+            Assert.AreEqual("--prerelease", firstArg, "First arg should be --prerelease");
+            Assert.AreEqual("explicit", secondArg, "Second arg should be explicit");
+            Assert.AreEqual("--from", thirdArg, "Third arg should be --from");
+            Assert.IsTrue(fourthArg.Contains("mcpforunityserver"), "Fourth arg should be PyPI package reference");
+            Assert.AreEqual("mcp-for-unity", fifthArg, "Fifth arg should be mcp-for-unity");
 
             // Verify env is NOT present on non-Windows platforms
             bool hasEnv = unityMcp.TryGetNode("env", out _);
@@ -373,15 +381,19 @@ namespace MCPForUnityTests.Editor.Helpers
 
             // Verify args contains the proper uvx command structure
             var args = argsNode as TomlArray;
-            Assert.IsTrue(args.ChildrenCount >= 3, "Args should contain --from, git URL, and package name");
-            
+            Assert.IsTrue(args.ChildrenCount >= 5, "Args should contain --prerelease, explicit, --from, PyPI package reference, and package name");
+
             var firstArg = (args[0] as TomlString).Value;
             var secondArg = (args[1] as TomlString).Value;
             var thirdArg = (args[2] as TomlString).Value;
-            
-            Assert.AreEqual("--from", firstArg, "First arg should be --from");
-            Assert.IsTrue(secondArg.Contains("mcpforunityserver"), "Second arg should be PyPI package reference");
-            Assert.AreEqual("mcp-for-unity", thirdArg, "Third arg should be mcp-for-unity");
+            var fourthArg = (args[3] as TomlString).Value;
+            var fifthArg = (args[4] as TomlString).Value;
+
+            Assert.AreEqual("--prerelease", firstArg, "First arg should be --prerelease");
+            Assert.AreEqual("explicit", secondArg, "Second arg should be explicit");
+            Assert.AreEqual("--from", thirdArg, "Third arg should be --from");
+            Assert.IsTrue(fourthArg.Contains("mcpforunityserver"), "Fourth arg should be PyPI package reference");
+            Assert.AreEqual("mcp-for-unity", fifthArg, "Fifth arg should be mcp-for-unity");
 
             // Verify env.SystemRoot is present on Windows
             bool hasEnv = unityMcp.TryGetNode("env", out var envNode);
@@ -447,15 +459,19 @@ namespace MCPForUnityTests.Editor.Helpers
 
             // Verify args contains the proper uvx command structure
             var args = argsNode as TomlArray;
-            Assert.IsTrue(args.ChildrenCount >= 3, "Args should contain --from, git URL, and package name");
-            
+            Assert.IsTrue(args.ChildrenCount >= 5, "Args should contain --prerelease, explicit, --from, PyPI package reference, and package name");
+
             var firstArg = (args[0] as TomlString).Value;
             var secondArg = (args[1] as TomlString).Value;
             var thirdArg = (args[2] as TomlString).Value;
-            
-            Assert.AreEqual("--from", firstArg, "First arg should be --from");
-            Assert.IsTrue(secondArg.Contains("mcpforunityserver"), "Second arg should be PyPI package reference");
-            Assert.AreEqual("mcp-for-unity", thirdArg, "Third arg should be mcp-for-unity");
+            var fourthArg = (args[3] as TomlString).Value;
+            var fifthArg = (args[4] as TomlString).Value;
+
+            Assert.AreEqual("--prerelease", firstArg, "First arg should be --prerelease");
+            Assert.AreEqual("explicit", secondArg, "Second arg should be explicit");
+            Assert.AreEqual("--from", thirdArg, "Third arg should be --from");
+            Assert.IsTrue(fourthArg.Contains("mcpforunityserver"), "Fourth arg should be PyPI package reference");
+            Assert.AreEqual("mcp-for-unity", fifthArg, "Fifth arg should be mcp-for-unity");
 
             // Verify env is NOT present on non-Windows platforms
             bool hasEnv = unityMcp.TryGetNode("env", out _);

@@ -25,7 +25,7 @@
 
 * **Unity 2021.3 LTS+** — [下载 Unity](https://unity.com/download)
 * **Python 3.10+** 和 **uv** — [安装 uv](https://docs.astral.sh/uv/getting-started/installation/)
-* **一个 MCP 客户端** — [Claude Desktop](https://claude.ai/download) | [Cursor](https://www.cursor.com/en/downloads) | [VS Code Copilot](https://code.visualstudio.com/docs/copilot/overview) | [Windsurf](https://windsurf.com)
+* **一个 MCP 客户端** — [Claude Desktop](https://claude.ai/download) | [Cursor](https://www.cursor.com/en/downloads) | [VS Code Copilot](https://code.visualstudio.com/docs/copilot/overview) | [GitHub Copilot CLI](https://docs.github.com/en/copilot/concepts/agents/about-copilot-cli) | [Windsurf](https://windsurf.com)
 
 ### 1. 安装 Unity 包
 

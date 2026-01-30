@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using MCPForUnity.Editor.Clients.Configurators;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Models;
@@ -110,20 +108,8 @@ namespace MCPForUnity.Editor.Helpers
 
                 var toolArgs = BuildUvxArgs(fromUrl, packageName);
 
-                if (ShouldUseWindowsCmdShim(client))
-                {
-                    unity["command"] = ResolveCmdPath();
-
-                    var cmdArgs = new List<string> { "/c", uvxPath };
-                    cmdArgs.AddRange(toolArgs);
-
-                    unity["args"] = JArray.FromObject(cmdArgs.ToArray());
-                }
-                else
-                {
-                    unity["command"] = uvxPath;
-                    unity["args"] = JArray.FromObject(toolArgs.ToArray());
-                }
+                unity["command"] = uvxPath;
+                unity["args"] = JArray.FromObject(toolArgs.ToArray());
 
                 // Remove url/serverUrl if they exist from previous config
                 if (unity["url"] != null) unity.Remove("url");
@@ -204,27 +190,5 @@ namespace MCPForUnity.Editor.Helpers
             return args;
         }
 
-        private static bool ShouldUseWindowsCmdShim(McpClient client)
-        {
-            if (client == null)
-            {
-                return false;
-            }
-
-            return Application.platform == RuntimePlatform.WindowsEditor &&
-                   string.Equals(client.name, ClaudeDesktopConfigurator.ClientName, StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static string ResolveCmdPath()
-        {
-            var comSpec = Environment.GetEnvironmentVariable("ComSpec");
-            if (!string.IsNullOrEmpty(comSpec) && File.Exists(comSpec))
-            {
-                return comSpec;
-            }
-
-            string system32Cmd = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe");
-            return File.Exists(system32Cmd) ? system32Cmd : "cmd.exe";
-        }
     }
 }
