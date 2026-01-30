@@ -241,6 +241,8 @@ class UnityConnection:
             params: Command parameters
             max_attempts: Maximum retry attempts (None = use config default, 0 = no retries)
         """
+        t0 = time.time()
+        logger.info("[TIMING-STDIO] send_command START: command=%s", command_type)
         # Defensive guard: catch empty/placeholder invocations early
         if not command_type:
             raise ValueError("MCP call missing command_type")
@@ -306,8 +308,10 @@ class UnityConnection:
         for attempt in range(attempts + 1):
             try:
                 # Ensure connected (handshake occurs within connect())
+                t_conn_start = time.time()
                 if not self.sock and not self.connect():
                     raise ConnectionError("Could not connect to Unity")
+                logger.info("[TIMING-STDIO] connect took %.3fs command=%s", time.time() - t_conn_start, command_type)
 
                 # Build payload
                 if command_type == 'ping':
@@ -324,12 +328,14 @@ class UnityConnection:
                     with contextlib.suppress(Exception):
                         logger.debug(
                             f"send {len(payload)} bytes; mode={mode}; head={payload[:32].decode('utf-8', 'ignore')}")
+                    t_send_start = time.time()
                     if self.use_framing:
                         header = struct.pack('>Q', len(payload))
                         self.sock.sendall(header)
                         self.sock.sendall(payload)
                     else:
                         self.sock.sendall(payload)
+                    logger.info("[TIMING-STDIO] sendall took %.3fs command=%s", time.time() - t_send_start, command_type)
 
                     # During retry bursts use a short receive timeout and ensure restoration
                     restore_timeout = None
@@ -337,7 +343,9 @@ class UnityConnection:
                         restore_timeout = self.sock.gettimeout()
                         self.sock.settimeout(1.0)
                     try:
+                        t_recv_start = time.time()
                         response_data = self.receive_full_response(self.sock)
+                        logger.info("[TIMING-STDIO] receive took %.3fs command=%s len=%d", time.time() - t_recv_start, command_type, len(response_data))
                         with contextlib.suppress(Exception):
                             logger.debug(
                                 f"recv {len(response_data)} bytes; mode={mode}")
@@ -419,7 +427,8 @@ class UnityConnection:
 
                     # Cap backoff depending on state
                     if status and status.get('reloading'):
-                        cap = 0.8
+                        # Domain reload can take 10-30s; use longer waits
+                        cap = 5.0
                     elif fast_error:
                         cap = 0.25
                     else:
@@ -761,20 +770,25 @@ def send_command_with_retry(
     Uses config.reload_retry_ms and config.reload_max_retries by default. Preserves the
     structured failure if retries are exhausted.
     """
+    t_retry_start = time.time()
+    logger.info("[TIMING-STDIO] send_command_with_retry START command=%s", command_type)
+    t_get_conn = time.time()
     conn = get_unity_connection(instance_id)
+    logger.info("[TIMING-STDIO] get_unity_connection took %.3fs command=%s", time.time() - t_get_conn, command_type)
     if max_retries is None:
         max_retries = getattr(config, "reload_max_retries", 40)
     if retry_ms is None:
         retry_ms = getattr(config, "reload_retry_ms", 250)
     try:
+        # Default to 30s to handle domain reloads (which can take 10-30s after tests or script changes)
         max_wait_s = float(os.environ.get(
-            "UNITY_MCP_RELOAD_MAX_WAIT_S", "2.0"))
+            "UNITY_MCP_RELOAD_MAX_WAIT_S", "30.0"))
     except ValueError as e:
-        raw_val = os.environ.get("UNITY_MCP_RELOAD_MAX_WAIT_S", "2.0")
+        raw_val = os.environ.get("UNITY_MCP_RELOAD_MAX_WAIT_S", "30.0")
         logger.warning(
-            "Invalid UNITY_MCP_RELOAD_MAX_WAIT_S=%r, using default 2.0: %s",
+            "Invalid UNITY_MCP_RELOAD_MAX_WAIT_S=%r, using default 30.0: %s",
             raw_val, e)
-        max_wait_s = 2.0
+        max_wait_s = 30.0
     # Clamp to [0, 30] to prevent misconfiguration from causing excessive waits
     max_wait_s = max(0.0, min(max_wait_s, 30.0))
 
@@ -847,6 +861,7 @@ def send_command_with_retry(
             instance_id or "default",
             waited,
         )
+    logger.info("[TIMING-STDIO] send_command_with_retry DONE total=%.3fs command=%s", time.time() - t_retry_start, command_type)
     return response
 
 
