@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import logging
 import os
 from typing import Awaitable, Callable, TypeVar
 
@@ -13,6 +14,7 @@ from models.models import MCPResponse
 from models.unity_response import normalize_unity_response
 from services.tools import get_unity_instance_from_context
 
+logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 

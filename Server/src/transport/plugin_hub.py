@@ -19,6 +19,7 @@ from transport.models import (
     WelcomeMessage,
     RegisteredMessage,
     ExecuteCommandMessage,
+    PingMessage,
     RegisterMessage,
     RegisterToolsMessage,
     PongMessage,
@@ -27,7 +28,7 @@ from transport.models import (
     SessionDetails,
 )
 
-logger = logging.getLogger("mcp-for-unity-server")
+logger = logging.getLogger(__name__)
 
 
 class PluginDisconnectedError(RuntimeError):
@@ -45,6 +46,10 @@ class PluginHub(WebSocketEndpoint):
     KEEP_ALIVE_INTERVAL = 15
     SERVER_TIMEOUT = 30
     COMMAND_TIMEOUT = 30
+    # Server-side ping interval (seconds) - how often to send pings to Unity
+    PING_INTERVAL = 10
+    # Max time (seconds) to wait for pong before considering connection dead
+    PING_TIMEOUT = 20
     # Timeout (seconds) for fast-fail commands like ping/read_console/get_editor_state.
     # Keep short so MCP clients aren't blocked during Unity compilation/reload/unfocused throttling.
     FAST_FAIL_TIMEOUT = 2.0
@@ -60,6 +65,10 @@ class PluginHub(WebSocketEndpoint):
     _pending: dict[str, dict[str, Any]] = {}
     _lock: asyncio.Lock | None = None
     _loop: asyncio.AbstractEventLoop | None = None
+    # session_id -> last pong timestamp (monotonic)
+    _last_pong: dict[str, float] = {}
+    # session_id -> ping task
+    _ping_tasks: dict[str, asyncio.Task] = {}
 
     @classmethod
     def configure(
@@ -114,12 +123,20 @@ class PluginHub(WebSocketEndpoint):
                 (sid for sid, ws in cls._connections.items() if ws is websocket), None)
             if session_id:
                 cls._connections.pop(session_id, None)
+                # Stop the ping loop for this session
+                ping_task = cls._ping_tasks.pop(session_id, None)
+                if ping_task and not ping_task.done():
+                    ping_task.cancel()
+                # Clean up last pong tracking
+                cls._last_pong.pop(session_id, None)
                 # Fail-fast any in-flight commands for this session to avoid waiting for COMMAND_TIMEOUT.
                 pending_ids = [
                     command_id
                     for command_id, entry in cls._pending.items()
                     if entry.get("session_id") == session_id
                 ]
+                if pending_ids:
+                    logger.debug(f"Cancelling {len(pending_ids)} pending commands for disconnected session")
                 for command_id in pending_ids:
                     entry = cls._pending.get(command_id)
                     future = entry.get("future") if isinstance(
@@ -294,7 +311,16 @@ class PluginHub(WebSocketEndpoint):
         session = await registry.register(session_id, project_name, project_hash, unity_version, project_path)
         async with lock:
             cls._connections[session.session_id] = websocket
-        logger.info(f"Plugin registered: {project_name} ({project_hash})")
+            # Initialize last pong time and start ping loop for this session
+            cls._last_pong[session_id] = time.monotonic()
+            # Cancel any existing ping task for this session (shouldn't happen, but be safe)
+            old_task = cls._ping_tasks.pop(session_id, None)
+            if old_task and not old_task.done():
+                old_task.cancel()
+            # Start the server-side ping loop
+            ping_task = asyncio.create_task(cls._ping_loop(session_id, websocket))
+            cls._ping_tasks[session_id] = ping_task
+        logger.info(f"Plugin registered: {project_name} ({project_hash}) - started ping loop")
 
     async def _handle_register_tools(self, websocket: WebSocket, payload: RegisterToolsMessage) -> None:
         cls = type(self)
@@ -359,6 +385,68 @@ class PluginHub(WebSocketEndpoint):
         session_id = payload.session_id
         if session_id:
             await registry.touch(session_id)
+            # Record last pong time for staleness detection
+            cls._last_pong[session_id] = time.monotonic()
+
+    @classmethod
+    async def _ping_loop(cls, session_id: str, websocket: WebSocket) -> None:
+        """Server-initiated ping loop to detect dead connections.
+
+        Sends periodic pings to the Unity client. If no pong is received within
+        PING_TIMEOUT seconds, the connection is considered dead and closed.
+        This helps detect connections that die silently (e.g., Windows OSError 64).
+        """
+        logger.debug(f"[Ping] Starting ping loop for session {session_id}")
+        try:
+            while True:
+                await asyncio.sleep(cls.PING_INTERVAL)
+
+                # Check if we're still supposed to be running
+                lock = cls._lock
+                if lock is None:
+                    break
+                async with lock:
+                    if session_id not in cls._connections:
+                        logger.debug(f"[Ping] Session {session_id} no longer in connections, stopping ping loop")
+                        break
+
+                # Check staleness: has it been too long since we got a pong?
+                last_pong = cls._last_pong.get(session_id, 0)
+                elapsed = time.monotonic() - last_pong
+                if elapsed > cls.PING_TIMEOUT:
+                    logger.warning(
+                        f"[Ping] Session {session_id} stale: no pong for {elapsed:.1f}s "
+                        f"(timeout={cls.PING_TIMEOUT}s). Closing connection."
+                    )
+                    try:
+                        await websocket.close(code=1001)  # Going away
+                    except Exception as close_ex:
+                        logger.debug(f"[Ping] Error closing stale websocket: {close_ex}")
+                    break
+
+                # Send a ping to the client
+                try:
+                    ping_msg = PingMessage()
+                    await websocket.send_json(ping_msg.model_dump())
+                    logger.debug(f"[Ping] Sent ping to session {session_id}")
+                except Exception as send_ex:
+                    # Send failed - connection is dead
+                    logger.warning(
+                        f"[Ping] Failed to send ping to session {session_id}: {send_ex}. "
+                        "Connection likely dead."
+                    )
+                    try:
+                        await websocket.close(code=1006)  # Abnormal closure
+                    except Exception:
+                        pass
+                    break
+
+        except asyncio.CancelledError:
+            logger.debug(f"[Ping] Ping loop cancelled for session {session_id}")
+        except Exception as ex:
+            logger.warning(f"[Ping] Ping loop error for session {session_id}: {ex}")
+        finally:
+            logger.debug(f"[Ping] Ping loop ended for session {session_id}")
 
     @classmethod
     async def _get_connection(cls, session_id: str) -> WebSocket:
@@ -386,10 +474,11 @@ class PluginHub(WebSocketEndpoint):
         if cls._registry is None:
             raise RuntimeError("Plugin registry not configured")
 
-        # Bound waiting for Unity sessions so calls fail fast when editors are not ready.
+        # Bound waiting for Unity sessions. Default to 30s to handle domain reloads
+        # (which can take 10-30s after test runs or script changes).
         try:
             max_wait_s = float(
-                os.environ.get("UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S", "2.0"))
+                os.environ.get("UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S", "30.0"))
         except ValueError as e:
             raw_val = os.environ.get(
                 "UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S", "2.0")

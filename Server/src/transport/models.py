@@ -23,6 +23,11 @@ class ExecuteCommandMessage(BaseModel):
     params: dict[str, Any]
     timeout: float
 
+
+class PingMessage(BaseModel):
+    """Server-initiated ping to detect dead connections."""
+    type: str = "ping"
+
 # Incoming (Plugin -> Server)
 
 
