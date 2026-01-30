@@ -117,10 +117,6 @@ class TestInstanceListResourceIsolation:
         ctx = DummyContext()
         ctx.set_state("user_id", "userA")
 
-        monkeypatch.setattr(
-            "services.resources.unity_instances._current_transport", lambda: "http"
-        )
-
         result = await unity_instances(ctx)
 
         assert result["success"] is True

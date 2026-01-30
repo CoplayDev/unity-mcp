@@ -2,7 +2,6 @@
 
 import asyncio
 import sys
-import types
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -102,13 +101,7 @@ class TestAutoSelectDisabledRemoteHosted:
     async def test_auto_select_returns_none_in_remote_hosted(self, monkeypatch):
         """_maybe_autoselect_instance should return None in remote-hosted mode even with one session."""
         monkeypatch.setattr(config, "http_remote_hosted", True)
-        monkeypatch.setenv("UNITY_MCP_TRANSPORT", "http")
-
-        # Stub transport module for the dynamic import inside _maybe_autoselect_instance
-        unity_transport = types.ModuleType("transport.unity_transport")
-        unity_transport._current_transport = lambda: "http"
-        monkeypatch.setitem(
-            sys.modules, "transport.unity_transport", unity_transport)
+        monkeypatch.setattr(config, "transport_mode", "http")
 
         # Re-import middleware to pick up the stubbed transport module
         monkeypatch.delitem(

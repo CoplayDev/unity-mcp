@@ -103,10 +103,7 @@ class UnityInstanceMiddleware(Middleware):
         to stick for subsequent tool/resource calls in the same session.
         """
         try:
-            # Import here to avoid circular dependencies / optional transport modules.
-            from transport.unity_transport import _current_transport
-
-            transport = _current_transport()
+            transport = (config.transport_mode or "stdio").lower()
             # This implicit behavior works well for solo-users, but is dangerous for multi-user setups
             if transport == "http" and config.http_remote_hosted:
                 return None

@@ -1,7 +1,6 @@
 """Transport helpers for routing commands to Unity."""
 from __future__ import annotations
 
-import os
 import logging
 from typing import Awaitable, Callable, TypeVar
 
@@ -18,11 +17,6 @@ logger = logging.getLogger("mcp-for-unity-server")
 
 def _is_http_transport() -> bool:
     return config.transport_mode.lower() == "http"
-
-
-def _current_transport() -> str:
-    """Expose the active transport mode as a simple string identifier."""
-    return "http" if _is_http_transport() else "stdio"
 
 
 async def _resolve_user_id_from_request() -> str | None:

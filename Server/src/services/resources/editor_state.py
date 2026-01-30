@@ -134,10 +134,7 @@ async def infer_single_instance_id(ctx: Context) -> str | None:
     """
     await ctx.info("If exactly one Unity instance is connected, return its Name@hash id.")
 
-    try:
-        transport = unity_transport._current_transport()
-    except Exception:
-        transport = None
+    transport = (config.transport_mode or "stdio").lower()
 
     if transport == "http":
         # HTTP/WebSocket transport: derive from PluginHub sessions.
