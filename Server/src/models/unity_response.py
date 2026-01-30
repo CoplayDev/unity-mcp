@@ -1,7 +1,9 @@
 """Utilities for normalizing Unity transport responses."""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Type
+
+from models.models import MCPResponse
 
 
 def normalize_unity_response(response: Any) -> Any:
@@ -45,3 +47,24 @@ def normalize_unity_response(response: Any) -> Any:
         normalized["error"] = message or "Unity command failed"
 
     return normalized
+
+
+def parse_resource_response(response: Any, typed_cls: Type[MCPResponse]) -> MCPResponse:
+    """Parse a Unity response into a typed response class.
+
+    Returns a base ``MCPResponse`` for error responses so that typed subclasses
+    with strict ``data`` fields (e.g. ``list[str]``) don't raise Pydantic
+    validation errors when ``data`` is ``None``.
+    """
+    if not isinstance(response, dict):
+        return response
+
+    # Detect errors from both normalized (success=False) and raw (status="error") shapes.
+    if response.get("success") is False or response.get("status") == "error":
+        return MCPResponse(
+            success=False,
+            error=response.get("error"),
+            message=response.get("message"),
+        )
+
+    return typed_cls(**response)

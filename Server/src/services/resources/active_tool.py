@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from fastmcp import Context
 
 from models import MCPResponse
+from models.unity_response import parse_resource_response
 from services.registry import mcp_for_unity_resource
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
@@ -44,4 +45,4 @@ async def get_active_tool(ctx: Context) -> ActiveToolResponse | MCPResponse:
         "get_active_tool",
         {}
     )
-    return ActiveToolResponse(**response) if isinstance(response, dict) else response
+    return parse_resource_response(response, ActiveToolResponse)

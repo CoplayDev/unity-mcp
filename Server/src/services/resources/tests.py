@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from fastmcp import Context
 
 from models import MCPResponse
+from models.unity_response import parse_resource_response
 from services.registry import mcp_for_unity_resource
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
@@ -53,7 +54,7 @@ async def get_tests(ctx: Context) -> GetTestsResponse | MCPResponse:
         "get_tests",
         {},
     )
-    return GetTestsResponse(**response) if isinstance(response, dict) else response
+    return parse_resource_response(response, GetTestsResponse)
 
 
 @mcp_for_unity_resource(
@@ -84,4 +85,4 @@ async def get_tests_for_mode(
         "get_tests_for_mode",
         {"mode": mode},
     )
-    return GetTestsResponse(**response) if isinstance(response, dict) else response
+    return parse_resource_response(response, GetTestsResponse)
