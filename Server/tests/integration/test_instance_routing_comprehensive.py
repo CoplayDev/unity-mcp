@@ -14,6 +14,7 @@ import pytest
 from unittest.mock import AsyncMock, Mock, MagicMock, patch
 from fastmcp import Context
 
+from core.config import config
 from transport.unity_instance_middleware import UnityInstanceMiddleware
 from services.tools import get_unity_instance_from_context
 from services.tools.set_active_instance import set_active_instance as set_active_instance_tool
@@ -172,7 +173,7 @@ class TestInstanceRoutingHTTP:
                              v: state_storage.__setitem__(k, v))
         ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
 
-        monkeypatch.setenv("UNITY_MCP_TRANSPORT", "http")
+        monkeypatch.setattr(config, "transport_mode", "http")
         fake_sessions = SessionList(
             sessions={
                 "sess-1": SessionDetails(
@@ -208,7 +209,7 @@ class TestInstanceRoutingHTTP:
                              v: state_storage.__setitem__(k, v))
         ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
 
-        monkeypatch.setenv("UNITY_MCP_TRANSPORT", "http")
+        monkeypatch.setattr(config, "transport_mode", "http")
         fake_sessions = SessionList(
             sessions={
                 "sess-99": SessionDetails(
@@ -240,7 +241,7 @@ class TestInstanceRoutingHTTP:
         ctx = Mock(spec=Context)
         ctx.session_id = "http-session-3"
 
-        monkeypatch.setenv("UNITY_MCP_TRANSPORT", "http")
+        monkeypatch.setattr(config, "transport_mode", "http")
         fake_sessions = SessionList(sessions={})
         monkeypatch.setattr(
             "services.tools.set_active_instance.PluginHub.get_sessions",
@@ -263,7 +264,7 @@ class TestInstanceRoutingHTTP:
         ctx = Mock(spec=Context)
         ctx.session_id = "http-session-4"
 
-        monkeypatch.setenv("UNITY_MCP_TRANSPORT", "http")
+        monkeypatch.setattr(config, "transport_mode", "http")
         fake_sessions = SessionList(
             sessions={
                 "sess-a": SessionDetails(project="ProjA", hash="abc12345", unity_version="2022", connected_at="now"),
