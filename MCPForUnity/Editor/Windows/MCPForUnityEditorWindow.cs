@@ -8,6 +8,7 @@ using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Windows.Components.Advanced;
 using MCPForUnity.Editor.Windows.Components.ClientConfig;
 using MCPForUnity.Editor.Windows.Components.Connection;
+using MCPForUnity.Editor.Windows.Components.Resources;
 using MCPForUnity.Editor.Windows.Components.Tools;
 using MCPForUnity.Editor.Windows.Components.Validation;
 using UnityEditor;
@@ -25,6 +26,7 @@ namespace MCPForUnity.Editor.Windows
         private McpValidationSection validationSection;
         private McpAdvancedSection advancedSection;
         private McpToolsSection toolsSection;
+        private McpResourcesSection resourcesSection;
 
         // UI Elements
         private Label versionLabel;
@@ -35,14 +37,17 @@ namespace MCPForUnity.Editor.Windows
         private ToolbarToggle validationTabToggle;
         private ToolbarToggle advancedTabToggle;
         private ToolbarToggle toolsTabToggle;
+        private ToolbarToggle resourcesTabToggle;
         private VisualElement clientsPanel;
         private VisualElement validationPanel;
         private VisualElement advancedPanel;
         private VisualElement toolsPanel;
+        private VisualElement resourcesPanel;
 
         private static readonly HashSet<MCPForUnityEditorWindow> OpenWindows = new();
         private bool guiCreated = false;
         private bool toolsLoaded = false;
+        private bool resourcesLoaded = false;
         private double lastRefreshTime = 0;
         private const double RefreshDebounceSeconds = 0.5;
 
@@ -51,7 +56,8 @@ namespace MCPForUnity.Editor.Windows
             Clients,
             Validation,
             Advanced,
-            Tools
+            Tools,
+            Resources
         }
 
         internal static void CloseAllWindows()
@@ -146,12 +152,14 @@ namespace MCPForUnity.Editor.Windows
             validationPanel = rootVisualElement.Q<VisualElement>("validation-panel");
             advancedPanel = rootVisualElement.Q<VisualElement>("advanced-panel");
             toolsPanel = rootVisualElement.Q<VisualElement>("tools-panel");
+            resourcesPanel = rootVisualElement.Q<VisualElement>("resources-panel");
             var clientsContainer = rootVisualElement.Q<VisualElement>("clients-container");
             var validationContainer = rootVisualElement.Q<VisualElement>("validation-container");
             var advancedContainer = rootVisualElement.Q<VisualElement>("advanced-container");
             var toolsContainer = rootVisualElement.Q<VisualElement>("tools-container");
+            var resourcesContainer = rootVisualElement.Q<VisualElement>("resources-container");
 
-            if (clientsPanel == null || validationPanel == null || advancedPanel == null || toolsPanel == null)
+            if (clientsPanel == null || validationPanel == null || advancedPanel == null || toolsPanel == null || resourcesPanel == null)
             {
                 McpLog.Error("Failed to find tab panels in UXML");
                 return;
@@ -178,6 +186,12 @@ namespace MCPForUnity.Editor.Windows
             if (toolsContainer == null)
             {
                 McpLog.Error("Failed to find tools-container in UXML");
+                return;
+            }
+
+            if (resourcesContainer == null)
+            {
+                McpLog.Error("Failed to find resources-container in UXML");
                 return;
             }
 
@@ -275,6 +289,26 @@ namespace MCPForUnity.Editor.Windows
                 McpLog.Warn("Failed to load tools section UXML. Tool configuration will be unavailable.");
             }
 
+            // Load and initialize Resources section
+            var resourcesTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
+                $"{basePath}/Editor/Windows/Components/Resources/McpResourcesSection.uxml"
+            );
+            if (resourcesTree != null)
+            {
+                var resourcesRoot = resourcesTree.Instantiate();
+                resourcesContainer.Add(resourcesRoot);
+                resourcesSection = new McpResourcesSection(resourcesRoot);
+
+                if (resourcesTabToggle != null && resourcesTabToggle.value)
+                {
+                    EnsureResourcesLoaded();
+                }
+            }
+            else
+            {
+                McpLog.Warn("Failed to load resources section UXML. Resource configuration will be unavailable.");
+            }
+
             // Apply .section-last class to last section in each stack
             // (Unity UI Toolkit doesn't support :last-child pseudo-class)
             ApplySectionLastClasses();
@@ -313,6 +347,22 @@ namespace MCPForUnity.Editor.Windows
 
             toolsLoaded = true;
             toolsSection.Refresh();
+        }
+
+        private void EnsureResourcesLoaded()
+        {
+            if (resourcesLoaded)
+            {
+                return;
+            }
+
+            if (resourcesSection == null)
+            {
+                return;
+            }
+
+            resourcesLoaded = true;
+            resourcesSection.Refresh();
         }
 
         /// <summary>
@@ -355,6 +405,7 @@ namespace MCPForUnity.Editor.Windows
             OpenWindows.Remove(this);
             guiCreated = false;
             toolsLoaded = false;
+            resourcesLoaded = false;
         }
 
         private void OnFocus()
@@ -411,11 +462,13 @@ namespace MCPForUnity.Editor.Windows
             validationTabToggle = rootVisualElement.Q<ToolbarToggle>("validation-tab");
             advancedTabToggle = rootVisualElement.Q<ToolbarToggle>("advanced-tab");
             toolsTabToggle = rootVisualElement.Q<ToolbarToggle>("tools-tab");
+            resourcesTabToggle = rootVisualElement.Q<ToolbarToggle>("resources-tab");
 
             clientsPanel?.RemoveFromClassList("hidden");
             validationPanel?.RemoveFromClassList("hidden");
             advancedPanel?.RemoveFromClassList("hidden");
             toolsPanel?.RemoveFromClassList("hidden");
+            resourcesPanel?.RemoveFromClassList("hidden");
 
             if (clientsTabToggle != null)
             {
@@ -446,6 +499,14 @@ namespace MCPForUnity.Editor.Windows
                 toolsTabToggle.RegisterValueChangedCallback(evt =>
                 {
                     if (evt.newValue) SwitchPanel(ActivePanel.Tools);
+                });
+            }
+
+            if (resourcesTabToggle != null)
+            {
+                resourcesTabToggle.RegisterValueChangedCallback(evt =>
+                {
+                    if (evt.newValue) SwitchPanel(ActivePanel.Resources);
                 });
             }
 
@@ -481,6 +542,11 @@ namespace MCPForUnity.Editor.Windows
                 toolsPanel.style.display = DisplayStyle.None;
             }
 
+            if (resourcesPanel != null)
+            {
+                resourcesPanel.style.display = DisplayStyle.None;
+            }
+
             // Show selected panel
             switch (panel)
             {
@@ -497,6 +563,10 @@ namespace MCPForUnity.Editor.Windows
                     if (toolsPanel != null) toolsPanel.style.display = DisplayStyle.Flex;
                     EnsureToolsLoaded();
                     break;
+                case ActivePanel.Resources:
+                    if (resourcesPanel != null) resourcesPanel.style.display = DisplayStyle.Flex;
+                    EnsureResourcesLoaded();
+                    break;
             }
 
             // Update toggle states
@@ -504,6 +574,7 @@ namespace MCPForUnity.Editor.Windows
             validationTabToggle?.SetValueWithoutNotify(panel == ActivePanel.Validation);
             advancedTabToggle?.SetValueWithoutNotify(panel == ActivePanel.Advanced);
             toolsTabToggle?.SetValueWithoutNotify(panel == ActivePanel.Tools);
+            resourcesTabToggle?.SetValueWithoutNotify(panel == ActivePanel.Resources);
 
             EditorPrefs.SetString(EditorPrefKeys.EditorWindowActivePanel, panel.ToString());
         }

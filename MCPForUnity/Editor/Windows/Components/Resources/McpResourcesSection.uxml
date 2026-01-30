@@ -1,0 +1,15 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+    <ui:VisualElement name="resources-section" class="section">
+        <ui:Label text="Resources" class="section-title" />
+        <ui:VisualElement class="section-content">
+            <ui:Label name="resources-summary" class="help-text" text="Discovering resources..." />
+            <ui:VisualElement name="resources-actions" class="tool-actions">
+                <ui:Button name="enable-all-resources-button" text="Enable All" class="tool-action-button" />
+                <ui:Button name="disable-all-resources-button" text="Disable All" class="tool-action-button" />
+                <ui:Button name="rescan-resources-button" text="Rescan" class="tool-action-button" />
+            </ui:VisualElement>
+            <ui:Label name="resources-note" class="help-text" text="Changes apply after reconnecting or re-registering resources." />
+            <ui:VisualElement name="resource-category-container" class="tool-category-container" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

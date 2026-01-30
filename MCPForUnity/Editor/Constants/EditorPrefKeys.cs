@@ -43,6 +43,8 @@ namespace MCPForUnity.Editor.Constants
         internal const string AutoRegisterEnabled = "MCPForUnity.AutoRegisterEnabled";
         internal const string ToolEnabledPrefix = "MCPForUnity.ToolEnabled.";
         internal const string ToolFoldoutStatePrefix = "MCPForUnity.ToolFoldout.";
+        internal const string ResourceEnabledPrefix = "MCPForUnity.ResourceEnabled.";
+        internal const string ResourceFoldoutStatePrefix = "MCPForUnity.ResourceFoldout.";
         internal const string EditorWindowActivePanel = "MCPForUnity.EditorWindow.ActivePanel";
 
         internal const string SetupCompleted = "MCPForUnity.SetupCompleted";

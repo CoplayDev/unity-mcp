@@ -16,6 +16,11 @@ namespace MCPForUnity.Editor.Resources
         public string ResourceName { get; }
 
         /// <summary>
+        /// Human-readable description of what this resource provides.
+        /// </summary>
+        public string Description { get; set; }
+
+        /// <summary>
         /// Create an MCP resource attribute with auto-generated resource name.
         /// The resource name will be derived from the class name (PascalCase → snake_case).
         /// Example: ManageAsset → manage_asset

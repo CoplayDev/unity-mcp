@@ -10,6 +10,7 @@
         <uie:Toolbar name="tab-toolbar" class="tab-toolbar">
             <uie:ToolbarToggle name="clients-tab" text="Connect" value="true" />
             <uie:ToolbarToggle name="tools-tab" text="Tools" />
+            <uie:ToolbarToggle name="resources-tab" text="Resources" />
             <uie:ToolbarToggle name="validation-tab" text="Scripts" />
             <uie:ToolbarToggle name="advanced-tab" text="Advanced" />
         </uie:Toolbar>
@@ -24,6 +25,9 @@
         </ui:ScrollView>
         <ui:ScrollView name="tools-panel" class="panel-scroll hidden" style="flex-grow: 1;">
             <ui:VisualElement name="tools-container" class="section-stack" />
+        </ui:ScrollView>
+        <ui:ScrollView name="resources-panel" class="panel-scroll hidden" style="flex-grow: 1;">
+            <ui:VisualElement name="resources-container" class="section-stack" />
         </ui:ScrollView>
     </ui:VisualElement>
 </ui:UXML>
