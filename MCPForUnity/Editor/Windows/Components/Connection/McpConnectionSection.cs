@@ -495,6 +495,10 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             httpServerControlRow.style.display = useHttp && httpLocalSelected ? DisplayStyle.Flex : DisplayStyle.None;
             unitySocketPortRow.style.display = useHttp ? DisplayStyle.None : DisplayStyle.Flex;
 
+            // Manual Server Launch foldout only relevant for HTTP Local
+            if (manualCommandFoldout != null)
+                manualCommandFoldout.style.display = httpLocalSelected ? DisplayStyle.Flex : DisplayStyle.None;
+
             // API key fields only visible in HTTP Remote mode
             if (apiKeyRow != null)
                 apiKeyRow.style.display = httpRemoteSelected ? DisplayStyle.Flex : DisplayStyle.None;
