@@ -8,7 +8,7 @@ from services.registry import mcp_for_unity_tool
 from transport.legacy.unity_connection import get_unity_connection_pool
 from transport.unity_instance_middleware import get_unity_instance_middleware
 from transport.plugin_hub import PluginHub
-from transport.unity_transport import _current_transport
+from core.config import config
 
 
 @mcp_for_unity_tool(
@@ -21,11 +21,14 @@ async def set_active_instance(
         ctx: Context,
         instance: Annotated[str, "Target instance (Name@hash or hash prefix)"]
 ) -> dict[str, Any]:
-    transport = _current_transport()
+    transport = (config.transport_mode or "stdio").lower()
 
     # Discover running instances based on transport
     if transport == "http":
-        sessions_data = await PluginHub.get_sessions()
+        # In remote-hosted mode, filter sessions by user_id
+        user_id = ctx.get_state(
+            "user_id") if config.http_remote_hosted else None
+        sessions_data = await PluginHub.get_sessions(user_id=user_id)
         sessions = sessions_data.sessions
         instances = []
         for session_id, session in sessions.items():

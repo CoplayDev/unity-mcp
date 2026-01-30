@@ -63,6 +63,54 @@ docker run -p 8080:8080 -e LOG_LEVEL=DEBUG msanatan/mcp-for-unity-server:latest
 
 ---
 
+## Remote-Hosted Mode
+
+To deploy as a shared remote service with API key authentication and per-user session isolation, pass `--http-remote-hosted` along with an API key validation URL:
+
+```bash
+docker run -p 8080:8080 \
+  -e UNITY_MCP_HTTP_REMOTE_HOSTED=true \
+  -e UNITY_MCP_API_KEY_VALIDATION_URL=https://auth.example.com/api/validate-key \
+  -e UNITY_MCP_API_KEY_LOGIN_URL=https://app.example.com/api-keys \
+  msanatan/mcp-for-unity-server:latest
+```
+
+In this mode:
+
+- All MCP tool/resource calls and Unity plugin WebSocket connections require a valid `X-API-Key` header.
+- Each user only sees Unity instances that connected with their API key.
+- Users must explicitly call `set_active_instance` to select a Unity instance.
+
+**Remote-hosted environment variables:**
+
+| Variable | Description |
+|----------|-------------|
+| `UNITY_MCP_HTTP_REMOTE_HOSTED` | Enable remote-hosted mode (`true`, `1`, or `yes`) |
+| `UNITY_MCP_API_KEY_VALIDATION_URL` | External endpoint to validate API keys (required) |
+| `UNITY_MCP_API_KEY_LOGIN_URL` | URL where users can obtain/manage API keys |
+| `UNITY_MCP_API_KEY_CACHE_TTL` | Cache TTL for validated keys in seconds (default: `300`) |
+| `UNITY_MCP_API_KEY_SERVICE_TOKEN_HEADER` | Header name for server-to-auth-service authentication |
+| `UNITY_MCP_API_KEY_SERVICE_TOKEN` | Token value sent to the auth service |
+
+**MCP client config with API key:**
+
+```json
+{
+  "mcpServers": {
+    "UnityMCP": {
+      "url": "http://your-server:8080/mcp",
+      "headers": {
+        "X-API-Key": "<your-api-key>"
+      }
+    }
+  }
+}
+```
+
+For full details, see the [Remote Server Auth Guide](https://github.com/CoplayDev/unity-mcp/blob/main/docs/guides/REMOTE_SERVER_AUTH.md).
+
+---
+
 ## Example Prompts
 
 Once connected, try these commands in your AI assistant:

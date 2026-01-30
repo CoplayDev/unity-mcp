@@ -21,11 +21,11 @@ namespace MCPForUnity.Editor.Windows
         private VisualElement prefsContainer;
         private TextField searchField;
         private string searchFilter = "";
-        
+
         // Data
         private List<EditorPrefItem> currentPrefs = new List<EditorPrefItem>();
         private HashSet<string> knownMcpKeys = new HashSet<string>();
-        
+
         // Type mapping for known EditorPrefs
         private readonly Dictionary<string, EditorPrefType> knownPrefTypes = new Dictionary<string, EditorPrefType>
         {
@@ -56,6 +56,7 @@ namespace MCPForUnity.Editor.Windows
             { EditorPrefKeys.ClaudeCliPathOverride, EditorPrefType.String },
             { EditorPrefKeys.UvxPathOverride, EditorPrefType.String },
             { EditorPrefKeys.HttpBaseUrl, EditorPrefType.String },
+            { EditorPrefKeys.HttpRemoteBaseUrl, EditorPrefType.String },
             { EditorPrefKeys.HttpTransportScope, EditorPrefType.String },
             { EditorPrefKeys.SessionId, EditorPrefType.String },
             { EditorPrefKeys.WebSocketUrlOverride, EditorPrefType.String },
@@ -67,10 +68,10 @@ namespace MCPForUnity.Editor.Windows
             { EditorPrefKeys.ServerSrc, EditorPrefType.String },
             { EditorPrefKeys.LatestKnownVersion, EditorPrefType.String },
         };
-        
+
         // Templates
         private VisualTreeAsset itemTemplate;
-        
+
         /// <summary>
         /// Show the EditorPrefs window
         /// </summary>
@@ -80,33 +81,33 @@ namespace MCPForUnity.Editor.Windows
             window.minSize = new Vector2(600, 400);
             window.Show();
         }
-        
+
         public void CreateGUI()
         {
             string basePath = AssetPathUtility.GetMcpPackageRootPath();
-            
+
             // Load UXML
             var visualTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
                 $"{basePath}/Editor/Windows/EditorPrefs/EditorPrefsWindow.uxml"
             );
-            
+
             if (visualTree == null)
             {
                 McpLog.Error("Failed to load EditorPrefsWindow.uxml template");
                 return;
             }
-            
+
             // Load item template
             itemTemplate = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
                 $"{basePath}/Editor/Windows/EditorPrefs/EditorPrefItem.uxml"
             );
-            
+
             if (itemTemplate == null)
             {
                 McpLog.Error("Failed to load EditorPrefItem.uxml template");
                 return;
             }
-            
+
             visualTree.CloneTree(rootVisualElement);
 
             // Add search bar container at the top
@@ -144,19 +145,19 @@ namespace MCPForUnity.Editor.Windows
             // Get references
             scrollView = rootVisualElement.Q<ScrollView>("scroll-view");
             prefsContainer = rootVisualElement.Q<VisualElement>("prefs-container");
-            
+
             // Load known MCP keys
             LoadKnownMcpKeys();
-            
+
             // Load initial data
             RefreshPrefs();
         }
-        
+
         private void LoadKnownMcpKeys()
         {
             knownMcpKeys.Clear();
             var fields = typeof(EditorPrefKeys).GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-            
+
             foreach (var field in fields)
             {
                 if (field.IsLiteral && !field.IsInitOnly)
@@ -165,18 +166,18 @@ namespace MCPForUnity.Editor.Windows
                 }
             }
         }
-        
+
         private void RefreshPrefs()
         {
             currentPrefs.Clear();
             prefsContainer.Clear();
-            
+
             // Get all EditorPrefs keys
             var allKeys = new List<string>();
-            
+
             // Always show all MCP keys
             allKeys.AddRange(knownMcpKeys);
-            
+
             // Try to find additional MCP keys
             var mcpKeys = GetAllMcpKeys();
             foreach (var key in mcpKeys)
@@ -186,7 +187,7 @@ namespace MCPForUnity.Editor.Windows
                     allKeys.Add(key);
                 }
             }
-            
+
             // Sort keys
             allKeys.Sort();
 
@@ -215,24 +216,24 @@ namespace MCPForUnity.Editor.Windows
                 }
             }
         }
-        
+
         private List<string> GetAllMcpKeys()
         {
             // This is a simplified approach - in reality, getting all EditorPrefs is platform-specific
             // For now, we'll return known MCP keys that might exist
             var keys = new List<string>();
-            
+
             // Add some common MCP keys that might not be in EditorPrefKeys
             keys.Add("MCPForUnity.TestKey");
-            
+
             // Filter to only those that actually exist
             return keys.Where(EditorPrefs.HasKey).ToList();
         }
-        
+
         private EditorPrefItem CreateEditorPrefItem(string key)
         {
             var item = new EditorPrefItem { Key = key, IsKnown = knownMcpKeys.Contains(key) };
-            
+
             // Check if we know the type of this pref
             if (knownPrefTypes.TryGetValue(key, out var knownType))
             {
@@ -265,10 +266,10 @@ namespace MCPForUnity.Editor.Windows
                     // Key doesn't exist and we don't know its type, skip it
                     return null;
                 }
-                
+
                 // Unknown pref - try to detect type
                 var stringValue = EditorPrefs.GetString(key, "");
-                
+
                 if (int.TryParse(stringValue, out var intValue))
                 {
                     item.Type = EditorPrefType.Int;
@@ -290,10 +291,10 @@ namespace MCPForUnity.Editor.Windows
                     item.Value = stringValue;
                 }
             }
-            
+
             return item;
         }
-   
+
         private VisualElement CreateItemUI(EditorPrefItem item)
         {
             if (itemTemplate == null)
@@ -301,32 +302,32 @@ namespace MCPForUnity.Editor.Windows
                 McpLog.Error("Item template not loaded");
                 return new VisualElement();
             }
-            
+
             var itemElement = itemTemplate.CloneTree();
-            
+
             // Set values
             itemElement.Q<Label>("key-label").text = item.Key;
             var valueField = itemElement.Q<TextField>("value-field");
             valueField.value = item.Value;
-            
+
             var typeDropdown = itemElement.Q<DropdownField>("type-dropdown");
             typeDropdown.index = (int)item.Type;
-            
+
             // Buttons
             var saveButton = itemElement.Q<Button>("save-button");
-            
+
             // Callbacks
             saveButton.clicked += () => SavePref(item, valueField.value, (EditorPrefType)typeDropdown.index);
-            
+
             return itemElement;
         }
-        
+
         private void SavePref(EditorPrefItem item, string newValue, EditorPrefType newType)
         {
             SaveValue(item.Key, newValue, newType);
             RefreshPrefs();
         }
-        
+
         private void SaveValue(string key, string value, EditorPrefType type)
         {
             switch (type)
@@ -370,7 +371,7 @@ namespace MCPForUnity.Editor.Windows
             }
         }
     }
-    
+
     /// <summary>
     /// Represents an EditorPrefs item
     /// </summary>
@@ -381,7 +382,7 @@ namespace MCPForUnity.Editor.Windows
         public EditorPrefType Type { get; set; }
         public bool IsKnown { get; set; }
     }
-    
+
     /// <summary>
     /// EditorPrefs value types
     /// </summary>

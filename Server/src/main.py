@@ -3,6 +3,7 @@ from transport.unity_instance_middleware import (
     UnityInstanceMiddleware,
     get_unity_instance_middleware
 )
+from services.api_key_service import ApiKeyService
 from transport.legacy.unity_connection import get_unity_connection_pool, UnityConnectionPool
 from services.tools import register_all_tools
 from core.telemetry import record_milestone, record_telemetry, MilestoneType, RecordType, get_package_version
@@ -312,6 +313,15 @@ Payload sizing & paging (important):
 """
 
 
+def _normalize_instance_token(instance_token: str | None) -> tuple[str | None, str | None]:
+    if not instance_token:
+        return None, None
+    if "@" in instance_token:
+        name_part, _, hash_part = instance_token.partition("@")
+        return (name_part or None), (hash_part or None)
+    return None, instance_token
+
+
 def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
     mcp = FastMCP(
         name="mcp-for-unity-server",
@@ -332,82 +342,176 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
             "message": "MCP for Unity server is running"
         })
 
-    def _normalize_instance_token(instance_token: str | None) -> tuple[str | None, str | None]:
-        if not instance_token:
-            return None, None
-        if "@" in instance_token:
-            name_part, _, hash_part = instance_token.partition("@")
-            return (name_part or None), (hash_part or None)
-        return None, instance_token
-
-    @mcp.custom_route("/api/command", methods=["POST"])
-    async def cli_command_route(request: Request) -> JSONResponse:
-        """REST endpoint for CLI commands to Unity."""
-        try:
-            body = await request.json()
-
-            command_type = body.get("type")
-            params = body.get("params", {})
-            unity_instance = body.get("unity_instance")
-
-            if not command_type:
-                return JSONResponse({"success": False, "error": "Missing 'type' field"}, status_code=400)
-
-            # Get available sessions
-            sessions = await PluginHub.get_sessions()
-            if not sessions.sessions:
-                return JSONResponse({
+    @mcp.custom_route("/api/auth/login-url", methods=["GET"])
+    async def auth_login_url(_: Request) -> JSONResponse:
+        """Return the login URL for users to obtain/manage API keys."""
+        if not config.api_key_login_url:
+            return JSONResponse(
+                {
                     "success": False,
-                    "error": "No Unity instances connected. Make sure Unity is running with MCP plugin."
-                }, status_code=503)
+                    "error": "API key management not configured. Contact your server administrator.",
+                },
+                status_code=404,
+            )
+        return JSONResponse({
+            "success": True,
+            "login_url": config.api_key_login_url,
+        })
 
-            # Find target session
-            session_id = None
-            session_details = None
-            instance_name, instance_hash = _normalize_instance_token(unity_instance)
-            if unity_instance:
-                # Try to match by hash or project name
-                for sid, details in sessions.sessions.items():
-                    if details.hash == instance_hash or details.project in (instance_name, unity_instance):
-                        session_id = sid
-                        session_details = details
-                        break
+    # Only expose CLI routes if running locally (not in remote hosted mode)
+    if not config.http_remote_hosted:
+        @mcp.custom_route("/api/command", methods=["POST"])
+        async def cli_command_route(request: Request) -> JSONResponse:
+            """REST endpoint for CLI commands to Unity."""
+            try:
+                body = await request.json()
 
-                # If a specific unity_instance was requested but not found, return an error
-                if not session_id:
-                    return JSONResponse(
-                        {
-                            "success": False,
-                            "error": f"Unity instance '{unity_instance}' not found",
-                        },
-                        status_code=404,
-                    )
-            else:
-                # No specific unity_instance requested: use first available session
-                session_id = next(iter(sessions.sessions.keys()))
-                session_details = sessions.sessions.get(session_id)
+                command_type = body.get("type")
+                params = body.get("params", {})
+                unity_instance = body.get("unity_instance")
 
-            if command_type == "execute_custom_tool":
-                tool_name = None
-                tool_params = {}
-                if isinstance(params, dict):
-                    tool_name = params.get("tool_name") or params.get("name")
-                    tool_params = params.get("parameters") or params.get("params") or {}
+                if not command_type:
+                    return JSONResponse({"success": False, "error": "Missing 'type' field"}, status_code=400)
 
-                if not tool_name:
-                    return JSONResponse(
-                        {"success": False, "error": "Missing 'tool_name' for execute_custom_tool"},
-                        status_code=400,
-                    )
-                if tool_params is None:
-                    tool_params = {}
-                if not isinstance(tool_params, dict):
-                    return JSONResponse(
-                        {"success": False, "error": "Tool parameters must be an object/dict"},
-                        status_code=400,
-                    )
+                # Get available sessions
+                sessions = await PluginHub.get_sessions()
+                if not sessions.sessions:
+                    return JSONResponse({
+                        "success": False,
+                        "error": "No Unity instances connected. Make sure Unity is running with MCP plugin."
+                    }, status_code=503)
 
-                # Prefer a concrete hash for project-scoped tools.
+                # Find target session
+                session_id = None
+                session_details = None
+                instance_name, instance_hash = _normalize_instance_token(
+                    unity_instance)
+                if unity_instance:
+                    # Try to match by hash or project name
+                    for sid, details in sessions.sessions.items():
+                        if details.hash == instance_hash or details.project in (instance_name, unity_instance):
+                            session_id = sid
+                            session_details = details
+                            break
+
+                    # If a specific unity_instance was requested but not found, return an error
+                    if not session_id:
+                        return JSONResponse(
+                            {
+                                "success": False,
+                                "error": f"Unity instance '{unity_instance}' not found",
+                            },
+                            status_code=404,
+                        )
+                else:
+                    # No specific unity_instance requested: use first available session
+                    session_id = next(iter(sessions.sessions.keys()))
+                    session_details = sessions.sessions.get(session_id)
+
+                    if command_type == "execute_custom_tool":
+                        tool_name = None
+                        tool_params = {}
+                        if isinstance(params, dict):
+                            tool_name = params.get(
+                                "tool_name") or params.get("name")
+                            tool_params = params.get(
+                                "parameters") or params.get("params") or {}
+
+                        if not tool_name:
+                            return JSONResponse(
+                                {"success": False,
+                                    "error": "Missing 'tool_name' for execute_custom_tool"},
+                                status_code=400,
+                            )
+                        if tool_params is None:
+                            tool_params = {}
+                        if not isinstance(tool_params, dict):
+                            return JSONResponse(
+                                {"success": False,
+                                    "error": "Tool parameters must be an object/dict"},
+                                status_code=400,
+                            )
+
+                        # Prefer a concrete hash for project-scoped tools.
+                        unity_instance_hint = unity_instance
+                        if session_details and session_details.hash:
+                            unity_instance_hint = session_details.hash
+
+                        project_id = resolve_project_id_for_unity_instance(
+                            unity_instance_hint)
+                        if not project_id:
+                            return JSONResponse(
+                                {"success": False,
+                                    "error": "Could not resolve project id for custom tool"},
+                                status_code=400,
+                            )
+
+                        service = CustomToolService.get_instance()
+                        result = await service.execute_tool(
+                            project_id, tool_name, unity_instance_hint, tool_params
+                        )
+                        return JSONResponse(result.model_dump())
+
+                # Send command to Unity
+                result = await PluginHub.send_command(session_id, command_type, params)
+                return JSONResponse(result)
+
+            except Exception as e:
+                logger.exception("CLI command error: %s", e)
+                return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+        @mcp.custom_route("/api/instances", methods=["GET"])
+        async def cli_instances_route(_: Request) -> JSONResponse:
+            """REST endpoint to list connected Unity instances."""
+            try:
+                sessions = await PluginHub.get_sessions()
+                instances = []
+                for session_id, details in sessions.sessions.items():
+                    instances.append({
+                        "session_id": session_id,
+                        "project": details.project,
+                        "hash": details.hash,
+                        "unity_version": details.unity_version,
+                        "connected_at": details.connected_at,
+                    })
+                return JSONResponse({"success": True, "instances": instances})
+            except Exception as e:
+                return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+        @mcp.custom_route("/api/custom-tools", methods=["GET"])
+        async def cli_custom_tools_route(request: Request) -> JSONResponse:
+            """REST endpoint to list custom tools for the active Unity project."""
+            try:
+                unity_instance = request.query_params.get("instance")
+                instance_name, instance_hash = _normalize_instance_token(
+                    unity_instance)
+
+                sessions = await PluginHub.get_sessions()
+                if not sessions.sessions:
+                    return JSONResponse({
+                        "success": False,
+                        "error": "No Unity instances connected. Make sure Unity is running with MCP plugin."
+                    }, status_code=503)
+
+                session_details = None
+                if unity_instance:
+                    # Try to match by hash or project name
+                    for _, details in sessions.sessions.items():
+                        if details.hash == instance_hash or details.project in (instance_name, unity_instance):
+                            session_details = details
+                            break
+                    if not session_details:
+                        return JSONResponse(
+                            {
+                                "success": False,
+                                "error": f"Unity instance '{unity_instance}' not found",
+                            },
+                            status_code=404,
+                        )
+                else:
+                    # No specific unity_instance requested: use first available session
+                    session_details = next(iter(sessions.sessions.values()))
+
                 unity_instance_hint = unity_instance
                 if session_details and session_details.hash:
                     unity_instance_hint = session_details.hash
@@ -416,113 +520,46 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
                     unity_instance_hint)
                 if not project_id:
                     return JSONResponse(
-                        {"success": False, "error": "Could not resolve project id for custom tool"},
+                        {"success": False,
+                            "error": "Could not resolve project id for custom tools"},
                         status_code=400,
                     )
 
                 service = CustomToolService.get_instance()
-                result = await service.execute_tool(
-                    project_id, tool_name, unity_instance_hint, tool_params
-                )
-                return JSONResponse(result.model_dump())
+                tools = await service.list_registered_tools(project_id)
+                tools_payload = [
+                    tool.model_dump() if hasattr(tool, "model_dump") else tool for tool in tools
+                ]
 
-            # Send command to Unity
-            result = await PluginHub.send_command(session_id, command_type, params)
-            return JSONResponse(result)
-
-        except Exception as e:
-            logger.error(f"CLI command error: {e}")
-            return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-
-    @mcp.custom_route("/api/custom-tools", methods=["GET"])
-    async def cli_custom_tools_route(request: Request) -> JSONResponse:
-        """REST endpoint to list custom tools for the active Unity project."""
-        try:
-            unity_instance = request.query_params.get("instance")
-            instance_name, instance_hash = _normalize_instance_token(unity_instance)
-
-            sessions = await PluginHub.get_sessions()
-            if not sessions.sessions:
                 return JSONResponse({
-                    "success": False,
-                    "error": "No Unity instances connected. Make sure Unity is running with MCP plugin."
-                }, status_code=503)
-
-            session_details = None
-            if unity_instance:
-                # Try to match by hash or project name
-                for _, details in sessions.sessions.items():
-                    if details.hash == instance_hash or details.project in (instance_name, unity_instance):
-                        session_details = details
-                        break
-                if not session_details:
-                    return JSONResponse(
-                        {
-                            "success": False,
-                            "error": f"Unity instance '{unity_instance}' not found",
-                        },
-                        status_code=404,
-                    )
-            else:
-                # No specific unity_instance requested: use first available session
-                session_details = next(iter(sessions.sessions.values()))
-
-            unity_instance_hint = unity_instance
-            if session_details and session_details.hash:
-                unity_instance_hint = session_details.hash
-
-            project_id = resolve_project_id_for_unity_instance(
-                unity_instance_hint)
-            if not project_id:
-                return JSONResponse(
-                    {"success": False, "error": "Could not resolve project id for custom tools"},
-                    status_code=400,
-                )
-
-            service = CustomToolService.get_instance()
-            tools = await service.list_registered_tools(project_id)
-            tools_payload = [
-                tool.model_dump() if hasattr(tool, "model_dump") else tool for tool in tools
-            ]
-
-            return JSONResponse({
-                "success": True,
-                "project_id": project_id,
-                "tool_count": len(tools_payload),
-                "tools": tools_payload,
-            })
-        except Exception as e:
-            logger.error(f"CLI custom tools error: {e}")
-            return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-
-    @mcp.custom_route("/api/instances", methods=["GET"])
-    async def cli_instances_route(_: Request) -> JSONResponse:
-        """REST endpoint to list connected Unity instances."""
-        try:
-            sessions = await PluginHub.get_sessions()
-            instances = []
-            for session_id, details in sessions.sessions.items():
-                instances.append({
-                    "session_id": session_id,
-                    "project": details.project,
-                    "hash": details.hash,
-                    "unity_version": details.unity_version,
-                    "connected_at": details.connected_at,
+                    "success": True,
+                    "project_id": project_id,
+                    "tool_count": len(tools_payload),
+                    "tools": tools_payload,
                 })
-            return JSONResponse({"success": True, "instances": instances})
-        except Exception as e:
-            return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-
-    @mcp.custom_route("/plugin/sessions", methods=["GET"])
-    async def plugin_sessions_route(_: Request) -> JSONResponse:
-        data = await PluginHub.get_sessions()
-        return JSONResponse(data.model_dump())
+            except Exception as e:
+                logger.exception("CLI custom tools error: %s", e)
+                return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
     # Initialize and register middleware for session-based Unity instance routing
     # Using the singleton getter ensures we use the same instance everywhere
     unity_middleware = get_unity_instance_middleware()
     mcp.add_middleware(unity_middleware)
     logger.info("Registered Unity instance middleware for session-based routing")
+
+    # Initialize API key authentication if in remote-hosted mode
+    if config.http_remote_hosted and config.api_key_validation_url:
+        ApiKeyService(
+            validation_url=config.api_key_validation_url,
+            cache_ttl=config.api_key_cache_ttl,
+            service_token_header=config.api_key_service_token_header,
+            service_token=config.api_key_service_token,
+        )
+        logger.info(
+            "Initialized API key authentication service (validation URL: %s, TTL: %.0fs)",
+            config.api_key_validation_url,
+            config.api_key_cache_ttl,
+        )
 
     # Mount plugin websocket hub at /hub/plugin when HTTP transport is active
     existing_routes = [
@@ -611,6 +648,54 @@ Examples:
              "Overrides UNITY_MCP_HTTP_PORT environment variable."
     )
     parser.add_argument(
+        "--http-remote-hosted",
+        action="store_true",
+        help="Treat HTTP transport as remotely hosted (forces explicit Unity instance selection). "
+             "Can also set via UNITY_MCP_HTTP_REMOTE_HOSTED=true."
+    )
+    parser.add_argument(
+        "--api-key-validation-url",
+        type=str,
+        default=None,
+        metavar="URL",
+        help="External URL to validate API keys (POST with {'api_key': '...'}). "
+             "Required when --http-remote-hosted is set. "
+             "Can also set via UNITY_MCP_API_KEY_VALIDATION_URL."
+    )
+    parser.add_argument(
+        "--api-key-login-url",
+        type=str,
+        default=None,
+        metavar="URL",
+        help="URL where users can obtain/manage API keys. "
+             "Returned by /api/auth/login-url endpoint. "
+             "Can also set via UNITY_MCP_API_KEY_LOGIN_URL."
+    )
+    parser.add_argument(
+        "--api-key-cache-ttl",
+        type=float,
+        default=300.0,
+        metavar="SECONDS",
+        help="Cache TTL for validated API keys in seconds (default: 300). "
+             "Can also set via UNITY_MCP_API_KEY_CACHE_TTL."
+    )
+    parser.add_argument(
+        "--api-key-service-token-header",
+        type=str,
+        default=None,
+        metavar="HEADER",
+        help="Header name for service token sent to validation endpoint (e.g. X-Service-Token). "
+             "Can also set via UNITY_MCP_API_KEY_SERVICE_TOKEN_HEADER."
+    )
+    parser.add_argument(
+        "--api-key-service-token",
+        type=str,
+        default=None,
+        metavar="TOKEN",
+        help="Service token value sent to validation endpoint for server authentication. "
+             "WARNING: Prefer UNITY_MCP_API_KEY_SERVICE_TOKEN env var in production to avoid process listing exposure."
+    )
+    parser.add_argument(
         "--unity-instance-token",
         type=str,
         default=None,
@@ -629,7 +714,8 @@ Examples:
     parser.add_argument(
         "--project-scoped-tools",
         action="store_true",
-        help="Keep custom tools scoped to the active Unity project and enable the custom tools resource."
+        help="Keep custom tools scoped to the active Unity project and enable the custom tools resource. "
+             "Can also set via UNITY_MCP_PROJECT_SCOPED_TOOLS=true."
     )
 
     args = parser.parse_args()
@@ -641,10 +727,52 @@ Examples:
             f"Using default Unity instance from command-line: {args.default_instance}")
 
     # Set transport mode
-    transport_mode = args.transport or os.environ.get(
+    config.transport_mode = args.transport or os.environ.get(
         "UNITY_MCP_TRANSPORT", "stdio")
-    os.environ["UNITY_MCP_TRANSPORT"] = transport_mode
-    logger.info(f"Transport mode: {transport_mode}")
+    logger.info(f"Transport mode: {config.transport_mode}")
+
+    config.http_remote_hosted = (
+        bool(args.http_remote_hosted)
+        or os.environ.get("UNITY_MCP_HTTP_REMOTE_HOSTED", "").lower() in ("true", "1", "yes", "on")
+    )
+
+    # API key authentication configuration
+    config.api_key_validation_url = (
+        args.api_key_validation_url
+        or os.environ.get("UNITY_MCP_API_KEY_VALIDATION_URL")
+    )
+    config.api_key_login_url = (
+        args.api_key_login_url
+        or os.environ.get("UNITY_MCP_API_KEY_LOGIN_URL")
+    )
+    try:
+        cache_ttl_env = os.environ.get("UNITY_MCP_API_KEY_CACHE_TTL")
+        config.api_key_cache_ttl = (
+            float(cache_ttl_env) if cache_ttl_env else args.api_key_cache_ttl
+        )
+    except ValueError:
+        logger.warning(
+            "Invalid UNITY_MCP_API_KEY_CACHE_TTL value, using default 300.0"
+        )
+        config.api_key_cache_ttl = 300.0
+
+    # Service token for authenticating to validation endpoint
+    config.api_key_service_token_header = (
+        args.api_key_service_token_header
+        or os.environ.get("UNITY_MCP_API_KEY_SERVICE_TOKEN_HEADER")
+    )
+    config.api_key_service_token = (
+        args.api_key_service_token
+        or os.environ.get("UNITY_MCP_API_KEY_SERVICE_TOKEN")
+    )
+
+    # Validate: remote-hosted HTTP mode requires API key validation URL
+    if config.http_remote_hosted and config.transport_mode == "http" and not config.api_key_validation_url:
+        logger.error(
+            "--http-remote-hosted requires --api-key-validation-url or "
+            "UNITY_MCP_API_KEY_VALIDATION_URL environment variable"
+        )
+        raise SystemExit(1)
 
     http_url = os.environ.get("UNITY_MCP_HTTP_URL", args.http_url)
     parsed_url = urlparse(http_url)
@@ -688,10 +816,14 @@ Examples:
     if args.http_port:
         logger.info(f"HTTP port override: {http_port}")
 
-    mcp = create_mcp_server(args.project_scoped_tools)
+    project_scoped_tools = (
+        bool(args.project_scoped_tools)
+        or os.environ.get("UNITY_MCP_PROJECT_SCOPED_TOOLS", "").lower() in ("true", "1", "yes", "on")
+    )
+    mcp = create_mcp_server(project_scoped_tools)
 
     # Determine transport mode
-    if transport_mode == 'http':
+    if config.transport_mode == 'http':
         # Use HTTP transport for FastMCP
         transport = 'http'
         # Use the parsed host and port from URL/args

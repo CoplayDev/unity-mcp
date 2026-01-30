@@ -15,6 +15,21 @@ class ServerConfig:
     unity_port: int = 6400
     mcp_port: int = 6500
 
+    # Transport settings
+    transport_mode: str = "stdio"
+
+    # HTTP transport behaviour
+    http_remote_hosted: bool = False
+
+    # API key authentication (required when http_remote_hosted=True)
+    api_key_validation_url: str | None = None  # POST endpoint to validate keys
+    api_key_login_url: str | None = None       # URL for users to get/manage keys
+    # Cache TTL in seconds (5 min default)
+    api_key_cache_ttl: float = 300.0
+    # Optional service token for authenticating to the validation endpoint
+    api_key_service_token_header: str | None = None  # e.g. "X-Service-Token"
+    api_key_service_token: str | None = None         # The token value
+
     # Connection settings
     connection_timeout: float = 30.0
     buffer_size: int = 16 * 1024 * 1024  # 16MB buffer

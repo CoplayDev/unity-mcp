@@ -275,6 +275,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
             string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
             var (uvxPath, gitUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
             bool shouldForceRefresh = AssetPathUtility.ShouldForceUvxRefresh();
+            string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
 
             // Compute pathPrepend on main thread
             string pathPrepend = null;
@@ -296,10 +297,12 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                 {
                     if (client is ClaudeCliMcpConfigurator cliConfigurator)
                     {
+                        var serverTransport = HttpEndpointUtility.GetCurrentServerTransport();
                         cliConfigurator.ConfigureWithCapturedValues(
                             projectDir, claudePath, pathPrepend,
                             useHttpTransport, httpUrl,
-                            uvxPath, gitUrl, packageName, shouldForceRefresh);
+                            uvxPath, gitUrl, packageName, shouldForceRefresh,
+                            apiKey, serverTransport);
                     }
                     return (success: true, error: (string)null);
                 }
@@ -525,12 +528,11 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                 return;
             }
 
-            // Check for transport mismatch
+            // Check for transport mismatch (3-way: Stdio, Http, HttpRemote)
             bool hasTransportMismatch = false;
             if (client.ConfiguredTransport != ConfiguredTransport.Unknown)
             {
-                bool serverUsesHttp = EditorConfigurationCache.Instance.UseHttpTransport;
-                ConfiguredTransport serverTransport = serverUsesHttp ? ConfiguredTransport.Http : ConfiguredTransport.Stdio;
+                ConfiguredTransport serverTransport = HttpEndpointUtility.GetCurrentServerTransport();
                 hasTransportMismatch = client.ConfiguredTransport != serverTransport;
             }
 

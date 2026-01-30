@@ -27,7 +27,7 @@ async def test_plugin_hub_waits_for_reconnection_during_reload():
     # Third call: session appears (plugin reconnected)
     call_count = [0]
 
-    async def mock_list_sessions():
+    async def mock_list_sessions(**kwargs):
         call_count[0] += 1
         if call_count[0] <= 2:
             # Plugin not yet reconnected
@@ -77,7 +77,7 @@ async def test_plugin_hub_fails_after_timeout():
     # Create a mock registry that never returns sessions
     mock_registry = AsyncMock(spec=PluginRegistry)
 
-    async def mock_list_sessions():
+    async def mock_list_sessions(**kwargs):
         return {}  # Never returns sessions
 
     mock_registry.list_sessions = mock_list_sessions
@@ -161,7 +161,7 @@ async def test_read_console_during_simulated_reload(monkeypatch):
 @pytest.mark.asyncio
 async def test_plugin_hub_respects_unity_instance_preference():
     """Test that _resolve_session_id prefers a specific Unity instance if requested."""
-    from transport.plugin_hub import PluginHub
+    from transport.plugin_hub import PluginHub, InstanceSelectionRequiredError
     from transport.plugin_registry import PluginRegistry, PluginSession
 
     # Create a mock registry with two sessions
@@ -185,19 +185,19 @@ async def test_plugin_hub_respects_unity_instance_preference():
         connected_at=now
     )
 
-    async def mock_list_sessions():
+    async def mock_list_sessions(**kwargs):
         return {
             "session-1": session1,
             "session-2": session2
         }
 
-    async def mock_get_session_by_hash(project_hash):
+    async def mock_get_session_id_by_hash(project_hash, user_id=None):
         if project_hash == "hash2":
             return "session-2"
         return None
 
     mock_registry.list_sessions = mock_list_sessions
-    mock_registry.get_session_id_by_hash = mock_get_session_by_hash
+    mock_registry.get_session_id_by_hash = mock_get_session_id_by_hash
 
     # Configure PluginHub with our mock while preserving the original state
     original_registry = PluginHub._registry
@@ -213,9 +213,8 @@ async def test_plugin_hub_respects_unity_instance_preference():
         assert session_id == "session-2"
 
         # Request default (no specific instance)
-        with pytest.raises(RuntimeError) as exc:
+        with pytest.raises(InstanceSelectionRequiredError, match="Multiple Unity instances"):
             await PluginHub._resolve_session_id(unity_instance=None)
-        assert "Multiple Unity instances are connected" in str(exc.value)
 
     finally:
         # Clean up: restore original PluginHub state

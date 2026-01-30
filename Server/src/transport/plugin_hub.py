@@ -13,8 +13,10 @@ from starlette.endpoints import WebSocketEndpoint
 from starlette.websockets import WebSocket
 
 from core.config import config
+from core.constants import API_KEY_HEADER
 from models.models import MCPResponse
 from transport.plugin_registry import PluginRegistry
+from services.api_key_service import ApiKeyService
 from transport.models import (
     WelcomeMessage,
     RegisteredMessage,
@@ -37,6 +39,22 @@ class PluginDisconnectedError(RuntimeError):
 
 class NoUnitySessionError(RuntimeError):
     """Raised when no Unity plugins are available."""
+
+
+class InstanceSelectionRequiredError(RuntimeError):
+    """Raised when the caller must explicitly select a Unity instance."""
+
+    _SELECTION_REQUIRED = (
+        "Unity instance selection is required. "
+        "Call set_active_instance with Name@hash from mcpforunity://instances."
+    )
+    _MULTIPLE_INSTANCES = (
+        "Multiple Unity instances are connected. "
+        "Call set_active_instance with Name@hash from mcpforunity://instances."
+    )
+
+    def __init__(self, message: str | None = None):
+        super().__init__(message or self._SELECTION_REQUIRED)
 
 
 class PluginHub(WebSocketEndpoint):
@@ -86,6 +104,50 @@ class PluginHub(WebSocketEndpoint):
         return cls._registry is not None and cls._lock is not None
 
     async def on_connect(self, websocket: WebSocket) -> None:
+        # Validate API key in remote-hosted mode (fail closed)
+        if config.http_remote_hosted:
+            if not ApiKeyService.is_initialized():
+                logger.debug(
+                    "WebSocket connection rejected: auth service not initialized")
+                await websocket.close(code=1013, reason="Try again later")
+                return
+
+            api_key = websocket.headers.get(API_KEY_HEADER)
+
+            if not api_key:
+                logger.debug("WebSocket connection rejected: API key required")
+                await websocket.close(code=4401, reason="API key required")
+                return
+
+            service = ApiKeyService.get_instance()
+            result = await service.validate(api_key)
+
+            if not result.valid:
+                # Transient auth failures are retryable (1013)
+                if result.error and any(
+                    indicator in result.error.lower()
+                    for indicator in ("unavailable", "timeout", "service error")
+                ):
+                    logger.debug(
+                        "WebSocket connection rejected: auth service unavailable")
+                    await websocket.close(code=1013, reason="Try again later")
+                    return
+
+                logger.debug("WebSocket connection rejected: invalid API key")
+                await websocket.close(code=4403, reason="Invalid API key")
+                return
+
+            # Both valid and user_id must be present to accept
+            if not result.user_id:
+                logger.debug(
+                    "WebSocket connection rejected: validated key missing user_id")
+                await websocket.close(code=4403, reason="Invalid API key")
+                return
+
+            # Store user_id in websocket state for later use during registration
+            websocket.state.user_id = result.user_id
+            websocket.state.api_key_metadata = result.metadata
+
         await websocket.accept()
         msg = WelcomeMessage(
             serverTimeout=self.SERVER_TIMEOUT,
@@ -234,10 +296,15 @@ class PluginHub(WebSocketEndpoint):
                 cls._pending.pop(command_id, None)
 
     @classmethod
-    async def get_sessions(cls) -> SessionList:
+    async def get_sessions(cls, user_id: str | None = None) -> SessionList:
+        """Get all active plugin sessions.
+
+        Args:
+            user_id: If provided (remote-hosted mode), only return sessions for this user.
+        """
         if cls._registry is None:
             return SessionList(sessions={})
-        sessions = await cls._registry.list_sessions()
+        sessions = await cls._registry.list_sessions(user_id=user_id)
         return SessionList(
             sessions={
                 session_id: SessionDetails(
@@ -303,12 +370,15 @@ class PluginHub(WebSocketEndpoint):
             raise ValueError(
                 "Plugin registration missing project_hash")
 
+        # Get user_id from websocket state (set during API key validation)
+        user_id = getattr(websocket.state, "user_id", None)
+
         session_id = str(uuid.uuid4())
         # Inform the plugin of its assigned session ID
         response = RegisteredMessage(session_id=session_id)
         await websocket.send_json(response.model_dump())
 
-        session = await registry.register(session_id, project_name, project_hash, unity_version, project_path)
+        session = await registry.register(session_id, project_name, project_hash, unity_version, project_path, user_id=user_id)
         async with lock:
             cls._connections[session.session_id] = websocket
             # Initialize last pong time and start ping loop for this session
@@ -320,7 +390,11 @@ class PluginHub(WebSocketEndpoint):
             # Start the server-side ping loop
             ping_task = asyncio.create_task(cls._ping_loop(session_id, websocket))
             cls._ping_tasks[session_id] = ping_task
-        logger.info(f"Plugin registered: {project_name} ({project_hash}) - started ping loop")
+
+        if user_id:
+            logger.info(f"Plugin registered: {project_name} ({project_hash}) for user {user_id}")
+        else:
+            logger.info(f"Plugin registered: {project_name} ({project_hash})")
 
     async def _handle_register_tools(self, websocket: WebSocket, payload: RegisterToolsMessage) -> None:
         cls = type(self)
@@ -463,13 +537,17 @@ class PluginHub(WebSocketEndpoint):
     # Session resolution helpers
     # ------------------------------------------------------------------
     @classmethod
-    async def _resolve_session_id(cls, unity_instance: str | None) -> str:
+    async def _resolve_session_id(cls, unity_instance: str | None, user_id: str | None = None) -> str:
         """Resolve a project hash (Unity instance id) to an active plugin session.
 
         During Unity domain reloads the plugin's WebSocket session is torn down
         and reconnected shortly afterwards. Instead of failing immediately when
         no sessions are available, we wait for a bounded period for a plugin
         to reconnect so in-flight MCP calls can succeed transparently.
+
+        Args:
+            unity_instance: Target instance (Name@hash or hash)
+            user_id: User ID from API key validation (for remote-hosted mode session isolation)
         """
         if cls._registry is None:
             raise RuntimeError("Plugin registry not configured")
@@ -500,24 +578,35 @@ class PluginHub(WebSocketEndpoint):
             else:
                 target_hash = unity_instance
 
-        async def _try_once() -> tuple[str | None, int]:
+        async def _try_once() -> tuple[str | None, int, bool]:
+            explicit_required = config.http_remote_hosted
             # Prefer a specific Unity instance if one was requested
             if target_hash:
-                session_id = await cls._registry.get_session_id_by_hash(target_hash)
-                sessions = await cls._registry.list_sessions()
-                return session_id, len(sessions)
+                # In remote-hosted mode with user_id, use user-scoped lookup
+                if config.http_remote_hosted and user_id:
+                    session_id = await cls._registry.get_session_id_by_hash(target_hash, user_id)
+                    sessions = await cls._registry.list_sessions(user_id=user_id)
+                else:
+                    session_id = await cls._registry.get_session_id_by_hash(target_hash)
+                    sessions = await cls._registry.list_sessions(user_id=user_id)
+                return session_id, len(sessions), explicit_required
 
             # No target provided: determine if we can auto-select
-            sessions = await cls._registry.list_sessions()
+            # In remote-hosted mode, filter sessions by user_id
+            sessions = await cls._registry.list_sessions(user_id=user_id)
             count = len(sessions)
             if count == 0:
-                return None, count
+                return None, count, explicit_required
+            if explicit_required:
+                return None, count, explicit_required
             if count == 1:
-                return next(iter(sessions.keys())), count
+                return next(iter(sessions.keys())), count, explicit_required
             # Multiple sessions but no explicit target is ambiguous
-            return None, count
+            return None, count, explicit_required
 
-        session_id, session_count = await _try_once()
+        session_id, session_count, explicit_required = await _try_once()
+        if session_id is None and explicit_required and not target_hash and session_count > 0:
+            raise InstanceSelectionRequiredError()
         deadline = time.monotonic() + max_wait_s
         wait_started = None
 
@@ -525,10 +614,10 @@ class PluginHub(WebSocketEndpoint):
         # wait politely for a session to appear before surfacing an error.
         while session_id is None and time.monotonic() < deadline:
             if not target_hash and session_count > 1:
-                raise RuntimeError(
-                    "Multiple Unity instances are connected. "
-                    "Call set_active_instance with Name@hash from mcpforunity://instances."
-                )
+                raise InstanceSelectionRequiredError(
+                    InstanceSelectionRequiredError._MULTIPLE_INSTANCES)
+            if session_id is None and explicit_required and not target_hash and session_count > 0:
+                raise InstanceSelectionRequiredError()
             if wait_started is None:
                 wait_started = time.monotonic()
                 logger.debug(
@@ -537,7 +626,7 @@ class PluginHub(WebSocketEndpoint):
                     max_wait_s,
                 )
             await asyncio.sleep(sleep_seconds)
-            session_id, session_count = await _try_once()
+            session_id, session_count, explicit_required = await _try_once()
 
         if session_id is not None and wait_started is not None:
             logger.debug(
@@ -546,10 +635,11 @@ class PluginHub(WebSocketEndpoint):
                 unity_instance or "default",
             )
         if session_id is None and not target_hash and session_count > 1:
-            raise RuntimeError(
-                "Multiple Unity instances are connected. "
-                "Call set_active_instance with Name@hash from mcpforunity://instances."
-            )
+            raise InstanceSelectionRequiredError(
+                InstanceSelectionRequiredError._MULTIPLE_INSTANCES)
+
+        if session_id is None and explicit_required and not target_hash and session_count > 0:
+            raise InstanceSelectionRequiredError()
 
         if session_id is None:
             logger.warning(
@@ -570,9 +660,18 @@ class PluginHub(WebSocketEndpoint):
         unity_instance: str | None,
         command_type: str,
         params: dict[str, Any],
+        user_id: str | None = None,
     ) -> dict[str, Any]:
+        """Send a command to a Unity instance.
+
+        Args:
+            unity_instance: Target instance (Name@hash or hash)
+            command_type: Command type to execute
+            params: Command parameters
+            user_id: User ID for session isolation in remote-hosted mode
+        """
         try:
-            session_id = await cls._resolve_session_id(unity_instance)
+            session_id = await cls._resolve_session_id(unity_instance, user_id=user_id)
         except NoUnitySessionError:
             logger.debug(
                 "Unity session unavailable; returning retry: command=%s instance=%s",

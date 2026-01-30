@@ -65,21 +65,6 @@ def mock_instances_response():
     }
 
 
-@pytest.fixture
-def mock_sessions_response():
-    """Mock plugin sessions response (legacy format)."""
-    return {
-        "sessions": {
-            "test-session-123": {
-                "project": "TestProject",
-                "hash": "abc123def456",
-                "unity_version": "2022.3.10f1",
-                "connected_at": "2024-01-01T00:00:00Z",
-            }
-        }
-    }
-
-
 # =============================================================================
 # Config Tests
 # =============================================================================
@@ -245,23 +230,6 @@ class TestConnection:
 
             with pytest.raises(UnityConnectionError):
                 await send_command("test_command", {})
-
-    @pytest.mark.asyncio
-    async def test_list_instances_from_sessions(self, mock_sessions_response):
-        """Test listing instances from /plugin/sessions endpoint."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = mock_sessions_response
-
-        with patch("httpx.AsyncClient") as mock_client:
-            # First call (api/instances) returns 404, second (plugin/sessions) succeeds
-            mock_get = AsyncMock(return_value=mock_response)
-            mock_client.return_value.__aenter__.return_value.get = mock_get
-
-            result = await list_unity_instances()
-            assert result["success"] is True
-            assert len(result["instances"]) == 1
-            assert result["instances"][0]["project"] == "TestProject"
 
 
 # =============================================================================

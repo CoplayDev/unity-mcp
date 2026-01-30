@@ -5,12 +5,14 @@ from typing import Any
 from fastmcp import Context
 from pydantic import BaseModel
 
+from core.config import config
 from models import MCPResponse
 from services.registry import mcp_for_unity_resource
 from services.tools import get_unity_instance_from_context
 from services.state.external_changes_scanner import external_changes_scanner
 import transport.unity_transport as unity_transport
 from transport.legacy.unity_connection import async_send_command_with_retry
+from transport.plugin_hub import PluginHub
 
 
 class EditorStateUnity(BaseModel):
@@ -132,17 +134,15 @@ async def infer_single_instance_id(ctx: Context) -> str | None:
     """
     await ctx.info("If exactly one Unity instance is connected, return its Name@hash id.")
 
-    try:
-        transport = unity_transport._current_transport()
-    except Exception:
-        transport = None
+    transport = (config.transport_mode or "stdio").lower()
 
     if transport == "http":
         # HTTP/WebSocket transport: derive from PluginHub sessions.
         try:
-            from transport.plugin_hub import PluginHub
-
-            sessions_data = await PluginHub.get_sessions()
+            # In remote-hosted mode, filter sessions by user_id
+            user_id = ctx.get_state(
+                "user_id") if config.http_remote_hosted else None
+            sessions_data = await PluginHub.get_sessions(user_id=user_id)
             sessions = sessions_data.sessions if hasattr(
                 sessions_data, "sessions") else {}
             if isinstance(sessions, dict) and len(sessions) == 1:

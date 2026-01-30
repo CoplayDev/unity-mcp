@@ -4,6 +4,7 @@ import types
 from types import SimpleNamespace
 
 from .test_helpers import DummyContext
+from core.config import config
 
 
 class DummyMiddlewareContext:
@@ -25,15 +26,12 @@ def test_auto_selects_single_instance_via_pluginhub(monkeypatch):
 
     plugin_hub.PluginHub = PluginHub
     monkeypatch.setitem(sys.modules, "transport.plugin_hub", plugin_hub)
-    unity_transport = types.ModuleType("transport.unity_transport")
-    unity_transport._current_transport = lambda: "http"
-    monkeypatch.setitem(sys.modules, "transport.unity_transport", unity_transport)
     monkeypatch.delitem(sys.modules, "transport.unity_instance_middleware", raising=False)
 
     from transport.unity_instance_middleware import UnityInstanceMiddleware, PluginHub as ImportedPluginHub
     assert ImportedPluginHub is plugin_hub.PluginHub
 
-    monkeypatch.setenv("UNITY_MCP_TRANSPORT", "http")
+    monkeypatch.setattr(config, "transport_mode", "http")
 
     middleware = UnityInstanceMiddleware()
     ctx = DummyContext()
@@ -74,15 +72,12 @@ def test_auto_selects_single_instance_via_stdio(monkeypatch):
 
     plugin_hub.PluginHub = PluginHub
     monkeypatch.setitem(sys.modules, "transport.plugin_hub", plugin_hub)
-    unity_transport = types.ModuleType("transport.unity_transport")
-    unity_transport._current_transport = lambda: "stdio"
-    monkeypatch.setitem(sys.modules, "transport.unity_transport", unity_transport)
     monkeypatch.delitem(sys.modules, "transport.unity_instance_middleware", raising=False)
 
     from transport.unity_instance_middleware import UnityInstanceMiddleware, PluginHub as ImportedPluginHub
     assert ImportedPluginHub is plugin_hub.PluginHub
 
-    monkeypatch.setenv("UNITY_MCP_TRANSPORT", "stdio")
+    monkeypatch.setattr(config, "transport_mode", "stdio")
 
     middleware = UnityInstanceMiddleware()
     ctx = DummyContext()
@@ -118,9 +113,6 @@ def test_auto_select_handles_stdio_errors(monkeypatch):
 
     plugin_hub.PluginHub = PluginHub
     monkeypatch.setitem(sys.modules, "transport.plugin_hub", plugin_hub)
-    unity_transport = types.ModuleType("transport.unity_transport")
-    unity_transport._current_transport = lambda: "stdio"
-    monkeypatch.setitem(sys.modules, "transport.unity_transport", unity_transport)
     monkeypatch.delitem(sys.modules, "transport.unity_instance_middleware", raising=False)
 
     from transport.unity_instance_middleware import UnityInstanceMiddleware, PluginHub as ImportedPluginHub

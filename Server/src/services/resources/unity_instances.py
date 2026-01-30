@@ -7,7 +7,7 @@ from fastmcp import Context
 from services.registry import mcp_for_unity_resource
 from transport.legacy.unity_connection import get_unity_connection_pool
 from transport.plugin_hub import PluginHub
-from transport.unity_transport import _current_transport
+from core.config import config
 
 
 @mcp_for_unity_resource(
@@ -36,10 +36,13 @@ async def unity_instances(ctx: Context) -> dict[str, Any]:
     await ctx.info("Listing Unity instances")
 
     try:
-        transport = _current_transport()
+        transport = (config.transport_mode or "stdio").lower()
         if transport == "http":
             # HTTP/WebSocket transport: query PluginHub
-            sessions_data = await PluginHub.get_sessions()
+            # In remote-hosted mode, filter sessions by user_id
+            user_id = ctx.get_state(
+                "user_id") if config.http_remote_hosted else None
+            sessions_data = await PluginHub.get_sessions(user_id=user_id)
             sessions = sessions_data.sessions
 
             instances = []

@@ -9,6 +9,7 @@ import logging
 
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 
+from core.config import config
 from transport.plugin_hub import PluginHub
 
 logger = logging.getLogger("mcp-for-unity-server")
@@ -32,7 +33,12 @@ def get_unity_instance_middleware() -> 'UnityInstanceMiddleware':
 
 
 def set_unity_instance_middleware(middleware: 'UnityInstanceMiddleware') -> None:
-    """Set the global Unity instance middleware (called during server initialization)."""
+    """Replace the global middleware instance.
+
+    This is a test seam: production code uses ``get_unity_instance_middleware()``
+    which lazy-initialises the singleton.  Tests call this function to inject a
+    mock or pre-configured middleware before exercising tool/resource code.
+    """
     global _unity_instance_middleware
     _unity_instance_middleware = middleware
 
@@ -55,12 +61,17 @@ class UnityInstanceMiddleware(Middleware):
         Derive a stable key for the calling session.
 
         Prioritizes client_id for stability.
-        If client_id is missing, falls back to 'global' (assuming single-user local mode),
-        ignoring session_id which can be unstable in some transports/clients.
+        In remote-hosted mode, falls back to user_id for session isolation.
+        Otherwise falls back to 'global' (assuming single-user local mode).
         """
         client_id = getattr(ctx, "client_id", None)
         if isinstance(client_id, str) and client_id:
             return client_id
+
+        # In remote-hosted mode, use user_id so different users get isolated instance selections
+        user_id = ctx.get_state("user_id")
+        if isinstance(user_id, str) and user_id:
+            return f"user:{user_id}"
 
         # Fallback to global for local dev stability
         return "global"
@@ -92,10 +103,10 @@ class UnityInstanceMiddleware(Middleware):
         to stick for subsequent tool/resource calls in the same session.
         """
         try:
-            # Import here to avoid circular dependencies / optional transport modules.
-            from transport.unity_transport import _current_transport
-
-            transport = _current_transport()
+            transport = (config.transport_mode or "stdio").lower()
+            # This implicit behavior works well for solo-users, but is dangerous for multi-user setups
+            if transport == "http" and config.http_remote_hosted:
+                return None
             if PluginHub.is_configured():
                 try:
                     sessions_data = await PluginHub.get_sessions()
@@ -172,9 +183,26 @@ class UnityInstanceMiddleware(Middleware):
 
         return None
 
+    async def _resolve_user_id(self) -> str | None:
+        """Extract user_id from the current HTTP request's API key."""
+        if not config.http_remote_hosted:
+            return None
+        # Lazy import to avoid circular dependencies (same pattern as _maybe_autoselect_instance).
+        from transport.unity_transport import _resolve_user_id_from_request
+        return await _resolve_user_id_from_request()
+
     async def _inject_unity_instance(self, context: MiddlewareContext) -> None:
-        """Inject active Unity instance into context if available."""
+        """Inject active Unity instance and user_id into context if available."""
         ctx = context.fastmcp_context
+
+        # Resolve user_id from the HTTP request's API key header
+        user_id = await self._resolve_user_id()
+        if config.http_remote_hosted and user_id is None:
+            raise RuntimeError(
+                "API key authentication required. Provide a valid X-API-Key header."
+            )
+        if user_id:
+            ctx.set_state("user_id", user_id)
 
         active_instance = self.get_active_instance(ctx)
         if not active_instance:
@@ -194,7 +222,8 @@ class UnityInstanceMiddleware(Middleware):
                     # resolving session_id might fail if the plugin disconnected
                     # We only need session_id for HTTP transport routing.
                     # For stdio, we just need the instance ID.
-                    session_id = await PluginHub._resolve_session_id(active_instance)
+                    # Pass user_id for remote-hosted mode session isolation
+                    session_id = await PluginHub._resolve_session_id(active_instance, user_id=user_id)
                 except (ConnectionError, ValueError, KeyError, TimeoutError) as exc:
                     # If resolution fails, it means the Unity instance is not reachable via HTTP/WS.
                     # If we are in stdio mode, this might still be fine if the user is just setting state?

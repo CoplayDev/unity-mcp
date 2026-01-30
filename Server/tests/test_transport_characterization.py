@@ -21,7 +21,7 @@ import uuid
 
 from transport.unity_instance_middleware import UnityInstanceMiddleware, get_unity_instance_middleware, set_unity_instance_middleware
 from transport.plugin_registry import PluginRegistry, PluginSession
-from transport.plugin_hub import PluginHub, NoUnitySessionError, PluginDisconnectedError
+from transport.plugin_hub import PluginHub, NoUnitySessionError, InstanceSelectionRequiredError, PluginDisconnectedError
 from transport.models import (
     RegisterMessage,
     RegisterToolsMessage,
@@ -775,7 +775,7 @@ class TestSessionResolution:
             unity_version="2023.2"
         )
 
-        with pytest.raises(RuntimeError, match="Multiple Unity instances"):
+        with pytest.raises(InstanceSelectionRequiredError, match="Multiple Unity instances"):
             await PluginHub._resolve_session_id(None)
 
         # Cleanup

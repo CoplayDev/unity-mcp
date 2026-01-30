@@ -6,6 +6,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Services.Transport;
@@ -56,6 +57,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private volatile bool _isConnected;
         private int _isReconnectingFlag;
         private TransportState _state = TransportState.Disconnected(TransportDisplayName, "Transport not started");
+        private string _apiKey;
         private bool _disposed;
 
         public WebSocketTransportClient(IToolDiscoveryService toolDiscoveryService = null)
@@ -80,6 +82,9 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             _projectName = ProjectIdentityUtility.GetProjectName();
             _projectHash = ProjectIdentityUtility.GetProjectHash();
             _unityVersion = Application.unityVersion;
+            _apiKey = HttpEndpointUtility.IsRemoteScope()
+                ? EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty)
+                : string.Empty;
 
             // Get project root path (strip /Assets from dataPath) for focus nudging
             string dataPath = Application.dataPath;
@@ -214,13 +219,21 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             _socket = new ClientWebSocket();
             _socket.Options.KeepAliveInterval = _socketKeepAliveInterval;
 
+            // Add API key header if configured (for remote-hosted mode)
+            if (!string.IsNullOrEmpty(_apiKey))
+            {
+                _socket.Options.SetRequestHeader(AuthConstants.ApiKeyHeader, _apiKey);
+            }
+
             try
             {
                 await _socket.ConnectAsync(_endpointUri, connectionToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                McpLog.Error($"[WebSocket] Connection failed: {ex.Message}");
+                string errorMsg = "Connection failed. Check that the server URL is correct, the server is running, and your API key (if required) is valid.";
+                McpLog.Error($"[WebSocket] {errorMsg} (Detail: {ex.Message})");
+                _state = TransportState.Disconnected(TransportDisplayName, errorMsg);
                 return false;
             }
 
@@ -232,7 +245,9 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             }
             catch (Exception ex)
             {
-                McpLog.Error($"[WebSocket] Registration failed: {ex.Message}");
+                string regMsg = $"Registration with server failed: {ex.Message}";
+                McpLog.Error($"[WebSocket] {regMsg}");
+                _state = TransportState.Disconnected(TransportDisplayName, regMsg);
                 return false;
             }
 
