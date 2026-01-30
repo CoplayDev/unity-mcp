@@ -388,7 +388,15 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                     statusIndicator.RemoveFromClassList("connected");
                     statusIndicator.AddToClassList("disconnected");
                     connectionToggleButton.text = "Start Session";
-                    connectionToggleButton.SetEnabled(true);
+
+                    // Disable Start Session for HTTP Remote when no API key is set
+                    bool httpRemoteNeedsKey = transportDropdown != null
+                        && (TransportProtocol)transportDropdown.value == TransportProtocol.HTTPRemote
+                        && string.IsNullOrEmpty(EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty));
+                    connectionToggleButton.SetEnabled(!httpRemoteNeedsKey);
+                    connectionToggleButton.tooltip = httpRemoteNeedsKey
+                        ? "An API key is required for HTTP Remote. Enter one above."
+                        : string.Empty;
                 }
 
                 unityPortField.SetEnabled(!isStdioResuming);
@@ -740,7 +748,13 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                     }
                     else
                     {
-                        McpLog.Warn("Failed to start MCP bridge");
+                        var mode = EditorConfigurationCache.Instance.UseHttpTransport
+                            ? TransportMode.Http : TransportMode.Stdio;
+                        var state = MCPServiceLocator.TransportManager.GetState(mode);
+                        string errorMsg = state?.Error
+                            ?? "Failed to start the MCP session. Check the server URL and that the server is running.";
+                        EditorUtility.DisplayDialog("Connection Failed", errorMsg, "OK");
+                        McpLog.Warn($"Failed to start MCP bridge: {errorMsg}");
                     }
                 }
             }
@@ -800,6 +814,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             {
                 EditorPrefs.SetString(EditorPrefKeys.ApiKey, apiKey);
                 OnManualConfigUpdateRequested?.Invoke();
+                UpdateConnectionStatus();
                 McpLog.Info(string.IsNullOrEmpty(apiKey) ? "API key cleared" : "API key updated");
             }
         }
@@ -885,6 +900,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 apiKeyField.SetValueWithoutNotify(string.Empty);
             }
             OnManualConfigUpdateRequested?.Invoke();
+            UpdateConnectionStatus();
             McpLog.Info("API key cleared");
         }
 

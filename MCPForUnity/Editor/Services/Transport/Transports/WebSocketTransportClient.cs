@@ -231,7 +231,9 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             }
             catch (Exception ex)
             {
-                McpLog.Error($"[WebSocket] Connection failed: {ex.Message}");
+                string errorMsg = "Connection failed. Check that the server URL is correct, the server is running, and your API key (if required) is valid.";
+                McpLog.Error($"[WebSocket] {errorMsg} (Detail: {ex.Message})");
+                _state = TransportState.Disconnected(TransportDisplayName, errorMsg);
                 return false;
             }
 
@@ -243,7 +245,9 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             }
             catch (Exception ex)
             {
-                McpLog.Error($"[WebSocket] Registration failed: {ex.Message}");
+                string regMsg = $"Registration with server failed: {ex.Message}";
+                McpLog.Error($"[WebSocket] {regMsg}");
+                _state = TransportState.Disconnected(TransportDisplayName, regMsg);
                 return false;
             }
 
