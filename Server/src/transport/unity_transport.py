@@ -17,7 +17,7 @@ logger = logging.getLogger("mcp-for-unity-server")
 
 
 def _is_http_transport() -> bool:
-    return os.environ.get("UNITY_MCP_TRANSPORT", "stdio").lower() == "http"
+    return config.transport_mode.lower() == "http"
 
 
 def _current_transport() -> str:

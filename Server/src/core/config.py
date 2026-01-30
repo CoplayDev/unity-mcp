@@ -16,6 +16,9 @@ class ServerConfig:
     unity_port: int = 6400
     mcp_port: int = 6500
 
+    # Transport settings
+    transport_mode: str = "stdio"
+
     # HTTP transport behaviour
     http_remote_hosted: bool = False
 

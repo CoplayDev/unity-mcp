@@ -727,10 +727,9 @@ Examples:
             f"Using default Unity instance from command-line: {args.default_instance}")
 
     # Set transport mode
-    transport_mode = args.transport or os.environ.get(
+    config.transport_mode = args.transport or os.environ.get(
         "UNITY_MCP_TRANSPORT", "stdio")
-    os.environ["UNITY_MCP_TRANSPORT"] = transport_mode
-    logger.info(f"Transport mode: {transport_mode}")
+    logger.info(f"Transport mode: {config.transport_mode}")
 
     config.http_remote_hosted = (
         bool(args.http_remote_hosted)
@@ -768,7 +767,7 @@ Examples:
     )
 
     # Validate: remote-hosted HTTP mode requires API key validation URL
-    if config.http_remote_hosted and transport_mode == "http" and not config.api_key_validation_url:
+    if config.http_remote_hosted and config.transport_mode == "http" and not config.api_key_validation_url:
         logger.error(
             "--http-remote-hosted requires --api-key-validation-url or "
             "UNITY_MCP_API_KEY_VALIDATION_URL environment variable"
