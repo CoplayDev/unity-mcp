@@ -349,6 +349,16 @@ namespace MCPForUnity.Editor.Services.Transport
                     return;
                 }
 
+                // Block execution of disabled tools
+                var toolMeta = MCPServiceLocator.ToolDiscovery.GetToolMetadata(command.type);
+                if (toolMeta != null && !MCPServiceLocator.ToolDiscovery.IsToolEnabled(command.type))
+                {
+                    pending.TrySetResult(SerializeError(
+                        $"Tool '{command.type}' is disabled in the Unity Editor."));
+                    RemovePending(id, pending);
+                    return;
+                }
+
                 var result = CommandRegistry.ExecuteCommand(command.type, parameters, pending.CompletionSource);
 
                 if (result == null)
