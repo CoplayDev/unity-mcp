@@ -823,7 +823,7 @@ Examples:
     mcp = create_mcp_server(project_scoped_tools)
 
     # Determine transport mode
-    if transport_mode == 'http':
+    if config.transport_mode == 'http':
         # Use HTTP transport for FastMCP
         transport = 'http'
         # Use the parsed host and port from URL/args
