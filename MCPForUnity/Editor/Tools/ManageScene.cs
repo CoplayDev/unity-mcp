@@ -361,6 +361,41 @@ namespace MCPForUnity.Editor.Tools
             {
                 int resolvedSuperSize = (superSize.HasValue && superSize.Value > 0) ? superSize.Value : 1;
 
+                // Batch mode warning
+                if (Application.isBatchMode)
+                {
+                    McpLog.Warn("[ManageScene] Screenshot capture in batch mode uses camera-based fallback. Results may vary.");
+                }
+
+                // Check Screen Capture module availability and warn if not available
+                bool screenCaptureAvailable = ScreenshotUtility.IsScreenCaptureModuleAvailable;
+                bool hasCameraFallback = Camera.main != null || UnityEngine.Object.FindObjectsOfType<Camera>().Length > 0;
+
+#if UNITY_2022_1_OR_NEWER
+                if (!screenCaptureAvailable && !hasCameraFallback)
+                {
+                    return new ErrorResponse(
+                        "Cannot capture screenshot. The Screen Capture module is not enabled and no Camera was found in the scene. " +
+                        "Please either: (1) Enable the Screen Capture module: Window > Package Manager > Built-in > Screen Capture > Enable, " +
+                        "or (2) Add a Camera to your scene for camera-based fallback capture."
+                    );
+                }
+                
+                if (!screenCaptureAvailable)
+                {
+                    McpLog.Warn("[ManageScene] Screen Capture module not enabled. Using camera-based fallback. " +
+                        "For best results, enable it: Window > Package Manager > Built-in > Screen Capture > Enable.");
+                }
+#else
+                if (!hasCameraFallback)
+                {
+                    return new ErrorResponse(
+                        "No camera found in the scene. Screenshot capture on Unity versions before 2022.1 requires a Camera in the scene. " +
+                        "Please add a Camera to your scene or upgrade to Unity 2022.1+ for ScreenCapture API support."
+                    );
+                }
+#endif
+
                 // Best-effort: ensure Game View exists and repaints before capture.
                 if (!Application.isBatchMode)
                 {
