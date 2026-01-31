@@ -628,7 +628,8 @@ class TestTelemetryDuration:
             assert result == "done"
             assert mock_record.called
             duration_ms = mock_record.call_args[0][2]
-            assert duration_ms >= 50
+            # Allow 20% variance for timer resolution (especially on Windows)
+            assert duration_ms >= 40
 
     def test_telemetry_duration_recorded_even_on_error(self):
         """Verify duration is recorded even when tool raises exception."""
@@ -1270,7 +1271,8 @@ class TestConfigurationEnvironmentInteraction:
         disable_vars = ["DISABLE_TELEMETRY", "UNITY_MCP_DISABLE_TELEMETRY", "MCP_DISABLE_TELEMETRY"]
 
         for var_name in disable_vars:
-            with patch.dict(os.environ, {var_name: "true"}, clear=True):
+            # Don't use clear=True as it removes HOME/USERPROFILE which breaks Path.home() on Windows
+            with patch.dict(os.environ, {var_name: "true"}):
                 with patch("core.telemetry.import_module", side_effect=Exception("No module")):
                     config = TelemetryConfig()
                     assert config.enabled is False, f"{var_name} did not disable telemetry"

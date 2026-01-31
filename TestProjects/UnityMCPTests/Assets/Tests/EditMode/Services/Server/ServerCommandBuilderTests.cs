@@ -110,6 +110,13 @@ namespace MCPForUnityTests.Editor.Services.Server
         [Test]
         public void BuildUvPathFromUvx_ValidPath_ConvertsCorrectly()
         {
+            // This test uses Unix-style paths which only work correctly on non-Windows
+            if (UnityEngine.Application.platform == UnityEngine.RuntimePlatform.WindowsEditor)
+            {
+                Assert.Pass("Skipped on Windows - use BuildUvPathFromUvx_WindowsPath_ConvertsCorrectly instead");
+                return;
+            }
+
             // Arrange
             string uvxPath = "/usr/local/bin/uvx";
 

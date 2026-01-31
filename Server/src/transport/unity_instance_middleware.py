@@ -214,9 +214,10 @@ class UnityInstanceMiddleware(Middleware):
             # The 'active_instance' (Name@hash) might be valid for stdio even if PluginHub fails.
 
             session_id: str | None = None
-            # Only validate via PluginHub if we are actually using HTTP transport
-            # OR if we want to support hybrid mode. For now, let's be permissive.
-            if PluginHub.is_configured():
+            # Only validate via PluginHub if we are actually using HTTP transport.
+            # For stdio transport, skip PluginHub entirely - we only need the instance ID.
+            from transport.unity_transport import _is_http_transport
+            if _is_http_transport() and PluginHub.is_configured():
                 try:
                     # resolving session_id might fail if the plugin disconnected
                     # We only need session_id for HTTP transport routing.

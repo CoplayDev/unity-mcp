@@ -59,6 +59,11 @@ namespace MCPForUnity.Editor.Services
 
         public ResourceMetadata GetResourceMetadata(string resourceName)
         {
+            if (string.IsNullOrEmpty(resourceName))
+            {
+                return null;
+            }
+
             if (_cachedResources == null)
             {
                 DiscoverAllResources();

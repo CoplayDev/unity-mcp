@@ -11,8 +11,8 @@ from services.api_key_service import ApiKeyService
 from models.models import MCPResponse
 from models.unity_response import normalize_unity_response
 
+logger = logging.getLogger(__name__)
 T = TypeVar("T")
-logger = logging.getLogger("mcp-for-unity-server")
 
 
 def _is_http_transport() -> bool:

@@ -619,6 +619,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             var payload = new JObject
             {
                 ["type"] = "pong",
+                ["session_id"] = _sessionId  // Include session ID for server-side tracking
             };
             return SendJsonAsync(payload, token);
         }
@@ -652,6 +653,10 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
         private async Task HandleSocketClosureAsync(string reason)
         {
+            // Capture stack trace for debugging disconnection triggers
+            var stackTrace = new System.Diagnostics.StackTrace(true);
+            McpLog.Debug($"[WebSocket] HandleSocketClosureAsync called. Reason: {reason}\nStack trace:\n{stackTrace}");
+
             if (_lifecycleCts == null || _lifecycleCts.IsCancellationRequested)
             {
                 return;

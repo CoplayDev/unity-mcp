@@ -36,6 +36,7 @@ namespace MCPForUnity.Editor.Services.Transport
                 CompletionSource = completionSource;
                 CancellationToken = cancellationToken;
                 CancellationRegistration = registration;
+                QueuedAt = DateTime.UtcNow;
             }
 
             public string CommandJson { get; }
@@ -43,6 +44,7 @@ namespace MCPForUnity.Editor.Services.Transport
             public CancellationToken CancellationToken { get; }
             public CancellationTokenRegistration CancellationRegistration { get; }
             public bool IsExecuting { get; set; }
+            public DateTime QueuedAt { get; }
 
             public void Dispose()
             {
