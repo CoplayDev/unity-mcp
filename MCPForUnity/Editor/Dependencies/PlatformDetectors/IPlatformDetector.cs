@@ -41,5 +41,11 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
         /// Get platform-specific uv installation URL
         /// </summary>
         string GetUvInstallUrl();
+
+        /// <summary>
+        /// Automatically install uv on this platform
+        /// </summary>
+        /// <returns>True if installation was successful</returns>
+        bool InstallUv();
     }
 }

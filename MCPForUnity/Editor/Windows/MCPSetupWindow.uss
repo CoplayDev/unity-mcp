@@ -78,14 +78,18 @@
 }
 
 .install-links-row {
-    flex-direction: row;
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: stretch;
 }
 
 .install-link-button {
     flex-grow: 1;
     min-width: 180px;
     margin-top: 0;
+    margin-left: 0;
+    margin-right: 0;
+    margin-bottom: 8px;
+    width: 100%;
 }
 
 /* Button container at bottom */

@@ -94,10 +94,38 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
    - Direct download: https://python.org/downloads/windows/
 
 2. uv Package Manager: Install via PowerShell
-   - Run: powershell -ExecutionPolicy ByPass -c ""irm https://astral.sh/uv/install.ps1 | iex""
+   - Run: powershell -NoProfile -ExecutionPolicy ByPass -c ""irm https://astral.sh/uv/install.ps1 | iex""
    - Or download from: https://github.com/astral-sh/uv/releases
 
 3. MCP Server: Will be installed automatically by MCP for Unity Bridge";
+        }
+
+        public override bool InstallUv()
+        {
+            try
+            {
+                McpLog.Info("Attempting to install uv package manager via PowerShell...");
+
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    Arguments = "-NoProfile -ExecutionPolicy ByPass -Command \"irm https://astral.sh/uv/install.ps1 | iex\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = false // Show window so user sees progress
+                };
+
+                using var process = System.Diagnostics.Process.Start(psi);
+                if (process == null) return false;
+
+                process.WaitForExit(60000); // Wait up to 1 minute
+
+                return process.ExitCode == 0;
+            }
+            catch (Exception ex)
+            {
+                McpLog.Error($"Failed to install uv: {ex.Message}");
+                return false;
+            }
         }
 
         public override DependencyStatus DetectUv()
