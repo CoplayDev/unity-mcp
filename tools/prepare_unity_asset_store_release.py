@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""Prepare MCPForUnity for Asset Store upload.
+
+Usage:
+  python tools/prepare_unity_asset_store_release.py \
+    --remote-url https://your.remote.endpoint/ \
+    --asset-project /path/to/AssetStoreUploads \
+    --backup
+"""
 from __future__ import annotations
 
 import argparse
@@ -74,6 +82,11 @@ def main() -> int:
         help="Path to the Unity project used for Asset Store uploads.",
     )
     parser.add_argument(
+        "--remote-url",
+        required=True,
+        help="Remote MCP HTTP base URL to set as default for Asset Store builds.",
+    )
+    parser.add_argument(
         "--backup",
         action="store_true",
         help="Backup existing Assets/MCPForUnity before replacing.",
@@ -88,6 +101,9 @@ def main() -> int:
     repo_root = Path(args.repo_root).expanduser().resolve()
     asset_project = Path(args.asset_project).expanduser().resolve(
     ) if args.asset_project else (repo_root / "TestProjects" / "AssetStoreUploads")
+    remote_url = args.remote_url.strip()
+    if not remote_url:
+        raise RuntimeError("--remote-url must be a non-empty URL")
 
     source_mcp = repo_root / "MCPForUnity"
     if not source_mcp.is_dir():
@@ -125,11 +141,11 @@ def main() -> int:
         # Remove auto-popup setup window for Asset Store packaging
         remove_line_exact(setup_service, "[InitializeOnLoad]")
 
-        # Set default base URL to the hosted endpoint
+        # Set default remote base URL to the hosted endpoint
         replace_once(
             http_util,
-            r'private const string DefaultBaseUrl = "http://localhost:8080";',
-            'private const string DefaultBaseUrl = "https://mc-0cb5e1039f6b4499b473670f70662d29.ecs.us-east-2.on.aws/";',
+            r'private const string DefaultRemoteBaseUrl = "";',
+            f'private const string DefaultRemoteBaseUrl = "{remote_url}";',
         )
 
         # Default transport to HTTP Remote and persist inferred scope when missing
@@ -137,6 +153,11 @@ def main() -> int:
             connection_section,
             r'transportDropdown\.Init\(TransportProtocol\.HTTPLocal\);',
             'transportDropdown.Init(TransportProtocol.HTTPRemote);',
+        )
+        replace_once(
+            connection_section,
+            r'scope = MCPServiceLocator\.Server\.IsLocalUrl\(\) \? "local" : "remote";',
+            'scope = "remote";',
         )
 
         # 2) Replace Assets/MCPForUnity in the target project
