@@ -48,7 +48,7 @@ namespace MCPForUnity.Editor.Windows
             // Integer prefs
             { EditorPrefKeys.UnitySocketPort, EditorPrefType.Int },
             { EditorPrefKeys.ValidationLevel, EditorPrefType.Int },
-            { EditorPrefKeys.LastUpdateCheck, EditorPrefType.Int },
+            { EditorPrefKeys.LastUpdateCheck, EditorPrefType.String },
             { EditorPrefKeys.LastStdIoUpgradeVersion, EditorPrefType.Int },
             
             // String prefs
@@ -67,6 +67,8 @@ namespace MCPForUnity.Editor.Windows
             { EditorPrefKeys.PackageDeployLastSourcePath, EditorPrefType.String },
             { EditorPrefKeys.ServerSrc, EditorPrefType.String },
             { EditorPrefKeys.LatestKnownVersion, EditorPrefType.String },
+            { EditorPrefKeys.LastAssetStoreUpdateCheck, EditorPrefType.String },
+            { EditorPrefKeys.LatestKnownAssetStoreVersion, EditorPrefType.String },
         };
 
         // Templates
