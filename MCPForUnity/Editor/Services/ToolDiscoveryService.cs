@@ -45,6 +45,10 @@ namespace MCPForUnity.Editor.Services
                 var metadata = ExtractToolMetadata(type, toolAttr);
                 if (metadata != null)
                 {
+                    if (_cachedTools.ContainsKey(metadata.Name))
+                    {
+                        McpLog.Warn($"Duplicate tool name '{metadata.Name}' from {type.FullName}; overwriting previous registration.");
+                    }
                     _cachedTools[metadata.Name] = metadata;
                     EnsurePreferenceInitialized(metadata);
                 }

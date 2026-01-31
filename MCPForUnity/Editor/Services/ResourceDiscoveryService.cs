@@ -44,6 +44,10 @@ namespace MCPForUnity.Editor.Services
                 var metadata = ExtractResourceMetadata(type, resourceAttr);
                 if (metadata != null)
                 {
+                    if (_cachedResources.ContainsKey(metadata.Name))
+                    {
+                        McpLog.Warn($"Duplicate resource name '{metadata.Name}' from {type.FullName}; overwriting previous registration.");
+                    }
                     _cachedResources[metadata.Name] = metadata;
                     EnsurePreferenceInitialized(metadata);
                 }
