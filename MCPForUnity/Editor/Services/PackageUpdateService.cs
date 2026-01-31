@@ -8,20 +8,23 @@ using UnityEditor;
 namespace MCPForUnity.Editor.Services
 {
     /// <summary>
-    /// Service for checking package updates from GitHub
+    /// Service for checking package updates from GitHub or Asset Store metadata
     /// </summary>
     public class PackageUpdateService : IPackageUpdateService
     {
         private const string LastCheckDateKey = EditorPrefKeys.LastUpdateCheck;
         private const string CachedVersionKey = EditorPrefKeys.LatestKnownVersion;
+        private const string LastAssetStoreCheckDateKey = EditorPrefKeys.LastAssetStoreUpdateCheck;
+        private const string CachedAssetStoreVersionKey = EditorPrefKeys.LatestKnownAssetStoreVersion;
         private const string PackageJsonUrl = "https://raw.githubusercontent.com/CoplayDev/unity-mcp/main/MCPForUnity/package.json";
+        private const string AssetStoreVersionUrl = "https://gqoqjkkptwfbkwyssmnj.supabase.co/storage/v1/object/public/coplay-images/assetstoreversion.json";
 
         /// <inheritdoc/>
         public UpdateCheckResult CheckForUpdate(string currentVersion)
         {
-            // Check cache first - only check once per day
-            string lastCheckDate = EditorPrefs.GetString(LastCheckDateKey, "");
-            string cachedLatestVersion = EditorPrefs.GetString(CachedVersionKey, "");
+            bool isGitInstallation = IsGitInstallation();
+            string lastCheckDate = EditorPrefs.GetString(isGitInstallation ? LastCheckDateKey : LastAssetStoreCheckDateKey, "");
+            string cachedLatestVersion = EditorPrefs.GetString(isGitInstallation ? CachedVersionKey : CachedAssetStoreVersionKey, "");
 
             if (lastCheckDate == DateTime.Now.ToString("yyyy-MM-dd") && !string.IsNullOrEmpty(cachedLatestVersion))
             {
@@ -34,25 +37,15 @@ namespace MCPForUnity.Editor.Services
                 };
             }
 
-            // Don't check for Asset Store installations
-            if (!IsGitInstallation())
-            {
-                return new UpdateCheckResult
-                {
-                    CheckSucceeded = false,
-                    UpdateAvailable = false,
-                    Message = "Asset Store installations are updated via Unity Asset Store"
-                };
-            }
-
-            // Fetch latest version from GitHub
-            string latestVersion = FetchLatestVersionFromGitHub();
+            string latestVersion = isGitInstallation
+                ? FetchLatestVersionFromGitHub()
+                : FetchLatestVersionFromAssetStoreJson();
 
             if (!string.IsNullOrEmpty(latestVersion))
             {
                 // Cache the result
-                EditorPrefs.SetString(LastCheckDateKey, DateTime.Now.ToString("yyyy-MM-dd"));
-                EditorPrefs.SetString(CachedVersionKey, latestVersion);
+                EditorPrefs.SetString(isGitInstallation ? LastCheckDateKey : LastAssetStoreCheckDateKey, DateTime.Now.ToString("yyyy-MM-dd"));
+                EditorPrefs.SetString(isGitInstallation ? CachedVersionKey : CachedAssetStoreVersionKey, latestVersion);
 
                 return new UpdateCheckResult
                 {
@@ -67,7 +60,9 @@ namespace MCPForUnity.Editor.Services
             {
                 CheckSucceeded = false,
                 UpdateAvailable = false,
-                Message = "Failed to check for updates (network issue or offline)"
+                Message = isGitInstallation
+                    ? "Failed to check for updates (network issue or offline)"
+                    : "Failed to check for Asset Store updates (network issue or offline)"
             };
         }
 
@@ -101,7 +96,7 @@ namespace MCPForUnity.Editor.Services
         }
 
         /// <inheritdoc/>
-        public bool IsGitInstallation()
+        public virtual bool IsGitInstallation()
         {
             // Git packages are installed via Package Manager and have a package.json in Packages/
             // Asset Store packages are in Assets/
@@ -122,12 +117,14 @@ namespace MCPForUnity.Editor.Services
         {
             EditorPrefs.DeleteKey(LastCheckDateKey);
             EditorPrefs.DeleteKey(CachedVersionKey);
+            EditorPrefs.DeleteKey(LastAssetStoreCheckDateKey);
+            EditorPrefs.DeleteKey(CachedAssetStoreVersionKey);
         }
 
         /// <summary>
         /// Fetches the latest version from GitHub's main branch package.json
         /// </summary>
-        private string FetchLatestVersionFromGitHub()
+        protected virtual string FetchLatestVersionFromGitHub()
         {
             try
             {
@@ -155,6 +152,32 @@ namespace MCPForUnity.Editor.Services
             {
                 // Silent fail - don't interrupt the user if network is unavailable
                 McpLog.Info($"Update check failed (this is normal if offline): {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Fetches the latest Asset Store version from a hosted JSON file.
+        /// </summary>
+        protected virtual string FetchLatestVersionFromAssetStoreJson()
+        {
+            try
+            {
+                using (var client = new WebClient())
+                {
+                    client.Headers.Add("User-Agent", "Unity-MCPForUnity-AssetStoreUpdateChecker");
+                    string jsonContent = client.DownloadString(AssetStoreVersionUrl);
+
+                    var versionJson = JObject.Parse(jsonContent);
+                    string version = versionJson["version"]?.ToString();
+
+                    return string.IsNullOrEmpty(version) ? null : version;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Silent fail - don't interrupt the user if network is unavailable
+                McpLog.Info($"Asset Store update check failed (this is normal if offline): {ex.Message}");
                 return null;
             }
         }

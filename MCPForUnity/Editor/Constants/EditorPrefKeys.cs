@@ -54,6 +54,8 @@ namespace MCPForUnity.Editor.Constants
 
         internal const string LastUpdateCheck = "MCPForUnity.LastUpdateCheck";
         internal const string LatestKnownVersion = "MCPForUnity.LatestKnownVersion";
+        internal const string LastAssetStoreUpdateCheck = "MCPForUnity.LastAssetStoreUpdateCheck";
+        internal const string LatestKnownAssetStoreVersion = "MCPForUnity.LatestKnownAssetStoreVersion";
         internal const string LastStdIoUpgradeVersion = "MCPForUnity.LastStdIoUpgradeVersion";
 
         internal const string TelemetryDisabled = "MCPForUnity.TelemetryDisabled";

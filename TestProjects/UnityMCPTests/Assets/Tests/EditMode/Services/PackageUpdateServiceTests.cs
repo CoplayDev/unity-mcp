@@ -11,6 +11,8 @@ namespace MCPForUnityTests.Editor.Services
         private PackageUpdateService _service;
         private const string TestLastCheckDateKey = EditorPrefKeys.LastUpdateCheck;
         private const string TestCachedVersionKey = EditorPrefKeys.LatestKnownVersion;
+        private const string TestAssetStoreLastCheckDateKey = EditorPrefKeys.LastAssetStoreUpdateCheck;
+        private const string TestAssetStoreCachedVersionKey = EditorPrefKeys.LatestKnownAssetStoreVersion;
 
         [SetUp]
         public void SetUp()
@@ -37,6 +39,14 @@ namespace MCPForUnityTests.Editor.Services
             if (EditorPrefs.HasKey(TestCachedVersionKey))
             {
                 EditorPrefs.DeleteKey(TestCachedVersionKey);
+            }
+            if (EditorPrefs.HasKey(TestAssetStoreLastCheckDateKey))
+            {
+                EditorPrefs.DeleteKey(TestAssetStoreLastCheckDateKey);
+            }
+            if (EditorPrefs.HasKey(TestAssetStoreCachedVersionKey))
+            {
+                EditorPrefs.DeleteKey(TestAssetStoreCachedVersionKey);
             }
         }
 
@@ -211,23 +221,73 @@ namespace MCPForUnityTests.Editor.Services
         }
 
         [Test]
-        public void CheckForUpdate_ReturnsAssetStoreMessage_ForNonGitInstallations()
+        public void CheckForUpdate_UsesAssetStoreCache_WhenCacheIsValid()
         {
-            // Note: This test verifies the service behavior when IsGitInstallation() returns false.
-            // Since the actual result depends on package installation method, we create a mock
-            // implementation to test this specific code path.
-            
-            var mockService = new MockAssetStorePackageUpdateService();
-            
+            // Arrange: Set up valid Asset Store cache
+            string today = DateTime.Now.ToString("yyyy-MM-dd");
+            string cachedVersion = "9.0.1";
+            EditorPrefs.SetString(TestAssetStoreLastCheckDateKey, today);
+            EditorPrefs.SetString(TestAssetStoreCachedVersionKey, cachedVersion);
+
+            var mockService = new TestablePackageUpdateService
+            {
+                IsGitInstallationResult = false,
+                AssetStoreFetchResult = "9.9.9"
+            };
+
             // Act
-            var result = mockService.CheckForUpdate("5.0.0");
+            var result = mockService.CheckForUpdate("9.0.0");
 
             // Assert
-            Assert.IsFalse(result.CheckSucceeded, "Check should not succeed for Asset Store installs");
-            Assert.IsFalse(result.UpdateAvailable, "No update should be reported for Asset Store installs");
-            Assert.AreEqual("Asset Store installations are updated via Unity Asset Store", result.Message,
-                "Should return Asset Store update message");
-            Assert.IsNull(result.LatestVersion, "Latest version should be null for Asset Store installs");
+            Assert.IsTrue(result.CheckSucceeded, "Check should succeed with valid Asset Store cache");
+            Assert.AreEqual(cachedVersion, result.LatestVersion, "Should return cached Asset Store version");
+            Assert.IsTrue(result.UpdateAvailable, "Update should be available (9.0.1 > 9.0.0)");
+            Assert.IsFalse(mockService.AssetStoreFetchCalled, "Should not fetch when Asset Store cache is valid");
+        }
+
+        [Test]
+        public void CheckForUpdate_FetchesAssetStoreJson_WhenCacheExpired()
+        {
+            // Arrange: Set expired Asset Store cache and a valid Git cache to ensure separation
+            string yesterday = DateTime.Now.AddDays(-1).ToString("yyyy-MM-dd");
+            EditorPrefs.SetString(TestAssetStoreLastCheckDateKey, yesterday);
+            EditorPrefs.SetString(TestAssetStoreCachedVersionKey, "9.0.0");
+            EditorPrefs.SetString(TestLastCheckDateKey, DateTime.Now.ToString("yyyy-MM-dd"));
+            EditorPrefs.SetString(TestCachedVersionKey, "99.0.0");
+
+            var mockService = new TestablePackageUpdateService
+            {
+                IsGitInstallationResult = false,
+                AssetStoreFetchResult = "9.1.0"
+            };
+
+            // Act
+            var result = mockService.CheckForUpdate("9.0.0");
+
+            // Assert
+            Assert.IsTrue(result.CheckSucceeded, "Check should succeed when fetch returns a version");
+            Assert.AreEqual("9.1.0", result.LatestVersion, "Should use fetched Asset Store version");
+            Assert.IsTrue(mockService.AssetStoreFetchCalled, "Should fetch when Asset Store cache is expired");
+        }
+
+        [Test]
+        public void CheckForUpdate_ReturnsAssetStoreFailureMessage_WhenFetchFails()
+        {
+            // Arrange
+            var mockService = new TestablePackageUpdateService
+            {
+                IsGitInstallationResult = false,
+                AssetStoreFetchResult = null
+            };
+
+            // Act
+            var result = mockService.CheckForUpdate("9.0.0");
+
+            // Assert
+            Assert.IsFalse(result.CheckSucceeded, "Check should fail when Asset Store fetch fails");
+            Assert.IsFalse(result.UpdateAvailable, "No update should be reported when fetch fails");
+            Assert.AreEqual("Failed to check for Asset Store updates (network issue or offline)", result.Message);
+            Assert.IsNull(result.LatestVersion, "Latest version should be null when fetch fails");
         }
 
         [Test]
@@ -236,10 +296,14 @@ namespace MCPForUnityTests.Editor.Services
             // Arrange: Set up cache
             EditorPrefs.SetString(TestLastCheckDateKey, DateTime.Now.ToString("yyyy-MM-dd"));
             EditorPrefs.SetString(TestCachedVersionKey, "5.0.0");
+            EditorPrefs.SetString(TestAssetStoreLastCheckDateKey, DateTime.Now.ToString("yyyy-MM-dd"));
+            EditorPrefs.SetString(TestAssetStoreCachedVersionKey, "9.0.0");
 
             // Verify cache exists
             Assert.IsTrue(EditorPrefs.HasKey(TestLastCheckDateKey), "Cache should exist before clearing");
             Assert.IsTrue(EditorPrefs.HasKey(TestCachedVersionKey), "Cache should exist before clearing");
+            Assert.IsTrue(EditorPrefs.HasKey(TestAssetStoreLastCheckDateKey), "Asset Store cache should exist before clearing");
+            Assert.IsTrue(EditorPrefs.HasKey(TestAssetStoreCachedVersionKey), "Asset Store cache should exist before clearing");
 
             // Act
             _service.ClearCache();
@@ -247,6 +311,8 @@ namespace MCPForUnityTests.Editor.Services
             // Assert
             Assert.IsFalse(EditorPrefs.HasKey(TestLastCheckDateKey), "Date cache should be cleared");
             Assert.IsFalse(EditorPrefs.HasKey(TestCachedVersionKey), "Version cache should be cleared");
+            Assert.IsFalse(EditorPrefs.HasKey(TestAssetStoreLastCheckDateKey), "Asset Store date cache should be cleared");
+            Assert.IsFalse(EditorPrefs.HasKey(TestAssetStoreCachedVersionKey), "Asset Store version cache should be cleared");
         }
 
         [Test]
@@ -261,36 +327,31 @@ namespace MCPForUnityTests.Editor.Services
     }
 
     /// <summary>
-    /// Mock implementation of IPackageUpdateService that simulates Asset Store installation behavior
+    /// Testable implementation that allows forcing install type and fetch results.
     /// </summary>
-    internal class MockAssetStorePackageUpdateService : IPackageUpdateService
+    internal class TestablePackageUpdateService : PackageUpdateService
     {
-        public UpdateCheckResult CheckForUpdate(string currentVersion)
+        public bool IsGitInstallationResult { get; set; } = true;
+        public string GitFetchResult { get; set; }
+        public string AssetStoreFetchResult { get; set; }
+        public bool GitFetchCalled { get; private set; }
+        public bool AssetStoreFetchCalled { get; private set; }
+
+        public override bool IsGitInstallation()
         {
-            // Simulate Asset Store installation (IsGitInstallation returns false)
-            return new UpdateCheckResult
-            {
-                CheckSucceeded = false,
-                UpdateAvailable = false,
-                Message = "Asset Store installations are updated via Unity Asset Store"
-            };
+            return IsGitInstallationResult;
         }
 
-        public bool IsNewerVersion(string version1, string version2)
+        protected override string FetchLatestVersionFromGitHub()
         {
-            // Not used in the Asset Store test, but required by interface
-            return false;
+            GitFetchCalled = true;
+            return GitFetchResult;
         }
 
-        public bool IsGitInstallation()
+        protected override string FetchLatestVersionFromAssetStoreJson()
         {
-            // Simulate non-Git installation (Asset Store)
-            return false;
-        }
-
-        public void ClearCache()
-        {
-            // Not used in the Asset Store test, but required by interface
+            AssetStoreFetchCalled = true;
+            return AssetStoreFetchResult;
         }
     }
 }
