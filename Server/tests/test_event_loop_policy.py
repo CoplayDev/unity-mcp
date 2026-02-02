@@ -36,10 +36,18 @@ def test_windows_uses_selector_event_loop_policy():
     # Get the current event loop policy
     policy = asyncio.get_event_loop_policy()
 
+    # Use getattr to avoid AttributeError on non-Windows platforms
+    # during pytest collection phase
+    WindowsSelectorEventLoopPolicy = getattr(
+        asyncio, 'WindowsSelectorEventLoopPolicy', None
+    )
+
     # Verify it's SelectorEventLoopPolicy, not ProactorEventLoop
+    assert WindowsSelectorEventLoopPolicy is not None, \
+        "WindowsSelectorEventLoopPolicy should exist on Windows"
     assert isinstance(
         policy,
-        asyncio.WindowsSelectorEventLoopPolicy
+        WindowsSelectorEventLoopPolicy
     ), f"Expected WindowsSelectorEventLoopPolicy on Windows, got {type(policy).__name__}"
 
 
@@ -58,10 +66,15 @@ def test_non_windows_uses_default_policy():
     # Get the current event loop policy
     policy = asyncio.get_event_loop_policy()
 
+    # Use getattr to safely check for Windows policy on all platforms
+    WindowsSelectorEventLoopPolicy = getattr(
+        asyncio, 'WindowsSelectorEventLoopPolicy', type(None)
+    )
+
     # On non-Windows, should NOT be WindowsSelectorEventLoopPolicy
     assert not isinstance(
         policy,
-        asyncio.WindowsSelectorEventLoopPolicy
+        WindowsSelectorEventLoopPolicy
     ), "WindowsSelectorEventLoopPolicy should only be used on Windows"
 
     # Should be the platform's default policy type
@@ -133,14 +146,28 @@ def test_windows_policy_prevents_proactor():
 
     policy = asyncio.get_event_loop_policy()
 
+    # Use getattr to safely reference Windows-specific policies
+    WindowsSelectorEventLoopPolicy = getattr(
+        asyncio, 'WindowsSelectorEventLoopPolicy', None
+    )
+    WindowsProactorEventLoopPolicy = getattr(
+        asyncio, 'WindowsProactorEventLoopPolicy', None
+    )
+
+    # These should exist on Windows
+    assert WindowsSelectorEventLoopPolicy is not None, \
+        "WindowsSelectorEventLoopPolicy should exist on Windows"
+    assert WindowsProactorEventLoopPolicy is not None, \
+        "WindowsProactorEventLoopPolicy should exist on Windows"
+
     # Should NOT be ProactorEventLoop
     assert not isinstance(
         policy,
-        asyncio.WindowsProactorEventLoopPolicy
+        WindowsProactorEventLoopPolicy
     ), "ProactorEventLoop should not be used on Windows (causes WinError 64)"
 
     # Should be SelectorEventLoop
     assert isinstance(
         policy,
-        asyncio.WindowsSelectorEventLoopPolicy
+        WindowsSelectorEventLoopPolicy
     ), "SelectorEventLoop should be used on Windows (prevents WinError 64)"
