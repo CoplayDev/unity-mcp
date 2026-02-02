@@ -497,7 +497,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 }
 
                 // Apply modifications
-                var modifyResult = ApplyModificationsToPrefabObject(targetGo, @params, prefabContents);
+                var modifyResult = ApplyModificationsToPrefabObject(targetGo, @params, prefabContents, out List<object> createdChildren);
                 if (modifyResult.error != null)
                 {
                     return modifyResult.error;
@@ -512,7 +512,8 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                         {
                             prefabPath = sanitizedPath,
                             targetName = targetGo.name,
-                            modified = false
+                            modified = false,
+                            createdChildren = createdChildren
                         }
                     );
                 }
@@ -537,6 +538,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                         prefabPath = sanitizedPath,
                         targetName = targetGo.name,
                         modified = modifyResult.modified,
+                        createdChildren = createdChildren,
                         transform = new
                         {
                             position = new { x = targetGo.transform.localPosition.x, y = targetGo.transform.localPosition.y, z = targetGo.transform.localPosition.z },
@@ -606,11 +608,21 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
         /// <summary>
         /// Applies modifications to a GameObject within loaded prefab contents.
-        /// Returns (modified: bool, error: ErrorResponse or null).
+        /// Backward-compatible overload that discards created children info.
         /// </summary>
         private static (bool modified, ErrorResponse error) ApplyModificationsToPrefabObject(GameObject targetGo, JObject @params, GameObject prefabRoot)
         {
+            return ApplyModificationsToPrefabObject(targetGo, @params, prefabRoot, out _);
+        }
+
+        /// <summary>
+        /// Applies modifications to a GameObject within loaded prefab contents.
+        /// Returns (modified: bool, error: ErrorResponse or null). Created children info is returned via out parameter.
+        /// </summary>
+        private static (bool modified, ErrorResponse error) ApplyModificationsToPrefabObject(GameObject targetGo, JObject @params, GameObject prefabRoot, out List<object> createdChildren)
+        {
             bool modified = false;
+            createdChildren = new List<object>();
 
             // Name change
             string newName = @params["name"]?.ToString();
@@ -762,7 +774,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 {
                     foreach (var childToken in childArray)
                     {
-                        var childResult = CreateSingleChildInPrefab(childToken, targetGo, prefabRoot);
+                        var childResult = CreateSingleChildInPrefab(childToken, targetGo, prefabRoot, out object childInfo);
                         if (childResult.error != null)
                         {
                             return (false, childResult.error);
@@ -770,13 +782,17 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                         if (childResult.created)
                         {
                             modified = true;
+                            if (childInfo != null)
+                            {
+                                createdChildren.Add(childInfo);
+                            }
                         }
                     }
                 }
                 else
                 {
                     // Handle single child object
-                    var childResult = CreateSingleChildInPrefab(createChildToken, targetGo, prefabRoot);
+                    var childResult = CreateSingleChildInPrefab(createChildToken, targetGo, prefabRoot, out object childInfo);
                     if (childResult.error != null)
                     {
                         return (false, childResult.error);
@@ -784,6 +800,10 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                     if (childResult.created)
                     {
                         modified = true;
+                        if (childInfo != null)
+                        {
+                            createdChildren.Add(childInfo);
+                        }
                     }
                 }
             }
@@ -861,9 +881,21 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
         /// <summary>
         /// Creates a single child GameObject within the prefab contents.
+        /// Backward-compatible overload that discards created info.
         /// </summary>
         private static (bool created, ErrorResponse error) CreateSingleChildInPrefab(JToken createChildToken, GameObject defaultParent, GameObject prefabRoot)
         {
+            return CreateSingleChildInPrefab(createChildToken, defaultParent, prefabRoot, out _);
+        }
+
+        /// <summary>
+        /// Creates a single child GameObject within the prefab contents.
+        /// Returns (created: bool, error: ErrorResponse or null). Created info is returned via out parameter.
+        /// </summary>
+        private static (bool created, ErrorResponse error) CreateSingleChildInPrefab(JToken createChildToken, GameObject defaultParent, GameObject prefabRoot, out object createdInfo)
+        {
+            createdInfo = null;
+
             JObject childParams;
             if (createChildToken is JObject obj)
             {
@@ -898,6 +930,9 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             GameObject newChild;
             string childPrefabPath = childParams["prefabPath"]?.ToString() ?? childParams["prefab_path"]?.ToString();
             string primitiveType = childParams["primitiveType"]?.ToString() ?? childParams["primitive_type"]?.ToString();
+            bool isPrefabInstance = false;
+            string sourcePrefabGuid = null;
+            string sourcePrefabPath = null;
 
             if (!string.IsNullOrEmpty(childPrefabPath))
             {
@@ -926,6 +961,10 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 {
                     newChild.name = childName;
                 }
+
+                isPrefabInstance = true;
+                sourcePrefabPath = sanitizedChildPrefabPath;
+                sourcePrefabGuid = AssetDatabase.AssetPathToGUID(sanitizedChildPrefabPath);
 
                 McpLog.Info($"[ManagePrefabs] Instantiated nested prefab '{sanitizedChildPrefabPath}' as '{childName}'.");
             }
@@ -968,7 +1007,8 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 newChild.transform.localScale = scale.Value;
             }
 
-            // Add components
+            // Add components and track them
+            var addedComponents = new List<object>();
             JArray componentsToAdd = childParams["componentsToAdd"] as JArray ?? childParams["components_to_add"] as JArray;
             if (componentsToAdd != null)
             {
@@ -992,7 +1032,13 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                         UnityEngine.Object.DestroyImmediate(newChild);
                         return (false, new ErrorResponse($"Component type '{typeName}' not found for create_child: {error}"));
                     }
-                    newChild.AddComponent(componentType);
+                    Component addedComp = newChild.AddComponent(componentType);
+                    addedComponents.Add(new
+                    {
+                        type = componentType.Name,
+                        fullType = componentType.FullName,
+                        instanceId = addedComp.GetInstanceID()
+                    });
                 }
             }
 
@@ -1031,8 +1077,60 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 newChild.SetActive(setActive.Value);
             }
 
+            // Build created info response
+            createdInfo = new
+            {
+                name = newChild.name,
+                path = GetGameObjectPath(newChild, prefabRoot),
+                instanceId = newChild.GetInstanceID(),
+                transformInstanceId = newChild.transform.GetInstanceID(),
+                isPrefabInstance = isPrefabInstance,
+                sourcePrefabGuid = sourcePrefabGuid,
+                sourcePrefabPath = sourcePrefabPath,
+                components = addedComponents,
+                allComponents = GetComponentInfoList(newChild)
+            };
+
             McpLog.Info($"[ManagePrefabs] Created child '{childName}' under '{parentTransform.name}' in prefab.");
             return (true, null);
+        }
+
+        /// <summary>
+        /// Gets the hierarchy path of a GameObject within a prefab.
+        /// </summary>
+        private static string GetGameObjectPath(GameObject go, GameObject root)
+        {
+            if (go == root) return go.name;
+
+            var path = new List<string>();
+            Transform current = go.transform;
+            while (current != null)
+            {
+                path.Add(current.name);
+                if (current == root.transform) break;
+                current = current.parent;
+            }
+            path.Reverse();
+            return string.Join("/", path);
+        }
+
+        /// <summary>
+        /// Gets info about all components on a GameObject.
+        /// </summary>
+        private static List<object> GetComponentInfoList(GameObject go)
+        {
+            var components = new List<object>();
+            foreach (Component comp in go.GetComponents<Component>())
+            {
+                if (comp == null) continue;
+                components.Add(new
+                {
+                    type = comp.GetType().Name,
+                    fullType = comp.GetType().FullName,
+                    instanceId = comp.GetInstanceID()
+                });
+            }
+            return components;
         }
 
         /// <summary>
