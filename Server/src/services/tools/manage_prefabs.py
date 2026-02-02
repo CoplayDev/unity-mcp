@@ -62,7 +62,7 @@ async def manage_prefabs(
     search_inactive: Annotated[bool, "Include inactive GameObjects in search."] | None = None,
     unlink_if_instance: Annotated[bool, "Unlink from existing prefab before creating new one."] | None = None,
     # get_hierarchy pagination parameters
-    page_size: Annotated[int, "Number of items per page for get_hierarchy (default 50, max 500)."] | None = None,
+    page_size: Annotated[int, "Number of items per page for get_hierarchy (max 500). If not specified, returns all items."] | None = None,
     cursor: Annotated[int, "Starting index for pagination in get_hierarchy (0-based)."] | None = None,
     max_depth: Annotated[int, "Maximum hierarchy depth to traverse for get_hierarchy (0=root only, null=unlimited)."] | None = None,
     filter: Annotated[str, "Filter objects by name (case-insensitive substring match) for get_hierarchy."] | None = None,

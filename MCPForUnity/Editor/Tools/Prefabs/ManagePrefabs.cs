@@ -400,12 +400,13 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 return new ErrorResponse($"Invalid prefab path '{prefabPath}'. Path traversal sequences are not allowed.");
             }
 
-            // Parse pagination parameters
-            int pageSize = Mathf.Clamp(
-                ParamCoercion.CoerceIntNullable(@params["pageSize"] ?? @params["page_size"]) ?? 50,
-                1, 500);
-            int cursor = Mathf.Max(0,
-                ParamCoercion.CoerceIntNullable(@params["cursor"]) ?? 0);
+            // Parse pagination parameters - check if pagination was explicitly requested
+            int? requestedPageSize = ParamCoercion.CoerceIntNullable(@params["pageSize"] ?? @params["page_size"]);
+            int? requestedCursor = ParamCoercion.CoerceIntNullable(@params["cursor"]);
+            bool paginationRequested = requestedPageSize.HasValue || requestedCursor.HasValue;
+
+            int pageSize = requestedPageSize.HasValue ? Mathf.Clamp(requestedPageSize.Value, 1, 500) : int.MaxValue;
+            int cursor = requestedCursor.HasValue ? Mathf.Max(0, requestedCursor.Value) : 0;
             int? maxDepth = ParamCoercion.CoerceIntNullable(@params["maxDepth"] ?? @params["max_depth"]);
             string filter = @params["filter"]?.ToString();
 
@@ -422,7 +423,22 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 var allItems = BuildHierarchyItemsWithDepth(prefabContents.transform, sanitizedPath, maxDepth, filter);
                 int total = allItems.Count;
 
-                // Apply pagination
+                // Apply pagination only if explicitly requested
+                if (!paginationRequested)
+                {
+                    // Backward compatible: return all items when no pagination params provided
+                    return new SuccessResponse(
+                        $"Successfully retrieved prefab hierarchy. Found {total} objects.",
+                        new
+                        {
+                            prefabPath = sanitizedPath,
+                            total = total,
+                            items = allItems
+                        }
+                    );
+                }
+
+                // Pagination was requested
                 if (cursor > total) cursor = total;
                 int end = Mathf.Min(total, cursor + pageSize);
 
