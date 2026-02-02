@@ -798,8 +798,40 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
             // Create the GameObject
             GameObject newChild;
+            string childPrefabPath = childParams["prefabPath"]?.ToString() ?? childParams["prefab_path"]?.ToString();
             string primitiveType = childParams["primitiveType"]?.ToString() ?? childParams["primitive_type"]?.ToString();
-            if (!string.IsNullOrEmpty(primitiveType))
+
+            if (!string.IsNullOrEmpty(childPrefabPath))
+            {
+                // Instantiate from a source prefab (creates a nested prefab instance)
+                string sanitizedChildPrefabPath = AssetPathUtility.SanitizeAssetPath(childPrefabPath);
+                if (string.IsNullOrEmpty(sanitizedChildPrefabPath))
+                {
+                    return (false, new ErrorResponse($"Invalid prefab path for create_child: '{childPrefabPath}'."));
+                }
+
+                GameObject sourcePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(sanitizedChildPrefabPath);
+                if (sourcePrefab == null)
+                {
+                    return (false, new ErrorResponse($"Source prefab not found at '{sanitizedChildPrefabPath}' for create_child."));
+                }
+
+                // Use InstantiatePrefab to create a proper nested prefab instance
+                newChild = PrefabUtility.InstantiatePrefab(sourcePrefab, parentTransform) as GameObject;
+                if (newChild == null)
+                {
+                    return (false, new ErrorResponse($"Failed to instantiate prefab '{sanitizedChildPrefabPath}' for create_child."));
+                }
+
+                // Apply the custom name if different from the source prefab name
+                if (newChild.name != childName)
+                {
+                    newChild.name = childName;
+                }
+
+                McpLog.Info($"[ManagePrefabs] Instantiated nested prefab '{sanitizedChildPrefabPath}' as '{childName}'.");
+            }
+            else if (!string.IsNullOrEmpty(primitiveType))
             {
                 try
                 {

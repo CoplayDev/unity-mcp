@@ -63,7 +63,7 @@ async def manage_prefabs(
     parent: Annotated[str, "New parent object name/path within prefab for modify_contents."] | None = None,
     components_to_add: Annotated[list[str], "Component types to add in modify_contents."] | None = None,
     components_to_remove: Annotated[list[str], "Component types to remove in modify_contents."] | None = None,
-    create_child: Annotated[dict[str, Any] | list[dict[str, Any]], "Create child GameObject(s) in the prefab. Single object or array of objects, each with: name (required), parent (optional, defaults to target), primitive_type (optional: Cube, Sphere, Capsule, Cylinder, Plane, Quad), position, rotation, scale, components_to_add, tag, layer, set_active."] | None = None,
+    create_child: Annotated[dict[str, Any] | list[dict[str, Any]], "Create child GameObject(s) in the prefab. Single object or array of objects, each with: name (required), parent (optional, defaults to target), prefab_path (optional: path to prefab asset to instantiate as nested prefab), primitive_type (optional: Cube, Sphere, Capsule, Cylinder, Plane, Quad), position, rotation, scale, components_to_add, tag, layer, set_active. Use prefab_path to create nested prefab instances."] | None = None,
 ) -> dict[str, Any]:
     # Back-compat: map 'name' → 'target' for create_from_gameobject (Unity accepts both)
     if action == "create_from_gameobject" and target is None and name is not None:
