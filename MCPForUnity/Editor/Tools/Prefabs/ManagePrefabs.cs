@@ -380,8 +380,8 @@ namespace MCPForUnity.Editor.Tools.Prefabs
         }
 
         /// <summary>
-        /// Gets the hierarchical structure of a prefab asset.
-        /// Returns all objects in the prefab for full client-side filtering and search.
+        /// Gets the hierarchical structure of a prefab asset with pagination support.
+        /// Supports page_size, cursor, max_depth, and filter parameters to limit response size.
         /// </summary>
         private static object GetHierarchy(JObject @params)
         {
@@ -397,6 +397,15 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 return new ErrorResponse($"Invalid prefab path '{prefabPath}'. Path traversal sequences are not allowed.");
             }
 
+            // Parse pagination parameters
+            int pageSize = Mathf.Clamp(
+                ParamCoercion.CoerceIntNullable(@params["pageSize"] ?? @params["page_size"]) ?? 50,
+                1, 500);
+            int cursor = Mathf.Max(0,
+                ParamCoercion.CoerceIntNullable(@params["cursor"]) ?? 0);
+            int? maxDepth = ParamCoercion.CoerceIntNullable(@params["maxDepth"] ?? @params["max_depth"]);
+            string filter = @params["filter"]?.ToString();
+
             // Load prefab contents in background (without opening stage UI)
             GameObject prefabContents = PrefabUtility.LoadPrefabContents(sanitizedPath);
             if (prefabContents == null)
@@ -406,16 +415,36 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
             try
             {
-                // Build complete hierarchy items (no pagination)
-                var allItems = BuildHierarchyItems(prefabContents.transform, sanitizedPath);
+                // Build hierarchy items with depth limit
+                var allItems = BuildHierarchyItemsWithDepth(prefabContents.transform, sanitizedPath, maxDepth, filter);
+                int total = allItems.Count;
+
+                // Apply pagination
+                if (cursor > total) cursor = total;
+                int end = Mathf.Min(total, cursor + pageSize);
+
+                var pagedItems = new List<object>(Mathf.Max(0, end - cursor));
+                for (int i = cursor; i < end; i++)
+                {
+                    pagedItems.Add(allItems[i]);
+                }
+
+                bool truncated = end < total;
+                string nextCursor = truncated ? end.ToString() : null;
 
                 return new SuccessResponse(
-                    $"Successfully retrieved prefab hierarchy. Found {allItems.Count} objects.",
+                    $"Retrieved prefab hierarchy page. Showing {pagedItems.Count} of {total} objects.",
                     new
                     {
                         prefabPath = sanitizedPath,
-                        total = allItems.Count,
-                        items = allItems
+                        total = total,
+                        cursor = cursor,
+                        pageSize = pageSize,
+                        next_cursor = nextCursor,
+                        truncated = truncated,
+                        maxDepth = maxDepth,
+                        filter = filter,
+                        items = pagedItems
                     }
                 );
             }
@@ -1160,63 +1189,103 @@ namespace MCPForUnity.Editor.Tools.Prefabs
         /// <returns>List of hierarchy items with prefab information.</returns>
         private static List<object> BuildHierarchyItems(Transform root, string mainPrefabPath)
         {
+            return BuildHierarchyItemsWithDepth(root, mainPrefabPath, null, null);
+        }
+
+        /// <summary>
+        /// Builds a flat list of hierarchy items from a transform root with optional depth limit and filter.
+        /// </summary>
+        /// <param name="root">The root transform of the prefab.</param>
+        /// <param name="mainPrefabPath">Asset path of the main prefab.</param>
+        /// <param name="maxDepth">Optional maximum depth to traverse (0 = root only, null = unlimited).</param>
+        /// <param name="filter">Optional name filter (case-insensitive substring match).</param>
+        /// <returns>List of hierarchy items with prefab information.</returns>
+        private static List<object> BuildHierarchyItemsWithDepth(Transform root, string mainPrefabPath, int? maxDepth, string filter)
+        {
             var items = new List<object>();
-            BuildHierarchyItemsRecursive(root, root, mainPrefabPath, "", items);
+            bool hasFilter = !string.IsNullOrEmpty(filter);
+            BuildHierarchyItemsRecursiveWithDepth(root, root, mainPrefabPath, "", items, 0, maxDepth, hasFilter ? filter.ToLowerInvariant() : null);
             return items;
         }
 
         /// <summary>
-        /// Recursively builds hierarchy items.
+        /// Recursively builds hierarchy items with depth limiting and filtering.
         /// </summary>
         /// <param name="transform">Current transform being processed.</param>
         /// <param name="mainPrefabRoot">Root transform of the main prefab asset.</param>
         /// <param name="mainPrefabPath">Asset path of the main prefab.</param>
         /// <param name="parentPath">Parent path for building full hierarchy path.</param>
         /// <param name="items">List to accumulate hierarchy items.</param>
-        private static void BuildHierarchyItemsRecursive(Transform transform, Transform mainPrefabRoot, string mainPrefabPath, string parentPath, List<object> items)
+        /// <param name="currentDepth">Current depth in the hierarchy (0 = root).</param>
+        /// <param name="maxDepth">Maximum depth to traverse (null = unlimited).</param>
+        /// <param name="filterLower">Lowercase filter string for name matching (null = no filter).</param>
+        private static void BuildHierarchyItemsRecursiveWithDepth(
+            Transform transform,
+            Transform mainPrefabRoot,
+            string mainPrefabPath,
+            string parentPath,
+            List<object> items,
+            int currentDepth,
+            int? maxDepth,
+            string filterLower)
         {
             if (transform == null) return;
 
             string name = transform.gameObject.name;
             string path = string.IsNullOrEmpty(parentPath) ? name : $"{parentPath}/{name}";
-            int instanceId = transform.gameObject.GetInstanceID();
-            bool activeSelf = transform.gameObject.activeSelf;
-            int childCount = transform.childCount;
-            var componentTypes = PrefabUtilityHelper.GetComponentTypeNames(transform.gameObject);
 
-            // Prefab information
-            bool isNestedPrefab = PrefabUtility.IsAnyPrefabInstanceRoot(transform.gameObject);
-            bool isPrefabRoot = transform == mainPrefabRoot;
-            int nestingDepth = isPrefabRoot ? 0 : PrefabUtilityHelper.GetPrefabNestingDepth(transform.gameObject, mainPrefabRoot);
-            string parentPrefabPath = isNestedPrefab && !isPrefabRoot
-                ? PrefabUtilityHelper.GetParentPrefabPath(transform.gameObject, mainPrefabRoot)
-                : null;
-            string nestedPrefabPath = isNestedPrefab ? PrefabUtilityHelper.GetNestedPrefabPath(transform.gameObject) : null;
+            // Check filter - include if name contains filter string (case-insensitive)
+            bool matchesFilter = filterLower == null || name.ToLowerInvariant().Contains(filterLower);
 
-            var item = new
+            if (matchesFilter)
             {
-                name = name,
-                instanceId = instanceId,
-                path = path,
-                activeSelf = activeSelf,
-                childCount = childCount,
-                componentTypes = componentTypes,
-                prefab = new
-                {
-                    isRoot = isPrefabRoot,
-                    isNestedRoot = isNestedPrefab,
-                    nestingDepth = nestingDepth,
-                    assetPath = isNestedPrefab ? nestedPrefabPath : mainPrefabPath,
-                    parentPath = parentPrefabPath
-                }
-            };
+                int instanceId = transform.gameObject.GetInstanceID();
+                bool activeSelf = transform.gameObject.activeSelf;
+                int childCount = transform.childCount;
+                var componentTypes = PrefabUtilityHelper.GetComponentTypeNames(transform.gameObject);
 
-            items.Add(item);
+                // Prefab information
+                bool isNestedPrefab = PrefabUtility.IsAnyPrefabInstanceRoot(transform.gameObject);
+                bool isPrefabRoot = transform == mainPrefabRoot;
+                int nestingDepth = isPrefabRoot ? 0 : PrefabUtilityHelper.GetPrefabNestingDepth(transform.gameObject, mainPrefabRoot);
+                string parentPrefabPath = isNestedPrefab && !isPrefabRoot
+                    ? PrefabUtilityHelper.GetParentPrefabPath(transform.gameObject, mainPrefabRoot)
+                    : null;
+                string nestedPrefabPath = isNestedPrefab ? PrefabUtilityHelper.GetNestedPrefabPath(transform.gameObject) : null;
+
+                var item = new
+                {
+                    name = name,
+                    instanceId = instanceId,
+                    path = path,
+                    depth = currentDepth,
+                    activeSelf = activeSelf,
+                    childCount = childCount,
+                    componentTypes = componentTypes,
+                    prefab = new
+                    {
+                        isRoot = isPrefabRoot,
+                        isNestedRoot = isNestedPrefab,
+                        nestingDepth = nestingDepth,
+                        assetPath = isNestedPrefab ? nestedPrefabPath : mainPrefabPath,
+                        parentPath = parentPrefabPath
+                    }
+                };
+
+                items.Add(item);
+            }
+
+            // Check depth limit before recursing into children
+            // If maxDepth is set and we've reached it, don't process children
+            if (maxDepth.HasValue && currentDepth >= maxDepth.Value)
+            {
+                return;
+            }
 
             // Recursively process children
             foreach (Transform child in transform)
             {
-                BuildHierarchyItemsRecursive(child, mainPrefabRoot, mainPrefabPath, path, items);
+                BuildHierarchyItemsRecursiveWithDepth(child, mainPrefabRoot, mainPrefabPath, path, items, currentDepth + 1, maxDepth, filterLower);
             }
         }
 

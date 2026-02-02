@@ -24,6 +24,7 @@ REQUIRED_PARAMS = {
     description=(
         "Manages Unity Prefab assets via headless operations (no UI, no prefab stages). "
         "Actions: get_info, get_hierarchy, create_from_gameobject, modify_contents. "
+        "get_hierarchy supports pagination (page_size, cursor), depth limiting (max_depth), and filtering (filter). "
         "Use modify_contents for headless prefab editing - ideal for automated workflows. "
         "Use create_child parameter with modify_contents to add child GameObjects to a prefab "
         "(single object or array for batch creation in one save). "
@@ -52,6 +53,11 @@ async def manage_prefabs(
     allow_overwrite: Annotated[bool, "Allow replacing existing prefab."] | None = None,
     search_inactive: Annotated[bool, "Include inactive GameObjects in search."] | None = None,
     unlink_if_instance: Annotated[bool, "Unlink from existing prefab before creating new one."] | None = None,
+    # get_hierarchy pagination parameters
+    page_size: Annotated[int, "Number of items per page for get_hierarchy (default 50, max 500)."] | None = None,
+    cursor: Annotated[int, "Starting index for pagination in get_hierarchy (0-based)."] | None = None,
+    max_depth: Annotated[int, "Maximum hierarchy depth to traverse for get_hierarchy (0=root only, null=unlimited)."] | None = None,
+    filter: Annotated[str, "Filter objects by name (case-insensitive substring match) for get_hierarchy."] | None = None,
     # modify_contents parameters
     position: Annotated[list[float] | dict[str, float] | str, "New local position [x, y, z] or {x, y, z} for modify_contents."] | None = None,
     rotation: Annotated[list[float] | dict[str, float] | str, "New local rotation (euler angles) [x, y, z] or {x, y, z} for modify_contents."] | None = None,
@@ -117,6 +123,16 @@ async def manage_prefabs(
         unlink_if_instance_val = coerce_bool(unlink_if_instance)
         if unlink_if_instance_val is not None:
             params["unlinkIfInstance"] = unlink_if_instance_val
+
+        # get_hierarchy pagination parameters
+        if page_size is not None:
+            params["pageSize"] = page_size
+        if cursor is not None:
+            params["cursor"] = cursor
+        if max_depth is not None:
+            params["maxDepth"] = max_depth
+        if filter is not None:
+            params["filter"] = filter
 
         # modify_contents parameters
         if position is not None:
