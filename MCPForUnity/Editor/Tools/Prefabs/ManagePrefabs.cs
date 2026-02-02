@@ -763,8 +763,8 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 modified = true;
             }
 
-            // Active state
-            bool? setActive = @params["setActive"]?.ToObject<bool?>();
+            // Active state (support both camelCase and snake_case)
+            bool? setActive = (@params["setActive"] ?? @params["set_active"])?.ToObject<bool?>();
             if (setActive.HasValue && targetGo.activeSelf != setActive.Value)
             {
                 targetGo.SetActive(setActive.Value);
@@ -852,8 +852,9 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 }
             }
 
-            // Components to add
-            if (@params["componentsToAdd"] is JArray componentsToAdd)
+            // Components to add (support both camelCase and snake_case)
+            JArray componentsToAdd = @params["componentsToAdd"] as JArray ?? @params["components_to_add"] as JArray;
+            if (componentsToAdd != null)
             {
                 foreach (var compToken in componentsToAdd)
                 {
@@ -873,8 +874,9 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 }
             }
 
-            // Components to remove
-            if (@params["componentsToRemove"] is JArray componentsToRemove)
+            // Components to remove (support both camelCase and snake_case)
+            JArray componentsToRemove = @params["componentsToRemove"] as JArray ?? @params["components_to_remove"] as JArray;
+            if (componentsToRemove != null)
             {
                 foreach (var compToken in componentsToRemove)
                 {
