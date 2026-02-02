@@ -51,7 +51,7 @@ async def manage_prefabs(
         "Prefab operation to perform.",
     ],
     prefab_path: Annotated[str, "Prefab asset path (e.g., Assets/Prefabs/MyPrefab.prefab)."] | None = None,
-    target: Annotated[str, "Target GameObject: scene object for create_from_gameobject, or object within prefab for modify_contents (name or path like 'Parent/Child')."] | None = None,
+    target: Annotated[str, "Target GameObject: scene object for create_from_gameobject, or object within prefab for modify_contents. Supports: name ('MyObject'), relative path ('Child/GrandChild'), or full path ('RootName/Child/GrandChild'). Defaults to prefab root if not specified."] | None = None,
     allow_overwrite: Annotated[bool, "Allow replacing existing prefab."] | None = None,
     search_inactive: Annotated[bool, "Include inactive GameObjects in search."] | None = None,
     unlink_if_instance: Annotated[bool, "Unlink from existing prefab before creating new one."] | None = None,
