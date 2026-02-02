@@ -126,7 +126,8 @@ async def test_async_operations_use_correct_event_loop():
     assert result == "success"
 
     # Verify we're using the expected event loop
-    loop = asyncio.get_event_loop()
+    # Use get_running_loop() as we're in an async context
+    loop = asyncio.get_running_loop()
     assert loop is not None, "Event loop should be running"
     assert loop.is_running(), "Event loop should be in running state"
 
