@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
@@ -758,6 +759,40 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 }
             }
 
+            // Set component references (wire serialized fields to other objects in the prefab)
+            JToken setRefToken = @params["setComponentReference"] ?? @params["set_component_reference"];
+            if (setRefToken != null)
+            {
+                // Handle array of references or single reference
+                if (setRefToken is JArray refArray)
+                {
+                    foreach (var refItem in refArray)
+                    {
+                        var refResult = SetSingleComponentReference(refItem, targetGo, prefabRoot);
+                        if (refResult.error != null)
+                        {
+                            return (false, refResult.error);
+                        }
+                        if (refResult.set)
+                        {
+                            modified = true;
+                        }
+                    }
+                }
+                else
+                {
+                    var refResult = SetSingleComponentReference(setRefToken, targetGo, prefabRoot);
+                    if (refResult.error != null)
+                    {
+                        return (false, refResult.error);
+                    }
+                    if (refResult.set)
+                    {
+                        modified = true;
+                    }
+                }
+            }
+
             return (modified, null);
         }
 
@@ -935,6 +970,182 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
             McpLog.Info($"[ManagePrefabs] Created child '{childName}' under '{parentTransform.name}' in prefab.");
             return (true, null);
+        }
+
+        /// <summary>
+        /// Sets a component's serialized field to reference another object in the prefab.
+        /// Supports referencing GameObjects or specific Components on GameObjects.
+        /// </summary>
+        private static (bool set, ErrorResponse error) SetSingleComponentReference(JToken refToken, GameObject targetGo, GameObject prefabRoot)
+        {
+            if (refToken is not JObject refParams)
+            {
+                return (false, new ErrorResponse("'set_component_reference' must be an object with component_type, field, and reference_target."));
+            }
+
+            // Required: component_type - the type of component on targetGo that has the field
+            string componentTypeName = refParams["componentType"]?.ToString() ?? refParams["component_type"]?.ToString();
+            if (string.IsNullOrEmpty(componentTypeName))
+            {
+                return (false, new ErrorResponse("'set_component_reference.component_type' is required."));
+            }
+
+            // Required: field - the name of the serialized field to set
+            string fieldName = refParams["field"]?.ToString();
+            if (string.IsNullOrEmpty(fieldName))
+            {
+                return (false, new ErrorResponse("'set_component_reference.field' is required."));
+            }
+
+            // Required: reference_target - path to the GameObject (or GameObject/ComponentType) to reference
+            string referenceTarget = refParams["referenceTarget"]?.ToString() ?? refParams["reference_target"]?.ToString();
+            if (string.IsNullOrEmpty(referenceTarget))
+            {
+                return (false, new ErrorResponse("'set_component_reference.reference_target' is required."));
+            }
+
+            // Find the component on targetGo
+            if (!ComponentResolver.TryResolve(componentTypeName, out Type componentType, out string resolveError))
+            {
+                return (false, new ErrorResponse($"Component type '{componentTypeName}' not found: {resolveError}"));
+            }
+
+            Component targetComponent = targetGo.GetComponent(componentType);
+            if (targetComponent == null)
+            {
+                return (false, new ErrorResponse($"Component '{componentTypeName}' not found on '{targetGo.name}'."));
+            }
+
+            // Parse reference_target - could be "Path/To/Object" or "Path/To/Object:ComponentType"
+            string targetObjectPath = referenceTarget;
+            string targetComponentType = null;
+            int colonIndex = referenceTarget.LastIndexOf(':');
+            if (colonIndex > 0 && colonIndex < referenceTarget.Length - 1)
+            {
+                targetObjectPath = referenceTarget.Substring(0, colonIndex);
+                targetComponentType = referenceTarget.Substring(colonIndex + 1);
+            }
+
+            // Find the referenced GameObject
+            GameObject referencedGo = FindInPrefabContents(prefabRoot, targetObjectPath);
+            if (referencedGo == null)
+            {
+                return (false, new ErrorResponse($"Reference target '{targetObjectPath}' not found in prefab."));
+            }
+
+            // Determine what object to assign (GameObject or Component)
+            UnityEngine.Object objectToAssign;
+            if (!string.IsNullOrEmpty(targetComponentType))
+            {
+                // User specified a component type, find it on the referenced GameObject
+                if (!ComponentResolver.TryResolve(targetComponentType, out Type refCompType, out string refResolveError))
+                {
+                    return (false, new ErrorResponse($"Reference component type '{targetComponentType}' not found: {refResolveError}"));
+                }
+                Component refComponent = referencedGo.GetComponent(refCompType);
+                if (refComponent == null)
+                {
+                    return (false, new ErrorResponse($"Component '{targetComponentType}' not found on '{referencedGo.name}'."));
+                }
+                objectToAssign = refComponent;
+            }
+            else
+            {
+                // No component specified - need to determine from field type
+                objectToAssign = referencedGo;
+            }
+
+            // Find and set the field using reflection
+            BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.IgnoreCase;
+            Type compType = targetComponent.GetType();
+
+            // Try public field first
+            FieldInfo field = compType.GetField(fieldName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+
+            // Try private [SerializeField] if public not found
+            if (field == null)
+            {
+                field = compType.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                if (field != null && field.GetCustomAttribute<SerializeField>() == null)
+                {
+                    // Private field without SerializeField - not serialized, skip
+                    field = null;
+                }
+            }
+
+            // Try property as fallback
+            PropertyInfo prop = null;
+            if (field == null)
+            {
+                prop = compType.GetProperty(fieldName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            }
+
+            if (field == null && prop == null)
+            {
+                var availableFields = ComponentResolver.GetAllComponentProperties(compType);
+                return (false, new ErrorResponse($"Field '{fieldName}' not found on '{componentTypeName}'. Available: [{string.Join(", ", availableFields)}]"));
+            }
+
+            // Check type compatibility and assign
+            try
+            {
+                if (field != null)
+                {
+                    Type fieldType = field.FieldType;
+
+                    // If the field expects a Component but we have a GameObject, try to get the component
+                    if (typeof(Component).IsAssignableFrom(fieldType) && objectToAssign is GameObject go)
+                    {
+                        Component autoResolvedComp = go.GetComponent(fieldType);
+                        if (autoResolvedComp == null)
+                        {
+                            return (false, new ErrorResponse($"Field '{fieldName}' expects type '{fieldType.Name}', but '{go.name}' does not have that component. Specify the component explicitly using 'reference_target: \"{targetObjectPath}:{fieldType.Name}\"'."));
+                        }
+                        objectToAssign = autoResolvedComp;
+                    }
+
+                    if (!fieldType.IsAssignableFrom(objectToAssign.GetType()))
+                    {
+                        return (false, new ErrorResponse($"Type mismatch: field '{fieldName}' is of type '{fieldType.Name}', but reference is of type '{objectToAssign.GetType().Name}'."));
+                    }
+
+                    field.SetValue(targetComponent, objectToAssign);
+                }
+                else if (prop != null && prop.CanWrite)
+                {
+                    Type propType = prop.PropertyType;
+
+                    // If the property expects a Component but we have a GameObject, try to get the component
+                    if (typeof(Component).IsAssignableFrom(propType) && objectToAssign is GameObject go)
+                    {
+                        Component autoResolvedComp = go.GetComponent(propType);
+                        if (autoResolvedComp == null)
+                        {
+                            return (false, new ErrorResponse($"Property '{fieldName}' expects type '{propType.Name}', but '{go.name}' does not have that component."));
+                        }
+                        objectToAssign = autoResolvedComp;
+                    }
+
+                    if (!propType.IsAssignableFrom(objectToAssign.GetType()))
+                    {
+                        return (false, new ErrorResponse($"Type mismatch: property '{fieldName}' is of type '{propType.Name}', but reference is of type '{objectToAssign.GetType().Name}'."));
+                    }
+
+                    prop.SetValue(targetComponent, objectToAssign);
+                }
+                else
+                {
+                    return (false, new ErrorResponse($"Field/property '{fieldName}' is not writable."));
+                }
+
+                McpLog.Info($"[ManagePrefabs] Set '{componentTypeName}.{fieldName}' to reference '{referencedGo.name}'" +
+                    (targetComponentType != null ? $" ({targetComponentType})" : ""));
+                return (true, null);
+            }
+            catch (Exception ex)
+            {
+                return (false, new ErrorResponse($"Failed to set reference '{fieldName}' on '{componentTypeName}': {ex.Message}"));
+            }
         }
 
         #endregion

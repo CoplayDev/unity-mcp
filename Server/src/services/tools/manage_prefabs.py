@@ -64,6 +64,7 @@ async def manage_prefabs(
     components_to_add: Annotated[list[str], "Component types to add in modify_contents."] | None = None,
     components_to_remove: Annotated[list[str], "Component types to remove in modify_contents."] | None = None,
     create_child: Annotated[dict[str, Any] | list[dict[str, Any]], "Create child GameObject(s) in the prefab. Single object or array of objects, each with: name (required), parent (optional, defaults to target), prefab_path (optional: path to prefab asset to instantiate as nested prefab), primitive_type (optional: Cube, Sphere, Capsule, Cylinder, Plane, Quad), position, rotation, scale, components_to_add, tag, layer, set_active. Use prefab_path to create nested prefab instances."] | None = None,
+    set_component_reference: Annotated[dict[str, Any] | list[dict[str, Any]], "Set serialized field references on components. Single or array of objects with: component_type (required: type name of component on target), field (required: field name to set), reference_target (required: path to object, optionally with ':ComponentType' suffix). Example: {component_type: 'MyScript', field: 'myButton', reference_target: 'Canvas/Button:Button'}"] | None = None,
 ) -> dict[str, Any]:
     # Back-compat: map 'name' → 'target' for create_from_gameobject (Unity accepts both)
     if action == "create_from_gameobject" and target is None and name is not None:
@@ -178,6 +179,9 @@ async def manage_prefabs(
                 if err:
                     return {"success": False, "message": err}
                 params["createChild"] = child_params
+
+        if set_component_reference is not None:
+            params["setComponentReference"] = set_component_reference
 
         # Send command to Unity
         response = await send_with_unity_instance(
