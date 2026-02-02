@@ -26,6 +26,8 @@ REQUIRED_PARAMS = {
         "Actions: get_info, get_hierarchy, create_from_gameobject, modify_contents. "
         "get_hierarchy supports pagination (page_size, cursor), depth limiting (max_depth), and filtering (filter). "
         "Use modify_contents for headless prefab editing - ideal for automated workflows. "
+        "Use set_property with modify_contents to set component property values on prefab objects "
+        "(works like manage_components set_property but for prefab assets). "
         "Use create_child parameter with modify_contents to add child GameObjects to a prefab "
         "(single object or array for batch creation in one save). "
         "Example: create_child=[{\"name\": \"Child1\", \"primitive_type\": \"Sphere\", \"position\": [1,0,0]}, "
@@ -71,6 +73,7 @@ async def manage_prefabs(
     components_to_remove: Annotated[list[str], "Component types to remove in modify_contents."] | None = None,
     create_child: Annotated[dict[str, Any] | list[dict[str, Any]], "Create child GameObject(s) in the prefab. Single object or array of objects, each with: name (required), parent (optional, defaults to target), prefab_path (optional: path to prefab asset to instantiate as nested prefab), primitive_type (optional: Cube, Sphere, Capsule, Cylinder, Plane, Quad), position, rotation, scale, components_to_add, tag, layer, set_active. Use prefab_path to create nested prefab instances."] | None = None,
     set_component_reference: Annotated[dict[str, Any] | list[dict[str, Any]], "Set serialized field references on components. Single or array of objects with: component_type (required: type name of component on target), field (required: field name to set), reference_target (required: path to object, optionally with ':ComponentType' suffix). Example: {component_type: 'MyScript', field: 'myButton', reference_target: 'Canvas/Button:Button'}"] | None = None,
+    set_property: Annotated[dict[str, Any] | list[dict[str, Any]], "Set component property values in prefab. Single or array of objects with: component_type (required), and either property+value for single property or properties object for multiple. Example: {component_type: 'Light', property: 'intensity', value: 2.5} or {component_type: 'Light', properties: {intensity: 2.5, range: 10}}"] | None = None,
 ) -> dict[str, Any]:
     # Back-compat: map 'name' → 'target' for create_from_gameobject (Unity accepts both)
     if action == "create_from_gameobject" and target is None and name is not None:
@@ -198,6 +201,9 @@ async def manage_prefabs(
 
         if set_component_reference is not None:
             params["setComponentReference"] = set_component_reference
+
+        if set_property is not None:
+            params["setProperty"] = set_property
 
         # Send command to Unity
         response = await send_with_unity_instance(

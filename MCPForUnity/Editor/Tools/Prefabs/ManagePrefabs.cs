@@ -822,6 +822,40 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 }
             }
 
+            // Set component property values
+            JToken setPropToken = @params["setProperty"] ?? @params["set_property"];
+            if (setPropToken != null)
+            {
+                // Handle array of property sets or single property set
+                if (setPropToken is JArray propArray)
+                {
+                    foreach (var propItem in propArray)
+                    {
+                        var propResult = SetSingleComponentProperty(propItem, targetGo);
+                        if (propResult.error != null)
+                        {
+                            return (false, propResult.error);
+                        }
+                        if (propResult.set)
+                        {
+                            modified = true;
+                        }
+                    }
+                }
+                else
+                {
+                    var propResult = SetSingleComponentProperty(setPropToken, targetGo);
+                    if (propResult.error != null)
+                    {
+                        return (false, propResult.error);
+                    }
+                    if (propResult.set)
+                    {
+                        modified = true;
+                    }
+                }
+            }
+
             return (modified, null);
         }
 
@@ -1174,6 +1208,110 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             catch (Exception ex)
             {
                 return (false, new ErrorResponse($"Failed to set reference '{fieldName}' on '{componentTypeName}': {ex.Message}"));
+            }
+        }
+
+        /// <summary>
+        /// Sets property values on a component within the prefab.
+        /// Supports both single property (property+value) and multiple properties (properties object).
+        /// </summary>
+        /// <param name="propToken">The property specification token.</param>
+        /// <param name="targetGo">The target GameObject within the prefab.</param>
+        /// <returns>Tuple of (set: bool, error: ErrorResponse or null).</returns>
+        private static (bool set, ErrorResponse error) SetSingleComponentProperty(JToken propToken, GameObject targetGo)
+        {
+            if (propToken is not JObject propParams)
+            {
+                return (false, new ErrorResponse("'set_property' must be an object with component_type and either property+value or properties."));
+            }
+
+            // Required: component_type
+            string componentTypeName = propParams["componentType"]?.ToString() ?? propParams["component_type"]?.ToString();
+            if (string.IsNullOrEmpty(componentTypeName))
+            {
+                return (false, new ErrorResponse("'set_property.component_type' is required."));
+            }
+
+            // Find the component on targetGo
+            if (!ComponentResolver.TryResolve(componentTypeName, out Type componentType, out string resolveError))
+            {
+                return (false, new ErrorResponse($"Component type '{componentTypeName}' not found: {resolveError}"));
+            }
+
+            Component targetComponent = targetGo.GetComponent(componentType);
+            if (targetComponent == null)
+            {
+                return (false, new ErrorResponse($"Component '{componentTypeName}' not found on '{targetGo.name}'."));
+            }
+
+            // Single property mode: property + value
+            string propertyName = propParams["property"]?.ToString();
+            JToken valueToken = propParams["value"];
+
+            // Multiple properties mode: properties object
+            JObject propertiesObj = propParams["properties"] as JObject;
+
+            if (string.IsNullOrEmpty(propertyName) && (propertiesObj == null || !propertiesObj.HasValues))
+            {
+                return (false, new ErrorResponse("'set_property' requires either 'property'+'value' or 'properties' object."));
+            }
+
+            var errors = new List<string>();
+            bool anySet = false;
+
+            try
+            {
+                // Single property mode
+                if (!string.IsNullOrEmpty(propertyName) && valueToken != null)
+                {
+                    if (ComponentOps.SetProperty(targetComponent, propertyName, valueToken, out string error))
+                    {
+                        McpLog.Info($"[ManagePrefabs] Set '{componentTypeName}.{propertyName}' on '{targetGo.name}'.");
+                        anySet = true;
+                    }
+                    else
+                    {
+                        errors.Add(error);
+                    }
+                }
+
+                // Multiple properties mode
+                if (propertiesObj != null && propertiesObj.HasValues)
+                {
+                    foreach (var prop in propertiesObj.Properties())
+                    {
+                        if (ComponentOps.SetProperty(targetComponent, prop.Name, prop.Value, out string error))
+                        {
+                            McpLog.Info($"[ManagePrefabs] Set '{componentTypeName}.{prop.Name}' on '{targetGo.name}'.");
+                            anySet = true;
+                        }
+                        else
+                        {
+                            errors.Add(error);
+                        }
+                    }
+                }
+
+                if (errors.Count > 0)
+                {
+                    string errorMsg = string.Join("; ", errors);
+                    if (anySet)
+                    {
+                        // Partial success - log warning but continue
+                        McpLog.Warn($"[ManagePrefabs] Some properties failed to set on '{componentTypeName}': {errorMsg}");
+                    }
+                    else
+                    {
+                        // Complete failure
+                        return (false, new ErrorResponse($"Failed to set properties on '{componentTypeName}': {errorMsg}"));
+                    }
+                }
+
+                return (anySet, null);
+            }
+            catch (Exception ex)
+            {
+                return (false, new ErrorResponse($"Error setting properties on '{componentTypeName}': {ex.Message}"));
             }
         }
 
