@@ -23,7 +23,8 @@ namespace MCPForUnity.Editor.Tools.Prefabs
         private const string ACTION_GET_INFO = "get_info";
         private const string ACTION_GET_HIERARCHY = "get_hierarchy";
         private const string ACTION_MODIFY_CONTENTS = "modify_contents";
-        private const string SupportedActions = ACTION_CREATE_FROM_GAMEOBJECT + ", " + ACTION_GET_INFO + ", " + ACTION_GET_HIERARCHY + ", " + ACTION_MODIFY_CONTENTS;
+        private const string ACTION_BATCH_MODIFY = "batch_modify";
+        private const string SupportedActions = ACTION_CREATE_FROM_GAMEOBJECT + ", " + ACTION_GET_INFO + ", " + ACTION_GET_HIERARCHY + ", " + ACTION_MODIFY_CONTENTS + ", " + ACTION_BATCH_MODIFY;
 
         public static object HandleCommand(JObject @params)
         {
@@ -50,6 +51,8 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                         return GetHierarchy(@params);
                     case ACTION_MODIFY_CONTENTS:
                         return ModifyContents(@params);
+                    case ACTION_BATCH_MODIFY:
+                        return BatchModifyContents(@params);
                     default:
                         return new ErrorResponse($"Unknown action: '{action}'. Valid actions are: {SupportedActions}.");
                 }
@@ -546,6 +549,133 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                             scale = new { x = targetGo.transform.localScale.x, y = targetGo.transform.localScale.y, z = targetGo.transform.localScale.z }
                         },
                         componentTypes = PrefabUtilityHelper.GetComponentTypeNames(targetGo)
+                    }
+                );
+            }
+            finally
+            {
+                // Always unload prefab contents to free memory
+                PrefabUtility.UnloadPrefabContents(prefabContents);
+            }
+        }
+
+        /// <summary>
+        /// Applies multiple modifications to a prefab in a single load/save cycle.
+        /// Each operation in the array specifies a target and modification parameters.
+        /// </summary>
+        private static object BatchModifyContents(JObject @params)
+        {
+            string prefabPath = @params["prefabPath"]?.ToString() ?? @params["path"]?.ToString();
+            if (string.IsNullOrEmpty(prefabPath))
+            {
+                return new ErrorResponse("'prefabPath' parameter is required for batch_modify.");
+            }
+
+            string sanitizedPath = AssetPathUtility.SanitizeAssetPath(prefabPath);
+            if (string.IsNullOrEmpty(sanitizedPath))
+            {
+                return new ErrorResponse($"Invalid prefab path '{prefabPath}'. Path traversal sequences are not allowed.");
+            }
+
+            JArray operations = @params["operations"] as JArray;
+            if (operations == null || operations.Count == 0)
+            {
+                return new ErrorResponse("'operations' array is required for batch_modify and must contain at least one operation.");
+            }
+
+            // Load prefab contents once
+            GameObject prefabContents = PrefabUtility.LoadPrefabContents(sanitizedPath);
+            if (prefabContents == null)
+            {
+                return new ErrorResponse($"Failed to load prefab contents from '{sanitizedPath}'.");
+            }
+
+            try
+            {
+                bool anyModified = false;
+                var allCreatedChildren = new List<object>();
+                var operationResults = new List<object>();
+
+                for (int i = 0; i < operations.Count; i++)
+                {
+                    JObject operation = operations[i] as JObject;
+                    if (operation == null)
+                    {
+                        operationResults.Add(new { index = i, success = false, error = $"Operation at index {i} must be an object." });
+                        continue;
+                    }
+
+                    // Find target for this operation (defaults to root)
+                    string targetName = operation["target"]?.ToString();
+                    GameObject targetGo = FindInPrefabContents(prefabContents, targetName);
+
+                    if (targetGo == null)
+                    {
+                        string searchedFor = string.IsNullOrEmpty(targetName) ? "root" : $"'{targetName}'";
+                        operationResults.Add(new { index = i, success = false, error = $"Target {searchedFor} not found in prefab.", target = targetName });
+                        continue;
+                    }
+
+                    // Apply modifications for this operation
+                    var modifyResult = ApplyModificationsToPrefabObject(targetGo, operation, prefabContents, out List<object> createdChildren);
+
+                    if (modifyResult.error != null)
+                    {
+                        operationResults.Add(new { index = i, success = false, error = modifyResult.error.Error, target = targetGo.name });
+                        continue;
+                    }
+
+                    if (modifyResult.modified)
+                    {
+                        anyModified = true;
+                    }
+
+                    if (createdChildren != null && createdChildren.Count > 0)
+                    {
+                        allCreatedChildren.AddRange(createdChildren);
+                    }
+
+                    operationResults.Add(new { index = i, success = true, target = targetGo.name, modified = modifyResult.modified, createdCount = createdChildren?.Count ?? 0 });
+                }
+
+                // Skip saving if nothing was modified
+                if (!anyModified)
+                {
+                    return new SuccessResponse(
+                        $"Batch completed for prefab '{sanitizedPath}'. No modifications were needed.",
+                        new
+                        {
+                            prefabPath = sanitizedPath,
+                            modified = false,
+                            operationCount = operations.Count,
+                            operationResults = operationResults,
+                            createdChildren = allCreatedChildren
+                        }
+                    );
+                }
+
+                // Save prefab once after all operations
+                bool success;
+                PrefabUtility.SaveAsPrefabAsset(prefabContents, sanitizedPath, out success);
+
+                if (!success)
+                {
+                    return new ErrorResponse($"Failed to save prefab asset at '{sanitizedPath}' after batch modifications.");
+                }
+
+                AssetDatabase.Refresh();
+
+                McpLog.Info($"[ManagePrefabs] Batch modified prefab '{sanitizedPath}' with {operations.Count} operations (headless).");
+
+                return new SuccessResponse(
+                    $"Batch completed for prefab '{sanitizedPath}'. Applied {operations.Count} operations.",
+                    new
+                    {
+                        prefabPath = sanitizedPath,
+                        modified = anyModified,
+                        operationCount = operations.Count,
+                        operationResults = operationResults,
+                        createdChildren = allCreatedChildren
                     }
                 );
             }
