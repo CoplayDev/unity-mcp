@@ -40,30 +40,30 @@ jobs:
           CURRENT_VERSION=$(jq -r '.version' MCPForUnity/package.json)
           echo "Current Unity package version: $CURRENT_VERSION"
 
-          # Strip any existing pre-release suffix for safe parsing
-          # e.g., "9.3.1-beta.1" -> "9.3.1"
-          BASE_VERSION=$(echo "$CURRENT_VERSION" | sed -E 's/-[a-zA-Z]+\.[0-9]+$//')
-
-          # Validate we have a proper X.Y.Z format before arithmetic
-          if ! [[ "$BASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Error: Could not parse version '$CURRENT_VERSION' -> '$BASE_VERSION'" >&2
-            exit 1
-          fi
-
-          # Check if already a beta version
-          if [[ "$CURRENT_VERSION" == *"-beta."* ]]; then
-            echo "Already a beta version, keeping: $CURRENT_VERSION"
-            echo "unity_beta_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+          # Check if already a beta version - increment beta number
+          if [[ "$CURRENT_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-beta\.([0-9]+)$ ]]; then
+            BASE_VERSION="${BASH_REMATCH[1]}"
+            BETA_NUM="${BASH_REMATCH[2]}"
+            NEXT_BETA=$((BETA_NUM + 1))
+            BETA_VERSION="${BASE_VERSION}-beta.${NEXT_BETA}"
+            echo "Incrementing beta number: $CURRENT_VERSION -> $BETA_VERSION"
+            echo "unity_beta_version=$BETA_VERSION" >> "$GITHUB_OUTPUT"
             echo "already_beta=true" >> "$GITHUB_OUTPUT"
-          else
-            # Create beta version with semver format (e.g., 9.4.0-beta.1)
-            # Bump minor version to ensure beta is "newer" than stable
-            IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
-            NEXT_MINOR=$((MINOR + 1))
-            BETA_VERSION="${MAJOR}.${NEXT_MINOR}.0-beta.1"
-            echo "Generated Unity beta version: $BETA_VERSION"
+          elif [[ "$CURRENT_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            # Stable version - bump patch and add -beta.1 suffix
+            # This ensures beta is "newer" than stable (9.3.2-beta.1 > 9.3.1)
+            # The release workflow decides final bump type (patch/minor/major)
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            PATCH="${BASH_REMATCH[3]}"
+            NEXT_PATCH=$((PATCH + 1))
+            BETA_VERSION="${MAJOR}.${MINOR}.${NEXT_PATCH}-beta.1"
+            echo "Converting stable to beta: $CURRENT_VERSION -> $BETA_VERSION"
             echo "unity_beta_version=$BETA_VERSION" >> "$GITHUB_OUTPUT"
             echo "already_beta=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Error: Could not parse version '$CURRENT_VERSION'" >&2
+            exit 1
           fi
 
       - name: Update Unity package.json with beta version
@@ -157,12 +157,13 @@ jobs:
             echo "Error: Could not parse version '$RAW_VERSION' -> '$BASE_VERSION'" >&2
             exit 1
           fi
-          # Bump minor version and use beta suffix (PEP 440 compliant: X.Y+1.0bN)
-          # This ensures beta is "newer" than the stable release
+          # Bump patch and add beta suffix (PEP 440 compliant: X.Y.Z+1bN)
+          # This ensures beta is "newer" than stable (9.3.2b1 > 9.3.1)
+          # The release workflow decides final bump type (patch/minor/major)
           IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
-          NEXT_MINOR=$((MINOR + 1))
+          NEXT_PATCH=$((PATCH + 1))
           BETA_NUMBER="$(date +%Y%m%d%H%M%S)"
-          BETA_VERSION="${MAJOR}.${NEXT_MINOR}.0b${BETA_NUMBER}"
+          BETA_VERSION="${MAJOR}.${MINOR}.${NEXT_PATCH}b${BETA_NUMBER}"
           echo "Raw version: $RAW_VERSION"
           echo "Base version: $BASE_VERSION"
           echo "Beta version: $BETA_VERSION"
