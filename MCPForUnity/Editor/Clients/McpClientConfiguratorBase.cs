@@ -420,6 +420,9 @@ namespace MCPForUnity.Editor.Clients
                     }
 
                     bool matches = false;
+                    bool hasVersionMismatch = false;
+                    string mismatchReason = null;
+
                     if (!string.IsNullOrEmpty(url))
                     {
                         // Match against the active scope's URL
@@ -427,15 +430,60 @@ namespace MCPForUnity.Editor.Clients
                     }
                     else if (args != null && args.Length > 0)
                     {
-                        string expected = AssetPathUtility.GetMcpServerPackageSource();
+                        // Use beta-aware expected package source for comparison
+                        string expected = GetExpectedPackageSourceForValidation();
                         string configured = McpConfigurationHelper.ExtractUvxUrl(args);
-                        matches = !string.IsNullOrEmpty(configured) &&
-                                  McpConfigurationHelper.PathsEqual(configured, expected);
+
+                        if (!string.IsNullOrEmpty(configured) && !string.IsNullOrEmpty(expected))
+                        {
+                            if (McpConfigurationHelper.PathsEqual(configured, expected))
+                            {
+                                matches = true;
+                            }
+                            else
+                            {
+                                // Check for beta/stable mismatch
+                                bool configuredIsBeta = IsBetaPackageSource(configured);
+                                bool expectedIsBeta = IsBetaPackageSource(expected);
+
+                                if (configuredIsBeta && !expectedIsBeta)
+                                {
+                                    hasVersionMismatch = true;
+                                    mismatchReason = "Configured for beta server, but 'Use Beta Server' is disabled in Advanced settings.";
+                                }
+                                else if (!configuredIsBeta && expectedIsBeta)
+                                {
+                                    hasVersionMismatch = true;
+                                    mismatchReason = "Configured for stable server, but 'Use Beta Server' is enabled in Advanced settings.";
+                                }
+                                else
+                                {
+                                    hasVersionMismatch = true;
+                                    mismatchReason = "Server version doesn't match the plugin. Re-configure to update.";
+                                }
+                            }
+                        }
                     }
 
                     if (matches)
                     {
                         client.SetStatus(McpStatus.Configured);
+                        return client.status;
+                    }
+
+                    if (hasVersionMismatch)
+                    {
+                        if (attemptAutoRewrite)
+                        {
+                            string result = McpConfigurationHelper.ConfigureCodexClient(path, client);
+                            if (result == "Configured successfully")
+                            {
+                                client.SetStatus(McpStatus.Configured);
+                                client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
+                                return client.status;
+                            }
+                        }
+                        client.SetStatus(McpStatus.VersionMismatch, mismatchReason);
                         return client.status;
                     }
                 }
