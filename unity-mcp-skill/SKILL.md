@@ -5,18 +5,18 @@ description: Orchestrate Unity Editor via MCP (Model Context Protocol) tools and
 
 # Unity-MCP Operator Guide
 
-This skill helps you effectively operate Unity Editor through MCP tools and resources.
+This skill helps you effectively use the Unity Editor with MCP tools and resources.
 
 ## Quick Start: Resource-First Workflow
 
-**Always read relevant resources before using tools.** This prevents errors and provides necessary context.
+**Always read relevant resources before using tools.** This prevents errors and provides the necessary context.
 
 ```
 1. Check editor state     → mcpforunity://editor/state
 2. Understand the scene   → mcpforunity://scene/gameobject-api
 3. Find what you need     → find_gameobjects or resources
 4. Take action            → tools (manage_gameobject, create_script, script_apply_edits, apply_text_edits, validate_script, delete_script, get_sha, etc.)
-5. Verify results         → read_console, capture_screenshot, resources
+5. Verify results         → read_console, capture_screenshot (in manage_scene), resources
 ```
 
 ## Critical Best Practices
@@ -47,7 +47,7 @@ batch_execute(
 
 **Max 25 commands per batch.** Use `fail_fast=True` for dependent operations.
 
-### 3. Use `capture_screenshot` to Verify Visual Results
+### 3. Use `screenshot` in manage_scene to Verify Visual Results
 
 ```python
 # Via manage_scene
@@ -55,7 +55,7 @@ manage_scene(action="screenshot")  # Returns base64 image
 
 # After creating/modifying objects, verify visually:
 # 1. Create objects
-# 2. capture_screenshot
+# 2. capture screenshot
 # 3. Analyze if result matches intent
 ```
 
