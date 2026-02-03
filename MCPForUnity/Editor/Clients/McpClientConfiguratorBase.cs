@@ -411,7 +411,8 @@ namespace MCPForUnity.Editor.Clients
             string claudePath = MCPServiceLocator.Paths.GetClaudeCliPath();
             RuntimePlatform platform = Application.platform;
             bool isRemoteScope = HttpEndpointUtility.IsRemoteScope();
-            string expectedPackageSource = AssetPathUtility.GetMcpServerPackageSource();
+            // Get expected package source considering beta mode (matches what Register() would use)
+            string expectedPackageSource = GetExpectedPackageSourceForValidation();
             return CheckStatusWithProjectDir(projectDir, useHttpTransport, claudePath, platform, isRemoteScope, expectedPackageSource, attemptAutoRewrite);
         }
 
@@ -908,6 +909,43 @@ namespace MCPForUnity.Editor.Clients
                 }
             }
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// Gets the expected package source for validation, accounting for beta mode.
+        /// This should match what Register() would actually use for the --from argument.
+        /// MUST be called from the main thread due to EditorPrefs access.
+        /// </summary>
+        private static string GetExpectedPackageSourceForValidation()
+        {
+            // Check for explicit override first
+            string gitUrlOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
+            if (!string.IsNullOrEmpty(gitUrlOverride))
+            {
+                return gitUrlOverride;
+            }
+
+            // Check beta mode using the same logic as GetUseBetaServerWithDynamicDefault
+            // (bypass cache to ensure fresh read)
+            bool useBetaServer;
+            bool hasPrefKey = EditorPrefs.HasKey(EditorPrefKeys.UseBetaServer);
+            if (hasPrefKey)
+            {
+                useBetaServer = EditorPrefs.GetBool(EditorPrefKeys.UseBetaServer, false);
+            }
+            else
+            {
+                // Dynamic default based on package version
+                useBetaServer = AssetPathUtility.IsPreReleaseVersion();
+            }
+
+            if (useBetaServer)
+            {
+                return "mcpforunityserver>=0.0.0a0";
+            }
+
+            // Standard mode uses exact version from package.json
+            return AssetPathUtility.GetMcpServerPackageSource();
         }
 
         /// <summary>
