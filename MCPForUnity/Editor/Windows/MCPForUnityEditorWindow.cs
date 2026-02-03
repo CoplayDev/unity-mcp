@@ -327,7 +327,7 @@ namespace MCPForUnity.Editor.Windows
             }
 
             string version = AssetPathUtility.GetPackageVersion();
-            versionLabel.text = useBetaServer ? $"v{version} β" : $"v{version}";
+            versionLabel.text = $"v{version}";
             versionLabel.tooltip = useBetaServer
                 ? "Beta server mode - fetching pre-release server versions from PyPI"
                 : $"MCP For Unity v{version}";
