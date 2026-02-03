@@ -53,6 +53,12 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
         /// </summary>
         public event Action<string, ConfiguredTransport> OnClientTransportDetected;
 
+        /// <summary>
+        /// Fired when a config mismatch is detected (e.g., version mismatch).
+        /// The parameter contains the client name and the mismatch message (null if no mismatch).
+        /// </summary>
+        public event Action<string, string> OnClientConfigMismatch;
+
         public VisualElement Root { get; private set; }
 
         public McpClientConfigSection(VisualElement root)
@@ -167,6 +173,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                 McpStatus.UnsupportedOS => "Unsupported OS",
                 McpStatus.MissingConfig => "Missing MCPForUnity Config",
                 McpStatus.Error => "Error",
+                McpStatus.VersionMismatch => "Version Mismatch",
                 _ => "Unknown",
             };
         }
@@ -581,6 +588,8 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                     case McpStatus.IncorrectPath:
                     case McpStatus.CommunicationError:
                     case McpStatus.NoResponse:
+                    case McpStatus.Error:
+                    case McpStatus.VersionMismatch:
                         clientStatusIndicator.AddToClassList("warning");
                         break;
                     default:

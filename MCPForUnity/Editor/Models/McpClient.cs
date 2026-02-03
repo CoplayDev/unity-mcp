@@ -35,6 +35,7 @@ namespace MCPForUnity.Editor.Models
                 McpStatus.UnsupportedOS => "Unsupported OS",
                 McpStatus.MissingConfig => "Missing MCPForUnity Config",
                 McpStatus.Error => configStatus?.StartsWith("Error:") == true ? configStatus : "Error",
+                McpStatus.VersionMismatch => "Version Mismatch",
                 _ => "Unknown",
             };
         }

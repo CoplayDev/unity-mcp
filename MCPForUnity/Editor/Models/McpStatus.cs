@@ -13,6 +13,7 @@ namespace MCPForUnity.Editor.Models
         MissingConfig, // Config file exists but missing required elements
         UnsupportedOS, // OS is not supported
         Error, // General error state
+        VersionMismatch, // Configuration version doesn't match expected version
     }
 
     /// <summary>

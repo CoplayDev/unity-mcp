@@ -561,7 +561,7 @@ namespace MCPForUnity.Editor.Clients
                         }
                         else
                         {
-                            client.SetStatus(McpStatus.IncorrectPath, mismatchReason);
+                            client.SetStatus(McpStatus.VersionMismatch, mismatchReason);
                         }
                         return client.status;
                     }
