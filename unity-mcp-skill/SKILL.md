@@ -15,7 +15,7 @@ This skill helps you effectively operate Unity Editor through MCP tools and reso
 1. Check editor state     → mcpforunity://editor/state
 2. Understand the scene   → mcpforunity://scene/gameobject-api
 3. Find what you need     → find_gameobjects or resources
-4. Take action            → tools (manage_gameobject, manage_script, etc.)
+4. Take action            → tools (manage_gameobject, create_script, script_apply_edits, apply_text_edits, validate_script, delete_script, get_sha, etc.)
 5. Verify results         → read_console, capture_screenshot, resources
 ```
 
