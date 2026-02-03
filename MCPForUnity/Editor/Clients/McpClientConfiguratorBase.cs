@@ -511,15 +511,15 @@ namespace MCPForUnity.Editor.Clients
 
                             if (configuredIsBeta && !expectedIsBeta)
                             {
-                                mismatchReason = $"Beta/stable mismatch: registered with beta '{configuredPackageSource}' but plugin is stable '{expectedPackageSource}'.";
+                                mismatchReason = "Configured for beta server, but 'Use Beta Server' is disabled in Advanced settings.";
                             }
                             else if (!configuredIsBeta && expectedIsBeta)
                             {
-                                mismatchReason = $"Beta/stable mismatch: registered with stable '{configuredPackageSource}' but plugin is beta '{expectedPackageSource}'.";
+                                mismatchReason = "Configured for stable server, but 'Use Beta Server' is enabled in Advanced settings.";
                             }
                             else
                             {
-                                mismatchReason = $"Package version mismatch: registered with '{configuredPackageSource}' but current version is '{expectedPackageSource}'.";
+                                mismatchReason = "Server version doesn't match the plugin. Re-configure to update.";
                             }
                         }
                     }

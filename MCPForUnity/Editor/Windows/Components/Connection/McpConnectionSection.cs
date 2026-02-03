@@ -1044,7 +1044,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 return;
             }
 
-            versionMismatchText.text = $"⚠ {clientName}: {mismatchMessage} Click \"Configure\" in Client Configuration to update.";
+            versionMismatchText.text = $"⚠ {clientName}: {mismatchMessage}";
             versionMismatchWarning.AddToClassList("visible");
         }
 
