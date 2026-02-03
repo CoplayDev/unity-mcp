@@ -229,6 +229,11 @@ namespace MCPForUnity.Editor.Windows
                 // update the connection section's warning banner if there's a mismatch
                 clientConfigSection.OnClientTransportDetected += (clientName, transport) =>
                     connectionSection?.UpdateTransportMismatchWarning(clientName, transport);
+
+                // Wire up version mismatch detection: when client status is checked,
+                // update the connection section's warning banner if there's a version mismatch
+                clientConfigSection.OnClientConfigMismatch += (clientName, mismatchMessage) =>
+                    connectionSection?.UpdateVersionMismatchWarning(clientName, mismatchMessage);
             }
 
             // Load and initialize Validation section

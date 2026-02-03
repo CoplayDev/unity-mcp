@@ -45,9 +45,9 @@ namespace MCPForUnity.Editor.Models
         {
             status = newStatus;
 
-            if (newStatus == McpStatus.Error && !string.IsNullOrEmpty(errorDetails))
+            if ((newStatus == McpStatus.Error || newStatus == McpStatus.VersionMismatch) && !string.IsNullOrEmpty(errorDetails))
             {
-                configStatus = $"Error: {errorDetails}";
+                configStatus = errorDetails;
             }
             else
             {

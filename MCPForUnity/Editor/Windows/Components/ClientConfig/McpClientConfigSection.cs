@@ -603,6 +603,19 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 
             // Notify listeners about the client's configured transport
             OnClientTransportDetected?.Invoke(client.DisplayName, client.ConfiguredTransport);
+
+            // Notify listeners about version mismatch if applicable
+            if (client.Status == McpStatus.VersionMismatch && client is McpClientConfiguratorBase baseConfigurator)
+            {
+                // Get the mismatch reason from the configStatus field
+                string mismatchReason = baseConfigurator.Client.configStatus;
+                OnClientConfigMismatch?.Invoke(client.DisplayName, mismatchReason);
+            }
+            else
+            {
+                // Clear any previous mismatch warning
+                OnClientConfigMismatch?.Invoke(client.DisplayName, null);
+            }
         }
 
         /// <summary>
