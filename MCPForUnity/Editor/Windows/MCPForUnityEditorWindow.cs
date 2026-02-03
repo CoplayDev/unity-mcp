@@ -263,6 +263,7 @@ namespace MCPForUnity.Editor.Windows
                         await connectionSection.VerifyBridgeConnectionAsync();
                 };
                 advancedSection.OnBetaModeChanged += UpdateVersionLabel;
+                advancedSection.OnBetaModeChanged += _ => clientConfigSection?.RefreshSelectedClient(forceImmediate: true);
 
                 // Wire up health status updates from Connection to Advanced
                 connectionSection?.SetHealthStatusUpdateCallback((isHealthy, statusText) =>
@@ -552,6 +553,8 @@ namespace MCPForUnity.Editor.Windows
             {
                 case ActivePanel.Clients:
                     if (clientsPanel != null) clientsPanel.style.display = DisplayStyle.Flex;
+                    // Refresh client status when switching to Connect tab (e.g., after changing beta mode in Advanced)
+                    clientConfigSection?.RefreshSelectedClient(forceImmediate: true);
                     break;
                 case ActivePanel.Validation:
                     if (validationPanel != null) validationPanel.style.display = DisplayStyle.Flex;
