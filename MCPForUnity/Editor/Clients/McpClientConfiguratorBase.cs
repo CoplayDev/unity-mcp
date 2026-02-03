@@ -1007,7 +1007,9 @@ namespace MCPForUnity.Editor.Clients
 
                 if (!File.Exists(configPath))
                 {
-                    return (null, "Claude Code config file not found");
+                    // Missing config file is "not configured", not an error
+                    // (Claude Code may not be installed or just hasn't been configured yet)
+                    return (null, null);
                 }
 
                 string configJson = File.ReadAllText(configPath);
@@ -1092,7 +1094,7 @@ namespace MCPForUnity.Editor.Clients
             if (args == null)
                 return null;
 
-            // Look for --from argument followed by the package source
+            // Look for --from argument (either "--from VALUE" or "--from=VALUE" format)
             bool foundFrom = false;
             foreach (var arg in args)
             {
@@ -1109,6 +1111,11 @@ namespace MCPForUnity.Editor.Clients
                 if (argStr == "--from")
                 {
                     foundFrom = true;
+                }
+                else if (argStr.StartsWith("--from=", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Handle --from=VALUE format
+                    return argStr.Substring(7).Trim('"', '\'');
                 }
             }
 
