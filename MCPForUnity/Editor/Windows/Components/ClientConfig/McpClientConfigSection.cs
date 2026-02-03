@@ -293,7 +293,8 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
             bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
             string claudePath = MCPServiceLocator.Paths.GetClaudeCliPath();
             string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
-            var (uvxPath, gitUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
+            var (uvxPath, _, packageName) = AssetPathUtility.GetUvxCommandParts();
+            string fromArgs = AssetPathUtility.GetBetaServerFromArgs(quoteFromPath: true);
             bool shouldForceRefresh = AssetPathUtility.ShouldForceUvxRefresh();
             string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
 
@@ -321,7 +322,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                         cliConfigurator.ConfigureWithCapturedValues(
                             projectDir, claudePath, pathPrepend,
                             useHttpTransport, httpUrl,
-                            uvxPath, gitUrl, packageName, shouldForceRefresh,
+                            uvxPath, fromArgs, packageName, shouldForceRefresh,
                             apiKey, serverTransport);
                     }
                     return (success: true, error: (string)null);
