@@ -78,6 +78,74 @@ namespace MCPForUnity.Editor.Clients
             string Normalize(string value) => value.Trim().TrimEnd('/');
             return string.Equals(Normalize(a), Normalize(b), StringComparison.OrdinalIgnoreCase);
         }
+
+        /// <summary>
+        /// Gets the expected package source for validation, accounting for beta mode.
+        /// This should match what Configure() would actually use for the --from argument.
+        /// MUST be called from the main thread due to EditorPrefs access.
+        /// </summary>
+        protected static string GetExpectedPackageSourceForValidation()
+        {
+            // Check for explicit override first
+            string gitUrlOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
+            if (!string.IsNullOrEmpty(gitUrlOverride))
+            {
+                return gitUrlOverride;
+            }
+
+            // Check beta mode using the same logic as GetUseBetaServerWithDynamicDefault
+            // (bypass cache to ensure fresh read)
+            bool useBetaServer;
+            bool hasPrefKey = EditorPrefs.HasKey(EditorPrefKeys.UseBetaServer);
+            if (hasPrefKey)
+            {
+                useBetaServer = EditorPrefs.GetBool(EditorPrefKeys.UseBetaServer, false);
+            }
+            else
+            {
+                // Dynamic default based on package version
+                useBetaServer = AssetPathUtility.IsPreReleaseVersion();
+            }
+
+            if (useBetaServer)
+            {
+                return "mcpforunityserver>=0.0.0a0";
+            }
+
+            // Standard mode uses exact version from package.json
+            return AssetPathUtility.GetMcpServerPackageSource();
+        }
+
+        /// <summary>
+        /// Checks if a package source string represents a beta/prerelease version.
+        /// Beta versions include:
+        /// - PyPI beta: "mcpforunityserver==9.4.0b20250203..." (contains 'b' before timestamp)
+        /// - PyPI prerelease range: "mcpforunityserver>=0.0.0a0" (used when beta mode is enabled)
+        /// - Git beta branch: contains "@beta" or "-beta"
+        /// </summary>
+        protected static bool IsBetaPackageSource(string packageSource)
+        {
+            if (string.IsNullOrEmpty(packageSource))
+                return false;
+
+            // PyPI beta format: mcpforunityserver==X.Y.Zb<timestamp>
+            // The 'b' suffix before numbers indicates a PEP 440 beta version
+            if (System.Text.RegularExpressions.Regex.IsMatch(packageSource, @"==\d+\.\d+\.\d+b\d+"))
+                return true;
+
+            // PyPI prerelease range: >=0.0.0a0 (used when "Use Beta Server" is enabled in Unity settings)
+            if (packageSource.Contains(">=0.0.0a0", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // Git-based beta references
+            if (packageSource.Contains("@beta", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (packageSource.Contains("-beta", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            return false;
+        }
     }
 
     /// <summary>JSON-file based configurator (Cursor, Windsurf, VS Code, etc.).</summary>
@@ -174,12 +242,44 @@ namespace MCPForUnity.Editor.Clients
                 }
 
                 bool matches = false;
+                bool hasVersionMismatch = false;
+                string mismatchReason = null;
+
                 if (args != null && args.Length > 0)
                 {
-                    string expectedUvxUrl = AssetPathUtility.GetMcpServerPackageSource();
+                    // Use beta-aware expected package source for comparison
+                    string expectedUvxUrl = GetExpectedPackageSourceForValidation();
                     string configuredUvxUrl = McpConfigurationHelper.ExtractUvxUrl(args);
-                    matches = !string.IsNullOrEmpty(configuredUvxUrl) &&
-                              McpConfigurationHelper.PathsEqual(configuredUvxUrl, expectedUvxUrl);
+
+                    if (!string.IsNullOrEmpty(configuredUvxUrl) && !string.IsNullOrEmpty(expectedUvxUrl))
+                    {
+                        if (McpConfigurationHelper.PathsEqual(configuredUvxUrl, expectedUvxUrl))
+                        {
+                            matches = true;
+                        }
+                        else
+                        {
+                            // Check for beta/stable mismatch
+                            bool configuredIsBeta = IsBetaPackageSource(configuredUvxUrl);
+                            bool expectedIsBeta = IsBetaPackageSource(expectedUvxUrl);
+
+                            if (configuredIsBeta && !expectedIsBeta)
+                            {
+                                hasVersionMismatch = true;
+                                mismatchReason = "Configured for beta server, but 'Use Beta Server' is disabled in Advanced settings.";
+                            }
+                            else if (!configuredIsBeta && expectedIsBeta)
+                            {
+                                hasVersionMismatch = true;
+                                mismatchReason = "Configured for stable server, but 'Use Beta Server' is enabled in Advanced settings.";
+                            }
+                            else
+                            {
+                                hasVersionMismatch = true;
+                                mismatchReason = "Server version doesn't match the plugin. Re-configure to update.";
+                            }
+                        }
+                    }
                 }
                 else if (!string.IsNullOrEmpty(configuredUrl))
                 {
@@ -194,7 +294,27 @@ namespace MCPForUnity.Editor.Clients
                     return client.status;
                 }
 
-                if (attemptAutoRewrite)
+                if (hasVersionMismatch)
+                {
+                    if (attemptAutoRewrite)
+                    {
+                        var result = McpConfigurationHelper.WriteMcpConfiguration(path, client);
+                        if (result == "Configured successfully")
+                        {
+                            client.SetStatus(McpStatus.Configured);
+                            client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
+                        }
+                        else
+                        {
+                            client.SetStatus(McpStatus.VersionMismatch, mismatchReason);
+                        }
+                    }
+                    else
+                    {
+                        client.SetStatus(McpStatus.VersionMismatch, mismatchReason);
+                    }
+                }
+                else if (attemptAutoRewrite)
                 {
                     var result = McpConfigurationHelper.WriteMcpConfiguration(path, client);
                     if (result == "Configured successfully")
@@ -911,43 +1031,6 @@ namespace MCPForUnity.Editor.Clients
         }
 
         /// <summary>
-        /// Gets the expected package source for validation, accounting for beta mode.
-        /// This should match what Register() would actually use for the --from argument.
-        /// MUST be called from the main thread due to EditorPrefs access.
-        /// </summary>
-        private static string GetExpectedPackageSourceForValidation()
-        {
-            // Check for explicit override first
-            string gitUrlOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
-            if (!string.IsNullOrEmpty(gitUrlOverride))
-            {
-                return gitUrlOverride;
-            }
-
-            // Check beta mode using the same logic as GetUseBetaServerWithDynamicDefault
-            // (bypass cache to ensure fresh read)
-            bool useBetaServer;
-            bool hasPrefKey = EditorPrefs.HasKey(EditorPrefKeys.UseBetaServer);
-            if (hasPrefKey)
-            {
-                useBetaServer = EditorPrefs.GetBool(EditorPrefKeys.UseBetaServer, false);
-            }
-            else
-            {
-                // Dynamic default based on package version
-                useBetaServer = AssetPathUtility.IsPreReleaseVersion();
-            }
-
-            if (useBetaServer)
-            {
-                return "mcpforunityserver>=0.0.0a0";
-            }
-
-            // Standard mode uses exact version from package.json
-            return AssetPathUtility.GetMcpServerPackageSource();
-        }
-
-        /// <summary>
         /// Extracts the package source (--from argument value) from claude mcp get output.
         /// The output format includes args like: --from "mcpforunityserver==9.0.1"
         /// </summary>
@@ -1120,37 +1203,6 @@ namespace MCPForUnity.Editor.Clients
             }
 
             return null;
-        }
-
-        /// <summary>
-        /// Checks if a package source string represents a beta/prerelease version.
-        /// Beta versions include:
-        /// - PyPI beta: "mcpforunityserver==9.4.0b20250203..." (contains 'b' before timestamp)
-        /// - PyPI prerelease range: "mcpforunityserver>=0.0.0a0" (used when beta mode is enabled)
-        /// - Git beta branch: contains "@beta" or "-beta"
-        /// </summary>
-        private static bool IsBetaPackageSource(string packageSource)
-        {
-            if (string.IsNullOrEmpty(packageSource))
-                return false;
-
-            // PyPI beta format: mcpforunityserver==X.Y.Zb<timestamp>
-            // The 'b' suffix before numbers indicates a PEP 440 beta version
-            if (System.Text.RegularExpressions.Regex.IsMatch(packageSource, @"==\d+\.\d+\.\d+b\d+"))
-                return true;
-
-            // PyPI prerelease range: >=0.0.0a0 (used when "Use Beta Server" is enabled in Unity settings)
-            if (packageSource.Contains(">=0.0.0a0", StringComparison.OrdinalIgnoreCase))
-                return true;
-
-            // Git-based beta references
-            if (packageSource.Contains("@beta", StringComparison.OrdinalIgnoreCase))
-                return true;
-
-            if (packageSource.Contains("-beta", StringComparison.OrdinalIgnoreCase))
-                return true;
-
-            return false;
         }
     }
 }
