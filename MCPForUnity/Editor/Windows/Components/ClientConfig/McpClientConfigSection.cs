@@ -286,7 +286,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 
             statusRefreshInFlight.Add(client);
             bool isCurrentlyConfigured = client.Status == McpStatus.Configured;
-            ApplyStatusToUi(client, showChecking: true, customMessage: isCurrentlyConfigured ? "Unregistering..." : "Registering...");
+            ApplyStatusToUi(client, showChecking: true, customMessage: isCurrentlyConfigured ? "Unregistering..." : "Configuring...");
 
             // Capture ALL main-thread-only values before async task
             string projectDir = Path.GetDirectoryName(Application.dataPath);

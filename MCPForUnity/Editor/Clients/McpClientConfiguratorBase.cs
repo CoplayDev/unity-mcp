@@ -394,7 +394,7 @@ namespace MCPForUnity.Editor.Clients
         public ClaudeCliMcpConfigurator(McpClient client) : base(client) { }
 
         public override bool SupportsAutoConfigure => true;
-        public override string GetConfigureActionLabel() => client.status == McpStatus.Configured ? "Unregister" : "Register";
+        public override string GetConfigureActionLabel() => client.status == McpStatus.Configured ? "Unregister" : "Configure";
 
         public override string GetConfigPath() => "Managed via Claude CLI";
 
@@ -445,131 +445,130 @@ namespace MCPForUnity.Editor.Clients
                     throw new ArgumentNullException(nameof(projectDir), "Project directory must be provided for thread-safe execution");
                 }
 
-                string pathPrepend = null;
-                if (platform == RuntimePlatform.OSXEditor)
+                // Read Claude Code config directly from ~/.claude.json instead of using slow CLI
+                // This is instant vs 15+ seconds for `claude mcp list` which does health checks
+                var configResult = ReadClaudeCodeConfig(projectDir);
+                if (configResult.error != null)
                 {
-                    pathPrepend = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin";
-                }
-                else if (platform == RuntimePlatform.LinuxEditor)
-                {
-                    pathPrepend = "/usr/local/bin:/usr/bin:/bin";
+                    client.SetStatus(McpStatus.NotConfigured, configResult.error);
+                    client.configuredTransport = Models.ConfiguredTransport.Unknown;
+                    return client.status;
                 }
 
-                try
+                if (configResult.serverConfig == null)
                 {
-                    string claudeDir = Path.GetDirectoryName(claudePath);
-                    if (!string.IsNullOrEmpty(claudeDir))
+                    // UnityMCP not found in config
+                    client.SetStatus(McpStatus.NotConfigured);
+                    client.configuredTransport = Models.ConfiguredTransport.Unknown;
+                    return client.status;
+                }
+
+                // UnityMCP is registered - check transport and version
+                bool currentUseHttp = useHttpTransport;
+                var serverConfig = configResult.serverConfig;
+
+                // Determine registered transport type
+                string registeredType = serverConfig["type"]?.ToString()?.ToLowerInvariant() ?? "";
+                bool registeredWithHttp = registeredType == "http";
+                bool registeredWithStdio = registeredType == "stdio";
+
+                // Set the configured transport based on what we detected
+                if (registeredWithHttp)
+                {
+                    client.configuredTransport = isRemoteScope
+                        ? Models.ConfiguredTransport.HttpRemote
+                        : Models.ConfiguredTransport.Http;
+                }
+                else if (registeredWithStdio)
+                {
+                    client.configuredTransport = Models.ConfiguredTransport.Stdio;
+                }
+                else
+                {
+                    client.configuredTransport = Models.ConfiguredTransport.Unknown;
+                }
+
+                // Check for transport mismatch
+                bool hasTransportMismatch = (currentUseHttp && registeredWithStdio) || (!currentUseHttp && registeredWithHttp);
+
+                // For stdio transport, also check package version
+                bool hasVersionMismatch = false;
+                string configuredPackageSource = null;
+                string mismatchReason = null;
+                if (registeredWithStdio)
+                {
+                    configuredPackageSource = ExtractPackageSourceFromConfig(serverConfig);
+                    if (!string.IsNullOrEmpty(configuredPackageSource) && !string.IsNullOrEmpty(expectedPackageSource))
                     {
-                        pathPrepend = string.IsNullOrEmpty(pathPrepend)
-                            ? claudeDir
-                            : $"{claudeDir}:{pathPrepend}";
-                    }
-                }
-                catch { }
-
-                // Check if UnityMCP exists (handles both "UnityMCP" and legacy "unityMCP")
-                if (ExecPath.TryRun(claudePath, "mcp list", projectDir, out var listStdout, out var listStderr, 10000, pathPrepend))
-                {
-                    if (!string.IsNullOrEmpty(listStdout) && listStdout.IndexOf("UnityMCP", StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        // UnityMCP is registered - now verify transport mode matches
-                        // useHttpTransport parameter is required (non-nullable) to ensure thread safety
-                        bool currentUseHttp = useHttpTransport;
-
-                        // Get detailed info about the registration to check transport type
-                        // Try both "UnityMCP" and "unityMCP" (legacy naming)
-                        string getStdout = null, getStderr = null;
-                        bool gotInfo = ExecPath.TryRun(claudePath, "mcp get UnityMCP", projectDir, out getStdout, out getStderr, 7000, pathPrepend)
-                                    || ExecPath.TryRun(claudePath, "mcp get unityMCP", projectDir, out getStdout, out getStderr, 7000, pathPrepend);
-                        if (gotInfo)
+                        // Check for exact match first
+                        if (!string.Equals(configuredPackageSource, expectedPackageSource, StringComparison.OrdinalIgnoreCase))
                         {
-                            // Parse the output to determine registered transport mode
-                            // The CLI output format contains "Type: http" or "Type: stdio"
-                            bool registeredWithHttp = getStdout.Contains("Type: http", StringComparison.OrdinalIgnoreCase);
-                            bool registeredWithStdio = getStdout.Contains("Type: stdio", StringComparison.OrdinalIgnoreCase);
+                            hasVersionMismatch = true;
 
-                            // Set the configured transport based on what we detected
-                            // For HTTP, we can't distinguish local/remote from CLI output alone,
-                            // so infer from the current scope setting when HTTP is detected.
-                            if (registeredWithHttp)
+                            // Provide more specific mismatch reason for beta/stable differences
+                            bool configuredIsBeta = IsBetaPackageSource(configuredPackageSource);
+                            bool expectedIsBeta = IsBetaPackageSource(expectedPackageSource);
+
+                            if (configuredIsBeta && !expectedIsBeta)
                             {
-                                client.configuredTransport = isRemoteScope
-                                    ? Models.ConfiguredTransport.HttpRemote
-                                    : Models.ConfiguredTransport.Http;
+                                mismatchReason = $"Beta/stable mismatch: registered with beta '{configuredPackageSource}' but plugin is stable '{expectedPackageSource}'.";
                             }
-                            else if (registeredWithStdio)
+                            else if (!configuredIsBeta && expectedIsBeta)
                             {
-                                client.configuredTransport = Models.ConfiguredTransport.Stdio;
+                                mismatchReason = $"Beta/stable mismatch: registered with stable '{configuredPackageSource}' but plugin is beta '{expectedPackageSource}'.";
                             }
                             else
                             {
-                                client.configuredTransport = Models.ConfiguredTransport.Unknown;
-                            }
-
-                            // Check for transport mismatch (3-way: Stdio, Http, HttpRemote)
-                            bool hasTransportMismatch = (currentUseHttp && registeredWithStdio) || (!currentUseHttp && registeredWithHttp);
-
-                            // For stdio transport, also check package version
-                            bool hasVersionMismatch = false;
-                            string configuredPackageSource = null;
-                            if (registeredWithStdio)
-                            {
-                                // expectedPackageSource was captured on main thread and passed as parameter
-                                configuredPackageSource = ExtractPackageSourceFromCliOutput(getStdout);
-                                hasVersionMismatch = !string.IsNullOrEmpty(configuredPackageSource) &&
-                                    !string.Equals(configuredPackageSource, expectedPackageSource, StringComparison.OrdinalIgnoreCase);
-                            }
-
-                            // If there's any mismatch and auto-rewrite is enabled, re-register
-                            if (hasTransportMismatch || hasVersionMismatch)
-                            {
-                                // Configure() requires main thread (accesses EditorPrefs, Application.dataPath)
-                                // Only attempt auto-rewrite if we're on the main thread
-                                bool isMainThread = System.Threading.Thread.CurrentThread.ManagedThreadId == 1;
-                                if (attemptAutoRewrite && isMainThread)
-                                {
-                                    string reason = hasTransportMismatch
-                                        ? $"Transport mismatch (registered: {(registeredWithHttp ? "HTTP" : "stdio")}, expected: {(currentUseHttp ? "HTTP" : "stdio")})"
-                                        : $"Package version mismatch (registered: {configuredPackageSource}, expected: {expectedPackageSource})";
-                                    McpLog.Info($"{reason}. Re-registering...");
-                                    try
-                                    {
-                                        // Force re-register by ensuring status is not Configured (which would toggle to Unregister)
-                                        client.SetStatus(McpStatus.IncorrectPath);
-                                        Configure();
-                                        return client.status;
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        McpLog.Warn($"Auto-reregister failed: {ex.Message}");
-                                        client.SetStatus(McpStatus.IncorrectPath, $"Configuration mismatch. Click Configure to re-register.");
-                                        return client.status;
-                                    }
-                                }
-                                else
-                                {
-                                    if (hasTransportMismatch)
-                                    {
-                                        string errorMsg = $"Transport mismatch: Claude Code is registered with {(registeredWithHttp ? "HTTP" : "stdio")} but current setting is {(currentUseHttp ? "HTTP" : "stdio")}. Click Configure to re-register.";
-                                        client.SetStatus(McpStatus.Error, errorMsg);
-                                        McpLog.Warn(errorMsg);
-                                    }
-                                    else
-                                    {
-                                        client.SetStatus(McpStatus.IncorrectPath, $"Package version mismatch: registered with '{configuredPackageSource}' but current version is '{expectedPackageSource}'.");
-                                    }
-                                    return client.status;
-                                }
+                                mismatchReason = $"Package version mismatch: registered with '{configuredPackageSource}' but current version is '{expectedPackageSource}'.";
                             }
                         }
+                    }
+                }
 
-                        client.SetStatus(McpStatus.Configured);
+                // If there's any mismatch and auto-rewrite is enabled, re-register
+                if (hasTransportMismatch || hasVersionMismatch)
+                {
+                    // Configure() requires main thread (accesses EditorPrefs, Application.dataPath)
+                    // Only attempt auto-rewrite if we're on the main thread
+                    bool isMainThread = System.Threading.Thread.CurrentThread.ManagedThreadId == 1;
+                    if (attemptAutoRewrite && isMainThread)
+                    {
+                        string reason = hasTransportMismatch
+                            ? $"Transport mismatch (registered: {(registeredWithHttp ? "HTTP" : "stdio")}, expected: {(currentUseHttp ? "HTTP" : "stdio")})"
+                            : mismatchReason ?? $"Package version mismatch";
+                        McpLog.Info($"{reason}. Re-registering...");
+                        try
+                        {
+                            // Force re-register by ensuring status is not Configured (which would toggle to Unregister)
+                            client.SetStatus(McpStatus.IncorrectPath);
+                            Configure();
+                            return client.status;
+                        }
+                        catch (Exception ex)
+                        {
+                            McpLog.Warn($"Auto-reregister failed: {ex.Message}");
+                            client.SetStatus(McpStatus.IncorrectPath, $"Configuration mismatch. Click Configure to re-register.");
+                            return client.status;
+                        }
+                    }
+                    else
+                    {
+                        if (hasTransportMismatch)
+                        {
+                            string errorMsg = $"Transport mismatch: Claude Code is registered with {(registeredWithHttp ? "HTTP" : "stdio")} but current setting is {(currentUseHttp ? "HTTP" : "stdio")}. Click Configure to re-register.";
+                            client.SetStatus(McpStatus.Error, errorMsg);
+                            McpLog.Warn(errorMsg);
+                        }
+                        else
+                        {
+                            client.SetStatus(McpStatus.IncorrectPath, mismatchReason);
+                        }
                         return client.status;
                     }
                 }
 
-                client.SetStatus(McpStatus.NotConfigured);
-                client.configuredTransport = Models.ConfiguredTransport.Unknown;
+                client.SetStatus(McpStatus.Configured);
+                return client.status;
             }
             catch (Exception ex)
             {
@@ -854,7 +853,7 @@ namespace MCPForUnity.Editor.Clients
         public override IList<string> GetInstallationSteps() => new List<string>
         {
             "Ensure Claude CLI is installed",
-            "Use Register to add UnityMCP (or run claude mcp add UnityMCP)",
+            "Use Configure to add UnityMCP (or run claude mcp add UnityMCP)",
             "Restart Claude Code"
         };
 
@@ -992,6 +991,159 @@ namespace MCPForUnity.Editor.Clients
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Reads Claude Code configuration directly from ~/.claude.json file.
+        /// This is much faster than running `claude mcp list` which does health checks on all servers.
+        /// </summary>
+        private static (JObject serverConfig, string error) ReadClaudeCodeConfig(string projectDir)
+        {
+            try
+            {
+                // Find the Claude config file
+                string homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                string configPath = Path.Combine(homeDir, ".claude.json");
+
+                if (!File.Exists(configPath))
+                {
+                    return (null, "Claude Code config file not found");
+                }
+
+                string configJson = File.ReadAllText(configPath);
+                var config = JObject.Parse(configJson);
+
+                var projects = config["projects"] as JObject;
+                if (projects == null)
+                {
+                    return (null, null); // No projects configured
+                }
+
+                // Build a dictionary of normalized paths for quick lookup
+                // Use last entry for duplicates (forward/backslash variants) as it's typically more recent
+                var normalizedProjects = new Dictionary<string, JObject>(StringComparer.OrdinalIgnoreCase);
+                foreach (var project in projects.Properties())
+                {
+                    string normalizedPath = NormalizePath(project.Name);
+                    normalizedProjects[normalizedPath] = project.Value as JObject;
+                }
+
+                // Walk up the directory tree to find a matching project config
+                // Claude Code may be configured at a parent directory (e.g., repo root)
+                // while Unity project is in a subdirectory (e.g., TestProjects/UnityMCPTests)
+                string currentDir = NormalizePath(projectDir);
+                while (!string.IsNullOrEmpty(currentDir))
+                {
+                    if (normalizedProjects.TryGetValue(currentDir, out var projectConfig))
+                    {
+                        var mcpServers = projectConfig?["mcpServers"] as JObject;
+                        if (mcpServers != null)
+                        {
+                            // Look for UnityMCP (case-insensitive)
+                            foreach (var server in mcpServers.Properties())
+                            {
+                                if (string.Equals(server.Name, "UnityMCP", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    return (server.Value as JObject, null);
+                                }
+                            }
+                        }
+                        // Found the project but no UnityMCP - don't continue walking up
+                        return (null, null);
+                    }
+
+                    // Move up one directory
+                    int lastSlash = currentDir.LastIndexOf('/');
+                    if (lastSlash <= 0)
+                        break;
+                    currentDir = currentDir.Substring(0, lastSlash);
+                }
+
+                return (null, null); // Project not found in config
+            }
+            catch (Exception ex)
+            {
+                return (null, $"Error reading Claude config: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Normalizes a file path for comparison (handles forward/back slashes, trailing slashes).
+        /// </summary>
+        private static string NormalizePath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                return path;
+
+            // Replace backslashes with forward slashes and remove trailing slashes
+            return path.Replace('\\', '/').TrimEnd('/');
+        }
+
+        /// <summary>
+        /// Extracts the package source from Claude Code JSON config.
+        /// For stdio servers, this is in the args array after "--from".
+        /// </summary>
+        private static string ExtractPackageSourceFromConfig(JObject serverConfig)
+        {
+            if (serverConfig == null)
+                return null;
+
+            var args = serverConfig["args"] as JArray;
+            if (args == null)
+                return null;
+
+            // Look for --from argument followed by the package source
+            bool foundFrom = false;
+            foreach (var arg in args)
+            {
+                string argStr = arg?.ToString();
+                if (argStr == null)
+                    continue;
+
+                if (foundFrom)
+                {
+                    // This is the package source following --from
+                    return argStr;
+                }
+
+                if (argStr == "--from")
+                {
+                    foundFrom = true;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Checks if a package source string represents a beta/prerelease version.
+        /// Beta versions include:
+        /// - PyPI beta: "mcpforunityserver==9.4.0b20250203..." (contains 'b' before timestamp)
+        /// - PyPI prerelease range: "mcpforunityserver>=0.0.0a0" (used when beta mode is enabled)
+        /// - Git beta branch: contains "@beta" or "-beta"
+        /// </summary>
+        private static bool IsBetaPackageSource(string packageSource)
+        {
+            if (string.IsNullOrEmpty(packageSource))
+                return false;
+
+            // PyPI beta format: mcpforunityserver==X.Y.Zb<timestamp>
+            // The 'b' suffix before numbers indicates a PEP 440 beta version
+            if (System.Text.RegularExpressions.Regex.IsMatch(packageSource, @"==\d+\.\d+\.\d+b\d+"))
+                return true;
+
+            // PyPI prerelease range: >=0.0.0a0 (used when "Use Beta Server" is enabled in Unity settings)
+            if (packageSource.Contains(">=0.0.0a0", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // Git-based beta references
+            if (packageSource.Contains("@beta", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (packageSource.Contains("-beta", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            return false;
         }
     }
 }
