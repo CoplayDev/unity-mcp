@@ -47,8 +47,6 @@ jobs:
             NEXT_BETA=$((BETA_NUM + 1))
             BETA_VERSION="${BASE_VERSION}-beta.${NEXT_BETA}"
             echo "Incrementing beta number: $CURRENT_VERSION -> $BETA_VERSION"
-            echo "unity_beta_version=$BETA_VERSION" >> "$GITHUB_OUTPUT"
-            echo "already_beta=true" >> "$GITHUB_OUTPUT"
           elif [[ "$CURRENT_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
             # Stable version - bump patch and add -beta.1 suffix
             # This ensures beta is "newer" than stable (9.3.2-beta.1 > 9.3.1)
@@ -59,15 +57,25 @@ jobs:
             NEXT_PATCH=$((PATCH + 1))
             BETA_VERSION="${MAJOR}.${MINOR}.${NEXT_PATCH}-beta.1"
             echo "Converting stable to beta: $CURRENT_VERSION -> $BETA_VERSION"
-            echo "unity_beta_version=$BETA_VERSION" >> "$GITHUB_OUTPUT"
-            echo "already_beta=false" >> "$GITHUB_OUTPUT"
           else
             echo "Error: Could not parse version '$CURRENT_VERSION'" >&2
             exit 1
           fi
 
+          # Always output the computed version
+          echo "unity_beta_version=$BETA_VERSION" >> "$GITHUB_OUTPUT"
+
+          # Only skip update if computed version matches current (no change needed)
+          if [[ "$BETA_VERSION" == "$CURRENT_VERSION" ]]; then
+            echo "Version unchanged, skipping update"
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Version will be updated: $CURRENT_VERSION -> $BETA_VERSION"
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Update Unity package.json with beta version
-        if: steps.version.outputs.already_beta != 'true'
+        if: steps.version.outputs.needs_update == 'true'
         env:
           BETA_VERSION: ${{ steps.version.outputs.unity_beta_version }}
         shell: bash
@@ -81,7 +89,7 @@ jobs:
 
       - name: Commit to temporary branch and create PR
         id: commit
-        if: steps.version.outputs.already_beta != 'true'
+        if: steps.version.outputs.needs_update == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           BETA_VERSION: ${{ steps.version.outputs.unity_beta_version }}
@@ -149,22 +157,39 @@ jobs:
         run: |
           set -euo pipefail
           RAW_VERSION=$(grep -oP '(?<=version = ")[^"]+' Server/pyproject.toml)
-          # Strip any existing pre-release suffix (a, b, rc, dev, post) for safe parsing
-          # e.g., "9.2.0b1" -> "9.2.0", "9.2.0.dev1" -> "9.2.0"
-          BASE_VERSION=$(echo "$RAW_VERSION" | sed -E 's/(a|b|rc|\.dev|\.post)[0-9]+$//')
+          echo "Raw version: $RAW_VERSION"
+
+          # Check if already a beta/prerelease version
+          if [[ "$RAW_VERSION" =~ (a|b|rc|\.dev|\.post)[0-9]+$ ]]; then
+            IS_PRERELEASE=true
+            # Strip the prerelease suffix to get base version
+            BASE_VERSION=$(echo "$RAW_VERSION" | sed -E 's/(a|b|rc|\.dev|\.post)[0-9]+$//')
+          else
+            IS_PRERELEASE=false
+            BASE_VERSION="$RAW_VERSION"
+          fi
+
           # Validate we have a proper X.Y.Z format
           if ! [[ "$BASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Error: Could not parse version '$RAW_VERSION' -> '$BASE_VERSION'" >&2
             exit 1
           fi
-          # Bump patch and add beta suffix (PEP 440 compliant: X.Y.Z+1bN)
-          # This ensures beta is "newer" than stable (9.3.2b1 > 9.3.1)
-          # The release workflow decides final bump type (patch/minor/major)
+
           IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
-          NEXT_PATCH=$((PATCH + 1))
+
+          # Only bump patch if coming from stable; keep same base if already prerelease
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
+            # Already on a beta series - keep the same base version
+            NEXT_PATCH="$PATCH"
+            echo "Already prerelease, keeping base: $BASE_VERSION"
+          else
+            # Stable version - bump patch to ensure beta is "newer"
+            NEXT_PATCH=$((PATCH + 1))
+            echo "Stable version, bumping patch: $PATCH -> $NEXT_PATCH"
+          fi
+
           BETA_NUMBER="$(date +%Y%m%d%H%M%S)"
           BETA_VERSION="${MAJOR}.${MINOR}.${NEXT_PATCH}b${BETA_NUMBER}"
-          echo "Raw version: $RAW_VERSION"
           echo "Base version: $BASE_VERSION"
           echo "Beta version: $BETA_VERSION"
           echo "beta_version=$BETA_VERSION" >> "$GITHUB_OUTPUT"

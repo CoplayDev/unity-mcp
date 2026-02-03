@@ -46,6 +46,7 @@ jobs:
           fetch-depth: 0
 
       - name: Show current versions
+        id: preview
         shell: bash
         run: |
           set -euo pipefail
@@ -70,9 +71,12 @@ jobs:
           echo "  PyPI server:   $BETA_PYPI"
           echo ""
 
+          # Compute stripped version (used for "none" bump option)
+          STRIPPED=$(echo "$BETA_VERSION" | sed -E 's/-[a-zA-Z]+\.[0-9]+$//')
+          echo "stripped_version=$STRIPPED" >> "$GITHUB_OUTPUT"
+
           # Show what will happen
           BUMP="${{ inputs.version_bump }}"
-          STRIPPED=$(echo "$BETA_VERSION" | sed -E 's/-[a-zA-Z]+\.[0-9]+$//')
           echo "Selected bump type: $BUMP"
           echo "After stripping beta suffix: $STRIPPED"
 
@@ -135,6 +139,8 @@ jobs:
 
       - name: Compute new version
         id: compute
+        env:
+          PREVIEWED_STRIPPED: ${{ steps.preview.outputs.stripped_version }}
         shell: bash
         run: |
           set -euo pipefail
@@ -142,9 +148,15 @@ jobs:
           CURRENT_VERSION=$(jq -r '.version' "MCPForUnity/package.json")
           echo "Current version: $CURRENT_VERSION"
 
+          # Sanity check: ensure current version matches what was previewed
+          if [[ "$CURRENT_VERSION" != "$PREVIEWED_STRIPPED" ]]; then
+            echo "Warning: Current version ($CURRENT_VERSION) differs from previewed ($PREVIEWED_STRIPPED)"
+            echo "This may indicate an unexpected merge result. Proceeding with current version."
+          fi
+
           if [[ "$BUMP" == "none" ]]; then
-            # Release the current version as-is (after beta suffix was stripped)
-            NEW_VERSION="$CURRENT_VERSION"
+            # Use the previewed stripped version to ensure consistency with what user saw
+            NEW_VERSION="$PREVIEWED_STRIPPED"
           else
             IFS='.' read -r MA MI PA <<< "$CURRENT_VERSION"
             case "$BUMP" in
