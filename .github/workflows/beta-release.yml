@@ -108,19 +108,39 @@ jobs:
           git commit -m "chore: bump Unity package to beta version ${BETA_VERSION}"
 
           # Push with retry for race conditions (non-fast-forward)
+          # Save original commit to reset to if needed
+          ORIGINAL_HEAD=$(git rev-parse HEAD)
+
           for attempt in 1 2 3; do
             echo "Push attempt $attempt..."
             git fetch origin beta
-            git rebase origin/beta
+
+            # Rebase onto latest beta, abort if it fails
+            if ! git rebase origin/beta; then
+              echo "Rebase failed on attempt $attempt"
+              git rebase --abort 2>/dev/null || true
+              if [[ $attempt -eq 3 ]]; then
+                echo "Rebase failed after 3 attempts"
+                exit 1
+              fi
+              echo "Retrying after rebase failure..."
+              sleep 2
+              continue
+            fi
+
+            # Rebase succeeded, try to push
             if git push origin HEAD:beta; then
               echo "Push succeeded on attempt $attempt"
               break
             fi
+
+            # Push failed (likely non-fast-forward), reset to original and retry
+            echo "Push failed on attempt $attempt"
             if [[ $attempt -eq 3 ]]; then
               echo "Push failed after 3 attempts"
               exit 1
             fi
-            echo "Push failed, retrying..."
+            git reset --hard "$ORIGINAL_HEAD"
             sleep 2
           done
           echo "updated=true" >> "$GITHUB_OUTPUT"
