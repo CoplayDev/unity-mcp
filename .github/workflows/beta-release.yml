@@ -1,7 +1,9 @@
 name: Beta Release (PyPI Pre-release)
 
 concurrency:
-  group: beta-release
+  # Separate bot-triggered runs from human-triggered runs to prevent
+  # the version bump push from canceling the active PyPI publish
+  group: beta-release-${{ github.actor == 'github-actions[bot]' && 'bot' || 'human' }}
   cancel-in-progress: true
 
 on:
@@ -104,7 +106,23 @@ jobs:
 
           git add MCPForUnity/package.json
           git commit -m "chore: bump Unity package to beta version ${BETA_VERSION}"
-          git push origin beta
+
+          # Push with retry for race conditions (non-fast-forward)
+          for attempt in 1 2 3; do
+            echo "Push attempt $attempt..."
+            git fetch origin beta
+            git rebase origin/beta
+            if git push origin HEAD:beta; then
+              echo "Push succeeded on attempt $attempt"
+              break
+            fi
+            if [[ $attempt -eq 3 ]]; then
+              echo "Push failed after 3 attempts"
+              exit 1
+            fi
+            echo "Push failed, retrying..."
+            sleep 2
+          done
           echo "updated=true" >> "$GITHUB_OUTPUT"
 
   publish_pypi_prerelease:
