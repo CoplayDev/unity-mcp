@@ -1,7 +1,9 @@
 name: Beta Release (PyPI Pre-release)
 
 concurrency:
-  group: beta-release
+  # Separate bot-triggered runs from human-triggered runs to prevent
+  # the version bump push from canceling the active PyPI publish
+  group: beta-release-${{ github.actor == 'github-actions[bot]' && 'bot' || 'human' }}
   cancel-in-progress: true
 
 on:
@@ -16,12 +18,10 @@ jobs:
   update_unity_beta_version:
     name: Update Unity package to beta version
     runs-on: ubuntu-latest
-    # Avoid running when the workflow's own automation merges the PR
-    # created by this workflow (prevents a version-bump loop).
+    # Avoid infinite loop: skip when this workflow's own commit triggers the workflow
     if: github.actor != 'github-actions[bot]'
     permissions:
       contents: write
-      pull-requests: write
     outputs:
       unity_beta_version: ${{ steps.version.outputs.unity_beta_version }}
       version_updated: ${{ steps.commit.outputs.updated }}
@@ -87,11 +87,10 @@ jobs:
           echo "Updated MCPForUnity/package.json:"
           jq '.version' MCPForUnity/package.json
 
-      - name: Commit to temporary branch and create PR
+      - name: Commit and push to beta
         id: commit
         if: steps.version.outputs.needs_update == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
           BETA_VERSION: ${{ steps.version.outputs.unity_beta_version }}
         shell: bash
         run: |
@@ -105,32 +104,51 @@ jobs:
             exit 0
           fi
 
-          # Create a temporary branch for the version update
-          BRANCH="beta-version-${BETA_VERSION}-${GITHUB_RUN_ID}"
-          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
-
-          git checkout -b "$BRANCH"
           git add MCPForUnity/package.json
-          git commit -m "chore: update Unity package to beta version ${BETA_VERSION}"
-          git push origin "$BRANCH"
+          git commit -m "chore: bump Unity package to beta version ${BETA_VERSION}"
 
-          # Check if PR already exists
-          if gh pr view "$BRANCH" >/dev/null 2>&1; then
-            echo "PR already exists for $BRANCH"
-          else
-            PR_URL=$(gh pr create \
-              --base beta \
-              --head "$BRANCH" \
-              --title "chore: update Unity package to beta version ${BETA_VERSION}" \
-              --body "Automated beta version bump for the Unity package.")
-            echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
-          fi
+          # Push with retry for race conditions (non-fast-forward)
+          # Save original commit to reset to if needed
+          ORIGINAL_HEAD=$(git rev-parse HEAD)
+
+          for attempt in 1 2 3; do
+            echo "Push attempt $attempt..."
+            git fetch origin beta
+
+            # Rebase onto latest beta, abort if it fails
+            if ! git rebase origin/beta; then
+              echo "Rebase failed on attempt $attempt"
+              git rebase --abort 2>/dev/null || true
+              if [[ $attempt -eq 3 ]]; then
+                echo "Rebase failed after 3 attempts"
+                exit 1
+              fi
+              echo "Retrying after rebase failure..."
+              sleep 2
+              continue
+            fi
+
+            # Rebase succeeded, try to push
+            if git push origin HEAD:beta; then
+              echo "Push succeeded on attempt $attempt"
+              break
+            fi
+
+            # Push failed (likely non-fast-forward), reset to original and retry
+            echo "Push failed on attempt $attempt"
+            if [[ $attempt -eq 3 ]]; then
+              echo "Push failed after 3 attempts"
+              exit 1
+            fi
+            git reset --hard "$ORIGINAL_HEAD"
+            sleep 2
+          done
           echo "updated=true" >> "$GITHUB_OUTPUT"
 
   publish_pypi_prerelease:
     name: Publish beta to PyPI (pre-release)
     runs-on: ubuntu-latest
-    # Avoid double-publish when the bot merges the version bump PR
+    # Avoid double-publish when the bot pushes the version bump
     if: github.actor != 'github-actions[bot]'
     environment:
       name: pypi
