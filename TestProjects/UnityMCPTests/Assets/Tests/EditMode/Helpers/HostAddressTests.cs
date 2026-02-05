@@ -106,7 +106,8 @@ namespace MCPForUnityTests.Editor.Helpers
         public void IsBindOnlyAddress_WildcardAddresses_ReturnsTrue()
         {
             Assert.IsTrue(HostAddress.IsBindOnlyAddress("0.0.0.0"), "IPv4 wildcard");
-            Assert.IsTrue(HostAddress.IsBindOnlyAddress("::"), "IPv6 wildcard");
+            Assert.IsTrue(HostAddress.IsBindOnlyAddress("::"), "IPv6 wildcard short-form");
+            Assert.IsTrue(HostAddress.IsBindOnlyAddress("0:0:0:0:0:0:0:0"), "IPv6 wildcard long-form");
         }
 
         [Test]
@@ -115,6 +116,22 @@ namespace MCPForUnityTests.Editor.Helpers
             Assert.IsFalse(HostAddress.IsBindOnlyAddress("127.0.0.1"), "IPv4 loopback");
             Assert.IsFalse(HostAddress.IsBindOnlyAddress("::1"), "IPv6 loopback");
             Assert.IsFalse(HostAddress.IsBindOnlyAddress("localhost"), "localhost");
+        }
+
+        [Test]
+        public void IsBindOnlyAddress_NullOrEmpty_ReturnsFalse()
+        {
+            Assert.IsFalse(HostAddress.IsBindOnlyAddress(null), "Null");
+            Assert.IsFalse(HostAddress.IsBindOnlyAddress(""), "Empty");
+            Assert.IsFalse(HostAddress.IsBindOnlyAddress("   "), "Whitespace");
+        }
+
+        [Test]
+        public void IsBindOnlyAddress_TrimsWhitespace()
+        {
+            Assert.IsTrue(HostAddress.IsBindOnlyAddress(" 0.0.0.0 "), "IPv4 wildcard with spaces");
+            Assert.IsTrue(HostAddress.IsBindOnlyAddress(" :: "), "IPv6 wildcard with spaces");
+            Assert.IsTrue(HostAddress.IsBindOnlyAddress(" 0:0:0:0:0:0:0:0 "), "IPv6 long-form wildcard with spaces");
         }
 
         #endregion
@@ -154,6 +171,7 @@ namespace MCPForUnityTests.Editor.Helpers
         {
             Assert.AreEqual(HostAddress.GetDefaultHost(), HostAddress.NormalizeForClient("0.0.0.0"));
             Assert.AreEqual(HostAddress.GetDefaultHost(), HostAddress.NormalizeForClient("::"));
+            Assert.AreEqual(HostAddress.GetDefaultHost(), HostAddress.NormalizeForClient("0:0:0:0:0:0:0:0"), "IPv6 long-form wildcard");
         }
 
         [Test]
@@ -232,7 +250,11 @@ namespace MCPForUnityTests.Editor.Helpers
             Assert.AreEqual("127.0.0.1", result[0]);
 
             result = HostAddress.BuildConnectionList("::");
-            Assert.AreEqual(1, result.Count, "IPv6 wildcard should return single entry by default (IPv6 fallback disabled)");
+            Assert.AreEqual(1, result.Count, "IPv6 wildcard short-form should return single entry by default (IPv6 fallback disabled)");
+            Assert.AreEqual("127.0.0.1", result[0]);
+
+            result = HostAddress.BuildConnectionList("0:0:0:0:0:0:0:0");
+            Assert.AreEqual(1, result.Count, "IPv6 wildcard long-form should return single entry by default (IPv6 fallback disabled)");
             Assert.AreEqual("127.0.0.1", result[0]);
         }
 
@@ -256,6 +278,22 @@ namespace MCPForUnityTests.Editor.Helpers
             Assert.AreEqual(2, result.Count, "Wildcard with IPv6 fallback enabled should return two entries");
             Assert.AreEqual("127.0.0.1", result[0], "IPv4 should be first");
             Assert.AreEqual("::1", result[1], "IPv6 should be second");
+        }
+
+        [Test]
+        public void BuildConnectionList_TrimsWhitespace()
+        {
+            var result = HostAddress.BuildConnectionList(" localhost ");
+            Assert.AreEqual(1, result.Count, "localhost with spaces should return single entry");
+            Assert.AreEqual("127.0.0.1", result[0], "IPv4 should be returned for localhost");
+
+            result = HostAddress.BuildConnectionList(" 127.0.0.1 ");
+            Assert.AreEqual(1, result.Count, "IPv4 with spaces should return single entry");
+            Assert.AreEqual("127.0.0.1", result[0]);
+
+            result = HostAddress.BuildConnectionList(" ::1 ");
+            Assert.AreEqual(1, result.Count, "IPv6 with spaces should return single entry");
+            Assert.AreEqual("::1", result[0]);
         }
 
         #endregion

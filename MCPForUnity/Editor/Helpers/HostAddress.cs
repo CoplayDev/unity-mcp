@@ -27,7 +27,7 @@ namespace MCPForUnity.Editor.Helpers
         /// <summary>
         /// Normalizes a host address for client connections.
         /// - Explicit IPv4/IPv6 addresses are preserved
-        /// - Wildcard addresses (0.0.0.0, ::) are converted to platform-aware default
+        /// - Wildcard addresses (0.0.0.0, ::, 0:0:0:0:0:0:0:0) are converted to platform-aware default
         /// - localhost is kept as-is (DNS resolution will handle it)
         /// </summary>
         public static string NormalizeForClient(string host)
@@ -40,14 +40,14 @@ namespace MCPForUnity.Editor.Helpers
 
             // Bind-only wildcards - use platform-aware default (check before explicit IP checks)
             // Note: 0.0.0.0 is valid IPv4 format, so we must check for wildcards first
-            if (host == "0.0.0.0" || host == "::")
+            if (IsBindOnlyAddress(host))
                 return DefaultHost;
 
             // Explicit IPv6 - respect user choice
             if (IsExplicitIPv6(host))
                 return host;
 
-            // Explicit IPv4 - respect user choice (but exclude 0.0.0.0 which is already handled)
+            // Explicit IPv4 - respect user choice (wildcard already handled by IsBindOnlyAddress)
             if (IsExplicitIPv4(host))
                 return host;
 
@@ -65,10 +65,12 @@ namespace MCPForUnity.Editor.Helpers
 
             if (string.IsNullOrWhiteSpace(host))
                 host = DefaultHost;
+            else
+                host = host.Trim();  // Trim whitespace for consistent handling
 
             // Bind-only wildcards - IPv4 first, optional IPv6 fallback
             // Note: 0.0.0.0 is valid IPv4 format, so check for wildcards before explicit IPv4
-            if (host == "0.0.0.0" || host == "::")
+            if (IsBindOnlyAddress(host))
             {
                 result.Add("127.0.0.1");  // Always try IPv4 first
                 if (enableIPv6Fallback)
@@ -139,10 +141,28 @@ namespace MCPForUnity.Editor.Helpers
 
         /// <summary>
         /// Checks if the host is a bind-only wildcard address.
+        /// Supports both short-form (::) and long-form (0:0:0:0:0:0:0:0) IPv6 wildcards.
         /// </summary>
         public static bool IsBindOnlyAddress(string host)
         {
-            return host == "0.0.0.0" || host == "::";
+            if (string.IsNullOrWhiteSpace(host))
+                return false;
+
+            host = host.Trim();
+
+            // IPv4 wildcard
+            if (host == "0.0.0.0")
+                return true;
+
+            // IPv6 wildcard - use IPAddress.Parse to handle both :: and 0:0:0:0:0:0:0:0
+            if (IPAddress.TryParse(host, out var ipAddress) &&
+                ipAddress.AddressFamily == AddressFamily.InterNetworkV6)
+            {
+                // IPAddress.IPv6Any equals both :: and 0:0:0:0:0:0:0:0
+                return ipAddress.Equals(IPAddress.IPv6Any);
+            }
+
+            return false;
         }
     }
 }
