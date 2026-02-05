@@ -724,7 +724,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             // Log warning if bind-only address is being used
             if (HostAddress.IsBindOnlyAddress(host))
             {
-                McpLog.Warn($"[WebSocket] Base URL host '{host}' is bind-only; using 'localhost' for client connection.");
+                string normalizedHost = HostAddress.NormalizeForClient(host);
+                McpLog.Warn($"[WebSocket] Base URL host '{host}' is bind-only; using '{normalizedHost}' for client connection.");
             }
 
             // Normalize the host address using the centralized utility
