@@ -171,6 +171,16 @@ namespace MCPForUnityTests.Editor.Helpers
             Assert.AreEqual("192.168.1.100", HostAddress.NormalizeForClient("192.168.1.100"));
         }
 
+        [Test]
+        public void NormalizeForClient_TrimsWhitespace()
+        {
+            Assert.AreEqual("127.0.0.1", HostAddress.NormalizeForClient(" 127.0.0.1 "), "IPv4 with spaces");
+            Assert.AreEqual("::1", HostAddress.NormalizeForClient(" ::1 "), "IPv6 with spaces");
+            Assert.AreEqual("localhost", HostAddress.NormalizeForClient(" localhost "), "localhost with spaces");
+            Assert.AreEqual("example.com", HostAddress.NormalizeForClient(" example.com "), "hostname with spaces");
+            Assert.AreEqual(HostAddress.GetDefaultHost(), HostAddress.NormalizeForClient("   "), "Whitespace only returns default");
+        }
+
         #endregion
 
         #region BuildConnectionList Tests

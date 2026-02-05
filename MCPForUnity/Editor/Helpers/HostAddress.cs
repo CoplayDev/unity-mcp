@@ -35,6 +35,9 @@ namespace MCPForUnity.Editor.Helpers
             if (string.IsNullOrWhiteSpace(host))
                 return DefaultHost;
 
+            // Trim whitespace for robustness (handles accidental spaces in config/input)
+            host = host.Trim();
+
             // Bind-only wildcards - use platform-aware default (check before explicit IP checks)
             // Note: 0.0.0.0 is valid IPv4 format, so we must check for wildcards first
             if (host == "0.0.0.0" || host == "::")
