@@ -456,20 +456,9 @@ namespace MCPForUnity.Editor.Services
         {
             try
             {
-                if (string.IsNullOrEmpty(host))
-                {
-                    host = "127.0.0.1";
-                }
-
-                var hosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { host };
-                if (host == "localhost" || host == "0.0.0.0")
-                {
-                    hosts.Add("127.0.0.1");
-                }
-                if (host == "::" || host == "0:0:0:0:0:0:0:0")
-                {
-                    hosts.Add("::1");
-                }
+                // Use HostAddress utility to build the connection list.
+                // IPv4 is tried first for wildcard addresses on all platforms.
+                var hosts = HostAddress.BuildConnectionList(host, enableIPv6Fallback: false);
 
                 foreach (var target in hosts)
                 {

@@ -18,8 +18,10 @@ namespace MCPForUnity.Editor.Helpers
     {
         private const string LocalPrefKey = EditorPrefKeys.HttpBaseUrl;
         private const string RemotePrefKey = EditorPrefKeys.HttpRemoteBaseUrl;
-        private const string DefaultLocalBaseUrl = "http://localhost:8080";
         private const string DefaultRemoteBaseUrl = "";
+
+        // Platform-aware default base URL
+        private static string DefaultLocalBaseUrl => $"http://{HostAddress.DefaultHost}:8080";
 
         /// <summary>
         /// Returns the normalized base URL for the currently active HTTP scope.

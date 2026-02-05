@@ -719,14 +719,16 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 throw new InvalidOperationException($"Invalid MCP base URL: {baseUrl}");
             }
 
-            // Replace bind-only addresses with localhost for client connections
-            // 0.0.0.0 and :: are only valid for server binding, not client connections
             string host = httpUri.Host;
-            if (host == "0.0.0.0" || host == "::")
+
+            // Log warning if bind-only address is being used
+            if (HostAddress.IsBindOnlyAddress(host))
             {
                 McpLog.Warn($"[WebSocket] Base URL host '{host}' is bind-only; using 'localhost' for client connection.");
-                host = "localhost";
             }
+
+            // Normalize the host address using the centralized utility
+            host = HostAddress.NormalizeForClient(host);
 
             var builder = new UriBuilder(httpUri)
             {
