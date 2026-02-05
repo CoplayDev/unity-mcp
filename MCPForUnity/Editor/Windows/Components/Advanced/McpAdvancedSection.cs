@@ -27,6 +27,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
         private Toggle debugLogsToggle;
         private Toggle devModeForceRefreshToggle;
         private Toggle useBetaServerToggle;
+        private Toggle ipv6FallbackToggle;
         private TextField deploySourcePath;
         private Button browseDeploySourceButton;
         private Button clearDeploySourceButton;
@@ -67,6 +68,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             debugLogsToggle = Root.Q<Toggle>("debug-logs-toggle");
             devModeForceRefreshToggle = Root.Q<Toggle>("dev-mode-force-refresh-toggle");
             useBetaServerToggle = Root.Q<Toggle>("use-beta-server-toggle");
+            ipv6FallbackToggle = Root.Q<Toggle>("ipv6-fallback-toggle");
             deploySourcePath = Root.Q<TextField>("deploy-source-path");
             browseDeploySourceButton = Root.Q<Button>("browse-deploy-source-button");
             clearDeploySourceButton = Root.Q<Button>("clear-deploy-source-button");
@@ -78,6 +80,17 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             healthIndicator = Root.Q<VisualElement>("health-indicator");
             healthStatus = Root.Q<Label>("health-status");
             testConnectionButton = Root.Q<Button>("test-connection-button");
+
+#if !UNITY_EDITOR_WIN
+            // Hide IPv6 Fallback on non-Windows platforms.
+            // Mac/Linux use 'localhost' which handles dual-stack automatically.
+            // Windows uses '127.0.0.1' and may need explicit IPv6 fallback.
+            var ipv6Row = ipv6FallbackToggle?.parent;
+            if (ipv6Row != null)
+            {
+                ipv6Row.style.display = DisplayStyle.None;
+            }
+#endif
         }
 
         private void InitializeUI()
@@ -107,6 +120,13 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
                 var betaServerLabel = useBetaServerToggle?.parent?.Q<Label>();
                 if (betaServerLabel != null)
                     betaServerLabel.tooltip = useBetaServerToggle.tooltip;
+            }
+            if (ipv6FallbackToggle != null)
+            {
+                ipv6FallbackToggle.tooltip = "Enable IPv6 fallback for connections. On IPv6-only networks, this allows connecting to ::1 when IPv4 (127.0.0.1) fails.";
+                var ipv6FallbackLabel = ipv6FallbackToggle?.parent?.Q<Label>();
+                if (ipv6FallbackLabel != null)
+                    ipv6FallbackLabel.tooltip = ipv6FallbackToggle.tooltip;
             }
             if (testConnectionButton != null)
                 testConnectionButton.tooltip = "Test the connection between Unity and the MCP server.";
@@ -139,6 +159,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
 
             devModeForceRefreshToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
             useBetaServerToggle.value = EditorConfigurationCache.Instance.UseBetaServer;
+            ipv6FallbackToggle.value = EditorPrefs.GetBool(EditorPrefKeys.EnableIPv6Fallback, false);
             UpdatePathOverrides();
             UpdateDeploymentSection();
         }
@@ -188,6 +209,11 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
                 EditorConfigurationCache.Instance.SetUseBetaServer(evt.newValue);
                 OnHttpServerCommandUpdateRequested?.Invoke();
                 OnBetaModeChanged?.Invoke(evt.newValue);
+            });
+
+            ipv6FallbackToggle.RegisterValueChangedCallback(evt =>
+            {
+                EditorPrefs.SetBool(EditorPrefKeys.EnableIPv6Fallback, evt.newValue);
             });
 
             deploySourcePath.RegisterValueChangedCallback(evt =>
@@ -293,6 +319,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             debugLogsToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
             devModeForceRefreshToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
             useBetaServerToggle.value = EditorConfigurationCache.Instance.UseBetaServer;
+            ipv6FallbackToggle.value = EditorPrefs.GetBool(EditorPrefKeys.EnableIPv6Fallback, false);
             UpdateDeploymentSection();
         }
 

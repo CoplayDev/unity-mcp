@@ -130,7 +130,7 @@ namespace MCPForUnity.Editor.Services.Server
         }
 
         /// <summary>
-        /// Check if a URL is local (localhost, 127.0.0.1, 0.0.0.0, ::1)
+        /// Check if a URL is local (localhost, 127.0.0.1, 0.0.0.0, ::1, ::)
         /// </summary>
         private static bool IsLocalUrl(string url)
         {
@@ -139,8 +139,18 @@ namespace MCPForUnity.Editor.Services.Server
             try
             {
                 var uri = new Uri(url);
-                string host = uri.Host.ToLower();
-                return host == "localhost" || host == "127.0.0.1" || host == "0.0.0.0" || host == "::1";
+                string host = uri.Host;
+
+                // Quick checks for common local addresses
+                if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+                    return true;
+                if (host == "127.0.0.1" || host == "0.0.0.0")
+                    return true;
+                if (host == "::1" || host == "::")
+                    return true;
+
+                // Use HostAddress utility for comprehensive bind-only address check
+                return HostAddress.IsBindOnlyAddress(host);
             }
             catch
             {

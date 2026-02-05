@@ -455,7 +455,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 httpServerCommandSection.EnableInClassList("http-local-invalid-url", true);
                 if (httpServerCommandHint != null)
                 {
-                    httpServerCommandHint.text = "⚠ HTTP Local requires a localhost URL (localhost/127.0.0.1/0.0.0.0/::1).";
+                    httpServerCommandHint.text = "⚠ HTTP Local requires a localhost URL (localhost/127.0.0.1/0.0.0.0/::1/::).";
                     httpServerCommandHint.AddToClassList("http-local-url-error");
                 }
                 copyHttpServerCommandButton?.SetEnabled(false);
@@ -567,7 +567,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             startHttpServerButton.SetEnabled(
                 !httpServerToggleInProgress && (shouldShowStop || canStartLocalServer));
             startHttpServerButton.tooltip = httpLocalSelected
-                ? (canStartLocalServer ? string.Empty : "HTTP Local requires a localhost URL (localhost/127.0.0.1/0.0.0.0/::1).")
+                ? (canStartLocalServer ? string.Empty : "HTTP Local requires a localhost URL (localhost/127.0.0.1/0.0.0.0/::1/::).")
                 : string.Empty;
         }
 

@@ -3,7 +3,18 @@ Configuration settings for the MCP for Unity Server.
 This file contains all configurable parameters for the server.
 """
 
+import sys
 from dataclasses import dataclass
+
+
+def _get_default_unity_host() -> str:
+    """Return platform-appropriate default host for Unity connection.
+
+    On Windows, use 127.0.0.1 to avoid dual-stack resolution delays (localhost
+    resolves to ::1 first, causing 1-2s delays when IPv6 has issues).
+    On other platforms, localhost is preferred for compatibility.
+    """
+    return "127.0.0.1" if sys.platform == "win32" else "localhost"
 
 
 @dataclass
@@ -11,7 +22,7 @@ class ServerConfig:
     """Main configuration class for the MCP server."""
 
     # Network settings
-    unity_host: str = "localhost"
+    unity_host: str = _get_default_unity_host()
     unity_port: int = 6400
     mcp_port: int = 6500
 
