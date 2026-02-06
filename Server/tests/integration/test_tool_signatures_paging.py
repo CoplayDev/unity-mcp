@@ -19,15 +19,23 @@ def test_manage_scene_signature_includes_paging_params():
     assert "include_transform" in names
 
 
-def test_manage_gameobject_signature_includes_paging_params():
+def test_manage_gameobject_signature_excludes_vestigial_params():
+    """Paging/find/component params were removed — they belong to separate tools."""
     import services.tools.manage_gameobject as mod
 
     sig = inspect.signature(mod.manage_gameobject)
     names = list(sig.parameters.keys())
 
-    assert "page_size" in names
-    assert "cursor" in names
-    assert "max_components" in names
-    assert "include_properties" in names
+    # These params now live on find_gameobjects / manage_components / gameobject_components resource
+    assert "page_size" not in names
+    assert "cursor" not in names
+    assert "max_components" not in names
+    assert "include_properties" not in names
+    assert "search_term" not in names
+    assert "find_all" not in names
+    assert "search_in_children" not in names
+    assert "search_inactive" not in names
+    assert "component_name" not in names
+    assert "includeNonPublicSerialized" not in names
 
 
