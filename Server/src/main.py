@@ -22,10 +22,17 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 import os
+import sys
 import threading
 import time
 from typing import AsyncIterator, Any
 from urllib.parse import urlparse
+
+# Windows asyncio fix: Use SelectorEventLoop instead of ProactorEventLoop
+# This fixes "WinError 64: The specified network name is no longer available"
+# which occurs with WebSocket connections under heavy client reconnect scenarios
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 # Workaround for environments where tool signature evaluation runs with a globals
 # dict that does not include common `typing` names (e.g. when annotations are strings
