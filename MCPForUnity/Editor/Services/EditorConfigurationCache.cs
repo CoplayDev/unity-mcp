@@ -124,6 +124,23 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         public int UnitySocketPort => _unitySocketPort;
 
+        /// <summary>
+        /// Gets UseBetaServer value with dynamic default based on package version.
+        /// If the pref hasn't been explicitly set, defaults to true for prerelease packages
+        /// (beta, alpha, rc, etc.) and false for stable releases.
+        /// </summary>
+        private static bool GetUseBetaServerWithDynamicDefault()
+        {
+            // If user has explicitly set the pref, use that value
+            if (EditorPrefs.HasKey(EditorPrefKeys.UseBetaServer))
+            {
+                return EditorPrefs.GetBool(EditorPrefKeys.UseBetaServer, false);
+            }
+
+            // Otherwise, default based on whether this is a prerelease package
+            return Helpers.AssetPathUtility.IsPreReleaseVersion();
+        }
+
         private EditorConfigurationCache()
         {
             Refresh();
@@ -137,7 +154,7 @@ namespace MCPForUnity.Editor.Services
         {
             _useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
             _debugLogs = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
-            _useBetaServer = EditorPrefs.GetBool(EditorPrefKeys.UseBetaServer, true);
+            _useBetaServer = GetUseBetaServerWithDynamicDefault();
             _devModeForceServerRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
             _uvxPathOverride = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
             _gitUrlOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, string.Empty);
@@ -312,7 +329,7 @@ namespace MCPForUnity.Editor.Services
                     _debugLogs = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
                     break;
                 case nameof(UseBetaServer):
-                    _useBetaServer = EditorPrefs.GetBool(EditorPrefKeys.UseBetaServer, true);
+                    _useBetaServer = GetUseBetaServerWithDynamicDefault();
                     break;
                 case nameof(DevModeForceServerRefresh):
                     _devModeForceServerRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);

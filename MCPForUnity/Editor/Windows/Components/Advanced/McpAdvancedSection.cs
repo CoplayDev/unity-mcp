@@ -138,7 +138,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             McpLog.SetDebugLoggingEnabled(debugEnabled);
 
             devModeForceRefreshToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
-            useBetaServerToggle.value = EditorPrefs.GetBool(EditorPrefKeys.UseBetaServer, true);
+            useBetaServerToggle.value = EditorConfigurationCache.Instance.UseBetaServer;
             UpdatePathOverrides();
             UpdateDeploymentSection();
         }
@@ -185,7 +185,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
 
             useBetaServerToggle.RegisterValueChangedCallback(evt =>
             {
-                EditorPrefs.SetBool(EditorPrefKeys.UseBetaServer, evt.newValue);
+                EditorConfigurationCache.Instance.SetUseBetaServer(evt.newValue);
                 OnHttpServerCommandUpdateRequested?.Invoke();
                 OnBetaModeChanged?.Invoke(evt.newValue);
             });
@@ -292,7 +292,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             gitUrlOverride.value = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
             debugLogsToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
             devModeForceRefreshToggle.value = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
-            useBetaServerToggle.value = EditorPrefs.GetBool(EditorPrefKeys.UseBetaServer, true);
+            useBetaServerToggle.value = EditorConfigurationCache.Instance.UseBetaServer;
             UpdateDeploymentSection();
         }
 

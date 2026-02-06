@@ -8,12 +8,13 @@ on:
   workflow_dispatch:
     inputs:
       version_bump:
-        description: "Version bump type"
+        description: "Version bump type (none = release beta version as-is)"
         type: choice
         options:
           - patch
           - minor
           - major
+          - none
         default: patch
         required: true
 
@@ -44,8 +45,102 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      - name: Show current versions
+        id: preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "============================================"
+          echo "CURRENT VERSION STATUS"
+          echo "============================================"
+
+          # Get main version
+          MAIN_VERSION=$(jq -r '.version' "MCPForUnity/package.json")
+          MAIN_PYPI=$(grep -oP '(?<=version = ")[^"]+' Server/pyproject.toml)
+          echo "Main branch:"
+          echo "  Unity package: $MAIN_VERSION"
+          echo "  PyPI server:   $MAIN_PYPI"
+          echo ""
+
+          # Get beta version
+          git fetch origin beta
+          BETA_VERSION=$(git show origin/beta:MCPForUnity/package.json | jq -r '.version')
+          BETA_PYPI=$(git show origin/beta:Server/pyproject.toml | grep -oP '(?<=version = ")[^"]+')
+          echo "Beta branch:"
+          echo "  Unity package: $BETA_VERSION"
+          echo "  PyPI server:   $BETA_PYPI"
+          echo ""
+
+          # Compute stripped version (used for "none" bump option)
+          STRIPPED=$(echo "$BETA_VERSION" | sed -E 's/-[a-zA-Z]+\.[0-9]+$//')
+          echo "stripped_version=$STRIPPED" >> "$GITHUB_OUTPUT"
+
+          # Show what will happen
+          BUMP="${{ inputs.version_bump }}"
+          echo "Selected bump type: $BUMP"
+          echo "After stripping beta suffix: $STRIPPED"
+
+          if [[ "$BUMP" == "none" ]]; then
+            echo "Release version will be: $STRIPPED"
+          else
+            IFS='.' read -r MA MI PA <<< "$STRIPPED"
+            case "$BUMP" in
+              major) ((MA+=1)); MI=0; PA=0 ;;
+              minor) ((MI+=1)); PA=0 ;;
+              patch) ((PA+=1)) ;;
+            esac
+            echo "Release version will be: $MA.$MI.$PA"
+          fi
+          echo "============================================"
+
+      - name: Merge beta into main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+          # Fetch beta branch
+          git fetch origin beta
+
+          # Check if beta has changes not in main
+          if git merge-base --is-ancestor origin/beta HEAD; then
+            echo "beta is already merged into main. Nothing to merge."
+          else
+            echo "Merging beta into main..."
+            git merge origin/beta --no-edit -m "chore: merge beta into main for release"
+            echo "Beta merged successfully."
+          fi
+
+      - name: Strip beta suffix from version if present
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT_VERSION=$(jq -r '.version' "MCPForUnity/package.json")
+          echo "Current version: $CURRENT_VERSION"
+
+          # Strip beta/alpha/rc suffix if present (e.g., "9.4.0-beta.1" -> "9.4.0")
+          if [[ "$CURRENT_VERSION" == *"-"* ]]; then
+            STABLE_VERSION=$(echo "$CURRENT_VERSION" | sed -E 's/-[a-zA-Z]+\.[0-9]+$//')
+            # Validate we have a proper X.Y.Z format after stripping
+            if ! [[ "$STABLE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Error: Could not parse version '$CURRENT_VERSION' -> '$STABLE_VERSION'" >&2
+              exit 1
+            fi
+            echo "Stripping prerelease suffix: $CURRENT_VERSION -> $STABLE_VERSION"
+            jq --arg v "$STABLE_VERSION" '.version = $v' MCPForUnity/package.json > tmp.json
+            mv tmp.json MCPForUnity/package.json
+
+            # Also update pyproject.toml
+            sed -i "s/^version = .*/version = \"${STABLE_VERSION}\"/" Server/pyproject.toml
+          else
+            echo "Version is already stable: $CURRENT_VERSION"
+          fi
+
       - name: Compute new version
         id: compute
+        env:
+          PREVIEWED_STRIPPED: ${{ steps.preview.outputs.stripped_version }}
         shell: bash
         run: |
           set -euo pipefail
@@ -53,24 +148,35 @@ jobs:
           CURRENT_VERSION=$(jq -r '.version' "MCPForUnity/package.json")
           echo "Current version: $CURRENT_VERSION"
 
-          IFS='.' read -r MA MI PA <<< "$CURRENT_VERSION"
-          case "$BUMP" in
-            major)
-              ((MA+=1)); MI=0; PA=0
-              ;;
-            minor)
-              ((MI+=1)); PA=0
-              ;;
-            patch)
-              ((PA+=1))
-              ;;
-            *)
-              echo "Unknown version_bump: $BUMP" >&2
-              exit 1
-              ;;
-          esac
+          # Sanity check: ensure current version matches what was previewed
+          if [[ "$CURRENT_VERSION" != "$PREVIEWED_STRIPPED" ]]; then
+            echo "Warning: Current version ($CURRENT_VERSION) differs from previewed ($PREVIEWED_STRIPPED)"
+            echo "This may indicate an unexpected merge result. Proceeding with current version."
+          fi
 
-          NEW_VERSION="$MA.$MI.$PA"
+          if [[ "$BUMP" == "none" ]]; then
+            # Use the previewed stripped version to ensure consistency with what user saw
+            NEW_VERSION="$PREVIEWED_STRIPPED"
+          else
+            IFS='.' read -r MA MI PA <<< "$CURRENT_VERSION"
+            case "$BUMP" in
+              major)
+                ((MA+=1)); MI=0; PA=0
+                ;;
+              minor)
+                ((MI+=1)); PA=0
+                ;;
+              patch)
+                ((PA+=1))
+                ;;
+              *)
+                echo "Unknown version_bump: $BUMP" >&2
+                exit 1
+                ;;
+            esac
+            NEW_VERSION="$MA.$MI.$PA"
+          fi
+
           echo "New version: $NEW_VERSION"
           echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
           echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
@@ -244,7 +350,8 @@ jobs:
         run: |
           set -euo pipefail
           # Enable auto-merge (requires repo setting "Allow auto-merge")
-          gh pr merge "$PR_NUMBER" --merge --auto || true
+          # Use --no-delete-branch to prevent deleting main (the head branch)
+          gh pr merge "$PR_NUMBER" --merge --auto --no-delete-branch || true
           # Wait for PR to be merged (poll up to 2 minutes)
           for i in {1..24}; do
             STATE=$(gh pr view "$PR_NUMBER" --json state -q '.state')
@@ -256,7 +363,7 @@ jobs:
             sleep 5
           done
           echo "Sync PR did not merge in time. Attempting direct merge..."
-          gh pr merge "$PR_NUMBER" --merge
+          gh pr merge "$PR_NUMBER" --merge --no-delete-branch
 
   publish_docker:
     name: Publish Docker image

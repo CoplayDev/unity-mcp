@@ -256,9 +256,10 @@ class TestUnityInstanceMiddlewareInjection:
         async def mock_call_next(_ctx):
             return {"status": "ok"}
 
-        # Mock PluginHub as unavailable - this is sufficient for auto-select to fail
+        # Mock PluginHub as unavailable AND legacy connection pool to prevent fallback discovery
         with patch("transport.unity_instance_middleware.PluginHub.is_configured", return_value=False):
-            await middleware.on_call_tool(middleware_ctx, mock_call_next)
+            with patch("transport.legacy.unity_connection.get_unity_connection_pool", return_value=None):
+                await middleware.on_call_tool(middleware_ctx, mock_call_next)
 
         # set_state should not be called for unity_instance if no instance found
         calls = [c for c in mock_context.set_state.call_args_list
@@ -329,9 +330,10 @@ class TestAutoSelectInstance:
 
         with patch("transport.unity_instance_middleware.PluginHub.is_configured", return_value=True):
             with patch("transport.unity_instance_middleware.PluginHub.get_sessions", new_callable=AsyncMock) as mock_get:
-                mock_get.return_value = fake_sessions
+                with patch("transport.legacy.unity_connection.get_unity_connection_pool", return_value=None):
+                    mock_get.return_value = fake_sessions
 
-                instance = await middleware._maybe_autoselect_instance(mock_context)
+                    instance = await middleware._maybe_autoselect_instance(mock_context)
 
         assert instance is None
 
@@ -345,10 +347,11 @@ class TestAutoSelectInstance:
 
         with patch("transport.unity_instance_middleware.PluginHub.is_configured", return_value=True):
             with patch("transport.unity_instance_middleware.PluginHub.get_sessions", new_callable=AsyncMock) as mock_get:
-                mock_get.side_effect = ConnectionError("Plugin hub unavailable")
+                with patch("transport.legacy.unity_connection.get_unity_connection_pool", return_value=None):
+                    mock_get.side_effect = ConnectionError("Plugin hub unavailable")
 
-                # When PluginHub fails, auto-select returns None (graceful fallback)
-                instance = await middleware._maybe_autoselect_instance(mock_context)
+                    # When PluginHub fails, auto-select returns None (graceful fallback)
+                    instance = await middleware._maybe_autoselect_instance(mock_context)
 
         # Should return None since both PluginHub failed
         assert instance is None
@@ -916,10 +919,11 @@ class TestTransportEdgeCases:
 
         with patch("transport.unity_instance_middleware.PluginHub.is_configured", return_value=True):
             with patch("transport.unity_instance_middleware.PluginHub.get_sessions", new_callable=AsyncMock) as mock_get:
-                mock_get.side_effect = RuntimeError("Unexpected error")
+                with patch("transport.legacy.unity_connection.get_unity_connection_pool", return_value=None):
+                    mock_get.side_effect = RuntimeError("Unexpected error")
 
-                # Should not raise, just return None
-                instance = await middleware._maybe_autoselect_instance(mock_context)
+                    # Should not raise, just return None
+                    instance = await middleware._maybe_autoselect_instance(mock_context)
 
         assert instance is None
 

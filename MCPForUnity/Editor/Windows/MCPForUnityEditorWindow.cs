@@ -196,7 +196,7 @@ namespace MCPForUnity.Editor.Windows
             }
 
             // Initialize version label
-            UpdateVersionLabel(EditorPrefs.GetBool(EditorPrefKeys.UseBetaServer, true));
+            UpdateVersionLabel(EditorConfigurationCache.Instance.UseBetaServer);
 
             SetupTabs();
 
@@ -229,6 +229,11 @@ namespace MCPForUnity.Editor.Windows
                 // update the connection section's warning banner if there's a mismatch
                 clientConfigSection.OnClientTransportDetected += (clientName, transport) =>
                     connectionSection?.UpdateTransportMismatchWarning(clientName, transport);
+
+                // Wire up version mismatch detection: when client status is checked,
+                // update the connection section's warning banner if there's a version mismatch
+                clientConfigSection.OnClientConfigMismatch += (clientName, mismatchMessage) =>
+                    connectionSection?.UpdateVersionMismatchWarning(clientName, mismatchMessage);
             }
 
             // Load and initialize Validation section
@@ -263,6 +268,7 @@ namespace MCPForUnity.Editor.Windows
                         await connectionSection.VerifyBridgeConnectionAsync();
                 };
                 advancedSection.OnBetaModeChanged += UpdateVersionLabel;
+                advancedSection.OnBetaModeChanged += _ => clientConfigSection?.RefreshSelectedClient(forceImmediate: true);
 
                 // Wire up health status updates from Connection to Advanced
                 connectionSection?.SetHealthStatusUpdateCallback((isHealthy, statusText) =>
@@ -327,7 +333,7 @@ namespace MCPForUnity.Editor.Windows
             }
 
             string version = AssetPathUtility.GetPackageVersion();
-            versionLabel.text = useBetaServer ? $"v{version} β" : $"v{version}";
+            versionLabel.text = $"v{version}";
             versionLabel.tooltip = useBetaServer
                 ? "Beta server mode - fetching pre-release server versions from PyPI"
                 : $"MCP For Unity v{version}";
@@ -552,6 +558,8 @@ namespace MCPForUnity.Editor.Windows
             {
                 case ActivePanel.Clients:
                     if (clientsPanel != null) clientsPanel.style.display = DisplayStyle.Flex;
+                    // Refresh client status when switching to Connect tab (e.g., after changing beta mode in Advanced)
+                    clientConfigSection?.RefreshSelectedClient(forceImmediate: true);
                     break;
                 case ActivePanel.Validation:
                     if (validationPanel != null) validationPanel.style.display = DisplayStyle.Flex;

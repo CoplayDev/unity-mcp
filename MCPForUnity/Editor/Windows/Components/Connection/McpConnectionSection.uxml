@@ -10,6 +10,9 @@
             <ui:VisualElement name="transport-mismatch-warning" class="warning-banner">
                 <ui:Label name="transport-mismatch-text" class="warning-banner-text" />
             </ui:VisualElement>
+            <ui:VisualElement name="version-mismatch-warning" class="warning-banner">
+                <ui:Label name="version-mismatch-text" class="warning-banner-text" />
+            </ui:VisualElement>
             <ui:VisualElement class="setting-row" name="http-url-row">
                 <ui:Label text="HTTP URL:" class="setting-label" />
                 <ui:TextField name="http-url" class="url-field" />

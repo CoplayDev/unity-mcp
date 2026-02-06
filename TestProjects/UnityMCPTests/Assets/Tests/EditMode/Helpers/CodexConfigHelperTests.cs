@@ -34,6 +34,8 @@ namespace MCPForUnityTests.Editor.Helpers
         private bool _originalHttpTransport;
         private bool _hadDevForceRefresh;
         private bool _originalDevForceRefresh;
+        private bool _hadUseBetaServer;
+        private bool _originalUseBetaServer;
         private IPlatformService _originalPlatformService;
 
         [OneTimeSetUp]
@@ -45,6 +47,8 @@ namespace MCPForUnityTests.Editor.Helpers
             _originalHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
             _hadDevForceRefresh = EditorPrefs.HasKey(EditorPrefKeys.DevModeForceServerRefresh);
             _originalDevForceRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
+            _hadUseBetaServer = EditorPrefs.HasKey(EditorPrefKeys.UseBetaServer);
+            _originalUseBetaServer = EditorPrefs.GetBool(EditorPrefKeys.UseBetaServer, true);
             _originalPlatformService = MCPServiceLocator.Platform;
         }
 
@@ -58,6 +62,10 @@ namespace MCPForUnityTests.Editor.Helpers
             // Ensure deterministic uvx args ordering for these tests regardless of editor settings
             // (dev-mode inserts --no-cache/--refresh, which changes the first args).
             EditorPrefs.SetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
+            // Tests expect beta server mode (--prerelease explicit --from mcpforunityserver>=0.0.0a0)
+            EditorPrefs.SetBool(EditorPrefKeys.UseBetaServer, true);
+            // Refresh the cache so it picks up the test's pref values
+            EditorConfigurationCache.Instance.Refresh();
         }
 
         [TearDown]
@@ -107,6 +115,15 @@ namespace MCPForUnityTests.Editor.Helpers
             else
             {
                 EditorPrefs.DeleteKey(EditorPrefKeys.DevModeForceServerRefresh);
+            }
+
+            if (_hadUseBetaServer)
+            {
+                EditorPrefs.SetBool(EditorPrefKeys.UseBetaServer, _originalUseBetaServer);
+            }
+            else
+            {
+                EditorPrefs.DeleteKey(EditorPrefKeys.UseBetaServer);
             }
         }
 

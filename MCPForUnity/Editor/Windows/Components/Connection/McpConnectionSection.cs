@@ -30,6 +30,8 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         private EnumField transportDropdown;
         private VisualElement transportMismatchWarning;
         private Label transportMismatchText;
+        private VisualElement versionMismatchWarning;
+        private Label versionMismatchText;
         private VisualElement httpUrlRow;
         private VisualElement httpServerControlRow;
         private Foldout manualCommandFoldout;
@@ -86,6 +88,8 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             transportDropdown = Root.Q<EnumField>("transport-dropdown");
             transportMismatchWarning = Root.Q<VisualElement>("transport-mismatch-warning");
             transportMismatchText = Root.Q<Label>("transport-mismatch-text");
+            versionMismatchWarning = Root.Q<VisualElement>("version-mismatch-warning");
+            versionMismatchText = Root.Q<Label>("version-mismatch-text");
             httpUrlRow = Root.Q<VisualElement>("http-url-row");
             httpServerControlRow = Root.Q<VisualElement>("http-server-control-row");
             manualCommandFoldout = Root.Q<Foldout>("manual-command-foldout");
@@ -1021,6 +1025,35 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
         public void ClearTransportMismatchWarning()
         {
             transportMismatchWarning?.RemoveFromClassList("visible");
+        }
+
+        /// <summary>
+        /// Updates the version mismatch warning banner based on the client's configuration status.
+        /// Shows a warning if the client is registered with a different package version than expected.
+        /// </summary>
+        /// <param name="clientName">The display name of the client being checked.</param>
+        /// <param name="mismatchMessage">The mismatch message, or null if no mismatch.</param>
+        public void UpdateVersionMismatchWarning(string clientName, string mismatchMessage)
+        {
+            if (versionMismatchWarning == null || versionMismatchText == null)
+                return;
+
+            if (string.IsNullOrEmpty(mismatchMessage))
+            {
+                versionMismatchWarning.RemoveFromClassList("visible");
+                return;
+            }
+
+            versionMismatchText.text = $"⚠ {clientName}: {mismatchMessage}";
+            versionMismatchWarning.AddToClassList("visible");
+        }
+
+        /// <summary>
+        /// Clears the version mismatch warning banner.
+        /// </summary>
+        public void ClearVersionMismatchWarning()
+        {
+            versionMismatchWarning?.RemoveFromClassList("visible");
         }
 
         private static string TransportDisplayName(ConfiguredTransport transport)

@@ -92,6 +92,9 @@ namespace MCPForUnity.Editor.Windows
 
         public void CreateGUI()
         {
+            // Clear search filter on GUI recreation to avoid stale filtered results
+            searchFilter = "";
+
             string basePath = AssetPathUtility.GetMcpPackageRootPath();
 
             // Load UXML
@@ -245,24 +248,27 @@ namespace MCPForUnity.Editor.Windows
             // Check if we know the type of this pref
             if (knownPrefTypes.TryGetValue(key, out var knownType))
             {
+                // Check if the key actually exists
+                item.IsUnset = !EditorPrefs.HasKey(key);
+
                 // Use the known type
                 switch (knownType)
                 {
                     case EditorPrefType.Bool:
                         item.Type = EditorPrefType.Bool;
-                        item.Value = EditorPrefs.GetBool(key, false).ToString();
+                        item.Value = item.IsUnset ? "Unset. Default: False" : EditorPrefs.GetBool(key, false).ToString();
                         break;
                     case EditorPrefType.Int:
                         item.Type = EditorPrefType.Int;
-                        item.Value = EditorPrefs.GetInt(key, 0).ToString();
+                        item.Value = item.IsUnset ? "Unset. Default: 0" : EditorPrefs.GetInt(key, 0).ToString();
                         break;
                     case EditorPrefType.Float:
                         item.Type = EditorPrefType.Float;
-                        item.Value = EditorPrefs.GetFloat(key, 0f).ToString();
+                        item.Value = item.IsUnset ? "Unset. Default: 0" : EditorPrefs.GetFloat(key, 0f).ToString();
                         break;
                     case EditorPrefType.String:
                         item.Type = EditorPrefType.String;
-                        item.Value = EditorPrefs.GetString(key, "");
+                        item.Value = item.IsUnset ? "Unset. Default: (empty)" : EditorPrefs.GetString(key, "");
                         break;
                 }
             }
@@ -323,6 +329,14 @@ namespace MCPForUnity.Editor.Windows
 
             // Buttons
             var saveButton = itemElement.Q<Button>("save-button");
+
+            // Style unset items
+            if (item.IsUnset)
+            {
+                valueField.SetEnabled(false);
+                valueField.style.opacity = 0.6f;
+                saveButton.SetEnabled(false);
+            }
 
             // Callbacks
             saveButton.clicked += () => SavePref(item, valueField.value, (EditorPrefType)typeDropdown.index);
@@ -389,6 +403,7 @@ namespace MCPForUnity.Editor.Windows
         public string Value { get; set; }
         public EditorPrefType Type { get; set; }
         public bool IsKnown { get; set; }
+        public bool IsUnset { get; set; }
     }
 
     /// <summary>

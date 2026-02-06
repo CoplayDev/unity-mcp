@@ -10,11 +10,128 @@ on:
       - beta
     paths:
       - "Server/**"
+      - "MCPForUnity/**"
 
 jobs:
+  update_unity_beta_version:
+    name: Update Unity package to beta version
+    runs-on: ubuntu-latest
+    # Avoid running when the workflow's own automation merges the PR
+    # created by this workflow (prevents a version-bump loop).
+    if: github.actor != 'github-actions[bot]'
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      unity_beta_version: ${{ steps.version.outputs.unity_beta_version }}
+      version_updated: ${{ steps.commit.outputs.updated }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: beta
+
+      - name: Generate beta version for Unity package
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Read current Unity package version
+          CURRENT_VERSION=$(jq -r '.version' MCPForUnity/package.json)
+          echo "Current Unity package version: $CURRENT_VERSION"
+
+          # Check if already a beta version - increment beta number
+          if [[ "$CURRENT_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-beta\.([0-9]+)$ ]]; then
+            BASE_VERSION="${BASH_REMATCH[1]}"
+            BETA_NUM="${BASH_REMATCH[2]}"
+            NEXT_BETA=$((BETA_NUM + 1))
+            BETA_VERSION="${BASE_VERSION}-beta.${NEXT_BETA}"
+            echo "Incrementing beta number: $CURRENT_VERSION -> $BETA_VERSION"
+          elif [[ "$CURRENT_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            # Stable version - bump patch and add -beta.1 suffix
+            # This ensures beta is "newer" than stable (9.3.2-beta.1 > 9.3.1)
+            # The release workflow decides final bump type (patch/minor/major)
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            PATCH="${BASH_REMATCH[3]}"
+            NEXT_PATCH=$((PATCH + 1))
+            BETA_VERSION="${MAJOR}.${MINOR}.${NEXT_PATCH}-beta.1"
+            echo "Converting stable to beta: $CURRENT_VERSION -> $BETA_VERSION"
+          else
+            echo "Error: Could not parse version '$CURRENT_VERSION'" >&2
+            exit 1
+          fi
+
+          # Always output the computed version
+          echo "unity_beta_version=$BETA_VERSION" >> "$GITHUB_OUTPUT"
+
+          # Only skip update if computed version matches current (no change needed)
+          if [[ "$BETA_VERSION" == "$CURRENT_VERSION" ]]; then
+            echo "Version unchanged, skipping update"
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Version will be updated: $CURRENT_VERSION -> $BETA_VERSION"
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update Unity package.json with beta version
+        if: steps.version.outputs.needs_update == 'true'
+        env:
+          BETA_VERSION: ${{ steps.version.outputs.unity_beta_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Update package.json version
+          jq --arg v "$BETA_VERSION" '.version = $v' MCPForUnity/package.json > tmp.json
+          mv tmp.json MCPForUnity/package.json
+          echo "Updated MCPForUnity/package.json:"
+          jq '.version' MCPForUnity/package.json
+
+      - name: Commit to temporary branch and create PR
+        id: commit
+        if: steps.version.outputs.needs_update == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BETA_VERSION: ${{ steps.version.outputs.unity_beta_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+          if git diff --quiet MCPForUnity/package.json; then
+            echo "No changes to commit"
+            echo "updated=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Create a temporary branch for the version update
+          BRANCH="beta-version-${BETA_VERSION}-${GITHUB_RUN_ID}"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+          git checkout -b "$BRANCH"
+          git add MCPForUnity/package.json
+          git commit -m "chore: update Unity package to beta version ${BETA_VERSION}"
+          git push origin "$BRANCH"
+
+          # Check if PR already exists
+          if gh pr view "$BRANCH" >/dev/null 2>&1; then
+            echo "PR already exists for $BRANCH"
+          else
+            PR_URL=$(gh pr create \
+              --base beta \
+              --head "$BRANCH" \
+              --title "chore: update Unity package to beta version ${BETA_VERSION}" \
+              --body "Automated beta version bump for the Unity package.")
+            echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+          fi
+          echo "updated=true" >> "$GITHUB_OUTPUT"
+
   publish_pypi_prerelease:
     name: Publish beta to PyPI (pre-release)
     runs-on: ubuntu-latest
+    # Avoid double-publish when the bot merges the version bump PR
+    if: github.actor != 'github-actions[bot]'
     environment:
       name: pypi
       url: https://pypi.org/p/mcpforunityserver
@@ -25,6 +142,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: beta
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -39,21 +157,39 @@ jobs:
         run: |
           set -euo pipefail
           RAW_VERSION=$(grep -oP '(?<=version = ")[^"]+' Server/pyproject.toml)
-          # Strip any existing pre-release suffix (a, b, rc, dev, post) for safe parsing
-          # e.g., "9.2.0b1" -> "9.2.0", "9.2.0.dev1" -> "9.2.0"
-          BASE_VERSION=$(echo "$RAW_VERSION" | sed -E 's/(a|b|rc|\.dev|\.post)[0-9]+$//')
+          echo "Raw version: $RAW_VERSION"
+
+          # Check if already a beta/prerelease version
+          if [[ "$RAW_VERSION" =~ (a|b|rc|\.dev|\.post)[0-9]+$ ]]; then
+            IS_PRERELEASE=true
+            # Strip the prerelease suffix to get base version
+            BASE_VERSION=$(echo "$RAW_VERSION" | sed -E 's/(a|b|rc|\.dev|\.post)[0-9]+$//')
+          else
+            IS_PRERELEASE=false
+            BASE_VERSION="$RAW_VERSION"
+          fi
+
           # Validate we have a proper X.Y.Z format
           if ! [[ "$BASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Error: Could not parse version '$RAW_VERSION' -> '$BASE_VERSION'" >&2
             exit 1
           fi
-          # Bump minor version and use beta suffix (PEP 440 compliant: X.Y+1.0bN)
-          # This ensures beta is "newer" than the stable release
+
           IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
-          NEXT_MINOR=$((MINOR + 1))
+
+          # Only bump patch if coming from stable; keep same base if already prerelease
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
+            # Already on a beta series - keep the same base version
+            NEXT_PATCH="$PATCH"
+            echo "Already prerelease, keeping base: $BASE_VERSION"
+          else
+            # Stable version - bump patch to ensure beta is "newer"
+            NEXT_PATCH=$((PATCH + 1))
+            echo "Stable version, bumping patch: $PATCH -> $NEXT_PATCH"
+          fi
+
           BETA_NUMBER="$(date +%Y%m%d%H%M%S)"
-          BETA_VERSION="${MAJOR}.${NEXT_MINOR}.0b${BETA_NUMBER}"
-          echo "Raw version: $RAW_VERSION"
+          BETA_VERSION="${MAJOR}.${MINOR}.${NEXT_PATCH}b${BETA_NUMBER}"
           echo "Base version: $BASE_VERSION"
           echo "Beta version: $BETA_VERSION"
           echo "beta_version=$BETA_VERSION" >> "$GITHUB_OUTPUT"
