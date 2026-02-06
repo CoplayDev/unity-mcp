@@ -40,7 +40,13 @@ def _normalize_component_properties(value: Any) -> tuple[dict[str, dict[str, Any
 
 
 @mcp_for_unity_tool(
-    description="Performs CRUD operations on GameObjects. Actions: create, modify, delete, duplicate, move_relative. For finding GameObjects use find_gameobjects tool. For component operations use manage_components tool.",
+    description=(
+        "Performs CRUD operations on GameObjects. "
+        "Actions: create, modify, delete, duplicate, move_relative. "
+        "NOT for searching — use the find_gameobjects tool to search by name/tag/layer/component/path. "
+        "NOT for component management — use the manage_components tool (add/remove/set_property) "
+        "or mcpforunity://scene/gameobject/{id}/components resource (read)."
+    ),
     annotations=ToolAnnotations(
         title="Manage GameObject",
         destructiveHint=True,
@@ -137,7 +143,7 @@ async def manage_gameobject(
     if action is None:
         return {
             "success": False,
-            "message": "Missing required parameter 'action'. Valid actions: create, modify, delete, duplicate, move_relative. For finding GameObjects use find_gameobjects tool. For component operations use manage_components tool."
+            "message": "Missing required parameter 'action'. Valid actions: create, modify, delete, duplicate, move_relative. To SEARCH for GameObjects use the find_gameobjects tool. To manage COMPONENTS use the manage_components tool."
         }
 
     # --- Normalize vector parameters with detailed error handling ---
