@@ -1,5 +1,7 @@
 using System;
 using System.Globalization;
+using System.Linq;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace MCPForUnity.Editor.Helpers
@@ -315,6 +317,86 @@ namespace MCPForUnity.Editor.Helpers
                 return false;
             }
             return true;
+        }
+
+        /// <summary>
+        /// Looks up a parameter by camelCase key with snake_case fallback.
+        /// MCP tool schemas use snake_case, but some handlers expect camelCase.
+        /// </summary>
+        /// <param name="params">The JSON parameters object</param>
+        /// <param name="camelKey">The camelCase key (e.g. "testNames")</param>
+        /// <param name="snakeKey">The snake_case key (e.g. "test_names")</param>
+        /// <returns>The token if found under either key, or null</returns>
+        public static JToken GetParam(JObject @params, string camelKey, string snakeKey = null)
+        {
+            if (@params == null) return null;
+            return @params[camelKey] ?? (snakeKey != null ? @params[snakeKey] : null);
+        }
+
+        /// <summary>
+        /// Coerces a JToken to a string array, handling various MCP serialization formats:
+        /// plain strings, JSON arrays, stringified JSON arrays, and double-serialized arrays.
+        /// </summary>
+        /// <param name="token">The JSON token to coerce</param>
+        /// <returns>A string array, or null if empty/missing</returns>
+        public static string[] CoerceStringArray(JToken token)
+        {
+            if (token == null || token.Type == JTokenType.Null) return null;
+
+            if (token.Type == JTokenType.String)
+            {
+                var value = token.ToString();
+                if (string.IsNullOrWhiteSpace(value)) return null;
+                // Handle stringified JSON arrays (e.g. "[\"name1\", \"name2\"]")
+                var trimmed = value.Trim();
+                if (trimmed.StartsWith("[") && trimmed.EndsWith("]"))
+                {
+                    try
+                    {
+                        var parsed = JArray.Parse(trimmed);
+                        var values = parsed.Values<string>()
+                            .Where(s => !string.IsNullOrWhiteSpace(s))
+                            .ToArray();
+                        return values.Length > 0 ? values : null;
+                    }
+                    catch (JsonException) { /* not a valid JSON array, treat as plain string */ }
+                }
+                return new[] { value };
+            }
+
+            if (token.Type == JTokenType.Array)
+            {
+                var array = token as JArray;
+                if (array == null || array.Count == 0) return null;
+                // Handle double-serialized arrays: MCP bridge may send ["[\"name1\"]"]
+                // where the inner string is a stringified JSON array
+                if (array.Count == 1 && array[0].Type == JTokenType.String)
+                {
+                    var inner = array[0].ToString().Trim();
+                    if (inner.StartsWith("[") && inner.EndsWith("]"))
+                    {
+                        try
+                        {
+                            array = JArray.Parse(inner);
+                        }
+                        catch (JsonException) { /* use original array */ }
+                    }
+                }
+                // Handle single-level nested arrays: [[name1, name2]]
+                // Multi-element outer arrays (e.g. [["a"], ["b"]]) are not unwrapped
+                // as that format is not produced by known MCP clients.
+                else if (array.Count == 1 && array[0].Type == JTokenType.Array)
+                {
+                    array = array[0] as JArray ?? array;
+                }
+                var values = array
+                    .Values<string>()
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .ToArray();
+                return values.Length > 0 ? values : null;
+            }
+
+            return null;
         }
 
         /// <summary>
