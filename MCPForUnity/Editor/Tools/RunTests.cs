@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Resources.Tests;
@@ -41,8 +40,8 @@ namespace MCPForUnity.Editor.Tools
                     return Task.FromResult<object>(new ErrorResponse(parseError));
                 }
 
-                bool includeDetails = ParamCoercion.CoerceBool(@params?["includeDetails"] ?? @params?["include_details"], false);
-                bool includeFailedTests = ParamCoercion.CoerceBool(@params?["includeFailedTests"] ?? @params?["include_failed_tests"], false);
+                bool includeDetails = ParamCoercion.CoerceBool(ParamCoercion.GetParam(@params, "includeDetails", "include_details"), false);
+                bool includeFailedTests = ParamCoercion.CoerceBool(ParamCoercion.GetParam(@params, "includeFailedTests", "include_failed_tests"), false);
 
                 var filterOptions = GetFilterOptions(@params);
                 string jobId = TestJobManager.StartJob(parsedMode.Value, filterOptions);
@@ -74,66 +73,10 @@ namespace MCPForUnity.Editor.Tools
                 return null;
             }
 
-            string[] ParseStringArray(string camelKey, string snakeKey = null)
-            {
-                var token = @params[camelKey] ?? (snakeKey != null ? @params[snakeKey] : null);
-                if (token == null) return null;
-                if (token.Type == JTokenType.String)
-                {
-                    var value = token.ToString();
-                    if (string.IsNullOrWhiteSpace(value)) return null;
-                    // Handle stringified JSON arrays (e.g. "[\"name1\", \"name2\"]")
-                    var trimmed = value.Trim();
-                    if (trimmed.StartsWith("[") && trimmed.EndsWith("]"))
-                    {
-                        try
-                        {
-                            var parsed = JArray.Parse(trimmed);
-                            var values = parsed.Values<string>()
-                                .Where(s => !string.IsNullOrWhiteSpace(s))
-                                .ToArray();
-                            return values.Length > 0 ? values : null;
-                        }
-                        catch { /* not a valid JSON array, treat as plain string */ }
-                    }
-                    return new[] { value };
-                }
-                if (token.Type == JTokenType.Array)
-                {
-                    var array = token as JArray;
-                    if (array == null || array.Count == 0) return null;
-                    // Handle double-serialized arrays: MCP bridge may send ["[\"name1\"]"]
-                    // where the inner string is a stringified JSON array
-                    if (array.Count == 1 && array[0].Type == JTokenType.String)
-                    {
-                        var inner = array[0].ToString().Trim();
-                        if (inner.StartsWith("[") && inner.EndsWith("]"))
-                        {
-                            try
-                            {
-                                array = JArray.Parse(inner);
-                            }
-                            catch { /* use original array */ }
-                        }
-                    }
-                    // Handle nested arrays: [[name1, name2]]
-                    else if (array.Count == 1 && array[0].Type == JTokenType.Array)
-                    {
-                        array = array[0] as JArray ?? array;
-                    }
-                    var values = array
-                        .Values<string>()
-                        .Where(s => !string.IsNullOrWhiteSpace(s))
-                        .ToArray();
-                    return values.Length > 0 ? values : null;
-                }
-                return null;
-            }
-
-            var testNames = ParseStringArray("testNames", "test_names");
-            var groupNames = ParseStringArray("groupNames", "group_names");
-            var categoryNames = ParseStringArray("categoryNames", "category_names");
-            var assemblyNames = ParseStringArray("assemblyNames", "assembly_names");
+            var testNames = ParamCoercion.CoerceStringArray(ParamCoercion.GetParam(@params, "testNames", "test_names"));
+            var groupNames = ParamCoercion.CoerceStringArray(ParamCoercion.GetParam(@params, "groupNames", "group_names"));
+            var categoryNames = ParamCoercion.CoerceStringArray(ParamCoercion.GetParam(@params, "categoryNames", "category_names"));
+            var assemblyNames = ParamCoercion.CoerceStringArray(ParamCoercion.GetParam(@params, "assemblyNames", "assembly_names"));
 
             if (testNames == null && groupNames == null && categoryNames == null && assemblyNames == null)
             {
