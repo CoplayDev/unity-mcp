@@ -42,8 +42,8 @@ if sys.platform == "win32" and os.getenv("UNITY_MCP_ASYNCIO_POLICY", "selector")
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     else:
         # Python 3.16+: SelectorEventLoop class still exists but requires a selector parameter
-        import selectors
-        asyncio.new_event_loop = lambda: asyncio.SelectorEventLoop(selectors.SelectSelector())
+        # import selectors
+        # asyncio.new_event_loop = lambda: asyncio.SelectorEventLoop(selectors.SelectSelector())
         
 # Workaround for environments where tool signature evaluation runs with a globals
 # dict that does not include common `typing` names (e.g. when annotations are strings
