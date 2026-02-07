@@ -174,7 +174,20 @@ async def run_tests(
         if value is None:
             return None
         if isinstance(value, str):
-            return [value] if value.strip() else None
+            stripped = value.strip()
+            if not stripped:
+                return None
+            # Handle JSON-stringified arrays (e.g. '["test1", "test2"]')
+            if stripped.startswith("["):
+                import json
+                try:
+                    parsed = json.loads(stripped)
+                    if isinstance(parsed, list):
+                        result = [str(v).strip() for v in parsed if v and str(v).strip()]
+                        return result if result else None
+                except (json.JSONDecodeError, ValueError):
+                    pass
+            return [stripped]
         if isinstance(value, list):
             result = [str(v).strip() for v in value if v and str(v).strip()]
             return result if result else None
