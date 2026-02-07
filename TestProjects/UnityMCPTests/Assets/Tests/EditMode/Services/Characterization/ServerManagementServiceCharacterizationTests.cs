@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using MCPForUnity.Editor.Services;
@@ -482,6 +484,63 @@ namespace MCPForUnityTests.Editor.Services.Characterization
             Assert.IsFalse((bool)method.Invoke(null, new object[] { "http://example.com:8080" }), "example.com should not be local");
             Assert.IsFalse((bool)method.Invoke(null, new object[] { "" }), "empty string should not be local");
             Assert.IsFalse((bool)method.Invoke(null, new object[] { null }), "null should not be local");
+        }
+
+        [Test]
+        public void BuildLocalProbeHosts_Localhost_IncludesIPv4AndIPv6Loopback_ViaReflection()
+        {
+            // Arrange
+            var method = typeof(ServerManagementService).GetMethod(
+                "BuildLocalProbeHosts",
+                BindingFlags.NonPublic | BindingFlags.Static,
+                null,
+                new[] { typeof(string) },
+                null);
+
+            if (method == null)
+            {
+                Assert.Pass("BuildLocalProbeHosts is a private method - behavior documented via code review");
+                return;
+            }
+
+            // Act
+            var result = method.Invoke(null, new object[] { "localhost" });
+            Assert.IsNotNull(result);
+            Assert.IsInstanceOf<IEnumerable<string>>(result);
+            var hosts = ((IEnumerable<string>)result).ToList();
+
+            // Assert
+            CollectionAssert.Contains(hosts, "localhost");
+            CollectionAssert.Contains(hosts, "127.0.0.1");
+            CollectionAssert.Contains(hosts, "::1");
+        }
+
+        [Test]
+        public void BuildLocalProbeHosts_EmptyHost_DefaultsToIPv4Loopback_ViaReflection()
+        {
+            // Arrange
+            var method = typeof(ServerManagementService).GetMethod(
+                "BuildLocalProbeHosts",
+                BindingFlags.NonPublic | BindingFlags.Static,
+                null,
+                new[] { typeof(string) },
+                null);
+
+            if (method == null)
+            {
+                Assert.Pass("BuildLocalProbeHosts is a private method - behavior documented via code review");
+                return;
+            }
+
+            // Act
+            var result = method.Invoke(null, new object[] { "" });
+            Assert.IsNotNull(result);
+            Assert.IsInstanceOf<IEnumerable<string>>(result);
+            var hosts = ((IEnumerable<string>)result).ToList();
+
+            // Assert
+            Assert.AreEqual(1, hosts.Count, "Empty host should resolve to a single default probe host.");
+            Assert.AreEqual("127.0.0.1", hosts[0]);
         }
 
         #endregion

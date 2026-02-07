@@ -35,19 +35,27 @@ namespace MCPForUnity.Editor.Services
                 if (shouldResume)
                 {
                     EditorPrefs.SetBool(EditorPrefKeys.ResumeStdioAfterReload, true);
-
-                    // Stop only the stdio bridge; leave HTTP untouched if it is running concurrently.
-                    var stopTask = MCPServiceLocator.TransportManager.StopAsync(TransportMode.Stdio);
-                    
-                    // Wait for stop to complete (which deletes the status file)
-                    try { stopTask.Wait(500); } catch { }
-
-                    // Write reloading status so clients don't think we vanished
-                    StdioBridgeHost.WriteHeartbeat(true, "reloading");
                 }
                 else
                 {
                     EditorPrefs.DeleteKey(EditorPrefKeys.ResumeStdioAfterReload);
+                }
+
+                if (isRunning)
+                {
+                    // Stop only stdio before reload. This is centralized here so resume-flag updates
+                    // and teardown cannot race each other via separate beforeAssemblyReload handlers.
+                    var stopTask = MCPServiceLocator.TransportManager.StopAsync(TransportMode.Stdio);
+                    try { stopTask.Wait(500); } catch { }
+
+                    // Legacy safety: stdio may have been started outside TransportManager state.
+                    try { StdioBridgeHost.Stop(); } catch { }
+                }
+
+                if (shouldResume)
+                {
+                    // Write reloading status so clients don't think we vanished.
+                    StdioBridgeHost.WriteHeartbeat(true, "reloading");
                 }
             }
             catch (Exception ex)

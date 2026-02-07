@@ -456,22 +456,7 @@ namespace MCPForUnity.Editor.Services
         {
             try
             {
-                if (string.IsNullOrEmpty(host))
-                {
-                    host = "127.0.0.1";
-                }
-
-                var hosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { host };
-                if (host == "localhost" || host == "0.0.0.0")
-                {
-                    hosts.Add("127.0.0.1");
-                }
-                if (host == "::" || host == "0:0:0:0:0:0:0:0")
-                {
-                    hosts.Add("::1");
-                }
-
-                foreach (var target in hosts)
+                foreach (string target in BuildLocalProbeHosts(host))
                 {
                     try
                     {
@@ -496,6 +481,55 @@ namespace MCPForUnity.Editor.Services
             }
 
             return false;
+        }
+
+        private static IReadOnlyList<string> BuildLocalProbeHosts(string host)
+        {
+            if (string.IsNullOrWhiteSpace(host))
+            {
+                host = "127.0.0.1";
+            }
+            else
+            {
+                host = host.Trim();
+            }
+
+            var hosts = new List<string>();
+            AddHostCandidate(hosts, host);
+
+            if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase))
+            {
+                // Probe both loopback families for localhost to avoid false negatives on systems where
+                // localhost resolution prefers an address family different from the server bind.
+                AddHostCandidate(hosts, "127.0.0.1");
+                AddHostCandidate(hosts, "::1");
+            }
+            else if (string.Equals(host, "0.0.0.0", StringComparison.OrdinalIgnoreCase))
+            {
+                AddHostCandidate(hosts, "127.0.0.1");
+            }
+            else if (string.Equals(host, "::", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(host, "0:0:0:0:0:0:0:0", StringComparison.OrdinalIgnoreCase))
+            {
+                AddHostCandidate(hosts, "::1");
+            }
+
+            return hosts;
+        }
+
+        private static void AddHostCandidate(List<string> hosts, string candidate)
+        {
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                return;
+            }
+
+            if (hosts.Any(existing => string.Equals(existing, candidate, StringComparison.OrdinalIgnoreCase)))
+            {
+                return;
+            }
+
+            hosts.Add(candidate);
         }
 
         private bool StopLocalHttpServerInternal(bool quiet, int? portOverride = null, bool allowNonLocalUrl = false)
