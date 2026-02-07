@@ -30,10 +30,21 @@ from urllib.parse import urlparse
 
 # Windows asyncio fix: Use SelectorEventLoop instead of ProactorEventLoop
 # This fixes "WinError 64: The specified network name is no longer available"
-# which occurs with WebSocket connections under heavy client reconnect scenarios
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
+# which occurs with WebSocket connections under heavy client reconnect scenarios.
+#
+# Python version compatibility:
+# - Python 3.8-3.15: Use WindowsSelectorEventLoopPolicy (set_event_loop_policy)
+# - Python 3.16+: Policy system removed, patch new_event_loop to use SelectorEventLoop
+#
+# Set UNITY_MCP_ASYNCIO_POLICY=proactor to override and use ProactorEventLoop.
+if sys.platform == "win32" and os.getenv("UNITY_MCP_ASYNCIO_POLICY", "selector").lower() == "selector":
+    if hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    else:
+        # Python 3.16+: SelectorEventLoop class still exists but requires a selector parameter
+        import selectors
+        asyncio.new_event_loop = lambda: asyncio.SelectorEventLoop(selectors.SelectSelector())
+        
 # Workaround for environments where tool signature evaluation runs with a globals
 # dict that does not include common `typing` names (e.g. when annotations are strings
 # and evaluated via `eval()` during schema generation).
