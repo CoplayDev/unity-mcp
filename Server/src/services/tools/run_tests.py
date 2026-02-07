@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from typing import Annotated, Any, Literal
@@ -178,15 +179,14 @@ async def run_tests(
             if not stripped:
                 return None
             # Handle JSON-stringified arrays (e.g. '["test1", "test2"]')
-            if stripped.startswith("["):
-                import json
+            if stripped.startswith("[") and stripped.endswith("]"):
                 try:
                     parsed = json.loads(stripped)
                     if isinstance(parsed, list):
                         result = [str(v).strip() for v in parsed if v and str(v).strip()]
                         return result if result else None
                 except (json.JSONDecodeError, ValueError):
-                    pass
+                    logger.debug("Failed to parse apparent JSON array in filter param: %s", stripped)
             return [stripped]
         if isinstance(value, list):
             result = [str(v).strip() for v in value if v and str(v).strip()]
