@@ -40,8 +40,9 @@ namespace MCPForUnity.Editor.Tools
                     return Task.FromResult<object>(new ErrorResponse(parseError));
                 }
 
-                bool includeDetails = ParamCoercion.CoerceBool(ParamCoercion.GetParam(@params, "includeDetails", "include_details"), false);
-                bool includeFailedTests = ParamCoercion.CoerceBool(ParamCoercion.GetParam(@params, "includeFailedTests", "include_failed_tests"), false);
+                var p = new ToolParams(@params);
+                bool includeDetails = p.GetBool("includeDetails");
+                bool includeFailedTests = p.GetBool("includeFailedTests");
 
                 var filterOptions = GetFilterOptions(@params);
                 string jobId = TestJobManager.StartJob(parsedMode.Value, filterOptions);
@@ -73,10 +74,11 @@ namespace MCPForUnity.Editor.Tools
                 return null;
             }
 
-            var testNames = ParamCoercion.CoerceStringArray(ParamCoercion.GetParam(@params, "testNames", "test_names"));
-            var groupNames = ParamCoercion.CoerceStringArray(ParamCoercion.GetParam(@params, "groupNames", "group_names"));
-            var categoryNames = ParamCoercion.CoerceStringArray(ParamCoercion.GetParam(@params, "categoryNames", "category_names"));
-            var assemblyNames = ParamCoercion.CoerceStringArray(ParamCoercion.GetParam(@params, "assemblyNames", "assembly_names"));
+            var p = new ToolParams(@params);
+            var testNames = p.GetStringArray("testNames");
+            var groupNames = p.GetStringArray("groupNames");
+            var categoryNames = p.GetStringArray("categoryNames");
+            var assemblyNames = p.GetStringArray("assemblyNames");
 
             if (testNames == null && groupNames == null && categoryNames == null && assemblyNames == null)
             {

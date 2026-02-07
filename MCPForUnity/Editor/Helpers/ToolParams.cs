@@ -1,3 +1,5 @@
+using System.Linq;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 
@@ -85,6 +87,80 @@ namespace MCPForUnity.Editor.Helpers
         public JToken GetRaw(string key)
         {
             return GetToken(key);
+        }
+
+        /// <summary>
+        /// Get optional string array parameter, handling various MCP serialization formats:
+        /// plain strings, JSON arrays, stringified JSON arrays, and double-serialized arrays.
+        /// Supports both snake_case and camelCase automatically.
+        /// </summary>
+        public string[] GetStringArray(string key)
+        {
+            return CoerceStringArray(GetToken(key));
+        }
+
+        /// <summary>
+        /// Coerces a JToken to a string array, handling various MCP serialization formats:
+        /// plain strings, JSON arrays, stringified JSON arrays, and double-serialized arrays.
+        /// </summary>
+        internal static string[] CoerceStringArray(JToken token)
+        {
+            if (token == null || token.Type == JTokenType.Null) return null;
+
+            if (token.Type == JTokenType.String)
+            {
+                var value = token.ToString();
+                if (string.IsNullOrWhiteSpace(value)) return null;
+                // Handle stringified JSON arrays (e.g. "[\"name1\", \"name2\"]")
+                var trimmed = value.Trim();
+                if (trimmed.StartsWith("[") && trimmed.EndsWith("]"))
+                {
+                    try
+                    {
+                        var parsed = JArray.Parse(trimmed);
+                        var values = parsed.Values<string>()
+                            .Where(s => !string.IsNullOrWhiteSpace(s))
+                            .ToArray();
+                        return values.Length > 0 ? values : null;
+                    }
+                    catch (JsonException) { /* not a valid JSON array, treat as plain string */ }
+                }
+                return new[] { value };
+            }
+
+            if (token.Type == JTokenType.Array)
+            {
+                var array = token as JArray;
+                if (array == null || array.Count == 0) return null;
+                // Handle double-serialized arrays: MCP bridge may send ["[\"name1\"]"]
+                // where the inner string is a stringified JSON array
+                if (array.Count == 1 && array[0].Type == JTokenType.String)
+                {
+                    var inner = array[0].ToString().Trim();
+                    if (inner.StartsWith("[") && inner.EndsWith("]"))
+                    {
+                        try
+                        {
+                            array = JArray.Parse(inner);
+                        }
+                        catch (JsonException) { /* use original array */ }
+                    }
+                }
+                // Handle single-level nested arrays: [[name1, name2]]
+                // Multi-element outer arrays (e.g. [["a"], ["b"]]) are not unwrapped
+                // as that format is not produced by known MCP clients.
+                else if (array.Count == 1 && array[0].Type == JTokenType.Array)
+                {
+                    array = array[0] as JArray ?? array;
+                }
+                var values = array
+                    .Values<string>()
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .ToArray();
+                return values.Length > 0 ? values : null;
+            }
+
+            return null;
         }
 
         /// <summary>
