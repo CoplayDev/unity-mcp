@@ -54,47 +54,37 @@ def test_windows_uses_selector_event_loop_policy():
 @pytest.mark.skipif(sys.platform == "win32", reason="Non-Windows only")
 def test_non_windows_uses_default_policy():
     """
-    Verify that non-Windows platforms use their default event loop policy.
+    Verify that non-Windows platforms keep their default event loop policy.
 
     SelectorEventLoopPolicy should only be used on Windows to avoid the
     IOCP bug. Other platforms should use their optimal default policy.
     """
+    # Capture the policy type before importing main
+    original_policy_type = type(asyncio.get_event_loop_policy())
+
     import importlib
     import main
     importlib.reload(main)
 
-    # Get the current event loop policy
-    policy = asyncio.get_event_loop_policy()
-
-    # Use getattr to safely check for Windows policy on all platforms
-    WindowsSelectorEventLoopPolicy = getattr(
-        asyncio, 'WindowsSelectorEventLoopPolicy', type(None)
+    # Policy type should be unchanged on non-Windows platforms
+    current_policy_type = type(asyncio.get_event_loop_policy())
+    assert current_policy_type == original_policy_type, (
+        f"Non-Windows platforms should keep default policy, "
+        f"changed from {original_policy_type.__name__} to {current_policy_type.__name__}"
     )
 
-    # On non-Windows, should NOT be WindowsSelectorEventLoopPolicy
-    assert not isinstance(
-        policy,
-        WindowsSelectorEventLoopPolicy
-    ), "WindowsSelectorEventLoopPolicy should only be used on Windows"
 
-    # Should be the platform's default policy type
-    # (UnixSelectorEventLoopPolicy on Linux/macOS)
-    default_policy_name = asyncio.get_event_loop_policy().__class__.__name__
-    assert "SelectorEventLoopPolicy" in default_policy_name or "DefaultEventLoopPolicy" in default_policy_name, \
-        f"Expected default policy for non-Windows, got {default_policy_name}"
-
-
-def test_event_loop_policy_is_set_early():
+def test_event_loop_policy_is_configured():
     """
-    Verify that event loop policy is set before any async operations.
+    Verify that an asyncio event loop policy is configured after importing main.
 
-    The policy must be set early (at module import time) to ensure all
+    The policy is set at module import time in main.py to ensure all
     subsequent async operations use the correct event loop implementation.
     """
     import importlib
     import main
 
-    # Reload main to ensure policy is set
+    # Reload main to ensure policy is (re)configured
     importlib.reload(main)
 
     # Policy should be set (not None)
@@ -114,8 +104,13 @@ async def test_async_operations_use_correct_event_loop():
     This test creates a simple async operation to ensure the event loop
     is functional. It doesn't test WinError 64 directly (which is a
     timing-dependent race condition), but confirms the basic async
-    infrastructure works.
+    infrastructure works with the policy configured in main.py.
     """
+    # Import main to ensure the event loop policy is configured
+    import importlib
+    import main
+    importlib.reload(main)
+
     # Simple async operation
     async def simple_task():
         await asyncio.sleep(0.01)
