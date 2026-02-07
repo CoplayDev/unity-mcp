@@ -16,6 +16,17 @@ import asyncio
 import pytest
 
 
+@pytest.fixture(scope="module")
+def original_policy_type():
+    """
+    Capture the original policy type before any test imports main.
+
+    This fixture runs once per module and captures the true default
+    event loop policy before main.py potentially modifies it.
+    """
+    return type(asyncio.get_event_loop_policy())
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows-specific")
 def test_windows_uses_selector_event_loop_policy():
     """
@@ -26,7 +37,7 @@ def test_windows_uses_selector_event_loop_policy():
     Regression test for Windows asyncio bug where ProactorEventLoop's IOCP
     has race conditions with rapid connection changes.
 
-    The fix is applied in Server/src/main.py:31-35
+    The fix is applied in Server/src/main.py:40-52
     """
     # Import main module to trigger event loop policy setting
     import importlib
@@ -52,16 +63,16 @@ def test_windows_uses_selector_event_loop_policy():
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Non-Windows only")
-def test_non_windows_uses_default_policy():
+def test_non_windows_uses_default_policy(original_policy_type):
     """
     Verify that non-Windows platforms keep their default event loop policy.
 
     SelectorEventLoopPolicy should only be used on Windows to avoid the
     IOCP bug. Other platforms should use their optimal default policy.
-    """
-    # Capture the policy type before importing main
-    original_policy_type = type(asyncio.get_event_loop_policy())
 
+    Uses the original_policy_type fixture to capture the policy before
+    any test imports main, avoiding cross-test pollution from reload.
+    """
     import importlib
     import main
     importlib.reload(main)

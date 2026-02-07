@@ -40,8 +40,8 @@ from urllib.parse import urlparse
 if sys.platform == "win32" and os.getenv("UNITY_MCP_ASYNCIO_POLICY", "selector").lower() == "selector":
     if hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    else:
-        # TODO Python 3.16+: SelectorEventLoop API we don't konw yet, but need to patch new_event_loop to return it instead of ProactorEventLoop
+        # else Python 3.16+: WindowsSelectorEventLoopPolicy removed; workaround unavailable.
+       
         
 # Workaround for environments where tool signature evaluation runs with a globals
 # dict that does not include common `typing` names (e.g. when annotations are strings
