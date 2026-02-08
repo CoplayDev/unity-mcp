@@ -38,10 +38,9 @@ namespace MCPForUnity.Editor.Tools.Animation
 
             var clip = new AnimationClip();
             string name = @params["name"]?.ToString();
-            if (!string.IsNullOrEmpty(name))
-                clip.name = name;
-            else
-                clip.name = Path.GetFileNameWithoutExtension(clipPath);
+            clip.name = !string.IsNullOrEmpty(name)
+                ? name
+                : Path.GetFileNameWithoutExtension(clipPath);
 
             float length = @params["length"]?.ToObject<float>() ?? 1f;
             clip.frameRate = @params["frameRate"]?.ToObject<float>() ?? 60f;
