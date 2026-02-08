@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "Unity MCP",
   "version": "9.4.0",
-  "description": "AI-powered Unity Editor automation via MCP - manage GameObjects, scripts, materials, scenes, prefabs, VFX, and run tests",
+  "description": "AI-powered Unity Editor automation via MCP - manage GameObjects, scripts, materials, scenes, prefabs, animations, VFX, and run tests",
   "author": {
     "name": "Coplay",
     "url": "https://www.coplay.dev"
@@ -54,6 +54,10 @@
       "description": "Search for content within Unity project files"
     },
     {
+      "name": "manage_animation",
+      "description": "Manage Unity animation: Animator control, AnimatorController CRUD, and AnimationClip operations"
+    },
+    {
       "name": "manage_asset",
       "description": "Create, modify, search, and organize Unity assets"
     },
@@ -92,6 +96,10 @@
     {
       "name": "manage_shader",
       "description": "Work with Unity shaders"
+    },
+    {
+      "name": "manage_texture",
+      "description": "Create and modify textures with patterns, gradients, and noise"
     },
     {
       "name": "manage_vfx",

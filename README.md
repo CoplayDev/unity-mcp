@@ -76,10 +76,10 @@ openupm add com.coplaydev.unity-mcp
 * **Extensible** — Works with various MCP Clients
 
 ### Available Tools
-`manage_asset` • `manage_editor` • `manage_gameobject` • `manage_components` • `manage_material` • `manage_prefabs` • `manage_scene` • `manage_script` • `manage_scriptable_object` • `manage_shader` • `manage_vfx` • `manage_texture` • `batch_execute` • `find_gameobjects` • `find_in_file` • `read_console` • `refresh_unity` • `run_tests` • `get_test_job` • `execute_menu_item` • `apply_text_edits` • `script_apply_edits` • `validate_script` • `create_script` • `delete_script` • `get_sha`
+`apply_text_edits` • `batch_execute` • `create_script` • `debug_request_context` • `delete_script` • `execute_custom_tool` • `execute_menu_item` • `find_gameobjects` • `find_in_file` • `get_sha` • `get_test_job` • `manage_animation` • `manage_asset` • `manage_components` • `manage_editor` • `manage_gameobject` • `manage_material` • `manage_prefabs` • `manage_scene` • `manage_script` • `manage_script_capabilities` • `manage_scriptable_object` • `manage_shader` • `manage_texture` • `manage_vfx` • `read_console` • `refresh_unity` • `run_tests` • `script_apply_edits` • `set_active_instance` • `validate_script`
 
 ### Available Resources
-`custom_tools` • `unity_instances` • `menu_items` • `get_tests` • `gameobject` • `gameobject_components` • `prefab_api` • `prefab_info` • `prefab_hierarchy` • `editor_state` • `editor_selection` • `editor_prefab_stage` • `project_info` • `project_tags` • `project_layers`
+`active_tool` • `custom_tools` • `editor_prefab_stage` • `editor_selection` • `editor_state` • `editor_windows` • `gameobject` • `gameobject_api` • `gameobject_component` • `gameobject_components` • `get_tests` • `menu_items` • `prefab_api` • `prefab_hierarchy` • `prefab_info` • `project_info` • `project_layers` • `project_tags` • `unity_instances`
 
 **Performance Tip:** Use `batch_execute` for multiple operations — it's 10-100x faster than individual calls!
 </details>
