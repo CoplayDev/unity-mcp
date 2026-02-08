@@ -57,8 +57,11 @@ async def manage_gameobject(
                               "move_relative"], "Action to perform on GameObject."] | None = None,
     target: Annotated[str,
                       "GameObject identifier by name, path, or instance ID for modify/delete/duplicate actions"] | None = None,
-    search_method: Annotated[Literal["by_id", "by_name", "by_path"],
-                             "How to resolve 'target'. Defaults to by_name."] | None = None,
+    search_method: Annotated[
+        Literal["by_id", "by_name", "by_path", "by_tag", "by_layer", "by_component"],
+        "How to resolve 'target'. If omitted, Unity infers: instance ID -> by_id, "
+        "path (contains '/') -> by_path, otherwise by_name."
+    ] | None = None,
     name: Annotated[str,
                     "GameObject name for 'create' (initial name) and 'modify' (rename) actions."] | None = None,
     tag: Annotated[str,
