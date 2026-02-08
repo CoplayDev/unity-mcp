@@ -53,6 +53,7 @@ async def manage_animation(
         "How to find the target GameObject.",
     ] = None,
     clip_path: Annotated[str | None, "Asset path for AnimationClip (e.g. 'Assets/Animations/Walk.anim')."] = None,
+    controller_path: Annotated[str | None, "Asset path for AnimatorController (e.g. 'Assets/Animators/Player.controller')."] = None,
     properties: Annotated[
         dict[str, Any] | str | None,
         "Action-specific parameters (dict or JSON string).",
@@ -96,6 +97,8 @@ async def manage_animation(
         params_dict["searchMethod"] = search_method
     if clip_path is not None:
         params_dict["clipPath"] = clip_path
+    if controller_path is not None:
+        params_dict["controllerPath"] = controller_path
 
     params_dict = {k: v for k, v in params_dict.items() if v is not None}
 

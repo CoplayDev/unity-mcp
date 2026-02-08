@@ -347,6 +347,7 @@ namespace MCPForUnity.Editor.Tools.Animation
             var legacyAnim = go.GetComponent<UnityEngine.Animation>();
             if (legacyAnim != null)
             {
+                var wasLegacy = clip.legacy;
                 SetupLegacyClip(clip);
                 Undo.RecordObject(legacyAnim, "Assign Animation Clip");
                 legacyAnim.clip = clip;
@@ -368,6 +369,8 @@ namespace MCPForUnity.Editor.Tools.Animation
                               "otherwise Unity will log 'AnimationEvent has no receiver' errors.";
                 }
 
+                if (!wasLegacy) warning += " Warning: clip was converted to legacy and will not be usable in Mecanim/BlendTrees.";
+
                 return new { success = true, message = $"Assigned clip '{clip.name}' to Animation component on '{go.name}'.{warning}" };
             }
 
@@ -375,6 +378,7 @@ namespace MCPForUnity.Editor.Tools.Animation
             var animator = go.GetComponent<Animator>();
             if (animator == null)
             {
+                var wasLegacy = clip.legacy;
                 SetupLegacyClip(clip);
                 Undo.RecordObject(go, "Add Animation Component");
                 legacyAnim = Undo.AddComponent<UnityEngine.Animation>(go);
@@ -383,7 +387,8 @@ namespace MCPForUnity.Editor.Tools.Animation
                 legacyAnim.playAutomatically = true;
                 EditorUtility.SetDirty(go);
                 AssetDatabase.SaveAssets();
-                return new { success = true, message = $"Added Animation component and assigned clip '{clip.name}' to '{go.name}'" };
+                var legacyWarning = !wasLegacy ? " Warning: clip was converted to legacy and will not be usable in Mecanim/BlendTrees." : "";
+                return new { success = true, message = $"Added Animation component and assigned clip '{clip.name}' to '{go.name}'.{legacyWarning}" };
             }
 
             // Has Animator - we can't programmatically assign clips to Animator states easily,

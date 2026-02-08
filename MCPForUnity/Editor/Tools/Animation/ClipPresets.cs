@@ -33,7 +33,6 @@ namespace MCPForUnity.Editor.Tools.Animation
             bool loop = @params["loop"]?.ToObject<bool>() ?? true;
 
             // Resolve position offset from target GameObject or explicit offset parameter.
-            // This ensures position-based presets animate relative to the object's current
             // localPosition rather than absolute origin, preventing objects from jumping to (0,0,0).
             Vector3 offset = Vector3.zero;
             var targetToken = @params["target"];
@@ -159,8 +158,8 @@ namespace MCPForUnity.Editor.Tools.Animation
                 new Keyframe(duration, 360f * amplitude)
             );
             // Linear tangents for smooth rotation
-            curve.keys[0].outTangent = 360f * amplitude / duration;
             var keys = curve.keys;
+            keys[0].outTangent = 360f * amplitude / duration;
             keys[1].inTangent = 360f * amplitude / duration;
             curve.keys = keys;
             SetTransformCurve(clip, "localEulerAngles.y", curve);

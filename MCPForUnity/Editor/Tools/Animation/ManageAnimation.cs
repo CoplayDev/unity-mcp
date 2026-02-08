@@ -188,9 +188,10 @@ namespace MCPForUnity.Editor.Tools.Animation
 
                 return new { success = false, message = $"Unknown action: {action}. Actions must be prefixed with: animator_, controller_, or clip_" };
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                return new { success = false, message = ex.Message, stackTrace = ex.StackTrace };
+                McpLog.Error($"[ManageAnimation] Action '{action}' failed: {e}");
+                return new ErrorResponse($"Internal error processing action '{action}': {e.Message}");
             }
         }
 
