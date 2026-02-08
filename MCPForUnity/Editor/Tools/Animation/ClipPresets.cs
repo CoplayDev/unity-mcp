@@ -32,6 +32,28 @@ namespace MCPForUnity.Editor.Tools.Animation
             float amplitude = @params["amplitude"]?.ToObject<float>() ?? 1f;
             bool loop = @params["loop"]?.ToObject<bool>() ?? true;
 
+            // Resolve position offset from target GameObject or explicit offset parameter.
+            // This ensures position-based presets animate relative to the object's current
+            // localPosition rather than absolute origin, preventing objects from jumping to (0,0,0).
+            Vector3 offset = Vector3.zero;
+            var targetToken = @params["target"];
+            if (targetToken != null && targetToken.Type != JTokenType.Null)
+            {
+                string searchMethod = @params["searchMethod"]?.ToString();
+                var go = ObjectResolver.ResolveGameObject(targetToken, searchMethod);
+                if (go != null)
+                    offset = go.transform.localPosition;
+            }
+            var offsetToken = @params["offset"];
+            if (offsetToken is JArray offsetArray && offsetArray.Count >= 3)
+            {
+                offset = new Vector3(
+                    offsetArray[0].ToObject<float>(),
+                    offsetArray[1].ToObject<float>(),
+                    offsetArray[2].ToObject<float>()
+                );
+            }
+
             string dir = Path.GetDirectoryName(clipPath)?.Replace('\\', '/');
             if (!string.IsNullOrEmpty(dir) && !AssetDatabase.IsValidFolder(dir))
                 CreateFoldersRecursive(dir);
@@ -52,7 +74,7 @@ namespace MCPForUnity.Editor.Tools.Animation
             switch (preset)
             {
                 case "bounce":
-                    ApplyBounce(clip, duration, amplitude);
+                    ApplyBounce(clip, duration, amplitude, offset);
                     break;
                 case "rotate":
                     ApplyRotate(clip, duration, amplitude);
@@ -64,10 +86,10 @@ namespace MCPForUnity.Editor.Tools.Animation
                     ApplyFade(clip, duration);
                     break;
                 case "shake":
-                    ApplyShake(clip, duration, amplitude);
+                    ApplyShake(clip, duration, amplitude, offset);
                     break;
                 case "hover":
-                    ApplyHover(clip, duration, amplitude);
+                    ApplyHover(clip, duration, amplitude, offset);
                     break;
                 case "spin":
                     ApplySpin(clip, duration, amplitude);
@@ -76,7 +98,7 @@ namespace MCPForUnity.Editor.Tools.Animation
                     ApplySway(clip, duration, amplitude);
                     break;
                 case "bob":
-                    ApplyBob(clip, duration, amplitude);
+                    ApplyBob(clip, duration, amplitude, offset);
                     break;
                 case "wiggle":
                     ApplyWiggle(clip, duration, amplitude);
@@ -85,7 +107,7 @@ namespace MCPForUnity.Editor.Tools.Animation
                     ApplyBlink(clip, duration);
                     break;
                 case "slide_in":
-                    ApplySlideIn(clip, duration, amplitude);
+                    ApplySlideIn(clip, duration, amplitude, offset);
                     break;
                 case "elastic":
                     ApplyElastic(clip, duration, amplitude);
@@ -100,7 +122,7 @@ namespace MCPForUnity.Editor.Tools.Animation
             return new
             {
                 success = true,
-                message = $"Created '{preset}' preset clip at '{clipPath}'",
+                message = $"Created '{preset}' preset clip at '{clipPath}'" + (offset != Vector3.zero ? $" (offset: {offset})" : ""),
                 data = new
                 {
                     path = clipPath,
@@ -109,23 +131,24 @@ namespace MCPForUnity.Editor.Tools.Animation
                     duration,
                     amplitude,
                     isLooping = loop,
+                    offset = new { x = offset.x, y = offset.y, z = offset.z },
                     curveCount = AnimationUtility.GetCurveBindings(clip).Length
                 }
             };
         }
 
-        private static void ApplyBounce(AnimationClip clip, float duration, float amplitude)
+        private static void ApplyBounce(AnimationClip clip, float duration, float amplitude, Vector3 offset)
         {
-            // localPosition.y sine wave oscillation
+            // localPosition.y sine wave oscillation, offset by target's current position
             float half = duration * 0.5f;
             var curve = new AnimationCurve(
-                new Keyframe(0f, 0f),
-                new Keyframe(half * 0.5f, amplitude),
-                new Keyframe(half, 0f),
-                new Keyframe(half + half * 0.5f, amplitude),
-                new Keyframe(duration, 0f)
+                new Keyframe(0f, offset.y),
+                new Keyframe(half * 0.5f, offset.y + amplitude),
+                new Keyframe(half, offset.y),
+                new Keyframe(half + half * 0.5f, offset.y + amplitude),
+                new Keyframe(duration, offset.y)
             );
-            clip.SetCurve("", typeof(Transform), "localPosition.y", curve);
+            SetTransformCurve(clip, "localPosition.y", curve);
         }
 
         private static void ApplyRotate(AnimationClip clip, float duration, float amplitude)
@@ -140,7 +163,7 @@ namespace MCPForUnity.Editor.Tools.Animation
             var keys = curve.keys;
             keys[1].inTangent = 360f * amplitude / duration;
             curve.keys = keys;
-            clip.SetCurve("", typeof(Transform), "localEulerAngles.y", curve);
+            SetTransformCurve(clip, "localEulerAngles.y", curve);
         }
 
         private static void ApplyPulse(AnimationClip clip, float duration, float amplitude)
@@ -153,9 +176,9 @@ namespace MCPForUnity.Editor.Tools.Animation
                 new Keyframe(half, peak),
                 new Keyframe(duration, 1f)
             );
-            clip.SetCurve("", typeof(Transform), "localScale.x", curve);
-            clip.SetCurve("", typeof(Transform), "localScale.y", curve);
-            clip.SetCurve("", typeof(Transform), "localScale.z", curve);
+            SetTransformCurve(clip, "localScale.x", curve);
+            SetTransformCurve(clip, "localScale.y", curve);
+            SetTransformCurve(clip, "localScale.z", curve);
         }
 
         private static void ApplyFade(AnimationClip clip, float duration)
@@ -165,12 +188,13 @@ namespace MCPForUnity.Editor.Tools.Animation
                 new Keyframe(0f, 1f),
                 new Keyframe(duration, 0f)
             );
-            clip.SetCurve("", typeof(CanvasGroup), "m_Alpha", curve);
+            var binding = EditorCurveBinding.FloatCurve("", typeof(CanvasGroup), "m_Alpha");
+            AnimationUtility.SetEditorCurve(clip, binding, curve);
         }
 
-        private static void ApplyShake(AnimationClip clip, float duration, float amplitude)
+        private static void ApplyShake(AnimationClip clip, float duration, float amplitude, Vector3 offset)
         {
-            // localPosition.x/z oscillation simulating shake
+            // localPosition.x/z oscillation simulating shake, centered on target's current position
             int steps = 8;
             float stepTime = duration / steps;
             var xKeys = new Keyframe[steps + 1];
@@ -182,30 +206,30 @@ namespace MCPForUnity.Editor.Tools.Animation
                 float decay = 1f - (float)i / steps;
                 // Alternating direction with decay
                 float sign = (i % 2 == 0) ? 1f : -1f;
-                xKeys[i] = new Keyframe(t, sign * amplitude * decay);
-                zKeys[i] = new Keyframe(t, -sign * amplitude * 0.5f * decay);
+                xKeys[i] = new Keyframe(t, offset.x + sign * amplitude * decay);
+                zKeys[i] = new Keyframe(t, offset.z - sign * amplitude * 0.5f * decay);
             }
 
-            // End at zero
-            xKeys[steps] = new Keyframe(duration, 0f);
-            zKeys[steps] = new Keyframe(duration, 0f);
+            // End at offset position
+            xKeys[steps] = new Keyframe(duration, offset.x);
+            zKeys[steps] = new Keyframe(duration, offset.z);
 
-            clip.SetCurve("", typeof(Transform), "localPosition.x", new AnimationCurve(xKeys));
-            clip.SetCurve("", typeof(Transform), "localPosition.z", new AnimationCurve(zKeys));
+            SetTransformCurve(clip, "localPosition.x", new AnimationCurve(xKeys));
+            SetTransformCurve(clip, "localPosition.z", new AnimationCurve(zKeys));
         }
 
-        private static void ApplyHover(AnimationClip clip, float duration, float amplitude)
+        private static void ApplyHover(AnimationClip clip, float duration, float amplitude, Vector3 offset)
         {
-            // localPosition.y gentle sine wave (4 samples for smooth sine approximation)
+            // localPosition.y gentle sine wave, offset by target's current position
             float q = duration * 0.25f;
             var curve = new AnimationCurve(
-                new Keyframe(0f, 0f),
-                new Keyframe(q, amplitude * 0.5f),
-                new Keyframe(q * 2f, 0f),
-                new Keyframe(q * 3f, -amplitude * 0.5f),
-                new Keyframe(duration, 0f)
+                new Keyframe(0f, offset.y),
+                new Keyframe(q, offset.y + amplitude * 0.5f),
+                new Keyframe(q * 2f, offset.y),
+                new Keyframe(q * 3f, offset.y - amplitude * 0.5f),
+                new Keyframe(duration, offset.y)
             );
-            clip.SetCurve("", typeof(Transform), "localPosition.y", curve);
+            SetTransformCurve(clip, "localPosition.y", curve);
         }
 
         private static void ApplySpin(AnimationClip clip, float duration, float amplitude)
@@ -219,7 +243,7 @@ namespace MCPForUnity.Editor.Tools.Animation
             keys[0].outTangent = 360f * amplitude / duration;
             keys[1].inTangent = 360f * amplitude / duration;
             curve.keys = keys;
-            clip.SetCurve("", typeof(Transform), "localEulerAngles.z", curve);
+            SetTransformCurve(clip, "localEulerAngles.z", curve);
         }
 
         private static void ApplySway(AnimationClip clip, float duration, float amplitude)
@@ -233,21 +257,21 @@ namespace MCPForUnity.Editor.Tools.Animation
                 new Keyframe(q * 3f, -amplitude),
                 new Keyframe(duration, 0f)
             );
-            clip.SetCurve("", typeof(Transform), "localEulerAngles.z", curve);
+            SetTransformCurve(clip, "localEulerAngles.z", curve);
         }
 
-        private static void ApplyBob(AnimationClip clip, float duration, float amplitude)
+        private static void ApplyBob(AnimationClip clip, float duration, float amplitude, Vector3 offset)
         {
-            // localPosition.z gentle forward/back movement
+            // localPosition.z gentle forward/back movement, offset by target's current position
             float q = duration * 0.25f;
             var curve = new AnimationCurve(
-                new Keyframe(0f, 0f),
-                new Keyframe(q, amplitude * 0.5f),
-                new Keyframe(q * 2f, 0f),
-                new Keyframe(q * 3f, -amplitude * 0.5f),
-                new Keyframe(duration, 0f)
+                new Keyframe(0f, offset.z),
+                new Keyframe(q, offset.z + amplitude * 0.5f),
+                new Keyframe(q * 2f, offset.z),
+                new Keyframe(q * 3f, offset.z - amplitude * 0.5f),
+                new Keyframe(duration, offset.z)
             );
-            clip.SetCurve("", typeof(Transform), "localPosition.z", curve);
+            SetTransformCurve(clip, "localPosition.z", curve);
         }
 
         private static void ApplyWiggle(AnimationClip clip, float duration, float amplitude)
@@ -266,7 +290,7 @@ namespace MCPForUnity.Editor.Tools.Animation
             }
 
             keys[steps] = new Keyframe(duration, 0f);
-            clip.SetCurve("", typeof(Transform), "localEulerAngles.z", new AnimationCurve(keys));
+            SetTransformCurve(clip, "localEulerAngles.z", new AnimationCurve(keys));
         }
 
         private static void ApplyBlink(AnimationClip clip, float duration)
@@ -278,24 +302,24 @@ namespace MCPForUnity.Editor.Tools.Animation
                 new Keyframe(mid, 0.05f),
                 new Keyframe(duration, 1f)
             );
-            clip.SetCurve("", typeof(Transform), "localScale.x", curve);
-            clip.SetCurve("", typeof(Transform), "localScale.y", curve);
-            clip.SetCurve("", typeof(Transform), "localScale.z", curve);
+            SetTransformCurve(clip, "localScale.x", curve);
+            SetTransformCurve(clip, "localScale.y", curve);
+            SetTransformCurve(clip, "localScale.z", curve);
         }
 
-        private static void ApplySlideIn(AnimationClip clip, float duration, float amplitude)
+        private static void ApplySlideIn(AnimationClip clip, float duration, float amplitude, Vector3 offset)
         {
-            // localPosition.x slide from -amplitude to 0 (linear)
+            // localPosition.x slide from offset-amplitude to offset (linear)
             var curve = new AnimationCurve(
-                new Keyframe(0f, -amplitude),
-                new Keyframe(duration, 0f)
+                new Keyframe(0f, offset.x - amplitude),
+                new Keyframe(duration, offset.x)
             );
             // Set linear tangents for smooth slide
             var keys = curve.keys;
             keys[0].outTangent = amplitude / duration;
             keys[1].inTangent = amplitude / duration;
             curve.keys = keys;
-            clip.SetCurve("", typeof(Transform), "localPosition.x", curve);
+            SetTransformCurve(clip, "localPosition.x", curve);
         }
 
         private static void ApplyElastic(AnimationClip clip, float duration, float amplitude)
@@ -310,9 +334,21 @@ namespace MCPForUnity.Editor.Tools.Animation
                 new Keyframe(third * 2f, settle),
                 new Keyframe(duration, 1f)
             );
-            clip.SetCurve("", typeof(Transform), "localScale.x", curve);
-            clip.SetCurve("", typeof(Transform), "localScale.y", curve);
-            clip.SetCurve("", typeof(Transform), "localScale.z", curve);
+            SetTransformCurve(clip, "localScale.x", curve);
+            SetTransformCurve(clip, "localScale.y", curve);
+            SetTransformCurve(clip, "localScale.z", curve);
+        }
+
+        /// <summary>
+        /// Sets an animation curve on a Transform property using AnimationUtility.SetEditorCurve
+        /// instead of clip.SetCurve to avoid marking the clip as legacy. Legacy clips cannot be
+        /// used with Mecanim AnimatorControllers, and legacy Animation components take control of
+        /// the entire Vector3 property (zeroing non-animated axes).
+        /// </summary>
+        private static void SetTransformCurve(AnimationClip clip, string propertyName, AnimationCurve curve)
+        {
+            var binding = EditorCurveBinding.FloatCurve("", typeof(Transform), propertyName);
+            AnimationUtility.SetEditorCurve(clip, binding, curve);
         }
 
         private static void CreateFoldersRecursive(string folderPath)
