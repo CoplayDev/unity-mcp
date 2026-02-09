@@ -341,7 +341,7 @@ jobs:
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "skipped=false" >> "$GITHUB_OUTPUT"
 
-      - name: Enable auto-merge and merge sync PR
+      - name: Merge sync PR
         if: steps.sync_pr.outputs.skipped != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -349,20 +349,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Enable auto-merge (requires repo setting "Allow auto-merge")
-          # Use --no-delete-branch to prevent deleting main (the head branch)
-          gh pr merge "$PR_NUMBER" --merge --auto --no-delete-branch || true
-          # Wait for PR to be merged (poll up to 2 minutes)
-          for i in {1..24}; do
-            STATE=$(gh pr view "$PR_NUMBER" --json state -q '.state')
-            if [[ "$STATE" == "MERGED" ]]; then
-              echo "Sync PR merged successfully."
-              exit 0
-            fi
-            echo "Waiting for sync PR to merge... (state: $STATE)"
-            sleep 5
-          done
-          echo "Sync PR did not merge in time. Attempting direct merge..."
           gh pr merge "$PR_NUMBER" --merge --no-delete-branch
 
   publish_docker:
