@@ -137,7 +137,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr merge "$PR_NUMBER" --merge --delete-branch
+          gh pr merge "$PR_NUMBER" --merge --auto --delete-branch
 
   publish_pypi_prerelease:
     name: Publish beta to PyPI (pre-release)
