@@ -117,6 +117,7 @@ jobs:
           # Check if PR already exists
           if gh pr view "$BRANCH" >/dev/null 2>&1; then
             echo "PR already exists for $BRANCH"
+            PR_NUMBER=$(gh pr view "$BRANCH" --json number -q '.number')
           else
             PR_URL=$(gh pr create \
               --base beta \
@@ -125,8 +126,8 @@ jobs:
               --body "Automated beta version bump for the Unity package.")
             echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
             PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
-            echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           fi
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "updated=true" >> "$GITHUB_OUTPUT"
 
       - name: Auto-merge version bump PR
