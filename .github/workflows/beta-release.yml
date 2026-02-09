@@ -137,27 +137,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr merge "$PR_NUMBER" --merge --auto || true
-          for i in {1..24}; do
-            STATE=$(gh pr view "$PR_NUMBER" --json state -q '.state')
-            if [[ "$STATE" == "MERGED" ]]; then
-              echo "PR merged successfully."
-              exit 0
-            fi
-            echo "Waiting for PR to merge... (state: $STATE)"
-            sleep 5
-          done
-          echo "PR did not merge in time. Attempting direct merge..."
-          gh pr merge "$PR_NUMBER" --merge
-
-      - name: Clean up version bump branch
-        if: always() && steps.commit.outputs.branch != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BRANCH: ${{ steps.commit.outputs.branch }}
-        shell: bash
-        run: |
-          git push origin --delete "$BRANCH" || true
+          gh pr merge "$PR_NUMBER" --merge --delete-branch
 
   publish_pypi_prerelease:
     name: Publish beta to PyPI (pre-release)
