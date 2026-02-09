@@ -124,8 +124,40 @@ jobs:
               --title "chore: update Unity package to beta version ${BETA_VERSION}" \
               --body "Automated beta version bump for the Unity package.")
             echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+            PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+            echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           fi
           echo "updated=true" >> "$GITHUB_OUTPUT"
+
+      - name: Auto-merge version bump PR
+        if: steps.commit.outputs.updated == 'true' && steps.commit.outputs.pr_number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.commit.outputs.pr_number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh pr merge "$PR_NUMBER" --merge --auto || true
+          for i in {1..24}; do
+            STATE=$(gh pr view "$PR_NUMBER" --json state -q '.state')
+            if [[ "$STATE" == "MERGED" ]]; then
+              echo "PR merged successfully."
+              exit 0
+            fi
+            echo "Waiting for PR to merge... (state: $STATE)"
+            sleep 5
+          done
+          echo "PR did not merge in time. Attempting direct merge..."
+          gh pr merge "$PR_NUMBER" --merge
+
+      - name: Clean up version bump branch
+        if: always() && steps.commit.outputs.branch != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.commit.outputs.branch }}
+        shell: bash
+        run: |
+          git push origin --delete "$BRANCH" || true
 
   publish_pypi_prerelease:
     name: Publish beta to PyPI (pre-release)
