@@ -342,7 +342,7 @@ namespace MCPForUnityTests.Editor.Services
             return IsGitInstallationResult;
         }
 
-        protected override string FetchLatestVersionFromGitHub()
+        protected override string FetchLatestVersionFromGitHub(string branch)
         {
             GitFetchCalled = true;
             return GitFetchResult;
