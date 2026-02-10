@@ -50,6 +50,7 @@ namespace MCPForUnity.Editor.Windows
         private bool resourcesLoaded = false;
         private double lastRefreshTime = 0;
         private const double RefreshDebounceSeconds = 0.5;
+        private bool updateCheckQueued = false;
 
         private enum ActivePanel
         {
@@ -323,6 +324,7 @@ namespace MCPForUnity.Editor.Windows
 
             // Initial updates
             RefreshAllData();
+            QueueUpdateCheck();
         }
 
         private void UpdateVersionLabel(bool useBetaServer)
@@ -337,6 +339,53 @@ namespace MCPForUnity.Editor.Windows
             versionLabel.tooltip = useBetaServer
                 ? "Beta server mode - fetching pre-release server versions from PyPI"
                 : $"MCP For Unity v{version}";
+        }
+
+        private void QueueUpdateCheck()
+        {
+            if (updateCheckQueued)
+            {
+                return;
+            }
+
+            updateCheckQueued = true;
+            EditorApplication.delayCall += CheckForPackageUpdates;
+        }
+
+        private void CheckForPackageUpdates()
+        {
+            updateCheckQueued = false;
+
+            if (updateNotification == null || updateNotificationText == null)
+            {
+                return;
+            }
+
+            string currentVersion = AssetPathUtility.GetPackageVersion();
+            if (string.IsNullOrEmpty(currentVersion) || currentVersion == "unknown")
+            {
+                updateNotification.RemoveFromClassList("visible");
+                return;
+            }
+
+            try
+            {
+                var result = MCPServiceLocator.Updates.CheckForUpdate(currentVersion);
+                if (result.CheckSucceeded && result.UpdateAvailable && !string.IsNullOrEmpty(result.LatestVersion))
+                {
+                    updateNotificationText.text = $"Newer version available: v{result.LatestVersion} (current v{currentVersion})";
+                    updateNotification.AddToClassList("visible");
+                }
+                else
+                {
+                    updateNotification.RemoveFromClassList("visible");
+                }
+            }
+            catch (Exception ex)
+            {
+                McpLog.Info($"Package update check skipped: {ex.Message}");
+                updateNotification.RemoveFromClassList("visible");
+            }
         }
 
         private void EnsureToolsLoaded()
@@ -460,6 +509,7 @@ namespace MCPForUnity.Editor.Windows
 
             advancedSection?.UpdatePathOverrides();
             clientConfigSection?.RefreshSelectedClient();
+            QueueUpdateCheck();
         }
 
         private void SetupTabs()
