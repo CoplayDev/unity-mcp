@@ -21,26 +21,50 @@ import argparse
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from functools import partial
 import os
 import sys
 import threading
 import time
-from typing import AsyncIterator, Any
+from typing import AsyncIterator, Any, Callable, Literal
 from urllib.parse import urlparse
+import anyio
+
+# Keep this local to avoid importing FastMCP internal modules just for typing.
+Transport = Literal["stdio", "http", "sse", "streamable-http"]
 
 # Windows asyncio fix: Use SelectorEventLoop instead of ProactorEventLoop
 # This fixes "WinError 64: The specified network name is no longer available"
 # which occurs with WebSocket connections under heavy client reconnect scenarios.
 #
-# Python version compatibility:
-# - Python 3.8-3.15: Use WindowsSelectorEventLoopPolicy (set_event_loop_policy)
-# - Python 3.16+: Policy system removed, patch new_event_loop to use SelectorEventLoop
-#
 # Set UNITY_MCP_ASYNCIO_POLICY=proactor to override and use ProactorEventLoop.
-if sys.platform == "win32" and os.getenv("UNITY_MCP_ASYNCIO_POLICY", "selector").lower() == "selector":
-    if hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-        # else Python 3.16+: WindowsSelectorEventLoopPolicy removed; workaround unavailable.
+def _get_asyncio_loop_factory() -> Callable[[], asyncio.AbstractEventLoop] | None:
+    if sys.platform != "win32":
+        return None
+
+    policy = os.getenv("UNITY_MCP_ASYNCIO_POLICY", "selector").lower()
+    if policy == "selector":
+        return asyncio.SelectorEventLoop
+
+    return None
+
+
+def _run_mcp(mcp: "FastMCP", transport: Transport, **transport_kwargs: Any) -> None:
+    """Run FastMCP with an optional Windows-specific loop factory."""
+    loop_factory = _get_asyncio_loop_factory()
+    if loop_factory is None:
+        mcp.run(transport=transport, **transport_kwargs)
+        return
+
+    anyio.run(
+        partial(
+            mcp.run_async,
+            transport,
+            show_banner=True,
+            **transport_kwargs,
+        ),
+        backend_options={"loop_factory": loop_factory},
+    )
        
         
 # Workaround for environments where tool signature evaluation runs with a globals
@@ -841,7 +865,7 @@ Examples:
     # Determine transport mode
     if config.transport_mode == 'http':
         # Use HTTP transport for FastMCP
-        transport = 'http'
+        transport: Transport = "http"
         # Use the parsed host and port from URL/args
         http_url = os.environ.get("UNITY_MCP_HTTP_URL", args.http_url)
         parsed_url = urlparse(http_url)
@@ -849,11 +873,12 @@ Examples:
             "UNITY_MCP_HTTP_HOST") or parsed_url.hostname or "localhost"
         port = args.http_port or _env_port or parsed_url.port or 8080
         logger.info(f"Starting FastMCP with HTTP transport on {host}:{port}")
-        mcp.run(transport=transport, host=host, port=port)
+        _run_mcp(mcp, transport=transport, host=host, port=port)
     else:
         # Use stdio transport for traditional MCP
         logger.info("Starting FastMCP with stdio transport")
-        mcp.run(transport='stdio')
+        transport: Transport = "stdio"
+        _run_mcp(mcp, transport=transport)
 
 
 # Run the server

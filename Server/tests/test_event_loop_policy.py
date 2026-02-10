@@ -1,110 +1,58 @@
 """
-Test event loop policy configuration for Windows.
+Test event loop configuration for Windows.
 
-This module verifies that the correct asyncio event loop policy is used
+This module verifies that the correct asyncio loop factory is selected
 on different platforms to prevent WinError 64 on Windows.
 
 WinError 64 occurs when using ProactorEventLoop with concurrent
 WebSocket and HTTP connections. The fix is to use SelectorEventLoop
 on Windows.
 
-Related fix: Server/src/main.py:31-35
+Related fix: Server/src/main.py
 """
 
 import sys
 import asyncio
+from functools import partial
 import pytest
 
 
-@pytest.fixture(scope="module")
-def original_policy_type():
-    """
-    Capture the original policy type before any test imports main.
-
-    This fixture runs once per module and captures the true default
-    event loop policy before main.py potentially modifies it.
-    """
-    return type(asyncio.get_event_loop_policy())
-
-
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows-specific")
-def test_windows_uses_selector_event_loop_policy():
+def test_windows_uses_selector_event_loop_factory():
     """
-    Verify that Windows uses SelectorEventLoopPolicy instead of ProactorEventLoop.
+    Verify that Windows uses SelectorEventLoop via loop_factory.
 
     This prevents WinError 64 when handling concurrent WebSocket and HTTP connections.
 
     Regression test for Windows asyncio bug where ProactorEventLoop's IOCP
     has race conditions with rapid connection changes.
 
-    The fix is applied in Server/src/main.py:40-52
+    The fix is applied in Server/src/main.py
     """
-    # Import main module to trigger event loop policy setting
     import importlib
-    import main
+    import main  # type: ignore[import] - conftest.py adds src to sys.path
     importlib.reload(main)
 
-    # Get the current event loop policy
-    policy = asyncio.get_event_loop_policy()
-
-    # Use getattr to avoid AttributeError on non-Windows platforms
-    # during pytest collection phase
-    WindowsSelectorEventLoopPolicy = getattr(
-        asyncio, 'WindowsSelectorEventLoopPolicy', None
+    loop_factory = main._get_asyncio_loop_factory()
+    assert loop_factory is asyncio.SelectorEventLoop, (
+        "Expected SelectorEventLoop for Windows loop_factory"
     )
-
-    # Verify it's SelectorEventLoopPolicy, not ProactorEventLoop
-    assert WindowsSelectorEventLoopPolicy is not None, \
-        "WindowsSelectorEventLoopPolicy should exist on Windows"
-    assert isinstance(
-        policy,
-        WindowsSelectorEventLoopPolicy
-    ), f"Expected WindowsSelectorEventLoopPolicy on Windows, got {type(policy).__name__}"
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Non-Windows only")
-def test_non_windows_uses_default_policy(original_policy_type):
+def test_non_windows_uses_default_loop_factory():
     """
-    Verify that non-Windows platforms keep their default event loop policy.
+    Verify that non-Windows platforms keep their default event loop behavior.
 
-    SelectorEventLoopPolicy should only be used on Windows to avoid the
-    IOCP bug. Other platforms should use their optimal default policy.
-
-    Uses the original_policy_type fixture to capture the policy before
-    any test imports main, avoiding cross-test pollution from reload.
+    SelectorEventLoop should only be used on Windows to avoid the IOCP bug.
+    Other platforms should use their optimal default event loop.
     """
     import importlib
-    import main
+    import main  # type: ignore[import] - conftest.py adds src to sys.path
     importlib.reload(main)
 
-    # Policy type should be unchanged on non-Windows platforms
-    current_policy_type = type(asyncio.get_event_loop_policy())
-    assert current_policy_type == original_policy_type, (
-        f"Non-Windows platforms should keep default policy, "
-        f"changed from {original_policy_type.__name__} to {current_policy_type.__name__}"
-    )
-
-
-def test_event_loop_policy_is_configured():
-    """
-    Verify that an asyncio event loop policy is configured after importing main.
-
-    The policy is set at module import time in main.py to ensure all
-    subsequent async operations use the correct event loop implementation.
-    """
-    import importlib
-    import main
-
-    # Reload main to ensure policy is (re)configured
-    importlib.reload(main)
-
-    # Policy should be set (not None)
-    policy = asyncio.get_event_loop_policy()
-    assert policy is not None, "Event loop policy should be set"
-
-    # Policy should be a concrete instance, not a class
-    assert isinstance(policy, asyncio.AbstractEventLoopPolicy), \
-        f"Event loop policy should be an AbstractEventLoopPolicy instance, got {type(policy)}"
+    loop_factory = main._get_asyncio_loop_factory()
+    assert loop_factory is None, "Non-Windows platforms should not set a loop_factory"
 
 
 @pytest.mark.asyncio
@@ -119,7 +67,7 @@ async def test_async_operations_use_correct_event_loop():
     """
     # Import main to ensure the event loop policy is configured
     import importlib
-    import main
+    import main  # type: ignore[import] - conftest.py adds src to sys.path
     importlib.reload(main)
 
     # Simple async operation
@@ -138,43 +86,76 @@ async def test_async_operations_use_correct_event_loop():
     assert loop.is_running(), "Event loop should be in running state"
 
 
+def test_run_mcp_uses_fastmcp_run_when_no_loop_factory(monkeypatch: pytest.MonkeyPatch):
+    """When no loop factory is needed, _run_mcp should delegate to FastMCP.run."""
+    import importlib
+    import main  # type: ignore[import] - conftest.py adds src to sys.path
+    importlib.reload(main)
+
+    class DummyMCP:
+        def __init__(self) -> None:
+            self.run_called = False
+            self.run_kwargs = {}
+
+        def run(self, **kwargs):
+            self.run_called = True
+            self.run_kwargs = kwargs
+
+    monkeypatch.setattr(main, "_get_asyncio_loop_factory", lambda: None)
+
+    mcp = DummyMCP()
+    main._run_mcp(mcp, transport="stdio")
+
+    assert mcp.run_called
+    assert mcp.run_kwargs["transport"] == "stdio"
+
+
+def test_run_mcp_uses_anyio_with_loop_factory(monkeypatch: pytest.MonkeyPatch):
+    """When loop factory exists, _run_mcp should use anyio.run with backend options."""
+    import importlib
+    import main  # type: ignore[import] - conftest.py adds src to sys.path
+    importlib.reload(main)
+
+    class DummyMCP:
+        async def run_async(self, transport, show_banner=True, **kwargs):
+            return None
+
+    captured = {}
+
+    def fake_anyio_run(func, *args, **kwargs):
+        captured["func"] = func
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return None
+
+    monkeypatch.setattr(main, "anyio", type("AnyIOStub", (), {"run": staticmethod(fake_anyio_run)}))
+    monkeypatch.setattr(main, "_get_asyncio_loop_factory", lambda: asyncio.SelectorEventLoop)
+
+    mcp = DummyMCP()
+    main._run_mcp(mcp, transport="http", host="localhost", port=8080)
+
+    assert isinstance(captured["func"], partial)
+    assert captured["func"].args[0] == "http"
+    assert captured["func"].keywords["show_banner"] is True
+    assert captured["func"].keywords["host"] == "localhost"
+    assert captured["func"].keywords["port"] == 8080
+    assert captured["kwargs"]["backend_options"]["loop_factory"] is asyncio.SelectorEventLoop
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows-specific")
-def test_windows_policy_prevents_proactor():
+def test_windows_loop_factory_prevents_proactor():
     """
-    Verify that Windows explicitly avoids ProactorEventLoop.
+    Verify that Windows loop_factory explicitly avoids ProactorEventLoop.
 
     ProactorEventLoop uses IOCP which has known issues with WinError 64
     when handling rapid connection changes. This test confirms we're
     not using ProactorEventLoop.
     """
     import importlib
-    import main
+    import main  # type: ignore[import] - conftest.py adds src to sys.path
     importlib.reload(main)
 
-    policy = asyncio.get_event_loop_policy()
-
-    # Use getattr to safely reference Windows-specific policies
-    WindowsSelectorEventLoopPolicy = getattr(
-        asyncio, 'WindowsSelectorEventLoopPolicy', None
+    loop_factory = main._get_asyncio_loop_factory()
+    assert loop_factory is asyncio.SelectorEventLoop, (
+        "SelectorEventLoop should be used on Windows (prevents WinError 64)"
     )
-    WindowsProactorEventLoopPolicy = getattr(
-        asyncio, 'WindowsProactorEventLoopPolicy', None
-    )
-
-    # These should exist on Windows
-    assert WindowsSelectorEventLoopPolicy is not None, \
-        "WindowsSelectorEventLoopPolicy should exist on Windows"
-    assert WindowsProactorEventLoopPolicy is not None, \
-        "WindowsProactorEventLoopPolicy should exist on Windows"
-
-    # Should NOT be ProactorEventLoop
-    assert not isinstance(
-        policy,
-        WindowsProactorEventLoopPolicy
-    ), "ProactorEventLoop should not be used on Windows (causes WinError 64)"
-
-    # Should be SelectorEventLoop
-    assert isinstance(
-        policy,
-        WindowsSelectorEventLoopPolicy
-    ), "SelectorEventLoop should be used on Windows (prevents WinError 64)"
