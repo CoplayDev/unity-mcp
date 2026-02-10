@@ -19,9 +19,21 @@ namespace MCPForUnity.Editor.Helpers
         /// <param name="renderer">The renderer to check</param>
         public static void EnsureMaterial(Renderer renderer)
         {
-            if (renderer == null || renderer.sharedMaterial != null)
+            if (renderer == null)
             {
                 return;
+            }
+
+            var existingMaterial = renderer.sharedMaterial;
+            if (IsUsableMaterial(existingMaterial))
+            {
+                return;
+            }
+
+            if (existingMaterial != null)
+            {
+                var shaderName = existingMaterial.shader != null ? existingMaterial.shader.name : "(null)";
+                McpLog.Warn($"[RendererHelpers] Replacing invalid VFX material '{existingMaterial.name}' (shader: {shaderName}).");
             }
 
             RenderPipelineUtility.VFXComponentType? componentType = null;
@@ -44,10 +56,32 @@ namespace MCPForUnity.Editor.Helpers
                 if (defaultMat != null)
                 {
                     Undo.RecordObject(renderer, "Assign default VFX material");
-                    EditorUtility.SetDirty(renderer);
                     renderer.sharedMaterial = defaultMat;
+                    EditorUtility.SetDirty(renderer);
                 }
             }
+        }
+
+        private static bool IsUsableMaterial(Material material)
+        {
+            if (material == null)
+            {
+                return false;
+            }
+
+            var shader = material.shader;
+            if (shader == null)
+            {
+                return false;
+            }
+
+            var shaderName = shader.name ?? string.Empty;
+            if (shaderName.IndexOf("InternalErrorShader", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return false;
+            }
+
+            return shader.isSupported;
         }
 
         /// <summary>
