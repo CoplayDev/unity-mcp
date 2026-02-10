@@ -10,7 +10,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 
 # All possible actions grouped by component type
 PARTICLE_ACTIONS = [
-    "particle_get_info", "particle_set_main", "particle_set_emission", "particle_set_shape",
+    "particle_create", "particle_get_info", "particle_set_main", "particle_set_emission", "particle_set_shape",
     "particle_set_color_over_lifetime", "particle_set_size_over_lifetime",
     "particle_set_velocity_over_lifetime", "particle_set_noise", "particle_set_renderer",
     "particle_enable_module", "particle_play", "particle_stop", "particle_pause",
