@@ -339,7 +339,7 @@ jobs:
 
           git checkout -b "$SYNC_BRANCH" origin/beta
 
-          if git merge origin/main --no-ff --no-commit -m "chore: sync main (v${NEW_VERSION}) into beta"; then
+          if git merge origin/main --no-ff --no-commit; then
             echo "main merged cleanly into sync branch."
           else
             echo "Merge conflicts detected. Attempting expected conflict resolution for beta version files."

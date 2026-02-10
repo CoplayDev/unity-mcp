@@ -324,7 +324,6 @@ namespace MCPForUnity.Editor.Windows
 
             // Initial updates
             RefreshAllData();
-            QueueUpdateCheck();
         }
 
         private void UpdateVersionLabel(bool useBetaServer)
