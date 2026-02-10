@@ -3,7 +3,10 @@
     "rootNamespace": "MCPForUnity.Editor",
     "references": [
         "MCPForUnity.Runtime",
-        "Newtonsoft.Json"
+        "Newtonsoft.Json",
+        "glTFast",
+        "Trellis.Editor",
+        "Trellis.Runtime"
     ],
     "includePlatforms": [
         "Editor"

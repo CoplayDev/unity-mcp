@@ -1,0 +1,2375 @@
+
+ ▐▛███▜▌   Claude Code v2.1.37
+▝▜█████▛▘  Sonnet 4.5 · Claude API
+  ▘▘ ▝▝    X:\GithubProjects\unity-mcp
+
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Plan to implement                                                            │
+│                                                                              │
+│ Plan: Redesign Streamlit SceneSpec Editor for Educators                      │
+│                                                                              │
+│ Context                                                                      │
+│                                                                              │
+│ The current app.py is too technical — it exposes Unity internals             │
+│ (transforms, asset strategies, VFX types) to educators who only care about   │
+│ the conceptual mapping between a target concept (e.g., "AI Recommendation    │
+│ System") and a source analogy (e.g., "Bee Pollination"). The app needs to be │
+│  redesigned so that:                                                         │
+│                                                                              │
+│ 1. Educators fill in only the conceptual mapping table (target attributes,   │
+│ source attributes, relationship descriptions)                                │
+│ 2. An LLM call (Step 1) inside Streamlit generates interaction/environment   │
+│ suggestions that the teacher reviews                                         │
+│ 3. A generated prompt (Step 2) is produced for Claude Code to execute the    │
+│ scene in Unity                                                               │
+│                                                                              │
+│ The environment tab with all its technical sliders moves to an "Advanced     │
+│ Settings" expander. The mapping table is simplified to just the columns      │
+│ educators understand.                                                        │
+│                                                                              │
+│ Two-Step LLM Workflow                                                        │
+│                                                                              │
+│ Teacher fills mapping table (target concept ↔ source analogy)                │
+│          ↓                                                                   │
+│   [Step 1: "Suggest" button]                                                 │
+│          ↓ LLM call in Streamlit (OpenAI or Anthropic)                       │
+│   LLM returns: suggested interactions, environment, asset strategies         │
+│          ↓                                                                   │
+│   Teacher reviews suggestions in Streamlit, edits if needed                  │
+│          ↓                                                                   │
+│   [Step 2: "Generate Prompt" button]                                         │
+│          ↓                                                                   │
+│   Produces ready-to-paste prompt for Claude Code                             │
+│          ↓                                                                   │
+│   Teacher pastes into Claude Code → executes via MCP → Unity scene           │
+│                                                                              │
+│ File: Server/src/scene_generator/app.py — Full Rewrite                       │
+│                                                                              │
+│ Layout Changes                                                               │
+│                                                                              │
+│ Sidebar (unchanged purpose, cleaner look):                                   │
+│ - Load/Presets/New/Export — same as before                                   │
+│ - API Key section: text input for API key, selectbox for provider (OpenAI /  │
+│ Anthropic), stored in st.session_state                                       │
+│ - Validation status indicator                                                │
+│                                                                              │
+│ Main Area: 2 tabs (down from 4)                                              │
+│                                                                              │
+│ Tab 1: "Concept Mapping" (merges old Scene Info + Mappings)                  │
+│ - Top: target_concept ("What are you teaching?"), source_concept (renamed    │
+│ from analogy_domain — "What analogy are you using?"), learning_goal,         │
+│ task_label                                                                   │
+│ - Below: Simplified mapping table with st.data_editor:                       │
+│   - Target Attribute (renamed from structural_component, selectbox with same │
+│  enum values but displayed with friendly labels: "User" → "Learner Role",    │
+│ "content_item" → "Content Items", etc.)                                      │
+│   - Source Attribute (renamed from analogy_name — e.g., "Bee", "Flower")     │
+│   - Relationship (renamed from analogy_description — how do they relate?)    │
+│ - No position/scale/color/asset_strategy columns — those are for the LLM to  │
+│ decide                                                                       │
+│ - Below the table: Interaction editor (same as before but only shown for     │
+│ rows that have interactions, after LLM suggestion)                           │
+│                                                                              │
+│ Tab 2: "Generate & Preview" (merges old Preview + Generate)                  │
+│ - Step 1: "Get Suggestions" button — calls LLM with the mapping table,       │
+│ receives back a full spec with suggested interactions/environment/asset      │
+│ strategies                                                                   │
+│   - Shows suggestions in a readable format (not raw JSON)                    │
+│   - Environment summary, per-mapping interaction cards                       │
+│   - Teacher can accept or request re-generation                              │
+│   - On accept: merges suggestions into spec_data                             │
+│ - Step 2: "Generate Prompt for Claude Code" button — same as current,        │
+│ produces the execution prompt                                                │
+│ - Batch plan preview (phases table, hints, warnings) shown after step 2      │
+│                                                                              │
+│ Advanced Settings (expander at bottom or in sidebar):                        │
+│ - All environment controls: setting, skybox, terrain, lighting, camera       │
+│ - Environment description at the top of this section                         │
+│ - Per-mapping overrides: position, scale, color, asset_strategy,             │
+│ primitive_type, trellis_prompt                                               │
+│                                                                              │
+│ Column Renaming (Display Only — JSON Keys Unchanged)                         │
+│                                                                              │
+│ The underlying JSON schema (models.py) stays the same. Only the Streamlit UI │
+│  labels change:                                                              │
+│ ┌────────────────┬──────────────────┬──────────────────────┐                 │
+│ │  Old UI Label  │   New UI Label   │ JSON key (unchanged) │                 │
+│ ├────────────────┼──────────────────┼──────────────────────┤                 │
+│ │ Component      │ Target Attribute │ structural_component │                 │
+│ ├────────────────┼──────────────────┼──────────────────────┤                 │
+│ │ Name           │ Source Attribute │ analogy_name         │                 │
+│ ├────────────────┼──────────────────┼──────────────────────┤                 │
+│ │ Description    │ Relationship     │ analogy_description  │                 │
+│ ├────────────────┼──────────────────┼──────────────────────┤                 │
+│ │ Analogy Domain │ Source Concept   │ analogy_domain       │                 │
+│ └────────────────┴──────────────────┴──────────────────────┘                 │
+│ Friendly display labels for structural_component enum values:                │
+│ COMPONENT_LABELS = {                                                         │
+│     "user": "Learner Role",                                                  │
+│     "content_item": "Content Items",                                         │
+│     "user_profile": "User Profile",                                          │
+│     "user_interaction": "User Interaction",                                  │
+│     "profile_update": "Profile Update",                                      │
+│     "candidate_generation": "Candidate Generation",                          │
+│     "ranking": "Ranking / Sorting",                                          │
+│     "feedback_loop": "Feedback Loop",                                        │
+│ }                                                                            │
+│                                                                              │
+│ LLM Integration                                                              │
+│                                                                              │
+│ Provider support (OpenAI first, Anthropic fallback):                         │
+│ LLM_PROVIDERS = ["OpenAI", "Anthropic"]                                      │
+│ # Sidebar: selectbox for provider, text_input for API key                    │
+│ # Try env var first (OPENAI_API_KEY / ANTHROPIC_API_KEY), then sidebar input │
+│                                                                              │
+│ Step 1 prompt construction — sends to LLM:                                   │
+│ - The target concept, source concept, learning goal                          │
+│ - The mapping table (target attributes + source attributes + relationships)  │
+│ - Instructions to suggest: environment setting, asset strategies per         │
+│ mapping, interaction specs, and a game-like loop description                 │
+│ - A JSON schema showing the expected output format (subset of SceneSpec)     │
+│                                                                              │
+│ LLM response parsing:                                                        │
+│ - Parse the JSON response                                                    │
+│ - Validate through SceneSpec.model_validate() (merge with teacher's mapping  │
+│ data)                                                                        │
+│ - Show suggestions as readable cards (not raw JSON)                          │
+│ - Store in st.session_state["llm_suggestions"]                               │
+│                                                                              │
+│ Dependencies: Add openai and anthropic to pyproject.toml                     │
+│ [project.optional-dependencies] gui section.                                 │
+│                                                                              │
+│ Educator-Friendly UX Improvements                                            │
+│                                                                              │
+│ 1. Guided language: All labels use plain English. "What are you teaching?"   │
+│ instead of "Target Concept". Help text on every field.                       │
+│ 2. No technical jargon in the main flow: no "VFX", "primitive", "trellis" —  │
+│ these appear only in Advanced Settings.                                      │
+│ 3. Step-by-step flow: Tab 1 is "describe", Tab 2 is "generate". Clear        │
+│ numbered steps.                                                              │
+│ 4. Suggestion cards: LLM suggestions shown as readable cards with headers    │
+│ like "Environment: Sunny Garden" and "Bee → Learner Role: The student        │
+│ embodies a bee..." rather than raw JSON.                                     │
+│ 5. Interaction viewer: After LLM suggestions, show interactions in a         │
+│ readable format: "When [trigger], [source] causes [effect] on [targets]"     │
+│                                                                              │
+│ Files Changed                                                                │
+│ File: Server/src/scene_generator/app.py                                      │
+│ Action: REWRITE — new layout, LLM integration, educator-friendly UX          │
+│ ────────────────────────────────────────                                     │
+│ File: Server/pyproject.toml                                                  │
+│ Action: EDIT — add openai and anthropic to gui extras                        │
+│ No changes to models.py or validator.py — the JSON schema stays the same,    │
+│ only the UI labels change.                                                   │
+│                                                                              │
+│ Verification                                                                 │
+│                                                                              │
+│ cd "X:\GithubProjects\unity-mcp\Server"                                      │
+│ pip install -e ".[gui]"                                                      │
+│ streamlit run src/scene_generator/app.py                                     │
+│                                                                              │
+│ 1. Load bee_garden.json preset → verify mapping table shows 3-column view    │
+│ (Target Attribute, Source Attribute, Relationship)                           │
+│ 2. Set an OpenAI API key in sidebar → click "Get Suggestions" → verify LLM   │
+│ returns interaction suggestions displayed as cards                           │
+│ 3. Accept suggestions → click "Generate Prompt" → verify prompt includes     │
+│ full spec + batch plan                                                       │
+│ 4. Open Advanced Settings → verify environment controls are all there        │
+│ 5. Create new spec from scratch: fill in target concept + mapping table →    │
+│ get suggestions → generate prompt → round-trip                               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+● I'll start by reading the existing files to understand the current
+  implementation before rewriting.
+
+● Read 3 files (ctrl+o to expand)
+
+● Now let me also check if there are any test spec files to understand the data
+  shape.
+
+● Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● Let me read one of the test specs to understand the data shape.
+
+● Read 1 file (ctrl+o to expand)
+
+● Now I have a thorough understanding of all files. Let me create the task list
+  and start implementing.
+
+● Now let me write the full rewrite of app.py.
+
+● Write(Server\src\scene_generator\app.py)
+  ⎿  Added 1082 lines, removed 654 lines
+         1 -"""Streamlit GUI for creating and editing SceneSpec JSON file
+           -s."""                                                       
+         2 -from __future__ import annotations                          
+         3 -                                                            
+         4 -import json                                                 
+         5 -import sys                                                  
+         6 -from pathlib import Path                                    
+         7 -from typing import Any                                      
+         8 -                                                            
+         9 -import streamlit as st                                      
+        10 -from pydantic import ValidationError                        
+        11 -                                                            
+        12 -# When run via `streamlit run`, there's no parent package, so
+           - relative imports                                           
+        13 -# fail. Add the parent of this package to sys.path so absolut
+           -e imports work.                                             
+        14 -_pkg_dir = Path(__file__).resolve().parent                  
+        15 -if str(_pkg_dir.parent) not in sys.path:                    
+        16 -    sys.path.insert(0, str(_pkg_dir.parent))                
+        17 -                                                            
+        18 -from scene_generator.models import (                        
+        19 -    AssetStrategy,                                          
+        20 -    BatchExecutionPlan,                                     
+        21 -    MCPCallPlan,                                            
+        22 -    SceneSpec,                                              
+        23 -    SkyboxPreset,                                           
+        24 -    StructuralComponent,                                    
+        25 -)                                                           
+        26 -from scene_generator.validator import PlanValidator         
+        27 -                                                            
+        28 -# -----------------------------------------------------------
+           -----------------                                            
+        29 -# Constants                                                 
+        30 -# -----------------------------------------------------------
+           -----------------                                            
+        31 -                                                            
+        32 -TEST_SPECS_DIR = Path(__file__).parent / "test_specs"       
+        33 -                                                            
+        34 -STRUCTURAL_COMPONENTS = [e.value for e in StructuralComponent
+           -]                                                           
+        35 -ASSET_STRATEGIES = [e.value for e in AssetStrategy]         
+        36 -SKYBOX_PRESETS = [e.value for e in SkyboxPreset]            
+        37 -                                                            
+        38 -TRIGGER_OPTIONS = [                                         
+        39 -    "button_press", "proximity", "collision", "continuous", "
+           -on_start", "custom",                                        
+        40 -]                                                           
+        41 -ANIMATION_PRESETS = [                                       
+        42 -    "", "pulse", "hover", "sway", "spin", "bounce", "grow", "
+           -shrink",                                                    
+        43 -    "shake", "fade_in", "fade_out", "orbit", "wave", "breathe
+           -",                                                          
+        44 -]                                                           
+        45 -VFX_TYPES = [                                               
+        46 -    "", "particle_burst", "particle_continuous", "line_beam",
+           - "trail",                                                   
+        47 -]                                                           
+        48 -PRIMITIVE_TYPES = [                                         
+        49 -    "Cube", "Sphere", "Cylinder", "Capsule", "Plane", "Quad",
+           -                                                             
+        50 -]                                                           
+        51 -                                                            
+        52 -                                                            
+        53 -def _default_spec() -> dict[str, Any]:                      
+        54 -    """Return a minimal empty spec dict."""                 
+        55 -    return {                                                
+        56 -        "target_concept": "",                               
+        57 -        "analogy_domain": "",                               
+        58 -        "learning_goal": "",                                
+        59 -        "task_label": "",                                   
+        60 -        "environment": {                                    
+        61 -            "setting": "garden",                            
+        62 -            "terrain_type": "plane",                        
+        63 -            "terrain_size": [30, 1, 30],                    
+        64 -            "terrain_color": [0.3, 0.6, 0.2, 1.0],          
+        65 -            "skybox": "sunny",                              
+        66 -            "ambient_color": [0.8, 0.9, 0.7, 1.0],          
+        67 -            "lighting": {                                   
+        68 -                "color": [1.0, 0.95, 0.9, 1.0],             
+        69 -                "intensity": 1.0,                           
+        70 -                "rotation": [50, -30, 0],                   
+        71 -                "shadow_type": "soft",                      
+        72 -            },                                              
+        73 -            "camera": {                                     
+        74 -                "position": [0, 1.6, -5],                   
+        75 -                "rotation": [10, 0, 0],                     
+        76 -                "field_of_view": 60.0,                      
+        77 -                "is_vr": True,                              
+        78 -            },                                              
+        79 -            "description": "",                              
+        80 -        },                                                  
+        81 -        "mappings": [],                                     
+        82 -    }                                                       
+        83 -                                                            
+        84 -                                                            
+        85 -# -----------------------------------------------------------
+           -----------------                                            
+        86 -# Color helpers                                             
+        87 -# -----------------------------------------------------------
+           -----------------                                            
+        88 -                                                            
+        89 -def _rgba_to_hex(rgba: list[float]) -> str:                 
+        90 -    """Convert [r,g,b,a] floats (0-1) to #RRGGBB hex string."
+           -""                                                          
+        91 -    r = int(max(0, min(1, rgba[0])) * 255)                  
+        92 -    g = int(max(0, min(1, rgba[1])) * 255)                  
+        93 -    b = int(max(0, min(1, rgba[2])) * 255)                  
+        94 -    return f"#{r:02x}{g:02x}{b:02x}"                        
+        95 -                                                            
+        96 -                                                            
+        97 -def _hex_to_rgba(hex_str: str, alpha: float = 1.0) -> list[fl
+           -oat]:                                                       
+        98 -    """Convert #RRGGBB hex string to [r,g,b,a] floats."""   
+        99 -    hex_str = hex_str.lstrip("#")                           
+       100 -    r = int(hex_str[0:2], 16) / 255.0                       
+       101 -    g = int(hex_str[2:4], 16) / 255.0                       
+       102 -    b = int(hex_str[4:6], 16) / 255.0                       
+       103 -    return [round(r, 3), round(g, 3), round(b, 3), alpha]   
+       104 -                                                            
+       105 -                                                            
+       106 -# -----------------------------------------------------------
+           -----------------                                            
+       107 -# Session state init                                        
+       108 -# -----------------------------------------------------------
+           -----------------                                            
+       109 -                                                            
+       110 -def _init_state() -> None:                                  
+       111 -    if "spec_data" not in st.session_state:                 
+       112 -        st.session_state["spec_data"] = _default_spec()     
+       113 -    if "validation_errors" not in st.session_state:         
+       114 -        st.session_state["validation_errors"] = []          
+       115 -                                                            
+       116 -                                                            
+       117 -def _get_spec() -> dict[str, Any]:                          
+       118 -    return st.session_state["spec_data"]                    
+       119 -                                                            
+       120 -                                                            
+       121 -def _set_spec(data: dict[str, Any]) -> None:                
+       122 -    st.session_state["spec_data"] = data                    
+       123 -    st.session_state["validation_errors"] = []              
+       124 -                                                            
+       125 -                                                            
+       126 -def _try_validate() -> SceneSpec | None:                    
+       127 -    """Try to validate current spec_data, return SceneSpec or
+           - None."""                                                   
+       128 -    try:                                                    
+       129 -        spec = SceneSpec.model_validate(_get_spec())        
+       130 -        st.session_state["validation_errors"] = []          
+       131 -        return spec                                         
+       132 -    except ValidationError as e:                            
+       133 -        st.session_state["validation_errors"] = [           
+       134 -            f"{err['loc']}: {err['msg']}" for err in e.errors
+           -()                                                          
+       135 -        ]                                                   
+       136 -        return None                                         
+       137 -                                                            
+       138 -                                                            
+       139 -# -----------------------------------------------------------
+           -----------------                                            
+       140 -# Sidebar                                                   
+       141 -# -----------------------------------------------------------
+           -----------------                                            
+       142 -                                                            
+       143 -def _render_sidebar() -> None:                              
+       144 -    with st.sidebar:                                        
+       145 -        st.title("SceneSpec Editor")                        
+       146 -                                                            
+       147 -        # Load JSON file                                    
+       148 -        st.subheader("Load")                                
+       149 -        uploaded = st.file_uploader("Import JSON", type=["jso
+           -n"], key="json_upload")                                     
+       150 -        if uploaded is not None:                            
+       151 -            try:                                            
+       152 -                data = json.loads(uploaded.read())          
+       153 -                SceneSpec.model_validate(data)  # validate be
+           -fore accepting                                              
+       154 -                _set_spec(data)                             
+       155 -                st.success("Loaded successfully")           
+       156 -            except (json.JSONDecodeError, ValidationError) as
+           - e:                                                         
+       157 -                st.error(f"Invalid JSON: {e}")              
+       158 -                                                            
+       159 -        # Presets                                           
+       160 -        st.subheader("Presets")                             
+       161 -        preset_files = {                                    
+       162 -            "Bee Garden": "bee_garden.json",                
+       163 -            "Sprinkler Garden": "sprinkler_garden.json",    
+       164 -            "Simple Demo": "simple_demo.json",              
+       165 -        }                                                   
+       166 -        cols = st.columns(len(preset_files))                
+       167 -        for col, (label, filename) in zip(cols, preset_files.
+           -items()):                                                   
+       168 -            with col:                                       
+       169 -                if st.button(label, use_container_width=True)
+           -:                                                           
+       170 -                    path = TEST_SPECS_DIR / filename        
+       171 -                    if path.exists():                       
+       172 -                        data = json.loads(path.read_text()) 
+       173 -                        _set_spec(data)                     
+       174 -                        st.rerun()                          
+       175 -                                                            
+       176 -        # New Spec                                          
+       177 -        st.subheader("New")                                 
+       178 -        if st.button("New Empty Spec", use_container_width=Tr
+           -ue):                                                        
+       179 -            _set_spec(_default_spec())                      
+       180 -            st.rerun()                                      
+       181 -                                                            
+       182 -        # Export                                            
+       183 -        st.subheader("Export")                              
+       184 -        spec_json = json.dumps(_get_spec(), indent=2)       
+       185 -        st.download_button(                                 
+       186 -            label="Download JSON",                          
+       187 -            data=spec_json,                                 
+       188 -            file_name="scene_spec.json",                    
+       189 -            mime="application/json",                        
+       190 -            use_container_width=True,                       
+       191 -        )                                                   
+       192 -                                                            
+       193 -        # Validation status                                 
+       194 -        errors = st.session_state.get("validation_errors", []
+           -)                                                           
+       195 -        if errors:                                          
+       196 -            st.error(f"{len(errors)} validation error(s)")  
+       197 -            for err in errors:                              
+       198 -                st.caption(f"- {err}")                      
+       199 -        else:                                               
+       200 -            _try_validate()                                 
+       201 -            errors = st.session_state.get("validation_errors"
+           -, [])                                                       
+       202 -            if errors:                                      
+       203 -                st.error(f"{len(errors)} validation error(s)"
+           -)                                                           
+       204 -                for err in errors:                          
+       205 -                    st.caption(f"- {err}")                  
+       206 -            else:                                           
+       207 -                st.success("Spec is valid")                 
+       208 -                                                            
+       209 -                                                            
+       210 -# -----------------------------------------------------------
+           -----------------                                            
+       211 -# Tab 1: Scene Info                                         
+       212 -# -----------------------------------------------------------
+           -----------------                                            
+       213 -                                                            
+       214 -def _render_scene_info() -> None:                           
+       215 -    spec = _get_spec()                                      
+       216 -                                                            
+       217 -    spec["target_concept"] = st.text_input(                 
+       218 -        "Target Concept", value=spec.get("target_concept", ""
+           -),                                                          
+       219 -        help="e.g. 'AI Recommendation System'",             
+       220 -    )                                                       
+       221 -    spec["analogy_domain"] = st.text_input(                 
+       222 -        "Analogy Domain", value=spec.get("analogy_domain", ""
+           -),                                                          
+       223 -        help="e.g. 'Bee Pollination in a Garden'",          
+       224 -    )                                                       
+       225 -    spec["learning_goal"] = st.text_area(                   
+       226 -        "Learning Goal", value=spec.get("learning_goal", ""),
+           -                                                             
+       227 -        help="What should the student learn?",              
+       228 -    )                                                       
+       229 -    spec["task_label"] = st.text_input(                     
+       230 -        "Task Label", value=spec.get("task_label", ""),     
+       231 -        help="e.g. 'Task 1: Beehive Analogy'",              
+       232 -    )                                                       
+       233 -                                                            
+       234 -                                                            
+       235 -# -----------------------------------------------------------
+           -----------------                                            
+       236 -# Tab 2: Environment                                        
+       237 -# -----------------------------------------------------------
+           -----------------                                            
+       238 -                                                            
+       239 -def _render_environment() -> None:                          
+       240 -    spec = _get_spec()                                      
+       241 -    env = spec.setdefault("environment", _default_spec()["env
+           -ironment"])                                                 
+       242 -                                                            
+       243 -    env["setting"] = st.text_input("Setting", value=env.get("
+           -setting", "garden"))                                        
+       244 -    env["skybox"] = st.selectbox(                           
+       245 -        "Skybox", SKYBOX_PRESETS, index=SKYBOX_PRESETS.index(
+           -env.get("skybox", "sunny")),                                
+       246 -    )                                                       
+       247 -                                                            
+       248 -    # Terrain                                               
+       249 -    st.subheader("Terrain")                                 
+       250 -    ts = env.get("terrain_size", [30, 1, 30])               
+       251 -    c1, c2, c3 = st.columns(3)                              
+       252 -    ts[0] = c1.slider("Size X", 1.0, 100.0, float(ts[0]), 1.0
+           -)                                                           
+       253 -    ts[1] = c2.slider("Size Y", 0.1, 10.0, float(ts[1]), 0.1)
+           -                                                             
+       254 -    ts[2] = c3.slider("Size Z", 1.0, 100.0, float(ts[2]), 1.0
+           -)                                                           
+       255 -    env["terrain_size"] = ts                                
+       256 -                                                            
+       257 -    tc = env.get("terrain_color", [0.3, 0.6, 0.2, 1.0])     
+       258 -    tc_hex = st.color_picker("Terrain Color", _rgba_to_hex(tc
+           -))                                                          
+       259 -    tc_alpha = st.slider("Terrain Alpha", 0.0, 1.0, float(tc[
+           -3] if len(tc) > 3 else 1.0), 0.05, key="terrain_alpha")     
+       260 -    env["terrain_color"] = _hex_to_rgba(tc_hex, tc_alpha)   
+       261 -                                                            
+       262 -    # Lighting                                              
+       263 -    st.subheader("Lighting")                                
+       264 -    light = env.setdefault("lighting", {"color": [1.0, 0.95, 
+           -0.9, 1.0], "intensity": 1.0, "rotation": [50, -30, 0]})     
+       265 -    light["intensity"] = st.slider("Intensity", 0.0, 2.0, flo
+           -at(light.get("intensity", 1.0)), 0.05)                      
+       266 -                                                            
+       267 -    lr = light.get("rotation", [50, -30, 0])                
+       268 -    lc1, lc2, lc3 = st.columns(3)                           
+       269 -    lr[0] = lc1.slider("Light Rot X", -180.0, 180.0, float(lr
+           -[0]), 1.0)                                                  
+       270 -    lr[1] = lc2.slider("Light Rot Y", -180.0, 180.0, float(lr
+           -[1]), 1.0)                                                  
+       271 -    lr[2] = lc3.slider("Light Rot Z", -180.0, 180.0, float(lr
+           -[2]), 1.0)                                                  
+       272 -    light["rotation"] = lr                                  
+       273 -                                                            
+       274 -    lcolor = light.get("color", [1.0, 0.95, 0.9, 1.0])      
+       275 -    lcolor_hex = st.color_picker("Light Color", _rgba_to_hex(
+           -lcolor))                                                    
+       276 -    env["lighting"]["color"] = _hex_to_rgba(lcolor_hex, lcolo
+           -r[3] if len(lcolor) > 3 else 1.0)                           
+       277 -                                                            
+       278 -    # Camera                                                
+       279 -    st.subheader("Camera")                                  
+       280 -    cam = env.setdefault("camera", {"position": [0, 1.6, -5],
+           - "rotation": [10, 0, 0], "field_of_view": 60.0, "is_vr": True
+           -})                                                          
+       281 -                                                            
+       282 -    cp = cam.get("position", [0, 1.6, -5])                  
+       283 -    cc1, cc2, cc3 = st.columns(3)                           
+       284 -    cp[0] = cc1.number_input("Cam Pos X", value=float(cp[0]),
+           - step=0.5, key="cam_px")                                    
+       285 -    cp[1] = cc2.number_input("Cam Pos Y", value=float(cp[1]),
+           - step=0.5, key="cam_py")                                    
+       286 -    cp[2] = cc3.number_input("Cam Pos Z", value=float(cp[2]),
+           - step=0.5, key="cam_pz")                                    
+       287 -    cam["position"] = cp                                    
+       288 -                                                            
+       289 -    cr = cam.get("rotation", [10, 0, 0])                    
+       290 -    cr1, cr2, cr3 = st.columns(3)                           
+       291 -    cr[0] = cr1.number_input("Cam Rot X", value=float(cr[0]),
+           - step=1.0, key="cam_rx")                                    
+       292 -    cr[1] = cr2.number_input("Cam Rot Y", value=float(cr[1]),
+           - step=1.0, key="cam_ry")                                    
+       293 -    cr[2] = cr3.number_input("Cam Rot Z", value=float(cr[2]),
+           - step=1.0, key="cam_rz")                                    
+       294 -    cam["rotation"] = cr                                    
+       295 -                                                            
+       296 -    cam["field_of_view"] = st.slider("FOV", 20.0, 120.0, floa
+           -t(cam.get("field_of_view", 60.0)), 1.0)                     
+       297 -    cam["is_vr"] = st.checkbox("VR Mode", value=cam.get("is_v
+           -r", True))                                                  
+       298 -                                                            
+       299 -    env["description"] = st.text_input("Environment Descripti
+           -on", value=env.get("description", ""))                      
+       300 -                                                            
+       301 -                                                            
+       302 -# -----------------------------------------------------------
+           -----------------                                            
+       303 -# Tab 3: Mappings + Interactions                            
+       304 -# -----------------------------------------------------------
+           -----------------                                            
+       305 -                                                            
+       306 -def _mapping_to_row(m: dict[str, Any]) -> dict[str, Any]:   
+       307 -    """Flatten a mapping dict into a row for the data editor.
+           -"""                                                         
+       308 -    pos = m.get("position", [0, 0, 0])                      
+       309 -    scl = m.get("scale", [1, 1, 1])                         
+       310 -    col = m.get("color")                                    
+       311 -    return {                                                
+       312 -        "structural_component": m.get("structural_component",
+           - "user"),                                                   
+       313 -        "analogy_name": m.get("analogy_name", ""),          
+       314 -        "analogy_description": m.get("analogy_description", "
+           -"),                                                         
+       315 -        "asset_strategy": m.get("asset_strategy", "primitive"
+           -),                                                          
+       316 -        "primitive_type": m.get("primitive_type", ""),      
+       317 -        "trellis_prompt": m.get("trellis_prompt", ""),      
+       318 -        "pos_x": pos[0] if len(pos) > 0 else 0,             
+       319 -        "pos_y": pos[1] if len(pos) > 1 else 0,             
+       320 -        "pos_z": pos[2] if len(pos) > 2 else 0,             
+       321 -        "scale_x": scl[0] if len(scl) > 0 else 1,           
+       322 -        "scale_y": scl[1] if len(scl) > 1 else 1,           
+       323 -        "scale_z": scl[2] if len(scl) > 2 else 1,           
+       324 -        "color": _rgba_to_hex(col) if col else "#b3b3b3",   
+       325 -        "color_alpha": col[3] if col and len(col) > 3 else 1.
+           -0,                                                          
+       326 -        "instance_count": m.get("instance_count", 1),       
+       327 -        "instance_spread": m.get("instance_spread", 3.0),   
+       328 -        "has_interaction": m.get("interaction") is not None,
+       329 -    }                                                       
+       330 -                                                            
+       331 -                                                            
+       332 -def _row_to_mapping(row: dict[str, Any], original: dict[str, 
+           -Any] | None = None) -> dict[str, Any]:                      
+       333 -    """Convert a data editor row back to a mapping dict, pres
+           -erving interaction."""                                      
+       334 -    m: dict[str, Any] = {                                   
+       335 -        "structural_component": row["structural_component"],
+       336 -        "analogy_name": row["analogy_name"],                
+       337 -        "analogy_description": row.get("analogy_description",
+           - ""),                                                       
+       338 -        "asset_strategy": row["asset_strategy"],            
+       339 -        "position": [row.get("pos_x", 0), row.get("pos_y", 0)
+           -, row.get("pos_z", 0)],                                     
+       340 -        "scale": [row.get("scale_x", 1), row.get("scale_y", 1
+           -), row.get("scale_z", 1)],                                  
+       341 -        "instance_count": int(row.get("instance_count", 1)),
+       342 -        "instance_spread": float(row.get("instance_spread", 3
+           -.0)),                                                       
+       343 -    }                                                       
+       344 -    if row.get("primitive_type"):                           
+       345 -        m["primitive_type"] = row["primitive_type"]         
+       346 -    if row.get("trellis_prompt"):                           
+       347 -        m["trellis_prompt"] = row["trellis_prompt"]         
+       348 -    if row.get("color") and row["color"] != "#b3b3b3":      
+       349 -        m["color"] = _hex_to_rgba(row["color"], float(row.get
+           -("color_alpha", 1.0)))                                      
+       350 -                                                            
+       351 -    # Preserve interaction from the original mapping        
+       352 -    if original and original.get("interaction"):            
+       353 -        m["interaction"] = original["interaction"]          
+       354 -                                                            
+       355 -    return m                                                
+       356 -                                                            
+       357 -                                                            
+       358 -def _render_mappings() -> None:                             
+       359 -    spec = _get_spec()                                      
+       360 -    mappings = spec.get("mappings", [])                     
+       361 -                                                            
+       362 -    st.subheader("Mapping Table")                           
+       363 -    st.caption("Edit the table below. Use the + button to add
+           - rows.")                                                    
+       364 -                                                            
+       365 -    # Build rows for data editor                            
+       366 -    import pandas as pd                                     
+       367 -                                                            
+       368 -    rows = [_mapping_to_row(m) for m in mappings]           
+       369 -    if not rows:                                            
+       370 -        rows = [_mapping_to_row({"structural_component": "use
+           -r", "analogy_name": "Player", "asset_strategy": "primitive"})
+           -]                                                           
+       371 -                                                            
+       372 -    df = pd.DataFrame(rows)                                 
+       373 -                                                            
+       374 -    column_config = {                                       
+       375 -        "structural_component": st.column_config.SelectboxCol
+           -umn(                                                        
+       376 -            "Component", options=STRUCTURAL_COMPONENTS, requi
+           -red=True, width="medium",                                   
+       377 -        ),                                                  
+       378 -        "analogy_name": st.column_config.TextColumn("Name", r
+           -equired=True, width="medium"),                              
+       379 -        "analogy_description": st.column_config.TextColumn("D
+           -escription", width="large"),                                
+       380 -        "asset_strategy": st.column_config.SelectboxColumn( 
+       381 -            "Strategy", options=ASSET_STRATEGIES, required=Tr
+           -ue, width="small",                                          
+       382 -        ),                                                  
+       383 -        "primitive_type": st.column_config.SelectboxColumn( 
+       384 -            "Primitive", options=PRIMITIVE_TYPES, width="smal
+           -l",                                                         
+       385 -        ),                                                  
+       386 -        "trellis_prompt": st.column_config.TextColumn("Trelli
+           -s Prompt", width="medium"),                                 
+       387 -        "pos_x": st.column_config.NumberColumn("Pos X", step=
+           -0.5, width="small"),                                        
+       388 -        "pos_y": st.column_config.NumberColumn("Pos Y", step=
+           -0.5, width="small"),                                        
+       389 -        "pos_z": st.column_config.NumberColumn("Pos Z", step=
+           -0.5, width="small"),                                        
+       390 -        "scale_x": st.column_config.NumberColumn("Scale X", s
+           -tep=0.1, width="small"),                                    
+       391 -        "scale_y": st.column_config.NumberColumn("Scale Y", s
+           -tep=0.1, width="small"),                                    
+       392 -        "scale_z": st.column_config.NumberColumn("Scale Z", s
+           -tep=0.1, width="small"),                                    
+       393 -        "color": st.column_config.TextColumn("Color (hex)", w
+           -idth="small"),                                              
+       394 -        "color_alpha": st.column_config.NumberColumn("Alpha",
+           - min_value=0.0, max_value=1.0, step=0.05, width="small"),   
+       395 -        "instance_count": st.column_config.NumberColumn("Inst
+           -ances", min_value=1, step=1, width="small"),                
+       396 -        "instance_spread": st.column_config.NumberColumn("Spr
+           -ead", min_value=0.0, step=0.5, width="small"),              
+       397 -        "has_interaction": st.column_config.CheckboxColumn("I
+           -nteraction?", disabled=True, width="small"),                
+       398 -    }                                                       
+       399 -                                                            
+       400 -    edited_df = st.data_editor(                             
+       401 -        df,                                                 
+       402 -        column_config=column_config,                        
+       403 -        num_rows="dynamic",                                 
+       404 -        use_container_width=True,                           
+       405 -        key="mapping_editor",                               
+       406 -    )                                                       
+       407 -                                                            
+       408 -    # Sync edited data back to spec                         
+       409 -    new_mappings = []                                       
+       410 -    for i, row in edited_df.iterrows():                     
+       411 -        original = mappings[i] if i < len(mappings) else None
+           -                                                             
+       412 -        new_mappings.append(_row_to_mapping(row.to_dict(), or
+           -iginal))                                                    
+       413 -    spec["mappings"] = new_mappings                         
+       414 -                                                            
+       415 -    # --- Interaction Editor ---                            
+       416 -    st.divider()                                            
+       417 -    st.subheader("Interaction Editor")                      
+       418 -                                                            
+       419 -    if not new_mappings:                                    
+       420 -        st.info("Add mappings above first.")                
+       421 -        return                                              
+       422 -                                                            
+       423 -    mapping_names = [f"{i}: {m.get('analogy_name', '?')}" for
+           - i, m in enumerate(new_mappings)]                           
+       424 -    selected = st.selectbox("Select mapping row", mapping_nam
+           -es, key="ix_row_select")                                    
+       425 -    if selected is None:                                    
+       426 -        return                                              
+       427 -                                                            
+       428 -    idx = int(selected.split(":")[0])                       
+       429 -    mapping = new_mappings[idx]                             
+       430 -    ix = mapping.get("interaction") or {}                   
+       431 -                                                            
+       432 -    col_a, col_b = st.columns(2)                            
+       433 -    with col_a:                                             
+       434 -        add_ix = st.checkbox(                               
+       435 -            "Has interaction",                              
+       436 -            value=bool(ix),                                 
+       437 -            key=f"has_ix_{idx}",                            
+       438 -        )                                                   
+       439 -    if not add_ix:                                          
+       440 -        mapping.pop("interaction", None)                    
+       441 -        return                                              
+       442 -                                                            
+       443 -    # Ensure interaction dict exists                        
+       444 -    if not ix:                                              
+       445 -        ix = {}                                             
+       446 -        mapping["interaction"] = ix                         
+       447 -                                                            
+       448 -    with col_b:                                             
+       449 -        current_trigger = ix.get("trigger", "")             
+       450 -        trigger_idx = TRIGGER_OPTIONS.index(current_trigger) 
+           -if current_trigger in TRIGGER_OPTIONS else 0                
+       451 -        ix["trigger"] = st.selectbox("Trigger", TRIGGER_OPTIO
+           -NS, index=trigger_idx, key=f"ix_trigger_{idx}")             
+       452 -                                                            
+       453 -    c1, c2 = st.columns(2)                                  
+       454 -    with c1:                                                
+       455 -        ix["trigger_source"] = st.text_input("Trigger Source"
+           -, value=ix.get("trigger_source", ""), key=f"ix_src_{idx}")  
+       456 -    with c2:                                                
+       457 -        targets_str = ", ".join(ix.get("target_objects", []))
+           -                                                             
+       458 -        targets_input = st.text_input("Target Objects (comma-
+           -sep)", value=targets_str, key=f"ix_targets_{idx}")          
+       459 -        ix["target_objects"] = [t.strip() for t in targets_in
+           -put.split(",") if t.strip()]                                
+       460 -                                                            
+       461 -    ix["effect"] = st.text_input("Effect", value=ix.get("effe
+           -ct", ""), key=f"ix_effect_{idx}")                           
+       462 -    ix["effect_description"] = st.text_area(                
+       463 -        "Effect Description", value=ix.get("effect_descriptio
+           -n", ""), key=f"ix_desc_{idx}",                              
+       464 -    )                                                       
+       465 -                                                            
+       466 -    c3, c4 = st.columns(2)                                  
+       467 -    with c3:                                                
+       468 -        current_anim = ix.get("animation_preset", "")       
+       469 -        anim_idx = ANIMATION_PRESETS.index(current_anim) if c
+           -urrent_anim in ANIMATION_PRESETS else 0                     
+       470 -        ix["animation_preset"] = st.selectbox("Animation Pres
+           -et", ANIMATION_PRESETS, index=anim_idx, key=f"ix_anim_{idx}")
+           -                                                             
+       471 -    with c4:                                                
+       472 -        current_vfx = ix.get("vfx_type", "")                
+       473 -        vfx_idx = VFX_TYPES.index(current_vfx) if current_vfx
+           - in VFX_TYPES else 0                                        
+       474 -        ix["vfx_type"] = st.selectbox("VFX Type", VFX_TYPES, 
+           -index=vfx_idx, key=f"ix_vfx_{idx}")                         
+       475 -                                                            
+       476 -    params_str = json.dumps(ix.get("parameters", {}), indent=
+           -2)                                                          
+       477 -    params_input = st.text_area("Parameters (JSON)", value=pa
+           -rams_str, height=120, key=f"ix_params_{idx}")               
+       478 -    try:                                                    
+       479 -        ix["parameters"] = json.loads(params_input) if params
+           -_input.strip() else {}                                      
+       480 -    except json.JSONDecodeError:                            
+       481 -        st.warning("Invalid JSON in parameters field")      
+       482 -                                                            
+       483 -    # Clean empty string fields                             
+       484 -    for key in ["animation_preset", "vfx_type", "trigger_sour
+           -ce", "effect"]:                                             
+       485 -        if not ix.get(key):                                 
+       486 -            ix.pop(key, None)                               
+       487 -    if not ix.get("target_objects"):                        
+       488 -        ix.pop("target_objects", None)                      
+       489 -    if not ix.get("parameters"):                            
+       490 -        ix.pop("parameters", None)                          
+       491 -                                                            
+       492 -    mapping["interaction"] = ix                             
+       493 -                                                            
+       494 -                                                            
+       495 -# -----------------------------------------------------------
+           -----------------                                            
+       496 -# Tab 4: Preview & Generate                                 
+       497 -# -----------------------------------------------------------
+           -----------------                                            
+       498 -                                                            
+       499 -def _render_preview() -> None:                              
+       500 -    spec_obj = _try_validate()                              
+       501 -    if spec_obj is None:                                    
+       502 -        st.error("Spec has validation errors — fix them first
+           -.")                                                         
+       503 -        for err in st.session_state.get("validation_errors", 
+           -[]):                                                        
+       504 -            st.caption(f"- {err}")                          
+       505 -        return                                              
+       506 -                                                            
+       507 -    # Run validator                                         
+       508 -    plan = MCPCallPlan()                                    
+       509 -    validator = PlanValidator(spec_obj)                     
+       510 -    plan = validator.validate_and_repair(plan)              
+       511 -    batch_plan = validator.to_batch_plan(plan)              
+       512 -                                                            
+       513 -    # Batch plan phases table                               
+       514 -    st.subheader("Batch Execution Plan")                    
+       515 -    phase_rows = []                                         
+       516 -    for phase in batch_plan.phases:                         
+       517 -        phase_rows.append({                                 
+       518 -            "Phase": phase.phase_name,                      
+       519 -            "#": phase.phase_number,                        
+       520 -            "Commands": len(phase.commands),                
+       521 -            "Parallel": phase.parallel,                     
+       522 -            "Note": phase.note,                             
+       523 -        })                                                  
+       524 -    if phase_rows:                                          
+       525 -        st.table(phase_rows)                                
+       526 -    st.metric("Total Commands", batch_plan.total_commands)  
+       527 -                                                            
+       528 -    col1, col2 = st.columns(2)                              
+       529 -    col1.metric("Estimated Batches", batch_plan.estimated_bat
+           -ches)                                                       
+       530 -    col2.metric("Trellis Generations", batch_plan.trellis_cou
+           -nt)                                                         
+       531 -                                                            
+       532 -    # Warnings / hints                                      
+       533 -    st.subheader("Planning Hints & Warnings")               
+       534 -    hints = [w for w in batch_plan.warnings if w.startswith("
+           -INTERACTION_HINT")]                                         
+       535 -    warnings = [w for w in batch_plan.warnings if not w.start
+           -swith("INTERACTION_HINT")]                                  
+       536 -                                                            
+       537 -    if hints:                                               
+       538 -        for h in hints:                                     
+       539 -            st.info(h)                                      
+       540 -    if warnings:                                            
+       541 -        for w in warnings:                                  
+       542 -            st.warning(w)                                   
+       543 -    if not hints and not warnings:                          
+       544 -        st.success("No warnings or hints.")                 
+       545 -                                                            
+       546 -    # Generate prompt                                       
+       547 -    st.divider()                                            
+       548 -    st.subheader("Generate Scene")                          
+       549 -                                                            
+       550 -    if st.button("Generate Prompt for Claude Code", type="pri
+           -mary", use_container_width=True):                           
+       551 -        spec_json = json.dumps(_get_spec(), indent=2)       
+       552 -        prompt = _build_generation_prompt(spec_json, batch_pl
+           -an)                                                         
+       553 -        st.session_state["generated_prompt"] = prompt       
+       554 -                                                            
+       555 -    if "generated_prompt" in st.session_state:              
+       556 -        st.text_area(                                       
+       557 -            "Copy this prompt into Claude Code",            
+       558 -            value=st.session_state["generated_prompt"],     
+       559 -            height=400,                                     
+       560 -        )                                                   
+       561 -        st.download_button(                                 
+       562 -            "Download Prompt",                              
+       563 -            data=st.session_state["generated_prompt"],      
+       564 -            file_name="scene_prompt.txt",                   
+       565 -            mime="text/plain",                              
+       566 -        )                                                   
+       567 -                                                            
+       568 -                                                            
+       569 -def _build_generation_prompt(spec_json: str, batch_plan: Batc
+           -hExecutionPlan) -> str:                                     
+       570 -    """Build a ready-to-paste prompt for Claude Code."""    
+       571 -    hints = [w for w in batch_plan.warnings if w.startswith("
+           -INTERACTION_HINT")]                                         
+       572 -    warnings = [w for w in batch_plan.warnings if not w.start
+           -swith("INTERACTION_HINT")]                                  
+       573 -                                                            
+       574 -    lines = [                                               
+       575 -        "# Scene Generation Request",                       
+       576 -        "",                                                 
+       577 -        "Execute the scene generation pipeline using the Scen
+           -eSpec below.",                                              
+       578 -        "The validator has already computed the batch executi
+           -on plan.",                                                  
+       579 -        "Execute each phase sequentially using `batch_execute
+           -`.",                                                        
+       580 -        "",                                                 
+       581 -        "## SceneSpec JSON",                                
+       582 -        "",                                                 
+       583 -        "```json",                                          
+       584 -        spec_json,                                          
+       585 -        "```",                                              
+       586 -        "",                                                 
+       587 -        f"## Execution Plan ({batch_plan.total_commands} comm
+           -ands, {batch_plan.estimated_batches} batches)",             
+       588 -        "",                                                 
+       589 -    ]                                                       
+       590 -                                                            
+       591 -    for phase in batch_plan.phases:                         
+       592 -        parallel_str = "parallel" if phase.parallel else "seq
+           -uential"                                                    
+       593 -        lines.append(f"### Phase {phase.phase_number}: {phase
+           -.phase_name} ({len(phase.commands)} commands, {parallel_str})
+           -")                                                          
+       594 -        lines.append(f"{phase.note}")                       
+       595 -        lines.append("")                                    
+       596 -        lines.append("```json")                             
+       597 -        lines.append(json.dumps(phase.commands, indent=2))  
+       598 -        lines.append("```")                                 
+       599 -        lines.append("")                                    
+       600 -                                                            
+       601 -    if hints:                                               
+       602 -        lines.append("## Interaction Hints (scripts to write)
+           -")                                                          
+       603 -        lines.append("")                                    
+       604 -        for h in hints:                                     
+       605 -            lines.append(f"- {h}")                          
+       606 -        lines.append("")                                    
+       607 -                                                            
+       608 -    if warnings:                                            
+       609 -        lines.append("## Warnings")                         
+       610 -        lines.append("")                                    
+       611 -        for w in warnings:                                  
+       612 -            lines.append(f"- {w}")                          
+       613 -        lines.append("")                                    
+       614 -                                                            
+       615 -    if batch_plan.trellis_count > 0:                        
+       616 -        lines.append(f"**Note:** This scene includes {batch_p
+           -lan.trellis_count} Trellis 3D generation(s). ")             
+       617 -        lines.append("These are async — poll `manage_3d_gen` 
+           -action=`status` after submitting.")                         
+       618 -        lines.append("")                                    
+       619 -                                                            
+       620 -    lines.append("## Instructions")                         
+       621 -    lines.append("")                                        
+       622 -    lines.append("1. Execute each phase in order using `batch
+           -_execute` with the commands above.")                        
+       623 -    lines.append("2. For script phases (parallel=false), wait
+           - for compilation before proceeding.")                       
+       624 -    lines.append("3. After all phases, write any interaction 
+           -scripts described in the hints above.")                     
+       625 -    lines.append("4. Save the scene when done.")            
+       626 -                                                            
+       627 -    return "\n".join(lines)                                 
+       628 -                                                            
+       629 -                                                            
+       630 -# -----------------------------------------------------------
+           -----------------                                            
+       631 -# Main                                                      
+       632 -# -----------------------------------------------------------
+           -----------------                                            
+       633 -                                                            
+       634 -def main() -> None:                                         
+       635 -    st.set_page_config(page_title="SceneSpec Editor", layout=
+           -"wide")                                                     
+       636 -    _init_state()                                           
+       637 -    _render_sidebar()                                       
+       638 -                                                            
+       639 -    tab1, tab2, tab3, tab4 = st.tabs([                      
+       640 -        "Scene Info", "Environment", "Mappings & Interactions
+           -", "Preview & Generate",                                    
+       641 -    ])                                                      
+       642 -                                                            
+       643 -    with tab1:                                              
+       644 -        _render_scene_info()                                
+       645 -    with tab2:                                              
+       646 -        _render_environment()                               
+       647 -    with tab3:                                              
+       648 -        _render_mappings()                                  
+       649 -    with tab4:                                              
+       650 -        _render_preview()                                   
+       651 -                                                            
+       652 -                                                            
+       653 -if __name__ == "__main__":                                  
+       654 -    main()                                                  
+         1 +"""Streamlit GUI for creating and editing SceneSpec JSON file
+           +s.                                                           
+         2 +                                                             
+         3 +Educator-friendly interface with two-step LLM workflow:      
+         4 +1. Teacher fills in concept mapping table (target ↔ source an
+           +alogy)                                                       
+         5 +2. LLM suggests interactions, environment, asset strategies  
+         6 +3. Teacher reviews and generates prompt for Claude Code      
+         7 +"""                                                          
+         8 +from __future__ import annotations                           
+         9 +                                                             
+        10 +import json                                                  
+        11 +import os                                                    
+        12 +import sys                                                   
+        13 +from pathlib import Path                                     
+        14 +from typing import Any                                       
+        15 +                                                             
+        16 +import streamlit as st                                       
+        17 +from pydantic import ValidationError                         
+        18 +                                                             
+        19 +# When run via `streamlit run`, there's no parent package, so
+           + relative imports                                            
+        20 +# fail. Add the parent of this package to sys.path so absolut
+           +e imports work.                                              
+        21 +_pkg_dir = Path(__file__).resolve().parent                   
+        22 +if str(_pkg_dir.parent) not in sys.path:                     
+        23 +    sys.path.insert(0, str(_pkg_dir.parent))                 
+        24 +                                                             
+        25 +from scene_generator.models import (                         
+        26 +    AssetStrategy,                                           
+        27 +    BatchExecutionPlan,                                      
+        28 +    MCPCallPlan,                                             
+        29 +    SceneSpec,                                               
+        30 +    SkyboxPreset,                                            
+        31 +    StructuralComponent,                                     
+        32 +)                                                            
+        33 +from scene_generator.validator import PlanValidator          
+        34 +                                                             
+        35 +# -----------------------------------------------------------
+           +----------------                                             
+        36 +# Constants                                                  
+        37 +# -----------------------------------------------------------
+           +----------------                                             
+        38 +                                                             
+        39 +TEST_SPECS_DIR = Path(__file__).parent / "test_specs"        
+        40 +                                                             
+        41 +STRUCTURAL_COMPONENTS = [e.value for e in StructuralComponent
+           +]                                                            
+        42 +ASSET_STRATEGIES = [e.value for e in AssetStrategy]          
+        43 +SKYBOX_PRESETS = [e.value for e in SkyboxPreset]             
+        44 +                                                             
+        45 +TRIGGER_OPTIONS = [                                          
+        46 +    "button_press", "proximity", "collision", "continuous", "
+           +on_start", "custom",                                         
+        47 +]                                                            
+        48 +ANIMATION_PRESETS = [                                        
+        49 +    "", "pulse", "hover", "sway", "spin", "bounce", "grow", "
+           +shrink",                                                     
+        50 +    "shake", "fade_in", "fade_out", "orbit", "wave", "breathe
+           +",                                                           
+        51 +]                                                            
+        52 +VFX_TYPES = [                                                
+        53 +    "", "particle_burst", "particle_continuous", "line_beam",
+           + "trail",                                                    
+        54 +]                                                            
+        55 +PRIMITIVE_TYPES = [                                          
+        56 +    "Cube", "Sphere", "Cylinder", "Capsule", "Plane", "Quad",
+        57 +]                                                            
+        58 +                                                             
+        59 +# Friendly display labels for structural_component enum value
+           +s                                                            
+        60 +COMPONENT_LABELS = {                                         
+        61 +    "user": "Learner Role",                                  
+        62 +    "content_item": "Content Items",                         
+        63 +    "user_profile": "User Profile",                          
+        64 +    "user_interaction": "User Interaction",                  
+        65 +    "profile_update": "Profile Update",                      
+        66 +    "candidate_generation": "Candidate Generation",          
+        67 +    "ranking": "Ranking / Sorting",                          
+        68 +    "feedback_loop": "Feedback Loop",                        
+        69 +}                                                            
+        70 +# Reverse mapping: friendly label -> enum value              
+        71 +LABEL_TO_COMPONENT = {v: k for k, v in COMPONENT_LABELS.items
+           +()}                                                          
+        72 +COMPONENT_FRIENDLY_OPTIONS = list(COMPONENT_LABELS.values()) 
+        73 +                                                             
+        74 +LLM_PROVIDERS = ["OpenAI", "Anthropic"]                      
+        75 +                                                             
+        76 +                                                             
+        77 +def _default_spec() -> dict[str, Any]:                       
+        78 +    """Return a minimal empty spec dict."""                  
+        79 +    return {                                                 
+        80 +        "target_concept": "",                                
+        81 +        "analogy_domain": "",                                
+        82 +        "learning_goal": "",                                 
+        83 +        "task_label": "",                                    
+        84 +        "environment": {                                     
+        85 +            "setting": "garden",                             
+        86 +            "terrain_type": "plane",                         
+        87 +            "terrain_size": [30, 1, 30],                     
+        88 +            "terrain_color": [0.3, 0.6, 0.2, 1.0],           
+        89 +            "skybox": "sunny",                               
+        90 +            "ambient_color": [0.8, 0.9, 0.7, 1.0],           
+        91 +            "lighting": {                                    
+        92 +                "color": [1.0, 0.95, 0.9, 1.0],              
+        93 +                "intensity": 1.0,                            
+        94 +                "rotation": [50, -30, 0],                    
+        95 +                "shadow_type": "soft",                       
+        96 +            },                                               
+        97 +            "camera": {                                      
+        98 +                "position": [0, 1.6, -5],                    
+        99 +                "rotation": [10, 0, 0],                      
+       100 +                "field_of_view": 60.0,                       
+       101 +                "is_vr": True,                               
+       102 +            },                                               
+       103 +            "description": "",                               
+       104 +        },                                                   
+       105 +        "mappings": [],                                      
+       106 +    }                                                        
+       107 +                                                             
+       108 +                                                             
+       109 +# -----------------------------------------------------------
+           +----------------                                             
+       110 +# Color helpers                                              
+       111 +# -----------------------------------------------------------
+           +----------------                                             
+       112 +                                                             
+       113 +def _rgba_to_hex(rgba: list[float]) -> str:                  
+       114 +    """Convert [r,g,b,a] floats (0-1) to #RRGGBB hex string."
+           +""                                                           
+       115 +    r = int(max(0, min(1, rgba[0])) * 255)                   
+       116 +    g = int(max(0, min(1, rgba[1])) * 255)                   
+       117 +    b = int(max(0, min(1, rgba[2])) * 255)                   
+       118 +    return f"#{r:02x}{g:02x}{b:02x}"                         
+       119 +                                                             
+       120 +                                                             
+       121 +def _hex_to_rgba(hex_str: str, alpha: float = 1.0) -> list[fl
+           +oat]:                                                        
+       122 +    """Convert #RRGGBB hex string to [r,g,b,a] floats."""    
+       123 +    hex_str = hex_str.lstrip("#")                            
+       124 +    r = int(hex_str[0:2], 16) / 255.0                        
+       125 +    g = int(hex_str[2:4], 16) / 255.0                        
+       126 +    b = int(hex_str[4:6], 16) / 255.0                        
+       127 +    return [round(r, 3), round(g, 3), round(b, 3), alpha]    
+       128 +                                                             
+       129 +                                                             
+       130 +# -----------------------------------------------------------
+           +----------------                                             
+       131 +# Session state init                                         
+       132 +# -----------------------------------------------------------
+           +----------------                                             
+       133 +                                                             
+       134 +def _init_state() -> None:                                   
+       135 +    if "spec_data" not in st.session_state:                  
+       136 +        st.session_state["spec_data"] = _default_spec()      
+       137 +    if "validation_errors" not in st.session_state:          
+       138 +        st.session_state["validation_errors"] = []           
+       139 +    if "llm_provider" not in st.session_state:               
+       140 +        st.session_state["llm_provider"] = "OpenAI"          
+       141 +    if "llm_api_key" not in st.session_state:                
+       142 +        st.session_state["llm_api_key"] = ""                 
+       143 +    if "llm_suggestions" not in st.session_state:            
+       144 +        st.session_state["llm_suggestions"] = None           
+       145 +    if "suggestions_accepted" not in st.session_state:       
+       146 +        st.session_state["suggestions_accepted"] = False     
+       147 +                                                             
+       148 +                                                             
+       149 +def _get_spec() -> dict[str, Any]:                           
+       150 +    return st.session_state["spec_data"]                     
+       151 +                                                             
+       152 +                                                             
+       153 +def _set_spec(data: dict[str, Any]) -> None:                 
+       154 +    st.session_state["spec_data"] = data                     
+       155 +    st.session_state["validation_errors"] = []               
+       156 +    st.session_state["llm_suggestions"] = None               
+       157 +    st.session_state["suggestions_accepted"] = False         
+       158 +                                                             
+       159 +                                                             
+       160 +def _try_validate() -> SceneSpec | None:                     
+       161 +    """Try to validate current spec_data, return SceneSpec or
+           + None."""                                                    
+       162 +    try:                                                     
+       163 +        spec = SceneSpec.model_validate(_get_spec())         
+       164 +        st.session_state["validation_errors"] = []           
+       165 +        return spec                                          
+       166 +    except ValidationError as e:                             
+       167 +        st.session_state["validation_errors"] = [            
+       168 +            f"{err['loc']}: {err['msg']}" for err in e.errors
+           +()                                                           
+       169 +        ]                                                    
+       170 +        return None                                          
+       171 +                                                             
+       172 +                                                             
+       173 +# -----------------------------------------------------------
+           +----------------                                             
+       174 +# LLM Integration                                            
+       175 +# -----------------------------------------------------------
+           +----------------                                             
+       176 +                                                             
+       177 +def _get_api_key() -> str | None:                            
+       178 +    """Get API key from session state or environment variable
+           +."""                                                         
+       179 +    provider = st.session_state.get("llm_provider", "OpenAI")
+       180 +    key = st.session_state.get("llm_api_key", "")            
+       181 +    if key:                                                  
+       182 +        return key                                           
+       183 +    env_var = "OPENAI_API_KEY" if provider == "OpenAI" else "
+           +ANTHROPIC_API_KEY"                                           
+       184 +    return os.environ.get(env_var)                           
+       185 +                                                             
+       186 +                                                             
+       187 +def _build_llm_prompt(spec: dict[str, Any]) -> str:          
+       188 +    """Build the prompt sent to the LLM for generating sugges
+           +tions."""                                                    
+       189 +    mappings_desc = []                                       
+       190 +    for m in spec.get("mappings", []):                       
+       191 +        comp = m.get("structural_component", "")             
+       192 +        friendly = COMPONENT_LABELS.get(comp, comp)          
+       193 +        mappings_desc.append(                                
+       194 +            f"- {friendly}: \"{m.get('analogy_name', '')}\" —
+           + {m.get('analogy_description', '')}"                         
+       195 +        )                                                    
+       196 +    mappings_text = "\n".join(mappings_desc) if mappings_desc
+           + else "(no mappings yet)"                                    
+       197 +                                                             
+       198 +    return f"""You are an expert educational game designer. A
+           + teacher wants to create a VR learning experience that teache
+           +s a concept through a physical analogy.                      
+       199 +                                                             
+       200 +## What the teacher provided                                 
+       201 +                                                             
+       202 +**Teaching concept (target):** {spec.get('target_concept', ''
+           +)}                                                           
+       203 +**Analogy being used (source):** {spec.get('analogy_domain', 
+           +'')}                                                         
+       204 +**Learning goal:** {spec.get('learning_goal', '')}           
+       205 +**Task label:** {spec.get('task_label', '')}                 
+       206 +                                                             
+       207 +**Concept mapping (how target maps to source):**             
+       208 +{mappings_text}                                              
+       209 +                                                             
+       210 +## Your task                                                 
+       211 +                                                             
+       212 +Generate suggestions to bring this analogy to life as a 3D sc
+           +ene. Return a JSON object with these fields:                 
+       213 +                                                             
+       214 +1. **environment**: Suggest appropriate environment settings 
+       215 +   - "setting": a short label (e.g. "garden", "ocean", "facto
+           +ry")                                                         
+       216 +   - "description": one-sentence description of the environme
+           +nt                                                           
+       217 +   - "skybox": one of "sunny", "sunset", "night", "overcast" 
+       218 +   - "terrain_color": [r, g, b, a] floats 0-1                
+       219 +                                                             
+       220 +2. **mapping_suggestions**: An array (one per mapping above, 
+           +same order) where each entry has:                            
+       221 +   - "asset_strategy": one of "primitive", "trellis", "vfx", 
+           +"mechanic", "ui"                                             
+       222 +   - "primitive_type": (if primitive) one of "Cube", "Sphere"
+           +, "Cylinder", "Capsule", "Plane", "Quad"                     
+       223 +   - "trellis_prompt": (if trellis) a text prompt for 3D mode
+           +l generation                                                 
+       224 +   - "position": [x, y, z] suggested position in scene       
+       225 +   - "scale": [x, y, z] suggested scale                      
+       226 +   - "color": [r, g, b, a] or null                           
+       227 +   - "instance_count": integer (for content_item, how many in
+           +stances)                                                     
+       228 +   - "instance_spread": float (spacing between instances)    
+       229 +   - "interaction": object or null, with fields:             
+       230 +     - "trigger": one of "button_press", "proximity", "collis
+           +ion", "continuous", "on_start", "custom"                     
+       231 +     - "trigger_source": which object triggers this          
+       232 +     - "target_objects": list of object names affected       
+       233 +     - "effect": short action label                          
+       234 +     - "effect_description": natural language description of 
+           +what happens                                                 
+       235 +     - "animation_preset": one of "pulse", "hover", "sway", "
+           +spin", "bounce", "grow", "shrink", "shake", "" (empty for non
+           +e)                                                           
+       236 +     - "vfx_type": one of "particle_burst", "particle_continu
+           +ous", "line_beam", "trail", "" (empty for none)              
+       237 +     - "parameters": dict of numeric config                  
+       238 +                                                             
+       239 +3. **game_loop_description**: A 2-3 sentence description of t
+           +he overall interaction loop from the learner's perspective.  
+       240 +                                                             
+       241 +Return ONLY valid JSON, no markdown fences, no commentary."""
+       242 +                                                             
+       243 +                                                             
+       244 +def _call_llm(prompt: str) -> str | None:                    
+       245 +    """Call the selected LLM provider and return the response
+           + text."""                                                    
+       246 +    provider = st.session_state.get("llm_provider", "OpenAI")
+       247 +    api_key = _get_api_key()                                 
+       248 +    if not api_key:                                          
+       249 +        st.error("No API key configured. Set it in the sideba
+           +r or via environment variable.")                             
+       250 +        return None                                          
+       251 +                                                             
+       252 +    try:                                                     
+       253 +        if provider == "OpenAI":                             
+       254 +            from openai import OpenAI                        
+       255 +            client = OpenAI(api_key=api_key)                 
+       256 +            response = client.chat.completions.create(       
+       257 +                model="gpt-4o",                              
+       258 +                messages=[{"role": "user", "content": prompt}
+           +],                                                           
+       259 +                temperature=0.7,                             
+       260 +                max_tokens=4000,                             
+       261 +            )                                                
+       262 +            return response.choices[0].message.content       
+       263 +        else:                                                
+       264 +            from anthropic import Anthropic                  
+       265 +            client = Anthropic(api_key=api_key)              
+       266 +            response = client.messages.create(               
+       267 +                model="claude-sonnet-4-20250514",            
+       268 +                max_tokens=4000,                             
+       269 +                messages=[{"role": "user", "content": prompt}
+           +],                                                           
+       270 +            )                                                
+       271 +            return response.content[0].text                  
+       272 +    except ImportError:                                      
+       273 +        st.error(                                            
+       274 +            f"The `{provider.lower()}` package is not install
+           +ed. "                                                        
+       275 +            f"Run: `pip install {provider.lower()}`"         
+       276 +        )                                                    
+       277 +        return None                                          
+       278 +    except Exception as e:                                   
+       279 +        st.error(f"LLM call failed: {e}")                    
+       280 +        return None                                          
+       281 +                                                             
+       282 +                                                             
+       283 +def _parse_llm_response(response_text: str) -> dict[str, Any]
+           + | None:                                                     
+       284 +    """Parse the LLM JSON response, stripping markdown fences
+           + if present."""                                              
+       285 +    text = response_text.strip()                             
+       286 +    if text.startswith("```"):                               
+       287 +        lines = text.split("\n")                             
+       288 +        # Remove first and last lines (fences)               
+       289 +        lines = lines[1:]                                    
+       290 +        if lines and lines[-1].strip() == "```":             
+       291 +            lines = lines[:-1]                               
+       292 +        text = "\n".join(lines)                              
+       293 +    try:                                                     
+       294 +        return json.loads(text)                              
+       295 +    except json.JSONDecodeError as e:                        
+       296 +        st.error(f"Could not parse LLM response as JSON: {e}"
+           +)                                                            
+       297 +        st.code(text[:500], language="json")                 
+       298 +        return None                                          
+       299 +                                                             
+       300 +                                                             
+       301 +def _merge_suggestions_into_spec(suggestions: dict[str, Any])
+           + -> None:                                                    
+       302 +    """Merge LLM suggestions into the current spec_data."""  
+       303 +    spec = _get_spec()                                       
+       304 +                                                             
+       305 +    # Merge environment suggestions                          
+       306 +    env_suggestions = suggestions.get("environment", {})     
+       307 +    env = spec.setdefault("environment", _default_spec()["env
+           +ironment"])                                                  
+       308 +    if env_suggestions.get("setting"):                       
+       309 +        env["setting"] = env_suggestions["setting"]          
+       310 +    if env_suggestions.get("description"):                   
+       311 +        env["description"] = env_suggestions["description"]  
+       312 +    if env_suggestions.get("skybox"):                        
+       313 +        env["skybox"] = env_suggestions["skybox"]            
+       314 +    if env_suggestions.get("terrain_color"):                 
+       315 +        env["terrain_color"] = env_suggestions["terrain_color
+           +"]                                                           
+       316 +                                                             
+       317 +    # Merge per-mapping suggestions                          
+       318 +    mapping_suggestions = suggestions.get("mapping_suggestion
+           +s", [])                                                      
+       319 +    mappings = spec.get("mappings", [])                      
+       320 +                                                             
+       321 +    for i, m_sug in enumerate(mapping_suggestions):          
+       322 +        if i >= len(mappings):                               
+       323 +            break                                            
+       324 +        m = mappings[i]                                      
+       325 +        if m_sug.get("asset_strategy"):                      
+       326 +            m["asset_strategy"] = m_sug["asset_strategy"]    
+       327 +        if m_sug.get("primitive_type"):                      
+       328 +            m["primitive_type"] = m_sug["primitive_type"]    
+       329 +        if m_sug.get("trellis_prompt"):                      
+       330 +            m["trellis_prompt"] = m_sug["trellis_prompt"]    
+       331 +        if m_sug.get("position"):                            
+       332 +            m["position"] = m_sug["position"]                
+       333 +        if m_sug.get("scale"):                               
+       334 +            m["scale"] = m_sug["scale"]                      
+       335 +        if m_sug.get("color"):                               
+       336 +            m["color"] = m_sug["color"]                      
+       337 +        if m_sug.get("instance_count"):                      
+       338 +            m["instance_count"] = m_sug["instance_count"]    
+       339 +        if m_sug.get("instance_spread"):                     
+       340 +            m["instance_spread"] = m_sug["instance_spread"]  
+       341 +        if m_sug.get("interaction"):                         
+       342 +            m["interaction"] = m_sug["interaction"]          
+       343 +                                                             
+       344 +                                                             
+       345 +# -----------------------------------------------------------
+           +----------------                                             
+       346 +# Sidebar                                                    
+       347 +# -----------------------------------------------------------
+           +----------------                                             
+       348 +                                                             
+       349 +def _render_sidebar() -> None:                               
+       350 +    with st.sidebar:                                         
+       351 +        st.title("Scene Builder")                            
+       352 +                                                             
+       353 +        # Load JSON file                                     
+       354 +        st.subheader("Load")                                 
+       355 +        uploaded = st.file_uploader("Import JSON", type=["jso
+           +n"], key="json_upload")                                      
+       356 +        if uploaded is not None:                             
+       357 +            try:                                             
+       358 +                data = json.loads(uploaded.read())           
+       359 +                SceneSpec.model_validate(data)  # validate be
+           +fore accepting                                               
+       360 +                _set_spec(data)                              
+       361 +                st.success("Loaded successfully")            
+       362 +            except (json.JSONDecodeError, ValidationError) as
+           + e:                                                          
+       363 +                st.error(f"Invalid JSON: {e}")               
+       364 +                                                             
+       365 +        # Presets                                            
+       366 +        st.subheader("Presets")                              
+       367 +        preset_files = {                                     
+       368 +            "Bee Garden": "bee_garden.json",                 
+       369 +            "Sprinkler": "sprinkler_garden.json",            
+       370 +            "Simple Demo": "simple_demo.json",               
+       371 +        }                                                    
+       372 +        cols = st.columns(len(preset_files))                 
+       373 +        for col, (label, filename) in zip(cols, preset_files.
+           +items()):                                                    
+       374 +            with col:                                        
+       375 +                if st.button(label, use_container_width=True)
+           +:                                                            
+       376 +                    path = TEST_SPECS_DIR / filename         
+       377 +                    if path.exists():                        
+       378 +                        data = json.loads(path.read_text())  
+       379 +                        _set_spec(data)                      
+       380 +                        st.rerun()                           
+       381 +                                                             
+       382 +        # New Spec                                           
+       383 +        if st.button("Start Fresh", use_container_width=True)
+           +:                                                            
+       384 +            _set_spec(_default_spec())                       
+       385 +            st.rerun()                                       
+       386 +                                                             
+       387 +        # Export                                             
+       388 +        st.subheader("Export")                               
+       389 +        spec_json = json.dumps(_get_spec(), indent=2)        
+       390 +        st.download_button(                                  
+       391 +            label="Download JSON",                           
+       392 +            data=spec_json,                                  
+       393 +            file_name="scene_spec.json",                     
+       394 +            mime="application/json",                         
+       395 +            use_container_width=True,                        
+       396 +        )                                                    
+       397 +                                                             
+       398 +        # --- API Key section ---                            
+       399 +        st.divider()                                         
+       400 +        st.subheader("AI Assistant")                         
+       401 +        st.session_state["llm_provider"] = st.selectbox(     
+       402 +            "Provider", LLM_PROVIDERS,                       
+       403 +            index=LLM_PROVIDERS.index(st.session_state.get("l
+           +lm_provider", "OpenAI")),                                    
+       404 +            help="Which AI provider to use for generating sug
+           +gestions.",                                                  
+       405 +        )                                                    
+       406 +        env_key = _get_api_key()                             
+       407 +        placeholder = "Set via environment variable" if (env_
+           +key and not st.session_state.get("llm_api_key")) else "Paste 
+           +your API key"                                                
+       408 +        st.session_state["llm_api_key"] = st.text_input(     
+       409 +            "API Key", value=st.session_state.get("llm_api_ke
+           +y", ""),                                                     
+       410 +            type="password", placeholder=placeholder,        
+       411 +            help="Or set OPENAI_API_KEY / ANTHROPIC_API_KEY e
+           +nvironment variable.",                                       
+       412 +        )                                                    
+       413 +        if _get_api_key():                                   
+       414 +            st.success("API key configured", icon="\u2713")  
+       415 +        else:                                                
+       416 +            st.warning("No API key set")                     
+       417 +                                                             
+       418 +        # Validation status                                  
+       419 +        st.divider()                                         
+       420 +        errors = st.session_state.get("validation_errors", []
+           +)                                                            
+       421 +        if errors:                                           
+       422 +            st.error(f"{len(errors)} validation error(s)")   
+       423 +            for err in errors:                               
+       424 +                st.caption(f"- {err}")                       
+       425 +        else:                                                
+       426 +            _try_validate()                                  
+       427 +            errors = st.session_state.get("validation_errors"
+           +, [])                                                        
+       428 +            if errors:                                       
+       429 +                st.error(f"{len(errors)} validation error(s)"
+           +)                                                            
+       430 +                for err in errors:                           
+       431 +                    st.caption(f"- {err}")                   
+       432 +            else:                                            
+       433 +                st.success("Spec is valid")                  
+       434 +                                                             
+       435 +                                                             
+       436 +# -----------------------------------------------------------
+           +----------------                                             
+       437 +# Tab 1: Concept Mapping                                     
+       438 +# -----------------------------------------------------------
+           +----------------                                             
+       439 +                                                             
+       440 +def _render_concept_mapping() -> None:                       
+       441 +    spec = _get_spec()                                       
+       442 +                                                             
+       443 +    st.markdown("### Describe your learning experience")     
+       444 +                                                             
+       445 +    col1, col2 = st.columns(2)                               
+       446 +    with col1:                                               
+       447 +        spec["target_concept"] = st.text_input(              
+       448 +            "What are you teaching?",                        
+       449 +            value=spec.get("target_concept", ""),            
+       450 +            help="The concept students should learn. Example:
+           + 'AI Recommendation System'",                                
+       451 +            placeholder="e.g. AI Recommendation System",     
+       452 +        )                                                    
+       453 +    with col2:                                               
+       454 +        spec["analogy_domain"] = st.text_input(              
+       455 +            "What analogy are you using?",                   
+       456 +            value=spec.get("analogy_domain", ""),            
+       457 +            help="The real-world analogy that represents the 
+           +concept. Example: 'Bee Pollination in a Garden'",            
+       458 +            placeholder="e.g. Bee Pollination in a Garden",  
+       459 +        )                                                    
+       460 +                                                             
+       461 +    spec["learning_goal"] = st.text_area(                    
+       462 +        "What should students learn?",                       
+       463 +        value=spec.get("learning_goal", ""),                 
+       464 +        help="Describe the learning outcome in one or two sen
+           +tences.",                                                    
+       465 +        placeholder="e.g. Understand how recommendation syste
+           +ms use user profiles and feedback loops to personalize sugges
+           +tions",                                                      
+       466 +        height=80,                                           
+       467 +    )                                                        
+       468 +    spec["task_label"] = st.text_input(                      
+       469 +        "Task label (optional)",                             
+       470 +        value=spec.get("task_label", ""),                    
+       471 +        help="A short label for this activity.",             
+       472 +        placeholder="e.g. Task 1: Beehive Analogy",          
+       473 +    )                                                        
+       474 +                                                             
+       475 +    # --- Simplified Mapping Table ---                       
+       476 +    st.divider()                                             
+       477 +    st.markdown("### Map your concept to the analogy")       
+       478 +    st.caption(                                              
+       479 +        "Each row connects a part of what you're teaching (Ta
+           +rget Attribute) "                                            
+       480 +        "to something in your analogy (Source Attribute), wit
+           +h a description of how they relate."                         
+       481 +    )                                                        
+       482 +                                                             
+       483 +    import pandas as pd                                      
+       484 +                                                             
+       485 +    mappings = spec.get("mappings", [])                      
+       486 +    rows = []                                                
+       487 +    for m in mappings:                                       
+       488 +        comp = m.get("structural_component", "user")         
+       489 +        friendly_label = COMPONENT_LABELS.get(comp, comp)    
+       490 +        rows.append({                                        
+       491 +            "Target Attribute": friendly_label,              
+       492 +            "Source Attribute": m.get("analogy_name", ""),   
+       493 +            "Relationship": m.get("analogy_description", ""),
+       494 +        })                                                   
+       495 +                                                             
+       496 +    if not rows:                                             
+       497 +        rows = [{"Target Attribute": "Learner Role", "Source 
+           +Attribute": "", "Relationship": ""}]                         
+       498 +                                                             
+       499 +    df = pd.DataFrame(rows)                                  
+       500 +                                                             
+       501 +    column_config = {                                        
+       502 +        "Target Attribute": st.column_config.SelectboxColumn(
+       503 +            "Target Attribute",                              
+       504 +            options=COMPONENT_FRIENDLY_OPTIONS,              
+       505 +            required=True,                                   
+       506 +            width="medium",                                  
+       507 +            help="What part of the concept does this represen
+           +t?",                                                         
+       508 +        ),                                                   
+       509 +        "Source Attribute": st.column_config.TextColumn(     
+       510 +            "Source Attribute",                              
+       511 +            required=True,                                   
+       512 +            width="medium",                                  
+       513 +            help="The analogy element (e.g. 'Bee', 'Flower', 
+           +'Beehive')",                                                 
+       514 +        ),                                                   
+       515 +        "Relationship": st.column_config.TextColumn(         
+       516 +            "Relationship",                                  
+       517 +            width="large",                                   
+       518 +            help="How does the source represent the target? W
+           +hat's the connection?",                                      
+       519 +        ),                                                   
+       520 +    }                                                        
+       521 +                                                             
+       522 +    edited_df = st.data_editor(                              
+       523 +        df,                                                  
+       524 +        column_config=column_config,                         
+       525 +        num_rows="dynamic",                                  
+       526 +        use_container_width=True,                            
+       527 +        key="mapping_editor",                                
+       528 +    )                                                        
+       529 +                                                             
+       530 +    # Sync edited data back to spec, preserving extra fields 
+           +from existing mappings                                       
+       531 +    new_mappings = []                                        
+       532 +    for i, row in edited_df.iterrows():                      
+       533 +        target_label = row.get("Target Attribute", "Learner R
+           +ole")                                                        
+       534 +        comp_value = LABEL_TO_COMPONENT.get(target_label, "us
+           +er")                                                         
+       535 +                                                             
+       536 +        # Preserve existing mapping data (positions, interact
+           +ions, etc.)                                                  
+       537 +        original = mappings[i] if i < len(mappings) else {}  
+       538 +        m = dict(original)  # shallow copy to preserve all fi
+           +elds                                                         
+       539 +        m["structural_component"] = comp_value               
+       540 +        m["analogy_name"] = row.get("Source Attribute", "")  
+       541 +        m["analogy_description"] = row.get("Relationship", ""
+           +)                                                            
+       542 +                                                             
+       543 +        # Ensure defaults for fields the simplified view does
+           +n't show                                                     
+       544 +        m.setdefault("asset_strategy", "primitive")          
+       545 +        m.setdefault("position", [0, 0, 0])                  
+       546 +        m.setdefault("scale", [1, 1, 1])                     
+       547 +                                                             
+       548 +        new_mappings.append(m)                               
+       549 +                                                             
+       550 +    spec["mappings"] = new_mappings                          
+       551 +                                                             
+       552 +    # --- Show interactions (read-only summary) if they exist
+           + from LLM suggestions ---                                    
+       553 +    mappings_with_interactions = [                           
+       554 +        (i, m) for i, m in enumerate(new_mappings) if m.get("
+           +interaction")                                                
+       555 +    ]                                                        
+       556 +    if mappings_with_interactions:                           
+       557 +        st.divider()                                         
+       558 +        st.markdown("### Interactions (from AI suggestions)")
+       559 +        st.caption("These were generated by the AI assistant.
+           + Edit them in the Generate & Preview tab or in Advanced Setti
+           +ngs.")                                                       
+       560 +        for i, m in mappings_with_interactions:              
+       561 +            ix = m["interaction"]                            
+       562 +            name = m.get("analogy_name", "?")                
+       563 +            trigger = ix.get("trigger", "?")                 
+       564 +            source = ix.get("trigger_source", "?")           
+       565 +            effect_desc = ix.get("effect_description", ix.get
+           +("effect", "?"))                                             
+       566 +            targets = ix.get("target_objects", [])           
+       567 +            targets_str = ", ".join(targets) if targets else 
+           +"?"                                                          
+       568 +            st.info(                                         
+       569 +                f"**{name}**: When *{trigger}*, "            
+       570 +                f"**{source}** causes *{effect_desc}* on **{t
+           +argets_str}**"                                               
+       571 +            )                                                
+       572 +                                                             
+       573 +                                                             
+       574 +# -----------------------------------------------------------
+           +----------------                                             
+       575 +# Tab 2: Generate & Preview                                  
+       576 +# -----------------------------------------------------------
+           +----------------                                             
+       577 +                                                             
+       578 +def _render_generate_preview() -> None:                      
+       579 +    spec = _get_spec()                                       
+       580 +    mappings = spec.get("mappings", [])                      
+       581 +                                                             
+       582 +    # --- Step 1: Get LLM Suggestions ---                    
+       583 +    st.markdown("### Step 1: Get AI suggestions")            
+       584 +    st.caption(                                              
+       585 +        "The AI will read your concept mapping and suggest ho
+           +w to build "                                                 
+       586 +        "the 3D scene — what objects look like, how they inte
+           +ract, and the environment."                                  
+       587 +    )                                                        
+       588 +                                                             
+       589 +    has_content = bool(spec.get("target_concept")) and bool(m
+           +appings)                                                     
+       590 +    if not has_content:                                      
+       591 +        st.warning("Fill in your concept and at least one map
+           +ping in the Concept Mapping tab first.")                     
+       592 +                                                             
+       593 +    col1, col2 = st.columns([3, 1])                          
+       594 +    with col1:                                               
+       595 +        suggest_clicked = st.button(                         
+       596 +            "Get Suggestions from AI",                       
+       597 +            type="primary",                                  
+       598 +            use_container_width=True,                        
+       599 +            disabled=not has_content or not _get_api_key(),  
+       600 +            help="Sends your mapping table to the AI to get s
+           +cene suggestions.",                                          
+       601 +        )                                                    
+       602 +    with col2:                                               
+       603 +        if not _get_api_key():                               
+       604 +            st.caption("Set API key in sidebar")             
+       605 +                                                             
+       606 +    if suggest_clicked:                                      
+       607 +        with st.spinner("Asking AI for suggestions..."):     
+       608 +            prompt = _build_llm_prompt(spec)                 
+       609 +            response_text = _call_llm(prompt)                
+       610 +            if response_text:                                
+       611 +                suggestions = _parse_llm_response(response_te
+           +xt)                                                          
+       612 +                if suggestions:                              
+       613 +                    st.session_state["llm_suggestions"] = sug
+           +gestions                                                     
+       614 +                    st.session_state["suggestions_accepted"] 
+           += False                                                      
+       615 +                    st.rerun()                               
+       616 +                                                             
+       617 +    # Display suggestions if we have them                    
+       618 +    suggestions = st.session_state.get("llm_suggestions")    
+       619 +    if suggestions:                                          
+       620 +        st.divider()                                         
+       621 +        st.markdown("#### AI Suggestions")                   
+       622 +                                                             
+       623 +        # Environment suggestion                             
+       624 +        env_sug = suggestions.get("environment", {})         
+       625 +        if env_sug:                                          
+       626 +            setting = env_sug.get("setting", "")             
+       627 +            desc = env_sug.get("description", "")            
+       628 +            skybox = env_sug.get("skybox", "")               
+       629 +            st.success(                                      
+       630 +                f"**Environment: {setting.title()}** ({skybox
+           +})\n\n{desc}"                                                
+       631 +            )                                                
+       632 +                                                             
+       633 +        # Game loop description                              
+       634 +        game_loop = suggestions.get("game_loop_description", 
+           +"")                                                          
+       635 +        if game_loop:                                        
+       636 +            st.info(f"**How it works:** {game_loop}")        
+       637 +                                                             
+       638 +        # Per-mapping suggestion cards                       
+       639 +        mapping_suggestions = suggestions.get("mapping_sugges
+           +tions", [])                                                  
+       640 +        for i, m_sug in enumerate(mapping_suggestions):      
+       641 +            if i >= len(mappings):                           
+       642 +                break                                        
+       643 +            m = mappings[i]                                  
+       644 +            name = m.get("analogy_name", f"Mapping {i + 1}") 
+       645 +            comp = m.get("structural_component", "")         
+       646 +            friendly = COMPONENT_LABELS.get(comp, comp)      
+       647 +            strategy = m_sug.get("asset_strategy", "primitive
+           +")                                                           
+       648 +                                                             
+       649 +            with st.expander(f"{name} ({friendly})", expanded
+           +=True):                                                      
+       650 +                cols = st.columns(3)                         
+       651 +                cols[0].markdown(f"**Strategy:** {strategy}")
+       652 +                if m_sug.get("trellis_prompt"):              
+       653 +                    cols[1].markdown(f"**3D Model:** {m_sug['
+           +trellis_prompt']}")                                          
+       654 +                if m_sug.get("primitive_type"):              
+       655 +                    cols[1].markdown(f"**Shape:** {m_sug['pri
+           +mitive_type']}")                                             
+       656 +                if m_sug.get("instance_count") and m_sug["ins
+           +tance_count"] > 1:                                           
+       657 +                    cols[2].markdown(f"**Instances:** {m_sug[
+           +'instance_count']}")                                         
+       658 +                                                             
+       659 +                ix = m_sug.get("interaction")                
+       660 +                if ix:                                       
+       661 +                    trigger = ix.get("trigger", "?")         
+       662 +                    source = ix.get("trigger_source", "?")   
+       663 +                    effect_desc = ix.get("effect_description"
+           +, ix.get("effect", ""))                                      
+       664 +                    targets = ix.get("target_objects", [])   
+       665 +                    targets_str = ", ".join(targets) if targe
+           +ts else "?"                                                  
+       666 +                                                             
+       667 +                    st.markdown(                             
+       668 +                        f"When *{trigger}*, **{source}** caus
+           +es "                                                         
+       669 +                        f"*{effect_desc}* on **{targets_str}*
+           +*"                                                           
+       670 +                    )                                        
+       671 +                                                             
+       672 +                    if ix.get("animation_preset"):           
+       673 +                        st.caption(f"Animation: {ix['animatio
+           +n_preset']}")                                                
+       674 +                    if ix.get("vfx_type"):                   
+       675 +                        st.caption(f"Visual effect: {ix['vfx_
+           +type']}")                                                    
+       676 +                                                             
+       677 +        # Accept / regenerate buttons                        
+       678 +        st.divider()                                         
+       679 +        col_accept, col_regen = st.columns(2)                
+       680 +        with col_accept:                                     
+       681 +            if st.button("Accept Suggestions", type="primary"
+           +, use_container_width=True):                                 
+       682 +                _merge_suggestions_into_spec(suggestions)    
+       683 +                st.session_state["suggestions_accepted"] = Tr
+           +ue                                                           
+       684 +                st.rerun()                                   
+       685 +        with col_regen:                                      
+       686 +            if st.button("Regenerate", use_container_width=Tr
+           +ue):                                                         
+       687 +                st.session_state["llm_suggestions"] = None   
+       688 +                st.session_state["suggestions_accepted"] = Fa
+           +lse                                                          
+       689 +                st.rerun()                                   
+       690 +                                                             
+       691 +    if st.session_state.get("suggestions_accepted"):         
+       692 +        st.success("Suggestions applied to your spec.")      
+       693 +                                                             
+       694 +    # --- Step 2: Generate Prompt ---                        
+       695 +    st.divider()                                             
+       696 +    st.markdown("### Step 2: Generate prompt for Claude Code"
+           +)                                                            
+       697 +    st.caption(                                              
+       698 +        "This creates a ready-to-paste prompt that tells Clau
+           +de Code "                                                    
+       699 +        "exactly how to build your scene in Unity."          
+       700 +    )                                                        
+       701 +                                                             
+       702 +    spec_obj = _try_validate()                               
+       703 +    if spec_obj is None:                                     
+       704 +        errors = st.session_state.get("validation_errors", []
+           +)                                                            
+       705 +        if errors:                                           
+       706 +            st.error("Your spec has validation errors. Fix th
+           +em before generating.")                                      
+       707 +            for err in errors:                               
+       708 +                st.caption(f"- {err}")                       
+       709 +        else:                                                
+       710 +            st.info("Fill in your concept mapping and get AI 
+           +suggestions first.")                                         
+       711 +        return                                               
+       712 +                                                             
+       713 +    if st.button(                                            
+       714 +        "Generate Prompt for Claude Code",                   
+       715 +        type="primary",                                      
+       716 +        use_container_width=True,                            
+       717 +    ):                                                       
+       718 +        plan = MCPCallPlan()                                 
+       719 +        validator = PlanValidator(spec_obj)                  
+       720 +        plan = validator.validate_and_repair(plan)           
+       721 +        batch_plan = validator.to_batch_plan(plan)           
+       722 +                                                             
+       723 +        spec_json = json.dumps(_get_spec(), indent=2)        
+       724 +        prompt = _build_generation_prompt(spec_json, batch_pl
+           +an)                                                          
+       725 +        st.session_state["generated_prompt"] = prompt        
+       726 +        st.session_state["batch_plan"] = batch_plan          
+       727 +                                                             
+       728 +    if "generated_prompt" in st.session_state:               
+       729 +        batch_plan = st.session_state.get("batch_plan")      
+       730 +                                                             
+       731 +        st.text_area(                                        
+       732 +            "Copy this prompt into Claude Code",             
+       733 +            value=st.session_state["generated_prompt"],      
+       734 +            height=400,                                      
+       735 +        )                                                    
+       736 +        st.download_button(                                  
+       737 +            "Download Prompt",                               
+       738 +            data=st.session_state["generated_prompt"],       
+       739 +            file_name="scene_prompt.txt",                    
+       740 +            mime="text/plain",                               
+       741 +        )                                                    
+       742 +                                                             
+       743 +        # Batch plan preview                                 
+       744 +        if batch_plan:                                       
+       745 +            with st.expander("Execution plan details"):      
+       746 +                phase_rows = []                              
+       747 +                for phase in batch_plan.phases:              
+       748 +                    phase_rows.append({                      
+       749 +                        "Phase": phase.phase_name,           
+       750 +                        "#": phase.phase_number,             
+       751 +                        "Commands": len(phase.commands),     
+       752 +                        "Parallel": phase.parallel,          
+       753 +                        "Note": phase.note,                  
+       754 +                    })                                       
+       755 +                if phase_rows:                               
+       756 +                    st.table(phase_rows)                     
+       757 +                                                             
+       758 +                c1, c2, c3 = st.columns(3)                   
+       759 +                c1.metric("Total Commands", batch_plan.total_
+           +commands)                                                    
+       760 +                c2.metric("Estimated Batches", batch_plan.est
+           +imated_batches)                                              
+       761 +                c3.metric("Trellis Generations", batch_plan.t
+           +rellis_count)                                                
+       762 +                                                             
+       763 +                hints = [w for w in batch_plan.warnings if w.
+           +startswith("INTERACTION_HINT")]                              
+       764 +                warnings = [w for w in batch_plan.warnings if
+           + not w.startswith("INTERACTION_HINT")]                       
+       765 +                if hints:                                    
+       766 +                    st.subheader("Interaction Hints")        
+       767 +                    for h in hints:                          
+       768 +                        st.info(h)                           
+       769 +                if warnings:                                 
+       770 +                    st.subheader("Warnings")                 
+       771 +                    for w in warnings:                       
+       772 +                        st.warning(w)                        
+       773 +                                                             
+       774 +                                                             
+       775 +# -----------------------------------------------------------
+           +----------------                                             
+       776 +# Advanced Settings (expander)                               
+       777 +# -----------------------------------------------------------
+           +----------------                                             
+       778 +                                                             
+       779 +def _render_advanced_settings() -> None:                     
+       780 +    spec = _get_spec()                                       
+       781 +    env = spec.setdefault("environment", _default_spec()["env
+           +ironment"])                                                  
+       782 +                                                             
+       783 +    with st.expander("Advanced Settings", expanded=False):   
+       784 +        st.caption("Technical environment and per-mapping ove
+           +rrides. Most educators can skip this section.")              
+       785 +                                                             
+       786 +        # --- Environment controls ---                       
+       787 +        st.markdown("#### Environment")                      
+       788 +        env["description"] = st.text_input(                  
+       789 +            "Environment Description",                       
+       790 +            value=env.get("description", ""),                
+       791 +            help="A short description of the environment for 
+           +context.",                                                   
+       792 +        )                                                    
+       793 +        col1, col2 = st.columns(2)                           
+       794 +        with col1:                                           
+       795 +            env["setting"] = st.text_input("Setting", value=e
+           +nv.get("setting", "garden"))                                 
+       796 +        with col2:                                           
+       797 +            env["skybox"] = st.selectbox(                    
+       798 +                "Skybox", SKYBOX_PRESETS,                    
+       799 +                index=SKYBOX_PRESETS.index(env.get("skybox", 
+           +"sunny")),                                                   
+       800 +            )                                                
+       801 +                                                             
+       802 +        # Terrain                                            
+       803 +        st.markdown("##### Terrain")                         
+       804 +        ts = env.get("terrain_size", [30, 1, 30])            
+       805 +        tc1, tc2, tc3 = st.columns(3)                        
+       806 +        ts[0] = tc1.slider("Size X", 1.0, 100.0, float(ts[0])
+           +, 1.0)                                                       
+       807 +        ts[1] = tc2.slider("Size Y", 0.1, 10.0, float(ts[1]),
+           + 0.1)                                                        
+       808 +        ts[2] = tc3.slider("Size Z", 1.0, 100.0, float(ts[2])
+           +, 1.0)                                                       
+       809 +        env["terrain_size"] = ts                             
+       810 +                                                             
+       811 +        tc = env.get("terrain_color", [0.3, 0.6, 0.2, 1.0])  
+       812 +        tc_hex = st.color_picker("Terrain Color", _rgba_to_he
+           +x(tc))                                                       
+       813 +        tc_alpha = st.slider("Terrain Alpha", 0.0, 1.0, float
+           +(tc[3] if len(tc) > 3 else 1.0), 0.05, key="terrain_alpha")  
+       814 +        env["terrain_color"] = _hex_to_rgba(tc_hex, tc_alpha)
+       815 +                                                             
+       816 +        # Lighting                                           
+       817 +        st.markdown("##### Lighting")                        
+       818 +        light = env.setdefault("lighting", {"color": [1.0, 0.
+           +95, 0.9, 1.0], "intensity": 1.0, "rotation": [50, -30, 0]})  
+       819 +        light["intensity"] = st.slider("Intensity", 0.0, 2.0,
+           + float(light.get("intensity", 1.0)), 0.05)                   
+       820 +                                                             
+       821 +        lr = light.get("rotation", [50, -30, 0])             
+       822 +        lc1, lc2, lc3 = st.columns(3)                        
+       823 +        lr[0] = lc1.slider("Light Rot X", -180.0, 180.0, floa
+           +t(lr[0]), 1.0)                                               
+       824 +        lr[1] = lc2.slider("Light Rot Y", -180.0, 180.0, floa
+           +t(lr[1]), 1.0)                                               
+       825 +        lr[2] = lc3.slider("Light Rot Z", -180.0, 180.0, floa
+           +t(lr[2]), 1.0)                                               
+       826 +        light["rotation"] = lr                               
+       827 +                                                             
+       828 +        lcolor = light.get("color", [1.0, 0.95, 0.9, 1.0])   
+       829 +        lcolor_hex = st.color_picker("Light Color", _rgba_to_
+           +hex(lcolor))                                                 
+       830 +        env["lighting"]["color"] = _hex_to_rgba(lcolor_hex, l
+           +color[3] if len(lcolor) > 3 else 1.0)                        
+       831 +                                                             
+       832 +        # Camera                                             
+       833 +        st.markdown("##### Camera")                          
+       834 +        cam = env.setdefault("camera", {"position": [0, 1.6, 
+           +-5], "rotation": [10, 0, 0], "field_of_view": 60.0, "is_vr": 
+           +True})                                                       
+       835 +                                                             
+       836 +        cp = cam.get("position", [0, 1.6, -5])               
+       837 +        cc1, cc2, cc3 = st.columns(3)                        
+       838 +        cp[0] = cc1.number_input("Cam Pos X", value=float(cp[
+           +0]), step=0.5, key="cam_px")                                 
+       839 +        cp[1] = cc2.number_input("Cam Pos Y", value=float(cp[
+           +1]), step=0.5, key="cam_py")                                 
+       840 +        cp[2] = cc3.number_input("Cam Pos Z", value=float(cp[
+           +2]), step=0.5, key="cam_pz")                                 
+       841 +        cam["position"] = cp                                 
+       842 +                                                             
+       843 +        cr = cam.get("rotation", [10, 0, 0])                 
+       844 +        cr1, cr2, cr3 = st.columns(3)                        
+       845 +        cr[0] = cr1.number_input("Cam Rot X", value=float(cr[
+           +0]), step=1.0, key="cam_rx")                                 
+       846 +        cr[1] = cr2.number_input("Cam Rot Y", value=float(cr[
+           +1]), step=1.0, key="cam_ry")                                 
+       847 +        cr[2] = cr3.number_input("Cam Rot Z", value=float(cr[
+           +2]), step=1.0, key="cam_rz")                                 
+       848 +        cam["rotation"] = cr                                 
+       849 +                                                             
+       850 +        cam["field_of_view"] = st.slider("FOV", 20.0, 120.0, 
+           +float(cam.get("field_of_view", 60.0)), 1.0)                  
+       851 +        cam["is_vr"] = st.checkbox("VR Mode", value=cam.get("
+           +is_vr", True))                                               
+       852 +                                                             
+       853 +        # --- Per-mapping overrides ---                      
+       854 +        st.divider()                                         
+       855 +        st.markdown("#### Per-mapping overrides")            
+       856 +        st.caption("Override position, scale, color, asset st
+           +rategy, and interactions for individual mappings.")          
+       857 +                                                             
+       858 +        mappings = spec.get("mappings", [])                  
+       859 +        if not mappings:                                     
+       860 +            st.info("Add mappings in the Concept Mapping tab 
+           +first.")                                                     
+       861 +            return                                           
+       862 +                                                             
+       863 +        mapping_names = [f"{i}: {m.get('analogy_name', '?')}"
+           + for i, m in enumerate(mappings)]                            
+       864 +        selected = st.selectbox("Select mapping", mapping_nam
+           +es, key="adv_mapping_select")                                
+       865 +        if selected is None:                                 
+       866 +            return                                           
+       867 +                                                             
+       868 +        idx = int(selected.split(":")[0])                    
+       869 +        mapping = mappings[idx]                              
+       870 +                                                             
+       871 +        # Asset strategy                                     
+       872 +        current_strategy = mapping.get("asset_strategy", "pri
+           +mitive")                                                     
+       873 +        strategy_idx = ASSET_STRATEGIES.index(current_strateg
+           +y) if current_strategy in ASSET_STRATEGIES else 0            
+       874 +        mapping["asset_strategy"] = st.selectbox(            
+       875 +            "Asset Strategy", ASSET_STRATEGIES, index=strateg
+           +y_idx, key=f"adv_strategy_{idx}",                            
+       876 +        )                                                    
+       877 +                                                             
+       878 +        if mapping["asset_strategy"] == "primitive":         
+       879 +            current_prim = mapping.get("primitive_type", "Cub
+           +e")                                                          
+       880 +            prim_idx = PRIMITIVE_TYPES.index(current_prim) if
+           + current_prim in PRIMITIVE_TYPES else 0                      
+       881 +            mapping["primitive_type"] = st.selectbox(        
+       882 +                "Primitive Type", PRIMITIVE_TYPES, index=prim
+           +_idx, key=f"adv_prim_{idx}",                                 
+       883 +            )                                                
+       884 +        elif mapping["asset_strategy"] == "trellis":         
+       885 +            mapping["trellis_prompt"] = st.text_input(       
+       886 +                "Trellis Prompt", value=mapping.get("trellis_
+           +prompt", ""),                                                
+       887 +                key=f"adv_trellis_{idx}",                    
+       888 +                help="Text prompt for AI 3D model generation.
+           +",                                                           
+       889 +            )                                                
+       890 +                                                             
+       891 +        # Position                                           
+       892 +        pos = mapping.get("position", [0, 0, 0])             
+       893 +        pc1, pc2, pc3 = st.columns(3)                        
+       894 +        pos[0] = pc1.number_input("Pos X", value=float(pos[0]
+           +), step=0.5, key=f"adv_px_{idx}")                            
+       895 +        pos[1] = pc2.number_input("Pos Y", value=float(pos[1]
+           +), step=0.5, key=f"adv_py_{idx}")                            
+       896 +        pos[2] = pc3.number_input("Pos Z", value=float(pos[2]
+           +), step=0.5, key=f"adv_pz_{idx}")                            
+       897 +        mapping["position"] = pos                            
+       898 +                                                             
+       899 +        # Scale                                              
+       900 +        scl = mapping.get("scale", [1, 1, 1])                
+       901 +        sc1, sc2, sc3 = st.columns(3)                        
+       902 +        scl[0] = sc1.number_input("Scale X", value=float(scl[
+           +0]), step=0.1, key=f"adv_sx_{idx}")                          
+       903 +        scl[1] = sc2.number_input("Scale Y", value=float(scl[
+           +1]), step=0.1, key=f"adv_sy_{idx}")                          
+       904 +        scl[2] = sc3.number_input("Scale Z", value=float(scl[
+           +2]), step=0.1, key=f"adv_sz_{idx}")                          
+       905 +        mapping["scale"] = scl                               
+       906 +                                                             
+       907 +        # Color                                              
+       908 +        col = mapping.get("color")                           
+       909 +        col_hex = st.color_picker("Color", _rgba_to_hex(col) 
+           +if col else "#b3b3b3", key=f"adv_col_{idx}")                 
+       910 +        col_alpha = st.slider("Alpha", 0.0, 1.0, float(col[3]
+           + if col and len(col) > 3 else 1.0), 0.05, key=f"adv_alpha_{id
+           +x}")                                                         
+       911 +        if col_hex != "#b3b3b3":                             
+       912 +            mapping["color"] = _hex_to_rgba(col_hex, col_alph
+           +a)                                                           
+       913 +                                                             
+       914 +        # Instance count / spread                            
+       915 +        if mapping.get("structural_component") == "content_it
+           +em":                                                         
+       916 +            mapping["instance_count"] = st.number_input(     
+       917 +                "Instance Count", min_value=1, value=int(mapp
+           +ing.get("instance_count", 1)),                               
+       918 +                key=f"adv_count_{idx}",                      
+       919 +            )                                                
+       920 +            mapping["instance_spread"] = st.number_input(    
+       921 +                "Instance Spread", min_value=0.0, value=float
+           +(mapping.get("instance_spread", 3.0)),                       
+       922 +                step=0.5, key=f"adv_spread_{idx}",           
+       923 +            )                                                
+       924 +                                                             
+       925 +        # --- Interaction Editor ---                         
+       926 +        st.markdown("##### Interaction")                     
+       927 +        ix = mapping.get("interaction") or {}                
+       928 +                                                             
+       929 +        add_ix = st.checkbox("Has interaction", value=bool(ix
+           +), key=f"adv_has_ix_{idx}")                                  
+       930 +        if not add_ix:                                       
+       931 +            mapping.pop("interaction", None)                 
+       932 +        else:                                                
+       933 +            if not ix:                                       
+       934 +                ix = {}                                      
+       935 +                mapping["interaction"] = ix                  
+       936 +                                                             
+       937 +            current_trigger = ix.get("trigger", "")          
+       938 +            trigger_idx = TRIGGER_OPTIONS.index(current_trigg
+           +er) if current_trigger in TRIGGER_OPTIONS else 0             
+       939 +            ix["trigger"] = st.selectbox("Trigger", TRIGGER_O
+           +PTIONS, index=trigger_idx, key=f"adv_trigger_{idx}")         
+       940 +                                                             
+       941 +            c1, c2 = st.columns(2)                           
+       942 +            with c1:                                         
+       943 +                ix["trigger_source"] = st.text_input(        
+       944 +                    "Trigger Source", value=ix.get("trigger_s
+           +ource", ""), key=f"adv_src_{idx}",                           
+       945 +                )                                            
+       946 +            with c2:                                         
+       947 +                targets_str = ", ".join(ix.get("target_object
+           +s", []))                                                     
+       948 +                targets_input = st.text_input(               
+       949 +                    "Target Objects (comma-sep)", value=targe
+           +ts_str, key=f"adv_targets_{idx}",                            
+       950 +                )                                            
+       951 +                ix["target_objects"] = [t.strip() for t in ta
+           +rgets_input.split(",") if t.strip()]                         
+       952 +                                                             
+       953 +            ix["effect"] = st.text_input("Effect", value=ix.g
+           +et("effect", ""), key=f"adv_effect_{idx}")                   
+       954 +            ix["effect_description"] = st.text_area(         
+       955 +                "Effect Description", value=ix.get("effect_de
+           +scription", ""), key=f"adv_effdesc_{idx}",                   
+       956 +            )                                                
+       957 +                                                             
+       958 +            c3, c4 = st.columns(2)                           
+       959 +            with c3:                                         
+       960 +                current_anim = ix.get("animation_preset", "")
+       961 +                anim_idx = ANIMATION_PRESETS.index(current_an
+           +im) if current_anim in ANIMATION_PRESETS else 0              
+       962 +                ix["animation_preset"] = st.selectbox(       
+       963 +                    "Animation Preset", ANIMATION_PRESETS, in
+           +dex=anim_idx, key=f"adv_anim_{idx}",                         
+       964 +                )                                            
+       965 +            with c4:                                         
+       966 +                current_vfx = ix.get("vfx_type", "")         
+       967 +                vfx_idx = VFX_TYPES.index(current_vfx) if cur
+           +rent_vfx in VFX_TYPES else 0                                 
+       968 +                ix["vfx_type"] = st.selectbox(               
+       969 +                    "VFX Type", VFX_TYPES, index=vfx_idx, key
+           +=f"adv_vfx_{idx}",                                           
+       970 +                )                                            
+       971 +                                                             
+       972 +            params_str = json.dumps(ix.get("parameters", {}),
+           + indent=2)                                                   
+       973 +            params_input = st.text_area(                     
+       974 +                "Parameters (JSON)", value=params_str, height
+           +=120, key=f"adv_params_{idx}",                               
+       975 +            )                                                
+       976 +            try:                                             
+       977 +                ix["parameters"] = json.loads(params_input) i
+           +f params_input.strip() else {}                               
+       978 +            except json.JSONDecodeError:                     
+       979 +                st.warning("Invalid JSON in parameters field"
+           +)                                                            
+       980 +                                                             
+       981 +            # Clean empty string fields                      
+       982 +            for key in ["animation_preset", "vfx_type", "trig
+           +ger_source", "effect"]:                                      
+       983 +                if not ix.get(key):                          
+       984 +                    ix.pop(key, None)                        
+       985 +            if not ix.get("target_objects"):                 
+       986 +                ix.pop("target_objects", None)               
+       987 +            if not ix.get("parameters"):                     
+       988 +                ix.pop("parameters", None)                   
+       989 +                                                             
+       990 +            mapping["interaction"] = ix                      
+       991 +                                                             
+       992 +                                                             
+       993 +# -----------------------------------------------------------
+           +----------------                                             
+       994 +# Prompt builder                                             
+       995 +# -----------------------------------------------------------
+           +----------------                                             
+       996 +                                                             
+       997 +def _build_generation_prompt(spec_json: str, batch_plan: Batc
+           +hExecutionPlan) -> str:                                      
+       998 +    """Build a ready-to-paste prompt for Claude Code."""     
+       999 +    hints = [w for w in batch_plan.warnings if w.startswith("
+           +INTERACTION_HINT")]                                          
+      1000 +    warnings = [w for w in batch_plan.warnings if not w.start
+           +swith("INTERACTION_HINT")]                                   
+      1001 +                                                             
+      1002 +    lines = [                                                
+      1003 +        "# Scene Generation Request",                        
+      1004 +        "",                                                  
+      1005 +        "Execute the scene generation pipeline using the Scen
+           +eSpec below.",                                               
+      1006 +        "The validator has already computed the batch executi
+           +on plan.",                                                   
+      1007 +        "Execute each phase sequentially using `batch_execute
+           +`.",                                                         
+      1008 +        "",                                                  
+      1009 +        "## SceneSpec JSON",                                 
+      1010 +        "",                                                  
+      1011 +        "```json",                                           
+      1012 +        spec_json,                                           
+      1013 +        "```",                                               
+      1014 +        "",                                                  
+      1015 +        f"## Execution Plan ({batch_plan.total_commands} comm
+           +ands, {batch_plan.estimated_batches} batches)",              
+      1016 +        "",                                                  
+      1017 +    ]                                                        
+      1018 +                                                             
+      1019 +    for phase in batch_plan.phases:                          
+      1020 +        parallel_str = "parallel" if phase.parallel else "seq
+           +uential"                                                     
+      1021 +        lines.append(f"### Phase {phase.phase_number}: {phase
+           +.phase_name} ({len(phase.commands)} commands, {parallel_str})
+           +")                                                           
+      1022 +        lines.append(f"{phase.note}")                        
+      1023 +        lines.append("")                                     
+      1024 +        lines.append("```json")                              
+      1025 +        lines.append(json.dumps(phase.commands, indent=2))   
+      1026 +        lines.append("```")                                  
+      1027 +        lines.append("")                                     
+      1028 +                                                             
+      1029 +    if hints:                                                
+      1030 +        lines.append("## Interaction Hints (scripts to write)
+           +")                                                           
+      1031 +        lines.append("")                                     
+      1032 +        for h in hints:                                      
+      1033 +            lines.append(f"- {h}")                           
+      1034 +        lines.append("")                                     
+      1035 +                                                             
+      1036 +    if warnings:                                             
+      1037 +        lines.append("## Warnings")                          
+      1038 +        lines.append("")                                     
+      1039 +        for w in warnings:                                   
+      1040 +            lines.append(f"- {w}")                           
+      1041 +        lines.append("")                                     
+      1042 +                                                             
+      1043 +    if batch_plan.trellis_count > 0:                         
+      1044 +        lines.append(f"**Note:** This scene includes {batch_p
+           +lan.trellis_count} Trellis 3D generation(s). ")              
+      1045 +        lines.append("These are async — poll `manage_3d_gen` 
+           +action=`status` after submitting.")                          
+      1046 +        lines.append("")                                     
+      1047 +                                                             
+      1048 +    lines.append("## Instructions")                          
+      1049 +    lines.append("")                                         
+      1050 +    lines.append("1. Execute each phase in order using `batch
+           +_execute` with the commands above.")                         
+      1051 +    lines.append("2. For script phases (parallel=false), wait
+           + for compilation before proceeding.")                        
+      1052 +    lines.append("3. After all phases, write any interaction 
+           +scripts described in the hints above.")                      
+      1053 +    lines.append("4. Save the scene when done.")             
+      1054 +                                                             
+      1055 +    return "\n".join(lines)                                  
+      1056 +                                                             
+      1057 +                                                             
+      1058 +# -----------------------------------------------------------
+           +----------------                                             
+      1059 +# Main                                                       
+      1060 +# -----------------------------------------------------------
+           +----------------                                             
+      1061 +                                                             
+      1062 +def main() -> None:                                          
+      1063 +    st.set_page_config(page_title="Scene Builder", layout="wi
+           +de")                                                         
+      1064 +    _init_state()                                            
+      1065 +    _render_sidebar()                                        
+      1066 +                                                             
+      1067 +    tab1, tab2 = st.tabs([                                   
+      1068 +        "Concept Mapping",                                   
+      1069 +        "Generate & Preview",                                
+      1070 +    ])                                                       
+      1071 +                                                             
+      1072 +    with tab1:                                               
+      1073 +        _render_concept_mapping()                            
+      1074 +    with tab2:                                               
+      1075 +        _render_generate_preview()                           
+      1076 +                                                             
+      1077 +    # Advanced Settings at the bottom of the page            
+      1078 +    _render_advanced_settings()                              
+      1079 +                                                             
+      1080 +                                                             
+      1081 +if __name__ == "__main__":                                   
+      1082 +    main()                                                   
+
+● Now update pyproject.toml to add the openai and anthropic dependencies.
+
+● Update(Server\pyproject.toml)
+  ⎿  Added 2 lines
+      48  gui = [
+      49      "streamlit>=1.30.0",
+      50      "pandas>=2.0.0",
+      51 +    "openai>=1.0.0",                                           
+      52 +    "anthropic>=0.18.0",                                       
+      53  ]
+      54  
+      55  [project.urls]
+
+● Let me do a quick syntax check on the rewritten file to make sure there are no
+   issues.
+
+● Bash(cd "X:\GithubProjects\unity-mcp\Server" && python -c "import ast;
+      ast.parse(open('src/scene_generator/app.py').read()); print('Syntax OK')")
+  ⎿  Syntax OK
+
+● Both files are updated. Here's a summary of what changed:
+
+  Server/src/scene_generator/app.py — Full rewrite:
+
+  - 2 tabs instead of 4: "Concept Mapping" and "Generate & Preview" (down from
+  Scene Info / Environment / Mappings & Interactions / Preview & Generate)
+  - Simplified mapping table: 3 columns only — Target Attribute (friendly labels
+   like "Learner Role"), Source Attribute, Relationship. No
+  position/scale/color/asset_strategy columns
+  - Educator-friendly labels: "What are you teaching?" instead of "Target
+  Concept", "What analogy are you using?" instead of "Analogy Domain", etc.
+  - LLM integration (Step 1): Sidebar has provider selector (OpenAI/Anthropic)
+  and API key input. "Get Suggestions from AI" button sends mapping table to LLM
+   and gets back environment/interaction/asset strategy suggestions displayed as
+   readable cards
+  - Suggestion cards: LLM results shown as expandable cards with natural
+  language like "When button_press, Bee causes pollen particles burst on Flower"
+  - Accept/Regenerate workflow: Teacher reviews suggestions, accepts to merge
+  into spec, or regenerates
+  - Prompt generation (Step 2): Same as before, produces ready-to-paste prompt
+  for Claude Code, with batch plan details in a collapsible expander
+  - Advanced Settings expander: All technical controls (terrain sliders,
+  lighting, camera, per-mapping asset strategy/position/scale/color/interaction
+  editor) moved to a collapsible expander at the bottom
+
+  Server/pyproject.toml — Added openai>=1.0.0 and anthropic>=0.18.0 to the gui 
+  extras.
+
+  No changes to models.py or validator.py — the JSON schema stays the same, only
+   the UI labels change.
+
+✻ Cooked for 3m 44s

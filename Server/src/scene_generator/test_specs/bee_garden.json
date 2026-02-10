@@ -1,0 +1,164 @@
+{
+  "target_concept": "AI Recommendation System",
+  "analogy_domain": "Bee Pollination in a Garden",
+  "learning_goal": "Understand how recommendation systems use user profiles, content features, and feedback loops to personalize suggestions",
+  "task_label": "Task 1: Beehive Analogy",
+  "prerequisite_knowledge": "Basic understanding of how apps suggest content (e.g., YouTube recommendations)",
+  "key_target_relations": ["DRIVES(profile, candidates)", "FILTERS(range, items)", "RANKS(similarity, display)"],
+  "environment": {
+    "setting": "garden",
+    "terrain_type": "plane",
+    "terrain_size": [30, 1, 30],
+    "terrain_color": [0.3, 0.6, 0.2, 1.0],
+    "skybox": "sunny",
+    "ambient_color": [0.8, 0.9, 0.7, 1.0],
+    "lighting": {
+      "color": [1.0, 0.95, 0.9, 1.0],
+      "intensity": 1.0,
+      "rotation": [50, -30, 0],
+      "shadow_type": "soft"
+    },
+    "camera": {
+      "position": [0, 1.6, -5],
+      "rotation": [10, 0, 0],
+      "field_of_view": 60,
+      "is_vr": true
+    },
+    "description": "A sunny garden with flowers around a central beehive"
+  },
+  "mappings": [
+    {
+      "structural_component": "user",
+      "analogy_name": "Bee",
+      "analogy_description": "The user embodies a bee, navigating the garden with first-person flight controls",
+      "mapping_type": "object",
+      "mapping_confidence": "strong",
+      "asset_strategy": "trellis",
+      "trellis_prompt": "stylized cartoon bee with wings",
+      "position": [0, 1.5, 0],
+      "scale": [0.3, 0.3, 0.3]
+    },
+    {
+      "structural_component": "content_item",
+      "analogy_name": "Flower",
+      "analogy_description": "3D models of flowers with varying attributes (color, petal shape, size)",
+      "mapping_type": "object",
+      "mapping_confidence": "strong",
+      "asset_strategy": "trellis",
+      "trellis_prompt": "colorful garden flower with petals",
+      "position": [0, 0, 5],
+      "scale": [0.5, 0.5, 0.5],
+      "instance_count": 8,
+      "instance_spread": 4.0
+    },
+    {
+      "structural_component": "user_profile",
+      "analogy_name": "Beehive",
+      "analogy_description": "A central 3D beehive that physically moves within the garden space, representing the user profile",
+      "mapping_type": "object",
+      "mapping_confidence": "strong",
+      "asset_strategy": "trellis",
+      "trellis_prompt": "wooden beehive on a stand",
+      "position": [0, 0.5, 0],
+      "scale": [0.8, 0.8, 0.8]
+    },
+    {
+      "structural_component": "user_interaction",
+      "analogy_name": "Pollination",
+      "analogy_description": "The user aims at a flower and triggers pollination with a visual/audio effect",
+      "mapping_type": "relation",
+      "mapping_confidence": "strong",
+      "asset_strategy": "vfx",
+      "position": [0, 1, 0],
+      "interaction": {
+        "trigger": "button_press",
+        "trigger_source": "Bee",
+        "target_objects": ["Flower"],
+        "effect": "emit_particles",
+        "effect_description": "Yellow pollen particles burst from the flower when the bee pollinates it",
+        "vfx_type": "particle_burst",
+        "parameters": {
+          "startColor": [1.0, 0.9, 0.3, 1.0],
+          "startSize": 0.1,
+          "startSpeed": 2.0,
+          "duration": 0.5
+        }
+      }
+    },
+    {
+      "structural_component": "profile_update",
+      "analogy_name": "BeehiveMovement",
+      "analogy_description": "The beehive position drifts toward pollinated flowers, making profile updates spatial",
+      "mapping_type": "relation",
+      "mapping_confidence": "strong",
+      "asset_strategy": "mechanic",
+      "interaction": {
+        "trigger": "on_pollinate",
+        "trigger_source": "Bee",
+        "target_objects": ["Beehive"],
+        "effect": "move_toward",
+        "effect_description": "Beehive smoothly drifts toward the average position of recently pollinated flowers",
+        "parameters": {
+          "speed": 2.0,
+          "smoothTime": 0.5
+        }
+      }
+    },
+    {
+      "structural_component": "candidate_generation",
+      "analogy_name": "PollenCircle",
+      "analogy_description": "A visible circular boundary on the ground centered on the beehive, defining which flowers are candidates",
+      "mapping_type": "relation",
+      "mapping_confidence": "strong",
+      "asset_strategy": "primitive",
+      "primitive_type": "Cylinder",
+      "position": [0, 0.01, 0],
+      "scale": [8, 0.01, 8],
+      "color": [1.0, 0.9, 0.3, 0.3],
+      "interaction": {
+        "trigger": "proximity",
+        "trigger_source": "Beehive",
+        "target_objects": ["Flower"],
+        "effect": "filter_in_range",
+        "effect_description": "Only flowers within the pollen circle radius are candidates for recommendation",
+        "parameters": {
+          "radius": 8.0
+        }
+      }
+    },
+    {
+      "structural_component": "ranking",
+      "analogy_name": "BudGrowth",
+      "analogy_description": "Flower buds closest to the beehive grow into full flowers first, representing ranking through proximity",
+      "mapping_type": "relation",
+      "mapping_confidence": "moderate",
+      "asset_strategy": "mechanic",
+      "interaction": {
+        "trigger": "continuous",
+        "target_objects": ["Flower"],
+        "effect": "grow",
+        "effect_description": "Flowers closest to the beehive grow larger (scale up), representing proximity-based ranking",
+        "animation_preset": "pulse",
+        "parameters": {
+          "maxScale": 1.5,
+          "growSpeed": 0.5
+        }
+      }
+    },
+    {
+      "structural_component": "feedback_loop",
+      "analogy_name": "GardenDynamics",
+      "analogy_description": "Pollinating flowers moves the beehive, which causes similar flowers to grow nearby",
+      "mapping_type": "higher_order",
+      "mapping_confidence": "strong",
+      "asset_strategy": "mechanic",
+      "interaction": {
+        "trigger": "on_pollinate",
+        "trigger_source": "Bee",
+        "target_objects": ["Beehive", "Flower", "PollenCircle"],
+        "effect": "feedback_loop",
+        "effect_description": "Pollinating flowers moves the beehive (profile_update), which changes which flowers are in range (candidate_generation), which changes which buds grow (ranking), encouraging further similar pollination"
+      }
+    }
+  ]
+}
