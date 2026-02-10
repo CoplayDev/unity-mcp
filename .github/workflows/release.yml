@@ -349,7 +349,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr merge "$PR_NUMBER" --merge --auto --no-delete-branch
+          gh pr merge "$PR_NUMBER" --merge --no-delete-branch
 
   publish_docker:
     name: Publish Docker image
