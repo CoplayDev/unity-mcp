@@ -42,7 +42,6 @@ namespace MCPForUnity.Editor.Windows
             { EditorPrefKeys.CustomToolRegistrationEnabled, EditorPrefType.Bool },
             { EditorPrefKeys.TelemetryDisabled, EditorPrefType.Bool },
             { EditorPrefKeys.DevModeForceServerRefresh, EditorPrefType.Bool },
-            { EditorPrefKeys.UseBetaServer, EditorPrefType.Bool },
             { EditorPrefKeys.ProjectScopedToolsLocalHttp, EditorPrefType.Bool },
             
             // Integer prefs

@@ -197,7 +197,7 @@ namespace MCPForUnity.Editor.Windows
             }
 
             // Initialize version label
-            UpdateVersionLabel(EditorConfigurationCache.Instance.UseBetaServer);
+            UpdateVersionLabel();
 
             SetupTabs();
 
@@ -268,9 +268,6 @@ namespace MCPForUnity.Editor.Windows
                     if (connectionSection != null)
                         await connectionSection.VerifyBridgeConnectionAsync();
                 };
-                advancedSection.OnBetaModeChanged += UpdateVersionLabel;
-                advancedSection.OnBetaModeChanged += _ => clientConfigSection?.RefreshSelectedClient(forceImmediate: true);
-
                 // Wire up health status updates from Connection to Advanced
                 connectionSection?.SetHealthStatusUpdateCallback((isHealthy, statusText) =>
                     advancedSection?.UpdateHealthStatus(isHealthy, statusText));
@@ -326,7 +323,7 @@ namespace MCPForUnity.Editor.Windows
             RefreshAllData();
         }
 
-        private void UpdateVersionLabel(bool useBetaServer)
+        private void UpdateVersionLabel()
         {
             if (versionLabel == null)
             {
@@ -335,8 +332,8 @@ namespace MCPForUnity.Editor.Windows
 
             string version = AssetPathUtility.GetPackageVersion();
             versionLabel.text = $"v{version}";
-            versionLabel.tooltip = useBetaServer
-                ? "Beta server mode - fetching pre-release server versions from PyPI"
+            versionLabel.tooltip = AssetPathUtility.IsPreReleaseVersion()
+                ? $"MCP For Unity v{version} (pre-release package, using prerelease server channel)"
                 : $"MCP For Unity v{version}";
         }
 
@@ -607,7 +604,7 @@ namespace MCPForUnity.Editor.Windows
             {
                 case ActivePanel.Clients:
                     if (clientsPanel != null) clientsPanel.style.display = DisplayStyle.Flex;
-                    // Refresh client status when switching to Connect tab (e.g., after changing beta mode in Advanced)
+                    // Refresh client status when switching to Connect tab (e.g., after package/version changes).
                     clientConfigSection?.RefreshSelectedClient(forceImmediate: true);
                     break;
                 case ActivePanel.Validation:
