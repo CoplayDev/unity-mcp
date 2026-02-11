@@ -91,6 +91,10 @@ class EditorStateTransport(BaseModel):
     last_message_unix_ms: int | None = None
 
 
+class EditorStateSettings(BaseModel):
+    batch_execute_max_commands: int | None = None
+
+
 class EditorStateAdvice(BaseModel):
     ready_for_tools: bool | None = None
     blocking_reasons: list[str] | None = None
@@ -114,6 +118,7 @@ class EditorStateData(BaseModel):
     assets: EditorStateAssets | None = None
     tests: EditorStateTests | None = None
     transport: EditorStateTransport | None = None
+    settings: EditorStateSettings | None = None
     advice: EditorStateAdvice | None = None
     staleness: EditorStateStaleness | None = None
 

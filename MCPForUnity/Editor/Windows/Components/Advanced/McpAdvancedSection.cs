@@ -158,6 +158,12 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
                 }
                 else
                 {
+                    url = ResolveServerPath(url);
+                    // Update the text field if the path was auto-corrected, without re-triggering the callback
+                    if (url != evt.newValue?.Trim())
+                    {
+                        gitUrlOverride.SetValueWithoutNotify(url);
+                    }
                     EditorPrefs.SetString(EditorPrefKeys.GitUrlOverride, url);
                 }
                 OnGitUrlChanged?.Invoke();
@@ -326,15 +332,64 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
 
         private void OnBrowseGitUrlClicked()
         {
-            string picked = EditorUtility.OpenFolderPanel("Select Server folder", string.Empty, string.Empty);
+            string picked = EditorUtility.OpenFolderPanel("Select Server folder (containing pyproject.toml)", string.Empty, string.Empty);
             if (!string.IsNullOrEmpty(picked))
             {
+                picked = ResolveServerPath(picked);
                 gitUrlOverride.value = picked;
                 EditorPrefs.SetString(EditorPrefKeys.GitUrlOverride, picked);
                 OnGitUrlChanged?.Invoke();
                 OnHttpServerCommandUpdateRequested?.Invoke();
                 McpLog.Info($"Server source override set to: {picked}");
             }
+        }
+
+        /// <summary>
+        /// Validates and auto-corrects a local server path to ensure it points to the directory
+        /// containing pyproject.toml (the Python package root). If the user selects a parent
+        /// directory (e.g. the repo root), this checks for a "Server" subdirectory with
+        /// pyproject.toml and returns that instead.
+        /// </summary>
+        private static string ResolveServerPath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                return path;
+
+            // If path is not a local filesystem path, return as-is (git URLs, PyPI refs, etc.)
+            if (path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("git+", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("ssh://", StringComparison.OrdinalIgnoreCase))
+            {
+                return path;
+            }
+
+            // Strip file:// prefix for filesystem checks, but preserve it for the return value
+            string checkPath = path;
+            string prefix = string.Empty;
+            if (checkPath.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+            {
+                prefix = "file://";
+                checkPath = checkPath.Substring(7);
+            }
+
+            // Already points to a directory with pyproject.toml — correct path
+            if (File.Exists(Path.Combine(checkPath, "pyproject.toml")))
+            {
+                return path;
+            }
+
+            // Check if "Server" subdirectory contains pyproject.toml (common repo structure)
+            string serverSubDir = Path.Combine(checkPath, "Server");
+            if (File.Exists(Path.Combine(serverSubDir, "pyproject.toml")))
+            {
+                string corrected = prefix + serverSubDir;
+                McpLog.Info($"Auto-corrected server path to 'Server' subdirectory: {corrected}");
+                return corrected;
+            }
+
+            // Return as-is; uvx will report the error if the path is invalid
+            return path;
         }
 
         private void UpdateDeploymentSection()

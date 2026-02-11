@@ -220,6 +220,11 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
                 row.Add(CreateManageSceneActions());
             }
 
+            if (IsBatchExecuteTool(tool))
+            {
+                row.Add(CreateBatchExecuteSettings());
+            }
+
             return row;
         }
 
@@ -296,6 +301,52 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             return actions;
         }
 
+        private VisualElement CreateBatchExecuteSettings()
+        {
+            var container = new VisualElement();
+            container.AddToClassList("tool-item-actions");
+            container.style.flexDirection = FlexDirection.Row;
+            container.style.alignItems = Align.Center;
+            container.style.marginTop = 4;
+
+            var label = new Label("Max commands per batch:");
+            label.style.marginRight = 8;
+            label.style.unityFontStyleAndWeight = UnityEngine.FontStyle.Normal;
+            container.Add(label);
+
+            int currentValue = EditorPrefs.GetInt(
+                EditorPrefKeys.BatchExecuteMaxCommands,
+                BatchExecute.DefaultMaxCommandsPerBatch
+            );
+
+            var field = new IntegerField
+            {
+                value = Math.Clamp(currentValue, 1, BatchExecute.AbsoluteMaxCommandsPerBatch),
+                style = { width = 60 }
+            };
+            field.tooltip = $"Number of commands allowed per batch_execute call (1–{BatchExecute.AbsoluteMaxCommandsPerBatch}). Default: {BatchExecute.DefaultMaxCommandsPerBatch}.";
+
+            field.RegisterValueChangedCallback(evt =>
+            {
+                int clamped = Math.Clamp(evt.newValue, 1, BatchExecute.AbsoluteMaxCommandsPerBatch);
+                if (clamped != evt.newValue)
+                {
+                    field.SetValueWithoutNotify(clamped);
+                }
+                EditorPrefs.SetInt(EditorPrefKeys.BatchExecuteMaxCommands, clamped);
+            });
+
+            container.Add(field);
+
+            var hint = new Label($"(max {BatchExecute.AbsoluteMaxCommandsPerBatch})");
+            hint.style.marginLeft = 4;
+            hint.style.color = new UnityEngine.Color(0.5f, 0.5f, 0.5f);
+            hint.style.fontSize = 10;
+            container.Add(hint);
+
+            return container;
+        }
+
         private void OnManageSceneScreenshotClicked()
         {
             try
@@ -328,6 +379,8 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
         }
 
         private static bool IsManageSceneTool(ToolMetadata tool) => string.Equals(tool?.Name, "manage_scene", StringComparison.OrdinalIgnoreCase);
+
+        private static bool IsBatchExecuteTool(ToolMetadata tool) => string.Equals(tool?.Name, "batch_execute", StringComparison.OrdinalIgnoreCase);
 
         private static bool IsBuiltIn(ToolMetadata tool) => tool?.IsBuiltIn ?? false;
     }

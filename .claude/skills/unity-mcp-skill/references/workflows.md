@@ -822,7 +822,7 @@ batch_execute(fail_fast=True, commands=[
 
 ### Complete Example: Main Menu Screen
 
-Combines multiple templates into a full menu screen in two batch calls (25 command limit per batch).
+Combines multiple templates into a full menu screen in two batch calls (default 25 command limit per batch, configurable in Unity MCP Tools window up to 100).
 
 ```python
 # Batch 1: Canvas + EventSystem + Panel + Title
