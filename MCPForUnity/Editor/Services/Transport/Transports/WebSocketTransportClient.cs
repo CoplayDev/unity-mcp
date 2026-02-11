@@ -58,6 +58,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private int _isReconnectingFlag;
         private TransportState _state = TransportState.Disconnected(TransportDisplayName, "Transport not started");
         private string _apiKey;
+        private bool _keepServerRunning;
         private bool _disposed;
 
         public WebSocketTransportClient(IToolDiscoveryService toolDiscoveryService = null)
@@ -85,6 +86,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             _apiKey = HttpEndpointUtility.IsRemoteScope()
                 ? EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty)
                 : string.Empty;
+            _keepServerRunning = EditorPrefs.GetBool(EditorPrefKeys.KeepServerRunning, false);
 
             // Get project root path (strip /Assets from dataPath) for focus nudging
             string dataPath = Application.dataPath;
@@ -608,7 +610,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 ["project_name"] = _projectName,
                 ["project_hash"] = _projectHash,
                 ["unity_version"] = _unityVersion,
-                ["project_path"] = _projectPath
+                ["project_path"] = _projectPath,
+                ["keep_server_running"] = _keepServerRunning
             };
 
             await SendJsonAsync(registerPayload, token).ConfigureAwait(false);

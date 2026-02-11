@@ -41,8 +41,17 @@ namespace MCPForUnity.Editor.Services
             }
 
             // 2) Stop local HTTP server if it was Unity-managed (best-effort).
+            // Skip shutdown if Keep Server Running is enabled - server should persist for reconnection.
             try
             {
+                bool keepServerRunning = EditorPrefs.GetBool(EditorPrefKeys.KeepServerRunning, false);
+
+                if (keepServerRunning)
+                {
+                    McpLog.Info("Keep Server Running is enabled - leaving MCP server running after Unity quits");
+                    return;
+                }
+
                 bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
                 string scope = string.Empty;
                 try { scope = EditorPrefs.GetString(EditorPrefKeys.HttpTransportScope, string.Empty); } catch { }

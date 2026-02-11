@@ -181,3 +181,39 @@ class TestUserIdFlowsToRegistration:
         assert session.user_id == "user-99"
         assert session.project_name == "TestProject"
         assert session.project_hash == "abc123"
+
+    @pytest.mark.asyncio
+    async def test_register_tracks_connection_and_keep_running_state(self, monkeypatch):
+        """Register should store the websocket connection and keep-running flag."""
+        monkeypatch.setattr(config, "http_remote_hosted", False)
+
+        registry = PluginRegistry()
+        loop = asyncio.get_running_loop()
+        PluginHub.configure(registry, loop)
+
+        ws = _make_mock_websocket(headers={})
+        hub = _make_hub()
+
+        import main as main_module
+        main_module.keep_server_running.clear()
+
+        await hub.on_connect(ws)
+        await hub.on_receive(
+            ws,
+            {
+                "type": "register",
+                "project_name": "KeepAliveProject",
+                "project_hash": "keep-alive-hash",
+                "unity_version": "2022.3",
+                "keep_server_running": True,
+            },
+        )
+
+        sessions = await registry.list_sessions()
+        assert len(sessions) == 1
+        session_id = next(iter(sessions.keys()))
+
+        assert session_id in PluginHub._connections
+        assert main_module.keep_server_running.get(session_id) is True
+
+        main_module.keep_server_running.clear()

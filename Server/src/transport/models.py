@@ -37,6 +37,7 @@ class RegisterMessage(BaseModel):
     project_hash: str
     unity_version: str = "Unknown"
     project_path: str | None = None  # Full path to project root (for focus nudging)
+    keep_server_running: bool = False  # When True, server stays running after Unity disconnects
 
 
 class RegisterToolsMessage(BaseModel):

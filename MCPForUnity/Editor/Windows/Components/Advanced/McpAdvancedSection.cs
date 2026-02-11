@@ -38,12 +38,14 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
         private VisualElement healthIndicator;
         private Label healthStatus;
         private Button testConnectionButton;
+        private Toggle keepServerRunningToggle;
 
         // Events
         public event Action OnGitUrlChanged;
         public event Action OnHttpServerCommandUpdateRequested;
         public event Action OnTestConnectionRequested;
         public event Action<bool> OnBetaModeChanged;
+        public event Action<bool> OnKeepServerRunningChanged;
 
         public VisualElement Root { get; private set; }
 
@@ -77,6 +79,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             deployStatusLabel = Root.Q<Label>("deploy-status-label");
             healthIndicator = Root.Q<VisualElement>("health-indicator");
             healthStatus = Root.Q<Label>("health-status");
+            keepServerRunningToggle = Root.Q<Toggle>("keep-server-running-toggle");
             testConnectionButton = Root.Q<Button>("test-connection-button");
         }
 
@@ -107,6 +110,26 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
                 var betaServerLabel = useBetaServerToggle?.parent?.Q<Label>();
                 if (betaServerLabel != null)
                     betaServerLabel.tooltip = useBetaServerToggle.tooltip;
+            }
+            if (keepServerRunningToggle != null)
+            {
+                // When enabled, server stays running after Unity disconnects (for auto-reconnect)
+                keepServerRunningToggle.tooltip = "When enabled, MCP server will stay running even when Unity disconnects. "
+                    + "Useful during development to avoid manual server restart after Domain Reload, test runs, or entering Play Mode. "
+                    + "Only works with HTTP transport mode.";
+                var keepRunningLabel = keepServerRunningToggle?.parent?.Q<Label>();
+                if (keepRunningLabel != null)
+                {
+                    keepRunningLabel.tooltip = keepServerRunningToggle.tooltip;
+                }
+                // Load current value and register callback
+                keepServerRunningToggle.value = EditorPrefs.GetBool(EditorPrefKeys.KeepServerRunning, false);
+                keepServerRunningToggle.RegisterValueChangedCallback(evt =>
+                {
+                    EditorPrefs.SetBool(EditorPrefKeys.KeepServerRunning, evt.newValue);
+                    OnKeepServerRunningChanged?.Invoke(evt.newValue);
+                    OnHttpServerCommandUpdateRequested?.Invoke();
+                });
             }
             if (testConnectionButton != null)
                 testConnectionButton.tooltip = "Test the connection between Unity and the MCP server.";

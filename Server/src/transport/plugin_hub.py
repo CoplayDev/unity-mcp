@@ -191,6 +191,13 @@ class PluginHub(WebSocketEndpoint):
                     ping_task.cancel()
                 # Clean up last pong tracking
                 cls._last_pong.pop(session_id, None)
+                # Clean up keep_server_running flag to avoid stale entries
+                try:
+                    import main as main_module
+                    main_module.keep_server_running.pop(session_id, None)
+                except (ImportError, AttributeError, KeyError):
+                    # main module not yet imported or key already removed
+                    pass
                 # Fail-fast any in-flight commands for this session to avoid waiting for COMMAND_TIMEOUT.
                 pending_ids = [
                     command_id
@@ -364,6 +371,7 @@ class PluginHub(WebSocketEndpoint):
         project_hash = payload.project_hash
         unity_version = payload.unity_version
         project_path = payload.project_path
+        keep_server_running = getattr(payload, 'keep_server_running', False)
 
         if not project_hash:
             await websocket.close(code=4400)
@@ -378,7 +386,15 @@ class PluginHub(WebSocketEndpoint):
         response = RegisteredMessage(session_id=session_id)
         await websocket.send_json(response.model_dump())
 
-        session = await registry.register(session_id, project_name, project_hash, unity_version, project_path, user_id=user_id)
+        session = await registry.register(
+            session_id, project_name, project_hash, unity_version, project_path,
+            user_id=user_id, keep_server_running=keep_server_running
+        )
+
+        # Store keep_server_running flag in global dict for shutdown logic.
+        # Import here to avoid circular dependency at module import time.
+        import main as main_module
+        main_module.keep_server_running[session.session_id] = keep_server_running
         async with lock:
             cls._connections[session.session_id] = websocket
             # Initialize last pong time and start ping loop for this session

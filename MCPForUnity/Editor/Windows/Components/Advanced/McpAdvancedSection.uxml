@@ -12,7 +12,6 @@
                 <ui:Button name="browse-uv-button" text="Browse" class="icon-button" />
                 <ui:Button name="clear-uv-button" text="Clear" class="icon-button" />
             </ui:VisualElement>
-
             <ui:VisualElement class="override-row" style="margin-top: 8px;">
                 <ui:Label text="Server Source:" class="override-label" />
             </ui:VisualElement>
@@ -21,12 +20,10 @@
                 <ui:Button name="browse-git-url-button" text="Select" class="icon-button" />
                 <ui:Button name="clear-git-url-button" text="Clear" class="icon-button" />
             </ui:VisualElement>
-
             <ui:VisualElement class="setting-row" style="margin-top: 8px;">
                 <ui:Label text="Debug Logging:" class="setting-label" />
                 <ui:Toggle name="debug-logs-toggle" class="setting-toggle" />
             </ui:VisualElement>
-
             <ui:VisualElement class="setting-row">
                 <ui:Label text="Server Health:" class="setting-label" />
                 <ui:VisualElement class="status-container">
@@ -35,17 +32,18 @@
                 </ui:VisualElement>
                 <ui:Button name="test-connection-button" text="Test" class="action-button" />
             </ui:VisualElement>
-
             <ui:VisualElement class="setting-row">
                 <ui:Label text="Force Fresh Install:" class="setting-label" />
                 <ui:Toggle name="dev-mode-force-refresh-toggle" class="setting-toggle" />
             </ui:VisualElement>
-
             <ui:VisualElement class="setting-row">
                 <ui:Label text="Use Beta Server:" class="setting-label" />
                 <ui:Toggle name="use-beta-server-toggle" class="setting-toggle" />
             </ui:VisualElement>
-
+            <ui:VisualElement class="setting-row" style="margin-top: 4px;">
+                <ui:Label text="Keep Server Running:" class="setting-label" />
+                <ui:Toggle name="keep-server-running-toggle" class="setting-toggle" />
+            </ui:VisualElement>
             <ui:VisualElement class="override-row" style="margin-top: 8px;">
                 <ui:Label text="Package Source:" class="override-label" />
             </ui:VisualElement>

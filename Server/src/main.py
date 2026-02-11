@@ -133,11 +133,15 @@ _server_version: str | None = None
 # In-memory custom tool service initialized after MCP construction
 custom_tool_service: CustomToolService | None = None
 
+# Per-session keep_server_running flag, indexed by session_id
+# Set by middleware when Unity registers with the flag enabled
+keep_server_running: dict[str, bool] = {}
+
 
 @asynccontextmanager
 async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     """Handle server startup and shutdown."""
-    global _unity_connection_pool, _server_version
+    global _unity_connection_pool, _server_version, keep_server_running
     _server_version = get_package_version()
     logger.info(f"MCP for Unity Server v{_server_version} starting up")
 
@@ -183,9 +187,17 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
             logger.info(
                 "Skipping Unity connection on startup (UNITY_MCP_SKIP_STARTUP_CONNECT=1)")
         else:
-            # Initialize connection pool and discover instances
-            _unity_connection_pool = get_unity_connection_pool()
-            instances = _unity_connection_pool.discover_all_instances()
+            # Initialize connection pool and discover instances (stdio mode only)
+            # In HTTP mode, PluginHub handles connections directly
+            instances = []  # Initialize to avoid UnboundLocalError in HTTP mode
+            if enable_http_server:
+                _unity_connection_pool = None  # No legacy pool in HTTP mode
+                logger.info("HTTP mode enabled - PluginHub will manage Unity connections")
+                # Skip stdio-specific connection logic in HTTP mode.
+                # Lifespan must still continue to reach the context yield.
+            else:
+                _unity_connection_pool = get_unity_connection_pool()
+                instances = _unity_connection_pool.discover_all_instances()
 
             if instances:
                 logger.info(
@@ -244,9 +256,23 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
             "plugin_registry": _plugin_registry,
         }
     finally:
-        if _unity_connection_pool:
+        # In HTTP mode, PluginHub manages connections independently.
+        # Only disconnect legacy pool if it was initialized (stdio mode).
+        # Check if any session has keep_server_running enabled.
+        has_keep_running = any(keep_server_running.values()) if keep_server_running else False
+
+        if _unity_connection_pool and not has_keep_running:
             _unity_connection_pool.disconnect_all()
-        logger.info("MCP for Unity Server shut down")
+
+        shutdown_msg = "MCP for Unity Server shut down"
+        if has_keep_running:
+            shutdown_msg += " (Keep-Running mode: maintaining server for Unity reconnection)"
+        logger.info(shutdown_msg)
+
+        # Note: keep_server_running state is per-session, not server-global.
+        # Cleared when sessions expire, used by middleware to pass state.
+        keep_server_running.clear()
+
 
 
 def _build_instructions(project_scoped_tools: bool) -> str:
