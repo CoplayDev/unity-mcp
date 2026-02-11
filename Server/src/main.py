@@ -405,20 +405,24 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
                         status_code=404,
                     )
 
+                # If no specific unity_instance requested, use first available session
+                # (Must be done before execute_custom_tool check so all command types benefit)
+                if not session_id:
+                    try:
+                        session_id = next(iter(sessions.sessions.keys()))
+                        session_details = sessions.sessions.get(session_id)
+                    except StopIteration:
+                        # No sessions available - sessions.sessions is empty
+                        # This should not happen since we checked at line 378, but handle gracefully
+                        return JSONResponse({
+                            "success": False,
+                            "error": "No Unity instances connected. Make sure Unity is running with MCP plugin."
+                        }, status_code=503)
+
                 # Custom tool execution - must be checked BEFORE the final PluginHub.send_command call
                 # This applies to both cases: with or without explicit unity_instance
                 if command_type == "execute_custom_tool":
-                    # If no specific unity_instance requested, use first available session
-                    # (Moved here so empty sessions check can be done consistently)
-                    if not session_id:
-                        try:
-                            session_id = next(iter(sessions.sessions.keys()))
-                            session_details = sessions.sessions.get(session_id)
-                        except StopIteration:
-                            # No sessions available
-                            session_id = None
-                            session_details = None
-
+                    # session_id and session_details are already set above
                     if not session_id or not session_details:
                         return JSONResponse(
                             {"success": False,
