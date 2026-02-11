@@ -124,6 +124,7 @@ uri="file:///full/path/to/file.cs"
 | **Editor** | `manage_editor`, `execute_menu_item`, `read_console` | Editor control |
 | **Testing** | `run_tests`, `get_test_job` | Unity Test Framework |
 | **Batch** | `batch_execute` | Parallel/bulk operations |
+| **UI** | `batch_execute` with `manage_gameobject` + `manage_components` | Canvas, Panel, Button, Text, Slider, Toggle, Input Field (see [UI workflows](references/workflows.md#ui-creation-workflows)) |
 
 ## Common Workflows
 
