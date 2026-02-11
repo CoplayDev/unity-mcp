@@ -50,12 +50,28 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                 }
             }
 
+            Component existingComponent = targetGo.GetComponent(componentType);
+            if (existingComponent != null && !AllowsMultiple(componentType))
+            {
+                return new ErrorResponse(
+                    $"Component '{typeName}' already exists on '{targetGo.name}' and this type does not allow multiple instances."
+                );
+            }
+
             try
             {
                 Component newComponent = Undo.AddComponent(targetGo, componentType);
                 if (newComponent == null)
                 {
-                    return new ErrorResponse($"Failed to add component '{typeName}' to '{targetGo.name}'. It might be disallowed (e.g., adding script twice)."
+                    if (targetGo.GetComponent(componentType) != null && !AllowsMultiple(componentType))
+                    {
+                        return new ErrorResponse(
+                            $"Component '{typeName}' already exists on '{targetGo.name}' and this type does not allow multiple instances."
+                        );
+                    }
+
+                    return new ErrorResponse(
+                        $"Failed to add component '{typeName}' to '{targetGo.name}'. Unity may restrict this component on the current target."
                     );
                 }
 
@@ -80,6 +96,16 @@ namespace MCPForUnity.Editor.Tools.GameObjects
             {
                 return new ErrorResponse($"Error adding component '{typeName}' to '{targetGo.name}': {e.Message}");
             }
+        }
+
+        private static bool AllowsMultiple(Type componentType)
+        {
+            if (componentType == null)
+            {
+                return false;
+            }
+
+            return !Attribute.IsDefined(componentType, typeof(DisallowMultipleComponent), inherit: true);
         }
 
         internal static object RemoveComponentInternal(GameObject targetGo, string typeName)

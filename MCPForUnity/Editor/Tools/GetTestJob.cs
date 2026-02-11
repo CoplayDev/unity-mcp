@@ -19,8 +19,9 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse("Missing required parameter 'job_id'.");
             }
 
-            bool includeDetails = ParamCoercion.CoerceBool(@params?["includeDetails"], false);
-            bool includeFailedTests = ParamCoercion.CoerceBool(@params?["includeFailedTests"], false);
+            var p = new ToolParams(@params);
+            bool includeDetails = p.GetBool("includeDetails");
+            bool includeFailedTests = p.GetBool("includeFailedTests");
 
             var job = TestJobManager.GetJob(jobId);
             if (job == null)

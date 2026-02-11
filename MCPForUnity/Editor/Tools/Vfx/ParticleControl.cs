@@ -8,6 +8,95 @@ namespace MCPForUnity.Editor.Tools.Vfx
 {
     internal static class ParticleControl
     {
+        public static object Create(JObject @params)
+        {
+            string target = @params["target"]?.ToString();
+            if (string.IsNullOrWhiteSpace(target))
+            {
+                return new { success = false, message = "target is required for particle_create" };
+            }
+
+            GameObject go = ManageVfxCommon.FindTargetGameObject(@params);
+            bool createdGameObject = false;
+            bool addedParticleSystem = false;
+
+            if (go == null)
+            {
+                string objectName = target;
+                int slashIndex = target.LastIndexOf('/');
+                if (slashIndex >= 0 && slashIndex < target.Length - 1)
+                {
+                    objectName = target.Substring(slashIndex + 1);
+                }
+
+                go = new GameObject(objectName);
+                createdGameObject = true;
+
+                if (!EditorApplication.isPlaying)
+                {
+                    Undo.RegisterCreatedObjectUndo(go, $"Create {objectName}");
+                }
+            }
+
+            if (@params["position"] != null)
+            {
+                go.transform.position = ManageVfxCommon.ParseVector3(@params["position"]);
+            }
+            if (@params["rotation"] != null)
+            {
+                go.transform.eulerAngles = ManageVfxCommon.ParseVector3(@params["rotation"]);
+            }
+            if (@params["scale"] != null)
+            {
+                go.transform.localScale = ManageVfxCommon.ParseVector3(@params["scale"]);
+            }
+
+            var ps = go.GetComponent<ParticleSystem>();
+            if (ps == null)
+            {
+                ps = go.AddComponent<ParticleSystem>();
+                addedParticleSystem = true;
+            }
+
+            var renderer = go.GetComponent<ParticleSystemRenderer>();
+            if (renderer != null)
+            {
+                RendererHelpers.EnsureMaterial(renderer);
+            }
+
+            var main = ps.main;
+            if (@params["playOnAwake"] != null)
+            {
+                main.playOnAwake = @params["playOnAwake"].ToObject<bool>();
+            }
+            else
+            {
+                main.playOnAwake = false;
+            }
+            if (@params["looping"] != null)
+            {
+                main.loop = @params["looping"].ToObject<bool>();
+            }
+
+            EditorUtility.SetDirty(go);
+            if (!EditorApplication.isPlaying)
+            {
+                UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
+                    UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene());
+            }
+
+            return new
+            {
+                success = true,
+                message = $"ParticleSystem ready on '{go.name}'",
+                target = go.name,
+                targetId = go.GetInstanceID(),
+                createdGameObject,
+                addedParticleSystem,
+                assignedMaterial = renderer?.sharedMaterial?.name
+            };
+        }
+
         public static object EnableModule(JObject @params)
         {
             ParticleSystem ps = ParticleCommon.FindParticleSystem(@params);

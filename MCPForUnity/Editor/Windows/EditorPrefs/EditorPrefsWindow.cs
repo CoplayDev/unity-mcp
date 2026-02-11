@@ -68,6 +68,7 @@ namespace MCPForUnity.Editor.Windows
             { EditorPrefKeys.PackageDeployLastTargetPath, EditorPrefType.String },
             { EditorPrefKeys.PackageDeployLastSourcePath, EditorPrefType.String },
             { EditorPrefKeys.ServerSrc, EditorPrefType.String },
+            { EditorPrefKeys.LastSelectedClientId, EditorPrefType.String },
             { EditorPrefKeys.LatestKnownVersion, EditorPrefType.String },
             { EditorPrefKeys.LastAssetStoreUpdateCheck, EditorPrefType.String },
             { EditorPrefKeys.LatestKnownAssetStoreVersion, EditorPrefType.String },

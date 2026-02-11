@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Resources.Tests;
@@ -41,8 +40,9 @@ namespace MCPForUnity.Editor.Tools
                     return Task.FromResult<object>(new ErrorResponse(parseError));
                 }
 
-                bool includeDetails = ParamCoercion.CoerceBool(@params?["includeDetails"], false);
-                bool includeFailedTests = ParamCoercion.CoerceBool(@params?["includeFailedTests"], false);
+                var p = new ToolParams(@params);
+                bool includeDetails = p.GetBool("includeDetails");
+                bool includeFailedTests = p.GetBool("includeFailedTests");
 
                 var filterOptions = GetFilterOptions(@params);
                 string jobId = TestJobManager.StartJob(parsedMode.Value, filterOptions);
@@ -74,32 +74,11 @@ namespace MCPForUnity.Editor.Tools
                 return null;
             }
 
-            string[] ParseStringArray(string key)
-            {
-                var token = @params[key];
-                if (token == null) return null;
-                if (token.Type == JTokenType.String)
-                {
-                    var value = token.ToString();
-                    return string.IsNullOrWhiteSpace(value) ? null : new[] { value };
-                }
-                if (token.Type == JTokenType.Array)
-                {
-                    var array = token as JArray;
-                    if (array == null || array.Count == 0) return null;
-                    var values = array
-                        .Values<string>()
-                        .Where(s => !string.IsNullOrWhiteSpace(s))
-                        .ToArray();
-                    return values.Length > 0 ? values : null;
-                }
-                return null;
-            }
-
-            var testNames = ParseStringArray("testNames");
-            var groupNames = ParseStringArray("groupNames");
-            var categoryNames = ParseStringArray("categoryNames");
-            var assemblyNames = ParseStringArray("assemblyNames");
+            var p = new ToolParams(@params);
+            var testNames = p.GetStringArray("testNames");
+            var groupNames = p.GetStringArray("groupNames");
+            var categoryNames = p.GetStringArray("categoryNames");
+            var assemblyNames = p.GetStringArray("assemblyNames");
 
             if (testNames == null && groupNames == null && categoryNames == null && assemblyNames == null)
             {
