@@ -1,0 +1,55 @@
+name: Sync Upstream
+
+on:
+  schedule:
+    # 每天北京时间 9:00 (UTC 1:00) 检查更新
+    - cron: '0 1 * * *'
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout current repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/CoplayDev/unity-mcp.git
+          git fetch upstream beta
+
+      - name: Check if sync needed
+        id: check
+        run: |
+          CURRENT=$(git rev-parse HEAD)
+          UPSTREAM=$(git rev-parse upstream/beta)
+          echo "current=$CURRENT" >> $GITHUB_OUTPUT
+          echo "upstream=$UPSTREAM" >> $GITHUB_OUTPUT
+          
+          if [ "$CURRENT" != "$UPSTREAM" ]; then
+            echo "needs_sync=true" >> $GITHUB_OUTPUT
+            echo "上游有新提交需要同步"
+          else
+            echo "needs_sync=false" >> $GITHUB_OUTPUT
+            echo "已是最新，无需同步"
+          fi
+
+      - name: Merge upstream changes
+        if: steps.check.outputs.needs_sync == 'true'
+        run: |
+          git merge upstream/beta -m "chore: sync upstream CoplayDev/beta into beta"
+
+      - name: Push changes
+        if: steps.check.outputs.needs_sync == 'true'
+        run: |
+          git push origin beta
