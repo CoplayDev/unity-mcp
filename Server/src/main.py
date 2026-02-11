@@ -405,20 +405,20 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
                         status_code=404,
                     )
 
-                # If no specific unity_instance requested, use first available session (if any)
-                if not session_id:
-                    try:
-                        session_id = next(iter(sessions.sessions.keys()))
-                        session_details = sessions.sessions.get(session_id)
-                    except StopIteration:
-                        # No sessions available (shouldn't happen since we check earlier,
-                        # but handle gracefully to avoid crash)
-                        session_id = None
-                        session_details = None
-
                 # Custom tool execution - must be checked BEFORE the final PluginHub.send_command call
                 # This applies to both cases: with or without explicit unity_instance
                 if command_type == "execute_custom_tool":
+                    # If no specific unity_instance requested, use first available session
+                    # (Moved here so empty sessions check can be done consistently)
+                    if not session_id:
+                        try:
+                            session_id = next(iter(sessions.sessions.keys()))
+                            session_details = sessions.sessions.get(session_id)
+                        except StopIteration:
+                            # No sessions available
+                            session_id = None
+                            session_details = None
+
                     if not session_id or not session_details:
                         return JSONResponse(
                             {"success": False,
