@@ -494,7 +494,14 @@ manage_scene(action="screenshot")
 
 ## UI Creation Workflows
 
-Unity UI (Canvas-based UGUI) requires specific component hierarchies. Use `batch_execute` with `fail_fast=True` to create complete UI elements in a single call. These templates handle the boilerplate so you don't need to remember which components each UI element needs.
+Unity UI (Canvas-based UGUI) requires specific component hierarchies. Use `batch_execute` with `fail_fast=True` to create complete UI elements in a single call.
+
+> **Template warning:** This section is a skill template library, not a guaranteed source of truth. Examples may be inaccurate for your Unity version, package setup, or project conventions.
+> **Use safely:**
+> 1. Validate component/property names against the current project.
+> 2. Prefer targeting by instance ID or full path over generic names.
+> 3. Assume complex controls (Slider/Toggle/TMP Input) may need extra reference wiring.
+> 4. Treat numeric enum values as placeholders and verify before reuse.
 
 ### Create Canvas (Foundation for All UI)
 
