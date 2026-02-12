@@ -264,18 +264,17 @@ namespace MCPForUnity.Editor.Helpers
         {
             string gitUrlOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
             string packageSource = GetMcpServerPackageSource();
-            return GetBetaServerFromArgs(useBetaServer: false, gitUrlOverride, packageSource, quoteFromPath);
+            return GetBetaServerFromArgs(gitUrlOverride, packageSource, quoteFromPath);
         }
 
         /// <summary>
         /// Thread-safe overload that accepts pre-captured values.
         /// Use this when calling from background threads.
         /// </summary>
-        /// <param name="useBetaServer">Deprecated. Ignored; prerelease mode is determined from packageSource.</param>
         /// <param name="gitUrlOverride">Pre-captured value from EditorPrefs GitUrlOverride</param>
         /// <param name="packageSource">Pre-captured value from GetMcpServerPackageSource()</param>
         /// <param name="quoteFromPath">Whether to quote the --from path</param>
-        public static string GetBetaServerFromArgs(bool useBetaServer, string gitUrlOverride, string packageSource, bool quoteFromPath = false)
+        public static string GetBetaServerFromArgs(string gitUrlOverride, string packageSource, bool quoteFromPath = false)
         {
             // Explicit override (local path, git URL, etc.) always wins
             if (!string.IsNullOrEmpty(gitUrlOverride))
@@ -316,17 +315,16 @@ namespace MCPForUnity.Editor.Helpers
         {
             string gitUrlOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
             string packageSource = GetMcpServerPackageSource();
-            return GetBetaServerFromArgsList(useBetaServer: false, gitUrlOverride, packageSource);
+            return GetBetaServerFromArgsList(gitUrlOverride, packageSource);
         }
 
         /// <summary>
         /// Thread-safe overload that accepts pre-captured values.
         /// Use this when calling from background threads.
         /// </summary>
-        /// <param name="useBetaServer">Deprecated. Ignored; prerelease mode is determined from packageSource.</param>
         /// <param name="gitUrlOverride">Pre-captured value from EditorPrefs GitUrlOverride</param>
         /// <param name="packageSource">Pre-captured value from GetMcpServerPackageSource()</param>
-        public static System.Collections.Generic.IList<string> GetBetaServerFromArgsList(bool useBetaServer, string gitUrlOverride, string packageSource)
+        public static System.Collections.Generic.IList<string> GetBetaServerFromArgsList(string gitUrlOverride, string packageSource)
         {
             var args = new System.Collections.Generic.List<string>();
 
