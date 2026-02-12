@@ -273,6 +273,47 @@ def test_validator_repairs_missing_primitive_type_and_prunes_invalid_material_ta
     assert "Flower_2" in material_targets
 
 
+def test_validator_assigns_non_gray_default_colors_for_uncolored_mappings() -> None:
+    spec = SceneSpec.model_validate(
+        {
+            "target_concept": "AI Recommendation System",
+            "analogy_domain": "Garden",
+            "learning_goal": "test",
+            "task_label": "test",
+            "mappings": [
+                {
+                    "structural_component": "user",
+                    "analogy_name": "Bee",
+                    "asset_strategy": "primitive",
+                    "mapping_type": "object",
+                    "mapping_confidence": "strong",
+                },
+                {
+                    "structural_component": "content_item",
+                    "analogy_name": "Flower",
+                    "asset_strategy": "primitive",
+                    "instance_count": 2,
+                    "mapping_type": "object",
+                    "mapping_confidence": "strong",
+                },
+            ],
+        }
+    )
+
+    validator = PlanValidator(spec)
+    repaired = validator.validate_and_repair(MCPCallPlan())
+
+    colors_by_target = {
+        str(call.params.get("target")): call.params.get("color")
+        for call in repaired.material_calls
+        if call.params.get("action") == "set_renderer_color"
+    }
+
+    assert colors_by_target.get("Bee") == [1.0, 0.82, 0.2, 1.0]
+    assert colors_by_target.get("Flower_1") == [0.95, 0.44, 0.58, 1.0]
+    assert colors_by_target.get("Flower_2") == [0.42, 0.72, 0.94, 1.0]
+
+
 def test_validator_outputs_experience_plan_with_phase_flow_and_causal_chain() -> None:
     spec = SceneSpec.model_validate(
         {
@@ -503,6 +544,26 @@ def test_validator_injects_runtime_ui_anchors() -> None:
         and call.params.get("target") == "FeedbackHUD"
     }
     assert {"Canvas", "CanvasScaler", "GraphicRaycaster", "BeginnerGuideUI"} <= feedback_hud_components
+
+    textmesh_targets = {
+        str(call.params.get("target"))
+        for call in repaired.component_calls
+        if call.tool == "manage_components"
+        and call.params.get("action") == "add"
+        and call.params.get("component_type") == "TextMesh"
+    }
+    assert {"HUD_BeginnerGuide", "HUD_StatusReadout"} <= textmesh_targets
+
+    textmesh_text_targets = {
+        str(call.params.get("target"))
+        for call in repaired.component_calls
+        if call.tool == "manage_components"
+        and call.params.get("action") == "set_property"
+        and call.params.get("component_type") == "TextMesh"
+        and call.params.get("property") == "text"
+        and str(call.params.get("value", "")).strip()
+    }
+    assert {"HUD_BeginnerGuide", "HUD_StatusReadout"} <= textmesh_text_targets
 
     script_paths = [
         call.params.get("path")

@@ -423,6 +423,8 @@ def _init_state() -> None:
         st.session_state["structure_lock_warning"] = None
     if "show_json_io_tools" not in st.session_state:
         st.session_state["show_json_io_tools"] = False
+    if "show_advanced_view" not in st.session_state:
+        st.session_state["show_advanced_view"] = False
     if "user_followup_question" not in st.session_state:
         st.session_state["user_followup_question"] = ""
 
@@ -1095,17 +1097,23 @@ def _normalize_interaction(interaction: Any, fallback_name: str = "") -> dict[st
 
     cleaned: dict[str, Any] = {}
 
-    trigger = str(interaction.get("trigger", "")).strip()
+    trigger = str(
+        interaction.get("trigger", "")
+        or interaction.get("triggerType", "")
+    ).strip()
     if trigger:
         cleaned["trigger"] = trigger
     else:
         cleaned["trigger"] = "custom"
 
-    source = str(interaction.get("trigger_source", "")).strip() or fallback_name
+    source = str(
+        interaction.get("trigger_source", "")
+        or interaction.get("triggerSource", "")
+    ).strip() or fallback_name
     if source:
         cleaned["trigger_source"] = source
 
-    raw_targets = interaction.get("target_objects", [])
+    raw_targets = interaction.get("target_objects", interaction.get("targetObjects", []))
     targets: list[str] = []
     if isinstance(raw_targets, list):
         targets = [str(t).strip() for t in raw_targets if str(t).strip()]
@@ -1120,17 +1128,26 @@ def _normalize_interaction(interaction: Any, fallback_name: str = "") -> dict[st
     if effect:
         cleaned["effect"] = effect
 
-    effect_desc = str(interaction.get("effect_description", "")).strip()
+    effect_desc = str(
+        interaction.get("effect_description", "")
+        or interaction.get("effectDescription", "")
+    ).strip()
     if not effect_desc:
         effect_desc = effect
     if effect_desc:
         cleaned["effect_description"] = effect_desc
 
-    animation_preset = str(interaction.get("animation_preset", "")).strip()
+    animation_preset = str(
+        interaction.get("animation_preset", "")
+        or interaction.get("animationPreset", "")
+    ).strip()
     if animation_preset:
         cleaned["animation_preset"] = animation_preset
 
-    vfx_type = str(interaction.get("vfx_type", "")).strip()
+    vfx_type = str(
+        interaction.get("vfx_type", "")
+        or interaction.get("vfxType", "")
+    ).strip()
     if vfx_type:
         cleaned["vfx_type"] = vfx_type
 
@@ -1146,16 +1163,31 @@ def _normalize_interaction(interaction: Any, fallback_name: str = "") -> dict[st
 
 
 def _format_interaction_summary(interaction: dict[str, Any], fallback_name: str = "") -> str:
-    """Render interaction text without placeholder symbols."""
-    trigger = interaction.get("trigger", "custom")
-    source = interaction.get("trigger_source") or fallback_name or "this object"
-    effect_desc = interaction.get("effect_description") or interaction.get("effect") or "an interaction effect"
+    """Render interaction using LLM prose + structured metadata."""
+    advanced_view = bool(st.session_state.get("show_advanced_view", False))
+    trigger_raw = str(interaction.get("trigger", "custom")).strip() or "custom"
+    trigger = trigger_raw.replace("_", " ")
+    source = str(interaction.get("trigger_source") or fallback_name or "this object").strip()
+    effect_label = str(interaction.get("effect", "")).strip()
+    effect_desc = str(interaction.get("effect_description") or effect_label or "").strip()
     targets = interaction.get("target_objects", [])
-    targets_str = ", ".join(targets) if targets else "its targets"
-    return (
-        f"When *{trigger}*, **{source}** causes "
-        f"*{effect_desc}* on **{targets_str}**"
-    )
+    targets_str = ", ".join(targets) if isinstance(targets, list) and targets else ""
+
+    if effect_desc and effect_desc[-1] not in ".!?":
+        effect_desc = f"{effect_desc}."
+    if not effect_desc:
+        effect_desc = "Interaction details were generated, but no description text was provided."
+
+    lines = [effect_desc]
+    if advanced_view:
+        lines.append(f"- Trigger: **{trigger}**")
+        lines.append(f"- Source: **{source}**")
+        if targets_str:
+            lines.append(f"- Affects: **{targets_str}**")
+        if effect_label and effect_label.lower() not in effect_desc.lower():
+            lines.append(f"- Effect type: **{effect_label}**")
+
+    return "\n".join(lines)
 
 
 def _normalize_experience_payload(payload: Any) -> dict[str, Any]:
@@ -1530,6 +1562,34 @@ def _parse_llm_response(response_text: str, *, show_errors: bool = True) -> dict
     return None
 
 
+def _call_llm_json_with_retries(
+    prompt: str,
+    *,
+    max_attempts: int = 3,
+    show_retry_notices: bool = True,
+) -> dict[str, Any] | None:
+    """Call LLM until we get parseable JSON, or attempts are exhausted."""
+    attempts = max(1, int(max_attempts))
+    for attempt in range(1, attempts + 1):
+        response_text = _call_llm(prompt)
+        if not response_text:
+            if show_retry_notices and attempt < attempts:
+                st.caption(f"AI call returned no content (attempt {attempt}/{attempts}). Retrying...")
+            continue
+
+        parsed = _parse_llm_response(
+            response_text,
+            show_errors=(attempt == attempts),
+        )
+        if isinstance(parsed, dict):
+            return parsed
+
+        if show_retry_notices and attempt < attempts:
+            st.caption(f"AI response was not valid JSON (attempt {attempt}/{attempts}). Retrying...")
+
+    return None
+
+
 def _execute_batch_plan_with_tool_handler(
     batch_plan: BatchExecutionPlan,
     *,
@@ -1817,6 +1877,12 @@ def _render_sidebar() -> None:
         st.title("Scene Builder")
 
         with st.expander("Developer Options", expanded=False):
+            st.toggle(
+                "Advanced View",
+                key="show_advanced_view",
+                help="Show developer-facing strategy metadata and advanced editing panels.",
+            )
+            st.divider()
             st.markdown("**Asset Plan Policy**")
             st.caption("Primitive-first is the default. Enable Trellis only when needed.")
             allow_trellis = st.checkbox(
@@ -2486,6 +2552,7 @@ def _render_scene_generation_prompt_section(generation_mode: Literal["execute_fi
 def _render_generate_preview() -> None:
     spec = _get_spec()
     allow_trellis = bool(st.session_state.get("allow_trellis_generation", DEFAULT_ALLOW_TRELLIS))
+    advanced_view = bool(st.session_state.get("show_advanced_view", False))
     if not allow_trellis:
         _apply_asset_policy_to_spec(spec, allow_trellis=False)
 
@@ -2550,6 +2617,9 @@ def _render_generate_preview() -> None:
     st.caption(
         "Follow the flow: 1) review and refine the Proposed Scene, then 2) generate the Scene Generation Prompt."
     )
+    pending_workflow_view = st.session_state.pop("pending_generate_preview_workflow_view", None)
+    if pending_workflow_view in ("Proposed Scene", "Scene Generation Prompt"):
+        st.session_state["generate_preview_workflow_view"] = pending_workflow_view
     workflow_view = st.radio(
         "View",
         ["Proposed Scene", "Scene Generation Prompt"],
@@ -2587,17 +2657,18 @@ def _render_generate_preview() -> None:
     if suggest_clicked:
         with st.spinner("Asking AI for suggestions..."):
             prompt = _build_llm_prompt(spec)
-            response_text = _call_llm(prompt)
-            if response_text:
-                suggestions = _parse_llm_response(response_text)
-                if suggestions:
-                    suggestions = _apply_asset_policy_to_suggestions(suggestions, allow_trellis=allow_trellis)
-                    clarification_questions = _generate_clarification_questions(spec, suggestions)
-                    _reset_refinement_feedback()
-                    st.session_state["llm_suggestions"] = suggestions
-                    st.session_state["clarification_questions"] = clarification_questions
-                    st.session_state["suggestions_accepted"] = False
-                    st.rerun()
+            suggestions = _call_llm_json_with_retries(prompt, max_attempts=3)
+            if suggestions:
+                suggestions = _apply_asset_policy_to_suggestions(suggestions, allow_trellis=allow_trellis)
+                _reset_refinement_feedback()
+                st.session_state["llm_suggestions"] = suggestions
+                # Clarification generation is best-effort and should not block showing suggestions.
+                clarification_questions = _generate_clarification_questions(spec, suggestions)
+                st.session_state["clarification_questions"] = clarification_questions
+                st.session_state["suggestions_accepted"] = False
+                st.rerun()
+            else:
+                st.error("Could not obtain valid JSON suggestions after multiple attempts. Please try again.")
 
     # Display suggestions if we have them
     suggestions = st.session_state.get("llm_suggestions")
@@ -2607,7 +2678,7 @@ def _render_generate_preview() -> None:
         st.divider()
         st.markdown("#### AI Suggestions")
 
-        if frozen_essence:
+        if frozen_essence and advanced_view:
             left, right = st.columns(2)
             with left:
                 st.markdown("**Lesson structure unchanged**")
@@ -2660,14 +2731,15 @@ def _render_generate_preview() -> None:
             strategy = m_sug.get("asset_strategy", "primitive")
 
             with st.expander(f"{name} ({friendly})", expanded=True):
-                cols = st.columns(3)
-                cols[0].markdown(f"**Strategy:** {strategy}")
-                if m_sug.get("trellis_prompt"):
-                    cols[1].markdown(f"**3D Model:** {m_sug['trellis_prompt']}")
-                if m_sug.get("primitive_type"):
-                    cols[1].markdown(f"**Shape:** {m_sug['primitive_type']}")
-                if m_sug.get("instance_count") and m_sug["instance_count"] > 1:
-                    cols[2].markdown(f"**Instances:** {m_sug['instance_count']}")
+                if advanced_view:
+                    cols = st.columns(3)
+                    cols[0].markdown(f"**Strategy:** {strategy}")
+                    if m_sug.get("trellis_prompt"):
+                        cols[1].markdown(f"**3D Model:** {m_sug['trellis_prompt']}")
+                    if m_sug.get("primitive_type"):
+                        cols[1].markdown(f"**Shape:** {m_sug['primitive_type']}")
+                    if m_sug.get("instance_count") and m_sug["instance_count"] > 1:
+                        cols[2].markdown(f"**Instances:** {m_sug['instance_count']}")
 
                 ix = m_sug.get("interaction")
                 if ix:
@@ -2684,6 +2756,8 @@ def _render_generate_preview() -> None:
                         st.caption(f"Animation: {normalized_ix['animation_preset']}")
                     if normalized_ix.get("vfx_type"):
                         st.caption(f"Visual effect: {normalized_ix['vfx_type']}")
+                else:
+                    st.caption("No interaction details returned for this mapping in this suggestion.")
 
         # Optional follow-up refinement
         st.divider()
@@ -2762,7 +2836,7 @@ def _render_generate_preview() -> None:
                             f"{message}"
                         )
                 st.session_state["suggestions_accepted"] = True
-                st.session_state["generate_preview_workflow_view"] = "Scene Generation Prompt"
+                st.session_state["pending_generate_preview_workflow_view"] = "Scene Generation Prompt"
                 st.rerun()
         with col_reset:
             if st.button("Reset Suggestions", width="stretch"):
@@ -3582,7 +3656,7 @@ def _build_generation_prompt_full(spec_json: str, batch_plan: BatchExecutionPlan
     lines.append("5. For script phases, keep `parallel=false`, wait for compilation completion before proceeding, then continue.")
     lines.append("6. Create `GameManager` first and implement manager scripts exactly as specified in `Manager Tasks`.")
     lines.append("7. Keep feedback-loop orchestration in `GameManager`; focused managers should remain narrow.")
-    lines.append("8. `create_script` command bodies are intentionally omitted in this prompt export. Generate script code from `Manager Tasks`, `Script Tasks`, and `Experience Plan` before execution.")
+    lines.append("8. `create_script` command bodies are intentionally omitted in this prompt export. Generate script code from `Manager Tasks`, `Script Tasks`, and `Experience Plan`, and create scripts only via `create_script` (do not write local files directly).")
     lines.append("9. Implement script tasks exactly as specified in the `Script Tasks` JSON section.")
     lines.append("10. Do not use tag-based lookups in scripts (`CompareTag`, `FindGameObjectsWithTag`). Use explicit references or explicit object lists.")
     lines.append("11. Run `scene_generator(action='smoke_test_scene', ...)` as a required gate. If it fails, do not run scene save.")
@@ -3670,7 +3744,7 @@ def _build_generation_prompt_compact(spec_json: str, batch_plan: BatchExecutionP
         "R6 Smoke test is mandatory before scene save.",
         "R7 If essence_hash exists, preserve semantics and phase meaning (surface-only variation).",
         "R8 Avoid tag lookups in scripts (CompareTag / FindGameObjectsWithTag).",
-        "R9 create_script code contents are omitted in this export; generate code from manager/script tasks before execution.",
+        "R9 create_script code contents are omitted in this export; generate code from manager/script tasks and create scripts only via create_script (no local file writes).",
         "R10 Keep phase order: Intro -> Explore -> Trigger -> Observe Feedback Loop -> Summary.",
         (
             "R11 Primitive-first policy active: do not use Trellis or manage_3d_gen."
@@ -3723,7 +3797,8 @@ def main() -> None:
         _render_reflection()
 
     # Advanced Settings at the bottom of the page
-    _render_advanced_settings()
+    if bool(st.session_state.get("show_advanced_view", False)):
+        _render_advanced_settings()
 
 
 if __name__ == "__main__":

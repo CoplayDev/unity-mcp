@@ -723,6 +723,42 @@ class PlanValidator:
 
         plan.vfx_calls = repaired_calls
 
+    def _fallback_color_for_name(self, name: str) -> list[float]:
+        """Return a deterministic non-gray fallback color for unmapped primitives."""
+        palette = [
+            [0.82, 0.68, 0.30, 1.0],
+            [0.30, 0.66, 0.86, 1.0],
+            [0.56, 0.78, 0.36, 1.0],
+            [0.86, 0.48, 0.42, 1.0],
+            [0.68, 0.54, 0.82, 1.0],
+            [0.36, 0.74, 0.68, 1.0],
+        ]
+        index = sum(ord(ch) for ch in str(name)) % len(palette)
+        return palette[index]
+
+    def _default_mapping_color(self, row: Any, name: str) -> list[float]:
+        """Infer readable default colors by structural role when explicit color is missing."""
+        component = self._canonical_component(getattr(row, "structural_component", ""))
+        if component == "user":
+            return [1.0, 0.82, 0.20, 1.0]
+        if component == "user_profile":
+            return [0.86, 0.64, 0.28, 1.0]
+        if component == "candidate_generation":
+            return [1.0, 0.90, 0.30, 0.35]
+        if component == "content_item":
+            flower_palette = [
+                [0.95, 0.44, 0.58, 1.0],
+                [0.42, 0.72, 0.94, 1.0],
+                [0.98, 0.74, 0.30, 1.0],
+                [0.62, 0.80, 0.38, 1.0],
+            ]
+            match = re.search(r"_(\d+)$", str(name))
+            if match:
+                idx = (int(match.group(1)) - 1) % len(flower_palette)
+                return flower_palette[idx]
+            return flower_palette[0]
+        return self._fallback_color_for_name(name)
+
     def _ensure_material_calls(self, plan: MCPCallPlan) -> None:
         """Ensure every primitive object has at least a default material/color."""
         objects_with_material = set()
@@ -749,15 +785,17 @@ class PlanValidator:
                 color = None
                 for row in self.spec.mappings:
                     if row.analogy_name == name or name.startswith(row.analogy_name + "_"):
-                        color = row.color
+                        color = row.color or self._default_mapping_color(row, str(name))
                         break
+                if color is None:
+                    color = self._fallback_color_for_name(str(name))
 
                 plan.material_calls.append(MCPToolCall(
                     tool="manage_material",
                     params={
                         "action": "set_renderer_color",
                         "target": name,
-                        "color": color or [0.7, 0.7, 0.7, 1.0],
+                        "color": color,
                     },
                     description=f"Set color for {name}",
                     phase="materials",
@@ -2238,6 +2276,100 @@ class PlanValidator:
             for call in plan.component_calls
         )
 
+    def _component_property_call_exists(
+        self,
+        plan: MCPCallPlan,
+        *,
+        target: str,
+        component_type: str,
+        property_name: str,
+    ) -> bool:
+        """Return True when a matching set_property command already exists."""
+        target_key = str(target).strip()
+        component_key = str(component_type).strip()
+        property_key = str(property_name).strip()
+        return any(
+            str(call.params.get("action", "")).lower() == "set_property"
+            and str(call.params.get("target", "")).strip() == target_key
+            and str(call.params.get("component_type", "")).strip() == component_key
+            and str(call.params.get("property", "")).strip() == property_key
+            for call in plan.component_calls
+        )
+
+    def _build_beginner_guide_overlay_text(self) -> str:
+        """Build short, always-available guidance text for explicit HUD fallback."""
+        objective = str(self.experience_plan.objective).strip()
+        if not objective:
+            objective = "Complete one full interaction loop."
+        phase_names = [
+            str(phase.phase_name).strip()
+            for phase in self.experience_plan.phases
+            if str(phase.phase_name).strip()
+        ]
+        phase_flow = " -> ".join(phase_names) if phase_names else "Intro -> Explore -> Trigger -> Observe Feedback Loop -> Summary"
+        return (
+            "How to interact:\n"
+            f"Objective: {objective}\n"
+            f"Flow: {phase_flow}\n"
+            "Do one trigger action, then watch immediate and delayed feedback."
+        )
+
+    def _build_status_overlay_text(self) -> str:
+        """Build compact status-hint text for explicit HUD fallback."""
+        sections = [str(item).strip() for item in self.experience_plan.feedback_hud_sections if str(item).strip()]
+        if not sections:
+            sections = ExperienceSpec().feedback_hud_sections
+        return "HUD tracks: " + ", ".join(sections[:6])
+
+    def _ensure_text_mesh_guidance(
+        self,
+        plan: MCPCallPlan,
+        *,
+        target: str,
+        text_value: str,
+        description: str,
+    ) -> None:
+        """Attach and configure a simple TextMesh guidance overlay on the target anchor."""
+        component_type = "TextMesh"
+        if not self._component_add_exists(plan, target, component_type):
+            plan.component_calls.append(MCPToolCall(
+                tool="manage_components",
+                params={
+                    "action": "add",
+                    "target": target,
+                    "component_type": component_type,
+                },
+                description=f"Add {component_type} to {target} for explicit guidance fallback",
+                phase="components_vfx",
+            ))
+
+        text_properties: list[tuple[str, Any]] = [
+            ("text", str(text_value)),
+            ("fontSize", 48),
+            ("characterSize", 0.04),
+            ("color", {"r": 0.95, "g": 0.95, "b": 0.95, "a": 1.0}),
+        ]
+        for prop_name, prop_value in text_properties:
+            if self._component_property_call_exists(
+                plan,
+                target=target,
+                component_type=component_type,
+                property_name=prop_name,
+            ):
+                continue
+            plan.component_calls.append(MCPToolCall(
+                tool="manage_components",
+                params={
+                    "action": "set_property",
+                    "target": target,
+                    "component_type": component_type,
+                    "property": prop_name,
+                    "value": prop_value,
+                },
+                description=f"Configure {target} {component_type}.{prop_name} ({description})",
+                phase="components_vfx",
+            ))
+
     def _ensure_mapping_interactions(self) -> None:
         """Auto-repair missing interactions for relation/higher_order mappings."""
         learner_name = ""
@@ -2379,6 +2511,20 @@ class PlanValidator:
                 ))
                 existing_section_names.add(anchor_name)
             self._runtime_ui_anchor_names.add(anchor_name)
+
+        # Explicit guidance overlays: visible baseline guidance even before runtime scripts initialize.
+        self._ensure_text_mesh_guidance(
+            plan,
+            target="HUD_BeginnerGuide",
+            text_value=self._build_beginner_guide_overlay_text(),
+            description="beginner guidance",
+        )
+        self._ensure_text_mesh_guidance(
+            plan,
+            target="HUD_StatusReadout",
+            text_value=self._build_status_overlay_text(),
+            description="status readout",
+        )
 
     def _ensure_intent_completeness(self, plan: MCPCallPlan) -> None:
         """Validate core intent contract requirements and hard-fail when unrecoverable."""

@@ -280,6 +280,8 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse($"GameObject {go.name} has no Renderer component");
             }
 
+            RendererHelpers.EnsureMaterial(renderer);
+
             if (mode == "property_block")
             {
                 if (slot < 0 || slot >= renderer.sharedMaterials.Length)
@@ -293,12 +295,26 @@ namespace MCPForUnity.Editor.Tools
                 if (renderer.sharedMaterials[slot] != null)
                 {
                     Material mat = renderer.sharedMaterials[slot];
-                    if (mat.HasProperty("_BaseColor")) block.SetColor("_BaseColor", color);
-                    else if (mat.HasProperty("_Color")) block.SetColor("_Color", color);
-                    else block.SetColor("_Color", color);
+                    bool wroteAnyProperty = false;
+                    if (mat.HasProperty("_BaseColor"))
+                    {
+                        block.SetColor("_BaseColor", color);
+                        wroteAnyProperty = true;
+                    }
+                    if (mat.HasProperty("_Color"))
+                    {
+                        block.SetColor("_Color", color);
+                        wroteAnyProperty = true;
+                    }
+                    if (!wroteAnyProperty)
+                    {
+                        block.SetColor("_BaseColor", color);
+                        block.SetColor("_Color", color);
+                    }
                 }
                 else
                 {
+                    block.SetColor("_BaseColor", color);
                     block.SetColor("_Color", color);
                 }
 
@@ -316,8 +332,7 @@ namespace MCPForUnity.Editor.Tools
                         return new ErrorResponse($"No material in slot {slot}");
                     }
                     Undo.RecordObject(mat, "Set Material Color");
-                    if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
-                    else mat.SetColor("_Color", color);
+                    SetColorProperties(mat, color);
                     EditorUtility.SetDirty(mat);
                     return new SuccessResponse("Set shared material color");
                 }
@@ -334,14 +349,33 @@ namespace MCPForUnity.Editor.Tools
                     }
                     // Note: Undo cannot fully revert material instantiation
                     Undo.RecordObject(mat, "Set Instance Material Color");
-                    if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
-                    else mat.SetColor("_Color", color);
+                    SetColorProperties(mat, color);
                     return new SuccessResponse("Set instance material color", new { warning = "Material instance created; Undo cannot fully revert instantiation." });
                 }
                 return new ErrorResponse("Invalid slot");
             }
 
             return new ErrorResponse($"Unknown mode: {mode}");
+        }
+
+        private static void SetColorProperties(Material mat, Color color)
+        {
+            bool wrote = false;
+            if (mat.HasProperty("_BaseColor"))
+            {
+                mat.SetColor("_BaseColor", color);
+                wrote = true;
+            }
+            if (mat.HasProperty("_Color"))
+            {
+                mat.SetColor("_Color", color);
+                wrote = true;
+            }
+            if (!wrote)
+            {
+                mat.SetColor("_BaseColor", color);
+                mat.SetColor("_Color", color);
+            }
         }
 
         private static object GetMaterialInfo(JObject @params)
