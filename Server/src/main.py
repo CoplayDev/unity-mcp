@@ -394,63 +394,83 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
                             session_details = details
                             break
 
-                    # If a specific unity_instance was requested but not found, return an error
-                    if not session_id:
+                # If a specific unity_instance was requested but not found, return an error
+                # (Check done here so execute_custom_tool can also validate the instance)
+                if unity_instance and not session_id:
+                    return JSONResponse(
+                        {
+                            "success": False,
+                            "error": f"Unity instance '{unity_instance}' not found",
+                        },
+                        status_code=404,
+                    )
+
+                # If no specific unity_instance requested, use first available session
+                # (Must be done before execute_custom_tool check so all command types benefit)
+                if not session_id:
+                    try:
+                        session_id = next(iter(sessions.sessions.keys()))
+                        session_details = sessions.sessions.get(session_id)
+                    except StopIteration:
+                        # No sessions available - sessions.sessions is empty
+                        # This should not happen since we checked at line 378, but handle gracefully
+                        return JSONResponse({
+                            "success": False,
+                            "error": "No Unity instances connected. Make sure Unity is running with MCP plugin."
+                        }, status_code=503)
+
+                # Custom tool execution - must be checked BEFORE the final PluginHub.send_command call
+                # This applies to both cases: with or without explicit unity_instance
+                if command_type == "execute_custom_tool":
+                    # session_id and session_details are already set above
+                    if not session_id or not session_details:
                         return JSONResponse(
-                            {
-                                "success": False,
-                                "error": f"Unity instance '{unity_instance}' not found",
-                            },
-                            status_code=404,
+                            {"success": False,
+                                "error": "No valid Unity session available for custom tool execution"},
+                            status_code=503,
                         )
-                else:
-                    # No specific unity_instance requested: use first available session
-                    session_id = next(iter(sessions.sessions.keys()))
-                    session_details = sessions.sessions.get(session_id)
+                    tool_name = None
+                    tool_params = {}
+                    if isinstance(params, dict):
+                        tool_name = params.get(
+                            "tool_name") or params.get("name")
+                        tool_params = params.get(
+                            "parameters") or params.get("params") or {}
 
-                    if command_type == "execute_custom_tool":
-                        tool_name = None
+                    if not tool_name:
+                        return JSONResponse(
+                            {"success": False,
+                                "error": "Missing 'tool_name' for execute_custom_tool"},
+                            status_code=400,
+                        )
+                    if tool_params is None:
                         tool_params = {}
-                        if isinstance(params, dict):
-                            tool_name = params.get(
-                                "tool_name") or params.get("name")
-                            tool_params = params.get(
-                                "parameters") or params.get("params") or {}
-
-                        if not tool_name:
-                            return JSONResponse(
-                                {"success": False,
-                                    "error": "Missing 'tool_name' for execute_custom_tool"},
-                                status_code=400,
-                            )
-                        if tool_params is None:
-                            tool_params = {}
-                        if not isinstance(tool_params, dict):
-                            return JSONResponse(
-                                {"success": False,
-                                    "error": "Tool parameters must be an object/dict"},
-                                status_code=400,
-                            )
-
-                        # Prefer a concrete hash for project-scoped tools.
-                        unity_instance_hint = unity_instance
-                        if session_details and session_details.hash:
-                            unity_instance_hint = session_details.hash
-
-                        project_id = resolve_project_id_for_unity_instance(
-                            unity_instance_hint)
-                        if not project_id:
-                            return JSONResponse(
-                                {"success": False,
-                                    "error": "Could not resolve project id for custom tool"},
-                                status_code=400,
-                            )
-
-                        service = CustomToolService.get_instance()
-                        result = await service.execute_tool(
-                            project_id, tool_name, unity_instance_hint, tool_params
+                    if not isinstance(tool_params, dict):
+                        return JSONResponse(
+                            {"success": False,
+                                "error": "Tool parameters must be an object/dict"},
+                            status_code=400,
                         )
-                        return JSONResponse(result.model_dump())
+
+                    # Prefer a concrete hash for project-scoped tools.
+                    unity_instance_hint = unity_instance
+                    if session_details and session_details.hash:
+                        unity_instance_hint = session_details.hash
+
+                    project_id = resolve_project_id_for_unity_instance(
+                        unity_instance_hint)
+                    if not project_id:
+                        return JSONResponse(
+                            {"success": False,
+                                "error": "Could not resolve project id for custom tool"},
+                            status_code=400,
+                        )
+
+                    service = CustomToolService.get_instance()
+                    result = await service.execute_tool(
+                        project_id, tool_name, unity_instance_hint, tool_params
+                    )
+                    return JSONResponse(result.model_dump())
 
                 # Send command to Unity
                 result = await PluginHub.send_command(session_id, command_type, params)

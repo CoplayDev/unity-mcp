@@ -75,6 +75,9 @@ namespace MCPForUnity.Editor.Services
 
             [JsonProperty("transport")]
             public EditorStateTransport Transport { get; set; }
+
+            [JsonProperty("settings")]
+            public EditorStateSettings Settings { get; set; }
         }
 
         private sealed class EditorStateUnity
@@ -237,6 +240,12 @@ namespace MCPForUnity.Editor.Services
 
             [JsonProperty("last_message_unix_ms")]
             public long? LastMessageUnixMs { get; set; }
+        }
+
+        private sealed class EditorStateSettings
+        {
+            [JsonProperty("batch_execute_max_commands")]
+            public int BatchExecuteMaxCommands { get; set; }
         }
 
         static EditorStateCache()
@@ -482,6 +491,10 @@ namespace MCPForUnity.Editor.Services
                 {
                     UnityBridgeConnected = null,
                     LastMessageUnixMs = null
+                },
+                Settings = new EditorStateSettings
+                {
+                    BatchExecuteMaxCommands = Tools.BatchExecute.GetMaxCommandsPerBatch()
                 }
             };
 

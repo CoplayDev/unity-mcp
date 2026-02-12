@@ -63,5 +63,7 @@ namespace MCPForUnity.Editor.Constants
         internal const string CustomerUuid = "MCPForUnity.CustomerUUID";
 
         internal const string ApiKey = "MCPForUnity.ApiKey";
+
+        internal const string BatchExecuteMaxCommands = "MCPForUnity.BatchExecute.MaxCommands";
     }
 }

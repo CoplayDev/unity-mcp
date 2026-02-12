@@ -201,6 +201,8 @@ namespace MCPForUnity.Editor.Helpers
         /// Gets the package source for the MCP server (used with uvx --from).
         /// Checks for EditorPrefs override first (supports git URLs, file:// paths, etc.),
         /// then falls back to PyPI package reference.
+        /// When the override is a local path, auto-corrects to the "Server" subdirectory
+        /// if the path doesn't contain pyproject.toml but Server/pyproject.toml exists.
         /// </summary>
         /// <returns>Package source string for uvx --from argument</returns>
         public static string GetMcpServerPackageSource()
@@ -209,7 +211,14 @@ namespace MCPForUnity.Editor.Helpers
             string sourceOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
             if (!string.IsNullOrEmpty(sourceOverride))
             {
-                return sourceOverride;
+                string resolved = ResolveLocalServerPath(sourceOverride);
+                // Persist the corrected path so future reads are consistent
+                if (resolved != sourceOverride)
+                {
+                    EditorPrefs.SetString(EditorPrefKeys.GitUrlOverride, resolved);
+                    McpLog.Info($"Auto-corrected server source override from '{sourceOverride}' to '{resolved}'");
+                }
+                return resolved;
             }
 
             // Default to PyPI package (avoids Windows long path issues with git clone)
@@ -221,6 +230,59 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             return $"mcpforunityserver=={version}";
+        }
+
+        /// <summary>
+        /// Validates and auto-corrects a local server source path to ensure it points to the
+        /// directory containing pyproject.toml. If the path points to a parent directory
+        /// (e.g. the repo root "unity-mcp") instead of the Python package directory ("Server"),
+        /// this checks for a "Server" subdirectory with pyproject.toml and returns that path.
+        /// Non-local paths (URLs, PyPI references) are returned unchanged.
+        /// </summary>
+        internal static string ResolveLocalServerPath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                return path;
+
+            // Skip non-local paths (git URLs, PyPI package names, etc.)
+            if (path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("git+", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("ssh://", StringComparison.OrdinalIgnoreCase))
+            {
+                return path;
+            }
+
+            // If it looks like a PyPI package reference (no path separators), skip
+            if (!path.Contains('/') && !path.Contains('\\') && !path.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+            {
+                return path;
+            }
+
+            // Strip file:// prefix for filesystem checks, preserve for return value
+            string checkPath = path;
+            string prefix = string.Empty;
+            if (checkPath.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+            {
+                prefix = checkPath.Substring(0, 7); // preserve original casing
+                checkPath = checkPath.Substring(7);
+            }
+
+            // Already correct — pyproject.toml exists at this path
+            if (System.IO.File.Exists(System.IO.Path.Combine(checkPath, "pyproject.toml")))
+            {
+                return path;
+            }
+
+            // Check if "Server" subdirectory contains pyproject.toml
+            string serverSubDir = System.IO.Path.Combine(checkPath, "Server");
+            if (System.IO.File.Exists(System.IO.Path.Combine(serverSubDir, "pyproject.toml")))
+            {
+                return prefix + serverSubDir;
+            }
+
+            // Return as-is; uvx will report the error if the path is truly invalid
+            return path;
         }
 
         /// <summary>

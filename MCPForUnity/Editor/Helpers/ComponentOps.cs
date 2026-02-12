@@ -51,12 +51,27 @@ namespace MCPForUnity.Editor.Helpers
                 return null;
             }
 
+            // Produce a clearer error when this component already exists and cannot be duplicated.
+            Component existingComponent = target.GetComponent(componentType);
+            if (existingComponent != null && !AllowsMultiple(target, componentType))
+            {
+                error = $"Component '{componentType.Name}' already exists on '{target.name}' and this type does not allow multiple instances.";
+                return null;
+            }
+
             try
             {
                 Component newComponent = Undo.AddComponent(target, componentType);
                 if (newComponent == null)
                 {
-                    error = $"Failed to add component '{componentType.Name}' to '{target.name}'. It might be disallowed.";
+                    if (target.GetComponent(componentType) != null && !AllowsMultiple(target, componentType))
+                    {
+                        error = $"Component '{componentType.Name}' already exists on '{target.name}' and this type does not allow multiple instances.";
+                    }
+                    else
+                    {
+                        error = $"Failed to add component '{componentType.Name}' to '{target.name}'. Unity may restrict this component on the current target.";
+                    }
                     return null;
                 }
 
@@ -343,6 +358,21 @@ namespace MCPForUnity.Editor.Helpers
             {
                 light.type = LightType.Directional;
             }
+        }
+
+        private static bool AllowsMultiple(GameObject target, Type componentType)
+        {
+            if (target == null || componentType == null)
+            {
+                return false;
+            }
+
+            if (Attribute.IsDefined(componentType, typeof(DisallowMultipleComponent), inherit: true))
+            {
+                return false;
+            }
+
+            return true;
         }
     }
 }

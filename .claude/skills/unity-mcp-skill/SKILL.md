@@ -7,7 +7,7 @@ description: Orchestrate Unity Editor via MCP (Model Context Protocol) tools and
 
 This skill helps you effectively use the Unity Editor with MCP tools and resources.
 
-## Template
+## Template Notice
 
 Examples in `references/workflows.md` and `references/tools-reference.md` are reusable templates. They may be inaccurate across Unity versions, package setups (UGUI/TMP/Input System), and project-specific conventions. Please check console, compilation errors, or use screenshot after implementation.
 

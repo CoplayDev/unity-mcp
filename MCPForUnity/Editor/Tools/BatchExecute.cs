@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
+using UnityEditor;
 
 namespace MCPForUnity.Editor.Tools
 {
@@ -13,7 +15,20 @@ namespace MCPForUnity.Editor.Tools
     [McpForUnityTool("batch_execute", AutoRegister = false)]
     public static class BatchExecute
     {
-        private const int MaxCommandsPerBatch = 25;
+        /// <summary>Default limit when no EditorPrefs override is set.</summary>
+        internal const int DefaultMaxCommandsPerBatch = 25;
+
+        /// <summary>Hard ceiling to prevent extreme editor freezes regardless of user setting.</summary>
+        internal const int AbsoluteMaxCommandsPerBatch = 100;
+
+        /// <summary>
+        /// Returns the user-configured max commands per batch, clamped between 1 and <see cref="AbsoluteMaxCommandsPerBatch"/>.
+        /// </summary>
+        internal static int GetMaxCommandsPerBatch()
+        {
+            int configured = EditorPrefs.GetInt(EditorPrefKeys.BatchExecuteMaxCommands, DefaultMaxCommandsPerBatch);
+            return Math.Clamp(configured, 1, AbsoluteMaxCommandsPerBatch);
+        }
 
         public static async Task<object> HandleCommand(JObject @params)
         {
@@ -28,9 +43,11 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse("Provide at least one command entry in 'commands'.");
             }
 
-            if (commandsToken.Count > MaxCommandsPerBatch)
+            int maxCommands = GetMaxCommandsPerBatch();
+            if (commandsToken.Count > maxCommands)
             {
-                return new ErrorResponse($"A maximum of {MaxCommandsPerBatch} commands are allowed per batch.");
+                return new ErrorResponse(
+                    $"A maximum of {maxCommands} commands are allowed per batch (configurable in MCP Tools window, hard max {AbsoluteMaxCommandsPerBatch}).");
             }
 
             bool failFast = @params.Value<bool?>("failFast") ?? false;

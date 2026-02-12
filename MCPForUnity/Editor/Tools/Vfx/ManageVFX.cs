@@ -45,6 +45,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
     /// AVAILABLE ACTIONS:
     ///
     /// ParticleSystem (particle_*):
+    ///   - particle_create: Create/prepare a ParticleSystem on target and auto-assign a valid renderer material
     ///   - particle_get_info: Get system info and current state
     ///   - particle_set_main: Set main module (duration, looping, startLifetime, startSpeed, startSize, startColor, gravityModifier, maxParticles, simulationSpace, playOnAwake, etc.)
     ///   - particle_set_emission: Set emission module (rateOverTime, rateOverDistance)
@@ -303,6 +304,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
         {
             switch (action)
             {
+                case "create": return ParticleControl.Create(@params);
                 case "get_info": return ParticleRead.GetInfo(@params);
                 case "set_main": return ParticleWrite.SetMain(@params);
                 case "set_emission": return ParticleWrite.SetEmission(@params);
@@ -321,7 +323,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 case "add_burst": return ParticleControl.AddBurst(@params);
                 case "clear_bursts": return ParticleControl.ClearBursts(@params);
                 default:
-                    return new { success = false, message = $"Unknown particle action: {action}. Valid: get_info, set_main, set_emission, set_shape, set_color_over_lifetime, set_size_over_lifetime, set_velocity_over_lifetime, set_noise, set_renderer, enable_module, play, stop, pause, restart, clear, add_burst, clear_bursts" };
+                    return new { success = false, message = $"Unknown particle action: {action}. Valid: create, get_info, set_main, set_emission, set_shape, set_color_over_lifetime, set_size_over_lifetime, set_velocity_over_lifetime, set_noise, set_renderer, enable_module, play, stop, pause, restart, clear, add_burst, clear_bursts" };
             }
         }
 
