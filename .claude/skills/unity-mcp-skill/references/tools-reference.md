@@ -2,6 +2,8 @@
 
 Complete reference for all MCP tools. Each tool includes parameters, types, and usage examples.
 
+> **Template warning:** Examples in this file are skill templates and may be inaccurate for some Unity versions, packages, or project setups. Validate parameters and payload shapes against your active tool schema and runtime behavior.
+
 ## Table of Contents
 
 - [Infrastructure Tools](#infrastructure-tools)
@@ -27,11 +29,13 @@ batch_execute(
         {"tool": "tool_name", "params": {...}},
         ...
     ],
-    parallel=False,              # bool, optional - run read-only ops in parallel
+    parallel=False,              # bool, optional - advisory only (Unity may still run sequentially)
     fail_fast=False,             # bool, optional - stop on first failure
     max_parallelism=None         # int, optional - max parallel workers
 )
 ```
+
+`batch_execute` is not transactional: earlier commands are not rolled back if a later command fails.
 
 ### set_active_instance
 
