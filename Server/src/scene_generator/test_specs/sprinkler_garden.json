@@ -20,7 +20,7 @@
       "position": [0, 1.6, -5],
       "rotation": [10, 0, 0],
       "field_of_view": 60,
-      "is_vr": true
+      "is_vr": false
     },
     "description": "A sunny garden with stylized data plants and a sprinkler-equipped gardener"
   },

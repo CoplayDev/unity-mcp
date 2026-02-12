@@ -11,7 +11,7 @@ from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 
-MAX_COMMANDS_PER_BATCH = 25
+MAX_COMMANDS_PER_BATCH = 40
 
 
 @mcp_for_unity_tool(
@@ -20,7 +20,7 @@ MAX_COMMANDS_PER_BATCH = 25
         "Executes multiple MCP commands in a single batch for dramatically better performance. "
         "STRONGLY RECOMMENDED when creating/modifying multiple objects, adding components to multiple targets, "
         "or performing any repetitive operations. Reduces latency and token costs by 10-100x compared to "
-        "sequential tool calls. Supports up to 25 commands per batch. "
+        "sequential tool calls. Supports up to 40 commands per batch. "
         "Example: creating 5 cubes → use 1 batch_execute with 5 create commands instead of 5 separate calls."
     ),
     annotations=ToolAnnotations(

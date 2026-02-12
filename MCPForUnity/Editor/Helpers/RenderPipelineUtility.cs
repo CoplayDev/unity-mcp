@@ -204,6 +204,76 @@ namespace MCPForUnity.Editor.Helpers
             }
         }
 
+        internal static bool IsMaterialInvalidForActivePipeline(Material material, out string reason)
+        {
+            reason = null;
+            if (material == null)
+            {
+                reason = "missing_material";
+                return true;
+            }
+
+            Shader shader = material.shader;
+            if (shader == null)
+            {
+                reason = "missing_shader";
+                return true;
+            }
+
+            if (IsErrorShader(shader))
+            {
+                reason = "error_shader";
+                return true;
+            }
+
+            var pipeline = GetActivePipeline();
+            if (IsPipelineMismatch(shader.name, pipeline))
+            {
+                reason = "pipeline_mismatch";
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsErrorShader(Shader shader)
+        {
+            if (shader == null)
+            {
+                return true;
+            }
+
+            if (shader == Shader.Find("Hidden/InternalErrorShader"))
+            {
+                return true;
+            }
+
+            string shaderName = shader.name ?? string.Empty;
+            return shaderName.IndexOf("InternalErrorShader", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool IsPipelineMismatch(string shaderName, PipelineKind activePipeline)
+        {
+            if (string.IsNullOrEmpty(shaderName))
+            {
+                return true;
+            }
+
+            string lowerName = shaderName.ToLowerInvariant();
+            bool shaderLooksUrp = lowerName.Contains("universal render pipeline") || lowerName.Contains("urp/");
+            bool shaderLooksHdrp = lowerName.Contains("high definition render pipeline") || lowerName.Contains("hdrp/");
+            bool shaderLooksBuiltin = lowerName.Contains("standard") || lowerName.Contains("legacy shaders/");
+            bool shaderLooksSrp = shaderLooksUrp || shaderLooksHdrp;
+
+            return activePipeline switch
+            {
+                PipelineKind.HighDefinition => shaderLooksUrp || (shaderLooksBuiltin && !shaderLooksHdrp),
+                PipelineKind.Universal => shaderLooksHdrp || (shaderLooksBuiltin && !shaderLooksUrp),
+                PipelineKind.BuiltIn => shaderLooksSrp,
+                _ => false,
+            };
+        }
+
         internal static Material GetOrCreateDefaultVFXMaterial(VFXComponentType componentType)
         {
             var pipeline = GetActivePipeline();

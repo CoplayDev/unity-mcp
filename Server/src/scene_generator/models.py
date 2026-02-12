@@ -7,6 +7,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+DEFAULT_BATCH_SIZE_LIMIT = 40
+
 
 # Domain templates: pre-defined structural component sets for common analogy domains.
 # Each entry maps a domain name to a list of component definitions.
@@ -55,7 +57,7 @@ class CameraSpec(BaseModel):
     position: list[float] = Field(default=[0, 1.6, -5])
     rotation: list[float] = Field(default=[10, 0, 0])
     field_of_view: float = 60.0
-    is_vr: bool = True
+    is_vr: bool = False
 
 
 class EnvironmentSpec(BaseModel):
@@ -209,6 +211,28 @@ class ExperienceSpec(BaseModel):
     causal_chain: list[CausalChainStep] = Field(default_factory=list)
 
 
+class EssenceSpec(BaseModel):
+    """Semantic structure that should remain unchanged across surface variants."""
+    mapping_role_ids: list[str] = Field(default_factory=list)
+    phase_ids: list[str] = Field(default_factory=list)
+    success_criteria: list[str] = Field(default_factory=list)
+    causal_chain_ids: list[str] = Field(default_factory=list)
+    required_managers: list[str] = Field(default_factory=lambda: ["GameManager"])
+    character_role_id: str = "user"
+    ui_role_id: str = "feedback_hud"
+
+
+class SurfaceSpec(BaseModel):
+    """Presentation layer that can vary while preserving the essence."""
+    style_seed: int = 0
+    style_mood: Literal["natural", "playful", "futuristic"] = "natural"
+    variation_level: Literal["low", "medium", "high"] = "medium"
+    character_style: str = "default"
+    asset_style: str = "default"
+    ui_skin: str = "default"
+    vfx_style: str = "default"
+
+
 class MappingRow(BaseModel):
     """One row of the teacher's mapping table."""
     structural_component: str
@@ -255,6 +279,9 @@ class SceneSpec(BaseModel):
     mappings: list[MappingRow]
     environment: EnvironmentSpec = Field(default_factory=EnvironmentSpec)
     experience: ExperienceSpec = Field(default_factory=ExperienceSpec)
+    essence: EssenceSpec | None = None
+    surface: SurfaceSpec = Field(default_factory=SurfaceSpec)
+    essence_hash: str | None = None
 
 
 # --- Reflection model (Phase 4 output) ---
@@ -320,6 +347,8 @@ class ExecutionPhase(BaseModel):
     commands: list[dict[str, Any]]          # [{tool, params}] ready for batch_execute
     parallel: bool = True
     note: str = ""
+    batch_size_limit: int | None = None
+    fail_fast: bool | None = None
 
 
 class ScriptTask(BaseModel):
@@ -358,6 +387,19 @@ class ManagerTask(BaseModel):
     managed_mappings: list[str] = Field(default_factory=list)
 
 
+class IntentContract(BaseModel):
+    """Execution-time contract that preserves learner intent in generated scenes."""
+    learner_goal: str = ""
+    target_concept: str = ""
+    analogy_domain: str = ""
+    key_relations: list[str] = Field(default_factory=list)
+    behavioral_mappings: list[str] = Field(default_factory=list)
+    mappings_with_explicit_interaction: list[str] = Field(default_factory=list)
+    mappings_with_inferred_interaction: list[str] = Field(default_factory=list)
+    ui_requirements: list[str] = Field(default_factory=list)
+    readability_requirements: list[str] = Field(default_factory=list)
+
+
 class BatchExecutionPlan(BaseModel):
     """The final output of validate_plan — ready for sequential batch_execute calls."""
     phases: list[ExecutionPhase]
@@ -368,13 +410,23 @@ class BatchExecutionPlan(BaseModel):
     script_tasks: list[ScriptTask] = Field(default_factory=list)
     manager_tasks: list[ManagerTask] = Field(default_factory=list)
     experience_plan: ExperienceSpec = Field(default_factory=ExperienceSpec)
+    intent_contract: IntentContract = Field(default_factory=IntentContract)
+    audit_rules: dict[str, Any] = Field(default_factory=dict)
+    smoke_test_plan: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _compute_stats(self) -> "BatchExecutionPlan":
         self.total_commands = sum(len(p.commands) for p in self.phases)
-        self.estimated_batches = sum(
-            max(1, math.ceil(len(p.commands) / 25)) for p in self.phases
-        )
+        estimated_batches = 0
+        for phase in self.phases:
+            command_count = len(phase.commands)
+            if command_count == 0:
+                continue
+            limit = phase.batch_size_limit or DEFAULT_BATCH_SIZE_LIMIT
+            if limit <= 0:
+                limit = DEFAULT_BATCH_SIZE_LIMIT
+            estimated_batches += max(1, math.ceil(command_count / limit))
+        self.estimated_batches = estimated_batches
         self.trellis_count = sum(
             1 for p in self.phases
             for cmd in p.commands

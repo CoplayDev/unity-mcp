@@ -240,7 +240,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
             if (renderer == null) return new { success = false, message = "ParticleSystemRenderer not found" };
 
             // Ensure material is set before any other operations
-            RendererHelpers.EnsureMaterial(renderer);
+            RendererHelpers.EnsureMaterialResult ensureResult = RendererHelpers.EnsureMaterial(renderer);
 
             Undo.RecordObject(renderer, "Set ParticleSystem Renderer");
             var changes = new List<string>();
@@ -288,8 +288,17 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 if (mat != null) { renderer.trailMaterial = mat; changes.Add("trailMaterial"); }
             }
 
+            // Re-check after renderer/material edits to catch invalid pipeline shader assignments.
+            ensureResult = RendererHelpers.EnsureMaterial(renderer);
+
             EditorUtility.SetDirty(renderer);
-            return new { success = true, message = $"Updated renderer: {string.Join(", ", changes)}" };
+            return new
+            {
+                success = true,
+                message = $"Updated renderer: {string.Join(", ", changes)}",
+                materialReplaced = ensureResult.MaterialReplaced,
+                replacementReason = ensureResult.ReplacementReason,
+            };
         }
     }
 }

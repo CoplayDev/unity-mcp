@@ -13,7 +13,7 @@ namespace MCPForUnity.Editor.Tools
     [McpForUnityTool("batch_execute", AutoRegister = false)]
     public static class BatchExecute
     {
-        private const int MaxCommandsPerBatch = 25;
+        private const int MaxCommandsPerBatch = 40;
 
         public static async Task<object> HandleCommand(JObject @params)
         {
