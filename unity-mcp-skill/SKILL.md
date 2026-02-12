@@ -7,6 +7,14 @@ description: Orchestrate Unity Editor via MCP (Model Context Protocol) tools and
 
 This skill helps you effectively use the Unity Editor with MCP tools and resources.
 
+## Template
+
+Examples in `references/workflows.md` and `references/tools-reference.md` are reusable templates. They may be inaccurate across Unity versions, package setups (UGUI/TMP/Input System), and project-specific conventions. Please check console, compilation errors, or use screenshot after implementation.
+
+Before applying a template:
+- Validate targets/components first via resources and `find_gameobjects`.
+- Treat names, enum values, and property payloads as placeholders to adapt.
+
 ## Quick Start: Resource-First Workflow
 
 **Always read relevant resources before using tools.** This prevents errors and provides the necessary context.
@@ -41,11 +49,11 @@ batch_execute(
         {"tool": "manage_gameobject", "params": {"action": "create", "name": "Cube2", "primitive_type": "Cube"}},
         {"tool": "manage_gameobject", "params": {"action": "create", "name": "Cube3", "primitive_type": "Cube"}}
     ],
-    parallel=True  # Read-only operations can run in parallel
+    parallel=True  # Hint only: Unity may still execute sequentially
 )
 ```
 
-**Max 25 commands per batch.** Use `fail_fast=True` for dependent operations.
+**Max 25 commands per batch by default (configurable in Unity MCP Tools window, max 100).** Use `fail_fast=True` for dependent operations.
 
 ### 3. Use `screenshot` in manage_scene to Verify Visual Results
 
@@ -81,6 +89,8 @@ read_console(
 ```
 
 ## Parameter Type Conventions
+
+These are common patterns, not strict guarantees. `manage_components.set_property` payload shapes can vary by component/property; if a template fails, inspect the component resource payload and adjust.
 
 ### Vectors (position, rotation, scale, color)
 ```python
@@ -124,6 +134,7 @@ uri="file:///full/path/to/file.cs"
 | **Editor** | `manage_editor`, `execute_menu_item`, `read_console` | Editor control |
 | **Testing** | `run_tests`, `get_test_job` | Unity Test Framework |
 | **Batch** | `batch_execute` | Parallel/bulk operations |
+| **UI** | `batch_execute` with `manage_gameobject` + `manage_components` | Canvas, Panel, Button, Text, Slider, Toggle, Input Field (see [UI workflows](references/workflows.md#ui-creation-workflows)) |
 
 ## Common Workflows
 

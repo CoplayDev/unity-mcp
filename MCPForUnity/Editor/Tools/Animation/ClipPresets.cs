@@ -9,7 +9,7 @@ namespace MCPForUnity.Editor.Tools.Animation
 {
     internal static class ClipPresets
     {
-        private static readonly string[] ValidPresets = { "bounce", "rotate", "pulse", "fade", "shake", "hover", "spin", "sway", "bob", "wiggle", "blink", "slide_in", "elastic" };
+        private static readonly string[] ValidPresets = { "bounce", "rotate", "pulse", "fade", "shake", "hover", "spin", "sway", "bob", "wiggle", "blink", "slide_in", "elastic", "grow", "shrink" };
 
         public static object CreatePreset(JObject @params)
         {
@@ -110,6 +110,12 @@ namespace MCPForUnity.Editor.Tools.Animation
                     break;
                 case "elastic":
                     ApplyElastic(clip, duration, amplitude);
+                    break;
+                case "grow":
+                    ApplyGrow(clip, duration, amplitude);
+                    break;
+                case "shrink":
+                    ApplyShrink(clip, duration, amplitude);
                     break;
                 default:
                     return new { success = false, message = $"Unknown preset '{preset}'. Valid: {string.Join(", ", ValidPresets)}" };
@@ -332,6 +338,34 @@ namespace MCPForUnity.Editor.Tools.Animation
                 new Keyframe(third, peak),
                 new Keyframe(third * 2f, settle),
                 new Keyframe(duration, 1f)
+            );
+            SetTransformCurve(clip, "localScale.x", curve);
+            SetTransformCurve(clip, "localScale.y", curve);
+            SetTransformCurve(clip, "localScale.z", curve);
+        }
+
+        private static void ApplyGrow(AnimationClip clip, float duration, float amplitude)
+        {
+            // localScale uniform from a reduced value up to 1.0
+            float clamped = Mathf.Max(0f, amplitude);
+            float start = Mathf.Clamp01(1f - clamped);
+            var curve = new AnimationCurve(
+                new Keyframe(0f, start),
+                new Keyframe(duration, 1f)
+            );
+            SetTransformCurve(clip, "localScale.x", curve);
+            SetTransformCurve(clip, "localScale.y", curve);
+            SetTransformCurve(clip, "localScale.z", curve);
+        }
+
+        private static void ApplyShrink(AnimationClip clip, float duration, float amplitude)
+        {
+            // localScale uniform from 1.0 down to a reduced value
+            float clamped = Mathf.Max(0f, amplitude);
+            float end = Mathf.Clamp01(1f - clamped);
+            var curve = new AnimationCurve(
+                new Keyframe(0f, 1f),
+                new Keyframe(duration, end)
             );
             SetTransformCurve(clip, "localScale.x", curve);
             SetTransformCurve(clip, "localScale.y", curve);

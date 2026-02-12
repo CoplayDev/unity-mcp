@@ -103,18 +103,10 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
             {
                 // Restore last selected client from EditorPrefs
                 string lastClientId = EditorPrefs.GetString(EditorPrefKeys.LastSelectedClientId, string.Empty);
-                int restoredIndex = 0;
-                if (!string.IsNullOrEmpty(lastClientId))
-                {
-                    for (int i = 0; i < configurators.Count; i++)
-                    {
-                        if (string.Equals(configurators[i].Id, lastClientId, StringComparison.OrdinalIgnoreCase))
-                        {
-                            restoredIndex = i;
-                            break;
-                        }
-                    }
-                }
+                int restoredIndex = FindConfiguratorIndex(lastClientId);
+                if (restoredIndex < 0)
+                    restoredIndex = 0;
+
                 clientDropdown.index = restoredIndex;
                 selectedClientIndex = restoredIndex;
             }
@@ -131,7 +123,17 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
         {
             clientDropdown.RegisterValueChangedCallback(evt =>
             {
-                selectedClientIndex = clientDropdown.index;
+                int selectedIndex = GetIndexForDropdownValue(evt.newValue);
+                if (selectedIndex < 0)
+                {
+                    selectedIndex = clientDropdown.index;
+                }
+                if (selectedIndex < 0 || selectedIndex >= configurators.Count)
+                {
+                    return;
+                }
+
+                selectedClientIndex = selectedIndex;
                 // Persist the selected client so it's restored on next window open
                 if (selectedClientIndex >= 0 && selectedClientIndex < configurators.Count)
                 {
@@ -652,6 +654,65 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 
             // Standard mode uses exact version from package.json
             return AssetPathUtility.GetMcpServerPackageSource();
+        }
+
+        private int FindConfiguratorIndex(string persistedClientValue)
+        {
+            if (string.IsNullOrWhiteSpace(persistedClientValue))
+                return -1;
+
+            // Primary match: stored stable ID.
+            for (int i = 0; i < configurators.Count; i++)
+            {
+                if (string.Equals(configurators[i].Id, persistedClientValue, StringComparison.OrdinalIgnoreCase))
+                    return i;
+            }
+
+            // Compatibility match for older persisted values (e.g., display names with spaces).
+            string normalized = NormalizeClientToken(persistedClientValue);
+            if (string.IsNullOrEmpty(normalized))
+                return -1;
+
+            for (int i = 0; i < configurators.Count; i++)
+            {
+                if (NormalizeClientToken(configurators[i].Id) == normalized ||
+                    NormalizeClientToken(configurators[i].DisplayName) == normalized)
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private int GetIndexForDropdownValue(string dropdownValue)
+        {
+            if (string.IsNullOrWhiteSpace(dropdownValue))
+                return -1;
+
+            int directIndex = clientDropdown.choices?.IndexOf(dropdownValue) ?? -1;
+            if (directIndex >= 0 && directIndex < configurators.Count)
+                return directIndex;
+
+            string normalized = NormalizeClientToken(dropdownValue);
+            if (string.IsNullOrEmpty(normalized))
+                return -1;
+
+            for (int i = 0; i < configurators.Count; i++)
+            {
+                if (NormalizeClientToken(configurators[i].DisplayName) == normalized)
+                    return i;
+            }
+
+            return -1;
+        }
+
+        private static string NormalizeClientToken(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            return new string(value.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
         }
     }
 }

@@ -309,47 +309,136 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - name: Checkout main
+      - name: Checkout beta
         uses: actions/checkout@v6
         with:
-          ref: main
+          ref: beta
           fetch-depth: 0
 
-      - name: Create PR to merge main into beta
-        id: sync_pr
+      - name: Prepare sync branch from beta with merged main
+        id: sync_branch
         env:
-          GH_TOKEN: ${{ github.token }}
           NEW_VERSION: ${{ needs.bump.outputs.new_version }}
         shell: bash
         run: |
           set -euo pipefail
-          # Check if beta is behind main
-          git fetch origin beta
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+          # Fetch both branches so we can build a merge commit in CI.
+          git fetch origin main beta
           if git merge-base --is-ancestor origin/main origin/beta; then
-            echo "beta is already up to date with main. Skipping PR."
+            echo "beta is already up to date with main. Skipping sync."
             echo "skipped=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
+          SYNC_BRANCH="sync/main-v${NEW_VERSION}-into-beta-${GITHUB_RUN_ID}"
+          echo "name=$SYNC_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "skipped=false" >> "$GITHUB_OUTPUT"
+
+          git checkout -b "$SYNC_BRANCH" origin/beta
+
+          if git merge origin/main --no-ff --no-commit; then
+            echo "main merged cleanly into sync branch."
+          else
+            echo "Merge conflicts detected. Attempting expected conflict resolution for beta version files."
+            CONFLICTS=$(git diff --name-only --diff-filter=U || true)
+            if [[ -n "$CONFLICTS" ]]; then
+              echo "$CONFLICTS"
+            fi
+
+            # Keep beta-side prerelease versions if these files conflict.
+            for file in MCPForUnity/package.json Server/pyproject.toml; do
+              if git ls-files -u -- "$file" | grep -q .; then
+                echo "Keeping beta version for $file"
+                git checkout --ours -- "$file"
+                git add "$file"
+              fi
+            done
+
+            REMAINING=$(git diff --name-only --diff-filter=U || true)
+            if [[ -n "$REMAINING" ]]; then
+              echo "Unexpected unresolved conflicts remain:"
+              echo "$REMAINING"
+              exit 1
+            fi
+          fi
+
+          git commit -m "chore: sync main (v${NEW_VERSION}) into beta"
+
+          # After releasing X.Y.Z on main, beta should move to X.Y.(Z+1)-beta.1.
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$NEW_VERSION"
+          NEXT_PATCH=$((PATCH + 1))
+          NEXT_BETA_VERSION="${MAJOR}.${MINOR}.${NEXT_PATCH}-beta.1"
+          echo "beta_version=$NEXT_BETA_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Setting beta version to $NEXT_BETA_VERSION"
+
+          CURRENT_BETA_VERSION=$(jq -r '.version' MCPForUnity/package.json)
+          if [[ "$CURRENT_BETA_VERSION" != "$NEXT_BETA_VERSION" ]]; then
+            jq --arg v "$NEXT_BETA_VERSION" '.version = $v' MCPForUnity/package.json > tmp.json
+            mv tmp.json MCPForUnity/package.json
+            git add MCPForUnity/package.json
+            git commit -m "chore: set beta version to ${NEXT_BETA_VERSION} after release v${NEW_VERSION}"
+          else
+            echo "Beta version already at target: $NEXT_BETA_VERSION"
+          fi
+
+          echo "Pushing sync branch $SYNC_BRANCH"
+          git push origin "$SYNC_BRANCH"
+
+      - name: Create PR to merge sync branch into beta
+        if: steps.sync_branch.outputs.skipped != 'true'
+        id: sync_pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEW_VERSION: ${{ needs.bump.outputs.new_version }}
+          NEXT_BETA_VERSION: ${{ steps.sync_branch.outputs.beta_version }}
+          SYNC_BRANCH: ${{ steps.sync_branch.outputs.name }}
+        shell: bash
+        run: |
+          set -euo pipefail
           PR_URL=$(gh pr create \
             --base beta \
-            --head main \
+            --head "$SYNC_BRANCH" \
             --title "chore: sync main (v${NEW_VERSION}) into beta" \
-            --body "Automated sync of version bump from main into beta.")
+            --body "Automated sync of main back into beta after release v${NEW_VERSION}, including beta version set to ${NEXT_BETA_VERSION}.")
           echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
           PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-          echo "skipped=false" >> "$GITHUB_OUTPUT"
 
       - name: Merge sync PR
-        if: steps.sync_pr.outputs.skipped != 'true'
+        if: steps.sync_branch.outputs.skipped != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.sync_pr.outputs.pr_number }}
         shell: bash
         run: |
           set -euo pipefail
-          gh pr merge "$PR_NUMBER" --merge --no-delete-branch
+
+          # Best effort: auto-merge if repository settings allow it.
+          gh pr merge "$PR_NUMBER" --merge --auto --delete-branch || true
+
+          # Retry direct merge for up to 2 minutes while checks settle.
+          for i in {1..24}; do
+            STATE=$(gh pr view "$PR_NUMBER" --json state -q '.state')
+            if [[ "$STATE" == "MERGED" ]]; then
+              echo "Sync PR merged successfully."
+              exit 0
+            fi
+
+            if gh pr merge "$PR_NUMBER" --merge --delete-branch >/dev/null 2>&1; then
+              echo "Sync PR merged successfully."
+              exit 0
+            fi
+
+            echo "Waiting for sync PR to become mergeable... (state: $STATE)"
+            sleep 5
+          done
+
+          echo "Sync PR did not merge in time."
+          gh pr view "$PR_NUMBER" --json state,mergeStateStatus,isDraft -q '{state: .state, mergeStateStatus: .mergeStateStatus, isDraft: .isDraft}'
+          exit 1
 
   publish_docker:
     name: Publish Docker image
