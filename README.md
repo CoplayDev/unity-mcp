@@ -1,3 +1,5 @@
+[![AgentAudit: Safe](https://img.shields.io/badge/AgentAudit-Safe-brightgreen)](https://www.agentaudit.dev/package/unity-mcp)
+
 <img width="676" height="380" alt="MCP for Unity" src="docs/images/logo.png" />
 
 | [English](README.md) | [简体中文](docs/i18n/README-zh.md) |
