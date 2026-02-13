@@ -68,7 +68,118 @@ def _iter_csharp_tokens(text: str):
                     i += 1
             continue
 
-        # Raw string literal: """ ... """
+        # Interpolated raw string: $"""...""" or $$"""...""" etc. (C# 11)
+        # Must check BEFORE regular $" and BEFORE plain """
+        if c == '$':
+            dollar_count = 1
+            while i + dollar_count < end and text[i + dollar_count] == '$':
+                dollar_count += 1
+            after_dollars = i + dollar_count
+            if (after_dollars + 2 < end and text[after_dollars] == '"'
+                    and text[after_dollars + 1] == '"' and text[after_dollars + 2] == '"'):
+                q = 3
+                while after_dollars + q < end and text[after_dollars + q] == '"':
+                    q += 1
+                # Yield all prefix chars ($s and quotes) as non-code
+                for _ in range(dollar_count + q):
+                    yield (i, text[i], False, 0)
+                    i += 1
+                # Scan body with interpolation tracking
+                interp_depth = 0
+                while i < end:
+                    ch = text[i]
+                    if interp_depth > 0:
+                        # Inside interpolation hole — code
+                        if ch == '{':
+                            interp_depth += 1
+                            yield (i, ch, True, interp_depth)
+                            i += 1
+                        elif ch == '}':
+                            yield (i, ch, True, interp_depth)
+                            interp_depth -= 1
+                            i += 1
+                        elif ch == '"':
+                            yield (i, ch, False, interp_depth)
+                            i += 1
+                            while i < end:
+                                yield (i, text[i], False, interp_depth)
+                                if text[i] == '\\':
+                                    i += 1
+                                    if i < end:
+                                        yield (i, text[i], False, interp_depth)
+                                        i += 1
+                                    continue
+                                if text[i] == '"':
+                                    i += 1
+                                    break
+                                i += 1
+                        elif ch == '/' and i + 1 < end and text[i + 1] == '/':
+                            yield (i, ch, False, interp_depth)
+                            i += 1
+                            while i < end and text[i] != '\n':
+                                yield (i, text[i], False, interp_depth)
+                                i += 1
+                        elif ch == '/' and i + 1 < end and text[i + 1] == '*':
+                            yield (i, ch, False, interp_depth)
+                            i += 1
+                            yield (i, text[i], False, interp_depth)
+                            i += 1
+                            while i + 1 < end and not (text[i] == '*' and text[i + 1] == '/'):
+                                yield (i, text[i], False, interp_depth)
+                                i += 1
+                            if i + 1 < end:
+                                yield (i, text[i], False, interp_depth)
+                                i += 1
+                                yield (i, text[i], False, interp_depth)
+                                i += 1
+                        else:
+                            yield (i, ch, True, interp_depth)
+                            i += 1
+                        continue
+                    # String content (interp_depth == 0)
+                    # Check for closing quote sequence
+                    if ch == '"':
+                        qc = 1
+                        while i + qc < end and text[i + qc] == '"':
+                            qc += 1
+                        if qc >= q:
+                            for _ in range(q):
+                                yield (i, text[i], False, 0)
+                                i += 1
+                            break
+                        for _ in range(qc):
+                            yield (i, text[i], False, 0)
+                            i += 1
+                        continue
+                    # Check for interpolation hole: dollar_count consecutive {'s
+                    if ch == '{':
+                        bc = 1
+                        while i + bc < end and text[i + bc] == '{':
+                            bc += 1
+                        if bc >= dollar_count:
+                            for _ in range(dollar_count):
+                                yield (i, text[i], True, 1)
+                                i += 1
+                            interp_depth = 1
+                        else:
+                            for _ in range(bc):
+                                yield (i, text[i], False, 0)
+                                i += 1
+                        continue
+                    # Closing braces — literal at depth 0
+                    if ch == '}':
+                        bc = 1
+                        while i + bc < end and text[i + bc] == '}':
+                            bc += 1
+                        for _ in range(bc):
+                            yield (i, text[i], False, 0)
+                            i += 1
+                        continue
+                    yield (i, ch, False, 0)
+                    i += 1
+                continue
+
+        # Raw string literal: """ ... """ (non-interpolated)
         if c == '"' and nxt == '"' and i + 2 < end and text[i + 2] == '"':
             q = 3
             while i + q < end and text[i + q] == '"':

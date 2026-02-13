@@ -88,6 +88,24 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
+        public void CheckBalancedDelimiters_InterpolatedRawString()
+        {
+            // $"""...{expr}...""" — interpolated raw string literal (C# 11)
+            string code = "class C { void M() { int x = 1; string s = $\"\"\"\n    Hello {x}\n    \"\"\"; } }";
+            Assert.IsTrue(CallCheckBalancedDelimiters(code, out _, out _),
+                "Interpolated raw string should not break delimiter balance");
+        }
+
+        [Test]
+        public void CheckBalancedDelimiters_MultiDollarRawString()
+        {
+            // $$"""...{{expr}}...""" — multi-dollar interpolated raw string
+            string code = "class C { void M() { int x = 1; string s = $$\"\"\"\n    {literal} {{x}}\n    \"\"\"; } }";
+            Assert.IsTrue(CallCheckBalancedDelimiters(code, out _, out _),
+                "Multi-dollar raw string should not break delimiter balance");
+        }
+
+        [Test]
         public void CheckBalancedDelimiters_BracesInComments_Ignored()
         {
             string code = "class C {\n// {\n/* { */\nvoid M() { }\n}";

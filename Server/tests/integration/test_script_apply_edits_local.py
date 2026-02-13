@@ -77,6 +77,36 @@ class TestIsInStringContext:
         pos = text.index("{ }")
         assert _is_in_string_context(text, pos)
 
+    def test_interpolated_raw_string_content(self):
+        text = 'string s = $"""\n    Hello {name}\n    """;'
+        # "Hello" is string content (non-code)
+        pos = text.index("Hello")
+        assert _is_in_string_context(text, pos)
+
+    def test_interpolated_raw_string_hole_is_code(self):
+        text = 'string s = $"""\n    Hello {name}\n    """;'
+        # "name" inside {name} is in an interpolation hole — code
+        pos = text.index("name")
+        assert not _is_in_string_context(text, pos)
+
+    def test_multi_dollar_raw_string_content(self):
+        text = 'string s = $$"""\n    {literal} {{interp}}\n    """;'
+        # {literal} has only 1 brace — it's literal string content
+        pos = text.index("literal")
+        assert _is_in_string_context(text, pos)
+
+    def test_multi_dollar_raw_string_hole_is_code(self):
+        text = 'string s = $$"""\n    {literal} {{interp}}\n    """;'
+        # {{interp}} has 2 braces matching $$ — it's an interpolation hole
+        pos = text.index("interp")
+        assert not _is_in_string_context(text, pos)
+
+    def test_interpolated_raw_string_closing(self):
+        text = 'string s = $"""\n    body\n    """; int x = 1;'
+        # "x" after the closing """ is code
+        pos = text.index("x = 1")
+        assert not _is_in_string_context(text, pos)
+
 
 # ── _find_best_closing_brace_match ───────────────────────────────────
 
@@ -140,6 +170,23 @@ class TestFindBestClosingBraceMatch:
         best_line = code[:best.start()].count('\n')
         # Class close is the last "}" — line 13 (0-indexed)
         assert best_line == 13
+
+    def test_skips_braces_in_interpolated_raw_strings(self):
+        """$\"\"\"{x}\"\"\" braces should not confuse the scorer."""
+        code = (
+            'public class Foo {\n'
+            '    string s = $"""\n'
+            '        { literal }\n'
+            '        {interp}\n'
+            '        """;\n'
+            '}\n'
+        )
+        pattern = r'^\s*}\s*$'
+        matches = list(re.finditer(pattern, code, re.MULTILINE))
+        best = _find_best_closing_brace_match(matches, code)
+        assert best is not None
+        best_line = code[:best.start()].count('\n')
+        assert best_line == 5  # class-closing brace
 
     def test_closing_brace_scorer_with_interpolated_code(self):
         """Realistic C# with multiple $"" strings should still find class-end."""

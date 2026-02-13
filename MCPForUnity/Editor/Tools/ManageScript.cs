@@ -922,13 +922,29 @@ namespace MCPForUnity.Editor.Tools
                 if (c == '/' && next == '/') { _inSingleComment = true; InNonCode = true; _pos += 2; return true; }
                 if (c == '/' && next == '*') { _inMultiComment = true; InNonCode = true; _pos += 2; return true; }
 
-                // Raw string literal: """...""" (C# 11)
+                // Interpolated raw string: $"""...""" or $$"""...""" etc. (C# 11)
+                // Must check BEFORE regular $" and BEFORE plain """
+                if (c == '$')
+                {
+                    int dollarCount = 1;
+                    while (_pos + dollarCount < _end && _text[_pos + dollarCount] == '$') dollarCount++;
+                    int afterDollars = _pos + dollarCount;
+                    if (afterDollars + 2 < _end && _text[afterDollars] == '"' && _text[afterDollars + 1] == '"' && _text[afterDollars + 2] == '"')
+                    {
+                        int q = 3;
+                        while (afterDollars + q < _end && _text[afterDollars + q] == '"') q++;
+                        _pos = afterDollars + q; // past all opening quotes
+                        SkipInterpolatedRawStringBody(dollarCount, q);
+                        InNonCode = true; return true;
+                    }
+                }
+
+                // Raw string literal: """...""" (C# 11, non-interpolated)
                 if (c == '"' && next == '"' && _pos + 2 < _end && _text[_pos + 2] == '"')
                 {
                     int q = 3;
                     while (_pos + q < _end && _text[_pos + q] == '"') q++;
                     _pos += q; // past opening quotes
-                    // Find matching closing sequence of q quotes
                     int closeCount = 0;
                     while (_pos < _end)
                     {
@@ -1058,6 +1074,91 @@ namespace MCPForUnity.Editor.Tools
                         _pos++; return; // closing quote
                     }
                     if (!isVerbatim && ch == '\\') { _pos += 2; continue; } // escape in regular interpolated
+                    _pos++;
+                }
+            }
+
+            /// <summary>
+            /// Skip the body of an interpolated raw string ($"""...""", $$"""...""", etc.).
+            /// dollarCount determines how many consecutive { start an interpolation hole.
+            /// quoteCount is the number of " that close the string.
+            /// _pos should be right after the opening quotes.
+            /// </summary>
+            private void SkipInterpolatedRawStringBody(int dollarCount, int quoteCount)
+            {
+                int interpDepth = 0;
+                while (_pos < _end)
+                {
+                    char ch = _text[_pos];
+                    if (ch == '\n') _line++;
+
+                    if (interpDepth > 0)
+                    {
+                        // Inside interpolation hole — code context
+                        if (ch == '{') { interpDepth++; _pos++; continue; }
+                        if (ch == '}') { interpDepth--; _pos++; continue; }
+                        if (ch == '"')
+                        {
+                            _pos++;
+                            while (_pos < _end)
+                            {
+                                if (_text[_pos] == '\\') { _pos += 2; continue; }
+                                if (_text[_pos] == '"') { _pos++; break; }
+                                if (_text[_pos] == '\n') _line++;
+                                _pos++;
+                            }
+                            continue;
+                        }
+                        if (ch == '/' && _pos + 1 < _end)
+                        {
+                            if (_text[_pos + 1] == '/') { _pos += 2; while (_pos < _end && _text[_pos] != '\n') _pos++; continue; }
+                            if (_text[_pos + 1] == '*') { _pos += 2; while (_pos + 1 < _end && !(_text[_pos] == '*' && _text[_pos + 1] == '/')) { if (_text[_pos] == '\n') _line++; _pos++; } _pos += 2; continue; }
+                        }
+                        if (ch == '\'') { _pos++; while (_pos < _end) { if (_text[_pos] == '\\') { _pos += 2; continue; } if (_text[_pos] == '\'') { _pos++; break; } _pos++; } continue; }
+                        _pos++;
+                        continue;
+                    }
+
+                    // String content (interpDepth == 0)
+                    // Check for closing quote sequence
+                    if (ch == '"')
+                    {
+                        int qc = 1;
+                        while (_pos + qc < _end && _text[_pos + qc] == '"') qc++;
+                        if (qc >= quoteCount) { _pos += quoteCount; return; }
+                        // Fewer quotes than needed — literal content
+                        _pos += qc;
+                        continue;
+                    }
+
+                    // Check for interpolation hole: dollarCount consecutive {'s
+                    if (ch == '{')
+                    {
+                        int bc = 1;
+                        while (_pos + bc < _end && _text[_pos + bc] == '{') bc++;
+                        if (bc >= dollarCount)
+                        {
+                            // Exactly dollarCount opens an interpolation hole; extras are literal
+                            _pos += dollarCount;
+                            interpDepth = 1;
+                        }
+                        else
+                        {
+                            // Fewer than dollarCount — literal braces
+                            _pos += bc;
+                        }
+                        continue;
+                    }
+
+                    // Closing braces with dollarCount threshold — literal if fewer
+                    if (ch == '}')
+                    {
+                        int bc = 1;
+                        while (_pos + bc < _end && _text[_pos + bc] == '}') bc++;
+                        _pos += bc; // all literal at depth 0
+                        continue;
+                    }
+
                     _pos++;
                 }
             }
@@ -1424,8 +1525,10 @@ namespace MCPForUnity.Editor.Tools
                                 try
                                 {
                                     var rx = new Regex(anchor, RegexOptions.Multiline, TimeSpan.FromSeconds(2));
-                                    var m = rx.Match(working);
-                                    if (!m.Success) return new ErrorResponse($"anchor_delete: anchor not found: {anchor}");
+                                    var allDelMatches = rx.Matches(working);
+                                    if (allDelMatches.Count == 0) return new ErrorResponse($"anchor_delete: anchor not found: {anchor}");
+                                    var m = FindBestAnchorMatch(allDelMatches, working, anchor);
+                                    if (m == null) return new ErrorResponse($"anchor_delete: anchor not found (filtered): {anchor}");
                                     int delAt = m.Index;
                                     int delLen = m.Length;
                                     if (applySequentially)
@@ -1453,8 +1556,10 @@ namespace MCPForUnity.Editor.Tools
                                 try
                                 {
                                     var rx = new Regex(anchor, RegexOptions.Multiline, TimeSpan.FromSeconds(2));
-                                    var m = rx.Match(working);
-                                    if (!m.Success) return new ErrorResponse($"anchor_replace: anchor not found: {anchor}");
+                                    var allReplMatches = rx.Matches(working);
+                                    if (allReplMatches.Count == 0) return new ErrorResponse($"anchor_replace: anchor not found: {anchor}");
+                                    var m = FindBestAnchorMatch(allReplMatches, working, anchor);
+                                    if (m == null) return new ErrorResponse($"anchor_replace: anchor not found (filtered): {anchor}");
                                     int at = m.Index;
                                     int len = m.Length;
                                     string norm = NormalizeNewlines(replacement);
