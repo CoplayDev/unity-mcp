@@ -13,6 +13,186 @@ from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 
 
+def _is_in_string_context(text: str, position: int) -> bool:
+    """Check if a position in C# source text is inside a string literal or comment.
+
+    Scans text[0:position] tracking string/comment state to determine if the
+    given position is inside a non-code context. Handles:
+    - Regular strings ("..." with \\ escaping)
+    - Verbatim strings (@"..." with "" escaping)
+    - Interpolated strings ($"..." with {/} interpolation depth tracking, {{/}} escapes)
+    - Verbatim interpolated ($@"..." / @$"...")
+    - Raw string literals (C# 11: \"\"\"..\"\"\")
+    - Char literals ('...')
+    - Single-line comments (//...)
+    - Multi-line comments (/*...*/)
+    """
+    i = 0
+    while i < position:
+        c = text[i]
+        nxt = text[i + 1] if i + 1 < len(text) else '\0'
+
+        # Single-line comment
+        if c == '/' and nxt == '/':
+            i += 2
+            while i < len(text) and text[i] != '\n':
+                if i == position:
+                    return True
+                i += 1
+            if i == position:
+                return False  # newline itself is not "in comment"
+            i += 1
+            continue
+
+        # Multi-line comment
+        if c == '/' and nxt == '*':
+            i += 2
+            while i + 1 < len(text):
+                if i == position:
+                    return True
+                if text[i] == '*' and text[i + 1] == '/':
+                    i += 2
+                    break
+                i += 1
+            else:
+                # Unterminated comment — position is inside
+                if i <= position:
+                    return True
+            continue
+
+        # Raw string literal: """ ... """
+        if c == '"' and nxt == '"' and i + 2 < len(text) and text[i + 2] == '"':
+            # Count opening quotes
+            q = 3
+            while i + q < len(text) and text[i + q] == '"':
+                q += 1
+            i += q  # past opening quotes
+            # Find matching closing sequence of q quotes
+            close_count = 0
+            while i < len(text):
+                if i == position:
+                    return True
+                if text[i] == '"':
+                    close_count += 1
+                    if close_count >= q:
+                        i += 1
+                        break
+                else:
+                    close_count = 0
+                i += 1
+            continue
+
+        # Interpolated string: $"..." or $@"..." or @$"..."
+        if (c == '$' and nxt == '"') or \
+           (c == '$' and nxt == '@' and i + 2 < len(text) and text[i + 2] == '"') or \
+           (c == '@' and nxt == '$' and i + 2 < len(text) and text[i + 2] == '"'):
+            is_verbatim = (nxt == '@') or (c == '@')
+            if c == '$' and nxt == '"':
+                i += 2  # past $"
+            else:
+                i += 3  # past $@" or @$"
+            # Now scan the interpolated string content
+            interp_depth = 0
+            while i < len(text):
+                if i == position:
+                    # Inside the string portion if interp_depth == 0
+                    return interp_depth == 0
+                ch = text[i]
+                if interp_depth > 0:
+                    # Inside an interpolation hole — this is code
+                    if ch == '{':
+                        interp_depth += 1
+                        i += 1
+                    elif ch == '}':
+                        interp_depth -= 1
+                        i += 1
+                    elif ch == '"':
+                        # Nested string inside interpolation hole — skip it
+                        i += 1
+                        while i < len(text):
+                            if i == position:
+                                return True  # inside nested string
+                            if text[i] == '\\':
+                                i += 2
+                                continue
+                            if text[i] == '"':
+                                i += 1
+                                break
+                            i += 1
+                    else:
+                        i += 1
+                    continue
+                # interp_depth == 0: inside string content
+                if ch == '{':
+                    if i + 1 < len(text) and text[i + 1] == '{':
+                        i += 2  # escaped {{ — still in string
+                        continue
+                    interp_depth = 1
+                    i += 1
+                    continue
+                if ch == '"':
+                    if is_verbatim:
+                        if i + 1 < len(text) and text[i + 1] == '"':
+                            i += 2  # doubled quote in verbatim
+                            continue
+                    i += 1  # closing quote
+                    break
+                if not is_verbatim and ch == '\\':
+                    i += 2  # escape in regular interpolated
+                    continue
+                i += 1
+            continue
+
+        # Verbatim string: @"..."
+        if c == '@' and nxt == '"':
+            i += 2
+            while i < len(text):
+                if i == position:
+                    return True
+                if text[i] == '"':
+                    if i + 1 < len(text) and text[i + 1] == '"':
+                        i += 2  # doubled quote
+                        continue
+                    i += 1  # closing quote
+                    break
+                i += 1
+            continue
+
+        # Regular string: "..."
+        if c == '"':
+            i += 1
+            while i < len(text):
+                if i == position:
+                    return True
+                if text[i] == '\\':
+                    i += 2
+                    continue
+                if text[i] == '"':
+                    i += 1
+                    break
+                i += 1
+            continue
+
+        # Char literal: '...'
+        if c == '\'':
+            i += 1
+            while i < len(text):
+                if i == position:
+                    return True
+                if text[i] == '\\':
+                    i += 2
+                    continue
+                if text[i] == '\'':
+                    i += 1
+                    break
+                i += 1
+            continue
+
+        i += 1
+
+    return False
+
+
 async def _apply_edits_locally(original_text: str, edits: list[dict[str, Any]]) -> str:
     text = original_text
     for edit in edits or []:
@@ -137,16 +317,165 @@ def _find_best_anchor_match(pattern: str, text: str, flags: int, prefer_last: bo
     return matches[-1] if prefer_last else matches[0]
 
 
+def _brace_depth_at_positions(text: str, positions: set[int]) -> dict[int, int]:
+    """Compute the brace depth just before each requested position.
+
+    Scans *text* once, tracking ``{``/``}`` depth while skipping strings and
+    comments.  For every position in *positions* that contains a ``}`` in
+    real code, stores the depth **before** that ``}`` is applied (i.e. the
+    depth the brace will decrement from).
+
+    Returns a dict mapping position → depth-before.
+    """
+    depths: dict[int, int] = {}
+    depth = 0
+    i = 0
+    end = len(text)
+    while i < end:
+        c = text[i]
+        nxt = text[i + 1] if i + 1 < end else '\0'
+
+        # Single-line comment
+        if c == '/' and nxt == '/':
+            i += 2
+            while i < end and text[i] != '\n':
+                i += 1
+            continue
+
+        # Multi-line comment
+        if c == '/' and nxt == '*':
+            i += 2
+            while i + 1 < end:
+                if text[i] == '*' and text[i + 1] == '/':
+                    i += 2
+                    break
+                i += 1
+            else:
+                i = end
+            continue
+
+        # Raw string literal: """..."""
+        if c == '"' and nxt == '"' and i + 2 < end and text[i + 2] == '"':
+            q = 3
+            while i + q < end and text[i + q] == '"':
+                q += 1
+            i += q
+            close_count = 0
+            while i < end:
+                if text[i] == '"':
+                    close_count += 1
+                    if close_count >= q:
+                        i += 1
+                        break
+                else:
+                    close_count = 0
+                i += 1
+            continue
+
+        # Interpolated string
+        if (c == '$' and nxt == '"') or \
+           (c == '$' and nxt == '@' and i + 2 < end and text[i + 2] == '"') or \
+           (c == '@' and nxt == '$' and i + 2 < end and text[i + 2] == '"'):
+            is_verbatim = (nxt == '@') or (c == '@')
+            i += 2 if (c == '$' and nxt == '"') else 3
+            interp_depth = 0
+            while i < end:
+                ch = text[i]
+                if interp_depth > 0:
+                    if ch == '{':
+                        interp_depth += 1; i += 1
+                    elif ch == '}':
+                        interp_depth -= 1; i += 1
+                    elif ch == '"':
+                        i += 1
+                        while i < end:
+                            if text[i] == '\\':
+                                i += 2; continue
+                            if text[i] == '"':
+                                i += 1; break
+                            i += 1
+                    elif ch == '/' and i + 1 < end and text[i + 1] == '/':
+                        i += 2
+                        while i < end and text[i] != '\n':
+                            i += 1
+                    elif ch == '/' and i + 1 < end and text[i + 1] == '*':
+                        i += 2
+                        while i + 1 < end and not (text[i] == '*' and text[i + 1] == '/'):
+                            i += 1
+                        i += 2
+                    else:
+                        i += 1
+                    continue
+                if ch == '{':
+                    if i + 1 < end and text[i + 1] == '{':
+                        i += 2; continue
+                    interp_depth = 1; i += 1; continue
+                if ch == '}':
+                    if i + 1 < end and text[i + 1] == '}':
+                        i += 2; continue
+                    i += 1; continue
+                if ch == '"':
+                    if is_verbatim and i + 1 < end and text[i + 1] == '"':
+                        i += 2; continue
+                    i += 1; break
+                if not is_verbatim and ch == '\\':
+                    i += 2; continue
+                i += 1
+            continue
+
+        # Verbatim string
+        if c == '@' and nxt == '"':
+            i += 2
+            while i < end:
+                if text[i] == '"':
+                    if i + 1 < end and text[i + 1] == '"':
+                        i += 2; continue
+                    i += 1; break
+                i += 1
+            continue
+
+        # Regular string
+        if c == '"':
+            i += 1
+            while i < end:
+                if text[i] == '\\':
+                    i += 2; continue
+                if text[i] == '"':
+                    i += 1; break
+                i += 1
+            continue
+
+        # Char literal
+        if c == '\'':
+            i += 1
+            while i < end:
+                if text[i] == '\\':
+                    i += 2; continue
+                if text[i] == '\'':
+                    i += 1; break
+                i += 1
+            continue
+
+        # Real code
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            if i in positions:
+                depths[i] = depth
+            depth = max(0, depth - 1)
+        i += 1
+
+    return depths
+
+
 def _find_best_closing_brace_match(matches, text: str):
     """
-    Find the best closing brace match using C# structure heuristics.
+    Find the best closing brace match using brace-depth analysis.
 
-    Enhanced heuristics for scope-aware matching:
-    1. Prefer matches with lower indentation (likely class-level)
-    2. Prefer matches closer to end of file  
-    3. Avoid matches that seem to be inside method bodies
-    4. For #endregion patterns, ensure class-level context
-    5. Validate insertion point is at appropriate scope
+    Scans the text once to compute the actual brace nesting depth at each
+    candidate ``}`` position (skipping strings/comments).  Prefers the
+    shallowest (outermost) brace — typically the class-closing brace.
+    Among equal-depth candidates, prefers the last one (closest to EOF).
 
     Args:
         matches: List of regex match objects
@@ -158,51 +487,34 @@ def _find_best_closing_brace_match(matches, text: str):
     if not matches:
         return None
 
-    scored_matches = []
-    lines = text.splitlines()
+    # Filter out matches inside strings/comments
+    matches = [m for m in matches if not _is_in_string_context(text, m.start())]
+    if not matches:
+        return None
 
-    for match in matches:
-        score = 0
-        start_pos = match.start()
+    # Find the position of the '}' character within each match
+    brace_positions: dict[int, object] = {}  # brace_pos → match
+    for m in matches:
+        # The match may contain whitespace around '}'; find the actual '}'
+        for offset in range(m.start(), m.end()):
+            if offset < len(text) and text[offset] == '}':
+                brace_positions[offset] = m
+                break
 
-        # Find which line this match is on
-        lines_before = text[:start_pos].count('\n')
-        line_num = lines_before
+    if not brace_positions:
+        return matches[-1]  # fallback
 
-        if line_num < len(lines):
-            line_content = lines[line_num]
+    depths = _brace_depth_at_positions(text, set(brace_positions.keys()))
 
-            # Calculate indentation level (lower is better for class braces)
-            indentation = len(line_content) - len(line_content.lstrip())
-
-            # Prefer lower indentation (class braces are typically less indented than method braces)
-            # Max 20 points for indentation=0
-            score += max(0, 20 - indentation)
-
-            # Prefer matches closer to end of file (class closing braces are typically at the end)
-            distance_from_end = len(lines) - line_num
-            # More points for being closer to end
-            score += max(0, 10 - distance_from_end)
-
-            # Look at surrounding context to avoid method braces
-            context_start = max(0, line_num - 3)
-            context_end = min(len(lines), line_num + 2)
-            context_lines = lines[context_start:context_end]
-
-            # Penalize if this looks like it's inside a method (has method-like patterns above)
-            for context_line in context_lines:
-                if re.search(r'\b(void|public|private|protected)\s+\w+\s*\(', context_line):
-                    score -= 5  # Penalty for being near method signatures
-
-            # Bonus if this looks like a class-ending brace (very minimal indentation and near EOF)
-            if indentation <= 4 and distance_from_end <= 3:
-                score += 15  # Bonus for likely class-ending brace
-
-        scored_matches.append((score, match))
-
-    # Return the match with the highest score
-    scored_matches.sort(key=lambda x: x[0], reverse=True)
-    best_match = scored_matches[0][1]
+    # Score: prefer shallowest depth (outermost brace), then latest position
+    best_match = None
+    best_key = (float('inf'), -1)  # (depth, -position) — lower is better
+    for pos, m in brace_positions.items():
+        d = depths.get(pos, float('inf'))
+        key = (d, -pos)  # lower depth wins, then later position wins
+        if key < best_key:
+            best_key = key
+            best_match = m
 
     return best_match
 
