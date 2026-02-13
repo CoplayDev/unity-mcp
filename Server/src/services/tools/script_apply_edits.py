@@ -539,22 +539,18 @@ def _find_best_closing_brace_match(matches, text: str):
     if not matches:
         return None
 
-    # Filter out matches inside strings/comments
-    matches = [m for m in matches if not _is_in_string_context(text, m.start())]
-    if not matches:
-        return None
-
-    # Find the position of the '}' character within each match
+    # Find the position of the '}' character within each match, filtering out
+    # braces inside strings/comments
     brace_positions: dict[int, object] = {}  # brace_pos → match
     for m in matches:
-        # The match may contain whitespace around '}'; find the actual '}'
         for offset in range(m.start(), m.end()):
             if offset < len(text) and text[offset] == '}':
-                brace_positions[offset] = m
+                if not _is_in_string_context(text, offset):
+                    brace_positions[offset] = m
                 break
 
     if not brace_positions:
-        return matches[-1]  # fallback
+        return None
 
     depths = _brace_depth_at_positions(text, set(brace_positions.keys()))
 

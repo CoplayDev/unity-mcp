@@ -1049,7 +1049,7 @@ namespace MCPForUnity.Editor.Tools
                         if (ch == '/' && _pos + 1 < _end)
                         {
                             if (_text[_pos + 1] == '/') { _pos += 2; while (_pos < _end && _text[_pos] != '\n') _pos++; continue; }
-                            if (_text[_pos + 1] == '*') { _pos += 2; while (_pos + 1 < _end && !(_text[_pos] == '*' && _text[_pos + 1] == '/')) { if (_text[_pos] == '\n') _line++; _pos++; } _pos += 2; continue; }
+                            if (_text[_pos + 1] == '*') { _pos += 2; while (_pos + 1 < _end && !(_text[_pos] == '*' && _text[_pos + 1] == '/')) { if (_text[_pos] == '\n') _line++; _pos++; } if (_pos + 1 < _end) _pos += 2; continue; }
                         }
                         if (ch == '\'') { _pos++; while (_pos < _end) { if (_text[_pos] == '\\') { _pos += 2; continue; } if (_text[_pos] == '\'') { _pos++; break; } _pos++; } continue; }
                         _pos++;
@@ -1112,7 +1112,7 @@ namespace MCPForUnity.Editor.Tools
                         if (ch == '/' && _pos + 1 < _end)
                         {
                             if (_text[_pos + 1] == '/') { _pos += 2; while (_pos < _end && _text[_pos] != '\n') _pos++; continue; }
-                            if (_text[_pos + 1] == '*') { _pos += 2; while (_pos + 1 < _end && !(_text[_pos] == '*' && _text[_pos + 1] == '/')) { if (_text[_pos] == '\n') _line++; _pos++; } _pos += 2; continue; }
+                            if (_text[_pos + 1] == '*') { _pos += 2; while (_pos + 1 < _end && !(_text[_pos] == '*' && _text[_pos + 1] == '/')) { if (_text[_pos] == '\n') _line++; _pos++; } if (_pos + 1 < _end) _pos += 2; continue; }
                         }
                         if (ch == '\'') { _pos++; while (_pos < _end) { if (_text[_pos] == '\\') { _pos += 2; continue; } if (_text[_pos] == '\'') { _pos++; break; } _pos++; } continue; }
                         _pos++;
