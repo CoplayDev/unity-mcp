@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Services;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 
@@ -101,6 +102,22 @@ namespace MCPForUnity.Editor.Tools
                     {
                         break;
                     }
+                    continue;
+                }
+
+                // Block disabled tools (mirrors TransportCommandDispatcher check)
+                var toolMeta = MCPServiceLocator.ToolDiscovery.GetToolMetadata(toolName);
+                if (toolMeta != null && !MCPServiceLocator.ToolDiscovery.IsToolEnabled(toolName))
+                {
+                    invocationFailureCount++;
+                    anyCommandFailed = true;
+                    commandResults.Add(new
+                    {
+                        tool = toolName,
+                        callSucceeded = false,
+                        result = new ErrorResponse($"Tool '{toolName}' is disabled in the Unity Editor.")
+                    });
+                    if (failFast) break;
                     continue;
                 }
 
