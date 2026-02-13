@@ -448,8 +448,18 @@ namespace MCPForUnity.Editor.Helpers
                 return false;
 
             // Check for file:// protocol or absolute local path
-            return fromUrl.StartsWith("file://", StringComparison.OrdinalIgnoreCase) ||
-                   System.IO.Path.IsPathRooted(fromUrl);
+            if (fromUrl.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            try
+            {
+                return System.IO.Path.IsPathRooted(fromUrl);
+            }
+            catch (System.ArgumentException)
+            {
+                // fromUrl contains characters illegal in paths (e.g. a remote URL)
+                return false;
+            }
         }
 
         /// <summary>
