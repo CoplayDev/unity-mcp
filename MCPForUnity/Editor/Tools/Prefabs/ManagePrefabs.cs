@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
@@ -22,7 +23,8 @@ namespace MCPForUnity.Editor.Tools.Prefabs
         private const string ACTION_GET_INFO = "get_info";
         private const string ACTION_GET_HIERARCHY = "get_hierarchy";
         private const string ACTION_MODIFY_CONTENTS = "modify_contents";
-        private const string SupportedActions = ACTION_CREATE_FROM_GAMEOBJECT + ", " + ACTION_GET_INFO + ", " + ACTION_GET_HIERARCHY + ", " + ACTION_MODIFY_CONTENTS;
+        private const string ACTION_BATCH_MODIFY = "batch_modify";
+        private const string SupportedActions = ACTION_CREATE_FROM_GAMEOBJECT + ", " + ACTION_GET_INFO + ", " + ACTION_GET_HIERARCHY + ", " + ACTION_MODIFY_CONTENTS + ", " + ACTION_BATCH_MODIFY;
 
         public static object HandleCommand(JObject @params)
         {
@@ -49,6 +51,8 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                         return GetHierarchy(@params);
                     case ACTION_MODIFY_CONTENTS:
                         return ModifyContents(@params);
+                    case ACTION_BATCH_MODIFY:
+                        return BatchModifyContents(@params);
                     default:
                         return new ErrorResponse($"Unknown action: '{action}'. Valid actions are: {SupportedActions}.");
                 }
@@ -379,8 +383,8 @@ namespace MCPForUnity.Editor.Tools.Prefabs
         }
 
         /// <summary>
-        /// Gets the hierarchical structure of a prefab asset.
-        /// Returns all objects in the prefab for full client-side filtering and search.
+        /// Gets the hierarchical structure of a prefab asset with pagination support.
+        /// Supports page_size, cursor, max_depth, and filter parameters to limit response size.
         /// </summary>
         private static object GetHierarchy(JObject @params)
         {
@@ -396,6 +400,16 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 return new ErrorResponse($"Invalid prefab path '{prefabPath}'. Path traversal sequences are not allowed.");
             }
 
+            // Parse pagination parameters - check if pagination was explicitly requested
+            int? requestedPageSize = ParamCoercion.CoerceIntNullable(@params["pageSize"] ?? @params["page_size"]);
+            int? requestedCursor = ParamCoercion.CoerceIntNullable(@params["cursor"]);
+            bool paginationRequested = requestedPageSize.HasValue || requestedCursor.HasValue;
+
+            int pageSize = requestedPageSize.HasValue ? Mathf.Clamp(requestedPageSize.Value, 1, 500) : int.MaxValue;
+            int cursor = requestedCursor.HasValue ? Mathf.Max(0, requestedCursor.Value) : 0;
+            int? maxDepth = ParamCoercion.CoerceIntNullable(@params["maxDepth"] ?? @params["max_depth"]);
+            string filter = @params["filter"]?.ToString();
+
             // Load prefab contents in background (without opening stage UI)
             GameObject prefabContents = PrefabUtility.LoadPrefabContents(sanitizedPath);
             if (prefabContents == null)
@@ -405,16 +419,51 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
             try
             {
-                // Build complete hierarchy items (no pagination)
-                var allItems = BuildHierarchyItems(prefabContents.transform, sanitizedPath);
+                // Build hierarchy items with depth limit
+                var allItems = BuildHierarchyItemsWithDepth(prefabContents.transform, sanitizedPath, maxDepth, filter);
+                int total = allItems.Count;
+
+                // Apply pagination only if explicitly requested
+                if (!paginationRequested)
+                {
+                    // Backward compatible: return all items when no pagination params provided
+                    return new SuccessResponse(
+                        $"Successfully retrieved prefab hierarchy. Found {total} objects.",
+                        new
+                        {
+                            prefabPath = sanitizedPath,
+                            total = total,
+                            items = allItems
+                        }
+                    );
+                }
+
+                // Pagination was requested
+                if (cursor > total) cursor = total;
+                int end = Mathf.Min(total, cursor + pageSize);
+
+                var pagedItems = new List<object>(Mathf.Max(0, end - cursor));
+                for (int i = cursor; i < end; i++)
+                {
+                    pagedItems.Add(allItems[i]);
+                }
+
+                bool truncated = end < total;
+                string nextCursor = truncated ? end.ToString() : null;
 
                 return new SuccessResponse(
-                    $"Successfully retrieved prefab hierarchy. Found {allItems.Count} objects.",
+                    $"Retrieved prefab hierarchy page. Showing {pagedItems.Count} of {total} objects.",
                     new
                     {
                         prefabPath = sanitizedPath,
-                        total = allItems.Count,
-                        items = allItems
+                        total = total,
+                        cursor = cursor,
+                        pageSize = pageSize,
+                        next_cursor = nextCursor,
+                        truncated = truncated,
+                        maxDepth = maxDepth,
+                        filter = filter,
+                        items = pagedItems
                     }
                 );
             }
@@ -467,7 +516,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 }
 
                 // Apply modifications
-                var modifyResult = ApplyModificationsToPrefabObject(targetGo, @params, prefabContents);
+                var modifyResult = ApplyModificationsToPrefabObject(targetGo, @params, prefabContents, out List<object> createdChildren);
                 if (modifyResult.error != null)
                 {
                     return modifyResult.error;
@@ -482,7 +531,8 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                         {
                             prefabPath = sanitizedPath,
                             targetName = targetGo.name,
-                            modified = false
+                            modified = false,
+                            createdChildren = createdChildren
                         }
                     );
                 }
@@ -507,6 +557,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                         prefabPath = sanitizedPath,
                         targetName = targetGo.name,
                         modified = modifyResult.modified,
+                        createdChildren = createdChildren,
                         transform = new
                         {
                             position = new { x = targetGo.transform.localPosition.x, y = targetGo.transform.localPosition.y, z = targetGo.transform.localPosition.z },
@@ -514,6 +565,133 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                             scale = new { x = targetGo.transform.localScale.x, y = targetGo.transform.localScale.y, z = targetGo.transform.localScale.z }
                         },
                         componentTypes = PrefabUtilityHelper.GetComponentTypeNames(targetGo)
+                    }
+                );
+            }
+            finally
+            {
+                // Always unload prefab contents to free memory
+                PrefabUtility.UnloadPrefabContents(prefabContents);
+            }
+        }
+
+        /// <summary>
+        /// Applies multiple modifications to a prefab in a single load/save cycle.
+        /// Each operation in the array specifies a target and modification parameters.
+        /// </summary>
+        private static object BatchModifyContents(JObject @params)
+        {
+            string prefabPath = @params["prefabPath"]?.ToString() ?? @params["path"]?.ToString();
+            if (string.IsNullOrEmpty(prefabPath))
+            {
+                return new ErrorResponse("'prefabPath' parameter is required for batch_modify.");
+            }
+
+            string sanitizedPath = AssetPathUtility.SanitizeAssetPath(prefabPath);
+            if (string.IsNullOrEmpty(sanitizedPath))
+            {
+                return new ErrorResponse($"Invalid prefab path '{prefabPath}'. Path traversal sequences are not allowed.");
+            }
+
+            JArray operations = @params["operations"] as JArray;
+            if (operations == null || operations.Count == 0)
+            {
+                return new ErrorResponse("'operations' array is required for batch_modify and must contain at least one operation.");
+            }
+
+            // Load prefab contents once
+            GameObject prefabContents = PrefabUtility.LoadPrefabContents(sanitizedPath);
+            if (prefabContents == null)
+            {
+                return new ErrorResponse($"Failed to load prefab contents from '{sanitizedPath}'.");
+            }
+
+            try
+            {
+                bool anyModified = false;
+                var allCreatedChildren = new List<object>();
+                var operationResults = new List<object>();
+
+                for (int i = 0; i < operations.Count; i++)
+                {
+                    JObject operation = operations[i] as JObject;
+                    if (operation == null)
+                    {
+                        operationResults.Add(new { index = i, success = false, error = $"Operation at index {i} must be an object." });
+                        continue;
+                    }
+
+                    // Find target for this operation (defaults to root)
+                    string targetName = operation["target"]?.ToString();
+                    GameObject targetGo = FindInPrefabContents(prefabContents, targetName);
+
+                    if (targetGo == null)
+                    {
+                        string searchedFor = string.IsNullOrEmpty(targetName) ? "root" : $"'{targetName}'";
+                        operationResults.Add(new { index = i, success = false, error = $"Target {searchedFor} not found in prefab.", target = targetName });
+                        continue;
+                    }
+
+                    // Apply modifications for this operation
+                    var modifyResult = ApplyModificationsToPrefabObject(targetGo, operation, prefabContents, out List<object> createdChildren);
+
+                    if (modifyResult.error != null)
+                    {
+                        operationResults.Add(new { index = i, success = false, error = modifyResult.error.Error, target = targetGo.name });
+                        continue;
+                    }
+
+                    if (modifyResult.modified)
+                    {
+                        anyModified = true;
+                    }
+
+                    if (createdChildren != null && createdChildren.Count > 0)
+                    {
+                        allCreatedChildren.AddRange(createdChildren);
+                    }
+
+                    operationResults.Add(new { index = i, success = true, target = targetGo.name, modified = modifyResult.modified, createdCount = createdChildren?.Count ?? 0 });
+                }
+
+                // Skip saving if nothing was modified
+                if (!anyModified)
+                {
+                    return new SuccessResponse(
+                        $"Batch completed for prefab '{sanitizedPath}'. No modifications were needed.",
+                        new
+                        {
+                            prefabPath = sanitizedPath,
+                            modified = false,
+                            operationCount = operations.Count,
+                            operationResults = operationResults,
+                            createdChildren = allCreatedChildren
+                        }
+                    );
+                }
+
+                // Save prefab once after all operations
+                bool success;
+                PrefabUtility.SaveAsPrefabAsset(prefabContents, sanitizedPath, out success);
+
+                if (!success)
+                {
+                    return new ErrorResponse($"Failed to save prefab asset at '{sanitizedPath}' after batch modifications.");
+                }
+
+                AssetDatabase.Refresh();
+
+                McpLog.Info($"[ManagePrefabs] Batch modified prefab '{sanitizedPath}' with {operations.Count} operations (headless).");
+
+                return new SuccessResponse(
+                    $"Batch completed for prefab '{sanitizedPath}'. Applied {operations.Count} operations.",
+                    new
+                    {
+                        prefabPath = sanitizedPath,
+                        modified = anyModified,
+                        operationCount = operations.Count,
+                        operationResults = operationResults,
+                        createdChildren = allCreatedChildren
                     }
                 );
             }
@@ -576,11 +754,21 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
         /// <summary>
         /// Applies modifications to a GameObject within loaded prefab contents.
-        /// Returns (modified: bool, error: ErrorResponse or null).
+        /// Backward-compatible overload that discards created children info.
         /// </summary>
         private static (bool modified, ErrorResponse error) ApplyModificationsToPrefabObject(GameObject targetGo, JObject @params, GameObject prefabRoot)
         {
+            return ApplyModificationsToPrefabObject(targetGo, @params, prefabRoot, out _);
+        }
+
+        /// <summary>
+        /// Applies modifications to a GameObject within loaded prefab contents.
+        /// Returns (modified: bool, error: ErrorResponse or null). Created children info is returned via out parameter.
+        /// </summary>
+        private static (bool modified, ErrorResponse error) ApplyModificationsToPrefabObject(GameObject targetGo, JObject @params, GameObject prefabRoot, out List<object> createdChildren)
+        {
             bool modified = false;
+            createdChildren = new List<object>();
 
             // Name change
             string newName = @params["name"]?.ToString();
@@ -591,8 +779,8 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 modified = true;
             }
 
-            // Active state
-            bool? setActive = @params["setActive"]?.ToObject<bool?>();
+            // Active state (support both camelCase and snake_case)
+            bool? setActive = (@params["setActive"] ?? @params["set_active"])?.ToObject<bool?>();
             if (setActive.HasValue && targetGo.activeSelf != setActive.Value)
             {
                 targetGo.SetActive(setActive.Value);
@@ -680,8 +868,9 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 }
             }
 
-            // Components to add
-            if (@params["componentsToAdd"] is JArray componentsToAdd)
+            // Components to add (support both camelCase and snake_case)
+            JArray componentsToAdd = @params["componentsToAdd"] as JArray ?? @params["components_to_add"] as JArray;
+            if (componentsToAdd != null)
             {
                 foreach (var compToken in componentsToAdd)
                 {
@@ -701,8 +890,9 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 }
             }
 
-            // Components to remove
-            if (@params["componentsToRemove"] is JArray componentsToRemove)
+            // Components to remove (support both camelCase and snake_case)
+            JArray componentsToRemove = @params["componentsToRemove"] as JArray ?? @params["components_to_remove"] as JArray;
+            if (componentsToRemove != null)
             {
                 foreach (var compToken in componentsToRemove)
                 {
@@ -732,7 +922,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 {
                     foreach (var childToken in childArray)
                     {
-                        var childResult = CreateSingleChildInPrefab(childToken, targetGo, prefabRoot);
+                        var childResult = CreateSingleChildInPrefab(childToken, targetGo, prefabRoot, out object childInfo);
                         if (childResult.error != null)
                         {
                             return (false, childResult.error);
@@ -740,18 +930,94 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                         if (childResult.created)
                         {
                             modified = true;
+                            if (childInfo != null)
+                            {
+                                createdChildren.Add(childInfo);
+                            }
                         }
                     }
                 }
                 else
                 {
                     // Handle single child object
-                    var childResult = CreateSingleChildInPrefab(createChildToken, targetGo, prefabRoot);
+                    var childResult = CreateSingleChildInPrefab(createChildToken, targetGo, prefabRoot, out object childInfo);
                     if (childResult.error != null)
                     {
                         return (false, childResult.error);
                     }
                     if (childResult.created)
+                    {
+                        modified = true;
+                        if (childInfo != null)
+                        {
+                            createdChildren.Add(childInfo);
+                        }
+                    }
+                }
+            }
+
+            // Set component references (wire serialized fields to other objects in the prefab)
+            JToken setRefToken = @params["setComponentReference"] ?? @params["set_component_reference"];
+            if (setRefToken != null)
+            {
+                // Handle array of references or single reference
+                if (setRefToken is JArray refArray)
+                {
+                    foreach (var refItem in refArray)
+                    {
+                        var refResult = SetSingleComponentReference(refItem, targetGo, prefabRoot);
+                        if (refResult.error != null)
+                        {
+                            return (false, refResult.error);
+                        }
+                        if (refResult.set)
+                        {
+                            modified = true;
+                        }
+                    }
+                }
+                else
+                {
+                    var refResult = SetSingleComponentReference(setRefToken, targetGo, prefabRoot);
+                    if (refResult.error != null)
+                    {
+                        return (false, refResult.error);
+                    }
+                    if (refResult.set)
+                    {
+                        modified = true;
+                    }
+                }
+            }
+
+            // Set component property values
+            JToken setPropToken = @params["setProperty"] ?? @params["set_property"];
+            if (setPropToken != null)
+            {
+                // Handle array of property sets or single property set
+                if (setPropToken is JArray propArray)
+                {
+                    foreach (var propItem in propArray)
+                    {
+                        var propResult = SetSingleComponentProperty(propItem, targetGo);
+                        if (propResult.error != null)
+                        {
+                            return (false, propResult.error);
+                        }
+                        if (propResult.set)
+                        {
+                            modified = true;
+                        }
+                    }
+                }
+                else
+                {
+                    var propResult = SetSingleComponentProperty(setPropToken, targetGo);
+                    if (propResult.error != null)
+                    {
+                        return (false, propResult.error);
+                    }
+                    if (propResult.set)
                     {
                         modified = true;
                     }
@@ -763,9 +1029,21 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
         /// <summary>
         /// Creates a single child GameObject within the prefab contents.
+        /// Backward-compatible overload that discards created info.
         /// </summary>
         private static (bool created, ErrorResponse error) CreateSingleChildInPrefab(JToken createChildToken, GameObject defaultParent, GameObject prefabRoot)
         {
+            return CreateSingleChildInPrefab(createChildToken, defaultParent, prefabRoot, out _);
+        }
+
+        /// <summary>
+        /// Creates a single child GameObject within the prefab contents.
+        /// Returns (created: bool, error: ErrorResponse or null). Created info is returned via out parameter.
+        /// </summary>
+        private static (bool created, ErrorResponse error) CreateSingleChildInPrefab(JToken createChildToken, GameObject defaultParent, GameObject prefabRoot, out object createdInfo)
+        {
+            createdInfo = null;
+
             JObject childParams;
             if (createChildToken is JObject obj)
             {
@@ -798,8 +1076,47 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
             // Create the GameObject
             GameObject newChild;
+            string childPrefabPath = childParams["prefabPath"]?.ToString() ?? childParams["prefab_path"]?.ToString();
             string primitiveType = childParams["primitiveType"]?.ToString() ?? childParams["primitive_type"]?.ToString();
-            if (!string.IsNullOrEmpty(primitiveType))
+            bool isPrefabInstance = false;
+            string sourcePrefabGuid = null;
+            string sourcePrefabPath = null;
+
+            if (!string.IsNullOrEmpty(childPrefabPath))
+            {
+                // Instantiate from a source prefab (creates a nested prefab instance)
+                string sanitizedChildPrefabPath = AssetPathUtility.SanitizeAssetPath(childPrefabPath);
+                if (string.IsNullOrEmpty(sanitizedChildPrefabPath))
+                {
+                    return (false, new ErrorResponse($"Invalid prefab path for create_child: '{childPrefabPath}'."));
+                }
+
+                GameObject sourcePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(sanitizedChildPrefabPath);
+                if (sourcePrefab == null)
+                {
+                    return (false, new ErrorResponse($"Source prefab not found at '{sanitizedChildPrefabPath}' for create_child."));
+                }
+
+                // Use InstantiatePrefab to create a proper nested prefab instance
+                newChild = PrefabUtility.InstantiatePrefab(sourcePrefab, parentTransform) as GameObject;
+                if (newChild == null)
+                {
+                    return (false, new ErrorResponse($"Failed to instantiate prefab '{sanitizedChildPrefabPath}' for create_child."));
+                }
+
+                // Apply the custom name if different from the source prefab name
+                if (newChild.name != childName)
+                {
+                    newChild.name = childName;
+                }
+
+                isPrefabInstance = true;
+                sourcePrefabPath = sanitizedChildPrefabPath;
+                sourcePrefabGuid = AssetDatabase.AssetPathToGUID(sanitizedChildPrefabPath);
+
+                McpLog.Info($"[ManagePrefabs] Instantiated nested prefab '{sanitizedChildPrefabPath}' as '{childName}'.");
+            }
+            else if (!string.IsNullOrEmpty(primitiveType))
             {
                 try
                 {
@@ -838,7 +1155,8 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 newChild.transform.localScale = scale.Value;
             }
 
-            // Add components
+            // Add components and track them
+            var addedComponents = new List<object>();
             JArray componentsToAdd = childParams["componentsToAdd"] as JArray ?? childParams["components_to_add"] as JArray;
             if (componentsToAdd != null)
             {
@@ -862,7 +1180,13 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                         UnityEngine.Object.DestroyImmediate(newChild);
                         return (false, new ErrorResponse($"Component type '{typeName}' not found for create_child: {error}"));
                     }
-                    newChild.AddComponent(componentType);
+                    Component addedComp = newChild.AddComponent(componentType);
+                    addedComponents.Add(new
+                    {
+                        type = componentType.Name,
+                        fullType = componentType.FullName,
+                        instanceId = addedComp.GetInstanceID()
+                    });
                 }
             }
 
@@ -901,8 +1225,340 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 newChild.SetActive(setActive.Value);
             }
 
+            // Build created info response
+            createdInfo = new
+            {
+                name = newChild.name,
+                path = GetGameObjectPath(newChild, prefabRoot),
+                instanceId = newChild.GetInstanceID(),
+                transformInstanceId = newChild.transform.GetInstanceID(),
+                isPrefabInstance = isPrefabInstance,
+                sourcePrefabGuid = sourcePrefabGuid,
+                sourcePrefabPath = sourcePrefabPath,
+                components = addedComponents,
+                allComponents = GetComponentInfoList(newChild)
+            };
+
             McpLog.Info($"[ManagePrefabs] Created child '{childName}' under '{parentTransform.name}' in prefab.");
             return (true, null);
+        }
+
+        /// <summary>
+        /// Gets the hierarchy path of a GameObject within a prefab.
+        /// </summary>
+        private static string GetGameObjectPath(GameObject go, GameObject root)
+        {
+            if (go == root) return go.name;
+
+            var path = new List<string>();
+            Transform current = go.transform;
+            while (current != null)
+            {
+                path.Add(current.name);
+                if (current == root.transform) break;
+                current = current.parent;
+            }
+            path.Reverse();
+            return string.Join("/", path);
+        }
+
+        /// <summary>
+        /// Gets info about all components on a GameObject.
+        /// </summary>
+        private static List<object> GetComponentInfoList(GameObject go)
+        {
+            var components = new List<object>();
+            foreach (Component comp in go.GetComponents<Component>())
+            {
+                if (comp == null) continue;
+                components.Add(new
+                {
+                    type = comp.GetType().Name,
+                    fullType = comp.GetType().FullName,
+                    instanceId = comp.GetInstanceID()
+                });
+            }
+            return components;
+        }
+
+        /// <summary>
+        /// Sets a component's serialized field to reference another object in the prefab.
+        /// Supports referencing GameObjects or specific Components on GameObjects.
+        /// </summary>
+        private static (bool set, ErrorResponse error) SetSingleComponentReference(JToken refToken, GameObject targetGo, GameObject prefabRoot)
+        {
+            if (refToken is not JObject refParams)
+            {
+                return (false, new ErrorResponse("'set_component_reference' must be an object with component_type, field, and reference_target."));
+            }
+
+            // Required: component_type - the type of component on targetGo that has the field
+            string componentTypeName = refParams["componentType"]?.ToString() ?? refParams["component_type"]?.ToString();
+            if (string.IsNullOrEmpty(componentTypeName))
+            {
+                return (false, new ErrorResponse("'set_component_reference.component_type' is required."));
+            }
+
+            // Required: field - the name of the serialized field to set
+            string fieldName = refParams["field"]?.ToString();
+            if (string.IsNullOrEmpty(fieldName))
+            {
+                return (false, new ErrorResponse("'set_component_reference.field' is required."));
+            }
+
+            // Required: reference_target - path to the GameObject (or GameObject/ComponentType) to reference
+            string referenceTarget = refParams["referenceTarget"]?.ToString() ?? refParams["reference_target"]?.ToString();
+            if (string.IsNullOrEmpty(referenceTarget))
+            {
+                return (false, new ErrorResponse("'set_component_reference.reference_target' is required."));
+            }
+
+            // Find the component on targetGo
+            if (!ComponentResolver.TryResolve(componentTypeName, out Type componentType, out string resolveError))
+            {
+                return (false, new ErrorResponse($"Component type '{componentTypeName}' not found: {resolveError}"));
+            }
+
+            Component targetComponent = targetGo.GetComponent(componentType);
+            if (targetComponent == null)
+            {
+                return (false, new ErrorResponse($"Component '{componentTypeName}' not found on '{targetGo.name}'."));
+            }
+
+            // Parse reference_target - could be "Path/To/Object" or "Path/To/Object:ComponentType"
+            string targetObjectPath = referenceTarget;
+            string targetComponentType = null;
+            int colonIndex = referenceTarget.LastIndexOf(':');
+            if (colonIndex > 0 && colonIndex < referenceTarget.Length - 1)
+            {
+                targetObjectPath = referenceTarget.Substring(0, colonIndex);
+                targetComponentType = referenceTarget.Substring(colonIndex + 1);
+            }
+
+            // Find the referenced GameObject
+            GameObject referencedGo = FindInPrefabContents(prefabRoot, targetObjectPath);
+            if (referencedGo == null)
+            {
+                return (false, new ErrorResponse($"Reference target '{targetObjectPath}' not found in prefab."));
+            }
+
+            // Determine what object to assign (GameObject or Component)
+            UnityEngine.Object objectToAssign;
+            if (!string.IsNullOrEmpty(targetComponentType))
+            {
+                // User specified a component type, find it on the referenced GameObject
+                if (!ComponentResolver.TryResolve(targetComponentType, out Type refCompType, out string refResolveError))
+                {
+                    return (false, new ErrorResponse($"Reference component type '{targetComponentType}' not found: {refResolveError}"));
+                }
+                Component refComponent = referencedGo.GetComponent(refCompType);
+                if (refComponent == null)
+                {
+                    return (false, new ErrorResponse($"Component '{targetComponentType}' not found on '{referencedGo.name}'."));
+                }
+                objectToAssign = refComponent;
+            }
+            else
+            {
+                // No component specified - need to determine from field type
+                objectToAssign = referencedGo;
+            }
+
+            // Find and set the field using reflection
+            BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.IgnoreCase;
+            Type compType = targetComponent.GetType();
+
+            // Try public field first
+            FieldInfo field = compType.GetField(fieldName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+
+            // Try private [SerializeField] if public not found
+            if (field == null)
+            {
+                field = compType.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                if (field != null && field.GetCustomAttribute<SerializeField>() == null)
+                {
+                    // Private field without SerializeField - not serialized, skip
+                    field = null;
+                }
+            }
+
+            // Try property as fallback
+            PropertyInfo prop = null;
+            if (field == null)
+            {
+                prop = compType.GetProperty(fieldName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            }
+
+            if (field == null && prop == null)
+            {
+                var availableFields = ComponentResolver.GetAllComponentProperties(compType);
+                return (false, new ErrorResponse($"Field '{fieldName}' not found on '{componentTypeName}'. Available: [{string.Join(", ", availableFields)}]"));
+            }
+
+            // Check type compatibility and assign
+            try
+            {
+                if (field != null)
+                {
+                    Type fieldType = field.FieldType;
+
+                    // If the field expects a Component but we have a GameObject, try to get the component
+                    if (typeof(Component).IsAssignableFrom(fieldType) && objectToAssign is GameObject go)
+                    {
+                        Component autoResolvedComp = go.GetComponent(fieldType);
+                        if (autoResolvedComp == null)
+                        {
+                            return (false, new ErrorResponse($"Field '{fieldName}' expects type '{fieldType.Name}', but '{go.name}' does not have that component. Specify the component explicitly using 'reference_target: \"{targetObjectPath}:{fieldType.Name}\"'."));
+                        }
+                        objectToAssign = autoResolvedComp;
+                    }
+
+                    if (!fieldType.IsAssignableFrom(objectToAssign.GetType()))
+                    {
+                        return (false, new ErrorResponse($"Type mismatch: field '{fieldName}' is of type '{fieldType.Name}', but reference is of type '{objectToAssign.GetType().Name}'."));
+                    }
+
+                    field.SetValue(targetComponent, objectToAssign);
+                }
+                else if (prop != null && prop.CanWrite)
+                {
+                    Type propType = prop.PropertyType;
+
+                    // If the property expects a Component but we have a GameObject, try to get the component
+                    if (typeof(Component).IsAssignableFrom(propType) && objectToAssign is GameObject go)
+                    {
+                        Component autoResolvedComp = go.GetComponent(propType);
+                        if (autoResolvedComp == null)
+                        {
+                            return (false, new ErrorResponse($"Property '{fieldName}' expects type '{propType.Name}', but '{go.name}' does not have that component."));
+                        }
+                        objectToAssign = autoResolvedComp;
+                    }
+
+                    if (!propType.IsAssignableFrom(objectToAssign.GetType()))
+                    {
+                        return (false, new ErrorResponse($"Type mismatch: property '{fieldName}' is of type '{propType.Name}', but reference is of type '{objectToAssign.GetType().Name}'."));
+                    }
+
+                    prop.SetValue(targetComponent, objectToAssign);
+                }
+                else
+                {
+                    return (false, new ErrorResponse($"Field/property '{fieldName}' is not writable."));
+                }
+
+                McpLog.Info($"[ManagePrefabs] Set '{componentTypeName}.{fieldName}' to reference '{referencedGo.name}'" +
+                    (targetComponentType != null ? $" ({targetComponentType})" : ""));
+                return (true, null);
+            }
+            catch (Exception ex)
+            {
+                return (false, new ErrorResponse($"Failed to set reference '{fieldName}' on '{componentTypeName}': {ex.Message}"));
+            }
+        }
+
+        /// <summary>
+        /// Sets property values on a component within the prefab.
+        /// Supports both single property (property+value) and multiple properties (properties object).
+        /// </summary>
+        /// <param name="propToken">The property specification token.</param>
+        /// <param name="targetGo">The target GameObject within the prefab.</param>
+        /// <returns>Tuple of (set: bool, error: ErrorResponse or null).</returns>
+        private static (bool set, ErrorResponse error) SetSingleComponentProperty(JToken propToken, GameObject targetGo)
+        {
+            if (propToken is not JObject propParams)
+            {
+                return (false, new ErrorResponse("'set_property' must be an object with component_type and either property+value or properties."));
+            }
+
+            // Required: component_type
+            string componentTypeName = propParams["componentType"]?.ToString() ?? propParams["component_type"]?.ToString();
+            if (string.IsNullOrEmpty(componentTypeName))
+            {
+                return (false, new ErrorResponse("'set_property.component_type' is required."));
+            }
+
+            // Find the component on targetGo
+            if (!ComponentResolver.TryResolve(componentTypeName, out Type componentType, out string resolveError))
+            {
+                return (false, new ErrorResponse($"Component type '{componentTypeName}' not found: {resolveError}"));
+            }
+
+            Component targetComponent = targetGo.GetComponent(componentType);
+            if (targetComponent == null)
+            {
+                return (false, new ErrorResponse($"Component '{componentTypeName}' not found on '{targetGo.name}'."));
+            }
+
+            // Single property mode: property + value
+            string propertyName = propParams["property"]?.ToString();
+            JToken valueToken = propParams["value"];
+
+            // Multiple properties mode: properties object
+            JObject propertiesObj = propParams["properties"] as JObject;
+
+            if (string.IsNullOrEmpty(propertyName) && (propertiesObj == null || !propertiesObj.HasValues))
+            {
+                return (false, new ErrorResponse("'set_property' requires either 'property'+'value' or 'properties' object."));
+            }
+
+            var errors = new List<string>();
+            bool anySet = false;
+
+            try
+            {
+                // Single property mode
+                if (!string.IsNullOrEmpty(propertyName) && valueToken != null)
+                {
+                    if (ComponentOps.SetProperty(targetComponent, propertyName, valueToken, out string error))
+                    {
+                        McpLog.Info($"[ManagePrefabs] Set '{componentTypeName}.{propertyName}' on '{targetGo.name}'.");
+                        anySet = true;
+                    }
+                    else
+                    {
+                        errors.Add(error);
+                    }
+                }
+
+                // Multiple properties mode
+                if (propertiesObj != null && propertiesObj.HasValues)
+                {
+                    foreach (var prop in propertiesObj.Properties())
+                    {
+                        if (ComponentOps.SetProperty(targetComponent, prop.Name, prop.Value, out string error))
+                        {
+                            McpLog.Info($"[ManagePrefabs] Set '{componentTypeName}.{prop.Name}' on '{targetGo.name}'.");
+                            anySet = true;
+                        }
+                        else
+                        {
+                            errors.Add(error);
+                        }
+                    }
+                }
+
+                if (errors.Count > 0)
+                {
+                    string errorMsg = string.Join("; ", errors);
+                    if (anySet)
+                    {
+                        // Partial success - log warning but continue
+                        McpLog.Warn($"[ManagePrefabs] Some properties failed to set on '{componentTypeName}': {errorMsg}");
+                    }
+                    else
+                    {
+                        // Complete failure
+                        return (false, new ErrorResponse($"Failed to set properties on '{componentTypeName}': {errorMsg}"));
+                    }
+                }
+
+                return (anySet, null);
+            }
+            catch (Exception ex)
+            {
+                return (false, new ErrorResponse($"Error setting properties on '{componentTypeName}': {ex.Message}"));
+            }
         }
 
         #endregion
@@ -917,63 +1573,103 @@ namespace MCPForUnity.Editor.Tools.Prefabs
         /// <returns>List of hierarchy items with prefab information.</returns>
         private static List<object> BuildHierarchyItems(Transform root, string mainPrefabPath)
         {
+            return BuildHierarchyItemsWithDepth(root, mainPrefabPath, null, null);
+        }
+
+        /// <summary>
+        /// Builds a flat list of hierarchy items from a transform root with optional depth limit and filter.
+        /// </summary>
+        /// <param name="root">The root transform of the prefab.</param>
+        /// <param name="mainPrefabPath">Asset path of the main prefab.</param>
+        /// <param name="maxDepth">Optional maximum depth to traverse (0 = root only, null = unlimited).</param>
+        /// <param name="filter">Optional name filter (case-insensitive substring match).</param>
+        /// <returns>List of hierarchy items with prefab information.</returns>
+        private static List<object> BuildHierarchyItemsWithDepth(Transform root, string mainPrefabPath, int? maxDepth, string filter)
+        {
             var items = new List<object>();
-            BuildHierarchyItemsRecursive(root, root, mainPrefabPath, "", items);
+            bool hasFilter = !string.IsNullOrEmpty(filter);
+            BuildHierarchyItemsRecursiveWithDepth(root, root, mainPrefabPath, "", items, 0, maxDepth, hasFilter ? filter.ToLowerInvariant() : null);
             return items;
         }
 
         /// <summary>
-        /// Recursively builds hierarchy items.
+        /// Recursively builds hierarchy items with depth limiting and filtering.
         /// </summary>
         /// <param name="transform">Current transform being processed.</param>
         /// <param name="mainPrefabRoot">Root transform of the main prefab asset.</param>
         /// <param name="mainPrefabPath">Asset path of the main prefab.</param>
         /// <param name="parentPath">Parent path for building full hierarchy path.</param>
         /// <param name="items">List to accumulate hierarchy items.</param>
-        private static void BuildHierarchyItemsRecursive(Transform transform, Transform mainPrefabRoot, string mainPrefabPath, string parentPath, List<object> items)
+        /// <param name="currentDepth">Current depth in the hierarchy (0 = root).</param>
+        /// <param name="maxDepth">Maximum depth to traverse (null = unlimited).</param>
+        /// <param name="filterLower">Lowercase filter string for name matching (null = no filter).</param>
+        private static void BuildHierarchyItemsRecursiveWithDepth(
+            Transform transform,
+            Transform mainPrefabRoot,
+            string mainPrefabPath,
+            string parentPath,
+            List<object> items,
+            int currentDepth,
+            int? maxDepth,
+            string filterLower)
         {
             if (transform == null) return;
 
             string name = transform.gameObject.name;
             string path = string.IsNullOrEmpty(parentPath) ? name : $"{parentPath}/{name}";
-            int instanceId = transform.gameObject.GetInstanceID();
-            bool activeSelf = transform.gameObject.activeSelf;
-            int childCount = transform.childCount;
-            var componentTypes = PrefabUtilityHelper.GetComponentTypeNames(transform.gameObject);
 
-            // Prefab information
-            bool isNestedPrefab = PrefabUtility.IsAnyPrefabInstanceRoot(transform.gameObject);
-            bool isPrefabRoot = transform == mainPrefabRoot;
-            int nestingDepth = isPrefabRoot ? 0 : PrefabUtilityHelper.GetPrefabNestingDepth(transform.gameObject, mainPrefabRoot);
-            string parentPrefabPath = isNestedPrefab && !isPrefabRoot
-                ? PrefabUtilityHelper.GetParentPrefabPath(transform.gameObject, mainPrefabRoot)
-                : null;
-            string nestedPrefabPath = isNestedPrefab ? PrefabUtilityHelper.GetNestedPrefabPath(transform.gameObject) : null;
+            // Check filter - include if name contains filter string (case-insensitive)
+            bool matchesFilter = filterLower == null || name.ToLowerInvariant().Contains(filterLower);
 
-            var item = new
+            if (matchesFilter)
             {
-                name = name,
-                instanceId = instanceId,
-                path = path,
-                activeSelf = activeSelf,
-                childCount = childCount,
-                componentTypes = componentTypes,
-                prefab = new
-                {
-                    isRoot = isPrefabRoot,
-                    isNestedRoot = isNestedPrefab,
-                    nestingDepth = nestingDepth,
-                    assetPath = isNestedPrefab ? nestedPrefabPath : mainPrefabPath,
-                    parentPath = parentPrefabPath
-                }
-            };
+                int instanceId = transform.gameObject.GetInstanceID();
+                bool activeSelf = transform.gameObject.activeSelf;
+                int childCount = transform.childCount;
+                var componentTypes = PrefabUtilityHelper.GetComponentTypeNames(transform.gameObject);
 
-            items.Add(item);
+                // Prefab information
+                bool isNestedPrefab = PrefabUtility.IsAnyPrefabInstanceRoot(transform.gameObject);
+                bool isPrefabRoot = transform == mainPrefabRoot;
+                int nestingDepth = isPrefabRoot ? 0 : PrefabUtilityHelper.GetPrefabNestingDepth(transform.gameObject, mainPrefabRoot);
+                string parentPrefabPath = isNestedPrefab && !isPrefabRoot
+                    ? PrefabUtilityHelper.GetParentPrefabPath(transform.gameObject, mainPrefabRoot)
+                    : null;
+                string nestedPrefabPath = isNestedPrefab ? PrefabUtilityHelper.GetNestedPrefabPath(transform.gameObject) : null;
+
+                var item = new
+                {
+                    name = name,
+                    instanceId = instanceId,
+                    path = path,
+                    depth = currentDepth,
+                    activeSelf = activeSelf,
+                    childCount = childCount,
+                    componentTypes = componentTypes,
+                    prefab = new
+                    {
+                        isRoot = isPrefabRoot,
+                        isNestedRoot = isNestedPrefab,
+                        nestingDepth = nestingDepth,
+                        assetPath = isNestedPrefab ? nestedPrefabPath : mainPrefabPath,
+                        parentPath = parentPrefabPath
+                    }
+                };
+
+                items.Add(item);
+            }
+
+            // Check depth limit before recursing into children
+            // If maxDepth is set and we've reached it, don't process children
+            if (maxDepth.HasValue && currentDepth >= maxDepth.Value)
+            {
+                return;
+            }
 
             // Recursively process children
             foreach (Transform child in transform)
             {
-                BuildHierarchyItemsRecursive(child, mainPrefabRoot, mainPrefabPath, path, items);
+                BuildHierarchyItemsRecursiveWithDepth(child, mainPrefabRoot, mainPrefabPath, path, items, currentDepth + 1, maxDepth, filterLower);
             }
         }
 

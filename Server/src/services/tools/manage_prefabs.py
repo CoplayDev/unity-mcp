@@ -17,18 +17,26 @@ REQUIRED_PARAMS = {
     "get_hierarchy": ["prefab_path"],
     "create_from_gameobject": ["target", "prefab_path"],
     "modify_contents": ["prefab_path"],
+    "batch_modify": ["prefab_path", "operations"],
 }
 
 
 @mcp_for_unity_tool(
     description=(
         "Manages Unity Prefab assets via headless operations (no UI, no prefab stages). "
-        "Actions: get_info, get_hierarchy, create_from_gameobject, modify_contents. "
+        "Actions: get_info, get_hierarchy, create_from_gameobject, modify_contents, batch_modify. "
+        "get_hierarchy supports pagination (page_size, cursor), depth limiting (max_depth), and filtering (filter). "
         "Use modify_contents for headless prefab editing - ideal for automated workflows. "
+        "Use set_property with modify_contents to set component property values on prefab objects "
+        "(works like manage_components set_property but for prefab assets). "
         "Use create_child parameter with modify_contents to add child GameObjects to a prefab "
         "(single object or array for batch creation in one save). "
         "Example: create_child=[{\"name\": \"Child1\", \"primitive_type\": \"Sphere\", \"position\": [1,0,0]}, "
         "{\"name\": \"Child2\", \"primitive_type\": \"Cube\", \"parent\": \"Child1\"}]. "
+        "Use batch_modify to apply multiple operations to different targets in a single prefab load/save cycle. "
+        "Each operation in the operations array can specify its own target (defaults to prefab root) and "
+        "modification parameters (position, rotation, scale, name, tag, layer, set_active, parent, "
+        "components_to_add, components_to_remove, create_child, set_component_reference, set_property). "
         "Use manage_asset action=search filterType=Prefab to list prefabs."
     ),
     annotations=ToolAnnotations(
@@ -44,14 +52,20 @@ async def manage_prefabs(
             "get_info",
             "get_hierarchy",
             "modify_contents",
+            "batch_modify",
         ],
         "Prefab operation to perform.",
     ],
     prefab_path: Annotated[str, "Prefab asset path (e.g., Assets/Prefabs/MyPrefab.prefab)."] | None = None,
-    target: Annotated[str, "Target GameObject: scene object for create_from_gameobject, or object within prefab for modify_contents (name or path like 'Parent/Child')."] | None = None,
+    target: Annotated[str, "Target GameObject: scene object for create_from_gameobject, or object within prefab for modify_contents. Supports: name ('MyObject'), relative path ('Child/GrandChild'), or full path ('RootName/Child/GrandChild'). Defaults to prefab root if not specified."] | None = None,
     allow_overwrite: Annotated[bool, "Allow replacing existing prefab."] | None = None,
     search_inactive: Annotated[bool, "Include inactive GameObjects in search."] | None = None,
     unlink_if_instance: Annotated[bool, "Unlink from existing prefab before creating new one."] | None = None,
+    # get_hierarchy pagination parameters
+    page_size: Annotated[int, "Number of items per page for get_hierarchy (max 500). If not specified, returns all items."] | None = None,
+    cursor: Annotated[int, "Starting index for pagination in get_hierarchy (0-based)."] | None = None,
+    max_depth: Annotated[int, "Maximum hierarchy depth to traverse for get_hierarchy (0=root only, null=unlimited)."] | None = None,
+    filter: Annotated[str, "Filter objects by name (case-insensitive substring match) for get_hierarchy."] | None = None,
     # modify_contents parameters
     position: Annotated[list[float] | dict[str, float] | str, "New local position [x, y, z] or {x, y, z} for modify_contents."] | None = None,
     rotation: Annotated[list[float] | dict[str, float] | str, "New local rotation (euler angles) [x, y, z] or {x, y, z} for modify_contents."] | None = None,
@@ -63,7 +77,11 @@ async def manage_prefabs(
     parent: Annotated[str, "New parent object name/path within prefab for modify_contents."] | None = None,
     components_to_add: Annotated[list[str], "Component types to add in modify_contents."] | None = None,
     components_to_remove: Annotated[list[str], "Component types to remove in modify_contents."] | None = None,
-    create_child: Annotated[dict[str, Any] | list[dict[str, Any]], "Create child GameObject(s) in the prefab. Single object or array of objects, each with: name (required), parent (optional, defaults to target), primitive_type (optional: Cube, Sphere, Capsule, Cylinder, Plane, Quad), position, rotation, scale, components_to_add, tag, layer, set_active."] | None = None,
+    create_child: Annotated[dict[str, Any] | list[dict[str, Any]], "Create child GameObject(s) in the prefab. Single object or array of objects, each with: name (required), parent (optional, defaults to target), prefab_path (optional: path to prefab asset to instantiate as nested prefab), primitive_type (optional: Cube, Sphere, Capsule, Cylinder, Plane, Quad), position, rotation, scale, components_to_add, tag, layer, set_active. Use prefab_path to create nested prefab instances."] | None = None,
+    set_component_reference: Annotated[dict[str, Any] | list[dict[str, Any]], "Set serialized field references on components. Single or array of objects with: component_type (required: type name of component on target), field (required: field name to set), reference_target (required: path to object, optionally with ':ComponentType' suffix). Example: {component_type: 'MyScript', field: 'myButton', reference_target: 'Canvas/Button:Button'}"] | None = None,
+    set_property: Annotated[dict[str, Any] | list[dict[str, Any]], "Set component property values in prefab. Single or array of objects with: component_type (required), and either property+value for single property or properties object for multiple. Example: {component_type: 'Light', property: 'intensity', value: 2.5} or {component_type: 'Light', properties: {intensity: 2.5, range: 10}}"] | None = None,
+    # batch_modify parameters
+    operations: Annotated[list[dict[str, Any]], "Array of operations for batch_modify. Each operation can specify: target (optional, defaults to prefab root), position, rotation, scale, name, tag, layer, set_active, parent, components_to_add, components_to_remove, create_child, set_component_reference, set_property. Operations are applied in order within a single prefab load/save cycle."] | None = None,
 ) -> dict[str, Any]:
     # Back-compat: map 'name' → 'target' for create_from_gameobject (Unity accepts both)
     if action == "create_from_gameobject" and target is None and name is not None:
@@ -116,6 +134,16 @@ async def manage_prefabs(
         unlink_if_instance_val = coerce_bool(unlink_if_instance)
         if unlink_if_instance_val is not None:
             params["unlinkIfInstance"] = unlink_if_instance_val
+
+        # get_hierarchy pagination parameters
+        if page_size is not None:
+            params["pageSize"] = page_size
+        if cursor is not None:
+            params["cursor"] = cursor
+        if max_depth is not None:
+            params["maxDepth"] = max_depth
+        if filter is not None:
+            params["filter"] = filter
 
         # modify_contents parameters
         if position is not None:
@@ -178,6 +206,15 @@ async def manage_prefabs(
                 if err:
                     return {"success": False, "message": err}
                 params["createChild"] = child_params
+
+        if set_component_reference is not None:
+            params["setComponentReference"] = set_component_reference
+
+        if set_property is not None:
+            params["setProperty"] = set_property
+
+        if operations is not None:
+            params["operations"] = operations
 
         # Send command to Unity
         response = await send_with_unity_instance(
