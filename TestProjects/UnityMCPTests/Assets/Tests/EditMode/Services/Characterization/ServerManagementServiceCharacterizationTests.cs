@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Helpers;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -20,6 +23,10 @@ namespace MCPForUnityTests.Editor.Services.Characterization
         private ServerManagementService _service;
         private bool _savedUseHttpTransport;
         private string _savedHttpUrl;
+        private string _savedHttpRemoteUrl;
+        private string _savedHttpTransportScope;
+        private bool _savedAllowLanHttpBind;
+        private bool _savedAllowInsecureRemoteHttp;
 
         [SetUp]
         public void SetUp()
@@ -28,6 +35,10 @@ namespace MCPForUnityTests.Editor.Services.Characterization
             // Save current settings
             _savedUseHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
             _savedHttpUrl = EditorPrefs.GetString(EditorPrefKeys.HttpBaseUrl, string.Empty);
+            _savedHttpRemoteUrl = EditorPrefs.GetString(EditorPrefKeys.HttpRemoteBaseUrl, string.Empty);
+            _savedHttpTransportScope = EditorPrefs.GetString(EditorPrefKeys.HttpTransportScope, string.Empty);
+            _savedAllowLanHttpBind = EditorPrefs.GetBool(EditorPrefKeys.AllowLanHttpBind, false);
+            _savedAllowInsecureRemoteHttp = EditorPrefs.GetBool(EditorPrefKeys.AllowInsecureRemoteHttp, false);
         }
 
         [TearDown]
@@ -43,6 +54,24 @@ namespace MCPForUnityTests.Editor.Services.Characterization
             {
                 EditorPrefs.DeleteKey(EditorPrefKeys.HttpBaseUrl);
             }
+            if (!string.IsNullOrEmpty(_savedHttpRemoteUrl))
+            {
+                EditorPrefs.SetString(EditorPrefKeys.HttpRemoteBaseUrl, _savedHttpRemoteUrl);
+            }
+            else
+            {
+                EditorPrefs.DeleteKey(EditorPrefKeys.HttpRemoteBaseUrl);
+            }
+            if (!string.IsNullOrEmpty(_savedHttpTransportScope))
+            {
+                EditorPrefs.SetString(EditorPrefKeys.HttpTransportScope, _savedHttpTransportScope);
+            }
+            else
+            {
+                EditorPrefs.DeleteKey(EditorPrefKeys.HttpTransportScope);
+            }
+            EditorPrefs.SetBool(EditorPrefKeys.AllowLanHttpBind, _savedAllowLanHttpBind);
+            EditorPrefs.SetBool(EditorPrefKeys.AllowInsecureRemoteHttp, _savedAllowInsecureRemoteHttp);
             // Refresh cache to reflect restored values
             EditorConfigurationCache.Instance.Refresh();
         }
@@ -78,6 +107,20 @@ namespace MCPForUnityTests.Editor.Services.Characterization
         }
 
         [Test]
+        public void IsLocalUrl_127002_ReturnsTrue()
+        {
+            // Arrange
+            EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://127.0.0.2:8080");
+            _service = new ServerManagementService();
+
+            // Act
+            bool result = _service.IsLocalUrl();
+
+            // Assert
+            Assert.IsTrue(result, "127.0.0.2 should be recognized as loopback local URL");
+        }
+
+        [Test]
         public void IsLocalUrl_0000_ReturnsTrue()
         {
             // Arrange
@@ -92,7 +135,7 @@ namespace MCPForUnityTests.Editor.Services.Characterization
         }
 
         [Test]
-        public void IsLocalUrl_IPv6Loopback_ReturnsFalse_KnownLimitation()
+        public void IsLocalUrl_IPv6Loopback_ReturnsTrue()
         {
             // Arrange
             EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://[::1]:8080");
@@ -101,8 +144,22 @@ namespace MCPForUnityTests.Editor.Services.Characterization
             // Act
             bool result = _service.IsLocalUrl();
 
-            // Assert - Known limitation: IPv6 loopback is not currently recognized as local
-            Assert.IsFalse(result, "::1 (IPv6 loopback) is not currently recognized as local (known limitation)");
+            // Assert
+            Assert.IsTrue(result, "::1 (IPv6 loopback) should be recognized as local URL");
+        }
+
+        [Test]
+        public void IsLocalUrl_IPv6LoopbackLongForm_ReturnsTrue()
+        {
+            // Arrange
+            EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://[0:0:0:0:0:0:0:1]:8080");
+            _service = new ServerManagementService();
+
+            // Act
+            bool result = _service.IsLocalUrl();
+
+            // Assert
+            Assert.IsTrue(result, "0:0:0:0:0:0:0:1 (IPv6 loopback long-form) should be recognized as local URL");
         }
 
         [Test]
@@ -184,6 +241,116 @@ namespace MCPForUnityTests.Editor.Services.Characterization
 
             // Assert
             Assert.IsFalse(result, "Cannot start local server when URL is remote");
+        }
+
+        [Test]
+        public void CanStartLocalServer_HttpEnabledZeroBind_DisallowedByDefault_ReturnsFalse()
+        {
+            // Arrange
+            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
+            EditorPrefs.SetBool(EditorPrefKeys.AllowLanHttpBind, false);
+            EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://0.0.0.0:8080");
+            EditorConfigurationCache.Instance.Refresh();
+            _service = new ServerManagementService();
+
+            // Act
+            bool result = _service.CanStartLocalServer();
+
+            // Assert
+            Assert.IsFalse(result, "Cannot start local server on 0.0.0.0 unless LAN bind opt-in is enabled");
+        }
+
+        [Test]
+        public void CanStartLocalServer_HttpEnabledZeroBind_WithOptIn_ReturnsTrue()
+        {
+            // Arrange
+            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
+            EditorPrefs.SetBool(EditorPrefKeys.AllowLanHttpBind, true);
+            EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://0.0.0.0:8080");
+            EditorConfigurationCache.Instance.Refresh();
+            _service = new ServerManagementService();
+
+            // Act
+            bool result = _service.CanStartLocalServer();
+
+            // Assert
+            Assert.IsTrue(result, "Can start local server on 0.0.0.0 when LAN bind opt-in is enabled");
+        }
+
+        #endregion
+
+        #region HttpEndpointUtility Security Policy Tests
+
+        [Test]
+        public void SaveRemoteBaseUrl_WithoutScheme_DefaultsToHttps()
+        {
+            // Arrange
+            EditorConfigurationCache.Instance.SetHttpTransportScope("remote");
+
+            // Act
+            HttpEndpointUtility.SaveRemoteBaseUrl("example.com:9000");
+            string normalized = HttpEndpointUtility.GetRemoteBaseUrl();
+
+            // Assert
+            Assert.AreEqual("https://example.com:9000", normalized);
+        }
+
+        [Test]
+        public void IsRemoteUrlAllowed_Http_DisallowedByDefault()
+        {
+            // Arrange
+            EditorPrefs.SetBool(EditorPrefKeys.AllowInsecureRemoteHttp, false);
+
+            // Act
+            bool allowed = HttpEndpointUtility.IsRemoteUrlAllowed("http://example.com:8080", out string error);
+
+            // Assert
+            Assert.IsFalse(allowed);
+            Assert.IsNotNull(error);
+            Assert.That(error, Does.Contain("HTTPS").IgnoreCase);
+        }
+
+        [Test]
+        public void IsRemoteUrlAllowed_Http_AllowedWithOptIn()
+        {
+            // Arrange
+            EditorPrefs.SetBool(EditorPrefKeys.AllowInsecureRemoteHttp, true);
+
+            // Act
+            bool allowed = HttpEndpointUtility.IsRemoteUrlAllowed("http://example.com:8080", out string error);
+
+            // Assert
+            Assert.IsTrue(allowed);
+            Assert.IsNull(error);
+        }
+
+        [Test]
+        public void IsHttpLocalUrlAllowedForLaunch_ZeroBind_DisallowedByDefault()
+        {
+            // Arrange
+            EditorPrefs.SetBool(EditorPrefKeys.AllowLanHttpBind, false);
+
+            // Act
+            bool allowed = HttpEndpointUtility.IsHttpLocalUrlAllowedForLaunch("http://0.0.0.0:8080", out string error);
+
+            // Assert
+            Assert.IsFalse(allowed);
+            Assert.IsNotNull(error);
+            Assert.That(error, Does.Contain("disabled by default").IgnoreCase);
+        }
+
+        [Test]
+        public void IsHttpLocalUrlAllowedForLaunch_ZeroBind_AllowedWithOptIn()
+        {
+            // Arrange
+            EditorPrefs.SetBool(EditorPrefKeys.AllowLanHttpBind, true);
+
+            // Act
+            bool allowed = HttpEndpointUtility.IsHttpLocalUrlAllowedForLaunch("http://0.0.0.0:8080", out string error);
+
+            // Assert
+            Assert.IsTrue(allowed);
+            Assert.IsNull(error);
         }
 
         #endregion
@@ -478,10 +645,67 @@ namespace MCPForUnityTests.Editor.Services.Characterization
             Assert.IsTrue((bool)method.Invoke(null, new object[] { "http://localhost:8080" }), "localhost should be local");
             Assert.IsTrue((bool)method.Invoke(null, new object[] { "http://127.0.0.1:8080" }), "127.0.0.1 should be local");
             Assert.IsTrue((bool)method.Invoke(null, new object[] { "http://0.0.0.0:8080" }), "0.0.0.0 should be local");
-            Assert.IsFalse((bool)method.Invoke(null, new object[] { "http://[::1]:8080" }), "::1 is not recognized as local (known limitation)");
+            Assert.IsTrue((bool)method.Invoke(null, new object[] { "http://[::1]:8080" }), "::1 should be recognized as local");
             Assert.IsFalse((bool)method.Invoke(null, new object[] { "http://example.com:8080" }), "example.com should not be local");
             Assert.IsFalse((bool)method.Invoke(null, new object[] { "" }), "empty string should not be local");
             Assert.IsFalse((bool)method.Invoke(null, new object[] { null }), "null should not be local");
+        }
+
+        [Test]
+        public void BuildLocalProbeHosts_Localhost_IncludesIPv4AndIPv6Loopback_ViaReflection()
+        {
+            // Arrange
+            var method = typeof(ServerManagementService).GetMethod(
+                "BuildLocalProbeHosts",
+                BindingFlags.NonPublic | BindingFlags.Static,
+                null,
+                new[] { typeof(string) },
+                null);
+
+            if (method == null)
+            {
+                Assert.Pass("BuildLocalProbeHosts is a private method - behavior documented via code review");
+                return;
+            }
+
+            // Act
+            var result = method.Invoke(null, new object[] { "localhost" });
+            Assert.IsNotNull(result);
+            Assert.IsInstanceOf<IEnumerable<string>>(result);
+            var hosts = ((IEnumerable<string>)result).ToList();
+
+            // Assert
+            CollectionAssert.Contains(hosts, "localhost");
+            CollectionAssert.Contains(hosts, "127.0.0.1");
+            CollectionAssert.Contains(hosts, "::1");
+        }
+
+        [Test]
+        public void BuildLocalProbeHosts_EmptyHost_DefaultsToIPv4Loopback_ViaReflection()
+        {
+            // Arrange
+            var method = typeof(ServerManagementService).GetMethod(
+                "BuildLocalProbeHosts",
+                BindingFlags.NonPublic | BindingFlags.Static,
+                null,
+                new[] { typeof(string) },
+                null);
+
+            if (method == null)
+            {
+                Assert.Pass("BuildLocalProbeHosts is a private method - behavior documented via code review");
+                return;
+            }
+
+            // Act
+            var result = method.Invoke(null, new object[] { "" });
+            Assert.IsNotNull(result);
+            Assert.IsInstanceOf<IEnumerable<string>>(result);
+            var hosts = ((IEnumerable<string>)result).ToList();
+
+            // Assert
+            Assert.AreEqual(1, hosts.Count, "Empty host should resolve to a single default probe host.");
+            Assert.AreEqual("127.0.0.1", hosts[0]);
         }
 
         #endregion

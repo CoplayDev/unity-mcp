@@ -11,7 +11,7 @@ class ServerConfig:
     """Main configuration class for the MCP server."""
 
     # Network settings
-    unity_host: str = "localhost"
+    unity_host: str = "127.0.0.1"
     unity_port: int = 6400
     mcp_port: int = 6500
 

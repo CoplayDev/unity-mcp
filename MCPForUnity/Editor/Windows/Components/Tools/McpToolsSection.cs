@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
+using MCPForUnity.Editor.Services.Transport;
 using MCPForUnity.Editor.Tools;
 using UnityEditor;
+using UnityEditor.UIElements;
 using UnityEngine.UIElements;
 
 namespace MCPForUnity.Editor.Windows.Components.Tools
@@ -228,7 +231,11 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             return row;
         }
 
-        private void HandleToggleChange(ToolMetadata tool, bool enabled, bool updateSummary = true)
+        private void HandleToggleChange(
+            ToolMetadata tool,
+            bool enabled,
+            bool updateSummary = true,
+            bool reregisterTools = true)
         {
             MCPServiceLocator.ToolDiscovery.SetToolEnabled(tool.Name, enabled);
 
@@ -236,15 +243,51 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             {
                 UpdateSummary();
             }
+
+            if (reregisterTools)
+            {
+                // Trigger tool reregistration with connected MCP server
+                ReregisterToolsAsync();
+            }
+        }
+
+        private void ReregisterToolsAsync()
+        {
+            // Fire and forget - don't block UI thread
+            var transportManager = MCPServiceLocator.TransportManager;
+            var client = transportManager.GetClient(TransportMode.Http);
+            if (client == null || !client.IsConnected)
+            {
+                return;
+            }
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await client.ReregisterToolsAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Warn($"Failed to reregister tools: {ex}");
+                }
+            });
         }
 
         private void SetAllToolsState(bool enabled)
         {
+            bool hasChanges = false;
+
             foreach (var tool in allTools)
             {
                 if (!toolToggleMap.TryGetValue(tool.Name, out var toggle))
                 {
-                    MCPServiceLocator.ToolDiscovery.SetToolEnabled(tool.Name, enabled);
+                    bool currentEnabled = MCPServiceLocator.ToolDiscovery.IsToolEnabled(tool.Name);
+                    if (currentEnabled != enabled)
+                    {
+                        MCPServiceLocator.ToolDiscovery.SetToolEnabled(tool.Name, enabled);
+                        hasChanges = true;
+                    }
                     continue;
                 }
 
@@ -254,10 +297,17 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
                 }
 
                 toggle.SetValueWithoutNotify(enabled);
-                HandleToggleChange(tool, enabled, updateSummary: false);
+                HandleToggleChange(tool, enabled, updateSummary: false, reregisterTools: false);
+                hasChanges = true;
             }
 
             UpdateSummary();
+
+            if (hasChanges)
+            {
+                // Trigger a single reregistration after bulk change
+                ReregisterToolsAsync();
+            }
         }
 
         private void UpdateSummary()

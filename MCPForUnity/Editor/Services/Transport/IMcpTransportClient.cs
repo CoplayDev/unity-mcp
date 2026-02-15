@@ -14,5 +14,6 @@ namespace MCPForUnity.Editor.Services.Transport
         Task<bool> StartAsync();
         Task StopAsync();
         Task<bool> VerifyAsync();
+        Task ReregisterToolsAsync();
     }
 }

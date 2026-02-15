@@ -58,7 +58,7 @@ namespace MCPForUnity.Editor.Services
         /// <summary>
         /// Check if the local HTTP server can be started
         /// </summary>
-        /// <returns>True if HTTP transport is enabled and URL is local</returns>
+        /// <returns>True if HTTP transport is enabled and URL satisfies local launch security policy</returns>
         bool CanStartLocalServer();
     }
 }

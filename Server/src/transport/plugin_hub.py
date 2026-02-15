@@ -318,12 +318,16 @@ class PluginHub(WebSocketEndpoint):
         )
 
     @classmethod
-    async def get_tools_for_project(cls, project_hash: str) -> list[Any]:
-        """Retrieve tools registered for a active project hash."""
+    async def get_tools_for_project(
+        cls,
+        project_hash: str,
+        user_id: str | None = None,
+    ) -> list[Any]:
+        """Retrieve tools registered for an active project hash."""
         if cls._registry is None:
             return []
 
-        session_id = await cls._registry.get_session_id_by_hash(project_hash)
+        session_id = await cls._registry.get_session_id_by_hash(project_hash, user_id=user_id)
         if not session_id:
             return []
 
@@ -334,12 +338,17 @@ class PluginHub(WebSocketEndpoint):
         return list(session.tools.values())
 
     @classmethod
-    async def get_tool_definition(cls, project_hash: str, tool_name: str) -> Any | None:
+    async def get_tool_definition(
+        cls,
+        project_hash: str,
+        tool_name: str,
+        user_id: str | None = None,
+    ) -> Any | None:
         """Retrieve a specific tool definition for an active project hash."""
         if cls._registry is None:
             return None
 
-        session_id = await cls._registry.get_session_id_by_hash(project_hash)
+        session_id = await cls._registry.get_session_id_by_hash(project_hash, user_id=user_id)
         if not session_id:
             return None
 

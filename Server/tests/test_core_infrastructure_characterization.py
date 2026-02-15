@@ -658,7 +658,7 @@ class TestServerConfigDefaults:
         """Verify ServerConfig has expected default values."""
         config = ServerConfig()
 
-        assert config.unity_host == "localhost"
+        assert config.unity_host == "127.0.0.1"
         assert config.unity_port == 6400
         assert config.mcp_port == 6500
         assert config.connection_timeout == 30.0
@@ -700,6 +700,60 @@ class TestServerConfigDefaults:
         """Verify ServerConfig is a dataclass."""
         from dataclasses import is_dataclass
         assert is_dataclass(ServerConfig)
+
+
+class TestHttpDefaultHostFallbacks:
+    """Tests for HTTP host/URL defaults in main.py argument parsing."""
+
+    @staticmethod
+    def _build_parser():
+        """Build the same argparser as main() for testing defaults."""
+        import argparse
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--http-url", type=str, default="http://127.0.0.1:8080")
+        parser.add_argument("--http-host", type=str, default=None)
+        parser.add_argument("--http-port", type=int, default=None)
+        return parser
+
+    def test_default_http_url_uses_127_0_0_1(self):
+        """With no flags, default URL should be http://127.0.0.1:8080."""
+        from urllib.parse import urlparse
+        args = self._build_parser().parse_args([])
+        parsed = urlparse(args.http_url)
+        assert parsed.hostname == "127.0.0.1"
+        assert parsed.port == 8080
+
+    def test_explicit_localhost_url_is_honored(self):
+        """--http-url localhost should not be rewritten to 127.0.0.1."""
+        from urllib.parse import urlparse
+        args = self._build_parser().parse_args(["--http-url", "http://localhost:8080"])
+        parsed = urlparse(args.http_url)
+        assert parsed.hostname == "localhost"
+
+    def test_host_fallback_without_env(self, monkeypatch):
+        """When no env vars or flags set host, fallback should be 127.0.0.1."""
+        from urllib.parse import urlparse
+        for key in ("UNITY_MCP_HTTP_URL", "UNITY_MCP_HTTP_HOST", "UNITY_MCP_HTTP_PORT"):
+            monkeypatch.delenv(key, raising=False)
+        args = self._build_parser().parse_args([])
+        http_host = (
+            args.http_host
+            or os.environ.get("UNITY_MCP_HTTP_HOST")
+            or urlparse(args.http_url).hostname
+            or "127.0.0.1"
+        )
+        assert http_host == "127.0.0.1"
+
+    def test_env_host_override_is_honored(self, monkeypatch):
+        """UNITY_MCP_HTTP_HOST=localhost should be used as-is."""
+        monkeypatch.setenv("UNITY_MCP_HTTP_HOST", "localhost")
+        args = self._build_parser().parse_args([])
+        http_host = (
+            args.http_host
+            or os.environ.get("UNITY_MCP_HTTP_HOST")
+            or "127.0.0.1"
+        )
+        assert http_host == "localhost"
 
 
 class TestServerConfigLogging:

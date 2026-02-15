@@ -29,8 +29,9 @@ namespace MCPForUnity.Editor.Constants
         internal const string WebSocketUrlOverride = "MCPForUnity.WebSocketUrl";
         internal const string GitUrlOverride = "MCPForUnity.GitUrlOverride";
         internal const string DevModeForceServerRefresh = "MCPForUnity.DevModeForceServerRefresh";
-        internal const string UseBetaServer = "MCPForUnity.UseBetaServer";
         internal const string ProjectScopedToolsLocalHttp = "MCPForUnity.ProjectScopedTools.LocalHttp";
+        internal const string AllowLanHttpBind = "MCPForUnity.Security.AllowLanHttpBind";
+        internal const string AllowInsecureRemoteHttp = "MCPForUnity.Security.AllowInsecureRemoteHttp";
 
         internal const string PackageDeploySourcePath = "MCPForUnity.PackageDeploy.SourcePath";
         internal const string PackageDeployLastBackupPath = "MCPForUnity.PackageDeploy.LastBackupPath";

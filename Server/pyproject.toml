@@ -1,6 +1,6 @@
 [project]
 name = "mcpforunityserver"
-version = "9.4.4"
+version = "9.4.6"
 description = "MCP for Unity Server: A Unity package for Unity Editor integration via the Model Context Protocol (MCP)."
 readme = "README.md"
 license = "MIT"

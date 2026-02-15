@@ -12,6 +12,7 @@ from core.config import config
 
 
 @mcp_for_unity_tool(
+    unity_target=None,
     description="Set the active Unity instance for this client/session. Accepts Name@hash or hash.",
     annotations=ToolAnnotations(
         title="Set Active Instance",

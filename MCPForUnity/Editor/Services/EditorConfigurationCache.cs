@@ -48,7 +48,6 @@ namespace MCPForUnity.Editor.Services
         // Cached values - most frequently read
         private bool _useHttpTransport;
         private bool _debugLogs;
-        private bool _useBetaServer;
         private bool _devModeForceServerRefresh;
         private string _uvxPathOverride;
         private string _gitUrlOverride;
@@ -69,12 +68,6 @@ namespace MCPForUnity.Editor.Services
         /// Default: false
         /// </summary>
         public bool DebugLogs => _debugLogs;
-
-        /// <summary>
-        /// Whether to use the beta server channel.
-        /// Default: true
-        /// </summary>
-        public bool UseBetaServer => _useBetaServer;
 
         /// <summary>
         /// Whether to force server refresh in dev mode (--no-cache --refresh).
@@ -124,23 +117,6 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         public int UnitySocketPort => _unitySocketPort;
 
-        /// <summary>
-        /// Gets UseBetaServer value with dynamic default based on package version.
-        /// If the pref hasn't been explicitly set, defaults to true for prerelease packages
-        /// (beta, alpha, rc, etc.) and false for stable releases.
-        /// </summary>
-        private static bool GetUseBetaServerWithDynamicDefault()
-        {
-            // If user has explicitly set the pref, use that value
-            if (EditorPrefs.HasKey(EditorPrefKeys.UseBetaServer))
-            {
-                return EditorPrefs.GetBool(EditorPrefKeys.UseBetaServer, false);
-            }
-
-            // Otherwise, default based on whether this is a prerelease package
-            return Helpers.AssetPathUtility.IsPreReleaseVersion();
-        }
-
         private EditorConfigurationCache()
         {
             Refresh();
@@ -154,7 +130,6 @@ namespace MCPForUnity.Editor.Services
         {
             _useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
             _debugLogs = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
-            _useBetaServer = GetUseBetaServerWithDynamicDefault();
             _devModeForceServerRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
             _uvxPathOverride = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
             _gitUrlOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, string.Empty);
@@ -188,19 +163,6 @@ namespace MCPForUnity.Editor.Services
                 _debugLogs = value;
                 EditorPrefs.SetBool(EditorPrefKeys.DebugLogs, value);
                 OnConfigurationChanged?.Invoke(nameof(DebugLogs));
-            }
-        }
-
-        /// <summary>
-        /// Set UseBetaServer and update cache + EditorPrefs atomically.
-        /// </summary>
-        public void SetUseBetaServer(bool value)
-        {
-            if (_useBetaServer != value)
-            {
-                _useBetaServer = value;
-                EditorPrefs.SetBool(EditorPrefKeys.UseBetaServer, value);
-                OnConfigurationChanged?.Invoke(nameof(UseBetaServer));
             }
         }
 
@@ -327,9 +289,6 @@ namespace MCPForUnity.Editor.Services
                     break;
                 case nameof(DebugLogs):
                     _debugLogs = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
-                    break;
-                case nameof(UseBetaServer):
-                    _useBetaServer = GetUseBetaServerWithDynamicDefault();
                     break;
                 case nameof(DevModeForceServerRefresh):
                     _devModeForceServerRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);

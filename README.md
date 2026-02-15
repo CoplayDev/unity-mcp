@@ -202,6 +202,16 @@ See [README-DEV.md](docs/development/README-DEV.md) for development setup. For c
 Anonymous, privacy-focused telemetry (no code, no project names, no personal data). Opt out with `DISABLE_TELEMETRY=true`. See [TELEMETRY.md](docs/reference/TELEMETRY.md).
 </details>
 
+<details>
+<summary><strong>Security</strong></summary>
+
+Network defaults are intentionally fail-closed:
+* **HTTP Local** allows loopback-only hosts by default (`127.0.0.1`, `localhost`, `::1`).
+* Bind-all interfaces (`0.0.0.0`, `::`) require explicit opt-in in **Advanced Settings** via **Allow LAN Bind (HTTP Local)**.
+* **HTTP Remote** requires `https://` by default.
+* Plaintext `http://` for remote endpoints requires explicit opt-in via **Allow Insecure Remote HTTP**.
+</details>
+
 ---
 
 **License:** MIT — See [LICENSE](LICENSE) | **Need help?** [Discord](https://discord.gg/y4p8KfzrN4) | [Issues](https://github.com/CoplayDev/unity-mcp/issues)

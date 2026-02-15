@@ -610,7 +610,7 @@ Environment Variables:
   UNITY_MCP_SKIP_STARTUP_CONNECT   Skip initial Unity connection attempt (set to 1/true/yes/on)
   UNITY_MCP_TELEMETRY_ENABLED   Enable telemetry (set to 1/true/yes/on)
   UNITY_MCP_TRANSPORT   Transport protocol: stdio or http (default: stdio)
-  UNITY_MCP_HTTP_URL   HTTP server URL (default: http://localhost:8080)
+  UNITY_MCP_HTTP_URL   HTTP server URL (default: http://127.0.0.1:8080)
   UNITY_MCP_HTTP_HOST   HTTP server host (overrides URL host)
   UNITY_MCP_HTTP_PORT   HTTP server port (overrides URL port)
 
@@ -619,7 +619,7 @@ Examples:
   python -m src.server --default-instance "MyProject"
 
   # Start with HTTP transport
-  python -m src.server --transport http --http-url http://localhost:8080
+  python -m src.server --transport http --http-url http://127.0.0.1:8080
 
   # Start with stdio transport (default)
   python -m src.server --transport stdio
@@ -646,9 +646,9 @@ Examples:
     parser.add_argument(
         "--http-url",
         type=str,
-        default="http://localhost:8080",
+        default="http://127.0.0.1:8080",
         metavar="URL",
-        help="HTTP server URL (default: http://localhost:8080). "
+        help="HTTP server URL (default: http://127.0.0.1:8080). "
              "Can also set via UNITY_MCP_HTTP_URL environment variable."
     )
     parser.add_argument(
@@ -799,7 +799,7 @@ Examples:
 
     # Allow individual host/port to override URL components
     http_host = args.http_host or os.environ.get(
-        "UNITY_MCP_HTTP_HOST") or parsed_url.hostname or "localhost"
+        "UNITY_MCP_HTTP_HOST") or parsed_url.hostname or "127.0.0.1"
 
     # Safely parse optional environment port (may be None or non-numeric)
     _env_port_str = os.environ.get("UNITY_MCP_HTTP_PORT")
@@ -829,7 +829,7 @@ Examples:
             logger.warning(
                 "Failed to write pidfile '%s': %s", args.pidfile, exc)
 
-    if args.http_url != "http://localhost:8080":
+    if args.http_url != "http://127.0.0.1:8080":
         logger.info(f"HTTP URL set to: {http_url}")
     if args.http_host:
         logger.info(f"HTTP host override: {http_host}")
@@ -850,7 +850,7 @@ Examples:
         http_url = os.environ.get("UNITY_MCP_HTTP_URL", args.http_url)
         parsed_url = urlparse(http_url)
         host = args.http_host or os.environ.get(
-            "UNITY_MCP_HTTP_HOST") or parsed_url.hostname or "localhost"
+            "UNITY_MCP_HTTP_HOST") or parsed_url.hostname or "127.0.0.1"
         port = args.http_port or _env_port or parsed_url.port or 8080
         logger.info(f"Starting FastMCP with HTTP transport on {host}:{port}")
         mcp.run(transport=transport, host=host, port=port)

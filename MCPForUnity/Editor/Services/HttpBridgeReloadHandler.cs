@@ -14,6 +14,16 @@ namespace MCPForUnity.Editor.Services
     [InitializeOnLoad]
     internal static class HttpBridgeReloadHandler
     {
+        private static readonly TimeSpan[] ResumeRetrySchedule =
+        {
+            TimeSpan.Zero,
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromSeconds(3),
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromSeconds(10),
+            TimeSpan.FromSeconds(30)
+        };
+
         static HttpBridgeReloadHandler()
         {
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
@@ -38,14 +48,9 @@ namespace MCPForUnity.Editor.Services
 
                 if (shouldResume)
                 {
-                    var stopTask = transport.StopAsync(TransportMode.Http);
-                    stopTask.ContinueWith(t =>
-                    {
-                        if (t.IsFaulted && t.Exception != null)
-                        {
-                            McpLog.Warn($"Error stopping MCP bridge before reload: {t.Exception.GetBaseException().Message}");
-                        }
-                    }, TaskScheduler.Default);
+                    // beforeAssemblyReload is synchronous; force a synchronous teardown so we do not
+                    // leave an orphaned socket due to an unfinished async close handshake.
+                    transport.ForceStop(TransportMode.Http);
                 }
             }
             catch (Exception ex)
@@ -90,56 +95,69 @@ namespace MCPForUnity.Editor.Services
 
             if (!isCompiling)
             {
-                try
-                {
-                    var startTask = MCPServiceLocator.TransportManager.StartAsync(TransportMode.Http);
-                    startTask.ContinueWith(t =>
-                    {
-                        if (t.IsFaulted)
-                        {
-                            var baseEx = t.Exception?.GetBaseException();
-                            McpLog.Warn($"Failed to resume HTTP MCP bridge after domain reload: {baseEx?.Message}");
-                            return;
-                        }
-                        bool started = t.Result;
-                        if (!started)
-                        {
-                            McpLog.Warn("Failed to resume HTTP MCP bridge after domain reload");
-                        }
-                        else
-                        {
-                            MCPForUnityEditorWindow.RequestHealthVerification();
-                        }
-                    }, TaskScheduler.Default);
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    McpLog.Error($"Error resuming HTTP MCP bridge: {ex.Message}");
-                    return;
-                }
+                _ = ResumeHttpWithRetriesAsync();
+                return;
             }
 
             // Fallback when compiling: schedule on the editor loop
-            EditorApplication.delayCall += async () =>
+            EditorApplication.delayCall += () =>
             {
+                _ = ResumeHttpWithRetriesAsync();
+            };
+        }
+
+        private static async Task ResumeHttpWithRetriesAsync()
+        {
+            Exception lastException = null;
+
+            for (int i = 0; i < ResumeRetrySchedule.Length; i++)
+            {
+                int attempt = i + 1;
+                McpLog.Debug($"[HTTP Reload] Resume attempt {attempt}/{ResumeRetrySchedule.Length}");
+
+                TimeSpan delay = ResumeRetrySchedule[i];
+                if (delay > TimeSpan.Zero)
+                {
+                    McpLog.Debug($"[HTTP Reload] Waiting {delay.TotalSeconds:0.#}s before resume attempt {attempt}");
+                    try { await Task.Delay(delay); }
+                    catch { return; }
+                }
+
+                // Abort retries if the user switched transports while we were waiting.
+                if (!EditorConfigurationCache.Instance.UseHttpTransport)
+                {
+                    return;
+                }
+
                 try
                 {
                     bool started = await MCPServiceLocator.TransportManager.StartAsync(TransportMode.Http);
-                    if (!started)
+                    if (started)
                     {
-                        McpLog.Warn("Failed to resume HTTP MCP bridge after domain reload");
-                    }
-                    else
-                    {
+                        McpLog.Debug($"[HTTP Reload] Resume succeeded on attempt {attempt}");
                         MCPForUnityEditorWindow.RequestHealthVerification();
+                        return;
                     }
+
+                    var state = MCPServiceLocator.TransportManager.GetState(TransportMode.Http);
+                    string reason = string.IsNullOrWhiteSpace(state?.Error) ? "no error detail" : state.Error;
+                    McpLog.Debug($"[HTTP Reload] Resume attempt {attempt} failed: {reason}");
                 }
                 catch (Exception ex)
                 {
-                    McpLog.Error($"Error resuming HTTP MCP bridge: {ex.Message}");
+                    lastException = ex;
+                    McpLog.Debug($"[HTTP Reload] Resume attempt {attempt} threw: {ex.Message}");
                 }
-            };
+            }
+
+            if (lastException != null)
+            {
+                McpLog.Warn($"Failed to resume HTTP MCP bridge after domain reload: {lastException.Message}");
+            }
+            else
+            {
+                McpLog.Warn("Failed to resume HTTP MCP bridge after domain reload");
+            }
         }
     }
 }
