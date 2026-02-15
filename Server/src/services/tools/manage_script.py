@@ -65,6 +65,7 @@ def _split_uri(uri: str) -> tuple[str, str]:
 
 
 @mcp_for_unity_tool(
+    unity_target="manage_script",
     description=(
         """Apply small text edits to a C# script identified by URI.
     IMPORTANT: This tool replaces EXACT character positions. Always verify content at target lines/columns BEFORE editing!
@@ -375,6 +376,7 @@ async def apply_text_edits(
 
 
 @mcp_for_unity_tool(
+    unity_target="manage_script",
     description="Create a new C# script at the given project path.",
     annotations=ToolAnnotations(
         title="Create Script",
@@ -426,6 +428,7 @@ async def create_script(
 
 
 @mcp_for_unity_tool(
+    unity_target="manage_script",
     description="Delete a C# script by URI or Assets-relative path.",
     annotations=ToolAnnotations(
         title="Delete Script",
@@ -454,6 +457,7 @@ async def delete_script(
 
 
 @mcp_for_unity_tool(
+    unity_target="manage_script",
     description="Validate a C# script and return diagnostics.",
     annotations=ToolAnnotations(
         title="Validate Script",
@@ -575,6 +579,7 @@ async def manage_script(
 
 
 @mcp_for_unity_tool(
+    unity_target=None,
     description=(
         """Get manage_script capabilities (supported ops, limits, and guards).
     Returns:
@@ -613,6 +618,7 @@ async def manage_script_capabilities(ctx: Context) -> dict[str, Any]:
 
 
 @mcp_for_unity_tool(
+    unity_target="manage_script",
     description="Get SHA256 and basic metadata for a Unity C# script without returning file contents. Requires uri (script path under Assets/ or mcpforunity://path/Assets/... or file://...).",
     annotations=ToolAnnotations(
         title="Get SHA",

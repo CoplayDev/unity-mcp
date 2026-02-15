@@ -13,6 +13,367 @@ from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 
 
+def _iter_csharp_tokens(text: str):
+    """Iterate over C# source text yielding (position, char, is_code, interp_depth).
+
+    A single-pass lexer that handles all C# string/comment variants:
+    - Regular strings ("..." with \\ escaping)
+    - Verbatim strings (@"..." with "" escaping)
+    - Interpolated strings ($"..." with {/} depth tracking, {{/}} escapes)
+    - Verbatim interpolated ($@"..." / @$"...")
+    - Raw string literals (C# 11: triple+ quotes)
+    - Char literals ('...')
+    - Single-line comments (//...)
+    - Multi-line comments (/*...*/)
+
+    Yields (position, char, is_code, interp_depth) for every character.
+    is_code is False inside strings/comments, True for real code.
+    interp_depth tracks nesting inside interpolation holes (0 = string content).
+    """
+    i = 0
+    end = len(text)
+    while i < end:
+        c = text[i]
+        nxt = text[i + 1] if i + 1 < end else '\0'
+
+        # Single-line comment
+        if c == '/' and nxt == '/':
+            yield (i, c, False, 0)
+            i += 1
+            while i < end and text[i] != '\n':
+                yield (i, text[i], False, 0)
+                i += 1
+            if i < end:
+                yield (i, text[i], True, 0)  # newline itself is code
+                i += 1
+            continue
+
+        # Multi-line comment
+        if c == '/' and nxt == '*':
+            yield (i, c, False, 0)
+            i += 1
+            yield (i, text[i], False, 0)
+            i += 1
+            while i + 1 < end:
+                yield (i, text[i], False, 0)
+                if text[i] == '*' and text[i + 1] == '/':
+                    i += 1
+                    yield (i, text[i], False, 0)
+                    i += 1
+                    break
+                i += 1
+            else:
+                if i < end:
+                    yield (i, text[i], False, 0)
+                    i += 1
+            continue
+
+        # Interpolated raw string: $"""...""" or $$"""...""" etc. (C# 11)
+        # Must check BEFORE regular $" and BEFORE plain """
+        if c == '$':
+            dollar_count = 1
+            while i + dollar_count < end and text[i + dollar_count] == '$':
+                dollar_count += 1
+            after_dollars = i + dollar_count
+            if (after_dollars + 2 < end and text[after_dollars] == '"'
+                    and text[after_dollars + 1] == '"' and text[after_dollars + 2] == '"'):
+                q = 3
+                while after_dollars + q < end and text[after_dollars + q] == '"':
+                    q += 1
+                # Yield all prefix chars ($s and quotes) as non-code
+                for _ in range(dollar_count + q):
+                    yield (i, text[i], False, 0)
+                    i += 1
+                # Scan body with interpolation tracking
+                interp_depth = 0
+                while i < end:
+                    ch = text[i]
+                    if interp_depth > 0:
+                        # Inside interpolation hole — code
+                        if ch == '{':
+                            interp_depth += 1
+                            yield (i, ch, True, interp_depth)
+                            i += 1
+                        elif ch == '}':
+                            yield (i, ch, True, interp_depth)
+                            interp_depth -= 1
+                            i += 1
+                        elif ch == '"':
+                            yield (i, ch, False, interp_depth)
+                            i += 1
+                            while i < end:
+                                yield (i, text[i], False, interp_depth)
+                                if text[i] == '\\':
+                                    i += 1
+                                    if i < end:
+                                        yield (i, text[i], False, interp_depth)
+                                        i += 1
+                                    continue
+                                if text[i] == '"':
+                                    i += 1
+                                    break
+                                i += 1
+                        elif ch == '/' and i + 1 < end and text[i + 1] == '/':
+                            yield (i, ch, False, interp_depth)
+                            i += 1
+                            while i < end and text[i] != '\n':
+                                yield (i, text[i], False, interp_depth)
+                                i += 1
+                        elif ch == '/' and i + 1 < end and text[i + 1] == '*':
+                            yield (i, ch, False, interp_depth)
+                            i += 1
+                            yield (i, text[i], False, interp_depth)
+                            i += 1
+                            while i + 1 < end and not (text[i] == '*' and text[i + 1] == '/'):
+                                yield (i, text[i], False, interp_depth)
+                                i += 1
+                            if i + 1 < end:
+                                yield (i, text[i], False, interp_depth)
+                                i += 1
+                                yield (i, text[i], False, interp_depth)
+                                i += 1
+                        else:
+                            yield (i, ch, True, interp_depth)
+                            i += 1
+                        continue
+                    # String content (interp_depth == 0)
+                    # Check for closing quote sequence
+                    if ch == '"':
+                        qc = 1
+                        while i + qc < end and text[i + qc] == '"':
+                            qc += 1
+                        if qc >= q:
+                            for _ in range(q):
+                                yield (i, text[i], False, 0)
+                                i += 1
+                            break
+                        for _ in range(qc):
+                            yield (i, text[i], False, 0)
+                            i += 1
+                        continue
+                    # Check for interpolation hole: dollar_count consecutive {'s
+                    if ch == '{':
+                        bc = 1
+                        while i + bc < end and text[i + bc] == '{':
+                            bc += 1
+                        if bc >= dollar_count:
+                            for _ in range(dollar_count):
+                                yield (i, text[i], True, 1)
+                                i += 1
+                            interp_depth = 1
+                        else:
+                            for _ in range(bc):
+                                yield (i, text[i], False, 0)
+                                i += 1
+                        continue
+                    # Closing braces — literal at depth 0
+                    if ch == '}':
+                        bc = 1
+                        while i + bc < end and text[i + bc] == '}':
+                            bc += 1
+                        for _ in range(bc):
+                            yield (i, text[i], False, 0)
+                            i += 1
+                        continue
+                    yield (i, ch, False, 0)
+                    i += 1
+                continue
+
+        # Raw string literal: """ ... """ (non-interpolated)
+        if c == '"' and nxt == '"' and i + 2 < end and text[i + 2] == '"':
+            q = 3
+            while i + q < end and text[i + q] == '"':
+                q += 1
+            for _ in range(q):
+                yield (i, text[i], False, 0)
+                i += 1
+            close_count = 0
+            while i < end:
+                yield (i, text[i], False, 0)
+                if text[i] == '"':
+                    close_count += 1
+                    if close_count >= q:
+                        i += 1
+                        break
+                else:
+                    close_count = 0
+                i += 1
+            continue
+
+        # Interpolated string: $"..." or $@"..." or @$"..."
+        if (c == '$' and nxt == '"') or \
+           (c == '$' and nxt == '@' and i + 2 < end and text[i + 2] == '"') or \
+           (c == '@' and nxt == '$' and i + 2 < end and text[i + 2] == '"'):
+            is_verbatim = (nxt == '@') or (c == '@')
+            prefix_len = 2 if (c == '$' and nxt == '"') else 3
+            for _ in range(prefix_len):
+                yield (i, text[i], False, 0)
+                i += 1
+            interp_depth = 0
+            while i < end:
+                ch = text[i]
+                if interp_depth > 0:
+                    # Inside interpolation hole — this is code
+                    if ch == '{':
+                        interp_depth += 1
+                        yield (i, ch, True, interp_depth)
+                        i += 1
+                    elif ch == '}':
+                        yield (i, ch, True, interp_depth)
+                        interp_depth -= 1
+                        i += 1
+                    elif ch == '"':
+                        # Nested string inside interpolation hole
+                        yield (i, ch, False, interp_depth)
+                        i += 1
+                        while i < end:
+                            yield (i, text[i], False, interp_depth)
+                            if text[i] == '\\':
+                                i += 1
+                                if i < end:
+                                    yield (i, text[i], False, interp_depth)
+                                    i += 1
+                                continue
+                            if text[i] == '"':
+                                i += 1
+                                break
+                            i += 1
+                    elif ch == '/' and i + 1 < end and text[i + 1] == '/':
+                        yield (i, ch, False, interp_depth)
+                        i += 1
+                        while i < end and text[i] != '\n':
+                            yield (i, text[i], False, interp_depth)
+                            i += 1
+                    elif ch == '/' and i + 1 < end and text[i + 1] == '*':
+                        yield (i, ch, False, interp_depth)
+                        i += 1
+                        yield (i, text[i], False, interp_depth)
+                        i += 1
+                        while i + 1 < end and not (text[i] == '*' and text[i + 1] == '/'):
+                            yield (i, text[i], False, interp_depth)
+                            i += 1
+                        if i + 1 < end:
+                            yield (i, text[i], False, interp_depth)
+                            i += 1
+                            yield (i, text[i], False, interp_depth)
+                            i += 1
+                    else:
+                        yield (i, ch, True, interp_depth)
+                        i += 1
+                    continue
+                # interp_depth == 0: inside string content
+                if ch == '{':
+                    if i + 1 < end and text[i + 1] == '{':
+                        yield (i, ch, False, 0)
+                        i += 1
+                        yield (i, text[i], False, 0)
+                        i += 1
+                        continue
+                    interp_depth = 1
+                    yield (i, ch, True, interp_depth)
+                    i += 1
+                    continue
+                if ch == '}':
+                    if i + 1 < end and text[i + 1] == '}':
+                        yield (i, ch, False, 0)
+                        i += 1
+                        yield (i, text[i], False, 0)
+                        i += 1
+                        continue
+                    yield (i, ch, False, 0)
+                    i += 1
+                    continue
+                if ch == '"':
+                    if is_verbatim and i + 1 < end and text[i + 1] == '"':
+                        yield (i, ch, False, 0)
+                        i += 1
+                        yield (i, text[i], False, 0)
+                        i += 1
+                        continue
+                    yield (i, ch, False, 0)
+                    i += 1
+                    break
+                if not is_verbatim and ch == '\\':
+                    yield (i, ch, False, 0)
+                    i += 1
+                    if i < end:
+                        yield (i, text[i], False, 0)
+                        i += 1
+                    continue
+                yield (i, ch, False, 0)
+                i += 1
+            continue
+
+        # Verbatim string: @"..."
+        if c == '@' and nxt == '"':
+            yield (i, c, False, 0)
+            i += 1
+            yield (i, text[i], False, 0)
+            i += 1
+            while i < end:
+                yield (i, text[i], False, 0)
+                if text[i] == '"':
+                    if i + 1 < end and text[i + 1] == '"':
+                        i += 1
+                        yield (i, text[i], False, 0)
+                        i += 1
+                        continue
+                    i += 1
+                    break
+                i += 1
+            continue
+
+        # Regular string: "..."
+        if c == '"':
+            yield (i, c, False, 0)
+            i += 1
+            while i < end:
+                yield (i, text[i], False, 0)
+                if text[i] == '\\':
+                    i += 1
+                    if i < end:
+                        yield (i, text[i], False, 0)
+                        i += 1
+                    continue
+                if text[i] == '"':
+                    i += 1
+                    break
+                i += 1
+            continue
+
+        # Char literal: '...'
+        if c == '\'':
+            yield (i, c, False, 0)
+            i += 1
+            while i < end:
+                yield (i, text[i], False, 0)
+                if text[i] == '\\':
+                    i += 1
+                    if i < end:
+                        yield (i, text[i], False, 0)
+                        i += 1
+                    continue
+                if text[i] == '\'':
+                    i += 1
+                    break
+                i += 1
+            continue
+
+        # Real code character
+        yield (i, c, True, 0)
+        i += 1
+
+
+def _is_in_string_context(text: str, position: int) -> bool:
+    """Check if a position in C# source text is inside a string literal or comment."""
+    for pos, _, is_code, _ in _iter_csharp_tokens(text):
+        if pos == position:
+            return not is_code
+        if pos > position:
+            break
+    return False
+
+
 async def _apply_edits_locally(original_text: str, edits: list[dict[str, Any]]) -> str:
     text = original_text
     for edit in edits or []:
@@ -137,16 +498,36 @@ def _find_best_anchor_match(pattern: str, text: str, flags: int, prefer_last: bo
     return matches[-1] if prefer_last else matches[0]
 
 
+def _brace_depth_at_positions(text: str, positions: set[int]) -> dict[int, int]:
+    """Compute the brace depth just before each requested position.
+
+    For every ``}`` in real code at a position in *positions*, stores the
+    depth **before** that ``}`` is applied (i.e. the depth it decrements from).
+
+    Returns a dict mapping position -> depth-before.
+    """
+    depths: dict[int, int] = {}
+    depth = 0
+    for pos, c, is_code, _ in _iter_csharp_tokens(text):
+        if not is_code:
+            continue
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            if pos in positions:
+                depths[pos] = depth
+            depth = max(0, depth - 1)
+    return depths
+
+
 def _find_best_closing_brace_match(matches, text: str):
     """
-    Find the best closing brace match using C# structure heuristics.
+    Find the best closing brace match using brace-depth analysis.
 
-    Enhanced heuristics for scope-aware matching:
-    1. Prefer matches with lower indentation (likely class-level)
-    2. Prefer matches closer to end of file  
-    3. Avoid matches that seem to be inside method bodies
-    4. For #endregion patterns, ensure class-level context
-    5. Validate insertion point is at appropriate scope
+    Scans the text once to compute the actual brace nesting depth at each
+    candidate ``}`` position (skipping strings/comments).  Prefers the
+    shallowest (outermost) brace — typically the class-closing brace.
+    Among equal-depth candidates, prefers the last one (closest to EOF).
 
     Args:
         matches: List of regex match objects
@@ -158,51 +539,30 @@ def _find_best_closing_brace_match(matches, text: str):
     if not matches:
         return None
 
-    scored_matches = []
-    lines = text.splitlines()
+    # Find the position of the '}' character within each match, filtering out
+    # braces inside strings/comments
+    brace_positions: dict[int, object] = {}  # brace_pos → match
+    for m in matches:
+        for offset in range(m.start(), m.end()):
+            if offset < len(text) and text[offset] == '}':
+                if not _is_in_string_context(text, offset):
+                    brace_positions[offset] = m
+                break
 
-    for match in matches:
-        score = 0
-        start_pos = match.start()
+    if not brace_positions:
+        return None
 
-        # Find which line this match is on
-        lines_before = text[:start_pos].count('\n')
-        line_num = lines_before
+    depths = _brace_depth_at_positions(text, set(brace_positions.keys()))
 
-        if line_num < len(lines):
-            line_content = lines[line_num]
-
-            # Calculate indentation level (lower is better for class braces)
-            indentation = len(line_content) - len(line_content.lstrip())
-
-            # Prefer lower indentation (class braces are typically less indented than method braces)
-            # Max 20 points for indentation=0
-            score += max(0, 20 - indentation)
-
-            # Prefer matches closer to end of file (class closing braces are typically at the end)
-            distance_from_end = len(lines) - line_num
-            # More points for being closer to end
-            score += max(0, 10 - distance_from_end)
-
-            # Look at surrounding context to avoid method braces
-            context_start = max(0, line_num - 3)
-            context_end = min(len(lines), line_num + 2)
-            context_lines = lines[context_start:context_end]
-
-            # Penalize if this looks like it's inside a method (has method-like patterns above)
-            for context_line in context_lines:
-                if re.search(r'\b(void|public|private|protected)\s+\w+\s*\(', context_line):
-                    score -= 5  # Penalty for being near method signatures
-
-            # Bonus if this looks like a class-ending brace (very minimal indentation and near EOF)
-            if indentation <= 4 and distance_from_end <= 3:
-                score += 15  # Bonus for likely class-ending brace
-
-        scored_matches.append((score, match))
-
-    # Return the match with the highest score
-    scored_matches.sort(key=lambda x: x[0], reverse=True)
-    best_match = scored_matches[0][1]
+    # Score: prefer shallowest depth (outermost brace), then latest position
+    best_match = None
+    best_key = (float('inf'), -1)  # (depth, -position) — lower is better
+    for pos, m in brace_positions.items():
+        d = depths.get(pos, float('inf'))
+        key = (d, -pos)  # lower depth wins, then later position wins
+        if key < best_key:
+            best_key = key
+            best_match = m
 
     return best_match
 
@@ -312,6 +672,7 @@ def _err(code: str, message: str, *, expected: dict[str, Any] | None = None, rew
 
 @mcp_for_unity_tool(
     name="script_apply_edits",
+    unity_target="manage_script",
     description=(
         """Structured C# edits (methods/classes) with safer boundaries - prefer this over raw text.
     Best practices:

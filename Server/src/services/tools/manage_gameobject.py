@@ -7,7 +7,7 @@ from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
-from services.tools.utils import coerce_bool, parse_json_payload, normalize_vector3
+from services.tools.utils import coerce_bool, parse_json_payload, normalize_vector3, normalize_string_list
 from services.tools.preflight import preflight
 
 
@@ -42,9 +42,9 @@ def _normalize_component_properties(value: Any) -> tuple[dict[str, dict[str, Any
     description=(
         "Performs CRUD operations on GameObjects. "
         "Actions: create, modify, delete, duplicate, move_relative. "
-        "To FIND GameObjects, use the find_gameobjects tool instead. "
-        "To manage COMPONENTS (add/remove/set_property), use the manage_components tool instead. "
-        "To READ component data, use the mcpforunity://scene/gameobject/{id}/components resource."
+        "NOT for searching — use the find_gameobjects tool to search by name/tag/layer/component/path. "
+        "NOT for component management — use the manage_components tool (add/remove/set_property) "
+        "or mcpforunity://scene/gameobject/{id}/components resource (read)."
     ),
     annotations=ToolAnnotations(
         title="Manage GameObject",
@@ -74,7 +74,7 @@ async def manage_gameobject(
                         "Rotation as [x, y, z] euler angles array, {x, y, z} object, or JSON string"] | None = None,
     scale: Annotated[list[float] | dict[str, float] | str,
                      "Scale as [x, y, z] array, {x, y, z} object, or JSON string"] | None = None,
-    components_to_add: Annotated[list[str],
+    components_to_add: Annotated[list[str] | str,
                                  "List of component names to add during 'create' or 'modify'"] | None = None,
     primitive_type: Annotated[str,
                               "Primitive type for 'create' action"] | None = None,
@@ -87,7 +87,7 @@ async def manage_gameobject(
     set_active: Annotated[bool | str,
                           "If True, sets the GameObject active (accepts true/false or 'true'/'false')"] | None = None,
     layer: Annotated[str, "Layer name"] | None = None,
-    components_to_remove: Annotated[list[str],
+    components_to_remove: Annotated[list[str] | str,
                                     "List of component names to remove"] | None = None,
     component_properties: Annotated[dict[str, dict[str, Any]],
                                     """Dictionary of component names to their properties to set. For example:
@@ -121,7 +121,7 @@ async def manage_gameobject(
     if action is None:
         return {
             "success": False,
-            "message": "Missing required parameter 'action'. Valid actions: create, modify, delete, duplicate, move_relative. For finding GameObjects use find_gameobjects tool. For component operations use manage_components tool."
+            "message": "Missing required parameter 'action'. Valid actions: create, modify, delete, duplicate, move_relative. To SEARCH for GameObjects use the find_gameobjects tool. To manage COMPONENTS use the manage_components tool."
         }
 
     # --- Normalize vector parameters with detailed error handling ---
@@ -148,6 +148,15 @@ async def manage_gameobject(
         component_properties)
     if comp_props_error:
         return {"success": False, "message": comp_props_error}
+
+    # --- Normalize components_to_add and components_to_remove ---
+    components_to_add, add_error = normalize_string_list(components_to_add, "components_to_add")
+    if add_error:
+        return {"success": False, "message": add_error}
+
+    components_to_remove, remove_error = normalize_string_list(components_to_remove, "components_to_remove")
+    if remove_error:
+        return {"success": False, "message": remove_error}
 
     try:
         # Prepare parameters, removing None values

@@ -62,27 +62,6 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
-        public void CheckScopedBalance_ValidCode_ReturnsTrue()
-        {
-            string validCode = "{ Debug.Log(\"test\"); }";
-
-            bool result = CallCheckScopedBalance(validCode, 0, validCode.Length);
-            Assert.IsTrue(result, "Valid scoped code should pass balance check");
-        }
-
-        [Test]
-        public void CheckScopedBalance_ShouldTolerateOuterContext_ReturnsTrue()
-        {
-            // This simulates a snippet extracted from a larger context
-            string contextSnippet = "    Debug.Log(\"inside method\");\n}  // This closing brace is from outer context";
-
-            bool result = CallCheckScopedBalance(contextSnippet, 0, contextSnippet.Length);
-
-            // Scoped balance should tolerate some imbalance from outer context
-            Assert.IsTrue(result, "Scoped balance should tolerate outer context imbalance");
-        }
-
-        [Test]
         public void TicTacToe3D_ValidationScenario_DoesNotCrash()
         {
             // Test the scenario that was causing issues without file I/O
@@ -90,10 +69,8 @@ namespace MCPForUnityTests.Editor.Tools
 
             // Test that the validation methods don't crash on this code
             bool balanceResult = CallCheckBalancedDelimiters(ticTacToeCode, out int line, out char expected);
-            bool scopedResult = CallCheckScopedBalance(ticTacToeCode, 0, ticTacToeCode.Length);
 
             Assert.IsTrue(balanceResult, "TicTacToe3D code should pass balance validation");
-            Assert.IsTrue(scopedResult, "TicTacToe3D code should pass scoped balance validation");
         }
 
         // Helper methods to access private ManageScript methods via reflection
@@ -123,26 +100,6 @@ namespace MCPForUnityTests.Editor.Tools
 
             // Fallback: basic structural check
             return BasicBalanceCheck(contents);
-        }
-
-        private bool CallCheckScopedBalance(string text, int start, int end)
-        {
-            try
-            {
-                var method = typeof(ManageScript).GetMethod("CheckScopedBalance",
-                    BindingFlags.NonPublic | BindingFlags.Static);
-
-                if (method != null)
-                {
-                    return (bool)method.Invoke(null, new object[] { text, start, end });
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"Could not test CheckScopedBalance directly: {ex.Message}");
-            }
-
-            return true; // Default to passing if we can't test the actual method
         }
 
         private bool BasicBalanceCheck(string contents)

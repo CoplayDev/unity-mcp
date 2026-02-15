@@ -226,16 +226,6 @@ namespace MCPForUnity.Editor.Services
             {
                 bool defaultValue = metadata.AutoRegister || metadata.IsBuiltIn;
                 EditorPrefs.SetBool(key, defaultValue);
-                return;
-            }
-
-            if (metadata.IsBuiltIn && !metadata.AutoRegister)
-            {
-                bool currentValue = EditorPrefs.GetBool(key, metadata.AutoRegister);
-                if (currentValue == metadata.AutoRegister)
-                {
-                    EditorPrefs.SetBool(key, true);
-                }
             }
         }
 

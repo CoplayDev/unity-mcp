@@ -266,8 +266,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
                     LogBreadcrumb("Start");
 
-                    const int maxImmediateRetries = 3;
-                    const int retrySleepMs = 75;
+                    const int maxImmediateRetries = 10;
+                    const int retrySleepMs = 200;
                     int attempt = 0;
                     for (; ; )
                     {
@@ -355,19 +355,12 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private static TcpListener CreateConfiguredListener(int port)
         {
             var newListener = new TcpListener(IPAddress.Loopback, port);
-#if !UNITY_EDITOR_OSX
+#if UNITY_EDITOR_OSX
             newListener.Server.SetSocketOption(
                 SocketOptionLevel.Socket,
                 SocketOptionName.ReuseAddress,
                 true
             );
-#endif
-#if UNITY_EDITOR_WIN
-            try
-            {
-                newListener.ExclusiveAddressUse = false;
-            }
-            catch { }
 #endif
             try
             {
@@ -398,6 +391,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     try { cancel?.Cancel(); } catch { }
 
                     try { listener?.Stop(); } catch { }
+                    try { listener?.Server?.Dispose(); } catch { }
                     listener = null;
 
                     toWait = listenerTask;
@@ -422,7 +416,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
             if (toWait != null)
             {
-                try { toWait.Wait(100); } catch { }
+                try { toWait.Wait(2000); } catch { }
             }
 
             try { EditorApplication.update -= ProcessCommands; } catch { }

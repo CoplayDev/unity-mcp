@@ -42,8 +42,13 @@
             </ui:VisualElement>
 
             <ui:VisualElement class="setting-row">
-                <ui:Label text="Use Beta Server:" class="setting-label" />
-                <ui:Toggle name="use-beta-server-toggle" class="setting-toggle" />
+                <ui:Label text="Allow LAN Bind (HTTP Local):" class="setting-label" />
+                <ui:Toggle name="allow-lan-http-bind-toggle" class="setting-toggle" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="setting-row">
+                <ui:Label text="Allow Insecure Remote HTTP:" class="setting-label" />
+                <ui:Toggle name="allow-insecure-remote-http-toggle" class="setting-toggle" />
             </ui:VisualElement>
 
             <ui:VisualElement class="override-row" style="margin-top: 8px;">

@@ -254,8 +254,9 @@ namespace MCPForUnityTests.Editor.Tools
         [Test]
         public void ClipGetInfo_ReturnsClipData()
         {
-            string clipPath = $"{TempRoot}/InfoClip_{Guid.NewGuid():N}.anim";
-            var clip = new AnimationClip { name = "InfoClip", frameRate = 30f };
+            string clipName = $"InfoClip_{Guid.NewGuid():N}";
+            string clipPath = $"{TempRoot}/{clipName}.anim";
+            var clip = new AnimationClip { name = clipName, frameRate = 30f };
             var settings = AnimationUtility.GetAnimationClipSettings(clip);
             settings.loopTime = true;
             settings.stopTime = 1.5f;
@@ -273,7 +274,7 @@ namespace MCPForUnityTests.Editor.Tools
 
             var data = result["data"] as JObject;
             Assert.IsNotNull(data);
-            Assert.AreEqual("InfoClip", data["name"].ToString());
+            Assert.AreEqual(clipName, data["name"].ToString());
             Assert.AreEqual(30f, data.Value<float>("frameRate"), 0.01f);
             Assert.IsTrue(data.Value<bool>("isLooping"));
         }

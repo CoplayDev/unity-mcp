@@ -31,9 +31,11 @@ namespace MCPForUnity.Editor.Services.Server
             }
 
             string httpUrl = HttpEndpointUtility.GetLocalBaseUrl();
-            if (!IsLocalUrl(httpUrl))
+            if (!HttpEndpointUtility.IsHttpLocalUrlAllowedForLaunch(httpUrl, out string localUrlError))
             {
-                error = $"The configured URL ({httpUrl}) is not a local address. Local server launch only works for localhost.";
+                error = string.IsNullOrEmpty(localUrlError)
+                    ? $"The configured URL ({httpUrl}) is not allowed for HTTP Local launch."
+                    : $"{localUrlError} (configured URL: {httpUrl})";
                 return false;
             }
 
@@ -129,23 +131,5 @@ namespace MCPForUnity.Editor.Services.Server
             return input.IndexOf(' ') >= 0 ? $"\"{input}\"" : input;
         }
 
-        /// <summary>
-        /// Check if a URL is local (localhost, 127.0.0.1, 0.0.0.0, ::1)
-        /// </summary>
-        private static bool IsLocalUrl(string url)
-        {
-            if (string.IsNullOrEmpty(url)) return false;
-
-            try
-            {
-                var uri = new Uri(url);
-                string host = uri.Host.ToLower();
-                return host == "localhost" || host == "127.0.0.1" || host == "0.0.0.0" || host == "::1";
-            }
-            catch
-            {
-                return false;
-            }
-        }
     }
 }
