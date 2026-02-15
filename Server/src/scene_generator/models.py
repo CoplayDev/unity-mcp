@@ -5,7 +5,7 @@ import math
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 DEFAULT_BATCH_SIZE_LIMIT = 40
 
@@ -102,6 +102,57 @@ class CausalChainStep(BaseModel):
     immediate_feedback: str = ""
     delayed_system_update: str = ""
     observable_outcome: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Multi-agent brainstorm models
+# ---------------------------------------------------------------------------
+
+
+class ScriptFieldSpec(BaseModel):
+    """One SerializeField declaration for a script blueprint."""
+    field_name: str
+    field_type: str                         # e.g. "Transform", "float", "GameObject[]"
+    purpose: str = ""
+    default_value: str | None = None        # C# literal when applicable
+
+
+class ScriptMethodSpec(BaseModel):
+    """One method signature for a script blueprint."""
+    method_name: str
+    return_type: str = "void"
+    parameters: list[str] = Field(default_factory=list)  # e.g. ["Collider other"]
+    purpose: str = ""
+    pseudocode: str = ""                    # LLM-generated implementation sketch
+
+    @field_validator("pseudocode", mode="before")
+    @classmethod
+    def _coerce_pseudocode(cls, v: Any) -> str:
+        """Accept a list of lines (common LLM output) and join into a string."""
+        if isinstance(v, list):
+            return "\n".join(str(line) for line in v)
+        return v
+
+
+class ScriptBlueprint(BaseModel):
+    """API contract for a MonoBehaviour produced by the Script Architect agent."""
+    class_name: str
+    base_class: str = "MonoBehaviour"
+    attach_to: str = ""
+    purpose: str = ""
+    fields: list[ScriptFieldSpec] = Field(default_factory=list)
+    methods: list[ScriptMethodSpec] = Field(default_factory=list)
+    dependencies: list[str] = Field(default_factory=list)     # Other script class names this references
+    events_emitted: list[str] = Field(default_factory=list)   # C# event / UnityEvent names
+    events_listened: list[str] = Field(default_factory=list)
+
+
+class BrainstormResult(BaseModel):
+    """Aggregated output from the parallel brainstorm agents."""
+    causal_chain: list[CausalChainStep] = Field(default_factory=list)
+    enriched_interactions: dict[str, InteractionSpec] = Field(default_factory=dict)  # keyed by mapping analogy_name
+    script_blueprints: list[ScriptBlueprint] = Field(default_factory=list)
+    merge_notes: list[str] = Field(default_factory=list)      # Merge-agent decisions / conflict resolutions
 
 
 class GuidedPromptSpec(BaseModel):
@@ -321,6 +372,7 @@ class MCPCallPlan(BaseModel):
     component_calls: list[MCPToolCall] = Field(default_factory=list)
     vfx_calls: list[MCPToolCall] = Field(default_factory=list)
     animation_calls: list[MCPToolCall] = Field(default_factory=list)
+    field_wiring_calls: list[MCPToolCall] = Field(default_factory=list)
     hierarchy_calls: list[MCPToolCall] = Field(default_factory=list)
     scene_save_calls: list[MCPToolCall] = Field(default_factory=list)
 
@@ -335,6 +387,7 @@ class MCPCallPlan(BaseModel):
             + self.component_calls
             + self.vfx_calls
             + self.animation_calls
+            + self.field_wiring_calls
             + self.hierarchy_calls
             + self.scene_save_calls
         )
@@ -409,6 +462,7 @@ class BatchExecutionPlan(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     script_tasks: list[ScriptTask] = Field(default_factory=list)
     manager_tasks: list[ManagerTask] = Field(default_factory=list)
+    script_blueprints: list[ScriptBlueprint] = Field(default_factory=list)
     experience_plan: ExperienceSpec = Field(default_factory=ExperienceSpec)
     intent_contract: IntentContract = Field(default_factory=IntentContract)
     audit_rules: dict[str, Any] = Field(default_factory=dict)

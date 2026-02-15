@@ -23,6 +23,10 @@ from services.tools.scene_generator import (
     scene_generator as scene_generator_tool,
 )
 
+# Resolve test_specs directory relative to source tree, not CWD.
+_SRC_DIR = Path(__file__).resolve().parent.parent / "src"
+TEST_SPECS_DIR = _SRC_DIR / "scene_generator" / "test_specs"
+
 
 def _sample_spec(mapping_overrides: dict | None = None) -> dict:
     mapping = {
@@ -123,7 +127,7 @@ def test_validator_canonicalizes_known_components_for_behavior() -> None:
 
 def test_validator_generates_focused_managers_when_required() -> None:
     spec = SceneSpec.model_validate_json(
-        Path("Server/src/scene_generator/test_specs/bee_garden.json").read_text(encoding="utf-8")
+        (TEST_SPECS_DIR / "bee_garden.json").read_text(encoding="utf-8")
     )
 
     validator = PlanValidator(spec)
@@ -471,7 +475,7 @@ def test_audit_batch_result_classifies_retryable_failures() -> None:
 
 def test_intent_contract_includes_ui_and_readability_requirements() -> None:
     spec = SceneSpec.model_validate_json(
-        Path("Server/src/scene_generator/test_specs/bee_garden.json").read_text(encoding="utf-8")
+        (TEST_SPECS_DIR / "bee_garden.json").read_text(encoding="utf-8")
     )
     validator = PlanValidator(spec)
     plan = validator.validate_and_repair(MCPCallPlan())
@@ -575,7 +579,7 @@ def test_validator_injects_runtime_ui_anchors() -> None:
 
 def test_validator_creates_manager_anchor_gameobjects_for_focused_managers() -> None:
     spec = SceneSpec.model_validate_json(
-        Path("Server/src/scene_generator/test_specs/bee_garden.json").read_text(encoding="utf-8")
+        (TEST_SPECS_DIR / "bee_garden.json").read_text(encoding="utf-8")
     )
     validator = PlanValidator(spec)
     repaired = validator.validate_and_repair(MCPCallPlan())
@@ -590,7 +594,7 @@ def test_validator_creates_manager_anchor_gameobjects_for_focused_managers() -> 
 
 def test_validator_generates_functional_runtime_scripts_not_log_only() -> None:
     spec = SceneSpec.model_validate_json(
-        Path("Server/src/scene_generator/test_specs/bee_garden.json").read_text(encoding="utf-8")
+        (TEST_SPECS_DIR / "bee_garden.json").read_text(encoding="utf-8")
     )
     validator = PlanValidator(spec)
     repaired = validator.validate_and_repair(MCPCallPlan())
@@ -608,7 +612,7 @@ def test_validator_generates_functional_runtime_scripts_not_log_only() -> None:
 
 def test_validator_waits_for_compile_readiness_before_component_attachment() -> None:
     spec = SceneSpec.model_validate_json(
-        Path("Server/src/scene_generator/test_specs/bee_garden.json").read_text(encoding="utf-8")
+        (TEST_SPECS_DIR / "bee_garden.json").read_text(encoding="utf-8")
     )
     validator = PlanValidator(spec)
     repaired = validator.validate_and_repair(MCPCallPlan())

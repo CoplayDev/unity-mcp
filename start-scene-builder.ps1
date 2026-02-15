@@ -12,7 +12,7 @@ if (-not (Test-Path $serverDir)) {
 
 if (-not (Test-Path $venvPython)) {
     Write-Host "Creating virtual environment at $venvDir ..."
-    python -m venv $venvDir
+    python3 -m venv $venvDir
 }
 
 Write-Host "Ensuring pip is available in venv ..."

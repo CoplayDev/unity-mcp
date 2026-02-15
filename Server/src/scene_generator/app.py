@@ -1,4 +1,4 @@
-﻿"""Streamlit GUI for creating and editing SceneSpec JSON files.
+"""Streamlit GUI for creating and editing SceneSpec JSON files.
 
 Educator-friendly interface with three-tab workflow grounded in analogy theory:
 1. Focus & Mapping (Phase 1 + Phase 2): Teacher defines concept, prerequisites, and mapping table
@@ -28,6 +28,7 @@ _pkg_dir = Path(__file__).resolve().parent
 if str(_pkg_dir.parent) not in sys.path:
     sys.path.insert(0, str(_pkg_dir.parent))
 
+from scene_generator.config import cfg
 from scene_generator.models import (
     AssetStrategy,
     BatchExecutionPlan,
@@ -77,8 +78,8 @@ PRIMITIVE_TYPES = [
 
 LLM_PROVIDERS = ["OpenAI", "Anthropic"]
 DEFAULT_LLM_MODELS: dict[str, str] = {
-    "OpenAI": "gpt-5.2",
-    "Anthropic": "claude-sonnet-4-5-20250929",
+    "OpenAI": cfg.openai_model,
+    "Anthropic": cfg.anthropic_model,
 }
 DEFAULT_CLARIFICATION_QUESTIONS = [
     "What should be the primary learner action trigger?",
@@ -427,6 +428,10 @@ def _init_state() -> None:
         st.session_state["show_advanced_view"] = False
     if "user_followup_question" not in st.session_state:
         st.session_state["user_followup_question"] = ""
+    if "brainstorm_result" not in st.session_state:
+        st.session_state["brainstorm_result"] = None
+    if "use_brainstorm" not in st.session_state:
+        st.session_state["use_brainstorm"] = False
 
 
 def _get_spec() -> dict[str, Any]:
@@ -581,9 +586,9 @@ def _try_validate() -> SceneSpec | None:
 
 def _get_default_api_key(provider: str) -> str | None:
     """Get app-configured default API key for provider."""
-    generic = os.environ.get(DEFAULT_API_KEY_ENV)
     if provider == "OpenAI":
-        return os.environ.get(DEFAULT_OPENAI_API_KEY_ENV) or generic
+        return cfg.openai_api_key
+    generic = os.environ.get(DEFAULT_API_KEY_ENV)
     return os.environ.get(DEFAULT_ANTHROPIC_API_KEY_ENV) or generic
 
 
@@ -2549,6 +2554,320 @@ def _render_scene_generation_prompt_section(generation_mode: Literal["execute_fi
                         st.warning(w)
 
 
+# ---------------------------------------------------------------------------
+# Suggest helpers (single-agent vs multi-agent brainstorm)
+# ---------------------------------------------------------------------------
+
+
+def _build_scene_diagram(
+    suggestions: dict[str, Any],
+    mappings: list[dict[str, Any]],
+    spec: dict[str, Any],
+) -> str:
+    """Build a Mermaid flowchart diagram from AI suggestions.
+
+    Returns a Mermaid string ready for st.markdown rendering.
+    """
+    lines: list[str] = ["graph TD"]
+
+    # Environment node
+    env_sug = suggestions.get("environment", {})
+    setting = env_sug.get("setting", "Scene") if env_sug else "Scene"
+    lines.append(f'    ENV["{_mermaid_escape(setting.title())} Environment"]')
+    lines.append('    style ENV fill:#e8f5e9,stroke:#4caf50,stroke-width:2px')
+
+    # Game loop node
+    game_loop = suggestions.get("game_loop_description", "")
+    if game_loop:
+        short_loop = game_loop[:80] + "..." if len(game_loop) > 80 else game_loop
+        lines.append(f'    LOOP["{_mermaid_escape(short_loop)}"]')
+        lines.append('    style LOOP fill:#fff3e0,stroke:#ff9800,stroke-width:2px')
+        lines.append('    ENV --> LOOP')
+
+    # Mapping nodes with interactions
+    mapping_suggestions = suggestions.get("mapping_suggestions", [])
+    node_ids: list[str] = []
+    for i, m_sug in enumerate(mapping_suggestions):
+        if i >= len(mappings):
+            break
+        m = mappings[i]
+        name = m.get("analogy_name", f"Mapping_{i + 1}")
+        comp = m.get("structural_component", "")
+        node_id = f"M{i}"
+        node_ids.append(node_id)
+
+        strategy = m_sug.get("asset_strategy", "primitive")
+        icon = {"primitive": "🔷", "trellis": "🎨", "vfx": "✨", "mechanic": "⚙️", "ui": "📊"}.get(strategy, "📦")
+
+        label = f"{icon} {_mermaid_escape(name)}"
+        if comp:
+            label += f"<br/><i>{_mermaid_escape(comp)}</i>"
+
+        lines.append(f'    {node_id}["{label}"]')
+        lines.append(f'    ENV --> {node_id}')
+
+        # Color by strategy
+        fill_colors = {
+            "primitive": "#e3f2fd,stroke:#2196f3",
+            "trellis": "#fce4ec,stroke:#e91e63",
+            "vfx": "#f3e5f5,stroke:#9c27b0",
+            "mechanic": "#fff8e1,stroke:#ffc107",
+            "ui": "#e0f7fa,stroke:#00bcd4",
+        }
+        style = fill_colors.get(strategy, "#f5f5f5,stroke:#9e9e9e")
+        lines.append(f'    style {node_id} fill:#{style},stroke-width:1px')
+
+    # Interaction edges between nodes
+    for i, m_sug in enumerate(mapping_suggestions):
+        if i >= len(mappings):
+            break
+        ix = m_sug.get("interaction", {})
+        if not isinstance(ix, dict):
+            continue
+        targets = ix.get("target_objects", [])
+        if isinstance(targets, list):
+            for target in targets:
+                target_name = str(target).strip()
+                for j, m2 in enumerate(mappings):
+                    if j < len(node_ids) and str(m2.get("analogy_name", "")).strip() == target_name:
+                        effect = ix.get("effect", "interacts")
+                        lines.append(f'    M{i} -->|"{_mermaid_escape(str(effect))}"| M{j}')
+                        break
+
+    # Causal chain sub-graph
+    exp_sug = suggestions.get("experience_suggestions", {})
+    chain = exp_sug.get("causal_chain", []) if isinstance(exp_sug, dict) else []
+    if not chain:
+        chain = spec.get("experience", {}).get("causal_chain", [])
+    if chain and isinstance(chain, list) and len(chain) > 1:
+        lines.append('    subgraph CHAIN["Causal Chain"]')
+        lines.append('    direction LR')
+        for ci, step in enumerate(chain):
+            trigger = step.get("trigger_event", f"Step {ci + 1}")
+            lines.append(f'    C{ci}["{_mermaid_escape(str(trigger)[:50])}"]')
+            if ci > 0:
+                lines.append(f'    C{ci - 1} --> C{ci}')
+        lines.append('    end')
+        lines.append('    style CHAIN fill:#f9fbe7,stroke:#cddc39,stroke-width:1px')
+
+    return "\n".join(lines)
+
+
+def _mermaid_escape(text: str) -> str:
+    """Escape special characters for Mermaid node labels."""
+    return text.replace('"', "'").replace("\n", " ").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _render_editable_environment(suggestions: dict[str, Any]) -> dict[str, Any]:
+    """Render editable environment fields. Returns updated environment dict."""
+    env_sug = suggestions.get("environment", {})
+    if not env_sug:
+        return {}
+
+    st.markdown("##### 🌍 Environment")
+    c1, c2 = st.columns(2)
+    with c1:
+        new_setting = st.text_input(
+            "Setting",
+            value=env_sug.get("setting", ""),
+            key="edit_env_setting",
+        )
+        new_skybox = st.selectbox(
+            "Skybox",
+            options=SKYBOX_PRESETS,
+            index=SKYBOX_PRESETS.index(env_sug.get("skybox", "sunny")) if env_sug.get("skybox", "sunny") in SKYBOX_PRESETS else 0,
+            key="edit_env_skybox",
+        )
+    with c2:
+        new_desc = st.text_area(
+            "Description",
+            value=env_sug.get("description", ""),
+            key="edit_env_desc",
+            height=100,
+        )
+
+    updated = dict(env_sug)
+    updated["setting"] = new_setting
+    updated["skybox"] = new_skybox
+    updated["description"] = new_desc
+    return updated
+
+
+def _render_editable_mapping_card(
+    i: int,
+    m_sug: dict[str, Any],
+    mapping: dict[str, Any],
+    labels: dict[str, str],
+    advanced_view: bool,
+) -> dict[str, Any]:
+    """Render one editable mapping suggestion card. Returns updated suggestion dict."""
+    name = mapping.get("analogy_name", f"Mapping {i + 1}")
+    comp = mapping.get("structural_component", "")
+    friendly = labels.get(comp, comp)
+    strategy = m_sug.get("asset_strategy", "primitive")
+
+    with st.expander(f"**{name}** ({friendly}) — {strategy}", expanded=True):
+        updated = dict(m_sug)
+
+        if advanced_view:
+            cols = st.columns(3)
+            new_strategy = cols[0].selectbox(
+                "Strategy",
+                options=ASSET_STRATEGIES,
+                index=ASSET_STRATEGIES.index(strategy) if strategy in ASSET_STRATEGIES else 0,
+                key=f"edit_strategy_{i}",
+            )
+            updated["asset_strategy"] = new_strategy
+
+            if m_sug.get("primitive_type"):
+                new_prim = cols[1].selectbox(
+                    "Shape",
+                    options=PRIMITIVE_TYPES,
+                    index=PRIMITIVE_TYPES.index(m_sug["primitive_type"]) if m_sug["primitive_type"] in PRIMITIVE_TYPES else 0,
+                    key=f"edit_prim_{i}",
+                )
+                updated["primitive_type"] = new_prim
+            if m_sug.get("instance_count") and int(m_sug.get("instance_count", 1)) > 1:
+                new_count = cols[2].number_input(
+                    "Instances",
+                    min_value=1, max_value=20,
+                    value=int(m_sug["instance_count"]),
+                    key=f"edit_instances_{i}",
+                )
+                updated["instance_count"] = new_count
+
+        ix = m_sug.get("interaction")
+        if ix:
+            normalized_ix = _normalize_interaction(ix, name)
+            if normalized_ix:
+                st.markdown("**Interaction**")
+                new_effect_desc = st.text_area(
+                    "Effect description",
+                    value=normalized_ix.get("effect_description", ""),
+                    key=f"edit_effect_desc_{i}",
+                    height=80,
+                    help="Describe what happens when this interaction triggers.",
+                )
+
+                ic1, ic2 = st.columns(2)
+                with ic1:
+                    new_trigger = st.selectbox(
+                        "Trigger",
+                        options=TRIGGER_OPTIONS,
+                        index=TRIGGER_OPTIONS.index(normalized_ix.get("trigger", "custom")) if normalized_ix.get("trigger", "custom") in TRIGGER_OPTIONS else len(TRIGGER_OPTIONS) - 1,
+                        key=f"edit_trigger_{i}",
+                    )
+                    raw_targets = normalized_ix.get("target_objects", [])
+                    targets_str = ", ".join(raw_targets) if isinstance(raw_targets, list) else str(raw_targets)
+                    new_targets = st.text_input(
+                        "Target objects (comma-separated)",
+                        value=targets_str,
+                        key=f"edit_targets_{i}",
+                    )
+                with ic2:
+                    new_effect = st.text_input(
+                        "Effect type",
+                        value=normalized_ix.get("effect", ""),
+                        key=f"edit_effect_{i}",
+                    )
+                    new_anim = st.selectbox(
+                        "Animation",
+                        options=ANIMATION_PRESETS,
+                        index=ANIMATION_PRESETS.index(normalized_ix.get("animation_preset", "")) if normalized_ix.get("animation_preset", "") in ANIMATION_PRESETS else 0,
+                        key=f"edit_anim_{i}",
+                    )
+                    new_vfx = st.selectbox(
+                        "VFX",
+                        options=VFX_TYPES,
+                        index=VFX_TYPES.index(normalized_ix.get("vfx_type", "")) if normalized_ix.get("vfx_type", "") in VFX_TYPES else 0,
+                        key=f"edit_vfx_{i}",
+                    )
+
+                updated_ix = dict(normalized_ix)
+                updated_ix["effect_description"] = new_effect_desc
+                updated_ix["trigger"] = new_trigger
+                updated_ix["effect"] = new_effect
+                updated_ix["target_objects"] = [t.strip() for t in new_targets.split(",") if t.strip()]
+                updated_ix["animation_preset"] = new_anim
+                updated_ix["vfx_type"] = new_vfx
+                updated["interaction"] = updated_ix
+            else:
+                st.caption("Interaction details incomplete for this suggestion.")
+        else:
+            st.caption("No interaction details in this suggestion.")
+
+    return updated
+
+
+def _run_single_agent_suggest(spec: dict[str, Any], allow_trellis: bool) -> None:
+    """Original single-agent suggest flow."""
+    with st.spinner("Asking AI for suggestions..."):
+        prompt = _build_llm_prompt(spec)
+        suggestions = _call_llm_json_with_retries(prompt, max_attempts=3)
+        if suggestions:
+            suggestions = _apply_asset_policy_to_suggestions(suggestions, allow_trellis=allow_trellis)
+            _reset_refinement_feedback()
+            st.session_state["llm_suggestions"] = suggestions
+            clarification_questions = _generate_clarification_questions(spec, suggestions)
+            st.session_state["clarification_questions"] = clarification_questions
+            st.session_state["suggestions_accepted"] = False
+            st.session_state["brainstorm_result"] = None
+            st.rerun()
+        else:
+            st.error("Could not obtain valid JSON suggestions after multiple attempts. Please try again.")
+
+
+def _run_brainstorm_suggest(spec: dict[str, Any], allow_trellis: bool) -> None:
+    """Multi-agent brainstorm: 3 parallel agents → merge → then single-agent suggest."""
+    import asyncio
+    from scene_generator.brainstorm import apply_brainstorm_to_spec, run_brainstorm
+    from scene_generator.models import SceneSpec
+
+    api_key = _get_api_key()
+    if not api_key:
+        st.error("No API key configured.")
+        return
+
+    with st.spinner("Running multi-agent brainstorm (3 agents in parallel + merge)..."):
+        try:
+            spec_obj = SceneSpec.model_validate(spec)
+        except Exception as e:
+            st.error(f"SceneSpec validation failed: {e}")
+            return
+
+        try:
+            loop = asyncio.new_event_loop()
+            brainstorm_result = loop.run_until_complete(
+                run_brainstorm(spec_obj, api_key=api_key)
+            )
+            loop.close()
+        except Exception as e:
+            st.error(f"Brainstorm failed: {e}")
+            return
+
+        st.session_state["brainstorm_result"] = brainstorm_result
+
+        # Apply brainstorm enrichments to spec
+        enriched_spec = apply_brainstorm_to_spec(spec_obj, brainstorm_result)
+        enriched_dict = enriched_spec.model_dump(mode="json")
+
+        # Now run single-agent suggest on the enriched spec
+        prompt = _build_llm_prompt(enriched_dict)
+        suggestions = _call_llm_json_with_retries(prompt, max_attempts=3)
+        if suggestions:
+            suggestions = _apply_asset_policy_to_suggestions(suggestions, allow_trellis=allow_trellis)
+            _reset_refinement_feedback()
+            st.session_state["llm_suggestions"] = suggestions
+            # Update the spec with brainstorm enrichments
+            _set_spec(enriched_dict)
+            clarification_questions = _generate_clarification_questions(enriched_dict, suggestions)
+            st.session_state["clarification_questions"] = clarification_questions
+            st.session_state["suggestions_accepted"] = False
+            st.rerun()
+        else:
+            st.error("Brainstorm succeeded but suggestion generation failed. Try again.")
+
+
 def _render_generate_preview() -> None:
     spec = _get_spec()
     allow_trellis = bool(st.session_state.get("allow_trellis_generation", DEFAULT_ALLOW_TRELLIS))
@@ -2641,10 +2960,20 @@ def _render_generate_preview() -> None:
     if not has_content:
         st.warning("Fill in your concept and at least one mapping in the Focus & Mapping tab first.")
 
+    use_brainstorm = st.checkbox(
+        "Use Multi-Agent Brainstorm (3 parallel agents + merge)",
+        value=st.session_state.get("use_brainstorm", False),
+        key="use_brainstorm_checkbox",
+        help="Runs Causal Chain, Interaction Designer, and Script Architect agents in parallel, "
+        "then merges results. Uses GPT-5.2 for brainstorm and GPT-5.2-codex for script architecture.",
+    )
+    st.session_state["use_brainstorm"] = use_brainstorm
+
     col1, col2 = st.columns([3, 1])
     with col1:
+        button_label = "Brainstorm + Suggest" if use_brainstorm else "Get Suggestions from AI"
         suggest_clicked = st.button(
-            "Get Suggestions from AI",
+            button_label,
             type="primary",
             width="stretch",
             disabled=not has_content or not _get_api_key(),
@@ -2655,20 +2984,10 @@ def _render_generate_preview() -> None:
             st.caption("Set API key in sidebar")
 
     if suggest_clicked:
-        with st.spinner("Asking AI for suggestions..."):
-            prompt = _build_llm_prompt(spec)
-            suggestions = _call_llm_json_with_retries(prompt, max_attempts=3)
-            if suggestions:
-                suggestions = _apply_asset_policy_to_suggestions(suggestions, allow_trellis=allow_trellis)
-                _reset_refinement_feedback()
-                st.session_state["llm_suggestions"] = suggestions
-                # Clarification generation is best-effort and should not block showing suggestions.
-                clarification_questions = _generate_clarification_questions(spec, suggestions)
-                st.session_state["clarification_questions"] = clarification_questions
-                st.session_state["suggestions_accepted"] = False
-                st.rerun()
-            else:
-                st.error("Could not obtain valid JSON suggestions after multiple attempts. Please try again.")
+        if use_brainstorm:
+            _run_brainstorm_suggest(spec, allow_trellis)
+        else:
+            _run_single_agent_suggest(spec, allow_trellis)
 
     # Display suggestions if we have them
     suggestions = st.session_state.get("llm_suggestions")
@@ -2699,65 +3018,55 @@ def _render_generate_preview() -> None:
                 else:
                     st.caption("No explicit surface block returned.")
 
-        # Environment suggestion
-        env_sug = suggestions.get("environment", {})
-        if env_sug:
-            setting = env_sug.get("setting", "")
-            desc = env_sug.get("description", "")
-            skybox = env_sug.get("skybox", "")
-            st.success(
-                f"**Environment: {setting.title()}** ({skybox})\n\n{desc}"
-            )
+        # --- Scene Diagram ---
+        st.markdown("##### Scene Overview")
+        diagram_code = _build_scene_diagram(suggestions, mappings, spec)
+        st.markdown(f"```mermaid\n{diagram_code}\n```")
 
-        # Game loop description
+        # Brainstorm summary (if available)
+        brainstorm = st.session_state.get("brainstorm_result")
+        if brainstorm and hasattr(brainstorm, "merge_notes") and brainstorm.merge_notes:
+            with st.expander("Brainstorm Merge Notes", expanded=False):
+                for note in brainstorm.merge_notes:
+                    st.caption(f"- {note}")
+
+        # --- Editable Suggestion Details ---
+        st.markdown("##### Edit Suggestions")
+        st.caption("Modify any field below. Changes are applied when you click Accept Suggestions.")
+
+        # Editable environment
+        updated_env = _render_editable_environment(suggestions)
+        if updated_env:
+            suggestions["environment"] = updated_env
+
+        # Game loop description (editable)
         game_loop = suggestions.get("game_loop_description", "")
-        if game_loop:
-            st.info(f"**How it works:** {game_loop}")
+        new_game_loop = st.text_area(
+            "How it works (game loop)",
+            value=game_loop,
+            key="edit_game_loop",
+            height=80,
+        )
+        suggestions["game_loop_description"] = new_game_loop
 
-        # Experience suggestion
+        # Experience suggestion (read-only preview)
         exp_sug = suggestions.get("experience_suggestions")
         if isinstance(exp_sug, dict):
-            _render_experience_preview(exp_sug, section_title="AI Experience Suggestions")
+            with st.expander("Experience Plan Preview", expanded=False):
+                _render_experience_preview(exp_sug, section_title="AI Experience Suggestions")
 
-        # Per-mapping suggestion cards
+        # Editable per-mapping suggestion cards
+        st.markdown("##### Object & Interaction Details")
         mapping_suggestions = suggestions.get("mapping_suggestions", [])
+        updated_mapping_suggestions = []
         for i, m_sug in enumerate(mapping_suggestions):
             if i >= len(mappings):
-                break
-            m = mappings[i]
-            name = m.get("analogy_name", f"Mapping {i + 1}")
-            comp = m.get("structural_component", "")
-            friendly = labels.get(comp, comp)
-            strategy = m_sug.get("asset_strategy", "primitive")
-
-            with st.expander(f"{name} ({friendly})", expanded=True):
-                if advanced_view:
-                    cols = st.columns(3)
-                    cols[0].markdown(f"**Strategy:** {strategy}")
-                    if m_sug.get("trellis_prompt"):
-                        cols[1].markdown(f"**3D Model:** {m_sug['trellis_prompt']}")
-                    if m_sug.get("primitive_type"):
-                        cols[1].markdown(f"**Shape:** {m_sug['primitive_type']}")
-                    if m_sug.get("instance_count") and m_sug["instance_count"] > 1:
-                        cols[2].markdown(f"**Instances:** {m_sug['instance_count']}")
-
-                ix = m_sug.get("interaction")
-                if ix:
-                    normalized_ix = _normalize_interaction(ix, name)
-                    if not normalized_ix:
-                        st.caption("Interaction details incomplete for this suggestion.")
-                        continue
-
-                    st.markdown(
-                        _format_interaction_summary(normalized_ix, name)
-                    )
-
-                    if normalized_ix.get("animation_preset"):
-                        st.caption(f"Animation: {normalized_ix['animation_preset']}")
-                    if normalized_ix.get("vfx_type"):
-                        st.caption(f"Visual effect: {normalized_ix['vfx_type']}")
-                else:
-                    st.caption("No interaction details returned for this mapping in this suggestion.")
+                updated_mapping_suggestions.append(m_sug)
+                continue
+            updated = _render_editable_mapping_card(i, m_sug, mappings[i], labels, advanced_view)
+            updated_mapping_suggestions.append(updated)
+        suggestions["mapping_suggestions"] = updated_mapping_suggestions
+        st.session_state["llm_suggestions"] = suggestions
 
         # Optional follow-up refinement
         st.divider()
@@ -3611,6 +3920,27 @@ def _build_generation_prompt_full(spec_json: str, batch_plan: BatchExecutionPlan
         lines.append("```")
         lines.append("")
 
+    # Include script blueprints from brainstorm if available
+    brainstorm_result = st.session_state.get("brainstorm_result")
+    if brainstorm_result and hasattr(brainstorm_result, "script_blueprints") and brainstorm_result.script_blueprints:
+        blueprint_dicts = [bp.model_dump(mode="json") for bp in brainstorm_result.script_blueprints]
+        lines.append("## Script Blueprints (from Multi-Agent Brainstorm)")
+        lines.append("")
+        lines.append("These blueprints define the API contracts for each script. Use them as the")
+        lines.append("architecture guide when generating C# code: follow the field names, method")
+        lines.append("signatures, event patterns, and inter-script dependencies exactly.")
+        lines.append("")
+        lines.append("```json")
+        lines.append(json.dumps(blueprint_dicts, indent=2))
+        lines.append("```")
+        lines.append("")
+        if brainstorm_result.merge_notes:
+            lines.append("### Merge Notes")
+            lines.append("")
+            for note in brainstorm_result.merge_notes:
+                lines.append(f"- {note}")
+            lines.append("")
+
     lines.append("## Experience Plan")
     lines.append("")
     lines.append("```json")
@@ -3677,14 +4007,18 @@ def _compact_spec_for_prompt(spec_obj: dict[str, Any]) -> dict[str, Any]:
     for row in spec_obj.get("mappings", []):
         if not isinstance(row, dict):
             continue
-        mappings.append({
+        compact_row: dict[str, Any] = {
             "structural_component": row.get("structural_component"),
             "analogy_name": row.get("analogy_name"),
             "mapping_type": row.get("mapping_type"),
             "asset_strategy": row.get("asset_strategy"),
             "instance_count": row.get("instance_count"),
             "instance_spread": row.get("instance_spread"),
-        })
+        }
+        # Preserve explicit color so the agent uses validated colors, not defaults.
+        if row.get("color"):
+            compact_row["color"] = row["color"]
+        mappings.append(compact_row)
 
     compact = {
         "target_concept": spec_obj.get("target_concept"),
@@ -3728,8 +4062,19 @@ def _build_generation_prompt_compact(spec_json: str, batch_plan: BatchExecutionP
         "warnings": batch_plan.warnings,
     }
 
+    # Include script blueprints from brainstorm if available
+    brainstorm_result = st.session_state.get("brainstorm_result")
+    if brainstorm_result and hasattr(brainstorm_result, "script_blueprints") and brainstorm_result.script_blueprints:
+        execution_payload["script_blueprints"] = [
+            bp.model_dump(mode="json") for bp in brainstorm_result.script_blueprints
+        ]
+        if brainstorm_result.merge_notes:
+            execution_payload["brainstorm_merge_notes"] = brainstorm_result.merge_notes
+
     spec_min_json = json.dumps(spec_min, separators=(",", ":"), ensure_ascii=True)
     execution_json = json.dumps(execution_payload, separators=(",", ":"), ensure_ascii=True)
+
+    has_blueprints = brainstorm_result and hasattr(brainstorm_result, "script_blueprints") and brainstorm_result.script_blueprints
 
     lines = [
         "# Scene Build Request (Compact)",
@@ -3744,20 +4089,35 @@ def _build_generation_prompt_compact(spec_json: str, batch_plan: BatchExecutionP
         "R6 Smoke test is mandatory before scene save.",
         "R7 If essence_hash exists, preserve semantics and phase meaning (surface-only variation).",
         "R8 Avoid tag lookups in scripts (CompareTag / FindGameObjectsWithTag).",
-        "R9 create_script code contents are omitted in this export; generate code from manager/script tasks and create scripts only via create_script (no local file writes).",
+        "R9 create_script code contents are omitted in this export; generate code from manager/script tasks. "
+        "Script creation workflow: (a) generate complete C# MonoBehaviour code for each script, "
+        "(b) call create_script(path=\"Assets/Scripts/{ClassName}.cs\", contents=\"<full C# code>\") for each, "
+        "(c) call refresh_unity(mode=\"force\", scope=\"scripts\", compile=\"request\", wait_for_ready=true), "
+        "(d) call read_console(types=[\"error\"], count=20) to verify zero compilation errors before proceeding. "
+        "Do NOT write local files; only use the create_script MCP tool.",
         "R10 Keep phase order: Intro -> Explore -> Trigger -> Observe Feedback Loop -> Summary.",
         (
             "R11 Primitive-first policy active: do not use Trellis or manage_3d_gen."
             if not allow_trellis
             else "R11 Trellis optional: still prefer primitives unless clearly necessary."
         ),
+    ]
+
+    if has_blueprints:
+        lines.append(
+            "R12 script_blueprints in EXECUTION_PLAN_JSON define the architecture contracts "
+            "from multi-agent brainstorm. Follow field names, method signatures, event patterns, "
+            "and inter-script dependencies exactly when generating C# code."
+        )
+
+    lines.extend([
         "",
         "SCENE_SPEC_MIN_JSON:",
         spec_min_json,
         "",
         "EXECUTION_PLAN_JSON:",
         execution_json,
-    ]
+    ])
     return "\n".join(lines)
 
 

@@ -136,6 +136,7 @@ class PlanValidator:
         self._ensure_manager_anchor_calls(plan)
         self._ensure_script_scaffolds(plan)
         self._ensure_experience_ui_calls(plan)
+        self._ensure_field_wiring(plan)
         self._ensure_intent_completeness(plan)
         self._deduplicate_names(plan)
         self._validate_tool_names(plan)
@@ -176,13 +177,15 @@ class PlanValidator:
              "Create interaction scripts and trigger compilation", SCRIPT_PHASE_BATCH_SIZE, True),
             ("components_vfx", 5, plan.component_calls + plan.vfx_calls, True,
              "Add Rigidbody, colliders, particle systems, script attachment", MAX_BATCH_SIZE, True),
-            ("animations", 6, plan.animation_calls, True,
+            ("field_wiring", 6, plan.field_wiring_calls, False,
+             "Wire SerializeField references between scripts and target GameObjects", MAX_BATCH_SIZE, True),
+            ("animations", 7, plan.animation_calls, True,
              "Create animation clips, controllers, and assign to objects", MAX_BATCH_SIZE, True),
-            ("hierarchy", 7, plan.hierarchy_calls, False,
+            ("hierarchy", 8, plan.hierarchy_calls, False,
              "Parent objects and final position adjustments", MAX_BATCH_SIZE, True),
-            ("smoke_test", 8, smoke_test_commands, False,
+            ("smoke_test", 9, smoke_test_commands, False,
              "Required gate: run Play Mode smoke test and block completion on runtime errors.", SMOKE_TEST_PHASE_BATCH_SIZE, True),
-            ("scene_save", 9, plan.scene_save_calls, False,
+            ("scene_save", 10, plan.scene_save_calls, False,
              "Save the scene only after smoke test passes", SMOKE_TEST_PHASE_BATCH_SIZE, True),
         ]
 
@@ -1159,7 +1162,10 @@ class PlanValidator:
                 attach_to = source
             elif sc in ("profile_update", "ranking"):
                 script_name = f"{name}Controller"
-                attach_to = targets[0]
+                # Attach to the source (usually a manager object) rather than
+                # targets[0], since ranking/profile controllers operate on
+                # multiple targets via [SerializeField] arrays.
+                attach_to = source if source in scene_object_names else (targets[0] if targets else source)
             elif sc in ("candidate_generation", "feedback_loop"):
                 script_name = f"{name}Controller"
                 attach_to = source
@@ -2525,6 +2531,77 @@ class PlanValidator:
             text_value=self._build_status_overlay_text(),
             description="status readout",
         )
+
+    def _ensure_field_wiring(self, plan: MCPCallPlan) -> None:
+        """Generate set_property calls to wire [SerializeField] references after component attachment.
+
+        For each script_task and manager_task, if target_objects are specified,
+        emit a set_property call that populates the serialized field with concrete
+        GameObject references so scripts don't start with null arrays.
+        """
+        # Build set of component attachments so we know which scripts are attached where.
+        attached: set[tuple[str, str]] = set()
+        for call in plan.component_calls:
+            if str(call.params.get("action", "")).lower() == "add":
+                target = str(call.params.get("target", "")).strip()
+                comp = str(call.params.get("component_type", "")).strip()
+                if target and comp:
+                    attached.add((target, comp))
+
+        for task in self.script_tasks:
+            class_name = self._safe_script_class_name(task.script_name)
+            attach_target = str(task.attach_to).strip() or "GameManager"
+            if (attach_target, class_name) not in attached:
+                continue
+
+            targets = task.target_objects or []
+            if not targets:
+                continue
+
+            # Determine sensible field name from the mapping context.
+            # Convention: "targetObjects" for generic, but use domain-aware
+            # names when we can infer them.
+            sc = self._canonical_component(task.structural_component)
+            if sc == "user_interaction":
+                field_name = "targetObjects"
+            elif sc in ("candidate_generation", "ranking", "feedback_loop"):
+                field_name = "targetObjects"
+            else:
+                field_name = "targetObjects"
+
+            plan.field_wiring_calls.append(MCPToolCall(
+                tool="manage_components",
+                params={
+                    "action": "set_property",
+                    "target": attach_target,
+                    "component_type": class_name,
+                    "property": field_name,
+                    "value": targets,
+                },
+                description=f"Wire {class_name}.{field_name} on {attach_target} to {targets}",
+                phase="field_wiring",
+            ))
+
+        # Wire manager cross-references: each focused manager should reference
+        # the GameManager, and GameManager should reference focused managers.
+        manager_names = [m.manager_name for m in self.manager_tasks if m.orchestration_scope == "focused"]
+        game_manager = next((m for m in self.manager_tasks if m.orchestration_scope == "global"), None)
+        if game_manager and manager_names:
+            gm_class = self._safe_script_class_name(game_manager.script_name)
+            gm_attach = str(game_manager.attach_to).strip() or "GameManager"
+            if (gm_attach, gm_class) in attached:
+                plan.field_wiring_calls.append(MCPToolCall(
+                    tool="manage_components",
+                    params={
+                        "action": "set_property",
+                        "target": gm_attach,
+                        "component_type": gm_class,
+                        "property": "focusedManagers",
+                        "value": manager_names,
+                    },
+                    description=f"Wire {gm_class}.focusedManagers to {manager_names}",
+                    phase="field_wiring",
+                ))
 
     def _ensure_intent_completeness(self, plan: MCPCallPlan) -> None:
         """Validate core intent contract requirements and hard-fail when unrecoverable."""

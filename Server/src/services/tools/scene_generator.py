@@ -1,9 +1,11 @@
-﻿"""MCP tool for scene generation pipeline validation, auditing, and smoke testing."""
+"""MCP tool for scene generation pipeline validation, auditing, and smoke testing."""
 from __future__ import annotations
 
 import asyncio
 import json
 import hashlib
+import logging
+import os
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -15,6 +17,8 @@ from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 from scene_generator.models import BatchExecutionPlan, MCPCallPlan, SceneSpec
 from scene_generator.validator import PlanValidator
+
+_logger = logging.getLogger(__name__)
 
 _BANNED_SCRIPT_LOOKUPS = (
     "CompareTag(",
@@ -1025,6 +1029,72 @@ async def _handle_plan_and_execute(
     }
 
 
+# ---------------------------------------------------------------------------
+# Script Author integration helpers
+# ---------------------------------------------------------------------------
+
+
+def _resolve_openai_api_key() -> str | None:
+    """Resolve an OpenAI API key from config (.env / environment variables)."""
+    from scene_generator.config import cfg
+    return cfg.openai_api_key
+
+
+async def _run_script_author_for_phase(
+    plan: BatchExecutionPlan,
+    unity_instance: Any,
+    api_key: str,
+) -> dict[str, Any]:
+    """Run the Script Author agent for all scripts in the plan.
+
+    Returns a phase-report-shaped dict compatible with the execution loop.
+    """
+    from scene_generator.script_author import author_all_scripts, build_scene_context
+
+    async def send_unity_command(tool: str, params: dict[str, Any]) -> dict[str, Any]:
+        raw = await send_with_unity_instance(
+            async_send_command_with_retry, unity_instance, tool, params,
+        )
+        return raw if isinstance(raw, dict) else {"success": False, "message": str(raw)}
+
+    results = await author_all_scripts(
+        script_tasks=plan.script_tasks,
+        manager_tasks=plan.manager_tasks,
+        blueprints=plan.script_blueprints,
+        api_key=api_key,
+        send_unity_command=send_unity_command,
+        target_concept=plan.intent_contract.target_concept,
+        analogy_domain=plan.intent_contract.analogy_domain,
+        learning_goal=plan.intent_contract.learner_goal,
+    )
+
+    successes = [r for r in results if r.success]
+    failures = [r for r in results if not r.success]
+
+    phase_failures = [
+        {
+            "index": i,
+            "tool": "script_author",
+            "message": f"{r.script_name}: {'; '.join(r.errors[:3])}",
+        }
+        for i, r in enumerate(results) if not r.success
+    ]
+
+    status = "pass" if not failures else "fail"
+    return {
+        "phase_name": "scripts",
+        "phase_number": 4,
+        "status": status,
+        "retries_used": sum(max(0, r.attempts - 1) for r in results),
+        "warnings": [],
+        "failures": phase_failures,
+        "batches": [],
+        "script_author_results": [r.to_dict() for r in results],
+        "scripts_authored": len(successes),
+        "scripts_failed": len(failures),
+    }
+
+
 async def _handle_execute_batch_plan(
     ctx: Context,
     batch_plan_json: str | None,
@@ -1072,7 +1142,43 @@ async def _handle_execute_batch_plan(
     scene_saved = False
 
     ordered_phases = sorted(plan.phases, key=lambda phase: int(phase.phase_number))
+    # Resolve API key once — needed for Script Author agent
+    script_author_api_key = _resolve_openai_api_key()
+    use_script_author = bool(
+        script_author_api_key
+        and (plan.script_blueprints or plan.script_tasks or plan.manager_tasks)
+    )
+
     for phase in ordered_phases:
+        # --- Script Author intercept ---
+        # When blueprints/tasks exist and an API key is available, delegate the
+        # scripts phase to the Script Author agent (LLM-driven compile-check-fix
+        # loop) instead of sending the validator's stub create_script commands.
+        if str(phase.phase_name) == "scripts" and use_script_author:
+            _logger.info(
+                "Script Author mode: authoring %d manager + %d interaction scripts",
+                len(plan.manager_tasks), len(plan.script_tasks),
+            )
+            author_report = await _run_script_author_for_phase(
+                plan, unity_instance, script_author_api_key,
+            )
+            phase_reports.append(author_report)
+            author_failures = author_report.get("failures", [])
+            all_failures.extend(author_failures)
+
+            if author_report["status"] == "fail":
+                return {
+                    "success": False,
+                    "final_decision": "fail",
+                    "message": f"Script Author failed for {author_report.get('scripts_failed', '?')} script(s).",
+                    "scene_saved": scene_saved,
+                    "phase_results": phase_reports,
+                    "warnings": all_warnings,
+                    "failures": all_failures,
+                    "smoke_report": smoke_report,
+                }
+            continue  # skip the normal batch loop for this phase
+
         chunks = _chunk_commands(phase.commands, phase.batch_size_limit)
         phase_status = "pass"
         phase_failures: list[dict[str, Any]] = []
