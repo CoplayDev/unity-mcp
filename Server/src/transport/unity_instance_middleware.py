@@ -5,8 +5,11 @@ This middleware intercepts all tool calls and injects the active Unity instance
 into the request-scoped state, allowing tools to access it via ctx.get_state("unity_instance").
 """
 from threading import RLock
+import json
 import logging
+import os
 import time
+from pathlib import Path
 
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 
@@ -294,13 +297,22 @@ class UnityInstanceMiddleware(Middleware):
 
     def _should_filter_tool_listing(self) -> bool:
         transport = (config.transport_mode or "stdio").lower()
-        return transport == "http" and PluginHub.is_configured()
+        if transport == "http":
+            return PluginHub.is_configured()
+
+        return transport == "stdio"
 
     async def _resolve_enabled_tool_names_for_context(
         self,
         context: MiddlewareContext,
     ) -> set[str] | None:
         ctx = context.fastmcp_context
+        transport = (config.transport_mode or "stdio").lower()
+
+        if transport == "stdio":
+            active_instance = ctx.get_state("unity_instance")
+            return self._resolve_enabled_tool_names_for_stdio_context(active_instance)
+
         user_id = ctx.get_state("user_id") if config.http_remote_hosted else None
         active_instance = ctx.get_state("unity_instance")
         project_hashes = self._resolve_candidate_project_hashes(active_instance)
@@ -372,6 +384,121 @@ class UnityInstanceMiddleware(Middleware):
             return None
 
         return enabled_tool_names
+
+    def _resolve_enabled_tool_names_for_stdio_context(self, active_instance: str | None) -> set[str] | None:
+        status_payloads = self._list_stdio_status_payloads()
+        if not status_payloads:
+            return None
+
+        project_hashes = self._resolve_candidate_project_hashes(active_instance)
+        if project_hashes:
+            active_hash = project_hashes[0]
+            for payload in status_payloads:
+                if payload["project_hash"] == active_hash:
+                    return payload["enabled_tools"]
+
+            logger.debug(
+                "No stdio status payload matched active hash '%s'; skipping tools/list filtering.",
+                active_hash,
+            )
+            return None
+
+        # Multi-instance edge case (no active_instance selected): merge enabled tools from
+        # all discovered status files so tools/list does not "flicker" between instances.
+        # This intentionally favors stability over strict per-instance precision.
+        enabled_by_project_hash: dict[str, set[str]] = {}
+        for payload in status_payloads:
+            project_hash = payload["project_hash"]
+            if project_hash in enabled_by_project_hash:
+                continue
+            enabled_by_project_hash[project_hash] = payload["enabled_tools"]
+
+        if len(enabled_by_project_hash) > 1:
+            union_enabled_tools: set[str] = set()
+            for enabled_tools in enabled_by_project_hash.values():
+                union_enabled_tools.update(enabled_tools)
+            return union_enabled_tools
+
+        # status_payloads is non-empty here, and every payload contributes a valid
+        # project_hash; after de-duplication this leaves exactly one project entry.
+        return next(iter(enabled_by_project_hash.values()))
+
+    def _list_stdio_status_payloads(self) -> list[dict[str, object]]:
+        status_dir_env = os.getenv("UNITY_MCP_STATUS_DIR")
+        status_dir = Path(status_dir_env).expanduser() if status_dir_env else Path.home().joinpath(".unity-mcp")
+
+        try:
+            status_files = sorted(
+                status_dir.glob("unity-mcp-status-*.json"),
+                key=lambda path: path.stat().st_mtime,
+                reverse=True,
+            )
+        except OSError as exc:
+            logger.debug(
+                "Failed to enumerate stdio status files from %s: %s",
+                status_dir,
+                exc,
+                exc_info=True,
+            )
+            return []
+
+        payloads: list[dict[str, object]] = []
+        for status_file in status_files:
+            file_hash = self._extract_project_hash_from_filename(status_file)
+            try:
+                with status_file.open("r", encoding="utf-8") as handle:
+                    raw_payload = json.load(handle)
+            except (OSError, ValueError) as exc:
+                logger.debug(
+                    "Failed to parse stdio status file %s: %s",
+                    status_file,
+                    exc,
+                    exc_info=True,
+                )
+                continue
+
+            if not isinstance(raw_payload, dict):
+                logger.debug("Skipping stdio status file %s with non-object payload.", status_file)
+                continue
+
+            enabled_tools_raw = raw_payload.get("enabled_tools")
+            if not isinstance(enabled_tools_raw, list):
+                # Missing enabled_tools means the status format is too old for safe filtering.
+                logger.debug("Skipping stdio status file %s without enabled_tools field.", status_file)
+                continue
+
+            enabled_tools = {
+                tool_name
+                for tool_name in enabled_tools_raw
+                if isinstance(tool_name, str) and tool_name
+            }
+
+            project_hash = raw_payload.get("project_hash")
+            if not isinstance(project_hash, str) or not project_hash:
+                project_hash = file_hash
+
+            if not project_hash:
+                logger.debug("Skipping stdio status file %s without project hash.", status_file)
+                continue
+
+            payloads.append(
+                {
+                    "project_hash": project_hash,
+                    "enabled_tools": enabled_tools,
+                }
+            )
+
+        return payloads
+
+    @staticmethod
+    def _extract_project_hash_from_filename(status_file: Path) -> str | None:
+        prefix = "unity-mcp-status-"
+        stem = status_file.stem
+        if not stem.startswith(prefix):
+            return None
+
+        suffix = stem[len(prefix):]
+        return suffix or None
 
     def _refresh_tool_visibility_metadata_from_registry(self) -> None:
         now = time.monotonic()

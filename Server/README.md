@@ -164,6 +164,34 @@ Telemetry:
 - `UNITY_MCP_TELEMETRY_ENDPOINT` - Override telemetry endpoint URL
 - `UNITY_MCP_TELEMETRY_TIMEOUT` - Override telemetry request timeout (seconds)
 
+### MCP tool toggles in stdio
+
+The `manage_editor` tool exposes MCP tool enable/disable controls:
+
+- `set_mcp_tool_enabled` (`tool_name`, `enabled`)
+- `get_mcp_tool_enabled` (`tool_name`)
+- `list_mcp_tools`
+
+Example:
+
+```json
+{
+  "action": "set_mcp_tool_enabled",
+  "tool_name": "manage_scene",
+  "enabled": false
+}
+```
+
+When running in `stdio`, `tools/list` is filtered by Unity's enabled tool state.
+If all Unity-managed tools are disabled, `tools/list` will only show server-only tools.
+The Unity status file (`~/.unity-mcp/unity-mcp-status-<hash>.json`) now includes:
+
+- `project_hash`
+- `enabled_tools`
+
+Tool toggle changes trigger an immediate status-file refresh, so `tools/list`
+updates do not depend on waiting for the next heartbeat.
+
 ### Examples
 
 **Stdio (default):**

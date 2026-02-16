@@ -12,18 +12,20 @@ from services.tools.utils import coerce_bool
 
 
 @mcp_for_unity_tool(
-    description="Controls and queries the Unity editor's state and settings. Tip: pass booleans as true/false; if your client only sends strings, 'true'/'false' are accepted. Read-only actions: telemetry_status, telemetry_ping. Modifying actions: play, pause, stop, set_active_tool, add_tag, remove_tag, add_layer, remove_layer.",
+    description="Controls and queries the Unity editor's state and settings. Tip: pass booleans as true/false; if your client only sends strings, 'true'/'false' are accepted. Read-only actions: telemetry_status, telemetry_ping, get_mcp_tool_enabled, list_mcp_tools. Modifying actions: play, pause, stop, set_active_tool, set_mcp_tool_enabled, add_tag, remove_tag, add_layer, remove_layer.",
     annotations=ToolAnnotations(
         title="Manage Editor",
     ),
 )
 async def manage_editor(
     ctx: Context,
-    action: Annotated[Literal["telemetry_status", "telemetry_ping", "play", "pause", "stop", "set_active_tool", "add_tag", "remove_tag", "add_layer", "remove_layer"], "Get and update the Unity Editor state."],
+    action: Annotated[Literal["telemetry_status", "telemetry_ping", "play", "pause", "stop", "set_active_tool", "set_mcp_tool_enabled", "get_mcp_tool_enabled", "list_mcp_tools", "add_tag", "remove_tag", "add_layer", "remove_layer"], "Get and update the Unity Editor state."],
     wait_for_completion: Annotated[bool | str,
                                    "Optional. If True, waits for certain actions (accepts true/false or 'true'/'false')"] | None = None,
     tool_name: Annotated[str,
-                         "Tool name when setting active tool"] | None = None,
+                         "Tool name when setting active tool or updating/querying MCP tool enabled state"] | None = None,
+    enabled: Annotated[bool | str,
+                       "Optional. Required for set_mcp_tool_enabled (accepts true/false or 'true'/'false')"] | None = None,
     tag_name: Annotated[str,
                         "Tag name when adding and removing tags"] | None = None,
     layer_name: Annotated[str,
@@ -32,7 +34,14 @@ async def manage_editor(
     # Get active instance from request state (injected by middleware)
     unity_instance = get_unity_instance_from_context(ctx)
 
-    wait_for_completion = coerce_bool(wait_for_completion)
+    wait_for_completion_value = coerce_bool(wait_for_completion, default=None)
+    enabled_value = coerce_bool(enabled, default=None)
+
+    if enabled is not None and enabled_value is None:
+        return {
+            "success": False,
+            "message": "enabled must be a boolean value ('true'/'false').",
+        }
 
     try:
         # Diagnostics: quick telemetry checks
@@ -45,8 +54,9 @@ async def manage_editor(
         # Prepare parameters, removing None values
         params = {
             "action": action,
-            "waitForCompletion": wait_for_completion,
+            "waitForCompletion": wait_for_completion_value,
             "toolName": tool_name,
+            "enabled": enabled_value,
             "tagName": tag_name,
             "layerName": layer_name,
         }
