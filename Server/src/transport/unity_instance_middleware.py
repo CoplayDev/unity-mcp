@@ -4,7 +4,9 @@ Middleware for managing Unity instance selection per session.
 This middleware intercepts all tool calls and injects the active Unity instance
 into the request-scoped state, allowing tools to access it via ctx.get_state("unity_instance").
 """
+import asyncio
 from threading import RLock
+from datetime import datetime, timezone
 import json
 import logging
 import os
@@ -61,6 +63,7 @@ class UnityInstanceMiddleware(Middleware):
         self._active_by_key: dict[str, str] = {}
         self._lock = RLock()
         self._metadata_lock = RLock()
+        self._session_lock = RLock()
         self._unity_managed_tool_names: set[str] = set()
         self._tool_alias_to_unity_target: dict[str, str] = {}
         self._server_only_tool_names: set[str] = set()
@@ -68,6 +71,9 @@ class UnityInstanceMiddleware(Middleware):
         self._last_tool_visibility_refresh = 0.0
         self._tool_visibility_refresh_interval_seconds = 0.5
         self._has_logged_empty_registry_warning = False
+        self._tracked_sessions: dict[str, object] = {}
+        self._stdio_tools_watch_task: asyncio.Task | None = None
+        self._last_stdio_tools_state_signature: tuple[tuple[str, tuple[str, ...]], ...] | None = None
 
     def get_session_key(self, ctx) -> str:
         """
@@ -106,6 +112,159 @@ class UnityInstanceMiddleware(Middleware):
         key = self.get_session_key(ctx)
         with self._lock:
             self._active_by_key.pop(key, None)
+
+    @staticmethod
+    def _is_stdio_transport() -> bool:
+        return (config.transport_mode or "stdio").lower() == "stdio"
+
+    def _track_session_from_context(self, fastmcp_context) -> bool:
+        if fastmcp_context is None or fastmcp_context.request_context is None:
+            return False
+
+        try:
+            session_id = fastmcp_context.session_id
+            session = fastmcp_context.session
+        except RuntimeError:
+            return False
+
+        if not isinstance(session_id, str) or not session_id:
+            return False
+
+        with self._session_lock:
+            existing = self._tracked_sessions.get(session_id)
+            if existing is session:
+                return False
+
+            self._tracked_sessions[session_id] = session
+
+        return True
+
+    async def _notify_tool_list_changed_to_sessions(self, reason: str) -> None:
+        with self._session_lock:
+            session_items = list(self._tracked_sessions.items())
+
+        if not session_items:
+            return
+
+        stale_session_ids: list[str] = []
+        sent_count = 0
+        for session_id, session in session_items:
+            try:
+                await session.send_tool_list_changed()
+                sent_count += 1
+            except Exception:
+                stale_session_ids.append(session_id)
+                logger.debug(
+                    "Failed sending tools/list_changed to session %s (reason=%s); session will be removed.",
+                    session_id,
+                    reason,
+                    exc_info=True,
+                )
+
+        if stale_session_ids:
+            with self._session_lock:
+                for session_id in stale_session_ids:
+                    self._tracked_sessions.pop(session_id, None)
+
+        if sent_count:
+            logger.debug(
+                "Sent tools/list_changed notification to %d tracked session(s) (reason=%s).",
+                sent_count,
+                reason,
+            )
+
+    def _build_stdio_tools_state_signature(self) -> tuple[tuple[str, tuple[str, ...]], ...]:
+        payloads = self._list_stdio_status_payloads()
+        enabled_by_hash: dict[str, tuple[str, ...]] = {}
+        for payload in payloads:
+            project_hash = payload.get("project_hash")
+            if not isinstance(project_hash, str) or not project_hash or project_hash in enabled_by_hash:
+                continue
+
+            enabled_raw = payload.get("enabled_tools")
+            if isinstance(enabled_raw, set):
+                enabled_tools = tuple(
+                    sorted(
+                        tool_name
+                        for tool_name in enabled_raw
+                        if isinstance(tool_name, str) and tool_name
+                    )
+                )
+            elif isinstance(enabled_raw, list):
+                enabled_tools = tuple(
+                    sorted(
+                        tool_name
+                        for tool_name in enabled_raw
+                        if isinstance(tool_name, str) and tool_name
+                    )
+                )
+            else:
+                enabled_tools = ()
+
+            enabled_by_hash[project_hash] = enabled_tools
+
+        return tuple(sorted(enabled_by_hash.items(), key=lambda item: item[0]))
+
+    @staticmethod
+    def _get_stdio_tools_watch_interval_seconds() -> float:
+        raw_interval = os.getenv("UNITY_MCP_STDIO_TOOLS_WATCH_INTERVAL_SECONDS", "1.0")
+        try:
+            parsed_interval = float(raw_interval)
+            if parsed_interval < 0.2:
+                return 0.2
+            return parsed_interval
+        except (TypeError, ValueError):
+            return 1.0
+
+    async def _run_stdio_tools_watch_loop(self, interval_seconds: float) -> None:
+        while True:
+            try:
+                await asyncio.sleep(interval_seconds)
+                current_signature = self._build_stdio_tools_state_signature()
+                if self._last_stdio_tools_state_signature is None:
+                    self._last_stdio_tools_state_signature = current_signature
+                    continue
+
+                if current_signature != self._last_stdio_tools_state_signature:
+                    self._last_stdio_tools_state_signature = current_signature
+                    await self._notify_tool_list_changed_to_sessions("stdio_state_changed")
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.debug("stdio tools watcher iteration failed.", exc_info=True)
+
+    async def start_stdio_tools_watcher(self) -> None:
+        if not self._is_stdio_transport():
+            return
+
+        task = self._stdio_tools_watch_task
+        if task is not None and not task.done():
+            return
+
+        self._last_stdio_tools_state_signature = self._build_stdio_tools_state_signature()
+        interval_seconds = self._get_stdio_tools_watch_interval_seconds()
+        self._stdio_tools_watch_task = asyncio.create_task(
+            self._run_stdio_tools_watch_loop(interval_seconds),
+            name="unity-mcp-stdio-tools-watcher",
+        )
+        logger.debug("Started stdio tools watcher (interval=%ss).", interval_seconds)
+
+    async def stop_stdio_tools_watcher(self) -> None:
+        task = self._stdio_tools_watch_task
+        self._stdio_tools_watch_task = None
+        self._last_stdio_tools_state_signature = None
+
+        if task is not None:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                logger.debug("Error while stopping stdio tools watcher.", exc_info=True)
+
+        with self._session_lock:
+            self._tracked_sessions.clear()
 
     async def _maybe_autoselect_instance(self, ctx) -> str | None:
         """
@@ -269,6 +428,22 @@ class UnityInstanceMiddleware(Middleware):
         await self._inject_unity_instance(context)
         return await call_next(context)
 
+    async def on_message(self, context: MiddlewareContext, call_next):
+        if self._is_stdio_transport():
+            is_new_session = self._track_session_from_context(context.fastmcp_context)
+            if is_new_session:
+                await self._notify_tool_list_changed_to_sessions("session_registered")
+
+        return await call_next(context)
+
+    async def on_notification(self, context: MiddlewareContext, call_next):
+        if self._is_stdio_transport():
+            self._track_session_from_context(context.fastmcp_context)
+            if context.method == "notifications/initialized":
+                await self._notify_tool_list_changed_to_sessions("client_initialized")
+
+        return await call_next(context)
+
     async def on_read_resource(self, context: MiddlewareContext, call_next):
         """Inject active Unity instance into resource context if available."""
         await self._inject_unity_instance(context)
@@ -424,6 +599,8 @@ class UnityInstanceMiddleware(Middleware):
         return next(iter(enabled_by_project_hash.values()))
 
     def _list_stdio_status_payloads(self) -> list[dict[str, object]]:
+        status_ttl_seconds = self._get_stdio_status_ttl_seconds()
+        now_utc = datetime.now(timezone.utc)
         status_dir_env = os.getenv("UNITY_MCP_STATUS_DIR")
         status_dir = Path(status_dir_env).expanduser() if status_dir_env else Path.home().joinpath(".unity-mcp")
 
@@ -473,6 +650,26 @@ class UnityInstanceMiddleware(Middleware):
                 if isinstance(tool_name, str) and tool_name
             }
 
+            freshness = self._parse_heartbeat_datetime(raw_payload.get("last_heartbeat"))
+            if freshness is None:
+                try:
+                    freshness = datetime.fromtimestamp(status_file.stat().st_mtime, tz=timezone.utc)
+                except OSError:
+                    logger.debug(
+                        "Failed to read mtime for stdio status file %s; skipping for safety.",
+                        status_file,
+                        exc_info=True,
+                    )
+                    continue
+
+            if (now_utc - freshness).total_seconds() > status_ttl_seconds:
+                logger.debug(
+                    "Skipping stale stdio status file %s (age exceeds %ss).",
+                    status_file,
+                    status_ttl_seconds,
+                )
+                continue
+
             project_hash = raw_payload.get("project_hash")
             if not isinstance(project_hash, str) or not project_hash:
                 project_hash = file_hash
@@ -499,6 +696,32 @@ class UnityInstanceMiddleware(Middleware):
 
         suffix = stem[len(prefix):]
         return suffix or None
+
+    @staticmethod
+    def _get_stdio_status_ttl_seconds() -> float:
+        raw_ttl = os.getenv("UNITY_MCP_STDIO_STATUS_TTL_SECONDS", "15")
+        try:
+            ttl = float(raw_ttl)
+            if ttl > 0:
+                return ttl
+        except (TypeError, ValueError):
+            pass
+        return 15.0
+
+    @staticmethod
+    def _parse_heartbeat_datetime(raw_heartbeat: object) -> datetime | None:
+        if not isinstance(raw_heartbeat, str) or not raw_heartbeat:
+            return None
+
+        try:
+            parsed = datetime.fromisoformat(raw_heartbeat.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+
+        return parsed.astimezone(timezone.utc)
 
     def _refresh_tool_visibility_metadata_from_registry(self) -> None:
         now = time.monotonic()

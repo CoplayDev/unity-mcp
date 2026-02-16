@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -161,6 +162,39 @@ async def test_stdio_list_tools_uses_union_when_no_active_instance_and_multiple_
     assert "manage_scene" in names
     assert "manage_asset" in names
     assert "set_active_instance" in names
+
+
+@pytest.mark.asyncio
+async def test_stdio_list_tools_ignores_stale_status_files_before_union(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "transport_mode", "stdio")
+    monkeypatch.setenv("UNITY_MCP_STATUS_DIR", str(tmp_path))
+    monkeypatch.setenv("UNITY_MCP_STDIO_STATUS_TTL_SECONDS", "15")
+
+    fresh_heartbeat = datetime.now(timezone.utc).isoformat()
+    stale_heartbeat = (datetime.now(timezone.utc) - timedelta(minutes=2)).isoformat()
+
+    _write_status_file(
+        tmp_path / "unity-mcp-status-fresh11.json",
+        {
+            "project_hash": "fresh11",
+            "enabled_tools": ["manage_scene"],
+            "last_heartbeat": fresh_heartbeat,
+        },
+    )
+    _write_status_file(
+        tmp_path / "unity-mcp-status-stale22.json",
+        {
+            "project_hash": "stale22",
+            "enabled_tools": ["manage_asset"],
+            "last_heartbeat": stale_heartbeat,
+        },
+    )
+
+    middleware = UnityInstanceMiddleware()
+    names = await _filter_tool_names(middleware, _build_fastmcp_context(None))
+
+    assert "manage_scene" in names
+    assert "manage_asset" not in names
 
 
 @pytest.mark.asyncio

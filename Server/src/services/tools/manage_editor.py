@@ -1,4 +1,5 @@
 from typing import Annotated, Any, Literal
+import logging
 
 from fastmcp import Context
 from mcp.types import ToolAnnotations
@@ -9,6 +10,8 @@ from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 from services.tools.utils import coerce_bool
+
+logger = logging.getLogger("mcp-for-unity-server")
 
 
 @mcp_for_unity_tool(
@@ -67,6 +70,14 @@ async def manage_editor(
 
         # Preserve structured failure data; unwrap success into a friendlier shape
         if isinstance(response, dict) and response.get("success"):
+            if action == "set_mcp_tool_enabled":
+                try:
+                    await ctx.send_tool_list_changed()
+                except Exception:
+                    logger.debug(
+                        "Failed to send tools/list_changed notification after set_mcp_tool_enabled.",
+                        exc_info=True,
+                    )
             return {"success": True, "message": response.get("message", "Editor operation successful."), "data": response.get("data")}
         return response if isinstance(response, dict) else {"success": False, "message": str(response)}
 
