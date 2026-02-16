@@ -147,6 +147,8 @@ These options apply to the `mcp-for-unity` command (whether run via `uvx`, Docke
 - `UNITY_MCP_HTTP_REMOTE_HOSTED` - Enable remote-hosted mode (`true`, `1`, or `yes`)
 - `UNITY_MCP_DEFAULT_INSTANCE` - Default Unity instance to target (project name, hash, or `Name@hash`)
 - `UNITY_MCP_SKIP_STARTUP_CONNECT=1` - Skip initial Unity connection attempt on startup
+- `UNITY_MCP_STDIO_STATUS_TTL_SECONDS` - Freshness window for stdio status files used by tools/list filtering (default: `15`)
+- `UNITY_MCP_STDIO_TOOLS_WATCH_INTERVAL_SECONDS` - Poll interval for stdio tool-list change watcher in seconds (default: `1.0`, minimum: `0.2`)
 
 API key authentication (remote-hosted mode):
 
@@ -191,6 +193,17 @@ The Unity status file (`~/.unity-mcp/unity-mcp-status-<hash>.json`) now includes
 
 Tool toggle changes trigger an immediate status-file refresh, so `tools/list`
 updates do not depend on waiting for the next heartbeat.
+When a client session initializes in `stdio`, the server sends
+`notifications/tools/list_changed` to trigger an immediate tool-list refresh.
+During runtime, a stdio watcher monitors status-file changes and emits the same
+notification when enabled-tool state changes.
+To avoid stale instance data, stdio filtering only uses recent status files
+(default freshness window: 15s, configurable via `UNITY_MCP_STDIO_STATUS_TTL_SECONDS`).
+Watcher interval defaults to 1.0s (minimum 0.2s), configurable via
+`UNITY_MCP_STDIO_TOOLS_WATCH_INTERVAL_SECONDS`.
+Compatibility note: if a client ignores `notifications/tools/list_changed`,
+tool calls still enforce enabled/disabled state, but visible list updates may
+still require reconnecting that client.
 
 ### Examples
 
