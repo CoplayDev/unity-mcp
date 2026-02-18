@@ -144,6 +144,57 @@ async def test_enabled_tools_is_object_not_list_skipped(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_status_file_with_future_state_field_but_no_enabled_tools_skipped(monkeypatch, tmp_path):
+    """Future/partial schema without enabled_tools should safely skip filtering."""
+    monkeypatch.setattr(config, "transport_mode", "stdio")
+    monkeypatch.setenv("UNITY_MCP_STATUS_DIR", str(tmp_path))
+
+    _write_status_file(
+        tmp_path / "unity-mcp-status-abc123.json",
+        {
+            "project_hash": "abc123",
+            "enabled_tools_state": "unavailable",
+            "last_heartbeat": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+
+    middleware = UnityInstanceMiddleware()
+    names = await _filter_tool_names(middleware, _build_fastmcp_context("Project@abc123"))
+
+    # Should fall through without filtering for backward/forward compatibility.
+    assert "manage_scene" in names
+    assert "manage_script" in names
+    assert "manage_asset" in names
+    assert "server_only_tool" in names
+
+
+@pytest.mark.asyncio
+async def test_status_file_with_unknown_extra_fields_does_not_break_filtering(monkeypatch, tmp_path):
+    """Unknown extra fields should be ignored and normal filtering should still apply."""
+    monkeypatch.setattr(config, "transport_mode", "stdio")
+    monkeypatch.setenv("UNITY_MCP_STATUS_DIR", str(tmp_path))
+
+    _write_status_file(
+        tmp_path / "unity-mcp-status-abc123.json",
+        {
+            "project_hash": "abc123",
+            "enabled_tools": ["manage_scene"],
+            "enabled_tools_state": "ok",
+            "schema_version": 2,
+            "some_future_field": {"nested": True},
+        },
+    )
+
+    middleware = UnityInstanceMiddleware()
+    names = await _filter_tool_names(middleware, _build_fastmcp_context("Project@abc123"))
+
+    assert "manage_scene" in names
+    assert "manage_script" not in names
+    assert "manage_asset" not in names
+    assert "server_only_tool" in names
+
+
+@pytest.mark.asyncio
 async def test_project_hash_missing_uses_filename_hash(monkeypatch, tmp_path):
     """If project_hash is missing, should extract from filename."""
     monkeypatch.setattr(config, "transport_mode", "stdio")
