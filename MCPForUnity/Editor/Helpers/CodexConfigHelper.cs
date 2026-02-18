@@ -17,14 +17,11 @@ namespace MCPForUnity.Editor.Helpers
     /// </summary>
     public static class CodexConfigHelper
     {
-        private static void AddDevModeArgs(TomlArray args)
+        private static void AddUvxModeFlags(TomlArray args)
         {
             if (args == null) return;
-            // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
-            // Note: --reinstall is not supported by uvx, use --no-cache --refresh instead
-            if (!AssetPathUtility.ShouldForceUvxRefresh()) return;
-            args.Add(new TomlString { Value = "--no-cache" });
-            args.Add(new TomlString { Value = "--refresh" });
+            foreach (var flag in AssetPathUtility.GetUvxDevFlagsList())
+                args.Add(new TomlString { Value = flag });
         }
 
         public static string BuildCodexServerBlock(string uvPath)
@@ -53,7 +50,7 @@ namespace MCPForUnity.Editor.Helpers
                 unityMCP["command"] = uvxPath;
 
                 var args = new TomlArray();
-                AddDevModeArgs(args);
+                AddUvxModeFlags(args);
                 // Use centralized helper for beta server / prerelease args
                 foreach (var arg in AssetPathUtility.GetBetaServerFromArgsList())
                 {
@@ -205,7 +202,7 @@ namespace MCPForUnity.Editor.Helpers
                 unityMCP["command"] = new TomlString { Value = uvxPath };
 
                 var argsArray = new TomlArray();
-                AddDevModeArgs(argsArray);
+                AddUvxModeFlags(argsArray);
                 // Use centralized helper for beta server / prerelease args
                 foreach (var arg in AssetPathUtility.GetBetaServerFromArgsList())
                 {

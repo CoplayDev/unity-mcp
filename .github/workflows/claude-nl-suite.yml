@@ -5,6 +5,7 @@ on: [workflow_dispatch]
 permissions:
   contents: read
   checks: write
+  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -516,19 +517,45 @@ jobs:
           attempt=0
           while true; do
             attempt=$((attempt+1))
-            if uv run --active --directory Server mcp-for-unity --transport stdio --help > /tmp/mcp-preflight.log 2>&1; then
+            if uv run --active --directory Server python <<'PY' > /tmp/mcp-preflight.log 2>&1
+          import json
+          import os
+          import sys
+          sys.path.insert(0, "src")
+          from transport.legacy.unity_connection import send_command_with_retry
+
+          unity_instance = (os.environ.get("UNITY_MCP_DEFAULT_INSTANCE") or "").strip() or None
+          resp = send_command_with_retry(
+              "read_console",
+              {"action": "get", "count": "1", "include_stacktrace": False},
+              instance_id=unity_instance,
+              max_retries=1,
+              retry_ms=200,
+              retry_on_reload=False,
+          )
+          print(json.dumps(resp, default=str))
+          ok = isinstance(resp, dict) and (resp.get("success") is True or resp.get("status") == "success")
+          raise SystemExit(0 if ok else 1)
+          PY
+            then
+              echo "MCP command-plane preflight passed on attempt ${attempt}"
               cat /tmp/mcp-preflight.log
               break
             fi
-            if [ "$attempt" -ge 5 ]; then
-              echo "::error::MCP server did not settle after $attempt attempts"
+            echo "MCP command-plane preflight failed on attempt ${attempt}"
+            cat /tmp/mcp-preflight.log || true
+            if [ "$attempt" -ge 8 ]; then
+              echo "::error::Unity command plane not ready after $attempt attempts"
               cat /tmp/mcp-preflight.log || true
               exit 1
             fi
             sleep 2
           done
 
-      - name: Verify MCP Unity instance and Claude args
+      # ---------- Readiness diagnostics (only if preflight fails) ----------
+      - name: Readiness diagnostics (on preflight failure)
+        if: failure()
+        continue-on-error: true
         env:
           UNITY_MCP_DEFAULT_INSTANCE: ${{ env.UNITY_MCP_DEFAULT_INSTANCE }}
         run: |
@@ -541,122 +568,100 @@ jobs:
             export UNITY_MCP_DEFAULT_INSTANCE
           fi
 
-          # Debug: check what PortDiscovery sees
-          echo "--- PortDiscovery debug ---"
-          python3 - <<'PY'
-          import sys
-          sys.path.insert(0, "Server/src")
-          from transport.legacy.port_discovery import PortDiscovery
-          import json
-
-          print(f"status_dir: {PortDiscovery.get_registry_dir()}")
-          instances = PortDiscovery.discover_all_unity_instances()
-          print(f"discover_all_unity_instances: {[{'id':i.id,'port':i.port} for i in instances]}")
-          print(f"try_probe_direct(6400): {PortDiscovery._try_probe_unity_mcp(6400)}")
-          print(f"discover_unity_port: {PortDiscovery.discover_unity_port()}")
-          PY
-
-          python3 - <<'PY'
-          import json
-          import subprocess
-          cmd = [
-              "uv", "run", "--active", "--directory", "Server", "python", "-c",
-              "from transport.legacy.stdio_port_registry import stdio_port_registry; "
-              "inst = stdio_port_registry.get_instances(force_refresh=True); "
-              "import json; print(json.dumps([{'id':i.id,'port':i.port} for i in inst]))"
-          ]
-          result = subprocess.run(cmd, capture_output=True, text=True)
-          print(result.stdout.strip())
-          if result.returncode != 0:
-              print(result.stderr)
-              raise SystemExit(1)
-          try:
-              data = json.loads(result.stdout.strip() or "[]")
-              if not data:
-                  print("::error::No Unity instances discovered by MCP registry")
-                  raise SystemExit(1)
-          except Exception as e:
-              print(f"::error::Failed to parse instances: {e}")
-              raise SystemExit(1)
-          PY
-
-          echo "=== Testing MCP server startup with --status-dir flag ==="
-          uv run --active --directory Server python <<'PYTEST'
-          import os
-          import sys
-          import glob
-          sys.path.insert(0, 'src')
-          from transport.legacy.port_discovery import PortDiscovery
-          status_dir = PortDiscovery.get_registry_dir()
-          print('Status dir:', status_dir)
-          print('Exists:', status_dir.exists())
-          pattern = str(status_dir / 'unity-mcp-status-*.json')
-          files = glob.glob(pattern)
-          print('Files:', files)
-          instances = PortDiscovery.discover_all_unity_instances()
-          print('Instances:', [i.id for i in instances])
-          if not instances:
-              print('::error::Discovery returned empty list!')
-              sys.exit(1)
-          PYTEST
-
-      # ---------- Final Unity check before Claude ----------
-      - name: Verify Unity IMMEDIATELY before Claude
-        run: |
-          set -euxo pipefail
           echo "=== Unity container status ==="
-          docker inspect -f '{{.State.Status}} {{.State.Running}}' unity-mcp || echo "Container not found!"
-          
-          echo "=== Raw socket probe to Unity ==="
-          # Try raw TCP connect without Python overhead
+          docker inspect -f '{{.State.Status}} {{.State.Running}} {{.State.ExitCode}}' unity-mcp || true
+          echo "=== Unity container logs (tail 200) ==="
+          docker logs unity-mcp --tail 200 | sed -E 's/((email|serial|license|password|token)[^[:space:]]*)/[REDACTED]/ig' || true
+
+          echo "=== Status directory ==="
+          ls -la "$GITHUB_WORKSPACE/.unity-mcp" || true
+          jq -r . "$GITHUB_WORKSPACE"/.unity-mcp/unity-mcp-status-*.json | sed -n '1,120p' || true
+
+          echo "=== Raw TCP probe to 6400 ==="
           for host in 127.0.0.1 localhost; do
-            echo "Probing $host:6400..."
             if timeout 2 bash -c "exec 3<>/dev/tcp/$host/6400" 2>/dev/null; then
               echo "$host:6400 - SUCCESS"
             else
               echo "$host:6400 - FAILED"
             fi
           done
-          
-          echo "=== Netstat for port 6400 ==="
-          docker exec unity-mcp netstat -tlnp 2>/dev/null | grep 6400 || ss -tlnp | grep 6400 || echo "No listener found on 6400"
-          
-          echo "=== Python probe with timing ==="
-          python3 <<'PY'
-          import socket, time
-          start = time.time()
-          for host in ['127.0.0.1', 'localhost']:
-              try:
-                  s = socket.create_connection((host, 6400), timeout=2)
-                  s.close()
-                  print(f"{host}:6400 OK ({time.time()-start:.2f}s)")
-              except Exception as e:
-                  print(f"{host}:6400 FAILED: {e} ({time.time()-start:.2f}s)")
+
+          echo "--- PortDiscovery debug ---"
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, "Server/src")
+          from transport.legacy.port_discovery import PortDiscovery
+
+          print(f"status_dir: {PortDiscovery.get_registry_dir()}")
+          instances = PortDiscovery.discover_all_unity_instances()
+          print(f"discover_all_unity_instances: {[{'id': i.id, 'port': i.port} for i in instances]}")
+          print(f"discover_unity_port: {PortDiscovery.discover_unity_port()}")
           PY
 
+          echo "--- Stdio registry debug ---"
+          uv run --active --directory Server python - <<'PY'
+          from transport.legacy.stdio_port_registry import stdio_port_registry
+          import json
+          instances = stdio_port_registry.get_instances(force_refresh=True)
+          print(json.dumps([{"id": i.id, "port": i.port} for i in instances]))
+          PY
+
+          echo "=== MCP startup debug log ==="
+          cat "$GITHUB_WORKSPACE/.unity-mcp/mcp-server-startup-debug.log" 2>/dev/null || echo "(no startup debug log)"
+
       # ---------- Run suite in two passes ----------
+      - name: Load NL prompt
+        id: nl_prompt
+        if: steps.detect.outputs.anthropic_ok == 'true' && steps.detect.outputs.unity_ok == 'true'
+        run: |
+          set -euo pipefail
+          cp .claude/prompts/nl-unity-suite-nl.md .claude/prompts/nl-unity-suite-nl-run.md
+          cat >> .claude/prompts/nl-unity-suite-nl-run.md <<'EOF'
+
+          You are running the NL pass only.
+          - Emit exactly NL-0, NL-1, NL-2, NL-3, NL-4.
+          - Write each to reports/${ID}_results.xml.
+          - Prefer a single MultiEdit(reports/**) batch. Do not emit any T-* tests.
+          - Stop after NL-4_results.xml is written.
+          EOF
+          cp .claude/prompts/nl-unity-suite-nl.md .claude/prompts/nl-unity-suite-nl-retry.md
+          cat >> .claude/prompts/nl-unity-suite-nl-retry.md <<'EOF'
+
+          You are retrying the NL pass only.
+          - Emit exactly NL-0, NL-1, NL-2, NL-3, NL-4.
+          - Overwrite reports/${ID}_results.xml for each ID.
+          - Do not emit any T-* or GO-* tests.
+          - Stop after NL-4_results.xml is written.
+          EOF
+
+          {
+            echo "run_prompt<<__NL_RUN_PROMPT__"
+            cat .claude/prompts/nl-unity-suite-nl-run.md
+            echo "__NL_RUN_PROMPT__"
+            echo "retry_prompt<<__NL_RETRY_PROMPT__"
+            cat .claude/prompts/nl-unity-suite-nl-retry.md
+            echo "__NL_RETRY_PROMPT__"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Run Claude NL pass
-        uses: anthropics/claude-code-base-action@beta
+        uses: anthropics/claude-code-action@cc5ef44546fda0649ddde3c5ab0cd3db7b7c5035
         if: steps.detect.outputs.anthropic_ok == 'true' && steps.detect.outputs.unity_ok == 'true'
         continue-on-error: true
         env:
           UNITY_MCP_DEFAULT_INSTANCE: ${{ env.UNITY_MCP_DEFAULT_INSTANCE }}
+          GITHUB_STEP_SUMMARY: /dev/null
         with:
-          use_node_cache: false
-          prompt_file: .claude/prompts/nl-unity-suite-nl.md
-          mcp_config: .claude/mcp.json
+          prompt: ${{ steps.nl_prompt.outputs.run_prompt }}
           settings: .claude/settings.json
-          allowed_tools: "mcp__unity,Edit(reports/**),MultiEdit(reports/**)"
-          disallowed_tools: "Bash,WebFetch,WebSearch,Task,TodoWrite,NotebookEdit,NotebookRead"
-          model: claude-haiku-4-5-20251001
-          fallback_model: claude-sonnet-4-5-20250929
-          append_system_prompt: |
-            You are running the NL pass only.
-            - Emit exactly NL-0, NL-1, NL-2, NL-3, NL-4.
-            - Write each to reports/${ID}_results.xml.
-            - Prefer a single MultiEdit(reports/**) batch. Do not emit any T-* tests.
-            - Stop after NL-4_results.xml is written.
-          timeout_minutes: "30"
+          claude_args: |
+            --mcp-config .claude/mcp.json
+            --allowedTools mcp__unity,Edit(reports/**),MultiEdit(reports/**)
+            --disallowedTools Bash,WebFetch,WebSearch,Task,TodoWrite,NotebookEdit,NotebookRead
+            --model claude-haiku-4-5-20251001
+            --fallback-model claude-sonnet-4-5-20250929
+          track_progress: false
+          show_full_output: true
+          display_report: false
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Debug MCP server startup (after NL pass)
@@ -669,32 +674,118 @@ jobs:
           echo "=== Status dir after Claude ==="
           ls -la "$GITHUB_WORKSPACE/.unity-mcp" || true
 
+      - name: Check NL coverage incomplete/failed (pre-retry)
+        id: nl_cov
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          failed=()
+          for id in NL-0 NL-1 NL-2 NL-3 NL-4; do
+            f="reports/${id}_results.xml"
+            if [[ ! -s "$f" && ! -s "reports/_staging/${id}_results.xml" ]]; then
+              missing+=("$id")
+              continue
+            fi
+            if [[ ! -s "$f" && -s "reports/_staging/${id}_results.xml" ]]; then
+              f="reports/_staging/${id}_results.xml"
+            fi
+            if grep -Eq '<(failure|error)\b' "$f"; then
+              failed+=("$id")
+            fi
+          done
+          echo "missing=${#missing[@]}" >> "$GITHUB_OUTPUT"
+          echo "failed=${#failed[@]}" >> "$GITHUB_OUTPUT"
+          if (( ${#missing[@]} )); then
+            echo "missing_list=${missing[*]}" >> "$GITHUB_OUTPUT"
+          fi
+          if (( ${#failed[@]} )); then
+            echo "failed_list=${failed[*]}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Retry NL pass (Sonnet) if incomplete or failed
+        if: steps.nl_cov.outputs.missing != '0' || steps.nl_cov.outputs.failed != '0'
+        uses: anthropics/claude-code-action@cc5ef44546fda0649ddde3c5ab0cd3db7b7c5035
+        continue-on-error: true
+        env:
+          UNITY_MCP_DEFAULT_INSTANCE: ${{ env.UNITY_MCP_DEFAULT_INSTANCE }}
+          GITHUB_STEP_SUMMARY: /dev/null
+        with:
+          prompt: ${{ steps.nl_prompt.outputs.retry_prompt }}
+          settings: .claude/settings.json
+          claude_args: |
+            --mcp-config .claude/mcp.json
+            --allowedTools mcp__unity,Edit(reports/**),MultiEdit(reports/**)
+            --disallowedTools Bash,WebFetch,WebSearch,Task,TodoWrite,NotebookEdit,NotebookRead
+            --model claude-sonnet-4-5-20250929
+            --fallback-model claude-haiku-4-5-20251001
+          track_progress: false
+          show_full_output: true
+          display_report: false
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Load T prompt
+        id: t_prompt
+        if: steps.detect.outputs.anthropic_ok == 'true' && steps.detect.outputs.unity_ok == 'true'
+        run: |
+          set -euo pipefail
+          cp .claude/prompts/nl-unity-suite-t.md .claude/prompts/nl-unity-suite-t-run.md
+          cat >> .claude/prompts/nl-unity-suite-t-run.md <<'EOF'
+
+          You are running the T pass (A–J) only.
+          Output requirements:
+          - Emit exactly 10 test fragments: T-A, T-B, T-C, T-D, T-E, T-F, T-G, T-H, T-I, T-J.
+          - Write each fragment to reports/${ID}_results.xml (e.g., T-A_results.xml).
+          - Prefer a single MultiEdit(reports/**) call that writes all ten files in one batch.
+          - If MultiEdit is not used, emit individual writes for any missing IDs until all ten exist.
+          - Do not emit any NL-* fragments.
+          Stop condition:
+          - After T-J_results.xml is written, stop.
+          EOF
+
+          cp .claude/prompts/nl-unity-suite-t.md .claude/prompts/nl-unity-suite-t-retry.md
+          cat >> .claude/prompts/nl-unity-suite-t-retry.md <<'EOF'
+
+          You are running the T pass only.
+          Output requirements:
+          - Emit exactly 10 test fragments: T-A, T-B, T-C, T-D, T-E, T-F, T-G, T-H, T-I, T-J.
+          - Write each fragment to reports/${ID}_results.xml (e.g., T-A_results.xml).
+          - Prefer a single MultiEdit(reports/**) call that writes all ten files in one batch.
+          - If MultiEdit is not used, emit individual writes for any missing IDs until all ten exist.
+          - Do not emit any NL-* fragments.
+          Stop condition:
+          - After T-J_results.xml is written, stop.
+          EOF
+
+          {
+            echo "run_prompt<<__T_RUN_PROMPT__"
+            cat .claude/prompts/nl-unity-suite-t-run.md
+            echo "__T_RUN_PROMPT__"
+            echo "retry_prompt<<__T_RETRY_PROMPT__"
+            cat .claude/prompts/nl-unity-suite-t-retry.md
+            echo "__T_RETRY_PROMPT__"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Run Claude T pass A-J
-        uses: anthropics/claude-code-base-action@beta
+        uses: anthropics/claude-code-action@cc5ef44546fda0649ddde3c5ab0cd3db7b7c5035
         if: steps.detect.outputs.anthropic_ok == 'true' && steps.detect.outputs.unity_ok == 'true'
         continue-on-error: true
         env:
           UNITY_MCP_DEFAULT_INSTANCE: ${{ env.UNITY_MCP_DEFAULT_INSTANCE }}
+          GITHUB_STEP_SUMMARY: /dev/null
         with:
-          use_node_cache: false
-          prompt_file: .claude/prompts/nl-unity-suite-t.md
-          mcp_config: .claude/mcp.json
+          prompt: ${{ steps.t_prompt.outputs.run_prompt }}
           settings: .claude/settings.json
-          allowed_tools: "mcp__unity,Edit(reports/**),MultiEdit(reports/**)"
-          disallowed_tools: "Bash,WebFetch,WebSearch,Task,TodoWrite,NotebookEdit,NotebookRead"
-          model: claude-haiku-4-5-20251001
-          fallback_model: claude-sonnet-4-5-20250929
-          append_system_prompt: |
-            You are running the T pass (A–J) only.
-            Output requirements:
-            - Emit exactly 10 test fragments: T-A, T-B, T-C, T-D, T-E, T-F, T-G, T-H, T-I, T-J.
-            - Write each fragment to reports/${ID}_results.xml (e.g., T-A_results.xml).
-            - Prefer a single MultiEdit(reports/**) call that writes all ten files in one batch.
-            - If MultiEdit is not used, emit individual writes for any missing IDs until all ten exist.
-            - Do not emit any NL-* fragments.
-            Stop condition:
-            - After T-J_results.xml is written, stop.
-          timeout_minutes: "30"
+          claude_args: |
+            --mcp-config .claude/mcp.json
+            --allowedTools mcp__unity,Edit(reports/**),MultiEdit(reports/**)
+            --disallowedTools Bash,WebFetch,WebSearch,Task,TodoWrite,NotebookEdit,NotebookRead
+            --model claude-haiku-4-5-20251001
+            --fallback-model claude-sonnet-4-5-20250929
+          track_progress: false
+          show_full_output: true
+          display_report: false
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
       # (moved) Assert T coverage after staged fragments are promoted
@@ -718,27 +809,21 @@ jobs:
 
       - name: Retry T pass (Sonnet) if incomplete
         if: steps.t_cov.outputs.missing != '0'
-        uses: anthropics/claude-code-base-action@beta
+        uses: anthropics/claude-code-action@cc5ef44546fda0649ddde3c5ab0cd3db7b7c5035
+        env:
+          GITHUB_STEP_SUMMARY: /dev/null
         with:
-          use_node_cache: false
-          prompt_file: .claude/prompts/nl-unity-suite-t.md
-          mcp_config: .claude/mcp.json
+          prompt: ${{ steps.t_prompt.outputs.retry_prompt }}
           settings: .claude/settings.json
-          allowed_tools: "mcp__unity,Edit(reports/**),MultiEdit(reports/**)"
-          disallowed_tools: "Bash,MultiEdit(/!(reports/**)),WebFetch,WebSearch,Task,TodoWrite,NotebookEdit,NotebookRead"
-          model: claude-sonnet-4-5-20250929
-          fallback_model: claude-haiku-4-5-20251001
-          append_system_prompt: |
-            You are running the T pass only.
-            Output requirements:
-            - Emit exactly 10 test fragments: T-A, T-B, T-C, T-D, T-E, T-F, T-G, T-H, T-I, T-J.
-            - Write each fragment to reports/${ID}_results.xml (e.g., T-A_results.xml).
-            - Prefer a single MultiEdit(reports/**) call that writes all ten files in one batch.
-            - If MultiEdit is not used, emit individual writes for any missing IDs until all ten exist.
-            - Do not emit any NL-* fragments.
-            Stop condition:
-            - After T-J_results.xml is written, stop.
-          timeout_minutes: "30"
+          claude_args: |
+            --mcp-config .claude/mcp.json
+            --allowedTools mcp__unity,Edit(reports/**),MultiEdit(reports/**)
+            --disallowedTools Bash,MultiEdit(/!(reports/**)),WebFetch,WebSearch,Task,TodoWrite,NotebookEdit,NotebookRead
+            --model claude-sonnet-4-5-20250929
+            --fallback-model claude-haiku-4-5-20251001
+          track_progress: false
+          show_full_output: true
+          display_report: false
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Re-assert T coverage (post-retry)
@@ -756,31 +841,65 @@ jobs:
           fi
 
       # ---------- Run GO pass (GameObject API tests) ----------
+      - name: Load GO prompt
+        id: go_prompt
+        if: steps.detect.outputs.anthropic_ok == 'true' && steps.detect.outputs.unity_ok == 'true'
+        run: |
+          set -euo pipefail
+          cp .claude/prompts/nl-gameobject-suite.md .claude/prompts/nl-gameobject-suite-run.md
+          cat >> .claude/prompts/nl-gameobject-suite-run.md <<'EOF'
+
+          You are running the GO pass (GameObject API tests) only.
+          Output requirements:
+          - Emit exactly 11 test fragments: GO-0, GO-1, GO-2, GO-3, GO-4, GO-5, GO-6, GO-7, GO-8, GO-9, GO-10.
+          - Write each fragment to reports/${ID}_results.xml (e.g., GO-0_results.xml).
+          - Prefer a single MultiEdit(reports/**) call that writes all eleven files in one batch.
+          - Do not emit any NL-* or T-* fragments.
+          Stop condition:
+          - After GO-10_results.xml is written, stop.
+          EOF
+
+          cp .claude/prompts/nl-gameobject-suite.md .claude/prompts/nl-gameobject-suite-retry.md
+          cat >> .claude/prompts/nl-gameobject-suite-retry.md <<'EOF'
+
+          You are running the GO pass only.
+          Output requirements:
+          - Emit exactly 11 test fragments: GO-0, GO-1, GO-2, GO-3, GO-4, GO-5, GO-6, GO-7, GO-8, GO-9, GO-10.
+          - Write each fragment to reports/${ID}_results.xml (e.g., GO-0_results.xml).
+          - Prefer a single MultiEdit(reports/**) call that writes all eleven files in one batch.
+          - Do not emit any NL-* or T-* fragments.
+          Stop condition:
+          - After GO-10_results.xml is written, stop.
+          EOF
+
+          {
+            echo "run_prompt<<__GO_RUN_PROMPT__"
+            cat .claude/prompts/nl-gameobject-suite-run.md
+            echo "__GO_RUN_PROMPT__"
+            echo "retry_prompt<<__GO_RETRY_PROMPT__"
+            cat .claude/prompts/nl-gameobject-suite-retry.md
+            echo "__GO_RETRY_PROMPT__"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Run Claude GO pass
-        uses: anthropics/claude-code-base-action@beta
+        uses: anthropics/claude-code-action@cc5ef44546fda0649ddde3c5ab0cd3db7b7c5035
         if: steps.detect.outputs.anthropic_ok == 'true' && steps.detect.outputs.unity_ok == 'true'
         continue-on-error: true
         env:
           UNITY_MCP_DEFAULT_INSTANCE: ${{ env.UNITY_MCP_DEFAULT_INSTANCE }}
+          GITHUB_STEP_SUMMARY: /dev/null
         with:
-          use_node_cache: false
-          prompt_file: .claude/prompts/nl-gameobject-suite.md
-          mcp_config: .claude/mcp.json
+          prompt: ${{ steps.go_prompt.outputs.run_prompt }}
           settings: .claude/settings.json
-          allowed_tools: "mcp__unity,Edit(reports/**),MultiEdit(reports/**)"
-          disallowed_tools: "Bash,WebFetch,WebSearch,Task,TodoWrite,NotebookEdit,NotebookRead"
-          model: claude-haiku-4-5-20251001
-          fallback_model: claude-sonnet-4-5-20250929
-          append_system_prompt: |
-            You are running the GO pass (GameObject API tests) only.
-            Output requirements:
-            - Emit exactly 11 test fragments: GO-0, GO-1, GO-2, GO-3, GO-4, GO-5, GO-6, GO-7, GO-8, GO-9, GO-10.
-            - Write each fragment to reports/${ID}_results.xml (e.g., GO-0_results.xml).
-            - Prefer a single MultiEdit(reports/**) call that writes all eleven files in one batch.
-            - Do not emit any NL-* or T-* fragments.
-            Stop condition:
-            - After GO-10_results.xml is written, stop.
-          timeout_minutes: "20"
+          claude_args: |
+            --mcp-config .claude/mcp.json
+            --allowedTools mcp__unity,Edit(reports/**),MultiEdit(reports/**)
+            --disallowedTools Bash,WebFetch,WebSearch,Task,TodoWrite,NotebookEdit,NotebookRead
+            --model claude-haiku-4-5-20251001
+            --fallback-model claude-sonnet-4-5-20250929
+          track_progress: false
+          show_full_output: true
+          display_report: false
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Check GO coverage incomplete (pre-retry)
@@ -802,26 +921,21 @@ jobs:
 
       - name: Retry GO pass (Sonnet) if incomplete
         if: steps.go_cov.outputs.missing != '0'
-        uses: anthropics/claude-code-base-action@beta
+        uses: anthropics/claude-code-action@cc5ef44546fda0649ddde3c5ab0cd3db7b7c5035
+        env:
+          GITHUB_STEP_SUMMARY: /dev/null
         with:
-          use_node_cache: false
-          prompt_file: .claude/prompts/nl-gameobject-suite.md
-          mcp_config: .claude/mcp.json
+          prompt: ${{ steps.go_prompt.outputs.retry_prompt }}
           settings: .claude/settings.json
-          allowed_tools: "mcp__unity,Edit(reports/**),MultiEdit(reports/**)"
-          disallowed_tools: "Bash,WebFetch,WebSearch,Task,TodoWrite,NotebookEdit,NotebookRead"
-          model: claude-sonnet-4-5-20250929
-          fallback_model: claude-haiku-4-5-20251001
-          append_system_prompt: |
-            You are running the GO pass only.
-            Output requirements:
-            - Emit exactly 11 test fragments: GO-0, GO-1, GO-2, GO-3, GO-4, GO-5, GO-6, GO-7, GO-8, GO-9, GO-10.
-            - Write each fragment to reports/${ID}_results.xml (e.g., GO-0_results.xml).
-            - Prefer a single MultiEdit(reports/**) call that writes all eleven files in one batch.
-            - Do not emit any NL-* or T-* fragments.
-            Stop condition:
-            - After GO-10_results.xml is written, stop.
-          timeout_minutes: "20"
+          claude_args: |
+            --mcp-config .claude/mcp.json
+            --allowedTools mcp__unity,Edit(reports/**),MultiEdit(reports/**)
+            --disallowedTools Bash,WebFetch,WebSearch,Task,TodoWrite,NotebookEdit,NotebookRead
+            --model claude-sonnet-4-5-20250929
+            --fallback-model claude-haiku-4-5-20251001
+          track_progress: false
+          show_full_output: true
+          display_report: false
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
       # (kept) Finalize staged report fragments (promote to reports/)
@@ -1283,7 +1397,7 @@ jobs:
               lines.append(f"- [x] {label}" if st is True else (f"- [ ] {label} (fail)" if st is False else f"- [ ] {label} (not run)"))
           lines.append('')
 
-          lines.append('## Test Details')
+          lines.append('## Test Details (trimmed)')
 
           def order_key(n: str):
               if n.startswith('NL-'):
@@ -1300,7 +1414,8 @@ jobs:
                       return (2, 999)
               return (3, n)
 
-          MAX_CHARS = 2000
+          MAX_CHARS = 800
+          MAX_LINES = 8
           seen = set()
           for tid in sorted(id_status.keys(), key=order_key):
               seen.add(tid)
@@ -1314,8 +1429,16 @@ jobs:
               text = '' if so is None or so.text is None else html.unescape(so.text.replace('\r\n','\n'))
               if text.strip():
                   t = text.strip()
+                  truncated = False
+                  lines_out = t.splitlines()
+                  if len(lines_out) > MAX_LINES:
+                      t = "\n".join(lines_out[:MAX_LINES]).rstrip()
+                      truncated = True
                   if len(t) > MAX_CHARS:
-                      t = t[:MAX_CHARS] + "\n…(truncated)"
+                      t = t[:MAX_CHARS].rstrip()
+                      truncated = True
+                  if truncated:
+                      t += "\n…(truncated)"
                   fence = '```' if '```' not in t else '````'
                   lines += [fence, t, fence]
               else:
@@ -1431,18 +1554,63 @@ jobs:
       - name: NL/T details -> Job Summary
         if: always()
         run: |
-          echo "## Unity NL/T Editing Suite — Summary" >> $GITHUB_STEP_SUMMARY
           python3 - <<'PY' >> $GITHUB_STEP_SUMMARY
           from pathlib import Path
+
+          print("## Unity NL/T Editing Suite — Summary")
+          print("")
+
           p = Path('reports/junit-nl-suite.md')
-          if p.exists():
-              text = p.read_bytes().decode('utf-8', 'replace')
-              MAX = 65000
-              print(text[:MAX])
-              if len(text) > MAX:
-                  print("\n\n_…truncated; full report in artifacts._")
-          else:
+          if not p.exists():
               print("_No markdown report found._")
+              raise SystemExit(0)
+
+          text = p.read_bytes().decode('utf-8', 'replace').replace('\r\n', '\n')
+          lines = text.splitlines()
+
+          details_start = None
+          for i, line in enumerate(lines):
+              if line.startswith("## Test Details"):
+                  details_start = i
+                  break
+
+          # Keep the summary compact: show heading/totals/checklist only.
+          prefix_lines = lines if details_start is None else lines[:details_start]
+          prefix = "\n".join(prefix_lines).strip()
+          if prefix:
+              print(prefix)
+          else:
+              print("_No summary section found in markdown report._")
+
+          failed_blocks = []
+          if details_start is not None:
+              i = details_start + 1
+              while i < len(lines):
+                  line = lines[i]
+                  if line.startswith("### "):
+                      block = [line]
+                      i += 1
+                      while i < len(lines) and not lines[i].startswith("### "):
+                          block.append(lines[i])
+                          i += 1
+                      if " — FAIL" in line or " - FAIL" in line:
+                          failed_blocks.append(block)
+                      continue
+                  i += 1
+
+          if failed_blocks:
+              print("")
+              print("## Failing Test Details")
+              print("")
+              max_block_lines = 40
+              for block in failed_blocks:
+                  if len(block) > max_block_lines:
+                      block = block[:max_block_lines] + ["…(truncated)"]
+                  print("\n".join(block).rstrip())
+                  print("")
+          else:
+              print("")
+              print("_All tests passed. Full per-test details are in artifact file `reports/junit-nl-suite.md`._")
           PY
 
       - name: Fallback JUnit if missing
@@ -1466,9 +1634,13 @@ jobs:
         uses: mikepenz/action-junit-report@v5
         with:
           report_paths: "${{ env.JUNIT_OUT }}"
-          include_passed: true
-          detailed_summary: true
-          annotate_notice: true
+          include_passed: false
+          detailed_summary: false
+          annotate_notice: false
+          check_annotations: false
+          job_summary: false
+          verbose_summary: false
+          skip_success_summary: true
           require_tests: false
           fail_on_parse_error: true
 

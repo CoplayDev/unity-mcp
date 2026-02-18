@@ -74,6 +74,12 @@ namespace MCPForUnity.Editor.Migrations
                     if (!ConfigUsesStdIo(configurator.Client))
                         continue;
 
+                    // Skip clients that don't support the current transport setting —
+                    // Configure() would throw (e.g., Claude Desktop when HTTP is enabled).
+                    bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
+                    if (useHttp && !configurator.Client.SupportsHttpTransport)
+                        continue;
+
                     MCPServiceLocator.Client.ConfigureClient(configurator);
                     touchedAny = true;
                 }

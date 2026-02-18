@@ -4,6 +4,7 @@ using System.Reflection;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Events;
 
 namespace MCPForUnity.Editor.Helpers
 {
@@ -164,15 +165,46 @@ namespace MCPForUnity.Editor.Helpers
             BindingFlags flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase;
             string normalizedName = ParamCoercion.NormalizePropertyName(propertyName);
 
-            // Try property first - check both original and normalized names for backwards compatibility
-            PropertyInfo propInfo = type.GetProperty(propertyName, flags) 
+            // UnityEventBase-derived types must be set via SerializedProperty, not reflection.
+            // Reflection creates a disconnected object that Unity's serialization layer doesn't track,
+            // causing m_PersistentCalls to be empty when the scene is saved.
+            Type memberType = ResolveMemberType(type, propertyName, normalizedName);
+            if (memberType != null && typeof(UnityEventBase).IsAssignableFrom(memberType))
+            {
+                return SetViaSerializedProperty(component, propertyName, normalizedName, value, out error);
+            }
+
+            // Try reflection first (property, field, then non-public serialized field)
+            if (TrySetViaReflection(component, type, propertyName, normalizedName, flags, value, out error))
+                return true;
+
+            // Reflection failed — fall back to SerializedProperty which handles arrays,
+            // custom serialization (e.g. UdonSharp), and types reflection can't convert.
+            string reflectionError = error;
+            if (SetViaSerializedProperty(component, propertyName, normalizedName, value, out error))
+                return true;
+
+            // Both paths failed. If reflection found the member but couldn't convert,
+            // report that (more useful than the SerializedProperty error).
+            // If reflection didn't find it at all, report the SerializedProperty error.
+            if (reflectionError != null && !reflectionError.Contains("not found"))
+                error = reflectionError;
+
+            return false;
+        }
+
+        private static bool TrySetViaReflection(object component, Type type, string propertyName, string normalizedName, BindingFlags flags, JToken value, out string error)
+        {
+            error = null;
+
+            // Try property first
+            PropertyInfo propInfo = type.GetProperty(propertyName, flags)
                                  ?? type.GetProperty(normalizedName, flags);
             if (propInfo != null && propInfo.CanWrite)
             {
                 try
                 {
                     object convertedValue = PropertyConversion.ConvertToType(value, propInfo.PropertyType);
-                    // Detect conversion failure: null result when input wasn't null
                     if (convertedValue == null && value.Type != JTokenType.Null)
                     {
                         error = $"Failed to convert value for property '{propertyName}' to type '{propInfo.PropertyType.Name}'.";
@@ -188,15 +220,14 @@ namespace MCPForUnity.Editor.Helpers
                 }
             }
 
-            // Try field - check both original and normalized names for backwards compatibility
-            FieldInfo fieldInfo = type.GetField(propertyName, flags) 
+            // Try field
+            FieldInfo fieldInfo = type.GetField(propertyName, flags)
                                ?? type.GetField(normalizedName, flags);
             if (fieldInfo != null && !fieldInfo.IsInitOnly)
             {
                 try
                 {
                     object convertedValue = PropertyConversion.ConvertToType(value, fieldInfo.FieldType);
-                    // Detect conversion failure: null result when input wasn't null
                     if (convertedValue == null && value.Type != JTokenType.Null)
                     {
                         error = $"Failed to convert value for field '{propertyName}' to type '{fieldInfo.FieldType.Name}'.";
@@ -212,9 +243,7 @@ namespace MCPForUnity.Editor.Helpers
                 }
             }
 
-            // Try non-public serialized fields - traverse inheritance hierarchy
-            // Type.GetField() with NonPublic only finds fields declared directly on that type,
-            // so we need to walk up the inheritance chain manually
+            // Try non-public serialized fields — traverse inheritance hierarchy
             fieldInfo = FindSerializedFieldInHierarchy(type, propertyName)
                      ?? FindSerializedFieldInHierarchy(type, normalizedName);
             if (fieldInfo != null)
@@ -222,7 +251,6 @@ namespace MCPForUnity.Editor.Helpers
                 try
                 {
                     object convertedValue = PropertyConversion.ConvertToType(value, fieldInfo.FieldType);
-                    // Detect conversion failure: null result when input wasn't null
                     if (convertedValue == null && value.Type != JTokenType.Null)
                     {
                         error = $"Failed to convert value for serialized field '{propertyName}' to type '{fieldInfo.FieldType.Name}'.";
@@ -297,7 +325,7 @@ namespace MCPForUnity.Editor.Helpers
         /// Type.GetField() with NonPublic only returns fields declared directly on that type,
         /// so this method walks up the chain to find inherited private serialized fields.
         /// </summary>
-        private static FieldInfo FindSerializedFieldInHierarchy(Type type, string fieldName)
+        internal static FieldInfo FindSerializedFieldInHierarchy(Type type, string fieldName)
         {
             if (type == null || string.IsNullOrEmpty(fieldName))
                 return null;
@@ -373,6 +401,314 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             return true;
+        }
+
+        // --- UnityEvent SerializedProperty support ---
+
+        private static Type ResolveMemberType(Type componentType, string propertyName, string normalizedName)
+        {
+            BindingFlags flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase;
+
+            PropertyInfo propInfo = componentType.GetProperty(propertyName, flags)
+                                 ?? componentType.GetProperty(normalizedName, flags);
+            if (propInfo != null)
+                return propInfo.PropertyType;
+
+            FieldInfo fieldInfo = componentType.GetField(propertyName, flags)
+                               ?? componentType.GetField(normalizedName, flags);
+            if (fieldInfo != null)
+                return fieldInfo.FieldType;
+
+            fieldInfo = FindSerializedFieldInHierarchy(componentType, propertyName)
+                     ?? FindSerializedFieldInHierarchy(componentType, normalizedName);
+            if (fieldInfo != null)
+                return fieldInfo.FieldType;
+
+            return null;
+        }
+
+        private static bool SetViaSerializedProperty(Component component, string propertyName, string normalizedName, JToken value, out string error)
+        {
+            error = null;
+            using var so = new SerializedObject(component);
+
+            SerializedProperty prop = so.FindProperty(propertyName)
+                                   ?? so.FindProperty(normalizedName);
+            if (prop == null)
+            {
+                error = $"SerializedProperty '{propertyName}' not found on component '{component.GetType().Name}'.";
+                return false;
+            }
+
+            if (!SetSerializedPropertyRecursive(prop, value, out error, 0))
+                return false;
+
+            so.ApplyModifiedProperties();
+            return true;
+        }
+
+        private static bool SetSerializedPropertyRecursive(SerializedProperty prop, JToken value, out string error, int depth)
+        {
+            error = null;
+            const int MaxDepth = 20;
+            if (depth > MaxDepth)
+            {
+                error = $"Maximum recursion depth ({MaxDepth}) exceeded.";
+                return false;
+            }
+
+            try
+            {
+                // Array + JArray
+                if (prop.isArray && prop.propertyType != SerializedPropertyType.String && value is JArray jArray)
+                {
+                    prop.arraySize = jArray.Count;
+                    prop.serializedObject.ApplyModifiedProperties();
+                    prop.serializedObject.Update();
+
+                    for (int i = 0; i < jArray.Count; i++)
+                    {
+                        var element = prop.GetArrayElementAtIndex(i);
+                        if (!SetSerializedPropertyRecursive(element, jArray[i], out error, depth + 1))
+                            return false;
+                    }
+                    return true;
+                }
+
+                // Generic (struct/class) + JObject
+                if (prop.propertyType == SerializedPropertyType.Generic && !prop.isArray && value is JObject jObj)
+                {
+                    foreach (var kvp in jObj)
+                    {
+                        var child = FindPropertyRelativeFuzzy(prop, kvp.Key);
+                        if (child == null)
+                        {
+                            error = $"Sub-property '{kvp.Key}' not found under '{prop.propertyPath}'.";
+                            return false;
+                        }
+                        if (!SetSerializedPropertyRecursive(child, kvp.Value, out error, depth + 1))
+                            return false;
+                    }
+                    return true;
+                }
+
+                // ObjectReference
+                if (prop.propertyType == SerializedPropertyType.ObjectReference)
+                    return SetObjectReference(prop, value, out error);
+
+                // Leaf types
+                switch (prop.propertyType)
+                {
+                    case SerializedPropertyType.Integer:
+                        int intVal = ParamCoercion.CoerceInt(value, int.MinValue);
+                        if (intVal == int.MinValue && value?.Type != JTokenType.Integer)
+                        {
+                            if (value == null || value.Type == JTokenType.Null ||
+                                (value.Type == JTokenType.String && !int.TryParse(value.ToString(), out _)))
+                            {
+                                error = "Expected integer value.";
+                                return false;
+                            }
+                        }
+                        prop.intValue = intVal;
+                        return true;
+
+                    case SerializedPropertyType.Boolean:
+                        if (value == null || value.Type == JTokenType.Null)
+                        {
+                            error = "Expected boolean value.";
+                            return false;
+                        }
+                        prop.boolValue = ParamCoercion.CoerceBool(value, false);
+                        return true;
+
+                    case SerializedPropertyType.Float:
+                        float floatVal = ParamCoercion.CoerceFloat(value, float.NaN);
+                        if (float.IsNaN(floatVal))
+                        {
+                            error = "Expected float value.";
+                            return false;
+                        }
+                        prop.floatValue = floatVal;
+                        return true;
+
+                    case SerializedPropertyType.String:
+                        prop.stringValue = value == null || value.Type == JTokenType.Null ? string.Empty : value.ToString();
+                        return true;
+
+                    case SerializedPropertyType.Enum:
+                        return SetEnum(prop, value, out error);
+
+                    default:
+                        error = $"Unsupported SerializedPropertyType: {prop.propertyType} at '{prop.propertyPath}'.";
+                        return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                error = $"Error setting '{prop.propertyPath}': {ex.Message}";
+                return false;
+            }
+        }
+
+        private static bool SetObjectReference(SerializedProperty prop, JToken value, out string error)
+        {
+            error = null;
+
+            if (value == null || value.Type == JTokenType.Null)
+            {
+                prop.objectReferenceValue = null;
+                return true;
+            }
+
+            if (value.Type == JTokenType.Integer)
+            {
+                int id = value.Value<int>();
+                var resolved = EditorUtility.InstanceIDToObject(id);
+                if (resolved == null)
+                {
+                    error = $"No object found with instanceID {id}.";
+                    return false;
+                }
+                prop.objectReferenceValue = resolved;
+                return true;
+            }
+
+            if (value is JObject jObj)
+            {
+                var idToken = jObj["instanceID"];
+                if (idToken != null)
+                {
+                    int id = ParamCoercion.CoerceInt(idToken, 0);
+                    var resolved = EditorUtility.InstanceIDToObject(id);
+                    if (resolved == null)
+                    {
+                        error = $"No object found with instanceID {id}.";
+                        return false;
+                    }
+                    prop.objectReferenceValue = resolved;
+                    return true;
+                }
+
+                var guidToken = jObj["guid"];
+                if (guidToken != null)
+                {
+                    string path = AssetDatabase.GUIDToAssetPath(guidToken.ToString());
+                    if (string.IsNullOrEmpty(path))
+                    {
+                        error = $"No asset found for GUID '{guidToken}'.";
+                        return false;
+                    }
+                    prop.objectReferenceValue = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
+                    return true;
+                }
+
+                var pathToken = jObj["path"];
+                if (pathToken != null)
+                {
+                    string sanitized = AssetPathUtility.SanitizeAssetPath(pathToken.ToString());
+                    var resolved = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(sanitized);
+                    if (resolved == null)
+                    {
+                        error = $"No asset found at path '{pathToken}'.";
+                        return false;
+                    }
+                    prop.objectReferenceValue = resolved;
+                    return true;
+                }
+
+                error = "Object reference must contain 'instanceID', 'guid', or 'path'.";
+                return false;
+            }
+
+            if (value.Type == JTokenType.String)
+            {
+                string strVal = value.ToString();
+                if (strVal.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || strVal.Contains("/"))
+                {
+                    string sanitized = AssetPathUtility.SanitizeAssetPath(strVal);
+                    var resolved = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(sanitized);
+                    if (resolved == null)
+                    {
+                        error = $"No asset found at path '{strVal}'.";
+                        return false;
+                    }
+                    prop.objectReferenceValue = resolved;
+                    return true;
+                }
+                error = $"Cannot resolve object reference from string '{strVal}'.";
+                return false;
+            }
+
+            error = $"Unsupported object reference format: {value.Type}.";
+            return false;
+        }
+
+        /// <summary>
+        /// Finds a child SerializedProperty by name, falling back to underscore-insensitive matching.
+        /// The batch_execute transport can strip underscores from JSON keys
+        /// (e.g. m_PersistentCalls → mPersistentCalls), so we iterate immediate children
+        /// and compare with underscores removed.
+        /// </summary>
+        private static SerializedProperty FindPropertyRelativeFuzzy(SerializedProperty parent, string key)
+        {
+            var child = parent.FindPropertyRelative(key);
+            if (child != null) return child;
+
+            string normalizedKey = key.Replace("_", "").ToLowerInvariant();
+
+            var end = parent.GetEndProperty();
+            var iter = parent.Copy();
+            if (!iter.Next(true)) return null;
+
+            while (!SerializedProperty.EqualContents(iter, end))
+            {
+                if (iter.depth == parent.depth + 1)
+                {
+                    string normalizedName = iter.name.Replace("_", "").ToLowerInvariant();
+                    if (normalizedName == normalizedKey)
+                        return parent.FindPropertyRelative(iter.name);
+                }
+                if (!iter.Next(false))
+                    break;
+            }
+
+            return null;
+        }
+
+        private static bool SetEnum(SerializedProperty prop, JToken value, out string error)
+        {
+            error = null;
+            var names = prop.enumNames;
+            if (names == null || names.Length == 0)
+            {
+                error = "Enum has no names.";
+                return false;
+            }
+
+            if (value.Type == JTokenType.Integer)
+            {
+                int idx = value.Value<int>();
+                if (idx < 0 || idx >= names.Length)
+                {
+                    error = $"Enum index out of range: {idx}.";
+                    return false;
+                }
+                prop.enumValueIndex = idx;
+                return true;
+            }
+
+            string s = value.ToString();
+            for (int i = 0; i < names.Length; i++)
+            {
+                if (string.Equals(names[i], s, StringComparison.OrdinalIgnoreCase))
+                {
+                    prop.enumValueIndex = i;
+                    return true;
+                }
+            }
+            error = $"Unknown enum name '{s}'.";
+            return false;
         }
     }
 }

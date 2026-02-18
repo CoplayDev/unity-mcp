@@ -528,7 +528,6 @@ read_console(
     types=["error", "warning", "log"],  # or ["all"]
     count=10,                    # max messages (ignored with paging)
     filter_text="NullReference", # optional text filter
-    since_timestamp="2024-01-01T00:00:00Z",  # optional time filter
     page_size=50,
     cursor=0,
     format="detailed",           # "plain"|"detailed"|"json"

@@ -225,29 +225,9 @@ namespace MCPForUnity.Editor.Tools
             foreach (var property in source.Properties())
             {
                 string normalizedName = ToCamelCase(property.Name);
-                normalized[normalizedName] = NormalizeToken(property.Value);
+                normalized[normalizedName] = property.Value;
             }
             return normalized;
-        }
-
-        private static JArray NormalizeArray(JArray source)
-        {
-            var normalized = new JArray();
-            foreach (var token in source)
-            {
-                normalized.Add(NormalizeToken(token));
-            }
-            return normalized;
-        }
-
-        private static JToken NormalizeToken(JToken token)
-        {
-            return token switch
-            {
-                JObject obj => NormalizeParameterKeys(obj),
-                JArray arr => NormalizeArray(arr),
-                _ => token.DeepClone()
-            };
         }
 
         private static string ToCamelCase(string key) => StringCaseUtility.ToCamelCase(key);
