@@ -30,10 +30,7 @@ namespace MCPForUnity.Editor.Tools
         private static FieldInfo _messageField;
         private static FieldInfo _fileField;
         private static FieldInfo _lineField;
-        private static FieldInfo _instanceIdField;
-
-        // Note: Timestamp is not directly available in LogEntry; need to parse message or find alternative?
-
+    
         // Static constructor for reflection setup
         static ReadConsole()
         {
@@ -102,10 +99,6 @@ namespace MCPForUnity.Editor.Tools
                 if (_lineField == null)
                     throw new Exception("Failed to reflect LogEntry.line");
 
-                _instanceIdField = logEntryType.GetField("instanceID", instanceFlags);
-                if (_instanceIdField == null)
-                    throw new Exception("Failed to reflect LogEntry.instanceID");
-
                 // (Calibration removed)
 
             }
@@ -121,7 +114,7 @@ namespace MCPForUnity.Editor.Tools
                     _getCountMethod =
                     _getEntryMethod =
                         null;
-                _modeField = _messageField = _fileField = _lineField = _instanceIdField = null;
+                _modeField = _messageField = _fileField = _lineField = null;
             }
         }
 
@@ -140,7 +133,6 @@ namespace MCPForUnity.Editor.Tools
                 || _messageField == null
                 || _fileField == null
                 || _lineField == null
-                || _instanceIdField == null
             )
             {
                 // Log the error here as well for easier debugging in Unity Console
@@ -176,21 +168,12 @@ namespace MCPForUnity.Editor.Tools
                     int? pageSize = p.GetInt("pageSize");
                     int? cursor = p.GetInt("cursor");
                     string filterText = p.Get("filterText");
-                    string sinceTimestampStr = p.Get("sinceTimestamp"); // TODO: Implement timestamp filtering
                     string format = p.Get("format", "plain").ToLower();
                     bool includeStacktrace = p.GetBool("includeStacktrace", false);
 
                     if (types.Contains("all"))
                     {
                         types = new List<string> { "error", "warning", "log" }; // Expand 'all'
-                    }
-
-                    if (!string.IsNullOrEmpty(sinceTimestampStr))
-                    {
-                        McpLog.Warn(
-                            "[ReadConsole] Filtering by 'since_timestamp' is not currently implemented."
-                        );
-                        // Need a way to get timestamp per log entry.
                     }
 
                     return GetConsoleEntries(
@@ -290,7 +273,6 @@ namespace MCPForUnity.Editor.Tools
                     string file = (string)_fileField.GetValue(logEntryInstance);
 
                     int line = (int)_lineField.GetValue(logEntryInstance);
-                    // int instanceId = (int)_instanceIdField.GetValue(logEntryInstance);
 
                     if (string.IsNullOrEmpty(message))
                     {
@@ -334,8 +316,6 @@ namespace MCPForUnity.Editor.Tools
                         continue;
                     }
 
-                    // TODO: Filter by timestamp (requires timestamp data)
-
                     // --- Formatting ---
                     string stackTrace = includeStacktrace ? ExtractStackTrace(message) : null;
                     // Always get first line for the message, use full message only if no stack trace exists
@@ -366,7 +346,6 @@ namespace MCPForUnity.Editor.Tools
                                 message = messageOnly,
                                 file = file,
                                 line = line,
-                                // timestamp = "", // TODO
                                 stackTrace = stackTrace, // Will be null if includeStacktrace is false or no stack found
                             };
                             break;
@@ -513,29 +492,6 @@ namespace MCPForUnity.Editor.Tools
             if (fullMessage.IndexOf("Debug:Log (", StringComparison.OrdinalIgnoreCase) >= 0) return true;
             if (fullMessage.IndexOf("UnityEngine.Debug:Log (", StringComparison.OrdinalIgnoreCase) >= 0) return true;
             return false;
-        }
-
-        /// <summary>
-        /// Applies the "one level lower" remapping for filtering, like the old version.
-        /// This ensures compatibility with the filtering logic that expects remapped types.
-        /// </summary>
-        private static LogType GetRemappedTypeForFiltering(LogType unityType)
-        {
-            switch (unityType)
-            {
-                case LogType.Error:
-                    return LogType.Warning; // Error becomes Warning
-                case LogType.Warning:
-                    return LogType.Log; // Warning becomes Log
-                case LogType.Assert:
-                    return LogType.Assert; // Assert remains Assert
-                case LogType.Log:
-                    return LogType.Log; // Log remains Log
-                case LogType.Exception:
-                    return LogType.Warning; // Exception becomes Warning
-                default:
-                    return LogType.Log; // Default fallback
-            }
         }
 
         /// <summary>

@@ -180,12 +180,8 @@ namespace MCPForUnity.Editor.Helpers
             // Keep ordering consistent with other uvx builders: dev flags first, then --from <url>, then package name.
             var args = new List<string>();
 
-            // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
-            if (AssetPathUtility.ShouldForceUvxRefresh())
-            {
-                args.Add("--no-cache");
-                args.Add("--refresh");
-            }
+            foreach (var flag in AssetPathUtility.GetUvxDevFlagsList())
+                args.Add(flag);
 
             // Use centralized helper for beta server / prerelease args
             foreach (var arg in AssetPathUtility.GetBetaServerFromArgsList())
