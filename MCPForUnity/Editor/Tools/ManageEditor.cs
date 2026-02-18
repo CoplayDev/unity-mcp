@@ -299,6 +299,9 @@ namespace MCPForUnity.Editor.Tools
 
         private static void RefreshStdioStatusFile()
         {
+            if (!StdioBridgeHost.IsRunning)
+                return;
+
             try
             {
                 StdioBridgeHost.RefreshStatusFile("tool_toggle");

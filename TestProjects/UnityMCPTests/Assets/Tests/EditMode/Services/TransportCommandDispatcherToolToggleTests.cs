@@ -1,8 +1,6 @@
-using System;
-using System.Reflection;
 using System.Threading;
-using System.Threading.Tasks;
 using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Services.Transport;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEditor;
@@ -51,7 +49,7 @@ namespace MCPForUnityTests.Editor.Services
                 },
             }.ToString();
 
-            string responseJson = ExecuteCommandJson(payload);
+            string responseJson = TransportCommandDispatcher.ExecuteCommandJsonAsync(payload, CancellationToken.None).GetAwaiter().GetResult();
             var response = JObject.Parse(responseJson);
             string error = response["error"]?.ToString() ?? string.Empty;
 
@@ -73,30 +71,11 @@ namespace MCPForUnityTests.Editor.Services
                 },
             }.ToString();
 
-            string responseJson = ExecuteCommandJson(payload);
+            string responseJson = TransportCommandDispatcher.ExecuteCommandJsonAsync(payload, CancellationToken.None).GetAwaiter().GetResult();
             var response = JObject.Parse(responseJson);
             string error = response["error"]?.ToString() ?? string.Empty;
 
-            Assert.Less(error.IndexOf("disabled in the Unity Editor", StringComparison.OrdinalIgnoreCase), 0);
-        }
-
-        private static string ExecuteCommandJson(string commandJson)
-        {
-            Type dispatcherType = Type.GetType(
-                "MCPForUnity.Editor.Services.Transport.TransportCommandDispatcher, MCPForUnity.Editor");
-            Assert.IsNotNull(dispatcherType, "Failed to resolve TransportCommandDispatcher type.");
-
-            MethodInfo executeMethod = dispatcherType.GetMethod(
-                "ExecuteCommandJsonAsync",
-                BindingFlags.Public | BindingFlags.Static);
-            Assert.IsNotNull(executeMethod, "Failed to resolve ExecuteCommandJsonAsync.");
-
-            var task = executeMethod.Invoke(
-                null,
-                new object[] { commandJson, CancellationToken.None }) as Task<string>;
-            Assert.IsNotNull(task, "ExecuteCommandJsonAsync did not return Task<string>.");
-
-            return task.GetAwaiter().GetResult();
+            StringAssert.DoesNotContain("disabled in the Unity Editor", error);
         }
     }
 }

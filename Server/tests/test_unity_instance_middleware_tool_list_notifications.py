@@ -81,7 +81,15 @@ async def test_stdio_tools_watcher_notifies_on_signature_change(monkeypatch):
     monkeypatch.setattr(config, "transport_mode", "stdio")
     monkeypatch.setenv("UNITY_MCP_STDIO_TOOLS_WATCH_INTERVAL_SECONDS", "0.2")
     middleware = UnityInstanceMiddleware()
-    middleware._notify_tool_list_changed_to_sessions = AsyncMock(return_value=None)
+
+    # Use an Event for deterministic synchronization instead of sleep
+    notification_event = asyncio.Event()
+
+    async def _fake_notify(reason: str):
+        notification_event.set()
+        return None
+
+    middleware._notify_tool_list_changed_to_sessions = AsyncMock(side_effect=_fake_notify)
 
     signatures = [
         (("hash1", ("manage_scene",)),),
@@ -101,7 +109,10 @@ async def test_stdio_tools_watcher_notifies_on_signature_change(monkeypatch):
 
     await middleware.start_stdio_tools_watcher()
     try:
-        await asyncio.sleep(0.35)
+        # Wait for the notification with a timeout instead of sleeping
+        await asyncio.wait_for(notification_event.wait(), timeout=1.0)
+    except asyncio.TimeoutError:
+        pass
     finally:
         await middleware.stop_stdio_tools_watcher()
 

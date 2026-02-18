@@ -151,20 +151,26 @@ class UnityInstanceMiddleware(Middleware):
         if not session_items:
             return
 
-        stale_session_ids: list[str] = []
-        sent_count = 0
-        for session_id, session in session_items:
+        async def _send_one(session_id: str, session):
             try:
                 await session.send_tool_list_changed()
-                sent_count += 1
+                return session_id, True
             except Exception:
-                stale_session_ids.append(session_id)
                 logger.debug(
                     "Failed sending tools/list_changed to session %s (reason=%s); session will be removed.",
                     session_id,
                     reason,
                     exc_info=True,
                 )
+                return session_id, False
+
+        results = await asyncio.gather(
+            *[_send_one(sid, sess) for sid, sess in session_items],
+            return_exceptions=False,
+        )
+
+        stale_session_ids = [sid for sid, ok in results if not ok]
+        sent_count = sum(1 for _, ok in results if ok)
 
         if stale_session_ids:
             with self._session_lock:
@@ -187,15 +193,7 @@ class UnityInstanceMiddleware(Middleware):
                 continue
 
             enabled_raw = payload.get("enabled_tools")
-            if isinstance(enabled_raw, set):
-                enabled_tools = tuple(
-                    sorted(
-                        tool_name
-                        for tool_name in enabled_raw
-                        if isinstance(tool_name, str) and tool_name
-                    )
-                )
-            elif isinstance(enabled_raw, list):
+            if isinstance(enabled_raw, (set, list)):
                 enabled_tools = tuple(
                     sorted(
                         tool_name
