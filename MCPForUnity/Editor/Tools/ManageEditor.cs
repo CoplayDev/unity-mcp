@@ -1,6 +1,8 @@
 using System;
+using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
+using MCPForUnity.Editor.Services.Transport;
 using MCPForUnity.Editor.Services.Transport.Transports;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
@@ -232,6 +234,7 @@ namespace MCPForUnity.Editor.Tools
 
             MCPServiceLocator.ToolDiscovery.SetToolEnabled(metadata.Name, enabled);
             RefreshStdioStatusFile();
+            RefreshHttpToolRegistration();
 
             return new SuccessResponse(
                 $"Tool '{metadata.Name}' {(enabled ? "enabled" : "disabled")} successfully.",
@@ -309,6 +312,35 @@ namespace MCPForUnity.Editor.Tools
             catch (Exception e)
             {
                 McpLog.Warn($"Failed to refresh stdio status file after tool toggle: {e.Message}");
+            }
+        }
+
+        private static void RefreshHttpToolRegistration()
+        {
+            try
+            {
+                var transportManager = MCPServiceLocator.TransportManager;
+                var client = transportManager.GetClient(TransportMode.Http);
+                if (client == null || !client.IsConnected)
+                {
+                    return;
+                }
+
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await client.ReregisterToolsAsync().ConfigureAwait(false);
+                    }
+                    catch (Exception e)
+                    {
+                        McpLog.Warn($"Failed to reregister HTTP tools after tool toggle: {e.Message}");
+                    }
+                });
+            }
+            catch (Exception e)
+            {
+                McpLog.Warn($"Failed to schedule HTTP tool reregistration after tool toggle: {e.Message}");
             }
         }
 
