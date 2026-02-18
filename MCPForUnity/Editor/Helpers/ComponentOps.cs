@@ -174,15 +174,37 @@ namespace MCPForUnity.Editor.Helpers
                 return SetViaSerializedProperty(component, propertyName, normalizedName, value, out error);
             }
 
-            // Try property first - check both original and normalized names for backwards compatibility
-            PropertyInfo propInfo = type.GetProperty(propertyName, flags) 
+            // Try reflection first (property, field, then non-public serialized field)
+            if (TrySetViaReflection(component, type, propertyName, normalizedName, flags, value, out error))
+                return true;
+
+            // Reflection failed — fall back to SerializedProperty which handles arrays,
+            // custom serialization (e.g. UdonSharp), and types reflection can't convert.
+            string reflectionError = error;
+            if (SetViaSerializedProperty(component, propertyName, normalizedName, value, out error))
+                return true;
+
+            // Both paths failed. If reflection found the member but couldn't convert,
+            // report that (more useful than the SerializedProperty error).
+            // If reflection didn't find it at all, report the SerializedProperty error.
+            if (reflectionError != null && !reflectionError.Contains("not found"))
+                error = reflectionError;
+
+            return false;
+        }
+
+        private static bool TrySetViaReflection(object component, Type type, string propertyName, string normalizedName, BindingFlags flags, JToken value, out string error)
+        {
+            error = null;
+
+            // Try property first
+            PropertyInfo propInfo = type.GetProperty(propertyName, flags)
                                  ?? type.GetProperty(normalizedName, flags);
             if (propInfo != null && propInfo.CanWrite)
             {
                 try
                 {
                     object convertedValue = PropertyConversion.ConvertToType(value, propInfo.PropertyType);
-                    // Detect conversion failure: null result when input wasn't null
                     if (convertedValue == null && value.Type != JTokenType.Null)
                     {
                         error = $"Failed to convert value for property '{propertyName}' to type '{propInfo.PropertyType.Name}'.";
@@ -198,15 +220,14 @@ namespace MCPForUnity.Editor.Helpers
                 }
             }
 
-            // Try field - check both original and normalized names for backwards compatibility
-            FieldInfo fieldInfo = type.GetField(propertyName, flags) 
+            // Try field
+            FieldInfo fieldInfo = type.GetField(propertyName, flags)
                                ?? type.GetField(normalizedName, flags);
             if (fieldInfo != null && !fieldInfo.IsInitOnly)
             {
                 try
                 {
                     object convertedValue = PropertyConversion.ConvertToType(value, fieldInfo.FieldType);
-                    // Detect conversion failure: null result when input wasn't null
                     if (convertedValue == null && value.Type != JTokenType.Null)
                     {
                         error = $"Failed to convert value for field '{propertyName}' to type '{fieldInfo.FieldType.Name}'.";
@@ -222,9 +243,7 @@ namespace MCPForUnity.Editor.Helpers
                 }
             }
 
-            // Try non-public serialized fields - traverse inheritance hierarchy
-            // Type.GetField() with NonPublic only finds fields declared directly on that type,
-            // so we need to walk up the inheritance chain manually
+            // Try non-public serialized fields — traverse inheritance hierarchy
             fieldInfo = FindSerializedFieldInHierarchy(type, propertyName)
                      ?? FindSerializedFieldInHierarchy(type, normalizedName);
             if (fieldInfo != null)
@@ -232,7 +251,6 @@ namespace MCPForUnity.Editor.Helpers
                 try
                 {
                     object convertedValue = PropertyConversion.ConvertToType(value, fieldInfo.FieldType);
-                    // Detect conversion failure: null result when input wasn't null
                     if (convertedValue == null && value.Type != JTokenType.Null)
                     {
                         error = $"Failed to convert value for serialized field '{propertyName}' to type '{fieldInfo.FieldType.Name}'.";
@@ -307,7 +325,7 @@ namespace MCPForUnity.Editor.Helpers
         /// Type.GetField() with NonPublic only returns fields declared directly on that type,
         /// so this method walks up the chain to find inherited private serialized fields.
         /// </summary>
-        private static FieldInfo FindSerializedFieldInHierarchy(Type type, string fieldName)
+        internal static FieldInfo FindSerializedFieldInHierarchy(Type type, string fieldName)
         {
             if (type == null || string.IsNullOrEmpty(fieldName))
                 return null;
@@ -412,7 +430,7 @@ namespace MCPForUnity.Editor.Helpers
         private static bool SetViaSerializedProperty(Component component, string propertyName, string normalizedName, JToken value, out string error)
         {
             error = null;
-            var so = new SerializedObject(component);
+            using var so = new SerializedObject(component);
 
             SerializedProperty prop = so.FindProperty(propertyName)
                                    ?? so.FindProperty(normalizedName);
@@ -515,7 +533,7 @@ namespace MCPForUnity.Editor.Helpers
                         return true;
 
                     case SerializedPropertyType.String:
-                        prop.stringValue = value == null || value.Type == JTokenType.Null ? null : value.ToString();
+                        prop.stringValue = value == null || value.Type == JTokenType.Null ? string.Empty : value.ToString();
                         return true;
 
                     case SerializedPropertyType.Enum:

@@ -741,7 +741,7 @@ namespace MCPForUnity.Editor.Clients
         public void ConfigureWithCapturedValues(
             string projectDir, string claudePath, string pathPrepend,
             bool useHttpTransport, string httpUrl,
-            string uvxPath, string fromArgs, string packageName, bool shouldForceRefresh,
+            string uvxPath, string fromArgs, string packageName, string uvxDevFlags,
             string apiKey,
             Models.ConfiguredTransport serverTransport)
         {
@@ -752,7 +752,7 @@ namespace MCPForUnity.Editor.Clients
             else
             {
                 RegisterWithCapturedValues(projectDir, claudePath, pathPrepend,
-                    useHttpTransport, httpUrl, uvxPath, fromArgs, packageName, shouldForceRefresh,
+                    useHttpTransport, httpUrl, uvxPath, fromArgs, packageName, uvxDevFlags,
                     apiKey, serverTransport);
             }
         }
@@ -763,7 +763,7 @@ namespace MCPForUnity.Editor.Clients
         private void RegisterWithCapturedValues(
             string projectDir, string claudePath, string pathPrepend,
             bool useHttpTransport, string httpUrl,
-            string uvxPath, string fromArgs, string packageName, bool shouldForceRefresh,
+            string uvxPath, string fromArgs, string packageName, string uvxDevFlags,
             string apiKey,
             Models.ConfiguredTransport serverTransport)
         {
@@ -789,10 +789,8 @@ namespace MCPForUnity.Editor.Clients
             }
             else
             {
-                // Note: --reinstall is not supported by uvx, use --no-cache --refresh instead
-                string devFlags = shouldForceRefresh ? "--no-cache --refresh " : string.Empty;
                 // Use --scope local to register in the project-local config, avoiding conflicts with user-level config (#664)
-                args = $"mcp add --scope local --transport stdio UnityMCP -- \"{uvxPath}\" {devFlags}{fromArgs} {packageName}";
+                args = $"mcp add --scope local --transport stdio UnityMCP -- \"{uvxPath}\" {uvxDevFlags}{fromArgs} {packageName}";
             }
 
             // Remove any existing registrations from ALL scopes to prevent stale config conflicts (#664)
@@ -867,9 +865,7 @@ namespace MCPForUnity.Editor.Clients
             else
             {
                 var (uvxPath, _, packageName) = AssetPathUtility.GetUvxCommandParts();
-                // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
-                // Note: --reinstall is not supported by uvx, use --no-cache --refresh instead
-                string devFlags = AssetPathUtility.ShouldForceUvxRefresh() ? "--no-cache --refresh " : string.Empty;
+                string devFlags = AssetPathUtility.GetUvxDevFlags();
                 string fromArgs = AssetPathUtility.GetBetaServerFromArgs(quoteFromPath: true);
                 // Use --scope local to register in the project-local config, avoiding conflicts with user-level config (#664)
                 args = $"mcp add --scope local --transport stdio UnityMCP -- \"{uvxPath}\" {devFlags}{fromArgs} {packageName}";
@@ -977,9 +973,7 @@ namespace MCPForUnity.Editor.Clients
                 return "# Error: Configuration not available - check paths in Advanced Settings";
             }
 
-            // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
-            // Note: --reinstall is not supported by uvx, use --no-cache --refresh instead
-            string devFlags = AssetPathUtility.ShouldForceUvxRefresh() ? "--no-cache --refresh " : string.Empty;
+            string devFlags = AssetPathUtility.GetUvxDevFlags();
             string fromArgs = AssetPathUtility.GetBetaServerFromArgs(quoteFromPath: true);
 
             return "# Register the MCP server with Claude Code:\n" +
