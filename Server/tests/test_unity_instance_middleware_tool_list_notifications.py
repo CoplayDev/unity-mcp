@@ -47,6 +47,25 @@ async def test_on_notification_initialized_triggers_tools_list_changed(monkeypat
 
 
 @pytest.mark.asyncio
+async def test_initialized_notification_does_not_duplicate_session_registration_refresh(monkeypatch):
+    monkeypatch.setattr(config, "transport_mode", "stdio")
+    middleware = UnityInstanceMiddleware()
+    session = SimpleNamespace(send_tool_list_changed=AsyncMock())
+
+    message_context = _build_context("session-init-dedupe", session)
+    initialized_context = _build_context(
+        "session-init-dedupe",
+        session,
+        method="notifications/initialized",
+    )
+
+    await middleware.on_message(message_context, AsyncMock(return_value=None))
+    await middleware.on_notification(initialized_context, AsyncMock(return_value=None))
+
+    assert session.send_tool_list_changed.await_count == 1
+
+
+@pytest.mark.asyncio
 async def test_notify_tool_list_changed_removes_stale_sessions(monkeypatch):
     monkeypatch.setattr(config, "transport_mode", "stdio")
     middleware = UnityInstanceMiddleware()

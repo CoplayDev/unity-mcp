@@ -221,15 +221,17 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse("Tool name cannot be empty.");
             }
 
-            if (string.Equals(toolName, "manage_editor", StringComparison.OrdinalIgnoreCase) && !enabled)
-            {
-                return new ErrorResponse("Tool 'manage_editor' cannot be disabled.");
-            }
-
             var metadata = MCPServiceLocator.ToolDiscovery.GetToolMetadata(toolName);
             if (metadata == null)
             {
                 return new ErrorResponse($"Unknown tool '{toolName}'.");
+            }
+
+            if (!enabled && (
+                string.Equals(metadata.Name, "manage_editor", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(metadata.Name, "set_active_instance", StringComparison.OrdinalIgnoreCase)))
+            {
+                return new ErrorResponse($"Tool '{metadata.Name}' cannot be disabled.");
             }
 
             MCPServiceLocator.ToolDiscovery.SetToolEnabled(metadata.Name, enabled);
@@ -305,14 +307,7 @@ namespace MCPForUnity.Editor.Tools
             if (!StdioBridgeHost.IsRunning)
                 return;
 
-            try
-            {
-                StdioBridgeHost.RefreshStatusFile("tool_toggle");
-            }
-            catch (Exception e)
-            {
-                McpLog.Warn($"Failed to refresh stdio status file after tool toggle: {e.Message}");
-            }
+            StdioBridgeHost.RefreshStatusFile("tool_toggle");
         }
 
         private static void RefreshHttpToolRegistration()

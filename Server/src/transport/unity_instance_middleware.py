@@ -73,6 +73,7 @@ class UnityInstanceMiddleware(Middleware):
         self._tool_visibility_refresh_interval_seconds = 0.5
         self._has_logged_empty_registry_warning = False
         self._tracked_sessions: dict[str, object] = {}
+        self._initial_refresh_notified_sessions: set[str] = set()
         self._stdio_tools_watch_task: asyncio.Task | None = None
         self._last_stdio_tools_state_signature: tuple[tuple[str, tuple[str, ...]], ...] | None = None
 
@@ -144,6 +145,31 @@ class UnityInstanceMiddleware(Middleware):
 
         return True
 
+    @staticmethod
+    def _try_get_session_id_from_context(fastmcp_context) -> str | None:
+        if fastmcp_context is None or fastmcp_context.request_context is None:
+            return None
+
+        try:
+            session_id = fastmcp_context.session_id
+        except RuntimeError:
+            return None
+
+        if not isinstance(session_id, str) or not session_id:
+            return None
+
+        return session_id
+
+    def _should_send_initial_tool_list_refresh(self, session_id: str | None) -> bool:
+        if session_id is None:
+            return True
+
+        with self._session_lock:
+            if session_id in self._initial_refresh_notified_sessions:
+                return False
+            self._initial_refresh_notified_sessions.add(session_id)
+            return True
+
     async def _notify_tool_list_changed_to_sessions(self, reason: str) -> None:
         with self._session_lock:
             session_items = list(self._tracked_sessions.items())
@@ -176,6 +202,7 @@ class UnityInstanceMiddleware(Middleware):
             with self._session_lock:
                 for session_id in stale_session_ids:
                     self._tracked_sessions.pop(session_id, None)
+                    self._initial_refresh_notified_sessions.discard(session_id)
 
         if sent_count:
             logger.debug(
@@ -268,6 +295,7 @@ class UnityInstanceMiddleware(Middleware):
 
         with self._session_lock:
             self._tracked_sessions.clear()
+            self._initial_refresh_notified_sessions.clear()
 
     # =========================================================================
     # Per-call instance routing (PR #772)
@@ -591,7 +619,10 @@ class UnityInstanceMiddleware(Middleware):
     async def on_message(self, context: MiddlewareContext, call_next):
         if self._is_stdio_transport():
             is_new_session = self._track_session_from_context(context.fastmcp_context)
-            if is_new_session:
+            session_id = self._try_get_session_id_from_context(context.fastmcp_context)
+            # A new stdio session needs one immediate tools/list refresh so the
+            # client does not wait for background polling.
+            if is_new_session and self._should_send_initial_tool_list_refresh(session_id):
                 await self._notify_tool_list_changed_to_sessions("session_registered")
 
         return await call_next(context)
@@ -600,7 +631,11 @@ class UnityInstanceMiddleware(Middleware):
         if self._is_stdio_transport():
             self._track_session_from_context(context.fastmcp_context)
             if context.method == "notifications/initialized":
-                await self._notify_tool_list_changed_to_sessions("client_initialized")
+                session_id = self._try_get_session_id_from_context(context.fastmcp_context)
+                # Some clients send a normal message before notifications/initialized.
+                # Deduplicate the initial push to avoid back-to-back list_changed noise.
+                if self._should_send_initial_tool_list_refresh(session_id):
+                    await self._notify_tool_list_changed_to_sessions("client_initialized")
 
         return await call_next(context)
 
@@ -762,6 +797,74 @@ class UnityInstanceMiddleware(Middleware):
         # project_hash; after de-duplication this leaves exactly one project entry.
         return next(iter(enabled_by_project_hash.values()))
 
+    def _parse_single_status_file(
+        self,
+        status_file: Path,
+        now_utc: datetime,
+        status_ttl_seconds: float,
+    ) -> dict[str, object] | None:
+        file_hash = self._extract_project_hash_from_filename(status_file)
+        try:
+            with status_file.open("r", encoding="utf-8") as handle:
+                raw_payload = json.load(handle)
+        except (OSError, ValueError) as exc:
+            logger.debug(
+                "Failed to parse stdio status file %s: %s",
+                status_file,
+                exc,
+                exc_info=True,
+            )
+            return None
+
+        if not isinstance(raw_payload, dict):
+            logger.debug("Skipping stdio status file %s with non-object payload.", status_file)
+            return None
+
+        enabled_tools_raw = raw_payload.get("enabled_tools")
+        if not isinstance(enabled_tools_raw, list):
+            # Missing enabled_tools means the status format is too old for safe filtering.
+            logger.debug("Skipping stdio status file %s without enabled_tools field.", status_file)
+            return None
+
+        enabled_tools = {
+            tool_name
+            for tool_name in enabled_tools_raw
+            if isinstance(tool_name, str) and tool_name
+        }
+
+        freshness = self._parse_heartbeat_datetime(raw_payload.get("last_heartbeat"))
+        if freshness is None:
+            try:
+                freshness = datetime.fromtimestamp(status_file.stat().st_mtime, tz=timezone.utc)
+            except OSError:
+                logger.debug(
+                    "Failed to read mtime for stdio status file %s; skipping for safety.",
+                    status_file,
+                    exc_info=True,
+                )
+                return None
+
+        if (now_utc - freshness).total_seconds() > status_ttl_seconds:
+            logger.debug(
+                "Skipping stale stdio status file %s (age exceeds %ss).",
+                status_file,
+                status_ttl_seconds,
+            )
+            return None
+
+        project_hash = raw_payload.get("project_hash")
+        if not isinstance(project_hash, str) or not project_hash:
+            project_hash = file_hash
+
+        if not project_hash:
+            logger.debug("Skipping stdio status file %s without project hash.", status_file)
+            return None
+
+        return {
+            "project_hash": project_hash,
+            "enabled_tools": enabled_tools,
+        }
+
     def _list_stdio_status_payloads(self) -> list[dict[str, object]]:
         status_ttl_seconds = self._get_stdio_status_ttl_seconds()
         now_utc = datetime.now(timezone.utc)
@@ -785,69 +888,13 @@ class UnityInstanceMiddleware(Middleware):
 
         payloads: list[dict[str, object]] = []
         for status_file in status_files:
-            file_hash = self._extract_project_hash_from_filename(status_file)
-            try:
-                with status_file.open("r", encoding="utf-8") as handle:
-                    raw_payload = json.load(handle)
-            except (OSError, ValueError) as exc:
-                logger.debug(
-                    "Failed to parse stdio status file %s: %s",
-                    status_file,
-                    exc,
-                    exc_info=True,
-                )
-                continue
-
-            if not isinstance(raw_payload, dict):
-                logger.debug("Skipping stdio status file %s with non-object payload.", status_file)
-                continue
-
-            enabled_tools_raw = raw_payload.get("enabled_tools")
-            if not isinstance(enabled_tools_raw, list):
-                # Missing enabled_tools means the status format is too old for safe filtering.
-                logger.debug("Skipping stdio status file %s without enabled_tools field.", status_file)
-                continue
-
-            enabled_tools = {
-                tool_name
-                for tool_name in enabled_tools_raw
-                if isinstance(tool_name, str) and tool_name
-            }
-
-            freshness = self._parse_heartbeat_datetime(raw_payload.get("last_heartbeat"))
-            if freshness is None:
-                try:
-                    freshness = datetime.fromtimestamp(status_file.stat().st_mtime, tz=timezone.utc)
-                except OSError:
-                    logger.debug(
-                        "Failed to read mtime for stdio status file %s; skipping for safety.",
-                        status_file,
-                        exc_info=True,
-                    )
-                    continue
-
-            if (now_utc - freshness).total_seconds() > status_ttl_seconds:
-                logger.debug(
-                    "Skipping stale stdio status file %s (age exceeds %ss).",
-                    status_file,
-                    status_ttl_seconds,
-                )
-                continue
-
-            project_hash = raw_payload.get("project_hash")
-            if not isinstance(project_hash, str) or not project_hash:
-                project_hash = file_hash
-
-            if not project_hash:
-                logger.debug("Skipping stdio status file %s without project hash.", status_file)
-                continue
-
-            payloads.append(
-                {
-                    "project_hash": project_hash,
-                    "enabled_tools": enabled_tools,
-                }
+            parsed_payload = self._parse_single_status_file(
+                status_file=status_file,
+                now_utc=now_utc,
+                status_ttl_seconds=status_ttl_seconds,
             )
+            if parsed_payload is not None:
+                payloads.append(parsed_payload)
 
         return payloads
 
