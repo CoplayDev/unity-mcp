@@ -385,3 +385,23 @@ def test_set_active_instance_port_http_errors(monkeypatch):
 
     assert result["success"] is False
     assert "not supported in HTTP transport mode" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# batch_execute rejects inner unity_instance
+# ---------------------------------------------------------------------------
+
+def test_batch_execute_rejects_inner_unity_instance():
+    """batch_execute raises ValueError when an inner command contains unity_instance."""
+    from services.tools.batch_execute import batch_execute
+
+    ctx = DummyContext()
+    ctx.client_id = "client-1"
+    ctx._state["unity_instance"] = "Proj@abc123"
+
+    commands = [
+        {"tool": "manage_scene", "params": {"action": "get_active", "unity_instance": "6402"}},
+    ]
+
+    with pytest.raises(ValueError, match="Per-command instance routing is not supported inside batch_execute"):
+        asyncio.run(batch_execute(ctx, commands=commands))

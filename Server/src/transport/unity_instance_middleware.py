@@ -300,7 +300,6 @@ class UnityInstanceMiddleware(Middleware):
     # =========================================================================
     # Per-call instance routing (PR #772)
     # =========================================================================
-
     async def _discover_instances(self, ctx) -> list:
         """
         Return running Unity instances across both HTTP (PluginHub) and stdio transports.
@@ -421,7 +420,6 @@ class UnityInstanceMiddleware(Middleware):
     # =========================================================================
     # Instance selection logic
     # =========================================================================
-
     async def _maybe_autoselect_instance(self, ctx) -> str | None:
         """
         Auto-select the sole Unity instance when no active instance is set.
