@@ -5,7 +5,7 @@ This middleware intercepts all tool calls and injects the active Unity instance
 into the request-scoped state, allowing tools to access it via ctx.get_state("unity_instance").
 """
 import asyncio
-from threading import RLock
+from threading import Lock, RLock
 from datetime import datetime, timezone
 import json
 import logging
@@ -64,7 +64,7 @@ class UnityInstanceMiddleware(Middleware):
         self._active_by_key: dict[str, str] = {}
         self._lock = RLock()
         self._metadata_lock = RLock()
-        self._session_lock = RLock()
+        self._session_lock = Lock()
         self._unity_managed_tool_names: set[str] = set()
         self._tool_alias_to_unity_target: dict[str, str] = {}
         self._server_only_tool_names: set[str] = set()
@@ -187,15 +187,7 @@ class UnityInstanceMiddleware(Middleware):
                 continue
 
             enabled_raw = payload.get("enabled_tools")
-            if isinstance(enabled_raw, set):
-                enabled_tools = tuple(
-                    sorted(
-                        tool_name
-                        for tool_name in enabled_raw
-                        if isinstance(tool_name, str) and tool_name
-                    )
-                )
-            elif isinstance(enabled_raw, list):
+            if isinstance(enabled_raw, (set, list)):
                 enabled_tools = tuple(
                     sorted(
                         tool_name
