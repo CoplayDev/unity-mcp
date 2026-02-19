@@ -299,14 +299,7 @@ namespace MCPForUnity.Editor.Tools
 
         private static void RefreshStdioStatusFile()
         {
-            try
-            {
-                StdioBridgeHost.RefreshStatusFile("tool_toggle");
-            }
-            catch (Exception e)
-            {
-                McpLog.Warn($"Failed to refresh stdio status file after tool toggle: {e.Message}");
-            }
+            StdioBridgeHost.RefreshStatusFile("tool_toggle");
         }
 
         // --- Tag Management Methods ---
