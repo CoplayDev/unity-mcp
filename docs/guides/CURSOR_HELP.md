@@ -83,3 +83,77 @@ References
 - GUI client PATH caveats (Cursor): [Cursor community thread](https://forum.cursor.com/t/mcp-feature-client-closed-fix/54651?page=4)
 - uv tools install location (`~/.local/bin`): [Astral docs](https://docs.astral.sh/uv/concepts/tools/)
 
+---
+
+### Alternative: Use WSL with HTTP Mode (Recommended for Windows Users)
+
+If you're experiencing persistent issues with uv.exe paths, PATH configuration, or Windows-specific problems, **using WSL (Windows Subsystem for Linux) with HTTP mode** is a cleaner solution.
+
+#### Why WSL + HTTP mode?
+
+- **Eliminates** all Windows PATH complexity and multiple uv.exe issues
+- **Provides** a stable Linux environment for Python development  
+- **Works seamlessly** with Unity on Windows via localhost networking
+- **Simpler** than managing Windows uv installations
+
+#### Quick WSL Setup
+
+1. **Install WSL2** (if not already installed):
+   ```powershell
+   # In Windows PowerShell (Administrator)
+   wsl --install
+   # Restart your computer
+   ```
+
+2. **Inside WSL, install Python and uv**:
+   ```bash
+   # Update package list
+   sudo apt update
+   
+   # Install Python 3.12+
+   sudo apt install python3.12 python3-pip
+   
+   # Install uv
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+3. **Run the MCP server in WSL**:
+   ```bash
+   uvx --from mcpforunityserver mcp-for-unity --transport http --host 0.0.0.0 --port 8080
+   ```
+
+4. **Configure your MCP client** (Cursor, VSCode, Windsurf):
+   
+   In `%USERPROFILE%\.cursor\mcp.json` (or equivalent for your client):
+   ```json
+   {
+     "mcpServers": {
+       "unityMCP": {
+         "url": "http://localhost:8080/mcp"
+       }
+     }
+   }
+   ```
+
+5. **In Unity (Windows)**:
+   - `Window > MCP for Unity`
+   - Server should auto-detect or set URL to `http://localhost:8080/mcp`
+   - Status should show "Connected ✓"
+
+#### Benefits over Windows native
+
+- ✅ No PATH issues
+- ✅ No multiple uv.exe locations to manage  
+- ✅ No WinGet Links vs Packages confusion
+- ✅ Standard Linux package management
+- ✅ Same HTTP server accessible from both Windows and WSL
+
+#### Troubleshooting WSL
+
+- Verify WSL2 is installed: `wsl --status`
+- Check WSL version: `wsl -l -v` (should show version 2)
+- If server not accessible from Windows: `wsl --shutdown` then restart WSL
+- Check Windows Firewall if connection issues persist
+
+**Learn more:** [WSL Installation Guide](https://docs.microsoft.com/en-us/windows/wsl/install) | [v8 Migration - HTTP Support](https://github.com/CoplayDev/unity-mcp/blob/main/docs/migrations/v8_NEW_NETWORKING_SETUP.md)
+
