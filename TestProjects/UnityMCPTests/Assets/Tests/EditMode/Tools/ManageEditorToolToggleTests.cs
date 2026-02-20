@@ -79,6 +79,22 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
+        public void HandleCommand_SetMcpToolEnabled_SetActiveInstanceIsUnknownTool()
+        {
+            var result = ManageEditor.HandleCommand(new JObject
+            {
+                ["action"] = "set_mcp_tool_enabled",
+                ["toolName"] = "set_active_instance",
+                ["enabled"] = false,
+            });
+
+            var response = JObject.FromObject(result);
+            Assert.AreEqual(false, response["success"]?.Value<bool>());
+            StringAssert.Contains("Unknown tool", response["error"]?.ToString());
+            StringAssert.Contains("set_active_instance", response["error"]?.ToString());
+        }
+
+        [Test]
         public void HandleCommand_GetMcpToolEnabled_ReturnsCurrentState()
         {
             EditorPrefs.SetBool(_targetToolPrefKey, false);

@@ -6,8 +6,8 @@ that may not occur in normal operation but could cause subtle bugs.
 """
 import asyncio
 import json
-import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -66,18 +66,6 @@ async def _filter_tool_names(middleware: UnityInstanceMiddleware, fastmcp_contex
             filtered = await middleware.on_list_tools(middleware_ctx, call_next)
 
     return [tool.name for tool in filtered]
-
-
-def _build_context(session_id: str, session_obj: object, method: str = "tools/list"):
-    fastmcp_context = SimpleNamespace(
-        request_context=object(),
-        session_id=session_id,
-        session=session_obj,
-    )
-    return SimpleNamespace(
-        fastmcp_context=fastmcp_context,
-        method=method,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -295,6 +283,48 @@ async def test_heartbeat_without_timezone_treated_as_utc(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_heartbeat_with_positive_timezone_offset_parsed_correctly(monkeypatch, tmp_path):
+    """Heartbeat with positive timezone offset should be parsed and accepted."""
+    monkeypatch.setattr(config, "transport_mode", "stdio")
+    monkeypatch.setenv("UNITY_MCP_STATUS_DIR", str(tmp_path))
+    monkeypatch.setenv("UNITY_MCP_STDIO_STATUS_TTL_SECONDS", "60")
+
+    ist = timezone(timedelta(hours=5, minutes=30))
+    heartbeat = datetime.now(timezone.utc).astimezone(ist).isoformat()
+
+    _write_status_file(
+        tmp_path / "unity-mcp-status-abc123.json",
+        {"project_hash": "abc123", "enabled_tools": ["manage_scene"], "last_heartbeat": heartbeat},
+    )
+
+    middleware = UnityInstanceMiddleware()
+    names = await _filter_tool_names(middleware, _build_fastmcp_context("Project@abc123"))
+
+    assert "manage_scene" in names
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_with_negative_timezone_offset_parsed_correctly(monkeypatch, tmp_path):
+    """Heartbeat with negative timezone offset should be parsed and accepted."""
+    monkeypatch.setattr(config, "transport_mode", "stdio")
+    monkeypatch.setenv("UNITY_MCP_STATUS_DIR", str(tmp_path))
+    monkeypatch.setenv("UNITY_MCP_STDIO_STATUS_TTL_SECONDS", "60")
+
+    pst = timezone(timedelta(hours=-8))
+    heartbeat = datetime.now(timezone.utc).astimezone(pst).isoformat()
+
+    _write_status_file(
+        tmp_path / "unity-mcp-status-abc123.json",
+        {"project_hash": "abc123", "enabled_tools": ["manage_scene"], "last_heartbeat": heartbeat},
+    )
+
+    middleware = UnityInstanceMiddleware()
+    names = await _filter_tool_names(middleware, _build_fastmcp_context("Project@abc123"))
+
+    assert "manage_scene" in names
+
+
+@pytest.mark.asyncio
 async def test_heartbeat_invalid_format_falls_back_to_mtime(monkeypatch, tmp_path):
     """Invalid heartbeat format should fall back to file mtime."""
     monkeypatch.setattr(config, "transport_mode", "stdio")
@@ -315,19 +345,18 @@ async def test_heartbeat_invalid_format_falls_back_to_mtime(monkeypatch, tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_heartbeat_exactly_at_ttl_boundary_is_stale(monkeypatch, tmp_path):
-    """Heartbeat exactly at TTL boundary should be considered stale (>)."""
+async def test_heartbeat_near_ttl_boundary_filters_only_clearly_stale_payload(monkeypatch, tmp_path):
+    """Near TTL boundary, clearly stale payloads are excluded while fresh payloads remain."""
     monkeypatch.setattr(config, "transport_mode", "stdio")
     monkeypatch.setenv("UNITY_MCP_STATUS_DIR", str(tmp_path))
     monkeypatch.setenv("UNITY_MCP_STDIO_STATUS_TTL_SECONDS", "10")
 
-    # Heartbeat exactly TTL seconds ago (boundary case: > not >=)
-    boundary_heartbeat = (datetime.now(timezone.utc) - timedelta(seconds=10)).isoformat()
-    slightly_fresh = (datetime.now(timezone.utc) - timedelta(seconds=9.9)).isoformat()
+    stale_heartbeat = (datetime.now(timezone.utc) - timedelta(seconds=10.2)).isoformat()
+    slightly_fresh = (datetime.now(timezone.utc) - timedelta(seconds=9.8)).isoformat()
 
     _write_status_file(
         tmp_path / "unity-mcp-status-boundary.json",
-        {"project_hash": "boundary", "enabled_tools": ["manage_scene"], "last_heartbeat": boundary_heartbeat},
+        {"project_hash": "boundary", "enabled_tools": ["manage_scene"], "last_heartbeat": stale_heartbeat},
     )
     _write_status_file(
         tmp_path / "unity-mcp-status-fresh.json",
@@ -337,7 +366,7 @@ async def test_heartbeat_exactly_at_ttl_boundary_is_stale(monkeypatch, tmp_path)
     middleware = UnityInstanceMiddleware()
     names = await _filter_tool_names(middleware, _build_fastmcp_context(None))
 
-    # Boundary should be stale, fresh should be included
+    # Stale should be excluded, fresh should be included.
     assert "manage_asset" in names
     assert "manage_scene" not in names
 
@@ -416,6 +445,34 @@ async def test_watch_interval_invalid_string_uses_default(monkeypatch):
 
     middleware = UnityInstanceMiddleware()
     assert middleware._get_stdio_tools_watch_interval_seconds() == 1.0
+
+
+@pytest.mark.asyncio
+async def test_stdio_list_tools_reads_status_files_via_to_thread(monkeypatch, tmp_path):
+    """Stdio tools/list filtering should offload status-file reads with asyncio.to_thread."""
+    monkeypatch.setattr(config, "transport_mode", "stdio")
+    monkeypatch.setenv("UNITY_MCP_STATUS_DIR", str(tmp_path))
+
+    _write_status_file(
+        tmp_path / "unity-mcp-status-abc123.json",
+        {"project_hash": "abc123", "enabled_tools": ["manage_scene"]},
+    )
+
+    middleware = UnityInstanceMiddleware()
+    to_thread_call_count = {"value": 0}
+
+    async def _fake_to_thread(func, *args, **kwargs):
+        to_thread_call_count["value"] += 1
+        return func(*args, **kwargs)
+
+    with patch(
+        "transport.unity_instance_middleware.asyncio.to_thread",
+        new=AsyncMock(side_effect=_fake_to_thread),
+    ):
+        names = await _filter_tool_names(middleware, _build_fastmcp_context("Project@abc123"))
+
+    assert to_thread_call_count["value"] >= 1
+    assert "manage_scene" in names
 
 
 # ---------------------------------------------------------------------------
@@ -576,18 +633,16 @@ async def test_watcher_continues_after_iteration_error(monkeypatch):
     middleware = UnityInstanceMiddleware()
     middleware._notify_tool_list_changed_to_sessions = AsyncMock(return_value=None)
 
+    progressed_after_error = asyncio.Event()
     call_count = {"value": 0}
-    error_on_call = 1
 
     def _fake_signature():
         call_count["value"] += 1
-        if call_count["value"] == error_on_call:
-            # First call is initial state, second call is first iteration
-            pass
         if call_count["value"] == 2:
             raise RuntimeError("simulated error")
+        if call_count["value"] >= 3:
+            progressed_after_error.set()
         if call_count["value"] >= 4:
-            # Stop after a few successful iterations
             raise asyncio.CancelledError()
         return (("hash1", ("tool1",)),)
 
@@ -595,9 +650,7 @@ async def test_watcher_continues_after_iteration_error(monkeypatch):
 
     await middleware.start_stdio_tools_watcher()
     try:
-        await asyncio.sleep(0.5)
-    except asyncio.CancelledError:
-        pass
+        await asyncio.wait_for(progressed_after_error.wait(), timeout=1.0)
     finally:
         await middleware.stop_stdio_tools_watcher()
 
@@ -735,6 +788,33 @@ async def test_status_dir_custom_path_expanded(monkeypatch, tmp_path):
 
     assert len(payloads) == 1
     assert payloads[0]["project_hash"] == "abc123"
+
+
+@pytest.mark.asyncio
+async def test_status_dir_skips_files_that_fail_stat_without_failing_enumeration(monkeypatch, tmp_path):
+    """A single stat() failure should be skipped instead of failing the full status scan."""
+    monkeypatch.setattr(config, "transport_mode", "stdio")
+    monkeypatch.setenv("UNITY_MCP_STATUS_DIR", str(tmp_path))
+
+    flaky_path = tmp_path / "unity-mcp-status-flaky.json"
+    good_path = tmp_path / "unity-mcp-status-good.json"
+
+    _write_status_file(flaky_path, {"project_hash": "flaky", "enabled_tools": ["manage_asset"]})
+    _write_status_file(good_path, {"project_hash": "good", "enabled_tools": ["manage_scene"]})
+
+    original_stat = Path.stat
+
+    def _fake_stat(path: Path, *args, **kwargs):
+        if path == flaky_path:
+            raise FileNotFoundError("simulated race: file disappeared between glob and stat")
+        return original_stat(path, *args, **kwargs)
+
+    middleware = UnityInstanceMiddleware()
+    with patch("pathlib.Path.stat", new=_fake_stat):
+        payloads = middleware._list_stdio_status_payloads()
+
+    assert len(payloads) == 1
+    assert payloads[0]["project_hash"] == "good"
 
 
 # ---------------------------------------------------------------------------

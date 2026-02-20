@@ -87,6 +87,57 @@ async def test_notify_tool_list_changed_removes_stale_sessions(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_notify_tool_list_changed_handles_cancelled_session_send(monkeypatch):
+    monkeypatch.setattr(config, "transport_mode", "stdio")
+    middleware = UnityInstanceMiddleware()
+
+    healthy_session = SimpleNamespace(send_tool_list_changed=AsyncMock(return_value=None))
+
+    async def _raise_cancelled():
+        raise asyncio.CancelledError()
+
+    cancelled_session = SimpleNamespace(send_tool_list_changed=AsyncMock(side_effect=_raise_cancelled))
+    middleware._tracked_sessions["healthy"] = healthy_session
+    middleware._tracked_sessions["cancelled"] = cancelled_session
+
+    await middleware._notify_tool_list_changed_to_sessions("test_reason")
+
+    assert "healthy" in middleware._tracked_sessions
+    assert "cancelled" not in middleware._tracked_sessions
+    assert healthy_session.send_tool_list_changed.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_on_message_is_noop_for_http_transport(monkeypatch):
+    monkeypatch.setattr(config, "transport_mode", "http")
+    middleware = UnityInstanceMiddleware()
+    session = SimpleNamespace(send_tool_list_changed=AsyncMock())
+    context = _build_context("session-http-message", session)
+    call_next = AsyncMock(return_value="ok")
+
+    result = await middleware.on_message(context, call_next)
+
+    assert result == "ok"
+    call_next.assert_awaited_once()
+    assert session.send_tool_list_changed.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_on_notification_is_noop_for_http_transport(monkeypatch):
+    monkeypatch.setattr(config, "transport_mode", "http")
+    middleware = UnityInstanceMiddleware()
+    session = SimpleNamespace(send_tool_list_changed=AsyncMock())
+    context = _build_context("session-http-notification", session, method="notifications/initialized")
+    call_next = AsyncMock(return_value="ok")
+
+    result = await middleware.on_notification(context, call_next)
+
+    assert result == "ok"
+    call_next.assert_awaited_once()
+    assert session.send_tool_list_changed.await_count == 0
+
+
+@pytest.mark.asyncio
 async def test_start_stdio_tools_watcher_skips_when_transport_is_not_stdio(monkeypatch):
     monkeypatch.setattr(config, "transport_mode", "http")
     middleware = UnityInstanceMiddleware()

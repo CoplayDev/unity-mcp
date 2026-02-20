@@ -227,9 +227,7 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse($"Unknown tool '{toolName}'.");
             }
 
-            if (!enabled && (
-                string.Equals(metadata.Name, "manage_editor", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(metadata.Name, "set_active_instance", StringComparison.OrdinalIgnoreCase)))
+            if (!enabled && string.Equals(metadata.Name, "manage_editor", StringComparison.OrdinalIgnoreCase))
             {
                 return new ErrorResponse($"Tool '{metadata.Name}' cannot be disabled.");
             }

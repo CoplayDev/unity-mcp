@@ -181,6 +181,14 @@ class UnityInstanceMiddleware(Middleware):
             try:
                 await session.send_tool_list_changed()
                 return session_id, True
+            except asyncio.CancelledError:
+                logger.debug(
+                    "tools/list_changed send cancelled for session %s (reason=%s); session will be removed.",
+                    session_id,
+                    reason,
+                    exc_info=True,
+                )
+                return session_id, False
             except Exception:
                 logger.debug(
                     "Failed sending tools/list_changed to session %s (reason=%s); session will be removed.",
@@ -192,11 +200,27 @@ class UnityInstanceMiddleware(Middleware):
 
         results = await asyncio.gather(
             *[_send_one(sid, sess) for sid, sess in session_items],
-            return_exceptions=False,
+            return_exceptions=True,
         )
 
-        stale_session_ids = [sid for sid, ok in results if not ok]
-        sent_count = sum(1 for _, ok in results if ok)
+        normalized_results: list[tuple[str, bool]] = []
+        for result in results:
+            if isinstance(result, BaseException):
+                logger.debug(
+                    "Unexpected exception while broadcasting tools/list_changed (reason=%s): %s",
+                    reason,
+                    type(result).__name__,
+                    exc_info=(
+                        type(result),
+                        result,
+                        result.__traceback__,
+                    ),
+                )
+                continue
+            normalized_results.append(result)
+
+        stale_session_ids = [sid for sid, ok in normalized_results if not ok]
+        sent_count = sum(1 for _, ok in normalized_results if ok)
 
         if stale_session_ids:
             with self._session_lock:
@@ -655,10 +679,11 @@ class UnityInstanceMiddleware(Middleware):
         if enabled_tool_names is None:
             return tools
 
+        tool_visibility_snapshot = self._get_tool_visibility_snapshot()
         filtered = []
         for tool in tools:
             tool_name = getattr(tool, "name", None)
-            if self._is_tool_visible(tool_name, enabled_tool_names):
+            if self._is_tool_visible(tool_name, enabled_tool_names, tool_visibility_snapshot):
                 filtered.append(tool)
 
         return filtered
@@ -683,7 +708,7 @@ class UnityInstanceMiddleware(Middleware):
 
         if transport == "stdio":
             active_instance = ctx.get_state("unity_instance")
-            return self._resolve_enabled_tool_names_for_stdio_context(active_instance)
+            return await self._resolve_enabled_tool_names_for_stdio_context(active_instance)
 
         user_id = ctx.get_state("user_id") if config.http_remote_hosted else None
         active_instance = ctx.get_state("unity_instance")
@@ -757,8 +782,8 @@ class UnityInstanceMiddleware(Middleware):
 
         return enabled_tool_names
 
-    def _resolve_enabled_tool_names_for_stdio_context(self, active_instance: str | None) -> set[str] | None:
-        status_payloads = self._list_stdio_status_payloads()
+    async def _resolve_enabled_tool_names_for_stdio_context(self, active_instance: str | None) -> set[str] | None:
+        status_payloads = await asyncio.to_thread(self._list_stdio_status_payloads)
         if not status_payloads:
             return None
 
@@ -870,11 +895,18 @@ class UnityInstanceMiddleware(Middleware):
         status_dir = Path(status_dir_env).expanduser() if status_dir_env else Path.home().joinpath(".unity-mcp")
 
         try:
-            status_files = sorted(
-                status_dir.glob("unity-mcp-status-*.json"),
-                key=lambda path: path.stat().st_mtime,
-                reverse=True,
-            )
+            status_file_entries: list[tuple[float, Path]] = []
+            for status_file in status_dir.glob("unity-mcp-status-*.json"):
+                try:
+                    mtime = status_file.stat().st_mtime
+                except OSError:
+                    logger.debug(
+                        "Skipping stdio status file %s because stat() failed.",
+                        status_file,
+                        exc_info=True,
+                    )
+                    continue
+                status_file_entries.append((mtime, status_file))
         except OSError as exc:
             logger.debug(
                 "Failed to enumerate stdio status files from %s: %s",
@@ -883,6 +915,9 @@ class UnityInstanceMiddleware(Middleware):
                 exc_info=True,
             )
             return []
+
+        status_file_entries.sort(key=lambda item: item[0], reverse=True)
+        status_files = [path for _, path in status_file_entries]
 
         payloads: list[dict[str, object]] = []
         for status_file in status_files:
@@ -1003,6 +1038,14 @@ class UnityInstanceMiddleware(Middleware):
             self._tool_visibility_signature = signature
             self._last_tool_visibility_refresh = now
 
+    def _get_tool_visibility_snapshot(self) -> tuple[set[str], dict[str, str], set[str]]:
+        with self._metadata_lock:
+            return (
+                set(self._unity_managed_tool_names),
+                dict(self._tool_alias_to_unity_target),
+                set(self._server_only_tool_names),
+            )
+
     @staticmethod
     def _resolve_candidate_project_hashes(active_instance: str | None) -> list[str]:
         if not active_instance:
@@ -1014,22 +1057,28 @@ class UnityInstanceMiddleware(Middleware):
 
         return [active_instance]
 
-    def _is_tool_visible(self, tool_name: str | None, enabled_tool_names: set[str]) -> bool:
+    def _is_tool_visible(
+        self,
+        tool_name: str | None,
+        enabled_tool_names: set[str],
+        tool_visibility_snapshot: tuple[set[str], dict[str, str], set[str]],
+    ) -> bool:
+        unity_managed_tool_names, tool_alias_to_unity_target, server_only_tool_names = tool_visibility_snapshot
         if not isinstance(tool_name, str) or not tool_name:
             return True
 
-        if tool_name in self._server_only_tool_names:
+        if tool_name in server_only_tool_names:
             return True
 
         if tool_name in enabled_tool_names:
             return True
 
-        unity_target = self._tool_alias_to_unity_target.get(tool_name)
+        unity_target = tool_alias_to_unity_target.get(tool_name)
         if unity_target:
             return unity_target in enabled_tool_names
 
         # Keep unknown tools visible for forward compatibility.
-        if tool_name not in self._unity_managed_tool_names:
+        if tool_name not in unity_managed_tool_names:
             return True
 
         return False
