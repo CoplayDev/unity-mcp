@@ -584,8 +584,8 @@ class PluginHub(WebSocketEndpoint):
         if websocket is not None:
             try:
                 await websocket.close(code=1001)
-            except Exception:
-                pass
+            except Exception as close_ex:
+                logger.debug("Error closing evicted WebSocket for session %s: %s", session_id, close_ex)
 
         if cls._registry is not None:
             try:
