@@ -71,12 +71,17 @@ async def send_with_unity_instance(
                 ).model_dump()
             )
 
+        retry_on_reload = kwargs.pop("retry_on_reload", True)
+        if not isinstance(retry_on_reload, bool):
+            retry_on_reload = True
+
         try:
             raw = await PluginHub.send_command_for_instance(
                 unity_instance,
                 command_type,
                 params,
                 user_id=user_id,
+                retry_on_reload=retry_on_reload,
             )
             return normalize_unity_response(raw)
         except Exception as exc:

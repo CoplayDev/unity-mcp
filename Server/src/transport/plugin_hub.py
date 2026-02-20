@@ -10,7 +10,7 @@ import uuid
 from typing import Any, ClassVar
 
 from starlette.endpoints import WebSocketEndpoint
-from starlette.websockets import WebSocket
+from starlette.websockets import WebSocket, WebSocketState
 
 from core.config import config
 from core.constants import API_KEY_HEADER
@@ -546,11 +546,102 @@ class PluginHub(WebSocketEndpoint):
             raise RuntimeError(f"Plugin session {session_id} not connected")
         return websocket
 
+    @classmethod
+    async def _evict_connection(cls, session_id: str, reason: str) -> None:
+        """Drop a stale session from in-memory maps and registry."""
+        lock = cls._lock
+        if lock is None:
+            return
+
+        websocket: WebSocket | None = None
+        ping_task: asyncio.Task | None = None
+        pending_futures: list[asyncio.Future] = []
+        async with lock:
+            websocket = cls._connections.pop(session_id, None)
+            ping_task = cls._ping_tasks.pop(session_id, None)
+            cls._last_pong.pop(session_id, None)
+            keys_to_remove: list[object] = []
+            for key, entry in list(cls._pending.items()):
+                if entry.get("session_id") == session_id:
+                    future = entry.get("future")
+                    if future and not future.done():
+                        pending_futures.append(future)
+                    keys_to_remove.append(key)
+            for key in keys_to_remove:
+                cls._pending.pop(key, None)
+
+        if ping_task is not None and not ping_task.done():
+            ping_task.cancel()
+
+        for future in pending_futures:
+            if not future.done():
+                future.set_exception(
+                    PluginDisconnectedError(
+                        f"Unity plugin session {session_id} disconnected while awaiting command_result"
+                    )
+                )
+
+        if websocket is not None:
+            try:
+                await websocket.close(code=1001)
+            except Exception:
+                pass
+
+        if cls._registry is not None:
+            try:
+                await cls._registry.unregister(session_id)
+            except Exception:
+                logger.debug(
+                    "Failed to unregister evicted plugin session %s",
+                    session_id,
+                    exc_info=True,
+                )
+
+        logger.debug("Evicted plugin session %s (%s)", session_id, reason)
+
+    @classmethod
+    async def _ensure_live_connection(cls, session_id: str) -> bool:
+        """Best-effort pre-send liveness check for a plugin WebSocket."""
+        try:
+            websocket = await cls._get_connection(session_id)
+        except RuntimeError:
+            await cls._evict_connection(session_id, "missing_websocket")
+            return False
+
+        if (
+            websocket.client_state == WebSocketState.CONNECTED
+            and websocket.application_state == WebSocketState.CONNECTED
+        ):
+            return True
+
+        logger.debug(
+            "Detected stale plugin connection before send: session=%s app_state=%s client_state=%s",
+            session_id,
+            websocket.application_state,
+            websocket.client_state,
+        )
+        await cls._evict_connection(session_id, "stale_websocket_state")
+        return False
+
+    @staticmethod
+    def _unavailable_retry_response(reason: str = "no_unity_session") -> dict[str, Any]:
+        return MCPResponse(
+            success=False,
+            error="Unity session not available; please retry",
+            hint="retry",
+            data={"reason": reason, "retry_after_ms": 250},
+        ).model_dump()
+
     # ------------------------------------------------------------------
     # Session resolution helpers
     # ------------------------------------------------------------------
     @classmethod
-    async def _resolve_session_id(cls, unity_instance: str | None, user_id: str | None = None) -> str:
+    async def _resolve_session_id(
+        cls,
+        unity_instance: str | None,
+        user_id: str | None = None,
+        retry_on_reload: bool = True,
+    ) -> str:
         """Resolve a project hash (Unity instance id) to an active plugin session.
 
         During Unity domain reloads the plugin's WebSocket session is torn down
@@ -561,6 +652,7 @@ class PluginHub(WebSocketEndpoint):
         Args:
             unity_instance: Target instance (Name@hash or hash)
             user_id: User ID from API key validation (for remote-hosted mode session isolation)
+            retry_on_reload: If False, do not wait for reconnects when no session is present.
         """
         if cls._registry is None:
             raise RuntimeError("Plugin registry not configured")
@@ -589,6 +681,8 @@ class PluginHub(WebSocketEndpoint):
             max_wait_s = 20.0
         # Clamp to [0, 20] to prevent misconfiguration from causing excessive waits
         max_wait_s = max(0.0, min(max_wait_s, 20.0))
+        if not retry_on_reload:
+            max_wait_s = 0.0
         retry_ms = float(getattr(config, "reload_retry_ms", 250))
         sleep_seconds = max(0.05, min(0.25, retry_ms / 1000.0))
 
@@ -684,6 +778,7 @@ class PluginHub(WebSocketEndpoint):
         command_type: str,
         params: dict[str, Any],
         user_id: str | None = None,
+        retry_on_reload: bool = True,
     ) -> dict[str, Any]:
         """Send a command to a Unity instance.
 
@@ -692,28 +787,42 @@ class PluginHub(WebSocketEndpoint):
             command_type: Command type to execute
             params: Command parameters
             user_id: User ID for session isolation in remote-hosted mode
+            retry_on_reload: If False, do not wait for session reconnect on reload.
         """
         try:
-            session_id = await cls._resolve_session_id(unity_instance, user_id=user_id)
+            session_id = await cls._resolve_session_id(
+                unity_instance,
+                user_id=user_id,
+                retry_on_reload=retry_on_reload,
+            )
         except NoUnitySessionError:
             logger.debug(
                 "Unity session unavailable; returning retry: command=%s instance=%s",
                 command_type,
                 unity_instance or "default",
             )
-            return MCPResponse(
-                success=False,
-                error="Unity session not available; please retry",
-                hint="retry",
-                data={"reason": "no_unity_session", "retry_after_ms": 250},
-            ).model_dump()
+            return cls._unavailable_retry_response("no_unity_session")
+
+        if not await cls._ensure_live_connection(session_id):
+            if not retry_on_reload:
+                return cls._unavailable_retry_response("stale_connection")
+            try:
+                session_id = await cls._resolve_session_id(
+                    unity_instance,
+                    user_id=user_id,
+                    retry_on_reload=True,
+                )
+            except NoUnitySessionError:
+                return cls._unavailable_retry_response("no_unity_session")
+            if not await cls._ensure_live_connection(session_id):
+                return cls._unavailable_retry_response("stale_connection")
 
         # During domain reload / immediate reconnect windows, the plugin may be connected but not yet
         # ready to process execute commands on the Unity main thread (which can be further delayed when
         # the Unity Editor is unfocused). For fast-path commands, we do a bounded readiness probe using
         # a main-thread ping command (handled by TransportCommandDispatcher) rather than waiting on
         # register_tools (which can be delayed by EditorApplication.delayCall).
-        if command_type in cls._FAST_FAIL_COMMANDS and command_type != "ping":
+        if retry_on_reload and command_type in cls._FAST_FAIL_COMMANDS and command_type != "ping":
             try:
                 max_wait_s = float(os.environ.get(
                     "UNITY_MCP_SESSION_READY_WAIT_SECONDS", "6"))
