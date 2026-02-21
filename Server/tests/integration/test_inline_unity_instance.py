@@ -355,12 +355,9 @@ def test_set_active_instance_port_stdio(monkeypatch):
 
     pool_instance = SimpleNamespace(id="Proj@abc123", hash="abc123", port=6401)
 
-    class FakePool:
-        def discover_all_instances(self, force_refresh=False):
-            return [pool_instance]
-
-    import services.tools.set_active_instance as sat
-    monkeypatch.setattr(sat, "get_unity_connection_pool", lambda: FakePool())
+    async def fake_discover(_ctx):
+        return [pool_instance]
+    monkeypatch.setattr(mw, "_discover_instances", fake_discover)
 
     from services.tools.set_active_instance import set_active_instance
 
