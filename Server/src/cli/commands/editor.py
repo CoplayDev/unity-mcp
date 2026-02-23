@@ -44,7 +44,7 @@ def wait_compile(timeout: float):
         waited = result.get("data", {}).get("waited_seconds", 0)
         print_success(f"Compilation complete (waited {waited}s)")
     else:
-        print_error("Compilation wait timed out")
+        print_error(result.get("message", "Compilation wait timed out"))
 
 
 @editor.command("play")
