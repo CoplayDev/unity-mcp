@@ -507,6 +507,9 @@ unity-mcp editor play
 unity-mcp editor pause
 unity-mcp editor stop
 
+# Wait for script compilation (optional timeout in seconds)
+unity-mcp editor wait-compile [--timeout 30]
+
 # Console
 unity-mcp editor console                    # Read console
 unity-mcp editor console --count 20         # Last 20 entries
