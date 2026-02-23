@@ -341,7 +341,7 @@ unity-mcp raw read_console '{"count": 20}'
 | `script` | `create`, `read`, `delete`, `edit`, `validate` |
 | `code` | `read`, `search` |
 | `shader` | `create`, `read`, `update`, `delete` |
-| `editor` | `play`, `pause`, `stop`, `refresh`, `console`, `menu`, `tool`, `add-tag`, `remove-tag`, `add-layer`, `remove-layer`, `tests`, `poll-test`, `custom-tool` |
+| `editor` | `play`, `pause`, `stop`, `wait-compile`, `refresh`, `console`, `menu`, `tool`, `add-tag`, `remove-tag`, `add-layer`, `remove-layer`, `tests`, `poll-test`, `custom-tool` |
 | `asset` | `search`, `info`, `create`, `delete`, `duplicate`, `move`, `rename`, `import`, `mkdir` |
 | `prefab` | `open`, `close`, `save`, `create` |
 | `material` | `info`, `create`, `set-color`, `set-property`, `assign`, `set-renderer-color` |
