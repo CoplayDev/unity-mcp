@@ -38,7 +38,9 @@ def wait_compile(timeout: float):
         unity-mcp editor wait-compile --timeout 60
     """
     config = get_config()
-    result = run_command("manage_editor", {"action": "wait_for_compilation", "timeout": timeout}, config)
+    # Ensure the transport timeout outlasts the compilation wait (add a small buffer).
+    transport_timeout = int(timeout) + 10
+    result = run_command("manage_editor", {"action": "wait_for_compilation", "timeout": timeout}, config, timeout=transport_timeout)
     click.echo(format_output(result, config.format))
     if result.get("success"):
         waited = result.get("data", {}).get("waited_seconds", 0)
