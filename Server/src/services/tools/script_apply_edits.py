@@ -8,6 +8,7 @@ from mcp.types import ToolAnnotations
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
+from services.tools.refresh_unity import send_mutation, verify_edit_by_sha
 from services.tools.utils import parse_json_payload
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
@@ -667,9 +668,6 @@ def _err(code: str, message: str, *, expected: dict[str, Any] | None = None, rew
         payload["data"] = data
     return payload
 
-# Natural-language parsing removed; clients should send structured edits.
-
-
 @mcp_for_unity_tool(
     name="script_apply_edits",
     unity_target="manage_script",
@@ -953,6 +951,17 @@ async def script_apply_edits(
 
     # If everything is structured (method/class/anchor ops), forward directly to Unity's structured editor.
     if all_struct:
+        # Get pre-edit SHA for disconnect verification
+        pre_sha = None
+        try:
+            sha_resp = await async_send_command_with_retry(
+                "manage_script", {"action": "get_sha", "name": name, "path": path},
+                instance_id=unity_instance,
+            )
+            if isinstance(sha_resp, dict) and sha_resp.get("success"):
+                pre_sha = (sha_resp.get("data") or {}).get("sha256")
+        except Exception:
+            pass
         opts2 = dict(options or {})
         # For structured edits, prefer immediate refresh to avoid missed reloads when Editor is unfocused
         opts2.setdefault("refresh", "immediate")
@@ -965,14 +974,13 @@ async def script_apply_edits(
             "edits": edits,
             "options": opts2,
         }
-        resp_struct = await send_with_unity_instance(
-            async_send_command_with_retry,
-            unity_instance,
-            "manage_script",
-            params_struct,
-        )
-        if isinstance(resp_struct, dict) and resp_struct.get("success"):
-            pass  # Optional sentinel reload removed (deprecated)
+
+        async def _verify():
+            if await verify_edit_by_sha(unity_instance, name, path, pre_sha):
+                return {"success": True, "message": "Edit applied (verified after domain reload)."}
+            return None
+
+        resp_struct = await send_mutation(ctx, unity_instance, "manage_script", params_struct, verify_after_disconnect=_verify)
         return _with_norm(resp_struct if isinstance(resp_struct, dict) else {"success": False, "message": str(resp_struct)}, normalized_for_echo, routing="structured")
 
     # 1) read from Unity
@@ -1105,15 +1113,14 @@ async def script_apply_edits(
                     "precondition_sha256": sha,
                     "options": {"refresh": (options or {}).get("refresh", "debounced"), "validate": (options or {}).get("validate", "standard"), "applyMode": ("atomic" if len(at_edits) > 1 else (options or {}).get("applyMode", "sequential"))}
                 }
-                resp_text = await send_with_unity_instance(
-                    async_send_command_with_retry,
-                    unity_instance,
-                    "manage_script",
-                    params_text,
-                )
+                async def _verify_text():
+                    if await verify_edit_by_sha(unity_instance, name, path, sha):
+                        return {"success": True, "message": "Text edits applied (verified after domain reload)."}
+                    return None
+
+                resp_text = await send_mutation(ctx, unity_instance, "manage_script", params_text, verify_after_disconnect=_verify_text)
                 if not (isinstance(resp_text, dict) and resp_text.get("success")):
                     return _with_norm(resp_text if isinstance(resp_text, dict) else {"success": False, "message": str(resp_text)}, normalized_for_echo, routing="mixed/text-first")
-                # Optional sentinel reload removed (deprecated)
         except Exception as e:
             return _with_norm({"success": False, "message": f"Text edit conversion failed: {e}"}, normalized_for_echo, routing="mixed/text-first")
 
@@ -1130,14 +1137,12 @@ async def script_apply_edits(
                 "edits": struct_edits,
                 "options": opts2
             }
-            resp_struct = await send_with_unity_instance(
-                async_send_command_with_retry,
-                unity_instance,
-                "manage_script",
-                params_struct,
-            )
-            if isinstance(resp_struct, dict) and resp_struct.get("success"):
-                pass  # Optional sentinel reload removed (deprecated)
+            async def _verify_struct():
+                if await verify_edit_by_sha(unity_instance, name, path, sha):
+                    return {"success": True, "message": "Edit applied (verified after domain reload)."}
+                return None
+
+            resp_struct = await send_mutation(ctx, unity_instance, "manage_script", params_struct, verify_after_disconnect=_verify_struct)
             return _with_norm(resp_struct if isinstance(resp_struct, dict) else {"success": False, "message": str(resp_struct)}, normalized_for_echo, routing="mixed/text-first")
 
         return _with_norm({"success": True, "message": "Applied text edits (no structured ops)"}, normalized_for_echo, routing="mixed/text-first")
@@ -1262,14 +1267,12 @@ async def script_apply_edits(
                     "applyMode": ("atomic" if len(at_edits) > 1 else (options or {}).get("applyMode", "sequential"))
                 }
             }
-            resp = await send_with_unity_instance(
-                async_send_command_with_retry,
-                unity_instance,
-                "manage_script",
-                params,
-            )
-            if isinstance(resp, dict) and resp.get("success"):
-                pass  # Optional sentinel reload removed (deprecated)
+            async def _verify_text_only():
+                if await verify_edit_by_sha(unity_instance, name, path, sha):
+                    return {"success": True, "message": "Edit applied (verified after domain reload)."}
+                return None
+
+            resp = await send_mutation(ctx, unity_instance, "manage_script", params, verify_after_disconnect=_verify_text_only)
             return _with_norm(
                 resp if isinstance(resp, dict)
                 else {"success": False, "message": str(resp)},
@@ -1351,14 +1354,12 @@ async def script_apply_edits(
         "options": options or {"validate": "standard", "refresh": "debounced"},
     }
 
-    write_resp = await send_with_unity_instance(
-        async_send_command_with_retry,
-        unity_instance,
-        "manage_script",
-        params,
-    )
-    if isinstance(write_resp, dict) and write_resp.get("success"):
-        pass  # Optional sentinel reload removed (deprecated)
+    async def _verify_write():
+        if await verify_edit_by_sha(unity_instance, name, path, sha):
+            return {"success": True, "message": "Edit applied (verified after domain reload)."}
+        return None
+
+    write_resp = await send_mutation(ctx, unity_instance, "manage_script", params, verify_after_disconnect=_verify_write)
     return _with_norm(
         write_resp if isinstance(write_resp, dict)
         else {"success": False, "message": str(write_resp)},

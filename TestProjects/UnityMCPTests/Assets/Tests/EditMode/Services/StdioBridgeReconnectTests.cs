@@ -120,11 +120,10 @@ namespace MCPForUnityTests.Editor.Services
                     string handshake2 = ReadLine(stream2, ReadTimeoutMs);
                     Assert.That(handshake2, Does.Contain("FRAMING=1"), "Second client should receive handshake");
 
-                    // Wait a few frames for stale client cleanup
-                    for (int i = 0; i < 5; i++)
-                        yield return null;
-
-                    // Second client should work — stale first client was closed
+                    // Stale-client cleanup runs synchronously in HandleClientAsync before
+                    // the read loop, so by the time we read the handshake it's already done.
+                    // No yield needed — yielding here creates a window for the MCP Python
+                    // server to reconnect and close our test client as stale.
                     SendFrame(stream2, Encoding.UTF8.GetBytes("ping"));
                     byte[] pong2Bytes = ReadFrame(stream2, ReadTimeoutMs);
                     Assert.That(Encoding.UTF8.GetString(pong2Bytes), Does.Contain("pong"),

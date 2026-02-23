@@ -191,6 +191,11 @@ namespace MCPForUnity.Editor.Services
 
             try { EditorPrefs.DeleteKey(EditorPrefKeys.ResumeStdioAfterReload); } catch { }
 
+            // Clear the stale "reloading" heartbeat so clients stop seeing reloading=true.
+            // The bridge isn't running, so clients will get connection-refused (recoverable)
+            // instead of hanging on a zombie socket or being rejected by the preflight check.
+            try { StdioBridgeHost.WriteHeartbeat(false, "stopped"); } catch { }
+
             if (lastException != null)
             {
                 McpLog.Warn($"Failed to resume stdio bridge after domain reload: {lastException.Message}");

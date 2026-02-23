@@ -269,6 +269,12 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 {
                     currentUnityPort = PortManager.GetPortWithFallback();
 
+                    // Clear any stale "reloading" heartbeat from a previous domain reload.
+                    // After reload, static fields reset (isRunning=false), so Stop() above
+                    // is a no-op and won't delete the status file. Writing now ensures clients
+                    // see reloading=false even if listener creation fails below.
+                    WriteHeartbeat(false, "starting");
+
                     LogBreadcrumb("Start");
 
                     try
@@ -320,6 +326,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 catch (SocketException ex)
                 {
                     McpLog.Error($"Failed to start TCP listener: {ex.Message}");
+                    WriteHeartbeat(false, "start_failed");
                 }
             }
         }

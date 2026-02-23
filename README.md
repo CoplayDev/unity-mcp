@@ -13,7 +13,7 @@
 [![](https://badge.mcpx.dev?status=on 'MCP Enabled')](https://modelcontextprotocol.io/introduction)
 [![](https://img.shields.io/badge/License-MIT-red.svg 'MIT License')](https://opensource.org/licenses/MIT)
 
-**Create your Unity apps with LLMs!** MCP for Unity bridges AI assistants (Claude, Cursor, VS Code, etc.) with your Unity Editor via the [Model Context Protocol](https://modelcontextprotocol.io/introduction). Give your LLM the tools to manage assets, control scenes, edit scripts, and automate tasks.
+**Create your Unity apps with LLMs!** MCP for Unity bridges AI assistants (Claude, Claude Code, Cursor, VS Code, etc.) with your Unity Editor via the [Model Context Protocol](https://modelcontextprotocol.io/introduction). Give your LLM the tools to manage assets, control scenes, edit scripts, and automate tasks.
 
 <img alt="MCP for Unity building a scene" src="docs/images/building_scene.gif">
 
@@ -25,7 +25,7 @@
 
 * **Unity 2021.3 LTS+** — [Download Unity](https://unity.com/download)
 * **Python 3.10+** and **uv** — [Install uv](https://docs.astral.sh/uv/getting-started/installation/)
-* **An MCP Client** — [Claude Desktop](https://claude.ai/download) | [Cursor](https://www.cursor.com/en/downloads) | [VS Code Copilot](https://code.visualstudio.com/docs/copilot/overview) | [GitHub Copilot CLI](https://docs.github.com/en/copilot/concepts/agents/about-copilot-cli) | [Windsurf](https://windsurf.com)
+* **An MCP Client** — [Claude Desktop](https://claude.ai/download) | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | [Cursor](https://www.cursor.com/en/downloads) | [VS Code Copilot](https://code.visualstudio.com/docs/copilot/overview) | [GitHub Copilot CLI](https://docs.github.com/en/copilot/concepts/agents/about-copilot-cli) | [Windsurf](https://windsurf.com)
 
 ### 1. Install the Unity Package
 

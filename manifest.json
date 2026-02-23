@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.3",
   "name": "Unity MCP",
-  "version": "9.4.6",
+  "version": "9.4.7",
   "description": "AI-powered Unity Editor automation via MCP - manage GameObjects, scripts, materials, scenes, prefabs, VFX, and run tests",
   "author": {
     "name": "Coplay",
