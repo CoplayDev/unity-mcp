@@ -505,6 +505,8 @@ manage_editor(action="remove_tag", tag_name="OldTag")
 
 manage_editor(action="add_layer", layer_name="Projectiles")
 manage_editor(action="remove_layer", layer_name="OldLayer")
+
+manage_editor(action="wait_for_compilation", timeout=30)  # Wait for scripts to compile
 ```
 
 ### execute_menu_item
