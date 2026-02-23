@@ -17,6 +17,36 @@ def editor():
     pass
 
 
+@editor.command("wait-compile")
+@click.option(
+    "--timeout", "-t",
+    type=float,
+    default=30.0,
+    help="Max seconds to wait (default: 30)."
+)
+@handle_unity_errors
+def wait_compile(timeout: float):
+    """Wait for Unity script compilation to finish.
+
+    Polls editor state until compilation and domain reload are complete.
+    Useful after modifying scripts to ensure changes are compiled before
+    entering play mode or performing other actions.
+
+    \b
+    Examples:
+        unity-mcp editor wait-compile
+        unity-mcp editor wait-compile --timeout 60
+    """
+    config = get_config()
+    result = run_command("manage_editor", {"action": "wait_for_compilation", "timeout": timeout}, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        waited = result.get("data", {}).get("waited_seconds", 0)
+        print_success(f"Compilation complete (waited {waited}s)")
+    else:
+        print_error("Compilation wait timed out")
+
+
 @editor.command("play")
 @handle_unity_errors
 def play():
