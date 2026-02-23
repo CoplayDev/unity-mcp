@@ -11,8 +11,6 @@ from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 from services.tools.utils import coerce_bool
 
-_WAIT_FOR_COMPILATION_ACTIONS = frozenset({"wait_for_compilation"})
-
 
 @mcp_for_unity_tool(
     description="Controls and queries the Unity editor's state and settings. Tip: pass booleans as true/false; if your client only sends strings, 'true'/'false' are accepted. Read-only actions: telemetry_status, telemetry_ping, wait_for_compilation. Modifying actions: play, pause, stop, set_active_tool, add_tag, remove_tag, add_layer, remove_layer.",
