@@ -488,7 +488,7 @@ unity-mcp raw manage_packages '{"action": "list_packages"}'
 | `component` | `add`, `remove`, `set`, `modify` |
 | `script` | `create`, `read`, `delete`, `edit`, `validate` |
 | `shader` | `create`, `read`, `update`, `delete` |
-| `editor` | `play`, `pause`, `stop`, `refresh`, `console`, `menu`, `tool`, `add-tag`, `remove-tag`, `add-layer`, `remove-layer`, `tests`, `poll-test`, `custom-tool` |
+| `editor` | `play`, `pause`, `stop`, `wait-compile`, `refresh`, `console`, `menu`, `tool`, `add-tag`, `remove-tag`, `add-layer`, `remove-layer`, `tests`, `poll-test`, `custom-tool` |
 | `asset` | `search`, `info`, `create`, `delete`, `duplicate`, `move`, `rename`, `import`, `mkdir` |
 | `prefab` | `open`, `close`, `save`, `create` |
 | `material` | `info`, `create`, `set-color`, `set-property`, `assign`, `set-renderer-color` |
