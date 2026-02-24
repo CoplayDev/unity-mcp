@@ -61,4 +61,3 @@ reports/
 # Local testing harness
 scripts/local-test/
 .claude/settings.local.json
-/TestProjects/UnityMCPTests
