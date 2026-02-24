@@ -15,6 +15,7 @@ import platform
 import shutil
 import subprocess
 import time
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,17 @@ _DEFAULT_FOCUS_DURATION_S = _parse_env_float("UNITY_MCP_NUDGE_DURATION_S", 3.0)
 _last_nudge_time: float = 0.0
 _consecutive_nudges: int = 0
 _last_progress_time: float = 0.0
+
+
+@dataclass
+class _FrontmostAppInfo:
+    """Info about the frontmost application for focus restore."""
+
+    name: str
+    bundle_id: str | None = None  # macOS only: bundle identifier for precise activation
+
+    def __str__(self) -> str:
+        return self.name
 
 
 def _is_available() -> bool:
@@ -120,20 +132,43 @@ def reset_nudge_backoff() -> None:
     _last_progress_time = time.monotonic()
 
 
-def _get_frontmost_app_macos() -> str | None:
-    """Get the name of the frontmost application on macOS."""
+def _get_frontmost_app_macos() -> _FrontmostAppInfo | None:
+    """Get the name and bundle identifier of the frontmost application on macOS.
+
+    Returns both process name and bundle ID so we can restore focus precisely.
+    Using bundle ID avoids the Electron bug where `tell application "Electron"`
+    launches a standalone Electron instance instead of returning to VS Code.
+    """
     try:
         result = subprocess.run(
             [
                 "osascript", "-e",
-                'tell application "System Events" to get name of first process whose frontmost is true'
+                'tell application "System Events"\n'
+                '    set frontProc to first process whose frontmost is true\n'
+                '    set procName to name of frontProc\n'
+                '    set bundleID to ""\n'
+                '    try\n'
+                '        set bID to bundle identifier of frontProc\n'
+                '        if bID is not missing value then set bundleID to bID\n'
+                '    end try\n'
+                '    return procName & "|" & bundleID\n'
+                'end tell',
             ],
             capture_output=True,
             text=True,
             timeout=5,
         )
         if result.returncode == 0:
-            return result.stdout.strip()
+            output = result.stdout.strip()
+            parts = output.split("|", 1)
+            name = parts[0]
+            bundle_id: str | None = None
+            if len(parts) > 1:
+                raw_bundle_id = parts[1].strip()
+                # Some processes report "missing value" as bundle ID; treat as absent
+                if raw_bundle_id and raw_bundle_id.lower() != "missing value":
+                    bundle_id = raw_bundle_id
+            return _FrontmostAppInfo(name=name, bundle_id=bundle_id)
     except Exception as e:
         logger.debug(f"Failed to get frontmost app: {e}")
     return None
@@ -205,15 +240,23 @@ def _find_unity_pid_by_project_path(project_path: str) -> int | None:
         return None
 
 
-def _focus_app_macos(app_name: str, unity_project_path: str | None = None) -> bool:
-    """Focus an application by name on macOS.
+def _focus_app_macos(
+    app_name: str,
+    unity_project_path: str | None = None,
+    bundle_id: str | None = None,
+) -> bool:
+    """Focus an application on macOS.
 
     For Unity, can target a specific instance by project path (multi-instance support).
+    For other apps, prefers bundle_id activation to avoid the Electron bug where
+    generic process names like "Electron" cause macOS to launch the wrong app.
 
     Args:
         app_name: Application name to focus ("Unity" or specific app name)
         unity_project_path: For Unity apps, the full project root path to match against
             -projectpath command line arg (e.g., "/path/to/project" NOT "/path/to/project/Assets")
+        bundle_id: Bundle identifier for precise activation (e.g. "com.microsoft.VSCode").
+            Preferred over app_name for non-Unity apps.
     """
     try:
         # For Unity, use PID-based activation for precise targeting
@@ -255,9 +298,27 @@ tell application id bundleID to activate
                 # No project path provided - activate any Unity process
                 return _focus_any_unity_macos()
         else:
-            # For other apps, use direct activation
-            # Escape double quotes in app_name to prevent AppleScript injection
-            escaped_app_name = app_name.replace('"', '\\"')
+            # For non-Unity apps, prefer bundle_id to avoid the Electron bug:
+            # VS Code's process name is "Electron", and `tell application "Electron"`
+            # can launch a standalone Electron instance instead of returning to VS Code.
+            if bundle_id:
+                escaped_bundle_id = bundle_id.replace('"', '""')
+                result = subprocess.run(
+                    ["osascript", "-e", f'tell application id "{escaped_bundle_id}" to activate'],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                if result.returncode == 0:
+                    return True
+                logger.debug(
+                    "Bundle ID activation failed for %s, falling back to name: %s",
+                    bundle_id,
+                    result.stderr.strip() if result.stderr else "(no stderr)",
+                )
+
+            # Fallback to name-based activation
+            escaped_app_name = app_name.replace('"', '""')
             result = subprocess.run(
                 ["osascript", "-e", f'tell application "{escaped_app_name}" to activate'],
                 capture_output=True,
@@ -294,7 +355,7 @@ end tell
         return False
 
 
-def _get_frontmost_app_windows() -> str | None:
+def _get_frontmost_app_windows() -> _FrontmostAppInfo | None:
     """Get the title of the frontmost window on Windows."""
     try:
         # PowerShell command to get active window title
@@ -321,7 +382,7 @@ $sb.ToString()
             timeout=5,
         )
         if result.returncode == 0:
-            return result.stdout.strip()
+            return _FrontmostAppInfo(name=result.stdout.strip())
     except Exception as e:
         logger.debug(f"Failed to get frontmost window: {e}")
     return None
@@ -381,7 +442,7 @@ if ($proc) {{
     return False
 
 
-def _get_frontmost_app_linux() -> str | None:
+def _get_frontmost_app_linux() -> _FrontmostAppInfo | None:
     """Get the window ID of the frontmost window on Linux."""
     try:
         result = subprocess.run(
@@ -391,7 +452,7 @@ def _get_frontmost_app_linux() -> str | None:
             timeout=5,
         )
         if result.returncode == 0:
-            return result.stdout.strip()
+            return _FrontmostAppInfo(name=result.stdout.strip())
     except Exception as e:
         logger.debug(f"Failed to get active window: {e}")
     return None
@@ -425,7 +486,7 @@ def _focus_app_linux(window_id: str) -> bool:
     return False
 
 
-def _get_frontmost_app() -> str | None:
+def _get_frontmost_app() -> _FrontmostAppInfo | None:
     """Get the frontmost application/window (platform-specific)."""
     system = platform.system()
     if system == "Darwin":
@@ -437,21 +498,27 @@ def _get_frontmost_app() -> str | None:
     return None
 
 
-def _focus_app(app_or_window: str, unity_project_path: str | None = None) -> bool:
+def _focus_app(
+    app_info: _FrontmostAppInfo | str,
+    unity_project_path: str | None = None,
+) -> bool:
     """Focus an application/window (platform-specific).
 
     Args:
-        app_or_window: Application name to focus
+        app_info: Application info (name + optional bundle_id) or plain name string
         unity_project_path: For Unity apps on macOS, the full project root path for
             multi-instance support
     """
+    if isinstance(app_info, str):
+        app_info = _FrontmostAppInfo(name=app_info)
+
     system = platform.system()
     if system == "Darwin":
-        return _focus_app_macos(app_or_window, unity_project_path)
+        return _focus_app_macos(app_info.name, unity_project_path, app_info.bundle_id)
     elif system == "Windows":
-        return _focus_app_windows(app_or_window)
+        return _focus_app_windows(app_info.name)
     elif system == "Linux":
-        return _focus_app_linux(app_or_window)
+        return _focus_app_linux(app_info.name)
     return False
 
 
@@ -505,7 +572,7 @@ async def nudge_unity_focus(
         return False
 
     # Check if Unity is already focused (no nudge needed)
-    if "Unity" in original_app:
+    if "Unity" in original_app.name:
         logger.debug("Unity already focused, no nudge needed")
         return False
 
@@ -523,7 +590,7 @@ async def nudge_unity_focus(
 
     # Verify Unity is actually focused now
     current_app = _get_frontmost_app()
-    if current_app and "Unity" not in current_app:
+    if current_app and "Unity" not in current_app.name:
         logger.warning(f"Unity activation didn't complete - current app is {current_app}")
         # Continue anyway in case Unity is processing in background
 
@@ -535,7 +602,7 @@ async def nudge_unity_focus(
     await asyncio.sleep(focus_duration_s)
 
     # Return focus to original app
-    if original_app and original_app != "Unity":
+    if original_app and original_app.name != "Unity":
         if _focus_app(original_app):
             logger.info(f"Returned focus to {original_app} after {focus_duration_s:.1f}s Unity focus")
         else:

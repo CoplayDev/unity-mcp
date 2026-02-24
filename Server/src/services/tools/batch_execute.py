@@ -116,6 +116,13 @@ async def batch_execute(
             raise ValueError(
                 f"Command '{tool_name}' must specify parameters as an object/dict")
 
+        if "unity_instance" in params:
+            raise ValueError(
+                f"Command '{tool_name}' at index {index} contains 'unity_instance'. "
+                "Per-command instance routing is not supported inside batch_execute. "
+                "Set unity_instance on the outer batch_execute call to route the entire batch."
+            )
+
         normalized_commands.append({
             "tool": tool_name,
             "params": params,

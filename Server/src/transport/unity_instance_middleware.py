@@ -104,6 +104,124 @@ class UnityInstanceMiddleware(Middleware):
         with self._lock:
             self._active_by_key.pop(key, None)
 
+    async def _discover_instances(self, ctx) -> list:
+        """
+        Return running Unity instances across both HTTP (PluginHub) and stdio transports.
+
+        Returns a list of objects with .id (Name@hash) and .hash attributes.
+        """
+        from types import SimpleNamespace
+        transport = (config.transport_mode or "stdio").lower()
+        results: list = []
+
+        if PluginHub.is_configured():
+            try:
+                user_id = None
+                get_state_fn = getattr(ctx, "get_state", None)
+                if callable(get_state_fn) and config.http_remote_hosted:
+                    user_id = get_state_fn("user_id")
+                sessions_data = await PluginHub.get_sessions(user_id=user_id)
+                sessions = sessions_data.sessions or {}
+                for session_info in sessions.values():
+                    project = getattr(session_info, "project", None) or "Unknown"
+                    hash_value = getattr(session_info, "hash", None)
+                    if hash_value:
+                        results.append(SimpleNamespace(
+                            id=f"{project}@{hash_value}",
+                            hash=hash_value,
+                            name=project,
+                        ))
+            except Exception as exc:
+                if isinstance(exc, (SystemExit, KeyboardInterrupt)):
+                    raise
+                logger.debug("PluginHub instance discovery failed (%s)", type(exc).__name__, exc_info=True)
+
+        if not results and transport != "http":
+            try:
+                from transport.legacy.unity_connection import get_unity_connection_pool
+                pool = get_unity_connection_pool()
+                results = pool.discover_all_instances(force_refresh=True)
+            except Exception as exc:
+                if isinstance(exc, (SystemExit, KeyboardInterrupt)):
+                    raise
+                logger.debug("Stdio instance discovery failed (%s)", type(exc).__name__, exc_info=True)
+
+        return results
+
+    async def _resolve_instance_value(self, value: str, ctx) -> str:
+        """
+        Resolve a unity_instance string to a validated instance identifier.
+
+        Accepts:
+          - Bare port number like "6401" (stdio only) -> resolved Name@hash
+          - "Name@hash" exact match
+          - Hash prefix (unique prefix match against running instances)
+
+        Raises ValueError with a user-friendly message on failure.
+        """
+        value = value.strip()
+        if not value:
+            raise ValueError("unity_instance value must not be empty.")
+
+        transport = (config.transport_mode or "stdio").lower()
+
+        # Port number (stdio only) — resolve to Name@hash via status file lookup
+        if value.isdigit():
+            if transport == "http":
+                raise ValueError(
+                    f"Port-based targeting ('{value}') is not supported in HTTP transport mode. "
+                    "Use Name@hash or a hash prefix. Read mcpforunity://instances for available instances."
+                )
+            port_int = int(value)
+            instances = await self._discover_instances(ctx)
+            for inst in instances:
+                if getattr(inst, "port", None) == port_int:
+                    return inst.id
+            available = ", ".join(
+                f"{getattr(i, 'id', '?')} (port {getattr(i, 'port', '?')})"
+                for i in instances
+            ) or "none"
+            raise ValueError(
+                f"No Unity instance found on port {value}. Available: {available}."
+            )
+
+        instances = await self._discover_instances(ctx)
+        ids = {
+            getattr(inst, "id", None): inst
+            for inst in instances
+            if getattr(inst, "id", None)
+        }
+
+        # Exact Name@hash match
+        if "@" in value:
+            if value in ids:
+                return value
+            available = ", ".join(ids) or "none"
+            raise ValueError(
+                f"Instance '{value}' not found. Available: {available}. "
+                "Read mcpforunity://instances for current sessions."
+            )
+
+        # Hash prefix match
+        lookup = value.lower()
+        matches = [
+            inst for inst in instances
+            if getattr(inst, "hash", "") and getattr(inst, "hash", "").lower().startswith(lookup)
+        ]
+        if len(matches) == 1:
+            return matches[0].id
+        if len(matches) > 1:
+            ambiguous = ", ".join(getattr(m, "id", "?") for m in matches)
+            raise ValueError(
+                f"Hash prefix '{value}' is ambiguous ({ambiguous}). "
+                "Provide the full Name@hash from mcpforunity://instances."
+            )
+        available = ", ".join(ids) or "none"
+        raise ValueError(
+            f"No running Unity instance matches '{value}'. Available: {available}. "
+            "Read mcpforunity://instances for current sessions."
+        )
+
     async def _maybe_autoselect_instance(self, ctx) -> str | None:
         """
         Auto-select the sole Unity instance when no active instance is set.
@@ -136,6 +254,12 @@ class UnityInstanceMiddleware(Middleware):
                             chosen,
                         )
                         return chosen
+                    if len(ids) > 1:
+                        logger.info(
+                            "Multiple Unity instances found (%d). Pass unity_instance on any tool call "
+                            "or call set_active_instance to choose one. Available: %s",
+                            len(ids), ", ".join(ids),
+                        )
                 except (ConnectionError, ValueError, KeyError, TimeoutError, AttributeError) as exc:
                     logger.debug(
                         "PluginHub auto-select probe failed (%s); falling back to stdio",
@@ -168,6 +292,12 @@ class UnityInstanceMiddleware(Middleware):
                             chosen,
                         )
                         return chosen
+                    if len(ids) > 1:
+                        logger.info(
+                            "Multiple Unity instances found (%d). Pass unity_instance on any tool call "
+                            "or call set_active_instance to choose one. Available: %s",
+                            len(ids), ", ".join(ids),
+                        )
                 except (ConnectionError, ValueError, KeyError, TimeoutError, AttributeError) as exc:
                     logger.debug(
                         "Stdio auto-select probe failed (%s)",
@@ -214,7 +344,23 @@ class UnityInstanceMiddleware(Middleware):
         if user_id:
             ctx.set_state("user_id", user_id)
 
-        active_instance = self.get_active_instance(ctx)
+        # Per-call routing: check if this tool call explicitly specifies unity_instance.
+        # context.message.arguments is a mutable dict on CallToolRequestParams; resource
+        # reads use ReadResourceRequestParams which has no .arguments, so this is a no-op for them.
+        # We pop the key here so Pydantic's type_adapter.validate_python() never sees it.
+        active_instance: str | None = None
+        msg_args = getattr(getattr(context, "message", None), "arguments", None)
+        if isinstance(msg_args, dict) and "unity_instance" in msg_args:
+            raw = msg_args.pop("unity_instance")
+            if raw is not None:
+                raw_str = str(raw).strip()
+                if raw_str:
+                    # Raises ValueError with a user-friendly message on invalid input.
+                    active_instance = await self._resolve_instance_value(raw_str, ctx)
+                    logger.debug("Per-call unity_instance resolved to: %s", active_instance)
+
+        if not active_instance:
+            active_instance = self.get_active_instance(ctx)
         if not active_instance:
             active_instance = await self._maybe_autoselect_instance(ctx)
         if active_instance:

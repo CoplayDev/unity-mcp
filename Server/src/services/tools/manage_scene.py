@@ -154,6 +154,8 @@ async def manage_scene(
             include_transform, default=None)
         coerced_include_image = coerce_bool(include_image, default=None)
         coerced_max_resolution = coerce_int(max_resolution, default=None)
+        if coerced_max_resolution is not None and coerced_max_resolution <= 0:
+            return {"success": False, "message": "max_resolution must be a positive integer greater than zero."}
 
         params: dict[str, Any] = {"action": action}
         if name:
