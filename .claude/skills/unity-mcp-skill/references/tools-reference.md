@@ -17,6 +17,34 @@ Complete reference for all MCP tools. Each tool includes parameters, types, and 
 
 ---
 
+## Project Info Resource
+
+Read `mcpforunity://project/info` to detect project capabilities before making assumptions about UI, input, or rendering setup.
+
+**Returned fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `projectRoot` | string | Absolute path to project root |
+| `projectName` | string | Project folder name |
+| `unityVersion` | string | e.g. `"2022.3.20f1"` |
+| `platform` | string | Active build target e.g. `"StandaloneWindows64"` |
+| `assetsPath` | string | Absolute path to Assets folder |
+| `renderPipeline` | string | `"BuiltIn"`, `"Universal"`, `"HighDefinition"`, or `"Custom"` |
+| `activeInputHandler` | string | `"Old"`, `"New"`, or `"Both"` |
+| `packages.ugui` | bool | `com.unity.ugui` installed (Canvas, Image, Button, etc.) |
+| `packages.textmeshpro` | bool | `com.unity.textmeshpro` installed (TMP_Text, TMP_InputField) |
+| `packages.inputsystem` | bool | `com.unity.inputsystem` installed (InputAction, PlayerInput) |
+
+**Key decision points:**
+
+- **UI system**: If `packages.ugui` is true, use Canvas + uGUI components. UI Toolkit (UIDocument/UXML) is built-in since Unity 2021+ but has no MCP tool support yet.
+- **Text**: If `packages.textmeshpro` is true, use `TextMeshProUGUI` instead of legacy `Text`.
+- **Input**: Use `activeInputHandler` to decide EventSystem module — `StandaloneInputModule` (Old) vs `InputSystemUIInputModule` (New). See [workflows.md — Input System](workflows.md#input-system-old-vs-new).
+- **Shaders**: Use `renderPipeline` to pick correct shader names — `Standard` (BuiltIn) vs `Universal Render Pipeline/Lit` (URP) vs `HDRP/Lit` (HDRP).
+
+---
+
 ## Infrastructure Tools
 
 ### batch_execute
@@ -66,7 +94,7 @@ refresh_unity(
 
 ### manage_scene
 
-Scene CRUD operations and hierarchy queries.
+Scene CRUD operations, hierarchy queries, screenshots, and scene view control.
 
 ```python
 # Get hierarchy (paginated)
@@ -78,8 +106,47 @@ manage_scene(
     include_transform=False      # bool - include local transforms
 )
 
-# Screenshot
-manage_scene(action="screenshot")  # Returns base64 PNG
+# Screenshot (file only — saves to Assets/)
+manage_scene(action="screenshot")
+
+# Screenshot with inline image (base64 PNG returned to AI)
+manage_scene(
+    action="screenshot",
+    camera="MainCamera",         # str, optional - camera name, path, or instance ID
+    include_image=True,          # bool, default False - return base64 PNG inline
+    max_resolution=512           # int, optional - downscale cap (default 512)
+)
+
+# Batch surround (6 angles around scene bounds, no file saved)
+manage_scene(
+    action="screenshot",
+    batch="surround",            # str - "surround" for 6-angle capture
+    max_resolution=256           # int - keep low for batch (6 images)
+)
+# Returns: front, back, left, right, top, bird_eye views
+
+# Batch surround centered on a specific target
+manage_scene(
+    action="screenshot",
+    batch="surround",
+    look_at="Player",            # str|int|list[float] - center surround on this target
+    max_resolution=256
+)
+
+# Positioned screenshot (temp camera at viewpoint, no file saved)
+manage_scene(
+    action="screenshot",
+    look_at="Enemy",             # str|int|list[float] - target to aim at
+    view_position=[0, 10, -10],  # list[float], optional - camera position
+    view_rotation=[45, 0, 0],    # list[float], optional - euler angles (overrides look_at aim)
+    max_resolution=512
+)
+
+# Frame scene view on target
+manage_scene(
+    action="scene_view_frame",
+    scene_view_target="Player"   # str|int - GO name, path, or instance ID to frame
+)
 
 # Other actions
 manage_scene(action="get_active")        # Current scene info
@@ -166,6 +233,14 @@ manage_gameobject(
     distance=5.0,
     world_space=True
 )
+
+# Look at target (rotates GO to face a point or another GO)
+manage_gameobject(
+    action="look_at",
+    target="MainCamera",         # the GO to rotate
+    look_at_target="Player",     # str (GO name/path) or list[float] world position
+    look_at_up=[0, 1, 0]        # optional up vector, default [0,1,0]
+)
 ```
 
 ### manage_components
@@ -207,6 +282,24 @@ manage_components(
         "localScale": [2, 2, 2]
     }
 )
+
+# Set object reference property (reference another GameObject by name)
+manage_components(
+    action="set_property",
+    target="GameManager",
+    component_type="GameManagerScript",
+    property="targetObjects",
+    value=[{"name": "Flower_1"}, {"name": "Flower_2"}, {"name": "Bee_1"}]
+)
+
+# Object reference formats supported:
+# - {"name": "ObjectName"}     → Find GameObject in scene by name
+# - {"instanceID": 12345}      → Direct instance ID reference
+# - {"guid": "abc123..."}      → Asset GUID reference
+# - {"path": "Assets/..."}     → Asset path reference
+# - "Assets/Prefabs/My.prefab" → String shorthand for asset paths
+# - "ObjectName"               → String shorthand for scene name lookup
+# - 12345                      → Integer shorthand for instanceID
 ```
 
 ---
@@ -449,7 +542,10 @@ manage_material(
     action="set_renderer_color",
     target="MyCube",
     color=[1, 0, 0, 1],
-    mode="instance"              # "shared"|"instance"|"property_block"
+    mode="create_unique"          # Creates a unique .mat asset per object (persistent)
+    # Other modes: "property_block" (default, not persistent),
+    #              "shared" (mutates shared material — avoid for primitives),
+    #              "instance" (runtime only, not persistent)
 )
 ```
 

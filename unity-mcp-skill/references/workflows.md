@@ -51,6 +51,73 @@ if editor_state["is_compiling"]:
 
 ---
 
+## Scene Generator Build Workflow
+
+### Fresh Scene Before Building
+
+**Always start a generated scene build with `manage_scene(action="create")`** to get a clean empty scene. This avoids conflicts with existing default objects (Camera, Light) that would cause "already exists" errors when the execution plan tries to create its own.
+
+```python
+# Step 0: Create fresh empty scene (replaces current scene entirely)
+manage_scene(action="create", name="MyGeneratedScene", path="Assets/Scenes/")
+
+# Now proceed with the phased execution plan...
+# Phase 1: Environment (camera, lights) — no conflicts
+# Phase 2: Objects (GameObjects)
+# Phase 3: Materials
+# etc.
+```
+
+### Wiring Object References Between Components
+
+After creating scripts and attaching components, use `set_property` to wire cross-references between GameObjects. Use the `{"name": "ObjectName"}` format to reference scene objects by name:
+
+```python
+# Wire a list of target GameObjects into a script's serialized field
+manage_components(
+    action="set_property",
+    target="BeeManager",
+    component_type="BeeManagerScript",
+    property="targetObjects",
+    value=[{"name": "Flower_1"}, {"name": "Flower_2"}, {"name": "Flower_3"}]
+)
+```
+
+### Physics Requirements for Trigger-Based Interactions
+
+When scripts use `OnTriggerEnter` / `OnTriggerStay` / `OnTriggerExit`, at least one of the two colliding objects **must** have a `Rigidbody` component. Common pattern:
+
+```python
+# Moving objects (bees, players) need Rigidbody for triggers to fire
+batch_execute(commands=[
+    {"tool": "manage_components", "params": {
+        "action": "add", "target": "Bee_1", "component_type": "Rigidbody"
+    }},
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "Bee_1",
+        "component_type": "Rigidbody",
+        "properties": {"useGravity": false, "isKinematic": true}
+    }}
+])
+```
+
+### Script Overwrites with `manage_script(action="update")`
+
+When a generated script needs to be rewritten (e.g., to add auto-wiring logic), use `update` instead of deleting and recreating:
+
+```python
+manage_script(
+    action="update",
+    path="Assets/Scripts/MyScript.cs",
+    contents="using UnityEngine;\n\npublic class MyScript : MonoBehaviour { ... }"
+)
+# Then refresh and check console
+refresh_unity(mode="force", scope="scripts", compile="request", wait_for_ready=True)
+read_console(types=["error"], count=10)
+```
+
+---
+
 ## Scene Creation Workflows
 
 ### Create Complete Scene from Scratch
@@ -498,10 +565,82 @@ Unity UI (Canvas-based UGUI) requires specific component hierarchies. Use `batch
 
 > **Template warning:** This section is a skill template library, not a guaranteed source of truth. Examples may be inaccurate for your Unity version, package setup, or project conventions.
 > **Use safely:**
-> 1. Validate component/property names against the current project.
-> 2. Prefer targeting by instance ID or full path over generic names.
-> 3. Assume complex controls (Slider/Toggle/TMP Input) may need extra reference wiring.
+> 1. **Always read `mcpforunity://project/info` first** to detect installed packages and input system.
+> 2. Validate component/property names against the current project.
+> 3. Prefer targeting by instance ID or full path over generic names.
 > 4. Treat numeric enum values as placeholders and verify before reuse.
+
+### Step 0: Detect Project UI Capabilities
+
+**Before creating any UI**, read project info to determine which packages and input system are available.
+
+```python
+# Read mcpforunity://project/info — returns:
+# {
+#   "renderPipeline": "BuiltIn" | "Universal" | "HighDefinition" | "Custom",
+#   "activeInputHandler": "Old" | "New" | "Both",
+#   "packages": {
+#     "ugui": true/false,        — com.unity.ugui (Canvas, Image, Button, etc.)
+#     "textmeshpro": true/false,  — com.unity.textmeshpro (TextMeshProUGUI)
+#     "inputsystem": true/false   — com.unity.inputsystem (new Input System)
+#   }
+# }
+```
+
+**Decision matrix:**
+
+| project_info field | Value | What to use |
+|---|---|---|
+| `packages.ugui` | `true` | Canvas-based UI (Image, Button, etc.) |
+| `packages.textmeshpro` | `true` | `TextMeshProUGUI` for text |
+| `packages.textmeshpro` | `false` | `UnityEngine.UI.Text` (legacy, lower quality) |
+| `activeInputHandler` | `"Old"` | `StandaloneInputModule` for EventSystem |
+| `activeInputHandler` | `"New"` | `InputSystemUIInputModule` for EventSystem |
+| `activeInputHandler` | `"Both"` | Either works; prefer `InputSystemUIInputModule` for UI |
+
+### RectTransform Sizing (Critical for All UI Children)
+
+Every GameObject under a Canvas gets a `RectTransform` instead of `Transform`. **Without setting anchor/size, UI elements default to zero size and won't be visible.** Use `set_property` on `RectTransform`:
+
+```python
+# Stretch to fill parent (common for panels/backgrounds)
+{"tool": "manage_components", "params": {
+    "action": "set_property", "target": "MyPanel",
+    "component_type": "RectTransform",
+    "properties": {
+        "anchorMin": [0, 0],        # bottom-left corner
+        "anchorMax": [1, 1],        # top-right corner
+        "sizeDelta": [0, 0],        # no extra size beyond anchors
+        "anchoredPosition": [0, 0]  # centered on anchors
+    }
+}}
+
+# Fixed-size centered element (e.g. 300x50 button)
+{"tool": "manage_components", "params": {
+    "action": "set_property", "target": "MyButton",
+    "component_type": "RectTransform",
+    "properties": {
+        "anchorMin": [0.5, 0.5],
+        "anchorMax": [0.5, 0.5],
+        "sizeDelta": [300, 50],
+        "anchoredPosition": [0, 0]
+    }
+}}
+
+# Top-anchored bar (e.g. health bar at top of screen)
+{"tool": "manage_components", "params": {
+    "action": "set_property", "target": "TopBar",
+    "component_type": "RectTransform",
+    "properties": {
+        "anchorMin": [0, 1],        # left-top
+        "anchorMax": [1, 1],        # right-top (stretch horizontally)
+        "sizeDelta": [0, 60],       # 60px tall, full width
+        "anchoredPosition": [0, -30] # offset down by half height
+    }
+}}
+```
+
+> **Note:** Vector2 properties accept both `[x, y]` array format and `{"x": ..., "y": ...}` object format.
 
 ### Create Canvas (Foundation for All UI)
 
@@ -541,9 +680,10 @@ batch_execute(fail_fast=True, commands=[
 
 ### Create EventSystem (Required Once Per Scene for UI Interaction)
 
-If no EventSystem exists in the scene, buttons and other interactive UI elements won't respond to input. Create one alongside your first Canvas.
+If no EventSystem exists in the scene, buttons and other interactive UI elements won't respond to input. Create one alongside your first Canvas. **Check `project_info.activeInputHandler` to pick the correct input module.**
 
 ```python
+# For activeInputHandler == "New" or "Both" (project has Input System package):
 batch_execute(fail_fast=True, commands=[
     {"tool": "manage_gameobject", "params": {
         "action": "create", "name": "EventSystem"
@@ -557,9 +697,22 @@ batch_execute(fail_fast=True, commands=[
         "component_type": "UnityEngine.InputSystem.UI.InputSystemUIInputModule"
     }}
 ])
-```
 
-> **Note:** For projects using legacy Input Manager instead of Input System, use `"component_type": "UnityEngine.EventSystems.StandaloneInputModule"` instead.
+# For activeInputHandler == "Old" (legacy Input Manager only):
+batch_execute(fail_fast=True, commands=[
+    {"tool": "manage_gameobject", "params": {
+        "action": "create", "name": "EventSystem"
+    }},
+    {"tool": "manage_components", "params": {
+        "action": "add", "target": "EventSystem",
+        "component_type": "UnityEngine.EventSystems.EventSystem"
+    }},
+    {"tool": "manage_components", "params": {
+        "action": "add", "target": "EventSystem",
+        "component_type": "UnityEngine.EventSystems.StandaloneInputModule"
+    }}
+])
+```
 
 ### Create Panel (Background Container)
 
@@ -573,18 +726,26 @@ batch_execute(fail_fast=True, commands=[
     {"tool": "manage_components", "params": {
         "action": "add", "target": "MenuPanel", "component_type": "Image"
     }},
-    # Set semi-transparent dark background
     {"tool": "manage_components", "params": {
         "action": "set_property", "target": "MenuPanel",
         "component_type": "Image", "property": "color",
         "value": [0.1, 0.1, 0.1, 0.8]
+    }},
+    # Size the panel (stretch to 60% of canvas, centered)
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "MenuPanel",
+        "component_type": "RectTransform",
+        "properties": {
+            "anchorMin": [0.2, 0.1], "anchorMax": [0.8, 0.9],
+            "sizeDelta": [0, 0], "anchoredPosition": [0, 0]
+        }
     }}
 ])
 ```
 
 ### Create Text (TextMeshPro)
 
-TextMeshProUGUI automatically adds a RectTransform when added to a child of a Canvas.
+TextMeshProUGUI automatically adds a RectTransform when added to a child of a Canvas. If `packages.textmeshpro` is `false`, use `UnityEngine.UI.Text` instead.
 
 ```python
 batch_execute(fail_fast=True, commands=[
@@ -604,6 +765,14 @@ batch_execute(fail_fast=True, commands=[
             "alignment": 514,
             "color": [1, 1, 1, 1]
         }
+    }},
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "TitleText",
+        "component_type": "RectTransform",
+        "properties": {
+            "anchorMin": [0, 0.8], "anchorMax": [1, 1],
+            "sizeDelta": [0, 0], "anchoredPosition": [0, 0]
+        }
     }}
 ])
 ```
@@ -616,7 +785,6 @@ A Button needs an `Image` (visual) + `Button` (interaction) on the parent, and a
 
 ```python
 batch_execute(fail_fast=True, commands=[
-    # Button container with Image + Button components
     {"tool": "manage_gameobject", "params": {
         "action": "create", "name": "StartButton", "parent": "MenuPanel"
     }},
@@ -631,7 +799,15 @@ batch_execute(fail_fast=True, commands=[
         "component_type": "Image", "property": "color",
         "value": [0.2, 0.6, 1.0, 1.0]
     }},
-    # Child text label
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "StartButton",
+        "component_type": "RectTransform",
+        "properties": {
+            "anchorMin": [0.5, 0.5], "anchorMax": [0.5, 0.5],
+            "sizeDelta": [300, 60], "anchoredPosition": [0, 0]
+        }
+    }},
+    # Child text label (stretches to fill button)
     {"tool": "manage_gameobject", "params": {
         "action": "create", "name": "StartButton_Label", "parent": "StartButton"
     }},
@@ -643,17 +819,25 @@ batch_execute(fail_fast=True, commands=[
         "action": "set_property", "target": "StartButton_Label",
         "component_type": "TextMeshProUGUI",
         "properties": {"text": "Start Game", "fontSize": 24, "alignment": 514}
+    }},
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "StartButton_Label",
+        "component_type": "RectTransform",
+        "properties": {
+            "anchorMin": [0, 0], "anchorMax": [1, 1],
+            "sizeDelta": [0, 0], "anchoredPosition": [0, 0]
+        }
     }}
 ])
 ```
 
-### Create Slider
+### Create Slider (With Reference Wiring)
 
-A Slider requires a specific hierarchy: the slider root, a background, a fill area with fill, and a handle area with handle.
+A Slider requires a specific hierarchy and **must have its `fillRect` and `handleRect` references wired** to function.
 
 ```python
+# Step 1: Create hierarchy
 batch_execute(fail_fast=True, commands=[
-    # Slider root
     {"tool": "manage_gameobject", "params": {
         "action": "create", "name": "HealthSlider", "parent": "MainCanvas"
     }},
@@ -663,49 +847,95 @@ batch_execute(fail_fast=True, commands=[
     {"tool": "manage_components", "params": {
         "action": "add", "target": "HealthSlider", "component_type": "Image"
     }},
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "HealthSlider",
+        "component_type": "RectTransform",
+        "properties": {
+            "anchorMin": [0.5, 0.5], "anchorMax": [0.5, 0.5],
+            "sizeDelta": [400, 30], "anchoredPosition": [0, 0]
+        }
+    }},
     # Background
     {"tool": "manage_gameobject", "params": {
-        "action": "create", "name": "Background", "parent": "HealthSlider"
+        "action": "create", "name": "SliderBG", "parent": "HealthSlider"
     }},
     {"tool": "manage_components", "params": {
-        "action": "add", "target": "Background", "component_type": "Image"
+        "action": "add", "target": "SliderBG", "component_type": "Image"
     }},
     {"tool": "manage_components", "params": {
-        "action": "set_property", "target": "Background",
-        "component_type": "Image", "property": "color",
-        "value": [0.3, 0.3, 0.3, 1.0]
+        "action": "set_property", "target": "SliderBG",
+        "component_type": "Image", "property": "color", "value": [0.3, 0.3, 0.3, 1.0]
+    }},
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "SliderBG",
+        "component_type": "RectTransform",
+        "properties": {"anchorMin": [0, 0], "anchorMax": [1, 1], "sizeDelta": [0, 0]}
     }},
     # Fill Area + Fill
     {"tool": "manage_gameobject", "params": {
-        "action": "create", "name": "Fill Area", "parent": "HealthSlider"
+        "action": "create", "name": "FillArea", "parent": "HealthSlider"
+    }},
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "FillArea",
+        "component_type": "RectTransform",
+        "properties": {"anchorMin": [0, 0], "anchorMax": [1, 1], "sizeDelta": [0, 0]}
     }},
     {"tool": "manage_gameobject", "params": {
-        "action": "create", "name": "Fill", "parent": "Fill Area"
+        "action": "create", "name": "SliderFill", "parent": "FillArea"
     }},
     {"tool": "manage_components", "params": {
-        "action": "add", "target": "Fill", "component_type": "Image"
+        "action": "add", "target": "SliderFill", "component_type": "Image"
     }},
     {"tool": "manage_components", "params": {
-        "action": "set_property", "target": "Fill",
-        "component_type": "Image", "property": "color",
-        "value": [0.2, 0.8, 0.2, 1.0]
+        "action": "set_property", "target": "SliderFill",
+        "component_type": "Image", "property": "color", "value": [0.2, 0.8, 0.2, 1.0]
+    }},
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "SliderFill",
+        "component_type": "RectTransform",
+        "properties": {"anchorMin": [0, 0], "anchorMax": [1, 1], "sizeDelta": [0, 0]}
     }},
     # Handle Area + Handle
     {"tool": "manage_gameobject", "params": {
-        "action": "create", "name": "Handle Slide Area", "parent": "HealthSlider"
-    }},
-    {"tool": "manage_gameobject", "params": {
-        "action": "create", "name": "Handle", "parent": "Handle Slide Area"
+        "action": "create", "name": "HandleArea", "parent": "HealthSlider"
     }},
     {"tool": "manage_components", "params": {
-        "action": "add", "target": "Handle", "component_type": "Image"
+        "action": "set_property", "target": "HandleArea",
+        "component_type": "RectTransform",
+        "properties": {"anchorMin": [0, 0], "anchorMax": [1, 1], "sizeDelta": [0, 0]}
+    }},
+    {"tool": "manage_gameobject", "params": {
+        "action": "create", "name": "SliderHandle", "parent": "HandleArea"
+    }},
+    {"tool": "manage_components", "params": {
+        "action": "add", "target": "SliderHandle", "component_type": "Image"
+    }},
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "SliderHandle",
+        "component_type": "RectTransform",
+        "properties": {"anchorMin": [0.5, 0], "anchorMax": [0.5, 1], "sizeDelta": [20, 0]}
+    }}
+])
+
+# Step 2: Wire Slider references (CRITICAL — slider won't work without this)
+batch_execute(fail_fast=True, commands=[
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "HealthSlider",
+        "component_type": "Slider", "property": "fillRect",
+        "value": {"name": "SliderFill"}
+    }},
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "HealthSlider",
+        "component_type": "Slider", "property": "handleRect",
+        "value": {"name": "SliderHandle"}
     }}
 ])
 ```
 
-### Create Input Field (TextMeshPro)
+### Create Input Field (With Reference Wiring)
 
 ```python
+# Step 1: Create hierarchy
 batch_execute(fail_fast=True, commands=[
     {"tool": "manage_gameobject", "params": {
         "action": "create", "name": "NameInput", "parent": "MenuPanel"
@@ -717,39 +947,78 @@ batch_execute(fail_fast=True, commands=[
         "action": "add", "target": "NameInput",
         "component_type": "TMP_InputField"
     }},
-    # Text area child
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "NameInput",
+        "component_type": "RectTransform",
+        "properties": {
+            "anchorMin": [0.5, 0.5], "anchorMax": [0.5, 0.5],
+            "sizeDelta": [400, 50], "anchoredPosition": [0, 0]
+        }
+    }},
+    # Text Area child (clips text to input bounds)
     {"tool": "manage_gameobject", "params": {
-        "action": "create", "name": "Text Area", "parent": "NameInput"
+        "action": "create", "name": "InputTextArea", "parent": "NameInput"
     }},
     {"tool": "manage_components", "params": {
-        "action": "add", "target": "Text Area",
-        "component_type": "RectMask2D"
+        "action": "add", "target": "InputTextArea", "component_type": "RectMask2D"
+    }},
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "InputTextArea",
+        "component_type": "RectTransform",
+        "properties": {"anchorMin": [0, 0], "anchorMax": [1, 1], "sizeDelta": [-16, -8]}
     }},
     # Placeholder
     {"tool": "manage_gameobject", "params": {
-        "action": "create", "name": "Placeholder", "parent": "Text Area"
+        "action": "create", "name": "InputPlaceholder", "parent": "InputTextArea"
     }},
     {"tool": "manage_components", "params": {
-        "action": "add", "target": "Placeholder",
-        "component_type": "TextMeshProUGUI"
+        "action": "add", "target": "InputPlaceholder", "component_type": "TextMeshProUGUI"
     }},
     {"tool": "manage_components", "params": {
-        "action": "set_property", "target": "Placeholder",
+        "action": "set_property", "target": "InputPlaceholder",
         "component_type": "TextMeshProUGUI",
         "properties": {"text": "Enter name...", "fontStyle": 2, "color": [0.5, 0.5, 0.5, 0.5]}
     }},
-    # Actual text
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "InputPlaceholder",
+        "component_type": "RectTransform",
+        "properties": {"anchorMin": [0, 0], "anchorMax": [1, 1], "sizeDelta": [0, 0]}
+    }},
+    # Actual text display
     {"tool": "manage_gameobject", "params": {
-        "action": "create", "name": "Text", "parent": "Text Area"
+        "action": "create", "name": "InputText", "parent": "InputTextArea"
     }},
     {"tool": "manage_components", "params": {
-        "action": "add", "target": "Text",
-        "component_type": "TextMeshProUGUI"
+        "action": "add", "target": "InputText", "component_type": "TextMeshProUGUI"
+    }},
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "InputText",
+        "component_type": "RectTransform",
+        "properties": {"anchorMin": [0, 0], "anchorMax": [1, 1], "sizeDelta": [0, 0]}
+    }}
+])
+
+# Step 2: Wire TMP_InputField references (CRITICAL)
+batch_execute(fail_fast=True, commands=[
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "NameInput",
+        "component_type": "TMP_InputField", "property": "textViewport",
+        "value": {"name": "InputTextArea"}
+    }},
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "NameInput",
+        "component_type": "TMP_InputField", "property": "textComponent",
+        "value": {"name": "InputText"}
+    }},
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "NameInput",
+        "component_type": "TMP_InputField", "property": "placeholder",
+        "value": {"name": "InputPlaceholder"}
     }}
 ])
 ```
 
-### Create Toggle (Checkbox)
+### Create Toggle (With Reference Wiring)
 
 ```python
 batch_execute(fail_fast=True, commands=[
@@ -759,41 +1028,72 @@ batch_execute(fail_fast=True, commands=[
     {"tool": "manage_components", "params": {
         "action": "add", "target": "SoundToggle", "component_type": "Toggle"
     }},
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "SoundToggle",
+        "component_type": "RectTransform",
+        "properties": {
+            "anchorMin": [0.5, 0.5], "anchorMax": [0.5, 0.5],
+            "sizeDelta": [200, 30], "anchoredPosition": [0, 0]
+        }
+    }},
     # Background box
     {"tool": "manage_gameobject", "params": {
-        "action": "create", "name": "Background", "parent": "SoundToggle"
+        "action": "create", "name": "ToggleBG", "parent": "SoundToggle"
     }},
     {"tool": "manage_components", "params": {
-        "action": "add", "target": "Background", "component_type": "Image"
+        "action": "add", "target": "ToggleBG", "component_type": "Image"
+    }},
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "ToggleBG",
+        "component_type": "RectTransform",
+        "properties": {"anchorMin": [0, 0.5], "anchorMax": [0, 0.5], "sizeDelta": [26, 26], "anchoredPosition": [13, 0]}
     }},
     # Checkmark
     {"tool": "manage_gameobject", "params": {
-        "action": "create", "name": "Checkmark", "parent": "Background"
+        "action": "create", "name": "ToggleCheckmark", "parent": "ToggleBG"
     }},
     {"tool": "manage_components", "params": {
-        "action": "add", "target": "Checkmark", "component_type": "Image"
+        "action": "add", "target": "ToggleCheckmark", "component_type": "Image"
+    }},
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "ToggleCheckmark",
+        "component_type": "RectTransform",
+        "properties": {"anchorMin": [0.1, 0.1], "anchorMax": [0.9, 0.9], "sizeDelta": [0, 0]}
     }},
     # Label
     {"tool": "manage_gameobject", "params": {
-        "action": "create", "name": "Label", "parent": "SoundToggle"
+        "action": "create", "name": "ToggleLabel", "parent": "SoundToggle"
     }},
     {"tool": "manage_components", "params": {
-        "action": "add", "target": "Label", "component_type": "TextMeshProUGUI"
+        "action": "add", "target": "ToggleLabel", "component_type": "TextMeshProUGUI"
     }},
     {"tool": "manage_components", "params": {
-        "action": "set_property", "target": "Label",
+        "action": "set_property", "target": "ToggleLabel",
         "component_type": "TextMeshProUGUI",
         "properties": {"text": "Sound Effects", "fontSize": 18, "alignment": 513}
+    }},
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "ToggleLabel",
+        "component_type": "RectTransform",
+        "properties": {"anchorMin": [0, 0], "anchorMax": [1, 1], "sizeDelta": [-35, 0], "anchoredPosition": [17.5, 0]}
+    }}
+])
+
+# Wire Toggle references (CRITICAL)
+batch_execute(fail_fast=True, commands=[
+    {"tool": "manage_components", "params": {
+        "action": "set_property", "target": "SoundToggle",
+        "component_type": "Toggle", "property": "graphic",
+        "value": {"name": "ToggleCheckmark"}
     }}
 ])
 ```
 
 ### Add Layout Group (Vertical/Horizontal/Grid)
 
-Layout groups auto-arrange child elements. Add to any container.
+Layout groups auto-arrange child elements, so you can skip manual RectTransform positioning for children.
 
 ```python
-# Vertical layout for a menu panel
 batch_execute(fail_fast=True, commands=[
     {"tool": "manage_components", "params": {
         "action": "add", "target": "MenuPanel",
@@ -804,12 +1104,12 @@ batch_execute(fail_fast=True, commands=[
         "component_type": "VerticalLayoutGroup",
         "properties": {
             "spacing": 10,
-            "childAlignment": 1,
+            "childAlignment": 4,
             "childForceExpandWidth": True,
-            "childForceExpandHeight": False
+            "childForceExpandHeight": False,
+            "padding": {"left": 20, "right": 20, "top": 20, "bottom": 20}
         }
     }},
-    # Add ContentSizeFitter to auto-resize
     {"tool": "manage_components", "params": {
         "action": "add", "target": "MenuPanel",
         "component_type": "ContentSizeFitter"
@@ -817,9 +1117,7 @@ batch_execute(fail_fast=True, commands=[
     {"tool": "manage_components", "params": {
         "action": "set_property", "target": "MenuPanel",
         "component_type": "ContentSizeFitter",
-        "properties": {
-            "verticalFit": 2
-        }
+        "properties": { "verticalFit": 2 }
     }}
 ])
 ```
@@ -829,7 +1127,7 @@ batch_execute(fail_fast=True, commands=[
 
 ### Complete Example: Main Menu Screen
 
-Combines multiple templates into a full menu screen in two batch calls (default 25 command limit per batch, configurable in Unity MCP Tools window up to 100).
+Combines multiple templates into a full menu screen in two batch calls (default 25 command limit per batch, configurable in Unity MCP Tools window up to 100). **Assumes `project_info` has been read and `activeInputHandler` is known.**
 
 ```python
 # Batch 1: Canvas + EventSystem + Panel + Title
@@ -841,14 +1139,15 @@ batch_execute(fail_fast=True, commands=[
     {"tool": "manage_components", "params": {"action": "add", "target": "MenuCanvas", "component_type": "GraphicRaycaster"}},
     {"tool": "manage_components", "params": {"action": "set_property", "target": "MenuCanvas", "component_type": "Canvas", "property": "renderMode", "value": 0}},
     {"tool": "manage_components", "params": {"action": "set_property", "target": "MenuCanvas", "component_type": "CanvasScaler", "properties": {"uiScaleMode": 1, "referenceResolution": [1920, 1080]}}},
-    # EventSystem
+    # EventSystem — use StandaloneInputModule OR InputSystemUIInputModule based on project_info
     {"tool": "manage_gameobject", "params": {"action": "create", "name": "EventSystem"}},
     {"tool": "manage_components", "params": {"action": "add", "target": "EventSystem", "component_type": "UnityEngine.EventSystems.EventSystem"}},
     {"tool": "manage_components", "params": {"action": "add", "target": "EventSystem", "component_type": "UnityEngine.EventSystems.StandaloneInputModule"}},
-    # Panel
+    # Panel (centered, 60% width)
     {"tool": "manage_gameobject", "params": {"action": "create", "name": "MenuPanel", "parent": "MenuCanvas"}},
     {"tool": "manage_components", "params": {"action": "add", "target": "MenuPanel", "component_type": "Image"}},
     {"tool": "manage_components", "params": {"action": "set_property", "target": "MenuPanel", "component_type": "Image", "property": "color", "value": [0.1, 0.1, 0.15, 0.9]}},
+    {"tool": "manage_components", "params": {"action": "set_property", "target": "MenuPanel", "component_type": "RectTransform", "properties": {"anchorMin": [0.2, 0.15], "anchorMax": [0.8, 0.85], "sizeDelta": [0, 0]}}},
     {"tool": "manage_components", "params": {"action": "add", "target": "MenuPanel", "component_type": "VerticalLayoutGroup"}},
     {"tool": "manage_components", "params": {"action": "set_property", "target": "MenuPanel", "component_type": "VerticalLayoutGroup", "properties": {"spacing": 20, "childAlignment": 4, "childForceExpandWidth": True, "childForceExpandHeight": False}}},
     # Title
@@ -864,25 +1163,28 @@ batch_execute(fail_fast=True, commands=[
     {"tool": "manage_components", "params": {"action": "add", "target": "PlayButton", "component_type": "Image"}},
     {"tool": "manage_components", "params": {"action": "add", "target": "PlayButton", "component_type": "Button"}},
     {"tool": "manage_components", "params": {"action": "set_property", "target": "PlayButton", "component_type": "Image", "property": "color", "value": [0.2, 0.6, 1.0, 1.0]}},
-    {"tool": "manage_gameobject", "params": {"action": "create", "name": "PlayButton_Label", "parent": "PlayButton"}},
-    {"tool": "manage_components", "params": {"action": "add", "target": "PlayButton_Label", "component_type": "TextMeshProUGUI"}},
-    {"tool": "manage_components", "params": {"action": "set_property", "target": "PlayButton_Label", "component_type": "TextMeshProUGUI", "properties": {"text": "Play", "fontSize": 32, "alignment": 514}}},
+    {"tool": "manage_gameobject", "params": {"action": "create", "name": "PlayLabel", "parent": "PlayButton"}},
+    {"tool": "manage_components", "params": {"action": "add", "target": "PlayLabel", "component_type": "TextMeshProUGUI"}},
+    {"tool": "manage_components", "params": {"action": "set_property", "target": "PlayLabel", "component_type": "TextMeshProUGUI", "properties": {"text": "Play", "fontSize": 32, "alignment": 514}}},
+    {"tool": "manage_components", "params": {"action": "set_property", "target": "PlayLabel", "component_type": "RectTransform", "properties": {"anchorMin": [0, 0], "anchorMax": [1, 1], "sizeDelta": [0, 0]}}},
     # Settings Button
     {"tool": "manage_gameobject", "params": {"action": "create", "name": "SettingsButton", "parent": "MenuPanel"}},
     {"tool": "manage_components", "params": {"action": "add", "target": "SettingsButton", "component_type": "Image"}},
     {"tool": "manage_components", "params": {"action": "add", "target": "SettingsButton", "component_type": "Button"}},
     {"tool": "manage_components", "params": {"action": "set_property", "target": "SettingsButton", "component_type": "Image", "property": "color", "value": [0.3, 0.3, 0.35, 1.0]}},
-    {"tool": "manage_gameobject", "params": {"action": "create", "name": "SettingsButton_Label", "parent": "SettingsButton"}},
-    {"tool": "manage_components", "params": {"action": "add", "target": "SettingsButton_Label", "component_type": "TextMeshProUGUI"}},
-    {"tool": "manage_components", "params": {"action": "set_property", "target": "SettingsButton_Label", "component_type": "TextMeshProUGUI", "properties": {"text": "Settings", "fontSize": 32, "alignment": 514}}},
+    {"tool": "manage_gameobject", "params": {"action": "create", "name": "SettingsLabel", "parent": "SettingsButton"}},
+    {"tool": "manage_components", "params": {"action": "add", "target": "SettingsLabel", "component_type": "TextMeshProUGUI"}},
+    {"tool": "manage_components", "params": {"action": "set_property", "target": "SettingsLabel", "component_type": "TextMeshProUGUI", "properties": {"text": "Settings", "fontSize": 32, "alignment": 514}}},
+    {"tool": "manage_components", "params": {"action": "set_property", "target": "SettingsLabel", "component_type": "RectTransform", "properties": {"anchorMin": [0, 0], "anchorMax": [1, 1], "sizeDelta": [0, 0]}}},
     # Quit Button
     {"tool": "manage_gameobject", "params": {"action": "create", "name": "QuitButton", "parent": "MenuPanel"}},
     {"tool": "manage_components", "params": {"action": "add", "target": "QuitButton", "component_type": "Image"}},
     {"tool": "manage_components", "params": {"action": "add", "target": "QuitButton", "component_type": "Button"}},
     {"tool": "manage_components", "params": {"action": "set_property", "target": "QuitButton", "component_type": "Image", "property": "color", "value": [0.8, 0.2, 0.2, 1.0]}},
-    {"tool": "manage_gameobject", "params": {"action": "create", "name": "QuitButton_Label", "parent": "QuitButton"}},
-    {"tool": "manage_components", "params": {"action": "add", "target": "QuitButton_Label", "component_type": "TextMeshProUGUI"}},
-    {"tool": "manage_components", "params": {"action": "set_property", "target": "QuitButton_Label", "component_type": "TextMeshProUGUI", "properties": {"text": "Quit", "fontSize": 32, "alignment": 514}}}
+    {"tool": "manage_gameobject", "params": {"action": "create", "name": "QuitLabel", "parent": "QuitButton"}},
+    {"tool": "manage_components", "params": {"action": "add", "target": "QuitLabel", "component_type": "TextMeshProUGUI"}},
+    {"tool": "manage_components", "params": {"action": "set_property", "target": "QuitLabel", "component_type": "TextMeshProUGUI", "properties": {"text": "Quit", "fontSize": 32, "alignment": 514}}},
+    {"tool": "manage_components", "params": {"action": "set_property", "target": "QuitLabel", "component_type": "RectTransform", "properties": {"anchorMin": [0, 0], "anchorMax": [1, 1], "sizeDelta": [0, 0]}}}
 ])
 ```
 
@@ -891,17 +1193,130 @@ batch_execute(fail_fast=True, commands=[
 | UI Element | Required Components | Notes |
 | ---------- | ------------------- | ----- |
 | **Canvas** | Canvas + CanvasScaler + GraphicRaycaster | Root for all UI. One per screen. |
-| **EventSystem** | EventSystem + StandaloneInputModule (or InputSystemUIInputModule) | One per scene. Required for interaction. |
-| **Panel** | Image | Container. Set color for background. |
-| **Text** | TextMeshProUGUI | Auto-adds RectTransform under Canvas. |
-| **Button** | Image + Button + child(TextMeshProUGUI) | Image = visual, Button = click handler. |
-| **Image** | Image | Set sprite property for custom graphics. |
-| **Slider** | Slider + Image + children(Background, Fill Area/Fill, Handle Slide Area/Handle) | Complex hierarchy. |
-| **Toggle** | Toggle + children(Background/Checkmark, Label) | Checkbox/radio button. |
-| **Input Field** | Image + TMP_InputField + children(Text Area/Placeholder/Text) | Text input. |
-| **Scroll View** | ScrollRect + Image + children(Viewport/Content, Scrollbar) | Scrollable container. |
-| **Dropdown** | Image + TMP_Dropdown + children(Label, Arrow, Template) | Selection menu. |
-| **Layout Group** | VerticalLayoutGroup / HorizontalLayoutGroup / GridLayoutGroup | Add to any container to auto-arrange children. |
+| **EventSystem** | EventSystem + input module (see below) | One per scene. Required for interaction. |
+| **Panel** | Image + RectTransform sizing | Container. Set color for background. |
+| **Text** | TextMeshProUGUI (or Text if no TMP) + RectTransform | Check `packages.textmeshpro`. |
+| **Button** | Image + Button + child(TextMeshProUGUI) + RectTransform | Image = visual, Button = click handler. |
+| **Slider** | Slider + Image + children + **wire fillRect/handleRect** | Won't function without wiring. |
+| **Toggle** | Toggle + children + **wire graphic** | Wire checkmark Image to `graphic`. |
+| **Input Field** | Image + TMP_InputField + children + **wire textViewport/textComponent/placeholder** | Won't function without wiring. |
+| **Layout Group** | VerticalLayoutGroup / HorizontalLayoutGroup / GridLayoutGroup | Auto-arranges children; skip manual RectTransform on children. |
+
+---
+
+## Input System: Old vs New
+
+Unity has two input systems that affect UI interaction, script input handling, and EventSystem configuration. **Always check `project_info.activeInputHandler` before creating EventSystems or writing input code.**
+
+### Detection
+
+```python
+# Read mcpforunity://project/info
+# activeInputHandler: "Old" | "New" | "Both"
+# packages.inputsystem: true/false (whether com.unity.inputsystem is installed)
+```
+
+### EventSystem — Old Input Manager
+
+Used when `activeInputHandler` is `"Old"`. Uses `StandaloneInputModule` which reads from `Input.GetAxis()` / `Input.GetButton()`.
+
+```python
+batch_execute(fail_fast=True, commands=[
+    {"tool": "manage_gameobject", "params": {"action": "create", "name": "EventSystem"}},
+    {"tool": "manage_components", "params": {
+        "action": "add", "target": "EventSystem",
+        "component_type": "UnityEngine.EventSystems.EventSystem"
+    }},
+    {"tool": "manage_components", "params": {
+        "action": "add", "target": "EventSystem",
+        "component_type": "UnityEngine.EventSystems.StandaloneInputModule"
+    }}
+])
+```
+
+Script pattern (old Input Manager):
+
+```csharp
+// Input.GetAxis / Input.GetKey — works with old Input Manager
+void Update()
+{
+    float h = Input.GetAxis("Horizontal");
+    float v = Input.GetAxis("Vertical");
+    transform.Translate(new Vector3(h, 0, v) * speed * Time.deltaTime);
+
+    if (Input.GetKeyDown(KeyCode.Space))
+        Jump();
+
+    if (Input.GetMouseButtonDown(0))
+        Fire();
+}
+```
+
+### EventSystem — New Input System
+
+Used when `activeInputHandler` is `"New"` or `"Both"`. Uses `InputSystemUIInputModule` from the `com.unity.inputsystem` package.
+
+```python
+batch_execute(fail_fast=True, commands=[
+    {"tool": "manage_gameobject", "params": {"action": "create", "name": "EventSystem"}},
+    {"tool": "manage_components", "params": {
+        "action": "add", "target": "EventSystem",
+        "component_type": "UnityEngine.EventSystems.EventSystem"
+    }},
+    {"tool": "manage_components", "params": {
+        "action": "add", "target": "EventSystem",
+        "component_type": "UnityEngine.InputSystem.UI.InputSystemUIInputModule"
+    }}
+])
+```
+
+Script pattern (new Input System with `PlayerInput` component):
+
+```csharp
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+public class PlayerController : MonoBehaviour
+{
+    public float speed = 5f;
+    private Vector2 moveInput;
+
+    // Called by PlayerInput component via SendMessages or UnityEvents
+    public void OnMove(InputValue value)
+    {
+        moveInput = value.Get<Vector2>();
+    }
+
+    public void OnJump(InputValue value)
+    {
+        if (value.isPressed)
+            Jump();
+    }
+
+    void Update()
+    {
+        Vector3 move = new Vector3(moveInput.x, 0, moveInput.y);
+        transform.Translate(move * speed * Time.deltaTime);
+    }
+}
+```
+
+### When `activeInputHandler` is `"Both"`
+
+Both systems are active simultaneously. For UI, prefer `InputSystemUIInputModule`. For gameplay scripts, either approach works — `Input.GetAxis()` still functions alongside the new Input System.
+
+```python
+# UI: use new Input System module
+{"tool": "manage_components", "params": {
+    "action": "add", "target": "EventSystem",
+    "component_type": "UnityEngine.InputSystem.UI.InputSystemUIInputModule"
+}}
+
+# Gameplay scripts: Input.GetAxis() still works in "Both" mode
+# But prefer the new Input System for consistency
+```
+
+> **Gotcha:** Adding `StandaloneInputModule` when `activeInputHandler` is `"New"` will cause a runtime error. Always check first.
 
 ---
 

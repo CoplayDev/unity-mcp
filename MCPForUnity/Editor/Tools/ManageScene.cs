@@ -27,6 +27,18 @@ namespace MCPForUnity.Editor.Tools
             public string fileName { get; set; } = string.Empty;
             public int? superSize { get; set; }
 
+            // screenshot: camera selection, inline image, batch, view positioning
+            public string camera { get; set; }
+            public bool? includeImage { get; set; }
+            public int? maxResolution { get; set; }
+            public string batch { get; set; }           // "surround" for multi-angle batch capture
+            public JToken lookAt { get; set; }          // GO reference or [x,y,z] to aim at before capture
+            public Vector3? viewPosition { get; set; }  // camera position for view-based capture
+            public Vector3? viewRotation { get; set; }  // euler rotation for view-based capture
+
+            // scene_view_frame
+            public JToken sceneViewTarget { get; set; }
+
             // get_hierarchy paging + safety (summary-first)
             public JToken parent { get; set; }
             public int? pageSize { get; set; }
@@ -48,6 +60,18 @@ namespace MCPForUnity.Editor.Tools
                 buildIndex = ParamCoercion.CoerceIntNullable(p["buildIndex"] ?? p["build_index"]),
                 fileName = (p["fileName"] ?? p["filename"])?.ToString() ?? string.Empty,
                 superSize = ParamCoercion.CoerceIntNullable(p["superSize"] ?? p["super_size"] ?? p["supersize"]),
+
+                // screenshot: camera selection, inline image, batch, view positioning
+                camera = (p["camera"])?.ToString(),
+                includeImage = ParamCoercion.CoerceBoolNullable(p["includeImage"] ?? p["include_image"]),
+                maxResolution = ParamCoercion.CoerceIntNullable(p["maxResolution"] ?? p["max_resolution"]),
+                batch = (p["batch"])?.ToString(),
+                lookAt = p["lookAt"] ?? p["look_at"],
+                viewPosition = VectorParsing.ParseVector3(p["viewPosition"] ?? p["view_position"]),
+                viewRotation = VectorParsing.ParseVector3(p["viewRotation"] ?? p["view_rotation"]),
+
+                // scene_view_frame
+                sceneViewTarget = p["sceneViewTarget"] ?? p["scene_view_target"],
 
                 // get_hierarchy paging + safety
                 parent = p["parent"],
@@ -157,11 +181,12 @@ namespace MCPForUnity.Editor.Tools
                 case "get_build_settings":
                     return GetBuildSettingsScenes();
                 case "screenshot":
-                    return CaptureScreenshot(cmd.fileName, cmd.superSize);
-                // Add cases for modifying build settings, additive loading, unloading etc.
+                    return CaptureScreenshot(cmd);
+                case "scene_view_frame":
+                    return FrameSceneView(cmd);
                 default:
                     return new ErrorResponse(
-                        $"Unknown action: '{action}'. Valid actions: create, load, save, get_hierarchy, get_active, get_build_settings, screenshot."
+                        $"Unknown action: '{action}'. Valid actions: create, load, save, get_hierarchy, get_active, get_build_settings, screenshot, scene_view_frame."
                     );
             }
         }
@@ -173,7 +198,8 @@ namespace MCPForUnity.Editor.Tools
         /// </summary>
         public static object ExecuteScreenshot(string fileName = null, int? superSize = null)
         {
-            return CaptureScreenshot(fileName, superSize);
+            var cmd = new SceneCommand { fileName = fileName ?? string.Empty, superSize = superSize };
+            return CaptureScreenshot(cmd);
         }
 
         private static object CreateScene(string fullPath, string relativePath)
@@ -355,11 +381,29 @@ namespace MCPForUnity.Editor.Tools
             }
         }
 
-        private static object CaptureScreenshot(string fileName, int? superSize)
+        private static object CaptureScreenshot(SceneCommand cmd)
         {
             try
             {
-                int resolvedSuperSize = (superSize.HasValue && superSize.Value > 0) ? superSize.Value : 1;
+                // Batch capture (e.g., "surround" for 6 angles around the scene)
+                if (!string.IsNullOrEmpty(cmd.batch))
+                {
+                    if (cmd.batch.Equals("surround", StringComparison.OrdinalIgnoreCase))
+                        return CaptureSurroundBatch(cmd);
+                    return new ErrorResponse($"Unknown batch mode: '{cmd.batch}'. Valid modes: 'surround'.");
+                }
+
+                // Positioned view-based capture (creates temp camera at view_position, aimed at look_at)
+                if ((cmd.lookAt != null && cmd.lookAt.Type != JTokenType.Null) || cmd.viewPosition.HasValue)
+                {
+                    return CapturePositionedScreenshot(cmd);
+                }
+
+                string fileName = cmd.fileName;
+                int resolvedSuperSize = (cmd.superSize.HasValue && cmd.superSize.Value > 0) ? cmd.superSize.Value : 1;
+                bool includeImage = cmd.includeImage ?? false;
+                int maxResolution = cmd.maxResolution ?? 0; // 0 = let ScreenshotUtility default to 640
+                string cameraRef = cmd.camera;
 
                 // Batch mode warning
                 if (Application.isBatchMode)
@@ -367,7 +411,62 @@ namespace MCPForUnity.Editor.Tools
                     McpLog.Warn("[ManageScene] Screenshot capture in batch mode uses camera-based fallback. Results may vary.");
                 }
 
-                // Check Screen Capture module availability and warn if not available
+                // Resolve camera target
+                Camera targetCamera = null;
+                if (!string.IsNullOrEmpty(cameraRef))
+                {
+                    targetCamera = ResolveCamera(cameraRef);
+                    if (targetCamera == null)
+                    {
+                        return new ErrorResponse($"Camera '{cameraRef}' not found. Provide a Camera GameObject name, path, or instance ID.");
+                    }
+                }
+
+                // When a specific camera is requested or include_image is true, always use camera-based capture
+                // (synchronous, gives us bytes in memory for base64).
+                if (targetCamera != null || includeImage)
+                {
+                    if (targetCamera == null)
+                    {
+                        targetCamera = Camera.main;
+                        if (targetCamera == null)
+                        {
+                            var allCams = UnityEngine.Object.FindObjectsOfType<Camera>();
+                            targetCamera = allCams.Length > 0 ? allCams[0] : null;
+                        }
+                    }
+                    if (targetCamera == null)
+                    {
+                        return new ErrorResponse("No camera found in the scene. Add a Camera to use screenshot with camera or include_image.");
+                    }
+
+                    if (!Application.isBatchMode) EnsureGameView();
+
+                    ScreenshotCaptureResult result = ScreenshotUtility.CaptureFromCameraToAssetsFolder(
+                        targetCamera, fileName, resolvedSuperSize, ensureUniqueFileName: true,
+                        includeImage: includeImage, maxResolution: maxResolution);
+
+                    AssetDatabase.ImportAsset(result.AssetsRelativePath, ImportAssetOptions.ForceSynchronousImport);
+                    string message = $"Screenshot captured to '{result.AssetsRelativePath}' (camera: {targetCamera.name}).";
+
+                    var data = new Dictionary<string, object>
+                    {
+                        { "path", result.AssetsRelativePath },
+                        { "fullPath", result.FullPath },
+                        { "superSize", result.SuperSize },
+                        { "isAsync", false },
+                        { "camera", targetCamera.name },
+                    };
+                    if (includeImage && result.ImageBase64 != null)
+                    {
+                        data["imageBase64"] = result.ImageBase64;
+                        data["imageWidth"] = result.ImageWidth;
+                        data["imageHeight"] = result.ImageHeight;
+                    }
+                    return new SuccessResponse(message, data);
+                }
+
+                // Default path: use ScreenCapture API if available, camera fallback otherwise
                 bool screenCaptureAvailable = ScreenshotUtility.IsScreenCaptureModuleAvailable;
                 bool hasCameraFallback = Camera.main != null || UnityEngine.Object.FindObjectsOfType<Camera>().Length > 0;
 
@@ -380,57 +479,366 @@ namespace MCPForUnity.Editor.Tools
                         "or (2) Add a Camera to your scene for camera-based fallback capture."
                     );
                 }
-                
                 if (!screenCaptureAvailable)
                 {
-                    McpLog.Warn("[ManageScene] Screen Capture module not enabled. Using camera-based fallback. " +
-                        "For best results, enable it: Window > Package Manager > Built-in > Screen Capture > Enable.");
+                    McpLog.Warn("[ManageScene] Screen Capture module not enabled. Using camera-based fallback.");
                 }
 #else
                 if (!hasCameraFallback)
                 {
                     return new ErrorResponse(
-                        "No camera found in the scene. Screenshot capture on Unity versions before 2022.1 requires a Camera in the scene. " +
-                        "Please add a Camera to your scene or upgrade to Unity 2022.1+ for ScreenCapture API support."
+                        "No camera found in the scene. Screenshot capture on Unity versions before 2022.1 requires a Camera in the scene."
                     );
                 }
 #endif
 
-                // Best-effort: ensure Game View exists and repaints before capture.
-                if (!Application.isBatchMode)
-                {
-                    EnsureGameView();
-                }
+                if (!Application.isBatchMode) EnsureGameView();
 
-                ScreenshotCaptureResult result = ScreenshotUtility.CaptureToAssetsFolder(fileName, resolvedSuperSize, ensureUniqueFileName: true);
+                ScreenshotCaptureResult defaultResult = ScreenshotUtility.CaptureToAssetsFolder(fileName, resolvedSuperSize, ensureUniqueFileName: true);
 
-                // ScreenCapture.CaptureScreenshot is async. Import after the file actually hits disk.
-                if (result.IsAsync)
-                {
-                    ScheduleAssetImportWhenFileExists(result.AssetsRelativePath, result.FullPath, timeoutSeconds: 30.0);
-                }
+                if (defaultResult.IsAsync)
+                    ScheduleAssetImportWhenFileExists(defaultResult.AssetsRelativePath, defaultResult.FullPath, timeoutSeconds: 30.0);
                 else
-                {
-                    AssetDatabase.ImportAsset(result.AssetsRelativePath, ImportAssetOptions.ForceSynchronousImport);
-                }
+                    AssetDatabase.ImportAsset(defaultResult.AssetsRelativePath, ImportAssetOptions.ForceSynchronousImport);
 
-                string verb = result.IsAsync ? "Screenshot requested" : "Screenshot captured";
-                string message = $"{verb} to '{result.AssetsRelativePath}' (full: {result.FullPath}).";
-
+                string verb = defaultResult.IsAsync ? "Screenshot requested" : "Screenshot captured";
                 return new SuccessResponse(
-                    message,
+                    $"{verb} to '{defaultResult.AssetsRelativePath}'.",
                     new
                     {
-                        path = result.AssetsRelativePath,
-                        fullPath = result.FullPath,
-                        superSize = result.SuperSize,
-                        isAsync = result.IsAsync,
+                        path = defaultResult.AssetsRelativePath,
+                        fullPath = defaultResult.FullPath,
+                        superSize = defaultResult.SuperSize,
+                        isAsync = defaultResult.IsAsync,
                     }
                 );
             }
             catch (Exception e)
             {
                 return new ErrorResponse($"Error capturing screenshot: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Captures screenshots from 6 angles around scene bounds (or a look_at target) for AI scene understanding.
+        /// Does NOT save to disk — returns all images as inline base64 PNGs. Always uses camera-based capture.
+        /// </summary>
+        private static object CaptureSurroundBatch(SceneCommand cmd)
+        {
+            try
+            {
+                int maxRes = cmd.maxResolution ?? 480;
+
+                Vector3 center;
+                float radius;
+
+                // If look_at is provided, center on that target instead of scene bounds
+                if (cmd.lookAt != null && cmd.lookAt.Type != JTokenType.Null)
+                {
+                    var lookAtPos = VectorParsing.ParseVector3(cmd.lookAt);
+                    if (lookAtPos.HasValue)
+                    {
+                        center = lookAtPos.Value;
+                        radius = 5f;
+                    }
+                    else
+                    {
+                        Scene lookAtScene = EditorSceneManager.GetActiveScene();
+                        var lookAtGo = ResolveGameObject(cmd.lookAt, lookAtScene);
+                        if (lookAtGo == null)
+                            return new ErrorResponse($"look_at target '{cmd.lookAt}' not found for batch capture.");
+
+                        Bounds targetBounds = new Bounds(lookAtGo.transform.position, Vector3.zero);
+                        foreach (var r in lookAtGo.GetComponentsInChildren<Renderer>())
+                        {
+                            if (r != null && r.gameObject.activeInHierarchy) targetBounds.Encapsulate(r.bounds);
+                        }
+                        center = targetBounds.center;
+                        radius = targetBounds.extents.magnitude * 1.8f;
+                        radius = Mathf.Max(radius, 3f);
+                    }
+                }
+                else
+                {
+                    // Default: calculate combined bounds of all renderers in the scene
+                    Bounds bounds = new Bounds(Vector3.zero, Vector3.zero);
+                    bool hasBounds = false;
+                    var renderers = UnityEngine.Object.FindObjectsOfType<Renderer>();
+                    foreach (var r in renderers)
+                    {
+                        if (r == null || !r.gameObject.activeInHierarchy) continue;
+                        if (!hasBounds)
+                        {
+                            bounds = r.bounds;
+                            hasBounds = true;
+                        }
+                        else
+                        {
+                            bounds.Encapsulate(r.bounds);
+                        }
+                    }
+
+                    if (!hasBounds)
+                        return new ErrorResponse("No renderers found in the scene. Cannot determine scene bounds for batch capture.");
+
+                    center = bounds.center;
+                    radius = bounds.extents.magnitude * 1.8f;
+                    radius = Mathf.Max(radius, 3f);
+                }
+
+                // Define 6 viewpoints: front, back, left, right, top, bird's-eye (45° elevated front-right)
+                var angles = new[]
+                {
+                    ("front", new Vector3(center.x, center.y, center.z - radius)),
+                    ("back", new Vector3(center.x, center.y, center.z + radius)),
+                    ("left", new Vector3(center.x - radius, center.y, center.z)),
+                    ("right", new Vector3(center.x + radius, center.y, center.z)),
+                    ("top", new Vector3(center.x, center.y + radius, center.z)),
+                    ("bird_eye", new Vector3(center.x + radius * 0.7f, center.y + radius * 0.7f, center.z - radius * 0.7f)),
+                };
+
+                // Create a temporary camera
+                var tempGo = new GameObject("__MCP_MultiAngle_Temp_Camera__");
+                Camera tempCam = tempGo.AddComponent<Camera>();
+                tempCam.fieldOfView = 60f;
+                tempCam.nearClipPlane = 0.1f;
+                tempCam.farClipPlane = radius * 4f;
+                tempCam.clearFlags = CameraClearFlags.Skybox;
+
+                var screenshots = new List<object>();
+                try
+                {
+                    foreach (var (label, pos) in angles)
+                    {
+                        tempCam.transform.position = pos;
+                        tempCam.transform.LookAt(center);
+
+                        var (b64, w, h) = ScreenshotUtility.RenderCameraToBase64(tempCam, maxRes);
+                        screenshots.Add(new Dictionary<string, object>
+                        {
+                            { "angle", label },
+                            { "position", new[] { pos.x, pos.y, pos.z } },
+                            { "imageBase64", b64 },
+                            { "imageWidth", w },
+                            { "imageHeight", h },
+                        });
+                    }
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(tempGo);
+                }
+
+                return new SuccessResponse(
+                    $"Captured {screenshots.Count} multi-angle screenshots (max {maxRes}px). Scene bounds center: ({center.x:F1}, {center.y:F1}, {center.z:F1}), radius: {radius:F1}.",
+                    new
+                    {
+                        sceneCenter = new[] { center.x, center.y, center.z },
+                        sceneRadius = radius,
+                        screenshots = screenshots,
+                    }
+                );
+            }
+            catch (Exception e)
+            {
+                return new ErrorResponse($"Error capturing batch screenshots: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Captures a single screenshot from a temporary camera placed at view_position and aimed at look_at.
+        /// Returns inline base64 PNG (no file saved to disk).
+        /// </summary>
+        private static object CapturePositionedScreenshot(SceneCommand cmd)
+        {
+            try
+            {
+                int maxRes = cmd.maxResolution ?? 640;
+
+                // Resolve where to aim
+                Vector3? targetPos = null;
+                if (cmd.lookAt != null && cmd.lookAt.Type != JTokenType.Null)
+                {
+                    var parsedPos = VectorParsing.ParseVector3(cmd.lookAt);
+                    if (parsedPos.HasValue)
+                    {
+                        targetPos = parsedPos.Value;
+                    }
+                    else
+                    {
+                        Scene activeScene = EditorSceneManager.GetActiveScene();
+                        var lookAtGo = ResolveGameObject(cmd.lookAt, activeScene);
+                        if (lookAtGo == null)
+                            return new ErrorResponse($"look_at target '{cmd.lookAt}' not found.");
+                        targetPos = lookAtGo.transform.position;
+                    }
+                }
+
+                // Determine camera position
+                Vector3 camPos;
+                if (cmd.viewPosition.HasValue)
+                {
+                    camPos = cmd.viewPosition.Value;
+                }
+                else if (targetPos.HasValue)
+                {
+                    // Default: offset from look_at target
+                    camPos = targetPos.Value + new Vector3(0, 2, -5);
+                }
+                else
+                {
+                    return new ErrorResponse("Provide 'look_at' or 'view_position' for a positioned screenshot.");
+                }
+
+                // Create temporary camera
+                var tempGo = new GameObject("__MCP_PositionedCapture_Temp__");
+                Camera tempCam = tempGo.AddComponent<Camera>();
+                tempCam.fieldOfView = 60f;
+                tempCam.nearClipPlane = 0.1f;
+                tempCam.farClipPlane = 1000f;
+                tempCam.clearFlags = CameraClearFlags.Skybox;
+                tempCam.transform.position = camPos;
+
+                try
+                {
+                    if (cmd.viewRotation.HasValue)
+                        tempCam.transform.rotation = Quaternion.Euler(cmd.viewRotation.Value);
+                    else if (targetPos.HasValue)
+                        tempCam.transform.LookAt(targetPos.Value);
+
+                    var (b64, w, h) = ScreenshotUtility.RenderCameraToBase64(tempCam, maxRes);
+
+                    var data = new Dictionary<string, object>
+                    {
+                        { "imageBase64", b64 },
+                        { "imageWidth", w },
+                        { "imageHeight", h },
+                        { "viewPosition", new[] { camPos.x, camPos.y, camPos.z } },
+                    };
+                    if (targetPos.HasValue)
+                        data["lookAt"] = new[] { targetPos.Value.x, targetPos.Value.y, targetPos.Value.z };
+
+                    return new SuccessResponse(
+                        $"Positioned screenshot captured (max {maxRes}px).",
+                        data
+                    );
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(tempGo);
+                }
+            }
+            catch (Exception e)
+            {
+                return new ErrorResponse($"Error capturing positioned screenshot: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Resolves a camera by name, path, or instance ID.
+        /// </summary>
+        private static Camera ResolveCamera(string cameraRef)
+        {
+            if (string.IsNullOrEmpty(cameraRef)) return null;
+
+            // Try instance ID
+            if (int.TryParse(cameraRef, out int id))
+            {
+                var obj = EditorUtility.InstanceIDToObject(id);
+                if (obj is Camera cam) return cam;
+                if (obj is GameObject go) return go.GetComponent<Camera>();
+            }
+
+            // Search all cameras by name or path
+            var allCams = UnityEngine.Object.FindObjectsOfType<Camera>();
+            foreach (var cam in allCams)
+            {
+                if (cam.name == cameraRef) return cam;
+                if (cam.gameObject.name == cameraRef) return cam;
+            }
+
+            // Try path-based lookup
+            if (cameraRef.Contains("/"))
+            {
+                var ids = GameObjectLookup.SearchGameObjects("by_path", cameraRef, includeInactive: false, maxResults: 1);
+                if (ids.Count > 0)
+                {
+                    var go = GameObjectLookup.FindById(ids[0]);
+                    if (go != null) return go.GetComponent<Camera>();
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Frames the Scene View on a target GameObject or the entire scene.
+        /// </summary>
+        private static object FrameSceneView(SceneCommand cmd)
+        {
+            try
+            {
+                var sceneView = SceneView.lastActiveSceneView;
+                if (sceneView == null)
+                {
+                    return new ErrorResponse("No active Scene View found. Open a Scene View window first.");
+                }
+
+                if (cmd.sceneViewTarget != null && cmd.sceneViewTarget.Type != JTokenType.Null)
+                {
+                    Scene activeScene = EditorSceneManager.GetActiveScene();
+                    GameObject target = ResolveGameObject(cmd.sceneViewTarget, activeScene);
+                    if (target == null)
+                    {
+                        return new ErrorResponse($"Target GameObject '{cmd.sceneViewTarget}' not found for scene_view_frame.");
+                    }
+
+                    // Calculate bounds from renderers, colliders, or transform
+                    Bounds bounds = new Bounds(target.transform.position, Vector3.zero);
+                    var renderers = target.GetComponentsInChildren<Renderer>();
+                    if (renderers.Length > 0)
+                    {
+                        bounds = renderers[0].bounds;
+                        for (int i = 1; i < renderers.Length; i++)
+                            bounds.Encapsulate(renderers[i].bounds);
+                    }
+                    else
+                    {
+                        var colliders = target.GetComponentsInChildren<Collider>();
+                        if (colliders.Length > 0)
+                        {
+                            bounds = colliders[0].bounds;
+                            for (int i = 1; i < colliders.Length; i++)
+                                bounds.Encapsulate(colliders[i].bounds);
+                        }
+                        else
+                        {
+                            bounds = new Bounds(target.transform.position, Vector3.one);
+                        }
+                    }
+
+                    sceneView.Frame(bounds, false);
+                    return new SuccessResponse($"Scene View framed on '{target.name}'.", new { target = target.name });
+                }
+                else
+                {
+                    // Frame entire scene by computing combined bounds of all renderers
+                    Bounds allBounds = new Bounds(Vector3.zero, Vector3.zero);
+                    bool hasAny = false;
+                    foreach (var r in UnityEngine.Object.FindObjectsOfType<Renderer>())
+                    {
+                        if (r == null || !r.gameObject.activeInHierarchy) continue;
+                        if (!hasAny) { allBounds = r.bounds; hasAny = true; }
+                        else allBounds.Encapsulate(r.bounds);
+                    }
+                    if (!hasAny) allBounds = new Bounds(Vector3.zero, Vector3.one * 10f);
+                    sceneView.Frame(allBounds, false);
+                    return new SuccessResponse("Scene View framed on entire scene.");
+                }
+            }
+            catch (Exception e)
+            {
+                return new ErrorResponse($"Error framing Scene View: {e.Message}");
             }
         }
 

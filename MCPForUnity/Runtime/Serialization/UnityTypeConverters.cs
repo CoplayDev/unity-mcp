@@ -24,7 +24,10 @@ namespace MCPForUnity.Runtime.Serialization
 
         public override Vector3 ReadJson(JsonReader reader, Type objectType, Vector3 existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
-            JObject jo = JObject.Load(reader);
+            JToken token = JToken.Load(reader);
+            if (token is JArray arr && arr.Count >= 3)
+                return new Vector3((float)arr[0], (float)arr[1], (float)arr[2]);
+            JObject jo = (JObject)token;
             return new Vector3(
                 (float)jo["x"],
                 (float)jo["y"],
@@ -47,7 +50,10 @@ namespace MCPForUnity.Runtime.Serialization
 
         public override Vector2 ReadJson(JsonReader reader, Type objectType, Vector2 existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
-            JObject jo = JObject.Load(reader);
+            JToken token = JToken.Load(reader);
+            if (token is JArray arr && arr.Count >= 2)
+                return new Vector2((float)arr[0], (float)arr[1]);
+            JObject jo = (JObject)token;
             return new Vector2(
                 (float)jo["x"],
                 (float)jo["y"]
@@ -73,7 +79,10 @@ namespace MCPForUnity.Runtime.Serialization
 
         public override Quaternion ReadJson(JsonReader reader, Type objectType, Quaternion existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
-            JObject jo = JObject.Load(reader);
+            JToken token = JToken.Load(reader);
+            if (token is JArray arr && arr.Count >= 4)
+                return new Quaternion((float)arr[0], (float)arr[1], (float)arr[2], (float)arr[3]);
+            JObject jo = (JObject)token;
             return new Quaternion(
                 (float)jo["x"],
                 (float)jo["y"],
@@ -178,7 +187,10 @@ namespace MCPForUnity.Runtime.Serialization
 
         public override Vector4 ReadJson(JsonReader reader, Type objectType, Vector4 existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
-            JObject jo = JObject.Load(reader);
+            JToken token = JToken.Load(reader);
+            if (token is JArray arr && arr.Count >= 4)
+                return new Vector4((float)arr[0], (float)arr[1], (float)arr[2], (float)arr[3]);
+            JObject jo = (JObject)token;
             return new Vector4(
                 (float)jo["x"],
                 (float)jo["y"],

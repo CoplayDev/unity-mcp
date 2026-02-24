@@ -17,8 +17,8 @@ Already installed and working as a Package in the Unity project (`Packages/com.c
 
 | MCP Tool | What It Does | Key Actions/Params |
 |---|---|---|
-| `manage_gameobject` | Create, modify, delete, duplicate GameObjects | `action`: create/modify/delete/duplicate. `primitive_type`: Cube/Sphere/Cylinder/Plane/Capsule. `position`, `rotation`, `scale` as `[x,y,z]`. `parent` for hierarchy. `tag`, `layer`. |
-| `manage_scene` | Scene hierarchy, load/save, screenshot | `action`: get_hierarchy/get_active/save/screenshot. `include_transform`: true to get positions. |
+| `manage_gameobject` | Create, modify, delete, duplicate, look_at GameObjects | `action`: create/modify/delete/duplicate/look_at. `primitive_type`: Cube/Sphere/Cylinder/Plane/Capsule. `position`, `rotation`, `scale` as `[x,y,z]`. `parent` for hierarchy. `tag`, `layer`. `look_at_target` (vector or GO name). |
+| `manage_scene` | Scene hierarchy, load/save, screenshot, scene view control | `action`: get_hierarchy/get_active/save/screenshot/scene_view_frame. `camera`: select camera by name/path/ID. `include_image`: return inline base64 PNG. `max_resolution`: downscale cap (default 512). `batch`: 'surround' for 6-angle capture. `look_at`/`view_position`/`view_rotation`: positioned capture. |
 | `manage_asset` | Import, create, search, modify assets | `action`: import/create/search/get_info. `path` for asset location. `search_pattern` for globbing. |
 | `manage_material` | Create materials, set colors/properties | `action`: create/set_renderer_color/set_material_color/assign_material_to_renderer. `color` as `[r,g,b,a]`. |
 | `manage_components` | Add/remove/configure components on GameObjects | `action`: add/remove/set_property. `component_type`: e.g., "Rigidbody", "BoxCollider". |

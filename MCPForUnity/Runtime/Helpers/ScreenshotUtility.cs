@@ -9,22 +9,35 @@ namespace MCPForUnity.Runtime.Helpers
     public readonly struct ScreenshotCaptureResult
     {
         public ScreenshotCaptureResult(string fullPath, string assetsRelativePath, int superSize)
-            : this(fullPath, assetsRelativePath, superSize, isAsync: false)
+            : this(fullPath, assetsRelativePath, superSize, isAsync: false, imageBase64: null, imageWidth: 0, imageHeight: 0)
         {
         }
 
         public ScreenshotCaptureResult(string fullPath, string assetsRelativePath, int superSize, bool isAsync)
+            : this(fullPath, assetsRelativePath, superSize, isAsync, imageBase64: null, imageWidth: 0, imageHeight: 0)
+        {
+        }
+
+        public ScreenshotCaptureResult(string fullPath, string assetsRelativePath, int superSize, bool isAsync,
+            string imageBase64, int imageWidth, int imageHeight)
         {
             FullPath = fullPath;
             AssetsRelativePath = assetsRelativePath;
             SuperSize = superSize;
             IsAsync = isAsync;
+            ImageBase64 = imageBase64;
+            ImageWidth = imageWidth;
+            ImageHeight = imageHeight;
         }
 
         public string FullPath { get; }
         public string AssetsRelativePath { get; }
         public int SuperSize { get; }
         public bool IsAsync { get; }
+        /// <summary>Base64-encoded PNG image data. Only populated when include_image is true.</summary>
+        public string ImageBase64 { get; }
+        public int ImageWidth { get; }
+        public int ImageHeight { get; }
     }
 
     public static class ScreenshotUtility
@@ -127,8 +140,16 @@ namespace MCPForUnity.Runtime.Helpers
 
         /// <summary>
         /// Captures a screenshot from a specific camera by rendering into a temporary RenderTexture (works in Edit Mode).
+        /// When <paramref name="includeImage"/> is true, the result includes a base64-encoded PNG (optionally
+        /// downscaled so the longest edge is at most <paramref name="maxResolution"/>).
         /// </summary>
-        public static ScreenshotCaptureResult CaptureFromCameraToAssetsFolder(Camera camera, string fileName = null, int superSize = 1, bool ensureUniqueFileName = true)
+        public static ScreenshotCaptureResult CaptureFromCameraToAssetsFolder(
+            Camera camera,
+            string fileName = null,
+            int superSize = 1,
+            bool ensureUniqueFileName = true,
+            bool includeImage = false,
+            int maxResolution = 0)
         {
             if (camera == null)
             {
@@ -147,6 +168,9 @@ namespace MCPForUnity.Runtime.Helpers
             RenderTexture prevActive = RenderTexture.active;
             var rt = RenderTexture.GetTemporary(width, height, 24, RenderTextureFormat.ARGB32);
             Texture2D tex = null;
+            Texture2D downscaled = null;
+            string imageBase64 = null;
+            int imgW = 0, imgH = 0;
             try
             {
                 camera.targetTexture = rt;
@@ -159,26 +183,133 @@ namespace MCPForUnity.Runtime.Helpers
 
                 byte[] png = tex.EncodeToPNG();
                 File.WriteAllBytes(result.FullPath, png);
+
+                if (includeImage)
+                {
+                    int targetMax = maxResolution > 0 ? maxResolution : 640;
+                    if (width > targetMax || height > targetMax)
+                    {
+                        downscaled = DownscaleTexture(tex, targetMax);
+                        byte[] smallPng = downscaled.EncodeToPNG();
+                        imageBase64 = System.Convert.ToBase64String(smallPng);
+                        imgW = downscaled.width;
+                        imgH = downscaled.height;
+                    }
+                    else
+                    {
+                        imageBase64 = System.Convert.ToBase64String(png);
+                        imgW = width;
+                        imgH = height;
+                    }
+                }
             }
             finally
             {
                 camera.targetTexture = prevRT;
                 RenderTexture.active = prevActive;
                 RenderTexture.ReleaseTemporary(rt);
-                if (tex != null)
-                {
-                    if (Application.isPlaying)
-                    {
-                        UnityEngine.Object.Destroy(tex);
-                    }
-                    else
-                    {
-                        UnityEngine.Object.DestroyImmediate(tex);
-                    }
-                }
+                DestroyTexture(tex);
+                DestroyTexture(downscaled);
             }
 
+            if (includeImage && imageBase64 != null)
+            {
+                return new ScreenshotCaptureResult(
+                    result.FullPath, result.AssetsRelativePath, result.SuperSize, false,
+                    imageBase64, imgW, imgH);
+            }
             return result;
+        }
+
+        /// <summary>
+        /// Renders a camera to a Texture2D without saving to disk. Used for multi-angle captures.
+        /// Returns the base64-encoded PNG, downscaled to fit within <paramref name="maxResolution"/>.
+        /// </summary>
+        public static (string base64, int width, int height) RenderCameraToBase64(Camera camera, int maxResolution = 640)
+        {
+            if (camera == null) throw new ArgumentNullException(nameof(camera));
+
+            int width = Mathf.Max(1, camera.pixelWidth > 0 ? camera.pixelWidth : Screen.width);
+            int height = Mathf.Max(1, camera.pixelHeight > 0 ? camera.pixelHeight : Screen.height);
+
+            RenderTexture prevRT = camera.targetTexture;
+            RenderTexture prevActive = RenderTexture.active;
+            var rt = RenderTexture.GetTemporary(width, height, 24, RenderTextureFormat.ARGB32);
+            Texture2D tex = null;
+            Texture2D downscaled = null;
+            try
+            {
+                camera.targetTexture = rt;
+                camera.Render();
+
+                RenderTexture.active = rt;
+                tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+                tex.Apply();
+
+                int targetMax = maxResolution > 0 ? maxResolution : 640;
+                if (width > targetMax || height > targetMax)
+                {
+                    downscaled = DownscaleTexture(tex, targetMax);
+                    string b64 = System.Convert.ToBase64String(downscaled.EncodeToPNG());
+                    return (b64, downscaled.width, downscaled.height);
+                }
+                else
+                {
+                    string b64 = System.Convert.ToBase64String(tex.EncodeToPNG());
+                    return (b64, width, height);
+                }
+            }
+            finally
+            {
+                camera.targetTexture = prevRT;
+                RenderTexture.active = prevActive;
+                RenderTexture.ReleaseTemporary(rt);
+                DestroyTexture(tex);
+                DestroyTexture(downscaled);
+            }
+        }
+
+        /// <summary>
+        /// Downscales a Texture2D so that its longest edge is at most <paramref name="maxEdge"/> pixels.
+        /// Uses bilinear filtering via a temporary RenderTexture blit.
+        /// Caller must destroy the returned Texture2D.
+        /// </summary>
+        public static Texture2D DownscaleTexture(Texture2D source, int maxEdge)
+        {
+            int srcW = source.width;
+            int srcH = source.height;
+            float scale = Mathf.Min((float)maxEdge / srcW, (float)maxEdge / srcH);
+            scale = Mathf.Min(scale, 1f); // never upscale
+            int dstW = Mathf.Max(1, Mathf.RoundToInt(srcW * scale));
+            int dstH = Mathf.Max(1, Mathf.RoundToInt(srcH * scale));
+
+            RenderTexture prevActive = RenderTexture.active;
+            var rt = RenderTexture.GetTemporary(dstW, dstH, 0, RenderTextureFormat.ARGB32);
+            rt.filterMode = FilterMode.Bilinear;
+            try
+            {
+                Graphics.Blit(source, rt);
+                RenderTexture.active = rt;
+                var dst = new Texture2D(dstW, dstH, TextureFormat.RGBA32, false);
+                dst.ReadPixels(new Rect(0, 0, dstW, dstH), 0, 0);
+                dst.Apply();
+                return dst;
+            }
+            finally
+            {
+                RenderTexture.active = prevActive;
+                RenderTexture.ReleaseTemporary(rt);
+            }
+        }
+
+        private static void DestroyTexture(Texture2D tex)
+        {
+            if (tex == null) return;
+            if (Application.isPlaying)
+                UnityEngine.Object.Destroy(tex);
+            else
+                UnityEngine.Object.DestroyImmediate(tex);
         }
 
         private static ScreenshotCaptureResult PrepareCaptureResult(string fileName, int superSize, bool ensureUniqueFileName, bool isAsync)

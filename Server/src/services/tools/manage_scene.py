@@ -1,7 +1,9 @@
+import json
 from typing import Annotated, Literal, Any
 
 from fastmcp import Context
-from mcp.types import ToolAnnotations
+from fastmcp.server.server import ToolResult
+from mcp.types import ToolAnnotations, TextContent, ImageContent
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
@@ -11,8 +13,66 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 from services.tools.preflight import preflight
 
 
+def _extract_images(response: dict[str, Any], action: str) -> ToolResult | None:
+    """If the Unity response contains inline base64 images, return a ToolResult
+    with TextContent + ImageContent blocks. Returns None for normal text-only responses."""
+    if not isinstance(response, dict) or not response.get("success"):
+        return None
+
+    data = response.get("data")
+    if not isinstance(data, dict):
+        return None
+
+    if action == "screenshot":
+        # Batch images (surround mode) — multiple screenshots in one response
+        screenshots = data.get("screenshots")
+        if screenshots and isinstance(screenshots, list):
+            blocks: list[TextContent | ImageContent] = []
+            summary_screenshots = []
+            for s in screenshots:
+                summary_screenshots.append({k: v for k, v in s.items() if k != "imageBase64"})
+            text_result = {
+                "success": True,
+                "message": response.get("message", ""),
+                "data": {
+                    "sceneCenter": data.get("sceneCenter"),
+                    "sceneRadius": data.get("sceneRadius"),
+                    "screenshots": summary_screenshots,
+                },
+            }
+            blocks.append(TextContent(type="text", text=json.dumps(text_result)))
+            for s in screenshots:
+                b64 = s.get("imageBase64")
+                if b64:
+                    blocks.append(TextContent(type="text", text=f"[Angle: {s.get('angle', '?')}]"))
+                    blocks.append(ImageContent(type="image", data=b64, mimeType="image/png"))
+            return ToolResult(content=blocks)
+
+        # Single image (include_image or positioned capture)
+        image_b64 = data.get("imageBase64")
+        if not image_b64:
+            return None
+        text_data = {k: v for k, v in data.items() if k != "imageBase64"}
+        text_result = {"success": True, "message": response.get("message", ""), "data": text_data}
+        return ToolResult(
+            content=[
+                TextContent(type="text", text=json.dumps(text_result)),
+                ImageContent(type="image", data=image_b64, mimeType="image/png"),
+            ],
+        )
+
+    return None
+
+
 @mcp_for_unity_tool(
-    description="Performs CRUD operations on Unity scenes. Read-only actions: get_hierarchy, get_active, get_build_settings, screenshot. Modifying actions: create, load, save.",
+    description=(
+        "Performs CRUD operations on Unity scenes. "
+        "Read-only actions: get_hierarchy, get_active, get_build_settings, screenshot, scene_view_frame. "
+        "Modifying actions: create, load, save. "
+        "screenshot supports include_image=true to return an inline base64 PNG for AI vision. "
+        "screenshot with batch='surround' captures 6 angles around the scene (no file saved) for comprehensive scene understanding. "
+        "screenshot with look_at/view_position creates a temp camera at that viewpoint and returns an inline image."
+    ),
     annotations=ToolAnnotations(
         title="Manage Scene",
         destructiveHint=True,
@@ -28,15 +88,39 @@ async def manage_scene(
         "get_active",
         "get_build_settings",
         "screenshot",
-    ], "Perform CRUD operations on Unity scenes, and capture a screenshot."],
+        "scene_view_frame",
+    ], "Perform CRUD operations on Unity scenes, capture screenshots, and control the Scene View camera."],
     name: Annotated[str, "Scene name."] | None = None,
     path: Annotated[str, "Scene path."] | None = None,
     build_index: Annotated[int | str,
                            "Unity build index (quote as string, e.g., '0')."] | None = None,
+    # --- screenshot params ---
     screenshot_file_name: Annotated[str,
                                     "Screenshot file name (optional). Defaults to timestamp when omitted."] | None = None,
     screenshot_super_size: Annotated[int | str,
                                      "Screenshot supersize multiplier (integer ≥1). Optional."] | None = None,
+    camera: Annotated[str,
+                      "Camera to capture from (name, path, or instance ID). Defaults to Camera.main."] | None = None,
+    include_image: Annotated[bool | str,
+                             "If true, return the screenshot as an inline base64 PNG image in the response. "
+                             "The AI can see the image. Default false. Recommended max_resolution=512 for context efficiency."] | None = None,
+    max_resolution: Annotated[int | str,
+                              "Max resolution (longest edge in pixels) for the inline image. Default 640. "
+                              "Use 256-512 for quick looks, 640-1024 for detail."] | None = None,
+    # --- screenshot extended params (batch, positioned capture) ---
+    batch: Annotated[str,
+                     "Batch capture mode. 'surround' captures 6 angles (front/back/left/right/top/bird_eye) "
+                     "around the scene or look_at target. Returns inline images, no file saved."] | None = None,
+    look_at: Annotated[str | int | list[float],
+                       "Target to aim the camera at before capture. Can be a GameObject name/path/ID or [x,y,z] position. "
+                       "For batch='surround', centers the surround on this target. For single shots, creates a temp camera aimed here."] | None = None,
+    view_position: Annotated[list[float] | str,
+                             "World position [x,y,z] to place the camera for a positioned screenshot."] | None = None,
+    view_rotation: Annotated[list[float] | str,
+                             "Euler rotation [x,y,z] for the camera. Overrides look_at aiming if both provided."] | None = None,
+    # --- scene_view_frame params ---
+    scene_view_target: Annotated[str | int,
+                                 "GameObject reference for scene_view_frame (name, path, or instance ID)."] | None = None,
     # --- get_hierarchy paging/safety ---
     parent: Annotated[str | int,
                       "Optional parent GameObject reference (name/path/instanceID) to list direct children."] | None = None,
@@ -52,9 +136,7 @@ async def manage_scene(
                                      "Child paging hint (safety)."] | None = None,
     include_transform: Annotated[bool | str,
                                  "If true, include local transform in node summaries."] | None = None,
-) -> dict[str, Any]:
-    # Get active instance from session state
-    # Removed session_state import
+) -> dict[str, Any] | ToolResult:
     unity_instance = get_unity_instance_from_context(ctx)
     gate = await preflight(ctx, wait_for_no_compile=True, refresh_if_dirty=True)
     if gate is not None:
@@ -70,6 +152,8 @@ async def manage_scene(
             max_children_per_node, default=None)
         coerced_include_transform = coerce_bool(
             include_transform, default=None)
+        coerced_include_image = coerce_bool(include_image, default=None)
+        coerced_max_resolution = coerce_int(max_resolution, default=None)
 
         params: dict[str, Any] = {"action": action}
         if name:
@@ -82,6 +166,28 @@ async def manage_scene(
             params["fileName"] = screenshot_file_name
         if coerced_super_size is not None:
             params["superSize"] = coerced_super_size
+
+        # screenshot params
+        if camera:
+            params["camera"] = camera
+        if coerced_include_image is not None:
+            params["includeImage"] = coerced_include_image
+        if coerced_max_resolution is not None:
+            params["maxResolution"] = coerced_max_resolution
+
+        # screenshot extended params (batch, positioned capture)
+        if batch:
+            params["batch"] = batch
+        if look_at is not None:
+            params["lookAt"] = look_at
+        if view_position is not None:
+            params["viewPosition"] = view_position
+        if view_rotation is not None:
+            params["viewRotation"] = view_rotation
+
+        # scene_view_frame params
+        if scene_view_target is not None:
+            params["sceneViewTarget"] = scene_view_target
 
         # get_hierarchy paging/safety params (optional)
         if parent is not None:
@@ -104,7 +210,14 @@ async def manage_scene(
 
         # Preserve structured failure data; unwrap success into a friendlier shape
         if isinstance(response, dict) and response.get("success"):
-            return {"success": True, "message": response.get("message", "Scene operation successful."), "data": response.get("data")}
+            friendly = {"success": True, "message": response.get("message", "Scene operation successful."), "data": response.get("data")}
+
+            # For screenshot actions, check if inline images should be returned as ImageContent
+            image_result = _extract_images(response, action)
+            if image_result is not None:
+                return image_result
+
+            return friendly
         return response if isinstance(response, dict) else {"success": False, "message": str(response)}
 
     except Exception as e:

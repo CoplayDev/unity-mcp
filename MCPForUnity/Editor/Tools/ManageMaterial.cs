@@ -354,6 +354,10 @@ namespace MCPForUnity.Editor.Tools
                 }
                 return new ErrorResponse("Invalid slot");
             }
+            else if (mode == "create_unique")
+            {
+                return CreateUniqueAndAssign(renderer, go, color, slot);
+            }
 
             return new ErrorResponse($"Unknown mode: {mode}");
         }
@@ -376,6 +380,56 @@ namespace MCPForUnity.Editor.Tools
                 mat.SetColor("_BaseColor", color);
                 mat.SetColor("_Color", color);
             }
+        }
+
+        private static object CreateUniqueAndAssign(Renderer renderer, GameObject go, Color color, int slot)
+        {
+            string safeName = go.name.Replace(" ", "_");
+            string matPath = $"Assets/Materials/{safeName}_mat.mat";
+            matPath = AssetPathUtility.SanitizeAssetPath(matPath);
+
+            // Ensure the Materials directory exists
+            if (!AssetDatabase.IsValidFolder("Assets/Materials"))
+            {
+                AssetDatabase.CreateFolder("Assets", "Materials");
+            }
+
+            Material existing = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+            if (existing != null)
+            {
+                // Material already exists (e.g. retry) — update its color and re-assign
+                Undo.RecordObject(existing, "Update unique material color");
+                SetColorProperties(existing, color);
+                EditorUtility.SetDirty(existing);
+            }
+            else
+            {
+                Shader shader = RenderPipelineUtility.ResolveShader("Standard");
+                if (shader == null)
+                {
+                    return new ErrorResponse("Could not resolve a suitable shader for the active render pipeline.");
+                }
+
+                existing = new Material(shader);
+                SetColorProperties(existing, color);
+                AssetDatabase.CreateAsset(existing, matPath);
+            }
+
+            AssetDatabase.SaveAssets();
+
+            // Assign to renderer
+            Undo.RecordObject(renderer, "Assign unique material");
+            Material[] sharedMats = renderer.sharedMaterials;
+            if (slot < 0 || slot >= sharedMats.Length)
+            {
+                return new ErrorResponse($"Slot {slot} out of bounds (count: {sharedMats.Length})");
+            }
+            sharedMats[slot] = existing;
+            renderer.sharedMaterials = sharedMats;
+            EditorUtility.SetDirty(renderer);
+
+            return new SuccessResponse($"Created unique material at {matPath} and assigned to {go.name}",
+                new { materialPath = matPath });
         }
 
         private static object GetMaterialInfo(JObject @params)

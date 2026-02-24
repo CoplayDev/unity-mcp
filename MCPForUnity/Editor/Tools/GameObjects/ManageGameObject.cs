@@ -100,6 +100,8 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                         return GameObjectDuplicate.Handle(@params, targetToken, searchMethod);
                     case "move_relative":
                         return GameObjectMoveRelative.Handle(@params, targetToken, searchMethod);
+                    case "look_at":
+                        return GameObjectLookAt.Handle(@params, targetToken, searchMethod);
 
                     default:
                         return new ErrorResponse($"Unknown action: '{action}'.");
