@@ -15,6 +15,20 @@ Before applying a template:
 - Validate targets/components first via resources and `find_gameobjects`.
 - Treat names, enum values, and property payloads as placeholders to adapt.
 
+## Resource URIs: Do NOT Guess
+
+Resource URIs use a specific scheme — do NOT guess or fabricate them. If you are unsure of a URI, call `ListMcpResourcesTool(server="UnityMCP")` first to get the exact list. Common URIs:
+
+| Resource | URI |
+|----------|-----|
+| Editor state | `mcpforunity://editor/state` |
+| Project info | `mcpforunity://project/info` |
+| Scene GameObject API | `mcpforunity://scene/gameobject-api` |
+| Tags | `mcpforunity://project/tags` |
+| Layers | `mcpforunity://project/layers` |
+| Instances | `mcpforunity://instances` |
+| Custom tools | `mcpforunity://custom-tools` |
+
 ## Quick Start: Resource-First Workflow
 
 **Always read relevant resources before using tools.** This prevents errors and provides the necessary context.

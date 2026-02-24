@@ -13,16 +13,49 @@ from core.config import config
 
 @mcp_for_unity_tool(
     unity_target=None,
-    description="Set the active Unity instance for this client/session. Accepts Name@hash or hash.",
+    description="Set the active Unity instance for this client/session. Accepts Name@hash, hash prefix, or port number (stdio only).",
     annotations=ToolAnnotations(
         title="Set Active Instance",
     ),
 )
 async def set_active_instance(
         ctx: Context,
-        instance: Annotated[str, "Target instance (Name@hash or hash prefix)"]
+        instance: Annotated[str, "Target instance (Name@hash, hash prefix, or port number in stdio mode)"]
 ) -> dict[str, Any]:
     transport = (config.transport_mode or "stdio").lower()
+
+    # Port number shorthand (stdio only) — resolve to Name@hash via pool discovery
+    value = (instance or "").strip()
+    if value.isdigit():
+        if transport == "http":
+            return {
+                "success": False,
+                "error": f"Port-based targeting ('{value}') is not supported in HTTP transport mode. "
+                         "Use Name@hash or a hash prefix. Read mcpforunity://instances for available instances."
+            }
+        port_int = int(value)
+        pool = get_unity_connection_pool()
+        instances = pool.discover_all_instances(force_refresh=True)
+        match = next((inst for inst in instances if getattr(inst, "port", None) == port_int), None)
+        if match is None:
+            available = ", ".join(
+                f"{inst.id} (port {getattr(inst, 'port', '?')})" for inst in instances
+            ) or "none"
+            return {
+                "success": False,
+                "error": f"No Unity instance found on port {value}. Available: {available}."
+            }
+        resolved_id = match.id
+        middleware = get_unity_instance_middleware()
+        middleware.set_active_instance(ctx, resolved_id)
+        return {
+            "success": True,
+            "message": f"Active instance set to {resolved_id}",
+            "data": {
+                "instance": resolved_id,
+                "session_key": middleware.get_session_key(ctx),
+            },
+        }
 
     # Discover running instances based on transport
     if transport == "http":
