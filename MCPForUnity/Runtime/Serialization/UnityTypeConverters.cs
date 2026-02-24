@@ -27,7 +27,8 @@ namespace MCPForUnity.Runtime.Serialization
             JToken token = JToken.Load(reader);
             if (token is JArray arr && arr.Count >= 3)
                 return new Vector3((float)arr[0], (float)arr[1], (float)arr[2]);
-            JObject jo = (JObject)token;
+            if (token is not JObject jo)
+                throw new JsonSerializationException($"Cannot deserialize Vector3 from {token.Type}: '{token}'");
             return new Vector3(
                 (float)jo["x"],
                 (float)jo["y"],
@@ -53,7 +54,8 @@ namespace MCPForUnity.Runtime.Serialization
             JToken token = JToken.Load(reader);
             if (token is JArray arr && arr.Count >= 2)
                 return new Vector2((float)arr[0], (float)arr[1]);
-            JObject jo = (JObject)token;
+            if (token is not JObject jo)
+                throw new JsonSerializationException($"Cannot deserialize Vector2 from {token.Type}: '{token}'");
             return new Vector2(
                 (float)jo["x"],
                 (float)jo["y"]
@@ -82,7 +84,8 @@ namespace MCPForUnity.Runtime.Serialization
             JToken token = JToken.Load(reader);
             if (token is JArray arr && arr.Count >= 4)
                 return new Quaternion((float)arr[0], (float)arr[1], (float)arr[2], (float)arr[3]);
-            JObject jo = (JObject)token;
+            if (token is not JObject jo)
+                throw new JsonSerializationException($"Cannot deserialize Quaternion from {token.Type}: '{token}'");
             return new Quaternion(
                 (float)jo["x"],
                 (float)jo["y"],
@@ -190,7 +193,8 @@ namespace MCPForUnity.Runtime.Serialization
             JToken token = JToken.Load(reader);
             if (token is JArray arr && arr.Count >= 4)
                 return new Vector4((float)arr[0], (float)arr[1], (float)arr[2], (float)arr[3]);
-            JObject jo = (JObject)token;
+            if (token is not JObject jo)
+                throw new JsonSerializationException($"Cannot deserialize Vector4 from {token.Type}: '{token}'");
             return new Vector4(
                 (float)jo["x"],
                 (float)jo["y"],

@@ -114,7 +114,7 @@ manage_scene(
     action="screenshot",
     camera="MainCamera",         # str, optional - camera name, path, or instance ID
     include_image=True,          # bool, default False - return base64 PNG inline
-    max_resolution=512           # int, optional - downscale cap (default 512)
+    max_resolution=512           # int, optional - downscale cap (default 640)
 )
 
 # Batch surround (6 angles around scene bounds, no file saved)

@@ -7,7 +7,7 @@ from mcp.types import ToolAnnotations, TextContent, ImageContent
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
-from services.tools.utils import coerce_int, coerce_bool
+from services.tools.utils import coerce_int, coerce_bool, normalize_vector3
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 from services.tools.preflight import preflight
@@ -181,9 +181,15 @@ async def manage_scene(
         if look_at is not None:
             params["lookAt"] = look_at
         if view_position is not None:
-            params["viewPosition"] = view_position
+            vec, err = normalize_vector3(view_position, "view_position")
+            if err:
+                return {"success": False, "message": err}
+            params["viewPosition"] = vec
         if view_rotation is not None:
-            params["viewRotation"] = view_rotation
+            vec, err = normalize_vector3(view_rotation, "view_rotation")
+            if err:
+                return {"success": False, "message": err}
+            params["viewRotation"] = vec
 
         # scene_view_frame params
         if scene_view_target is not None:

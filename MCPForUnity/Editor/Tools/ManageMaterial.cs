@@ -244,16 +244,21 @@ namespace MCPForUnity.Editor.Tools
 
         private static object SetRendererColor(JObject @params)
         {
-            string target = @params["target"]?.ToString();
-            string searchMethod = @params["searchMethod"]?.ToString();
-            JToken colorToken = @params["color"];
-            int slot = @params["slot"]?.ToObject<int>() ?? 0;
-            string mode = @params["mode"]?.ToString() ?? "property_block";
+            var p = new ToolParams(@params);
 
-            if (string.IsNullOrEmpty(target) || colorToken == null)
+            var targetResult = p.GetRequired("target");
+            var targetError = targetResult.GetOrError(out string target);
+            if (targetError != null) return targetError;
+
+            string searchMethod = p.Get("searchMethod");
+            JToken colorToken = p.GetRaw("color");
+            if (colorToken == null)
             {
-                return new ErrorResponse("target and color are required");
+                return new ErrorResponse("'color' parameter is required.");
             }
+
+            int slot = p.GetInt("slot") ?? 0;
+            string mode = p.Get("mode", "property_block");
 
             Color color;
             try
@@ -385,8 +390,12 @@ namespace MCPForUnity.Editor.Tools
         private static object CreateUniqueAndAssign(Renderer renderer, GameObject go, Color color, int slot)
         {
             string safeName = go.name.Replace(" ", "_");
-            string matPath = $"Assets/Materials/{safeName}_mat.mat";
+            string matPath = $"Assets/Materials/{safeName}_{go.GetInstanceID()}_mat.mat";
             matPath = AssetPathUtility.SanitizeAssetPath(matPath);
+            if (matPath == null)
+            {
+                return new ErrorResponse($"Invalid GameObject name '{go.name}' — cannot build a safe material path.");
+            }
 
             // Ensure the Materials directory exists
             if (!AssetDatabase.IsValidFolder("Assets/Materials"))

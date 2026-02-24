@@ -277,6 +277,11 @@ namespace MCPForUnity.Runtime.Helpers
         /// </summary>
         public static Texture2D DownscaleTexture(Texture2D source, int maxEdge)
         {
+            if (source == null)
+                throw new System.ArgumentNullException(nameof(source));
+            if (maxEdge <= 0)
+                throw new System.ArgumentOutOfRangeException(nameof(maxEdge), maxEdge, "maxEdge must be > 0.");
+
             int srcW = source.width;
             int srcH = source.height;
             float scale = Mathf.Min((float)maxEdge / srcW, (float)maxEdge / srcH);
