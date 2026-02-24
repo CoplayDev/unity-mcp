@@ -33,8 +33,8 @@ namespace MCPForUnity.Editor.Tools.GameObjects
             Vector3? lookAtPos = VectorParsing.ParseVector3(lookAtToken);
             if (!lookAtPos.HasValue)
             {
-                // Not a vector — treat as a GO reference
-                GameObject lookAtGo = ManageGameObjectCommon.FindObjectInternal(lookAtToken, "by_id_or_name_or_path");
+                // Not a vector — treat as a GO reference, using the same search method as for the main target
+                GameObject lookAtGo = ManageGameObjectCommon.FindObjectInternal(lookAtToken, searchMethod);
                 if (lookAtGo == null)
                 {
                     return new ErrorResponse($"look_at_target '{lookAtToken}' could not be resolved as a position [x,y,z] or found as a GameObject.");
