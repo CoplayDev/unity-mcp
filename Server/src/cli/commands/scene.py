@@ -207,8 +207,46 @@ def build_settings():
     type=int,
     help="Supersize multiplier (1-4)."
 )
+@click.option(
+    "--camera", "-c",
+    default=None,
+    help="Camera to capture from (name, path, or instance ID). Defaults to Camera.main."
+)
+@click.option(
+    "--include-image", is_flag=True,
+    help="Return screenshot as inline base64 PNG in the response."
+)
+@click.option(
+    "--max-resolution", "-r",
+    default=None,
+    type=int,
+    help="Max resolution (longest edge) for inline image. Default 640."
+)
+@click.option(
+    "--batch", "-b",
+    default=None,
+    help="Batch capture mode: 'surround' for 6 angles around the scene."
+)
+@click.option(
+    "--look-at",
+    default=None,
+    help="Target to aim at (GO name/path/ID or 'x,y,z' position)."
+)
+@click.option(
+    "--view-position",
+    default=None,
+    help="Camera position as 'x,y,z'."
+)
+@click.option(
+    "--view-rotation",
+    default=None,
+    help="Camera euler rotation as 'x,y,z'."
+)
 @handle_unity_errors
-def screenshot(filename: Optional[str], supersize: int):
+def screenshot(filename: Optional[str], supersize: int, camera: Optional[str],
+               include_image: bool, max_resolution: Optional[int],
+               batch: Optional[str], look_at: Optional[str],
+               view_position: Optional[str], view_rotation: Optional[str]):
     """Capture a screenshot of the scene.
 
     \b
@@ -216,6 +254,11 @@ def screenshot(filename: Optional[str], supersize: int):
         unity-mcp scene screenshot
         unity-mcp scene screenshot --filename "level_preview"
         unity-mcp scene screenshot --supersize 2
+        unity-mcp scene screenshot --camera "SecondCamera" --include-image
+        unity-mcp scene screenshot --include-image --max-resolution 512
+        unity-mcp scene screenshot --batch surround --max-resolution 256
+        unity-mcp scene screenshot --look-at "Player" --max-resolution 512
+        unity-mcp scene screenshot --view-position "0,10,-10" --look-at "0,0,0"
     """
     config = get_config()
 
@@ -224,8 +267,40 @@ def screenshot(filename: Optional[str], supersize: int):
         params["fileName"] = filename
     if supersize > 1:
         params["superSize"] = supersize
+    if camera:
+        params["camera"] = camera
+    if include_image:
+        params["includeImage"] = True
+    if max_resolution:
+        params["maxResolution"] = max_resolution
+    if batch:
+        params["batch"] = batch
+    if look_at:
+        # Try parsing as x,y,z coordinates
+        parts = look_at.split(",")
+        if len(parts) == 3:
+            try:
+                params["lookAt"] = [float(p.strip()) for p in parts]
+            except ValueError:
+                params["lookAt"] = look_at
+        else:
+            params["lookAt"] = look_at
+    if view_position:
+        parts = view_position.split(",")
+        if len(parts) == 3:
+            params["viewPosition"] = [float(p.strip()) for p in parts]
+    if view_rotation:
+        parts = view_rotation.split(",")
+        if len(parts) == 3:
+            params["viewRotation"] = [float(p.strip()) for p in parts]
 
     result = run_command("manage_scene", params, config)
-    click.echo(format_output(result, config.format))
-    if result.get("success"):
-        print_success("Screenshot captured")
+
+    if batch and result.get("success"):
+        data = result.get("data", {})
+        count = len(data.get("screenshots", []))
+        print_success(f"Captured {count} batch screenshots")
+    else:
+        click.echo(format_output(result, config.format))
+        if result.get("success"):
+            print_success("Screenshot captured")

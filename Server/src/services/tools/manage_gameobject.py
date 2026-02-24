@@ -41,7 +41,7 @@ def _normalize_component_properties(value: Any) -> tuple[dict[str, dict[str, Any
 @mcp_for_unity_tool(
     description=(
         "Performs CRUD operations on GameObjects. "
-        "Actions: create, modify, delete, duplicate, move_relative. "
+        "Actions: create, modify, delete, duplicate, move_relative, look_at. "
         "NOT for searching — use the find_gameobjects tool to search by name/tag/layer/component/path. "
         "NOT for component management — use the manage_components tool (add/remove/set_property) "
         "or mcpforunity://scene/gameobject/{id}/components resource (read)."
@@ -54,7 +54,7 @@ def _normalize_component_properties(value: Any) -> tuple[dict[str, dict[str, Any
 async def manage_gameobject(
     ctx: Context,
     action: Annotated[Literal["create", "modify", "delete", "duplicate",
-                              "move_relative"], "Action to perform on GameObject."] | None = None,
+                              "move_relative", "look_at"], "Action to perform on GameObject."] | None = None,
     target: Annotated[str,
                       "GameObject identifier by name, path, or instance ID for modify/delete/duplicate actions"] | None = None,
     search_method: Annotated[
@@ -109,6 +109,11 @@ async def manage_gameobject(
                         "Distance to move in the specified direction (default: 1.0)"] | None = None,
     world_space: Annotated[bool | str,
                            "If True (default), use world space directions; if False, use reference object's local directions"] | None = None,
+    # --- Parameters for 'look_at' ---
+    look_at_target: Annotated[list[float] | str,
+                              "World position [x,y,z] or GameObject name/path/ID to look at (for look_at action)."] | None = None,
+    look_at_up: Annotated[list[float] | str,
+                          "Optional up vector [x,y,z] for look_at. Defaults to [0,1,0]."] | None = None,
 ) -> dict[str, Any]:
     # Get active instance from session state
     # Removed session_state import
@@ -121,7 +126,7 @@ async def manage_gameobject(
     if action is None:
         return {
             "success": False,
-            "message": "Missing required parameter 'action'. Valid actions: create, modify, delete, duplicate, move_relative. To SEARCH for GameObjects use the find_gameobjects tool. To manage COMPONENTS use the manage_components tool."
+            "message": "Missing required parameter 'action'. Valid actions: create, modify, delete, duplicate, move_relative, look_at. To SEARCH for GameObjects use the find_gameobjects tool. To manage COMPONENTS use the manage_components tool."
         }
 
     # --- Normalize vector parameters with detailed error handling ---
@@ -187,6 +192,9 @@ async def manage_gameobject(
             "direction": direction,
             "distance": distance,
             "world_space": world_space,
+            # Parameters for 'look_at'
+            "look_at_target": look_at_target,
+            "look_at_up": look_at_up,
         }
         params = {k: v for k, v in params.items() if v is not None}
 

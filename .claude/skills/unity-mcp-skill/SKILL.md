@@ -55,16 +55,40 @@ batch_execute(
 
 **Max 25 commands per batch by default (configurable in Unity MCP Tools window, max 100).** Use `fail_fast=True` for dependent operations.
 
-### 3. Use `screenshot` in manage_scene to Verify Visual Results
+### 3. Use Screenshots to Verify Visual Results
 
 ```python
-# Via manage_scene
-manage_scene(action="screenshot")  # Returns base64 image
+# Basic screenshot (saves to Assets/, returns file path only)
+manage_scene(action="screenshot")
 
-# After creating/modifying objects, verify visually:
-# 1. Create objects
-# 2. capture screenshot
-# 3. Analyze if result matches intent
+# Inline screenshot (returns base64 PNG directly to the AI)
+manage_scene(action="screenshot", include_image=True)
+
+# Use a specific camera and cap resolution for smaller payloads
+manage_scene(action="screenshot", camera="MainCamera", include_image=True, max_resolution=512)
+
+# Batch surround: captures front/back/left/right/top/bird_eye around the scene
+manage_scene(action="screenshot", batch="surround", max_resolution=256)
+
+# Batch surround centered on a specific object
+manage_scene(action="screenshot", batch="surround", look_at="Player", max_resolution=256)
+
+# Positioned screenshot: place a temp camera and capture in one call
+manage_scene(action="screenshot", look_at="Player", view_position=[0, 10, -10], max_resolution=512)
+```
+
+**Best practices for AI scene understanding:**
+- Use `include_image=True` when you need to *see* the scene, not just save a file.
+- Use `batch="surround"` for a comprehensive overview (6 angles, one command).
+- Use `look_at`/`view_position` to capture from a specific viewpoint without needing a scene camera.
+- Keep `max_resolution` at 256–512 to balance quality vs. token cost.
+- Combine with `look_at` on `manage_gameobject` to orient a game camera before capturing.
+
+```python
+# Agentic camera loop: point, shoot, analyze
+manage_gameobject(action="look_at", target="MainCamera", look_at_target="Player")
+manage_scene(action="screenshot", camera="MainCamera", include_image=True, max_resolution=512)
+# → Analyze image, decide next action
 ```
 
 ### 4. Check Console After Major Changes
@@ -134,7 +158,7 @@ uri="file:///full/path/to/file.cs"
 | **Editor** | `manage_editor`, `execute_menu_item`, `read_console` | Editor control |
 | **Testing** | `run_tests`, `get_test_job` | Unity Test Framework |
 | **Batch** | `batch_execute` | Parallel/bulk operations |
-| **UI** | `batch_execute` with `manage_gameobject` + `manage_components` | Canvas, Panel, Button, Text, Slider, Toggle, Input Field (see [UI workflows](references/workflows.md#ui-creation-workflows)) |
+| **UI** | `batch_execute` with `manage_gameobject` + `manage_components` | Canvas, Panel, Button, Text, Slider, Toggle, Input Field. **Read `mcpforunity://project/info` first** to detect uGUI/TMP/Input System availability. (see [UI workflows](references/workflows.md#ui-creation-workflows)) |
 
 ## Common Workflows
 

@@ -12,54 +12,59 @@ namespace MCPForUnity.Editor.Helpers
     /// </summary>
     public static class RendererHelpers
     {
+        public readonly struct EnsureMaterialResult
+        {
+            public EnsureMaterialResult(bool materialReplaced, string replacementReason)
+            {
+                MaterialReplaced = materialReplaced;
+                ReplacementReason = replacementReason ?? string.Empty;
+            }
+
+            public bool MaterialReplaced { get; }
+            public string ReplacementReason { get; }
+        }
+
         /// <summary>
         /// Ensures a renderer has a material assigned. If not, auto-assigns a default material
         /// based on the render pipeline and component type.
         /// </summary>
         /// <param name="renderer">The renderer to check</param>
-        public static void EnsureMaterial(Renderer renderer)
+        public static EnsureMaterialResult EnsureMaterial(Renderer renderer)
         {
             if (renderer == null)
             {
-                return;
+                return new EnsureMaterialResult(false, "renderer_missing");
             }
 
             var existingMaterial = renderer.sharedMaterial;
-            if (IsUsableMaterial(existingMaterial))
+            string replacementReason = string.Empty;
+            bool pipelineInvalid = RenderPipelineUtility.IsMaterialInvalidForActivePipeline(existingMaterial, out string pipelineReason);
+            if (existingMaterial != null && !pipelineInvalid && IsUsableMaterial(existingMaterial))
             {
-                return;
+                return new EnsureMaterialResult(false, string.Empty);
             }
 
             if (existingMaterial != null)
             {
                 var shaderName = existingMaterial.shader != null ? existingMaterial.shader.name : "(null)";
                 McpLog.Warn($"[RendererHelpers] Replacing invalid VFX material '{existingMaterial.name}' (shader: {shaderName}).");
+                replacementReason = !string.IsNullOrWhiteSpace(pipelineReason) ? pipelineReason : "invalid_material";
+            }
+            else
+            {
+                replacementReason = "missing_material";
             }
 
-            RenderPipelineUtility.VFXComponentType? componentType = null;
-            if (renderer is ParticleSystemRenderer)
+            Material replacement = ResolveReplacementMaterial(renderer);
+            if (replacement != null)
             {
-                componentType = RenderPipelineUtility.VFXComponentType.ParticleSystem;
-            }
-            else if (renderer is LineRenderer)
-            {
-                componentType = RenderPipelineUtility.VFXComponentType.LineRenderer;
-            }
-            else if (renderer is TrailRenderer)
-            {
-                componentType = RenderPipelineUtility.VFXComponentType.TrailRenderer;
+                Undo.RecordObject(renderer, "Assign default renderer material");
+                renderer.sharedMaterial = replacement;
+                EditorUtility.SetDirty(renderer);
+                return new EnsureMaterialResult(true, replacementReason);
             }
 
-            if (componentType.HasValue)
-            {
-                Material defaultMat = RenderPipelineUtility.GetOrCreateDefaultVFXMaterial(componentType.Value);
-                if (defaultMat != null)
-                {
-                    Undo.RecordObject(renderer, "Assign default VFX material");
-                    renderer.sharedMaterial = defaultMat;
-                    EditorUtility.SetDirty(renderer);
-                }
-            }
+            return new EnsureMaterialResult(false, replacementReason);
         }
 
         private static bool IsUsableMaterial(Material material)
@@ -82,6 +87,23 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             return shader.isSupported;
+        }
+
+        private static Material ResolveReplacementMaterial(Renderer renderer)
+        {
+            if (renderer is ParticleSystemRenderer)
+            {
+                return RenderPipelineUtility.GetOrCreateDefaultVFXMaterial(RenderPipelineUtility.VFXComponentType.ParticleSystem);
+            }
+            if (renderer is LineRenderer)
+            {
+                return RenderPipelineUtility.GetOrCreateDefaultVFXMaterial(RenderPipelineUtility.VFXComponentType.LineRenderer);
+            }
+            if (renderer is TrailRenderer)
+            {
+                return RenderPipelineUtility.GetOrCreateDefaultVFXMaterial(RenderPipelineUtility.VFXComponentType.TrailRenderer);
+            }
+            return RenderPipelineUtility.GetOrCreateDefaultSceneMaterial();
         }
 
         /// <summary>
@@ -272,4 +294,3 @@ namespace MCPForUnity.Editor.Helpers
 
     }
 }
-
