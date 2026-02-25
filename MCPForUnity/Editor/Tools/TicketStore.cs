@@ -156,11 +156,26 @@ namespace MCPForUnity.Editor.Tools
                     var status = (JobStatus)jo.Value<int>("status");
                     string error = jo.Value<string>("error");
 
-                    // Jobs that were running when domain reload hit are now dead
+                    // Jobs that were running when domain reload hit:
+                    // - If the job itself caused the domain reload and all commands
+                    //   were dispatched, the reload IS the success signal.
+                    // - Otherwise, the job was interrupted unexpectedly.
                     if (status == JobStatus.Running)
                     {
-                        status = JobStatus.Failed;
-                        error = "Interrupted by domain reload";
+                        bool causesDomainReload = jo.Value<bool>("causes_domain_reload");
+                        int currentIndex = jo.Value<int>("current_index");
+                        int commandCount = jo["commands"] is JArray ca ? ca.Count : 0;
+                        bool allDispatched = commandCount > 0 && currentIndex >= commandCount - 1;
+
+                        if (causesDomainReload && allDispatched)
+                        {
+                            status = JobStatus.Done;
+                        }
+                        else
+                        {
+                            status = JobStatus.Failed;
+                            error = "Interrupted by domain reload";
+                        }
                     }
 
                     var commands = new List<BatchCommand>();
@@ -180,6 +195,11 @@ namespace MCPForUnity.Editor.Tools
                     }
 
                     var completedStr = jo.Value<string>("completed_at");
+                    DateTime? completedAt = !string.IsNullOrEmpty(completedStr) && DateTime.TryParse(completedStr, out var comp) ? comp : null;
+
+                    // Domain-reload-completed or failed jobs need a CompletedAt timestamp
+                    if (completedAt == null && (status == JobStatus.Done || status == JobStatus.Failed))
+                        completedAt = DateTime.UtcNow;
 
                     _jobs[ticket] = new BatchJob
                     {
@@ -190,8 +210,8 @@ namespace MCPForUnity.Editor.Tools
                         Tier = (ExecutionTier)jo.Value<int>("tier"),
                         Status = status,
                         CausesDomainReload = jo.Value<bool>("causes_domain_reload"),
-                        CreatedAt = DateTime.TryParse(jo.Value<string>("created_at"), out var ca) ? ca : DateTime.UtcNow,
-                        CompletedAt = !string.IsNullOrEmpty(completedStr) && DateTime.TryParse(completedStr, out var comp) ? comp : null,
+                        CreatedAt = DateTime.TryParse(jo.Value<string>("created_at"), out var ca2) ? ca2 : DateTime.UtcNow,
+                        CompletedAt = completedAt,
                         Error = error,
                         CurrentIndex = jo.Value<int>("current_index"),
                         Commands = commands,
