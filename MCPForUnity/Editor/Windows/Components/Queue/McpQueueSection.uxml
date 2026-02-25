@@ -15,6 +15,17 @@
                     <ui:Label name="failed-count" text="Failed: 0" class="queue-counter" />
                 </ui:VisualElement>
             </ui:VisualElement>
+            <!-- Logging settings -->
+            <ui:VisualElement name="logging-box" class="queue-logging-box">
+                <ui:VisualElement class="queue-logging-header">
+                    <ui:Label text="Job Logging" class="queue-logging-title" />
+                    <ui:Toggle name="logging-toggle" class="queue-logging-toggle" />
+                </ui:VisualElement>
+                <ui:VisualElement name="logging-path-row" class="queue-logging-path-row">
+                    <ui:TextField name="log-path-field" class="queue-log-path-field" />
+                    <ui:Button name="browse-log-path-btn" text="..." class="queue-browse-btn" />
+                </ui:VisualElement>
+            </ui:VisualElement>
             <!-- Job list header -->
             <ui:VisualElement name="job-list-header" class="queue-job-header">
                 <ui:Label text="Ticket" class="queue-col-ticket" />

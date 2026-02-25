@@ -18,6 +18,60 @@
     color: rgba(180, 180, 180, 1);
 }
 
+/* Logging settings box */
+.queue-logging-box {
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.queue-logging-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.queue-logging-title {
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: rgba(180, 180, 180, 1);
+}
+
+.queue-logging-toggle {
+    margin: 0;
+}
+
+.queue-logging-path-row {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 4px;
+}
+
+.queue-log-path-field {
+    flex-grow: 1;
+    font-size: 10px;
+    margin-right: 4px;
+}
+
+.queue-log-path-field > .unity-text-field__input {
+    font-size: 10px;
+    padding: 2px 4px;
+    min-height: 18px;
+    color: rgba(170, 170, 170, 1);
+}
+
+.queue-browse-btn {
+    width: 28px;
+    min-width: 28px;
+    height: 20px;
+    padding: 0;
+    font-size: 11px;
+    -unity-text-align: middle-center;
+}
+
 /* Job list header */
 .queue-job-header {
     flex-direction: row;
@@ -149,4 +203,17 @@
 .unity-theme-light .queue-blocked-badge {
     background-color: rgba(255, 100, 50, 0.2);
     color: rgba(200, 80, 30, 1);
+}
+
+.unity-theme-light .queue-logging-box {
+    border-color: rgba(0, 0, 0, 0.1);
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.unity-theme-light .queue-logging-title {
+    color: rgba(80, 80, 80, 1);
+}
+
+.unity-theme-light .queue-log-path-field > .unity-text-field__input {
+    color: rgba(60, 60, 60, 1);
 }

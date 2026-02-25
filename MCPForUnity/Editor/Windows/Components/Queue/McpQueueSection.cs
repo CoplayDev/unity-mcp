@@ -1,13 +1,14 @@
 using System.Collections.Generic;
 using System.Linq;
 using MCPForUnity.Editor.Tools;
+using UnityEditor;
 using UnityEngine.UIElements;
 
 namespace MCPForUnity.Editor.Windows.Components.Queue
 {
     /// <summary>
     /// Controller for the Queue tab in the MCP For Unity editor window.
-    /// Displays real-time command gateway queue state.
+    /// Displays real-time command gateway queue state and logging settings.
     /// </summary>
     public class McpQueueSection
     {
@@ -19,6 +20,10 @@ namespace MCPForUnity.Editor.Windows.Components.Queue
         private VisualElement jobListContainer;
         private VisualElement jobListHeader;
         private Label emptyLabel;
+        private Toggle loggingToggle;
+        private TextField logPathField;
+        private Button browseLogPathBtn;
+        private VisualElement loggingPathRow;
 
         public VisualElement Root { get; private set; }
 
@@ -26,6 +31,7 @@ namespace MCPForUnity.Editor.Windows.Components.Queue
         {
             Root = root;
             CacheUIElements();
+            SetupLoggingControls();
         }
 
         private void CacheUIElements()
@@ -38,6 +44,65 @@ namespace MCPForUnity.Editor.Windows.Components.Queue
             jobListContainer = Root.Q<VisualElement>("job-list-container");
             jobListHeader = Root.Q<VisualElement>("job-list-header");
             emptyLabel = Root.Q<Label>("empty-label");
+            loggingToggle = Root.Q<Toggle>("logging-toggle");
+            logPathField = Root.Q<TextField>("log-path-field");
+            browseLogPathBtn = Root.Q<Button>("browse-log-path-btn");
+            loggingPathRow = Root.Q<VisualElement>("logging-path-row");
+        }
+
+        private void SetupLoggingControls()
+        {
+            if (loggingToggle != null)
+            {
+                loggingToggle.SetValueWithoutNotify(GatewayJobLogger.IsEnabled);
+                loggingToggle.RegisterValueChangedCallback(evt =>
+                {
+                    GatewayJobLogger.IsEnabled = evt.newValue;
+                    UpdateLoggingPathVisibility();
+                });
+            }
+
+            if (logPathField != null)
+            {
+                logPathField.SetValueWithoutNotify(GatewayJobLogger.LogPath);
+                logPathField.RegisterValueChangedCallback(evt =>
+                {
+                    GatewayJobLogger.LogPath = evt.newValue;
+                });
+            }
+
+            if (browseLogPathBtn != null)
+            {
+                browseLogPathBtn.clicked += () =>
+                {
+                    string currentDir = System.IO.Path.GetDirectoryName(GatewayJobLogger.LogPath);
+                    if (string.IsNullOrEmpty(currentDir) || !System.IO.Directory.Exists(currentDir))
+                        currentDir = System.IO.Path.Combine(UnityEngine.Application.dataPath, "..");
+
+                    string selected = EditorUtility.SaveFilePanel(
+                        "Choose Gateway Job Log File",
+                        currentDir,
+                        "mcp-gateway-jobs",
+                        "jsonl");
+
+                    if (!string.IsNullOrEmpty(selected))
+                    {
+                        GatewayJobLogger.LogPath = selected;
+                        if (logPathField != null)
+                            logPathField.SetValueWithoutNotify(selected);
+                    }
+                };
+            }
+
+            UpdateLoggingPathVisibility();
+        }
+
+        private void UpdateLoggingPathVisibility()
+        {
+            if (loggingPathRow != null)
+                loggingPathRow.style.display = GatewayJobLogger.IsEnabled
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
         }
 
         /// <summary>

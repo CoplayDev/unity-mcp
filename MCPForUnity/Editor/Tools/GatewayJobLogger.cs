@@ -11,18 +11,39 @@ namespace MCPForUnity.Editor.Tools
 {
     /// <summary>
     /// Logs completed gateway jobs to a JSON-lines file when logging is enabled.
-    /// Log file: <c>{ProjectRoot}/Logs/mcp-gateway-jobs.jsonl</c>
+    /// Default log file: <c>{ProjectRoot}/Logs/mcp-gateway-jobs.jsonl</c>
+    /// Path is configurable via EditorPrefs.
     /// </summary>
     internal static class GatewayJobLogger
     {
-        static readonly string LogPath = Path.Combine(
-            Application.dataPath, "..", "Logs", "mcp-gateway-jobs.jsonl");
+        /// <summary>
+        /// Default log path relative to project root.
+        /// </summary>
+        public static readonly string DefaultLogPath = Path.GetFullPath(
+            Path.Combine(Application.dataPath, "..", "Logs", "mcp-gateway-jobs.jsonl"));
 
         /// <summary>
         /// Returns true when gateway job logging is enabled via EditorPrefs.
         /// </summary>
-        public static bool IsEnabled =>
-            EditorPrefs.GetBool(EditorPrefKeys.GatewayJobLogging, false);
+        public static bool IsEnabled
+        {
+            get => EditorPrefs.GetBool(EditorPrefKeys.GatewayJobLogging, false);
+            set => EditorPrefs.SetBool(EditorPrefKeys.GatewayJobLogging, value);
+        }
+
+        /// <summary>
+        /// The current log file path. Returns the EditorPrefs override if set,
+        /// otherwise the default path.
+        /// </summary>
+        public static string LogPath
+        {
+            get
+            {
+                string custom = EditorPrefs.GetString(EditorPrefKeys.GatewayJobLogPath, "");
+                return string.IsNullOrWhiteSpace(custom) ? DefaultLogPath : custom;
+            }
+            set => EditorPrefs.SetString(EditorPrefKeys.GatewayJobLogPath, value ?? "");
+        }
 
         /// <summary>
         /// Write a completed job to the log file as a single JSON line.
@@ -58,11 +79,12 @@ namespace MCPForUnity.Editor.Tools
                     entry["tools"] = tools;
                 }
 
-                string dir = Path.GetDirectoryName(LogPath);
+                string path = LogPath;
+                string dir = Path.GetDirectoryName(path);
                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
 
-                File.AppendAllText(LogPath, entry.ToString(Formatting.None) + "\n");
+                File.AppendAllText(path, entry.ToString(Formatting.None) + "\n");
             }
             catch (Exception ex)
             {

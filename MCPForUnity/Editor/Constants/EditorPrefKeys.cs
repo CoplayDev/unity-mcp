@@ -67,5 +67,6 @@ namespace MCPForUnity.Editor.Constants
 
         internal const string BatchExecuteMaxCommands = "MCPForUnity.BatchExecute.MaxCommands";
         internal const string GatewayJobLogging = "MCPForUnity.Gateway.JobLogging";
+        internal const string GatewayJobLogPath = "MCPForUnity.Gateway.JobLogPath";
     }
 }
