@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using NUnit.Framework;
 using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Tools;
@@ -56,6 +57,36 @@ namespace MCPForUnity.Tests.Editor
             // Just verify the constants are sane
             Assert.That(BatchExecute.DefaultMaxCommandsPerBatch, Is.EqualTo(25));
             Assert.That(BatchExecute.AbsoluteMaxCommandsPerBatch, Is.EqualTo(100));
+        }
+
+        [Test]
+        public void PollJob_QueuedReloadJob_IncludesBlockedBy_WhenBusy()
+        {
+            var queue = new CommandQueue();
+            queue.IsEditorBusy = () => true;
+            var cmds = new List<BatchCommand>
+            {
+                new() { Tool = "refresh_unity", Params = new JObject(), Tier = ExecutionTier.Heavy, CausesDomainReload = true }
+            };
+            var job = queue.Submit("agent-1", "refresh", false, cmds);
+
+            string reason = queue.GetBlockedReason(job.Ticket);
+            Assert.That(reason, Is.Not.Null);
+        }
+
+        [Test]
+        public void PollJob_QueuedNonReloadJob_BlockedByIsNull()
+        {
+            var queue = new CommandQueue();
+            queue.IsEditorBusy = () => true;
+            var cmds = new List<BatchCommand>
+            {
+                new() { Tool = "run_tests", Params = new JObject(), Tier = ExecutionTier.Heavy, CausesDomainReload = false }
+            };
+            var job = queue.Submit("agent-1", "tests", false, cmds);
+
+            string reason = queue.GetBlockedReason(job.Ticket);
+            Assert.That(reason, Is.Null);
         }
     }
 }

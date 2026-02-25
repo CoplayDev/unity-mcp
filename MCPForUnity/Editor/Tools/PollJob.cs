@@ -26,6 +26,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 case JobStatus.Queued:
                     var ahead = CommandGatewayState.Queue.GetAheadOf(ticket);
+                    string blockedBy = CommandGatewayState.Queue.GetBlockedReason(ticket);
                     return new PendingResponse(
                         $"Queued at position {ahead.Count}.",
                         pollIntervalSeconds: 2.0,
@@ -36,6 +37,7 @@ namespace MCPForUnity.Editor.Tools
                             position = ahead.Count,
                             agent = job.Agent,
                             label = job.Label,
+                            blocked_by = blockedBy,
                             ahead = ahead.ConvertAll(j => (object)new
                             {
                                 ticket = j.Ticket,

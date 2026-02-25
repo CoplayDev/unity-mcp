@@ -92,6 +92,23 @@ namespace MCPForUnity.Editor.Tools
         }
 
         /// <summary>
+        /// Returns the reason a queued job is blocked, or null if not blocked.
+        /// </summary>
+        public string GetBlockedReason(string ticket)
+        {
+            var job = _store.GetJob(ticket);
+            if (job == null || job.Status != JobStatus.Queued) return null;
+            if (!job.CausesDomainReload) return null;
+            if (!IsEditorBusy()) return null;
+
+            if (MCPForUnity.Editor.Services.TestJobManager.HasRunningJob)
+                return "tests_running";
+            if (UnityEditor.EditorApplication.isCompiling)
+                return "compiling";
+            return "editor_busy";
+        }
+
+        /// <summary>
         /// Get overall queue status.
         /// </summary>
         public object GetStatus()
