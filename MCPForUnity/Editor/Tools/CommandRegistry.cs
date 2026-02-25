@@ -18,14 +18,16 @@ namespace MCPForUnity.Editor.Tools
         public string CommandName { get; }
         public Func<JObject, object> SyncHandler { get; }
         public Func<JObject, Task<object>> AsyncHandler { get; }
+        public ExecutionTier Tier { get; }
 
         public bool IsAsync => AsyncHandler != null;
 
-        public HandlerInfo(string commandName, Func<JObject, object> syncHandler, Func<JObject, Task<object>> asyncHandler)
+        public HandlerInfo(string commandName, Func<JObject, object> syncHandler, Func<JObject, Task<object>> asyncHandler, ExecutionTier tier = ExecutionTier.Smooth)
         {
             CommandName = commandName;
             SyncHandler = syncHandler;
             AsyncHandler = asyncHandler;
+            Tier = tier;
         }
     }
 
@@ -102,17 +104,20 @@ namespace MCPForUnity.Editor.Tools
         {
             string commandName;
             string typeLabel = isResource ? "resource" : "tool";
+            ExecutionTier tier = ExecutionTier.Smooth; // default
 
             // Get command name from appropriate attribute
             if (isResource)
             {
                 var resourceAttr = type.GetCustomAttribute<McpForUnityResourceAttribute>();
                 commandName = resourceAttr.ResourceName;
+                tier = ExecutionTier.Instant; // Resources are read-only
             }
             else
             {
                 var toolAttr = type.GetCustomAttribute<McpForUnityToolAttribute>();
                 commandName = toolAttr.CommandName;
+                tier = toolAttr.Tier;
             }
 
             // Auto-generate command name if not explicitly provided
@@ -155,7 +160,7 @@ namespace MCPForUnity.Editor.Tools
                 if (typeof(Task).IsAssignableFrom(method.ReturnType))
                 {
                     var asyncHandler = CreateAsyncHandlerDelegate(method, commandName);
-                    handlerInfo = new HandlerInfo(commandName, null, asyncHandler);
+                    handlerInfo = new HandlerInfo(commandName, null, asyncHandler, tier);
                 }
                 else
                 {
@@ -163,7 +168,7 @@ namespace MCPForUnity.Editor.Tools
                         typeof(Func<JObject, object>),
                         method
                     );
-                    handlerInfo = new HandlerInfo(commandName, handler, null);
+                    handlerInfo = new HandlerInfo(commandName, handler, null, tier);
                 }
 
                 _handlers[commandName] = handlerInfo;
@@ -188,6 +193,17 @@ namespace MCPForUnity.Editor.Tools
                 );
             }
             return handler;
+        }
+
+        /// <summary>
+        /// Get the declared ExecutionTier for a registered tool.
+        /// Returns Smooth as default for unknown tools.
+        /// </summary>
+        public static ExecutionTier GetToolTier(string commandName)
+        {
+            if (_handlers.TryGetValue(commandName, out var handler))
+                return handler.Tier;
+            return ExecutionTier.Smooth;
         }
 
         /// <summary>
