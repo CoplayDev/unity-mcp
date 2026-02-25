@@ -111,9 +111,16 @@ namespace MCPForUnity.Editor.Tools
 
         /// <summary>
         /// Remove a completed job from the store by ticket.
+        /// Clears the active heavy slot if the removed job was the active heavy.
         /// Returns the removed job, or null if not found.
         /// </summary>
-        public BatchJob Remove(string ticket) => _store.Remove(ticket);
+        public BatchJob Remove(string ticket)
+        {
+            if (_activeHeavyTicket == ticket)
+                _activeHeavyTicket = null;
+            _smoothInFlight.Remove(ticket);
+            return _store.Remove(ticket);
+        }
 
         /// <summary>
         /// Compressed summary of all jobs for batch status checks.
@@ -219,7 +226,19 @@ namespace MCPForUnity.Editor.Tools
             if (_activeHeavyTicket != null)
             {
                 var heavy = _store.GetJob(_activeHeavyTicket);
-                if (heavy != null && (heavy.Status == JobStatus.Done || heavy.Status == JobStatus.Failed))
+
+                // Job was removed (e.g., auto-cleanup on poll) — release the slot
+                if (heavy == null)
+                {
+                    // Still hold if editor is busy from side-effects of the removed job
+                    if (IsEditorBusy())
+                        return;
+
+                    _activeHeavyTicket = null;
+                    return; // One-frame cooldown
+                }
+
+                if (heavy.Status == JobStatus.Done || heavy.Status == JobStatus.Failed)
                 {
                     // Hold the heavy slot while the editor is still busy from side-effects.
                     // e.g., run_tests starts tests asynchronously and returns instantly, but
@@ -233,8 +252,23 @@ namespace MCPForUnity.Editor.Tools
                     // Gives async state one editor frame to settle before the guard check.
                     return;
                 }
-                else
-                    return; // Heavy still running, wait
+
+                // Running job with all commands dispatched, waiting for async side-effects
+                // (e.g., test runner still executing). Transition to Done once editor settles.
+                if (heavy.Status == JobStatus.Running
+                    && heavy.Commands != null
+                    && heavy.CurrentIndex >= heavy.Commands.Count - 1
+                    && heavy.Results.Count >= heavy.Commands.Count)
+                {
+                    if (!IsEditorBusy())
+                    {
+                        heavy.Status = JobStatus.Done;
+                        heavy.CompletedAt = DateTime.UtcNow;
+                    }
+                    return; // Either way, wait this frame
+                }
+
+                return; // Heavy still running, wait
             }
 
             // 2. If heavy queue has items and no smooth in flight, start next heavy
@@ -314,7 +348,21 @@ namespace MCPForUnity.Editor.Tools
                 if (job.Atomic && job.UndoGroup >= 0)
                     Undo.CollapseUndoOperations(job.UndoGroup);
 
-                job.Status = JobStatus.Done;
+                // If the batch triggered async side-effects (e.g., run_tests starts
+                // the test runner which keeps going after the command returns), keep
+                // the job in Running so poll_job shows it as in-progress. ProcessTick
+                // will transition it to Done once IsEditorBusy() returns false.
+                if (job.Tier == ExecutionTier.Heavy && IsEditorBusy())
+                {
+                    job.Status = JobStatus.Running;
+                    // Mark all commands as dispatched so progress shows full count
+                    job.CurrentIndex = job.Commands.Count - 1;
+                }
+                else
+                {
+                    job.Status = JobStatus.Done;
+                    job.CompletedAt = DateTime.UtcNow;
+                }
             }
             catch (Exception ex)
             {
@@ -322,9 +370,6 @@ namespace MCPForUnity.Editor.Tools
                     Undo.RevertAllInCurrentGroup();
                 job.Error = ex.Message;
                 job.Status = JobStatus.Failed;
-            }
-            finally
-            {
                 job.CompletedAt = DateTime.UtcNow;
             }
         }
