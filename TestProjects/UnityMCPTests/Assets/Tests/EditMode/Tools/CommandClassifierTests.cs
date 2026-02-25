@@ -121,5 +121,67 @@ namespace MCPForUnity.Tests.Editor
             var tier = CommandClassifier.ClassifyBatch(commands);
             Assert.That(tier, Is.EqualTo(ExecutionTier.Smooth));
         }
+
+        [Test]
+        public void CausesDomainReload_RefreshUnity_CompileRequest_ReturnsTrue()
+        {
+            var p = new JObject { ["compile"] = "request" };
+            Assert.That(CommandClassifier.CausesDomainReload("refresh_unity", p), Is.True);
+        }
+
+        [Test]
+        public void CausesDomainReload_RefreshUnity_CompileNone_ReturnsFalse()
+        {
+            var p = new JObject { ["compile"] = "none" };
+            Assert.That(CommandClassifier.CausesDomainReload("refresh_unity", p), Is.False);
+        }
+
+        [Test]
+        public void CausesDomainReload_RefreshUnity_NoCompileParam_ReturnsTrue()
+        {
+            var p = new JObject { ["scope"] = "all" };
+            Assert.That(CommandClassifier.CausesDomainReload("refresh_unity", p), Is.True);
+        }
+
+        [Test]
+        public void CausesDomainReload_ManageEditor_Play_ReturnsTrue()
+        {
+            var p = new JObject { ["action"] = "play" };
+            Assert.That(CommandClassifier.CausesDomainReload("manage_editor", p), Is.True);
+        }
+
+        [Test]
+        public void CausesDomainReload_ManageEditor_Stop_ReturnsFalse()
+        {
+            var p = new JObject { ["action"] = "stop" };
+            Assert.That(CommandClassifier.CausesDomainReload("manage_editor", p), Is.False);
+        }
+
+        [Test]
+        public void CausesDomainReload_RunTests_ReturnsFalse()
+        {
+            var p = new JObject { ["mode"] = "EditMode" };
+            Assert.That(CommandClassifier.CausesDomainReload("run_tests", p), Is.False);
+        }
+
+        [Test]
+        public void CausesDomainReload_ManageScript_Create_ReturnsFalse()
+        {
+            var p = new JObject { ["action"] = "create" };
+            Assert.That(CommandClassifier.CausesDomainReload("manage_script", p), Is.False);
+        }
+
+        [Test]
+        public void CausesDomainReload_ManageScene_Load_ReturnsFalse()
+        {
+            var p = new JObject { ["action"] = "load" };
+            Assert.That(CommandClassifier.CausesDomainReload("manage_scene", p), Is.False);
+        }
+
+        [Test]
+        public void CausesDomainReload_NullParams_ReturnsFalse()
+        {
+            Assert.That(CommandClassifier.CausesDomainReload("refresh_unity", null), Is.False);
+        }
     }
 }

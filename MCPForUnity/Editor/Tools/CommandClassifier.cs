@@ -42,6 +42,21 @@ namespace MCPForUnity.Editor.Tools
             return max;
         }
 
+        /// <summary>
+        /// Returns true if the given command would trigger a domain reload (compilation or play mode entry).
+        /// </summary>
+        public static bool CausesDomainReload(string toolName, JObject @params)
+        {
+            if (@params == null) return false;
+
+            return toolName switch
+            {
+                "refresh_unity" => @params.Value<string>("compile") != "none",
+                "manage_editor" => @params.Value<string>("action") == "play",
+                _ => false
+            };
+        }
+
         static ExecutionTier ClassifyManageScene(string action, ExecutionTier fallback)
         {
             return action switch
