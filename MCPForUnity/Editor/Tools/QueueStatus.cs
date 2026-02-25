@@ -4,16 +4,17 @@ using MCPForUnity.Editor.Helpers;
 namespace MCPForUnity.Editor.Tools
 {
     /// <summary>
-    /// Get overall command queue status. No ticket needed.
-    /// Shows queue depth, active heavy job, smooth in-flight count, per-agent stats.
+    /// Compressed queue summary — returns all tickets and their status in one shot.
+    /// Instant tier: never queued, executes inline for non-blocking batch status checks.
+    /// Fields: t=ticket, s=status, a=agent, l=label, p=progress, b=blocked, e=error.
     /// </summary>
     [McpForUnityTool("queue_status", Tier = ExecutionTier.Instant)]
     public static class QueueStatus
     {
         public static object HandleCommand(JObject @params)
         {
-            var status = CommandGatewayState.Queue.GetStatus();
-            return new SuccessResponse("Queue status.", status);
+            var summary = CommandGatewayState.Queue.GetSummary();
+            return new SuccessResponse("Queue snapshot.", summary);
         }
     }
 }

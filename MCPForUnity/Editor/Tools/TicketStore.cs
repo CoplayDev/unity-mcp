@@ -81,6 +81,14 @@ namespace MCPForUnity.Editor.Tools
         public int QueueDepth => _jobs.Values.Count(j => j.Status == JobStatus.Queued);
 
         /// <summary>
+        /// Get all jobs ordered by creation time (most recent first). Used for queue summary.
+        /// </summary>
+        public List<BatchJob> GetAllJobs()
+        {
+            return _jobs.Values.OrderByDescending(j => j.CreatedAt).ToList();
+        }
+
+        /// <summary>
         /// Serialize all jobs to JSON for SessionState persistence.
         /// </summary>
         public string ToJson()

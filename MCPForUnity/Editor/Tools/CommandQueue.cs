@@ -110,6 +110,46 @@ namespace MCPForUnity.Editor.Tools
         }
 
         /// <summary>
+        /// Compressed summary of all jobs for batch status checks.
+        /// Returns short field names for token efficiency.
+        /// </summary>
+        public object GetSummary()
+        {
+            var allJobs = _store.GetAllJobs();
+            var summary = new List<object>(allJobs.Count);
+
+            foreach (var j in allJobs)
+            {
+                var entry = new Dictionary<string, object>
+                {
+                    ["t"] = j.Ticket,
+                    ["s"] = j.Status.ToString().ToLowerInvariant(),
+                    ["a"] = j.Agent,
+                    ["l"] = j.Label
+                };
+
+                if (j.Commands != null && j.Commands.Count > 0)
+                    entry["p"] = $"{j.CurrentIndex + (j.Status == JobStatus.Done ? 0 : 1)}/{j.Commands.Count}";
+
+                if (j.Status == JobStatus.Queued && j.CausesDomainReload && IsEditorBusy())
+                    entry["b"] = "blocked";
+
+                if (j.Status == JobStatus.Failed && j.Error != null)
+                    entry["e"] = j.Error.Length > 80 ? j.Error.Substring(0, 80) + "..." : j.Error;
+
+                summary.Add(entry);
+            }
+
+            return new
+            {
+                jobs = summary,
+                heavy = _activeHeavyTicket,
+                qd = QueueDepth,
+                sf = _smoothInFlight.Count
+            };
+        }
+
+        /// <summary>
         /// Get overall queue status.
         /// </summary>
         public object GetStatus()
