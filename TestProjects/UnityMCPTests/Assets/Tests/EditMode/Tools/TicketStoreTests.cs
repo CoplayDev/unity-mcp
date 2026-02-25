@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Tools;
 
 namespace MCPForUnity.Tests.Editor
@@ -117,6 +118,86 @@ namespace MCPForUnity.Tests.Editor
             var queued = _store.GetQueuedJobs();
             Assert.That(queued[0].Ticket, Is.EqualTo(j1.Ticket));
             Assert.That(queued[1].Ticket, Is.EqualTo(j2.Ticket));
+        }
+
+        [Test]
+        public void ToJson_FromJson_RoundTrip_PreservesJobs()
+        {
+            var job = _store.CreateJob("agent-1", "test-label", false, ExecutionTier.Heavy);
+            job.CausesDomainReload = true;
+            job.Commands = new System.Collections.Generic.List<BatchCommand>
+            {
+                new() { Tool = "refresh_unity", Params = new JObject { ["compile"] = "request" }, Tier = ExecutionTier.Heavy, CausesDomainReload = true }
+            };
+
+            string json = _store.ToJson();
+            var restored = new TicketStore();
+            restored.FromJson(json);
+
+            var restoredJob = restored.GetJob(job.Ticket);
+            Assert.That(restoredJob, Is.Not.Null);
+            Assert.That(restoredJob.Agent, Is.EqualTo("agent-1"));
+            Assert.That(restoredJob.Label, Is.EqualTo("test-label"));
+            Assert.That(restoredJob.CausesDomainReload, Is.True);
+            Assert.That(restoredJob.Tier, Is.EqualTo(ExecutionTier.Heavy));
+        }
+
+        [Test]
+        public void ToJson_FromJson_PreservesNextId()
+        {
+            _store.CreateJob("a", "j1", false, ExecutionTier.Smooth);
+            _store.CreateJob("b", "j2", false, ExecutionTier.Heavy);
+
+            string json = _store.ToJson();
+            var restored = new TicketStore();
+            restored.FromJson(json);
+
+            var j3 = restored.CreateJob("c", "j3", false, ExecutionTier.Instant);
+            Assert.That(j3.Ticket, Is.EqualTo("t-000002"));
+        }
+
+        [Test]
+        public void FromJson_RunningJobs_MarkedFailed()
+        {
+            var job = _store.CreateJob("agent-1", "test", false, ExecutionTier.Heavy);
+            job.Status = JobStatus.Running;
+
+            string json = _store.ToJson();
+            var restored = new TicketStore();
+            restored.FromJson(json);
+
+            var restoredJob = restored.GetJob(job.Ticket);
+            Assert.That(restoredJob.Status, Is.EqualTo(JobStatus.Failed));
+            Assert.That(restoredJob.Error, Does.Contain("domain reload"));
+        }
+
+        [Test]
+        public void FromJson_QueuedJobs_StayQueued()
+        {
+            var job = _store.CreateJob("agent-1", "test", false, ExecutionTier.Heavy);
+
+            string json = _store.ToJson();
+            var restored = new TicketStore();
+            restored.FromJson(json);
+
+            var restoredJob = restored.GetJob(job.Ticket);
+            Assert.That(restoredJob.Status, Is.EqualTo(JobStatus.Queued));
+        }
+
+        [Test]
+        public void FromJson_EmptyJson_NoError()
+        {
+            var restored = new TicketStore();
+            restored.FromJson("");
+            Assert.That(restored.QueueDepth, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void FromJson_NullJson_NoError()
+        {
+            var restored = new TicketStore();
+            restored.FromJson(null);
+            Assert.That(restored.QueueDepth, Is.EqualTo(0));
         }
     }
 }

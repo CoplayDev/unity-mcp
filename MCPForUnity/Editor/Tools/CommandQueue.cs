@@ -130,6 +130,26 @@ namespace MCPForUnity.Editor.Tools
         }
 
         /// <summary>
+        /// Serialize queue state for SessionState persistence.
+        /// </summary>
+        public string PersistToJson() => _store.ToJson();
+
+        /// <summary>
+        /// Restore queue state after domain reload. Re-enqueues any queued heavy jobs.
+        /// </summary>
+        public void RestoreFromJson(string json)
+        {
+            _store.FromJson(json);
+
+            // Re-populate the heavy queue from restored queued jobs
+            foreach (var job in _store.GetQueuedJobs())
+            {
+                if (job.Tier == ExecutionTier.Heavy)
+                    _heavyQueue.Enqueue(job.Ticket);
+            }
+        }
+
+        /// <summary>
         /// Called every EditorApplication.update frame. Processes the queue.
         /// </summary>
         public void ProcessTick(Func<string, JObject, Task<object>> executeCommand)
