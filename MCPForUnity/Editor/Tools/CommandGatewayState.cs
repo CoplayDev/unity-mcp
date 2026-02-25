@@ -24,6 +24,7 @@ namespace MCPForUnity.Editor.Tools
 
             Queue.IsEditorBusy = () =>
                 TestJobManager.HasRunningJob
+                || TestRunStatus.IsRunning
                 || EditorApplication.isCompiling;
 
             // Persist before next domain reload

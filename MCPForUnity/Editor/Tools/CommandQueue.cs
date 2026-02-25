@@ -101,7 +101,8 @@ namespace MCPForUnity.Editor.Tools
             if (!job.CausesDomainReload) return null;
             if (!IsEditorBusy()) return null;
 
-            if (MCPForUnity.Editor.Services.TestJobManager.HasRunningJob)
+            if (MCPForUnity.Editor.Services.TestJobManager.HasRunningJob
+                || MCPForUnity.Editor.Services.TestRunStatus.IsRunning)
                 return "tests_running";
             if (UnityEditor.EditorApplication.isCompiling)
                 return "compiling";
@@ -168,7 +169,19 @@ namespace MCPForUnity.Editor.Tools
             {
                 var heavy = _store.GetJob(_activeHeavyTicket);
                 if (heavy != null && (heavy.Status == JobStatus.Done || heavy.Status == JobStatus.Failed))
+                {
+                    // Hold the heavy slot while the editor is still busy from side-effects.
+                    // e.g., run_tests starts tests asynchronously and returns instantly, but
+                    // the TestRunner is still running. We keep the slot occupied so domain-reload
+                    // jobs can't be dequeued until the async operation completes.
+                    if (IsEditorBusy())
+                        return;
+
                     _activeHeavyTicket = null;
+                    // One-frame cooldown: don't immediately dequeue the next heavy job.
+                    // Gives async state one editor frame to settle before the guard check.
+                    return;
+                }
                 else
                     return; // Heavy still running, wait
             }

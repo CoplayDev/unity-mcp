@@ -237,5 +237,73 @@ namespace MCPForUnity.Tests.Editor
             Assert.That(testJob.Status, Is.Not.EqualTo(JobStatus.Queued));
             Assert.That(refreshJob.Status, Is.EqualTo(JobStatus.Queued));
         }
+
+        [Test]
+        public void ProcessTick_HoldsHeavySlotWhileEditorBusy()
+        {
+            bool busy = false;
+            _queue.IsEditorBusy = () => busy;
+
+            var testCmds = new List<BatchCommand>
+            {
+                new() { Tool = "run_tests", Params = new JObject(), Tier = ExecutionTier.Heavy, CausesDomainReload = false }
+            };
+            var refreshCmds = new List<BatchCommand>
+            {
+                new() { Tool = "refresh_unity", Params = new JObject(), Tier = ExecutionTier.Heavy, CausesDomainReload = true }
+            };
+            var testJob = _queue.Submit("a", "tests", false, testCmds);
+            var refreshJob = _queue.Submit("b", "refresh", false, refreshCmds);
+
+            // Tick 1: starts testJob, completes synchronously
+            _queue.ProcessTick(DummyExecutor);
+            Assert.That(testJob.Status, Is.EqualTo(JobStatus.Done));
+            Assert.That(_queue.HasActiveHeavy, Is.True, "Heavy slot should remain occupied");
+
+            // Simulate: tests started async operation, editor is now busy
+            busy = true;
+
+            // Tick 2: testJob is Done but editor is busy → heavy slot held
+            _queue.ProcessTick(DummyExecutor);
+            Assert.That(refreshJob.Status, Is.EqualTo(JobStatus.Queued), "Refresh blocked while editor busy");
+            Assert.That(_queue.HasActiveHeavy, Is.True, "Heavy slot held while editor busy");
+
+            // Tick 3: still busy
+            _queue.ProcessTick(DummyExecutor);
+            Assert.That(refreshJob.Status, Is.EqualTo(JobStatus.Queued));
+
+            // Simulate: tests complete, editor no longer busy
+            busy = false;
+
+            // Tick 4: heavy slot cleared (cooldown)
+            _queue.ProcessTick(DummyExecutor);
+            Assert.That(_queue.HasActiveHeavy, Is.False, "Heavy slot released after editor settles");
+            Assert.That(refreshJob.Status, Is.EqualTo(JobStatus.Queued), "Cooldown frame - not dequeued yet");
+
+            // Tick 5: refresh proceeds
+            _queue.ProcessTick(DummyExecutor);
+            Assert.That(refreshJob.Status, Is.EqualTo(JobStatus.Done));
+        }
+
+        [Test]
+        public void ProcessTick_ReleasesHeavySlotImmediatelyWhenEditorNotBusy()
+        {
+            _queue.IsEditorBusy = () => false;
+
+            var cmds = new List<BatchCommand>
+            {
+                new() { Tool = "run_tests", Params = new JObject(), Tier = ExecutionTier.Heavy, CausesDomainReload = false }
+            };
+            var job = _queue.Submit("a", "tests", false, cmds);
+
+            // Tick 1: starts and completes job
+            _queue.ProcessTick(DummyExecutor);
+            Assert.That(job.Status, Is.EqualTo(JobStatus.Done));
+            Assert.That(_queue.HasActiveHeavy, Is.True, "Heavy slot occupied (cooldown pending)");
+
+            // Tick 2: cooldown frame — clears heavy slot
+            _queue.ProcessTick(DummyExecutor);
+            Assert.That(_queue.HasActiveHeavy, Is.False, "Heavy slot released after cooldown");
+        }
     }
 }
