@@ -21,6 +21,12 @@ namespace MCPForUnity.Editor.Tools
 
         static readonly TimeSpan TicketExpiry = TimeSpan.FromMinutes(5);
 
+        /// <summary>
+        /// Predicate that returns true when domain-reload operations should be deferred.
+        /// Default always returns false. CommandGatewayState wires this to the real checks.
+        /// </summary>
+        public Func<bool> IsEditorBusy { get; set; } = () => false;
+
         public bool HasActiveHeavy => _activeHeavyTicket != null;
         public int QueueDepth => _store.QueueDepth;
         public int SmoothInFlight => _smoothInFlight.Count;
@@ -133,11 +139,22 @@ namespace MCPForUnity.Editor.Tools
             // 2. If heavy queue has items and no smooth in flight, start next heavy
             if (_heavyQueue.Count > 0 && _smoothInFlight.Count == 0)
             {
-                while (_heavyQueue.Count > 0)
+                bool editorBusy = IsEditorBusy();
+                // Peek-and-skip: find the first eligible heavy job
+                int count = _heavyQueue.Count;
+                for (int i = 0; i < count; i++)
                 {
                     var ticket = _heavyQueue.Dequeue();
                     var job = _store.GetJob(ticket);
                     if (job == null || job.Status == JobStatus.Cancelled) continue;
+
+                    // Guard: domain-reload jobs must wait when editor is busy
+                    if (job.CausesDomainReload && editorBusy)
+                    {
+                        _heavyQueue.Enqueue(ticket); // put back at end
+                        continue;
+                    }
+
                     _activeHeavyTicket = ticket;
                     _ = ExecuteJob(job, executeCommand);
                     return;

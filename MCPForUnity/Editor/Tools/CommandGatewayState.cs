@@ -1,3 +1,4 @@
+using MCPForUnity.Editor.Services;
 using UnityEditor;
 
 namespace MCPForUnity.Editor.Tools
@@ -13,6 +14,10 @@ namespace MCPForUnity.Editor.Tools
 
         static CommandGatewayState()
         {
+            Queue.IsEditorBusy = () =>
+                TestJobManager.HasRunningJob
+                || EditorApplication.isCompiling;
+
             EditorApplication.update += OnUpdate;
         }
 

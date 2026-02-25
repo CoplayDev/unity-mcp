@@ -172,5 +172,70 @@ namespace MCPForUnity.Tests.Editor
             var job = _queue.Submit("agent-1", "test", false, cmds);
             Assert.That(job.CausesDomainReload, Is.False);
         }
+
+        [Test]
+        public void ProcessTick_ReloadJob_SkippedWhenEditorBusy()
+        {
+            _queue.IsEditorBusy = () => true;
+            var cmds = new List<BatchCommand>
+            {
+                new() { Tool = "refresh_unity", Params = new JObject(), Tier = ExecutionTier.Heavy, CausesDomainReload = true }
+            };
+            var job = _queue.Submit("agent-1", "refresh", false, cmds);
+
+            // Tick should NOT start the job because editor is busy
+            _queue.ProcessTick(DummyExecutor);
+            Assert.That(job.Status, Is.EqualTo(JobStatus.Queued));
+            Assert.That(_queue.HasActiveHeavy, Is.False);
+        }
+
+        [Test]
+        public void ProcessTick_ReloadJob_ProceedsWhenEditorNotBusy()
+        {
+            _queue.IsEditorBusy = () => false;
+            var cmds = new List<BatchCommand>
+            {
+                new() { Tool = "refresh_unity", Params = new JObject(), Tier = ExecutionTier.Heavy, CausesDomainReload = true }
+            };
+            var job = _queue.Submit("agent-1", "refresh", false, cmds);
+
+            _queue.ProcessTick(DummyExecutor);
+            Assert.That(job.Status, Is.Not.EqualTo(JobStatus.Queued));
+        }
+
+        [Test]
+        public void ProcessTick_NonReloadHeavyJob_ProceedsEvenWhenBusy()
+        {
+            _queue.IsEditorBusy = () => true;
+            var cmds = new List<BatchCommand>
+            {
+                new() { Tool = "run_tests", Params = new JObject(), Tier = ExecutionTier.Heavy, CausesDomainReload = false }
+            };
+            var job = _queue.Submit("agent-1", "tests", false, cmds);
+
+            _queue.ProcessTick(DummyExecutor);
+            Assert.That(job.Status, Is.Not.EqualTo(JobStatus.Queued));
+        }
+
+        [Test]
+        public void ProcessTick_ReloadJobBehindNonReload_NonReloadProceeds()
+        {
+            _queue.IsEditorBusy = () => true;
+            var testCmds = new List<BatchCommand>
+            {
+                new() { Tool = "run_tests", Params = new JObject(), Tier = ExecutionTier.Heavy, CausesDomainReload = false }
+            };
+            var refreshCmds = new List<BatchCommand>
+            {
+                new() { Tool = "refresh_unity", Params = new JObject(), Tier = ExecutionTier.Heavy, CausesDomainReload = true }
+            };
+            var testJob = _queue.Submit("agent-1", "tests", false, testCmds);
+            var refreshJob = _queue.Submit("agent-2", "refresh", false, refreshCmds);
+
+            _queue.ProcessTick(DummyExecutor);
+            // test job should start (non-reload), refresh should stay queued
+            Assert.That(testJob.Status, Is.Not.EqualTo(JobStatus.Queued));
+            Assert.That(refreshJob.Status, Is.EqualTo(JobStatus.Queued));
+        }
     }
 }
