@@ -158,7 +158,7 @@ uri="file:///full/path/to/file.cs"
 | **Editor** | `manage_editor`, `execute_menu_item`, `read_console` | Editor control |
 | **Testing** | `run_tests`, `get_test_job` | Unity Test Framework |
 | **Batch** | `batch_execute` | Parallel/bulk operations |
-| **UI** | `batch_execute` with `manage_gameobject` + `manage_components` | Canvas, Panel, Button, Text, Slider, Toggle, Input Field. **Read `mcpforunity://project/info` first** to detect uGUI/TMP/Input System availability. (see [UI workflows](references/workflows.md#ui-creation-workflows)) |
+| **UI** | `manage_ui`, `batch_execute` with `manage_gameobject` + `manage_components` | **UI Toolkit**: Use `manage_ui` to create UXML/USS files, attach UIDocument, inspect visual trees. **uGUI (Canvas)**: Use `batch_execute` for Canvas, Panel, Button, Text, Slider, Toggle, Input Field. **Read `mcpforunity://project/info` first** to detect uGUI/TMP/Input System/UI Toolkit availability. (see [UI workflows](references/workflows.md#ui-creation-workflows)) |
 
 ## Common Workflows
 
