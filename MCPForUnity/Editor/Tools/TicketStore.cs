@@ -78,6 +78,16 @@ namespace MCPForUnity.Editor.Tools
             return stats;
         }
 
+        /// <summary>
+        /// Remove a job from the store. Returns the removed job, or null if not found.
+        /// </summary>
+        public BatchJob Remove(string ticket)
+        {
+            if (_jobs.Remove(ticket, out var job))
+                return job;
+            return null;
+        }
+
         public int QueueDepth => _jobs.Values.Count(j => j.Status == JobStatus.Queued);
 
         /// <summary>

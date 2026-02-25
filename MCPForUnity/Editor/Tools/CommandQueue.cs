@@ -110,6 +110,12 @@ namespace MCPForUnity.Editor.Tools
         }
 
         /// <summary>
+        /// Remove a completed job from the store by ticket.
+        /// Returns the removed job, or null if not found.
+        /// </summary>
+        public BatchJob Remove(string ticket) => _store.Remove(ticket);
+
+        /// <summary>
         /// Compressed summary of all jobs for batch status checks.
         /// Returns short field names for token efficiency.
         /// </summary>

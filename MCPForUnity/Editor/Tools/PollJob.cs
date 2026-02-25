@@ -6,6 +6,9 @@ namespace MCPForUnity.Editor.Tools
     /// <summary>
     /// Poll the status of an async batch job by ticket ID.
     /// Generalizes the get_test_job pattern to any queued batch.
+    /// Terminal jobs (Done, Failed, Cancelled) are auto-removed after the
+    /// response is built. If gateway logging is enabled, the job data is
+    /// written to a log file before removal.
     /// </summary>
     [McpForUnityTool("poll_job", Tier = ExecutionTier.Instant)]
     public static class PollJob
@@ -22,12 +25,14 @@ namespace MCPForUnity.Editor.Tools
             if (job == null)
                 return new ErrorResponse($"Ticket '{ticket}' not found or expired.");
 
+            object response;
+
             switch (job.Status)
             {
                 case JobStatus.Queued:
                     var ahead = CommandGatewayState.Queue.GetAheadOf(ticket);
                     string blockedBy = CommandGatewayState.Queue.GetBlockedReason(ticket);
-                    return new PendingResponse(
+                    response = new PendingResponse(
                         $"Queued at position {ahead.Count}.",
                         pollIntervalSeconds: 2.0,
                         data: new
@@ -47,9 +52,10 @@ namespace MCPForUnity.Editor.Tools
                                 status = j.Status.ToString().ToLowerInvariant()
                             })
                         });
+                    break;
 
                 case JobStatus.Running:
-                    return new PendingResponse(
+                    response = new PendingResponse(
                         $"Running command {job.CurrentIndex + 1}/{job.Commands.Count}.",
                         pollIntervalSeconds: 1.0,
                         data: new
@@ -60,9 +66,10 @@ namespace MCPForUnity.Editor.Tools
                             agent = job.Agent,
                             label = job.Label
                         });
+                    break;
 
                 case JobStatus.Done:
-                    return new SuccessResponse(
+                    response = new SuccessResponse(
                         $"Batch complete. {job.Results.Count} results.",
                         new
                         {
@@ -73,9 +80,10 @@ namespace MCPForUnity.Editor.Tools
                             label = job.Label,
                             atomic = job.Atomic
                         });
+                    break;
 
                 case JobStatus.Failed:
-                    return new ErrorResponse(
+                    response = new ErrorResponse(
                         job.Error ?? "Batch failed.",
                         new
                         {
@@ -87,17 +95,33 @@ namespace MCPForUnity.Editor.Tools
                             atomic = job.Atomic,
                             rolled_back = job.Atomic
                         });
+                    break;
 
                 case JobStatus.Cancelled:
-                    return new ErrorResponse("Job was cancelled.", new
+                    response = new ErrorResponse("Job was cancelled.", new
                     {
                         ticket = job.Ticket,
                         status = "cancelled"
                     });
+                    break;
 
                 default:
                     return new ErrorResponse($"Unknown status: {job.Status}");
             }
+
+            // Auto-cleanup: remove terminal jobs after building the response.
+            // The agent has consumed the result — no need to keep it in the queue.
+            if (job.Status == JobStatus.Done
+                || job.Status == JobStatus.Failed
+                || job.Status == JobStatus.Cancelled)
+            {
+                if (GatewayJobLogger.IsEnabled)
+                    GatewayJobLogger.Log(job);
+
+                CommandGatewayState.Queue.Remove(ticket);
+            }
+
+            return response;
         }
     }
 }
