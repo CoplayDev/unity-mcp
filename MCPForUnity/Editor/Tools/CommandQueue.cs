@@ -150,6 +150,11 @@ namespace MCPForUnity.Editor.Tools
         }
 
         /// <summary>
+        /// Get all jobs ordered by creation time (most recent first).
+        /// </summary>
+        public List<BatchJob> GetAllJobs() => _store.GetAllJobs();
+
+        /// <summary>
         /// Get overall queue status.
         /// </summary>
         public object GetStatus()
