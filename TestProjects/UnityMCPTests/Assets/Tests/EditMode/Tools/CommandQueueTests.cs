@@ -135,5 +135,42 @@ namespace MCPForUnity.Tests.Editor
             // All three should be queued
             Assert.That(_queue.QueueDepth, Is.GreaterThanOrEqualTo(3));
         }
+
+        [Test]
+        public void BatchCommand_CausesDomainReload_DefaultsFalse()
+        {
+            var cmd = new BatchCommand { Tool = "find_gameobjects", Params = new JObject(), Tier = ExecutionTier.Instant };
+            Assert.That(cmd.CausesDomainReload, Is.False);
+        }
+
+        [Test]
+        public void BatchJob_CausesDomainReload_DefaultsFalse()
+        {
+            var job = new BatchJob();
+            Assert.That(job.CausesDomainReload, Is.False);
+        }
+
+        [Test]
+        public void Submit_WithReloadCommand_SetsJobCausesDomainReload()
+        {
+            var cmds = new List<BatchCommand>
+            {
+                new() { Tool = "find_gameobjects", Params = new JObject(), Tier = ExecutionTier.Instant, CausesDomainReload = false },
+                new() { Tool = "refresh_unity", Params = new JObject(), Tier = ExecutionTier.Heavy, CausesDomainReload = true }
+            };
+            var job = _queue.Submit("agent-1", "test", false, cmds);
+            Assert.That(job.CausesDomainReload, Is.True);
+        }
+
+        [Test]
+        public void Submit_WithoutReloadCommand_JobCausesDomainReloadFalse()
+        {
+            var cmds = new List<BatchCommand>
+            {
+                new() { Tool = "run_tests", Params = new JObject(), Tier = ExecutionTier.Heavy, CausesDomainReload = false }
+            };
+            var job = _queue.Submit("agent-1", "test", false, cmds);
+            Assert.That(job.CausesDomainReload, Is.False);
+        }
     }
 }

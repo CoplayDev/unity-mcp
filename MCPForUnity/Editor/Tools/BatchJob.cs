@@ -16,6 +16,7 @@ namespace MCPForUnity.Editor.Tools
         public string Label { get; set; }
         public bool Atomic { get; set; }
         public ExecutionTier Tier { get; set; }
+        public bool CausesDomainReload { get; set; }
         public JobStatus Status { get; set; } = JobStatus.Queued;
 
         public List<BatchCommand> Commands { get; set; } = new();
@@ -34,6 +35,7 @@ namespace MCPForUnity.Editor.Tools
         public string Tool { get; set; }
         public JObject Params { get; set; }
         public ExecutionTier Tier { get; set; }
+        public bool CausesDomainReload { get; set; }
     }
 
     public class AgentStats
