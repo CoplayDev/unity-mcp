@@ -35,6 +35,7 @@ namespace MCPForUnity.Editor.Tools
 
             var job = _store.CreateJob(agent, label, atomic, batchTier);
             job.Commands = commands;
+            job.CausesDomainReload = commands.Any(c => c.CausesDomainReload);
 
             if (batchTier == ExecutionTier.Heavy)
                 _heavyQueue.Enqueue(job.Ticket);

@@ -264,7 +264,7 @@ namespace MCPForUnity.Editor.Tools
                 var toolTier = CommandRegistry.GetToolTier(toolName);
                 var effectiveTier = CommandClassifier.Classify(toolName, toolTier, cmdParams);
 
-                commands.Add(new BatchCommand { Tool = toolName, Params = cmdParams, Tier = effectiveTier });
+                commands.Add(new BatchCommand { Tool = toolName, Params = cmdParams, Tier = effectiveTier, CausesDomainReload = CommandClassifier.CausesDomainReload(toolName, cmdParams) });
             }
 
             if (commands.Count == 0)
