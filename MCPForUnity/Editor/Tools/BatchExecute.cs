@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
@@ -51,6 +52,14 @@ namespace MCPForUnity.Editor.Tools
                     $"A maximum of {maxCommands} commands are allowed per batch (configurable in MCP Tools window, hard max {AbsoluteMaxCommandsPerBatch}).");
             }
 
+            // --- Async gateway path ---
+            bool isAsync = @params.Value<bool?>("async") ?? false;
+            if (isAsync)
+            {
+                return HandleAsyncSubmit(@params, commandsToken);
+            }
+
+            // --- Legacy synchronous path (unchanged) ---
             bool failFast = @params.Value<bool?>("failFast") ?? false;
             bool parallelRequested = @params.Value<bool?>("parallel") ?? false;
             int? maxParallel = @params.Value<int?>("maxParallelism");
@@ -231,5 +240,84 @@ namespace MCPForUnity.Editor.Tools
         }
 
         private static string ToCamelCase(string key) => StringCaseUtility.ToCamelCase(key);
+
+        /// <summary>
+        /// Handle async batch submission. Queues commands via CommandGateway and returns
+        /// a ticket (for non-instant batches) or results inline (for instant batches).
+        /// </summary>
+        private static object HandleAsyncSubmit(JObject @params, JArray commandsToken)
+        {
+            bool atomic = @params.Value<bool?>("atomic") ?? false;
+            string agent = @params.Value<string>("agent") ?? "anonymous";
+            string label = @params.Value<string>("label") ?? "";
+
+            var commands = new List<BatchCommand>();
+            foreach (var token in commandsToken)
+            {
+                if (token is not JObject cmdObj) continue;
+                string toolName = cmdObj["tool"]?.ToString();
+                if (string.IsNullOrWhiteSpace(toolName)) continue;
+
+                var rawParams = cmdObj["params"] as JObject ?? new JObject();
+                var cmdParams = NormalizeParameterKeys(rawParams);
+
+                var toolTier = CommandRegistry.GetToolTier(toolName);
+                var effectiveTier = CommandClassifier.Classify(toolName, toolTier, cmdParams);
+
+                commands.Add(new BatchCommand { Tool = toolName, Params = cmdParams, Tier = effectiveTier });
+            }
+
+            if (commands.Count == 0)
+            {
+                return new ErrorResponse("No valid commands in async batch.");
+            }
+
+            var job = CommandGatewayState.Queue.Submit(agent, label, atomic, commands);
+
+            if (job.Tier == ExecutionTier.Instant)
+            {
+                // Execute inline, return results directly
+                foreach (var cmd in commands)
+                {
+                    try
+                    {
+                        var result = CommandRegistry.InvokeCommandAsync(cmd.Tool, cmd.Params)
+                            .ConfigureAwait(true).GetAwaiter().GetResult();
+                        job.Results.Add(result);
+                    }
+                    catch (Exception ex)
+                    {
+                        job.Results.Add(new ErrorResponse(ex.Message));
+                        if (atomic)
+                        {
+                            job.Status = JobStatus.Failed;
+                            job.Error = ex.Message;
+                            job.CompletedAt = DateTime.UtcNow;
+                            return new ErrorResponse($"Instant batch failed at command '{cmd.Tool}': {ex.Message}",
+                                new { ticket = job.Ticket, results = job.Results });
+                        }
+                    }
+                }
+                job.Status = JobStatus.Done;
+                job.CompletedAt = DateTime.UtcNow;
+                return new SuccessResponse("Batch completed (instant).",
+                    new { ticket = job.Ticket, results = job.Results });
+            }
+
+            // Non-instant: return ticket for polling
+            return new PendingResponse(
+                $"Batch queued as {job.Ticket}. Poll with poll_job.",
+                pollIntervalSeconds: 2.0,
+                data: new
+                {
+                    ticket = job.Ticket,
+                    status = job.Status.ToString().ToLowerInvariant(),
+                    position = CommandGatewayState.Queue.GetAheadOf(job.Ticket).Count,
+                    tier = job.Tier.ToString().ToLowerInvariant(),
+                    agent,
+                    label,
+                    atomic
+                });
+        }
     }
 }
