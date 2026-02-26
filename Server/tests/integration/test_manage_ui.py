@@ -356,3 +356,73 @@ class TestManageUIReadResponse:
         assert data["contents"] == SAMPLE_UXML
         assert "encodedContents" not in data
         assert "contentsEncoded" not in data
+
+
+class TestManageUIRenderUI:
+    """Tests for render_ui action."""
+
+    def test_render_ui_routes_params(self, monkeypatch):
+        captured = {}
+
+        async def fake_send(ctx, instance, cmd, params, **kwargs):
+            captured["params"] = params
+            return {"success": True, "message": "Rendered",
+                    "data": {"path": "Assets/Screenshots/test.png"}}
+
+        monkeypatch.setattr(manage_ui_mod, "send_mutation", fake_send)
+
+        resp = run_async(manage_ui_mod.manage_ui(
+            ctx=DummyContext(), action="render_ui",
+            target="UIRoot", width=1280, height=720,
+            include_image=True, max_resolution=480,
+            screenshot_file_name="my-preview",
+        ))
+        assert resp["success"] is True
+        p = captured["params"]
+        assert p["action"] == "render_ui"
+        assert p["target"] == "UIRoot"
+        assert p["width"] == 1280
+        assert p["height"] == 720
+        assert p["include_image"] is True
+        assert p["max_resolution"] == 480
+        assert p["file_name"] == "my-preview"
+
+    def test_render_ui_none_excluded(self, monkeypatch):
+        captured = {}
+
+        async def fake_send(ctx, instance, cmd, params, **kwargs):
+            captured["params"] = params
+            return {"success": True, "message": "ok"}
+
+        monkeypatch.setattr(manage_ui_mod, "send_mutation", fake_send)
+        run_async(manage_ui_mod.manage_ui(
+            ctx=DummyContext(), action="render_ui", target="X"))
+        p = captured["params"]
+        for k in ("width", "height", "include_image", "max_resolution", "file_name"):
+            assert k not in p
+
+
+class TestManageUILinkStylesheet:
+    """Tests for link_stylesheet action."""
+
+    def test_link_stylesheet_routes_params(self, monkeypatch):
+        captured = {}
+
+        async def fake_send(ctx, instance, cmd, params, **kwargs):
+            captured["params"] = params
+            return {"success": True, "message": "Linked"}
+
+        monkeypatch.setattr(manage_ui_mod, "send_mutation", fake_send)
+
+        resp = run_async(manage_ui_mod.manage_ui(
+            ctx=DummyContext(), action="link_stylesheet",
+            path="Assets/UI/Menu.uxml",
+            stylesheet="Assets/UI/Styles.uss",
+        ))
+        assert resp["success"] is True
+        p = captured["params"]
+        assert p["action"] == "link_stylesheet"
+        assert p["path"] == "Assets/UI/Menu.uxml"
+        assert p["stylesheet"] == "Assets/UI/Styles.uss"
+        for k in ("width", "height", "include_image"):
+            assert k not in p
