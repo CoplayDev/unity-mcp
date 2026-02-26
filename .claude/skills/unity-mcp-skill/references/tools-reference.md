@@ -12,6 +12,7 @@ Complete reference for all MCP tools. Each tool includes parameters, types, and 
 - [Script Tools](#script-tools)
 - [Asset Tools](#asset-tools)
 - [Material & Shader Tools](#material--shader-tools)
+- [UI Tools](#ui-tools)
 - [Editor Control Tools](#editor-control-tools)
 - [Testing Tools](#testing-tools)
 
@@ -35,10 +36,12 @@ Read `mcpforunity://project/info` to detect project capabilities before making a
 | `packages.ugui` | bool | `com.unity.ugui` installed (Canvas, Image, Button, etc.) |
 | `packages.textmeshpro` | bool | `com.unity.textmeshpro` installed (TMP_Text, TMP_InputField) |
 | `packages.inputsystem` | bool | `com.unity.inputsystem` installed (InputAction, PlayerInput) |
+| `packages.uiToolkit` | bool | Always `true` for Unity 2021.3+ (UIDocument, VisualElement, UXML/USS) |
+| `packages.screenCapture` | bool | `com.unity.modules.screencapture` enabled (ScreenCapture API for screenshots) |
 
 **Key decision points:**
 
-- **UI system**: If `packages.ugui` is true, use Canvas + uGUI components. UI Toolkit (UIDocument/UXML) is built-in since Unity 2021+ but has no MCP tool support yet.
+- **UI system**: If `packages.uiToolkit` is true (always for Unity 2021+), use `manage_ui` for UI Toolkit workflows (UXML/USS). If `packages.ugui` is true, use Canvas + uGUI components via `batch_execute`. UI Toolkit is preferred for new UI — it uses a frontend-like workflow (UXML for structure, USS for styling).
 - **Text**: If `packages.textmeshpro` is true, use `TextMeshProUGUI` instead of legacy `Text`.
 - **Input**: Use `activeInputHandler` to decide EventSystem module — `StandaloneInputModule` (Old) vs `InputSystemUIInputModule` (New). See [workflows.md — Input System](workflows.md#input-system-old-vs-new).
 - **Shaders**: Use `renderPipeline` to pick correct shader names — `Standard` (BuiltIn) vs `Universal Render Pipeline/Lit` (URP) vs `HDRP/Lit` (HDRP).
@@ -580,6 +583,76 @@ manage_texture(
     palette=[[255,0,0,255], [0,0,255,255]]
 )
 ```
+
+---
+
+## UI Tools
+
+### manage_ui
+
+Manage Unity UI Toolkit elements: UXML documents, USS stylesheets, UIDocument components, and visual tree inspection.
+
+```python
+# Create a UXML file
+manage_ui(
+    action="create",
+    path="Assets/UI/MainMenu.uxml",
+    contents='<ui:UXML xmlns:ui="UnityEngine.UIElements"><ui:Label text="Hello" /></ui:UXML>'
+)
+
+# Create a USS stylesheet
+manage_ui(
+    action="create",
+    path="Assets/UI/Styles.uss",
+    contents=".title { font-size: 32px; color: white; }"
+)
+
+# Read a UXML/USS file
+manage_ui(
+    action="read",
+    path="Assets/UI/MainMenu.uxml"
+)
+# Returns: {"success": true, "data": {"contents": "...", "path": "..."}}
+
+# Update an existing file
+manage_ui(
+    action="update",
+    path="Assets/UI/Styles.uss",
+    contents=".title { font-size: 48px; color: yellow; -unity-font-style: bold; }"
+)
+
+# Attach UIDocument to a GameObject
+manage_ui(
+    action="attach_ui_document",
+    target="UICanvas",                    # GameObject name or path
+    source_asset="Assets/UI/MainMenu.uxml",
+    panel_settings="Assets/UI/Panel.asset",  # optional, auto-creates if omitted
+    sort_order=0                          # optional, default 0
+)
+
+# Create PanelSettings asset
+manage_ui(
+    action="create_panel_settings",
+    path="Assets/UI/Panel.asset",
+    scale_mode="ScaleWithScreenSize",     # optional: "ConstantPixelSize"|"ConstantPhysicalSize"|"ScaleWithScreenSize"
+    reference_resolution={"width": 1920, "height": 1080}  # optional, for ScaleWithScreenSize
+)
+
+# Inspect the visual tree of a UIDocument
+manage_ui(
+    action="get_visual_tree",
+    target="UICanvas",                    # GameObject with UIDocument
+    max_depth=10                          # optional, default 10
+)
+# Returns: hierarchy of VisualElements with type, name, classes, styles, text, children
+```
+
+**UI Toolkit workflow:**
+
+1. Create UXML (structure, like HTML) and USS (styling, like CSS) files
+2. Create a PanelSettings asset (or let `attach_ui_document` auto-create one)
+3. Create an empty GameObject and attach UIDocument with the UXML source
+4. Use `get_visual_tree` to inspect the result
 
 ---
 

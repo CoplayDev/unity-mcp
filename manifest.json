@@ -102,6 +102,10 @@
       "description": "Create and modify textures with patterns, gradients, and noise"
     },
     {
+      "name": "manage_ui",
+      "description": "Manage Unity UI Toolkit elements (UXML documents, USS stylesheets, UIDocument components)"
+    },
+    {
       "name": "manage_vfx",
       "description": "Manage Visual Effects, particle systems, and trails"
     },

@@ -561,7 +561,7 @@ manage_scene(action="screenshot")
 
 ## UI Creation Workflows
 
-Unity UI (Canvas-based UGUI) requires specific component hierarchies. Use `batch_execute` with `fail_fast=True` to create complete UI elements in a single call.
+Unity has two UI systems: **UI Toolkit** (modern, recommended) and **uGUI** (Canvas-based, legacy). Use `manage_ui` for UI Toolkit workflows, and `batch_execute` with `manage_gameobject` + `manage_components` for uGUI.
 
 > **Template warning:** This section is a skill template library, not a guaranteed source of truth. Examples may be inaccurate for your Unity version, package setup, or project conventions.
 > **Use safely:**
@@ -582,7 +582,9 @@ Unity UI (Canvas-based UGUI) requires specific component hierarchies. Use `batch
 #   "packages": {
 #     "ugui": true/false,        — com.unity.ugui (Canvas, Image, Button, etc.)
 #     "textmeshpro": true/false,  — com.unity.textmeshpro (TextMeshProUGUI)
-#     "inputsystem": true/false   — com.unity.inputsystem (new Input System)
+#     "inputsystem": true/false,  — com.unity.inputsystem (new Input System)
+#     "uiToolkit": true/false,    — UI Toolkit (always true for Unity 2021.3+)
+#     "screenCapture": true/false  — ScreenCapture module enabled
 #   }
 # }
 ```
@@ -591,12 +593,115 @@ Unity UI (Canvas-based UGUI) requires specific component hierarchies. Use `batch
 
 | project_info field | Value | What to use |
 |---|---|---|
-| `packages.ugui` | `true` | Canvas-based UI (Image, Button, etc.) |
-| `packages.textmeshpro` | `true` | `TextMeshProUGUI` for text |
+| `packages.uiToolkit` | `true` | **Preferred:** Use `manage_ui` for UI Toolkit (UXML/USS) |
+| `packages.ugui` | `true` | Canvas-based UI (Image, Button, etc.) via `batch_execute` |
+| `packages.textmeshpro` | `true` | `TextMeshProUGUI` for text (uGUI) |
 | `packages.textmeshpro` | `false` | `UnityEngine.UI.Text` (legacy, lower quality) |
-| `activeInputHandler` | `"Old"` | `StandaloneInputModule` for EventSystem |
-| `activeInputHandler` | `"New"` | `InputSystemUIInputModule` for EventSystem |
+| `activeInputHandler` | `"Old"` | `StandaloneInputModule` for EventSystem (uGUI) |
+| `activeInputHandler` | `"New"` | `InputSystemUIInputModule` for EventSystem (uGUI) |
 | `activeInputHandler` | `"Both"` | Either works; prefer `InputSystemUIInputModule` for UI |
+
+### UI Toolkit Workflows (manage_ui)
+
+UI Toolkit uses a web-like approach: **UXML** (like HTML) for structure, **USS** (like CSS) for styling. This is the preferred UI system for new projects.
+
+#### Create a Complete UI Screen
+
+```python
+# 1. Create UXML document (structure)
+manage_ui(
+    action="create",
+    path="Assets/UI/MainMenu.uxml",
+    contents='''<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+    <ui:Style src="Assets/UI/MainMenu.uss" />
+    <ui:VisualElement name="root" class="root-container">
+        <ui:Label text="My Game" class="title" />
+        <ui:Button text="Play" name="play-btn" class="menu-button" />
+        <ui:Button text="Settings" name="settings-btn" class="menu-button" />
+        <ui:Button text="Quit" name="quit-btn" class="menu-button" />
+    </ui:VisualElement>
+</ui:UXML>'''
+)
+
+# 2. Create USS stylesheet (styling)
+manage_ui(
+    action="create",
+    path="Assets/UI/MainMenu.uss",
+    contents='''.root-container {
+    flex-grow: 1;
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.8);
+}
+.title {
+    font-size: 48px;
+    color: white;
+    -unity-font-style: bold;
+    margin-bottom: 40px;
+}
+.menu-button {
+    width: 300px;
+    height: 60px;
+    font-size: 24px;
+    margin: 8px;
+    background-color: rgb(50, 120, 200);
+    color: white;
+    border-radius: 8px;
+}
+.menu-button:hover {
+    background-color: rgb(70, 140, 220);
+}'''
+)
+
+# 3. Create a GameObject and attach UIDocument
+manage_gameobject(action="create", name="UIRoot")
+manage_ui(
+    action="attach_ui_document",
+    target="UIRoot",
+    source_asset="Assets/UI/MainMenu.uxml"
+    # panel_settings auto-created if omitted
+)
+
+# 4. Verify the visual tree
+manage_ui(action="get_visual_tree", target="UIRoot", max_depth=5)
+```
+
+#### Update Existing UI
+
+```python
+# Read current content
+result = manage_ui(action="read", path="Assets/UI/MainMenu.uss")
+# Modify and update
+manage_ui(
+    action="update",
+    path="Assets/UI/MainMenu.uss",
+    contents=".title { font-size: 64px; color: yellow; }"
+)
+```
+
+#### Custom PanelSettings
+
+```python
+# Create PanelSettings with ScaleWithScreenSize
+manage_ui(
+    action="create_panel_settings",
+    path="Assets/UI/GamePanelSettings.asset",
+    scale_mode="ScaleWithScreenSize",
+    reference_resolution={"width": 1920, "height": 1080}
+)
+
+# Attach UIDocument with custom PanelSettings
+manage_ui(
+    action="attach_ui_document",
+    target="UIRoot",
+    source_asset="Assets/UI/MainMenu.uxml",
+    panel_settings="Assets/UI/GamePanelSettings.asset"
+)
+```
+
+### uGUI (Canvas-Based) Workflows
+
+The sections below cover legacy Canvas-based UI using `batch_execute`. Use these when working with existing uGUI projects or when UI Toolkit is not suitable.
 
 ### RectTransform Sizing (Critical for All UI Children)
 
