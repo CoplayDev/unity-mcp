@@ -43,6 +43,12 @@ namespace MCPForUnity.Editor.Tools
         public string PollAction { get; set; } = "status";
 
         /// <summary>
+        /// Execution tier for queue dispatch. Default: Smooth (safe conservative default).
+        /// Instant = read-only, inline. Smooth = non-blocking write. Heavy = exclusive access.
+        /// </summary>
+        public ExecutionTier Tier { get; set; } = ExecutionTier.Smooth;
+
+        /// <summary>
         /// The command name used to route requests to this tool.
         /// If not specified, defaults to the PascalCase class name converted to snake_case.
         /// Kept for backward compatibility.

@@ -1,0 +1,43 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+    <ui:VisualElement name="queue-section" class="section">
+        <ui:Label text="Command Queue" class="section-title" />
+        <ui:VisualElement class="section-content">
+            <!-- Status bar -->
+            <ui:VisualElement name="queue-status-bar" class="queue-status-bar">
+                <ui:VisualElement class="setting-row">
+                    <ui:Label text="Active Heavy:" class="setting-label" />
+                    <ui:Label name="heavy-ticket-label" text="None" class="setting-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="queue-counters">
+                    <ui:Label name="queued-count" text="Queued: 0" class="queue-counter" />
+                    <ui:Label name="running-count" text="Running: 0" class="queue-counter" />
+                    <ui:Label name="done-count" text="Done: 0" class="queue-counter" />
+                    <ui:Label name="failed-count" text="Failed: 0" class="queue-counter" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <!-- Logging settings -->
+            <ui:VisualElement name="logging-box" class="queue-logging-box">
+                <ui:VisualElement class="queue-logging-header">
+                    <ui:Label text="Job Logging" class="queue-logging-title" />
+                    <ui:Toggle name="logging-toggle" class="queue-logging-toggle" />
+                </ui:VisualElement>
+                <ui:VisualElement name="logging-path-row" class="queue-logging-path-row">
+                    <ui:TextField name="log-path-field" class="queue-log-path-field" />
+                    <ui:Button name="browse-log-path-btn" text="..." class="queue-browse-btn" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <!-- Job list header -->
+            <ui:VisualElement name="job-list-header" class="queue-job-header">
+                <ui:Label text="Ticket" class="queue-col-ticket" />
+                <ui:Label text="Status" class="queue-col-status" />
+                <ui:Label text="Agent" class="queue-col-agent" />
+                <ui:Label text="Label" class="queue-col-label" />
+                <ui:Label text="Progress" class="queue-col-progress" />
+            </ui:VisualElement>
+            <!-- Dynamic job rows inserted here by C# -->
+            <ui:VisualElement name="job-list-container" class="queue-job-list" />
+            <!-- Empty state -->
+            <ui:Label name="empty-label" text="No jobs in queue." class="help-text" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

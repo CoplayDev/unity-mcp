@@ -8,7 +8,7 @@ namespace MCPForUnity.Editor.Tools
     /// <summary>
     /// Poll a previously started async test job by job_id.
     /// </summary>
-    [McpForUnityTool("get_test_job", AutoRegister = false)]
+    [McpForUnityTool("get_test_job", AutoRegister = false, Tier = ExecutionTier.Instant)]
     public static class GetTestJob
     {
         public static object HandleCommand(JObject @params)

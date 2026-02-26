@@ -1,0 +1,219 @@
+/* Status bar */
+.queue-status-bar {
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Counter row */
+.queue-counters {
+    flex-direction: row;
+    margin-top: 4px;
+}
+
+.queue-counter {
+    font-size: 11px;
+    margin-right: 16px;
+    color: rgba(180, 180, 180, 1);
+}
+
+/* Logging settings box */
+.queue-logging-box {
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.queue-logging-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.queue-logging-title {
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: rgba(180, 180, 180, 1);
+}
+
+.queue-logging-toggle {
+    margin: 0;
+}
+
+.queue-logging-path-row {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 4px;
+}
+
+.queue-log-path-field {
+    flex-grow: 1;
+    font-size: 10px;
+    margin-right: 4px;
+}
+
+.queue-log-path-field > .unity-text-field__input {
+    font-size: 10px;
+    padding: 2px 4px;
+    min-height: 18px;
+    color: rgba(170, 170, 170, 1);
+}
+
+.queue-browse-btn {
+    width: 28px;
+    min-width: 28px;
+    height: 20px;
+    padding: 0;
+    font-size: 11px;
+    -unity-text-align: middle-center;
+}
+
+/* Job list header */
+.queue-job-header {
+    flex-direction: row;
+    padding: 4px 8px;
+    margin-bottom: 2px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+.queue-job-header > Label {
+    font-size: 10px;
+    -unity-font-style: bold;
+    color: rgba(150, 150, 150, 1);
+}
+
+/* Job list container */
+.queue-job-list {
+    flex-direction: column;
+}
+
+/* Individual job row */
+.queue-job-row {
+    flex-direction: row;
+    align-items: center;
+    padding: 3px 8px;
+    margin-bottom: 1px;
+    border-radius: 2px;
+}
+
+.queue-job-row:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+/* Column widths */
+.queue-col-ticket {
+    width: 72px;
+    min-width: 72px;
+    font-size: 11px;
+    -unity-font-style: bold;
+    overflow: hidden;
+}
+
+.queue-col-status {
+    width: 70px;
+    min-width: 70px;
+    font-size: 11px;
+}
+
+.queue-col-agent {
+    width: 80px;
+    min-width: 80px;
+    font-size: 11px;
+    overflow: hidden;
+}
+
+.queue-col-label {
+    flex-grow: 1;
+    font-size: 11px;
+    overflow: hidden;
+}
+
+.queue-col-progress {
+    width: 50px;
+    min-width: 50px;
+    font-size: 11px;
+    -unity-text-align: middle-right;
+}
+
+/* Status dot in job rows */
+.queue-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+.queue-status-dot.status-queued {
+    background-color: rgba(255, 180, 0, 1);
+}
+
+.queue-status-dot.status-running {
+    background-color: rgba(100, 200, 255, 1);
+}
+
+.queue-status-dot.status-done {
+    background-color: rgba(0, 200, 100, 1);
+}
+
+.queue-status-dot.status-failed {
+    background-color: rgba(200, 50, 50, 1);
+}
+
+.queue-status-dot.status-cancelled {
+    background-color: rgba(150, 150, 150, 1);
+}
+
+/* Blocked badge */
+.queue-blocked-badge {
+    font-size: 9px;
+    padding: 1px 4px;
+    margin-left: 4px;
+    background-color: rgba(255, 100, 50, 0.3);
+    border-radius: 3px;
+    color: rgba(255, 150, 100, 1);
+}
+
+/* Light theme overrides */
+.unity-theme-light .queue-status-bar {
+    border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+.unity-theme-light .queue-counter {
+    color: rgba(80, 80, 80, 1);
+}
+
+.unity-theme-light .queue-job-header {
+    border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+.unity-theme-light .queue-job-header > Label {
+    color: rgba(100, 100, 100, 1);
+}
+
+.unity-theme-light .queue-job-row:hover {
+    background-color: rgba(0, 0, 0, 0.04);
+}
+
+.unity-theme-light .queue-blocked-badge {
+    background-color: rgba(255, 100, 50, 0.2);
+    color: rgba(200, 80, 30, 1);
+}
+
+.unity-theme-light .queue-logging-box {
+    border-color: rgba(0, 0, 0, 0.1);
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.unity-theme-light .queue-logging-title {
+    color: rgba(80, 80, 80, 1);
+}
+
+.unity-theme-light .queue-log-path-field > .unity-text-field__input {
+    color: rgba(60, 60, 60, 1);
+}

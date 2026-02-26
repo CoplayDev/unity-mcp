@@ -12,7 +12,7 @@ namespace MCPForUnity.Editor.Tools
     /// Starts a Unity Test Runner run asynchronously and returns a job id immediately.
     /// Use get_test_job(job_id) to poll status/results.
     /// </summary>
-    [McpForUnityTool("run_tests", AutoRegister = false)]
+    [McpForUnityTool("run_tests", AutoRegister = false, Tier = ExecutionTier.Heavy)]
     public static class RunTests
     {
         public static Task<object> HandleCommand(JObject @params)

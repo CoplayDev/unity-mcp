@@ -103,6 +103,14 @@ namespace MCPForUnity.Editor.Helpers
         {
             try
             {
+                // WSL workaround: when the package lives on a WSL UNC path and Unity
+                // runs on Windows, UXML/USS files cannot be parsed from the UNC path.
+                // UIAssetSync copies them to Assets/MCPForUnityUI/ on domain reload.
+                if (UIAssetSync.NeedsSync())
+                {
+                    return UIAssetSync.SyncedBasePath;
+                }
+
                 // Try Package Manager first (registry and local installs)
                 var packageInfo = PackageInfo.FindForAssembly(typeof(AssetPathUtility).Assembly);
                 if (packageInfo != null && !string.IsNullOrEmpty(packageInfo.assetPath))
