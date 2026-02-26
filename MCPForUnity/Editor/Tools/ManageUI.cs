@@ -982,30 +982,45 @@ namespace MCPForUnity.Editor.Tools
                 // Check if we already have a persistent RT assigned to this PanelSettings.
                 // If the RT exists and its size matches, the panel has been rendering into it.
                 // If not, create one and assign it — content will be available on the next call.
-                bool rtJustCreated = false;
-                RenderTexture rt = panelSettings.targetTexture as RenderTexture;
+                // Look up from our cache rather than panelSettings.targetTexture,
+                // because we set targetTexture = null after each successful read
+                // to restore on-screen rendering.  The RT itself stays alive in s_panelRTs.
+                bool rtJustAssigned = false;
+                RenderTexture rt = null;
 
-                if (rt != null && s_panelRTs.ContainsKey(psId) && rt.width == width && rt.height == height)
+                if (s_panelRTs.TryGetValue(psId, out var cachedRt) && cachedRt != null)
                 {
-                    // RT already assigned and size matches — panel has been rendering into it.
-                    // We will read it below, then restore targetTexture = null so the UI
-                    // goes back to rendering on the actual display/camera.
-                }
-                else
-                {
-                    // Clean up old RT if size changed
-                    if (s_panelRTs.TryGetValue(psId, out var oldRt) && oldRt != null)
+                    if (cachedRt.width == width && cachedRt.height == height)
                     {
+                        rt = cachedRt;
+                        // Re-attach if it was detached after the previous read
+                        if (panelSettings.targetTexture != rt)
+                        {
+                            panelSettings.targetTexture = rt;
+                            rtJustAssigned = true;
+
+                            uiDoc.rootVisualElement?.MarkDirtyRepaint();
+                            EditorUtility.SetDirty(panelSettings);
+                            UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+                            Canvas.ForceUpdateCanvases();
+                        }
+                    }
+                    else
+                    {
+                        // Size changed — release the old RT
                         panelSettings.targetTexture = null;
-                        string oldPath = AssetDatabase.GetAssetPath(oldRt);
-                        oldRt.Release();
+                        string oldPath = AssetDatabase.GetAssetPath(cachedRt);
+                        cachedRt.Release();
                         if (!string.IsNullOrEmpty(oldPath))
                             AssetDatabase.DeleteAsset(oldPath);
                         else
-                            UnityEngine.Object.DestroyImmediate(oldRt);
+                            UnityEngine.Object.DestroyImmediate(cachedRt);
                         s_panelRTs.Remove(psId);
                     }
+                }
 
+                if (rt == null)
+                {
                     // Create RT as an asset so PanelSettings can serialize the reference properly
                     rt = new RenderTexture(width, height, 32, RenderTextureFormat.ARGB32);
                     rt.name = $"MCP_UI_Render_{psId}";
@@ -1020,7 +1035,7 @@ namespace MCPForUnity.Editor.Tools
 
                     panelSettings.targetTexture = rt;
                     s_panelRTs[psId] = rt;
-                    rtJustCreated = true;
+                    rtJustAssigned = true;
 
                     // Mark dirty and force editor repaint so the panel renders into the RT
                     uiDoc.rootVisualElement?.MarkDirtyRepaint();
@@ -1040,9 +1055,9 @@ namespace MCPForUnity.Editor.Tools
                 RenderTexture.active = prevActive;
 
                 // Restore targetTexture to null so the UI renders back to the
-                // actual display / camera.  Keep the RT cached in s_panelRTs so
-                // it can be reused on the next render_ui call without re-creating.
-                if (!rtJustCreated)
+                // actual display / camera.  The RT stays cached in s_panelRTs
+                // and will be re-attached on the next render_ui call.
+                if (!rtJustAssigned)
                 {
                     panelSettings.targetTexture = null;
                     EditorUtility.SetDirty(panelSettings);
@@ -1083,7 +1098,7 @@ namespace MCPForUnity.Editor.Tools
                     { "hasContent", hasContent },
                 };
 
-                if (rtJustCreated)
+                if (rtJustAssigned)
                     data["note"] = "RenderTexture was just assigned to PanelSettings. Call render_ui again to capture the rendered UI.";
 
                 if (!string.IsNullOrEmpty(target))
@@ -1121,7 +1136,7 @@ namespace MCPForUnity.Editor.Tools
 
                 string msg = hasContent
                     ? $"UI rendered to '{assetsRelPath}'."
-                    : rtJustCreated
+                    : rtJustAssigned
                         ? $"RenderTexture assigned to PanelSettings. Call render_ui again to capture the rendered content."
                         : $"UI render saved to '{assetsRelPath}' (no visible content detected).";
 
@@ -1508,21 +1523,32 @@ namespace MCPForUnity.Editor.Tools
                 modifications.Add($"tooltip='{tooltip}'");
             }
 
-            if (modifications.Count == 0)
+            // Filter out [skipped] entries so they don't count as real modifications
+            var applied = modifications.Where(m => !m.StartsWith("[skipped]")).ToList();
+            var skipped = modifications.Where(m => m.StartsWith("[skipped]")).ToList();
+
+            if (applied.Count == 0)
             {
-                return new ErrorResponse("No modifications specified. Provide at least one of: text, add_classes, remove_classes, toggle_classes, style, enabled, visible, tooltip.");
+                string msg = skipped.Count > 0
+                    ? $"No modifications applied. Skipped unsupported styles: {string.Join(", ", skipped)}"
+                    : "No modifications specified. Provide at least one of: text, add_classes, remove_classes, toggle_classes, style, enabled, visible, tooltip.";
+                return new ErrorResponse(msg);
             }
 
+            var responseData = new Dictionary<string, object>
+            {
+                { "gameObject", go.name },
+                { "elementName", elementName },
+                { "elementType", element.GetType().Name },
+                { "modifications", applied },
+                { "currentClasses", new List<string>(element.GetClasses()) },
+            };
+            if (skipped.Count > 0)
+                responseData["skipped"] = skipped;
+
             return new SuccessResponse(
-                $"Modified element '{elementName}' on {go.name}: {string.Join(", ", modifications)}",
-                new
-                {
-                    gameObject = go.name,
-                    elementName,
-                    elementType = element.GetType().Name,
-                    modifications,
-                    currentClasses = new List<string>(element.GetClasses()),
-                });
+                $"Modified element '{elementName}' on {go.name}: {string.Join(", ", applied)}",
+                responseData);
         }
 
         private static void ApplyInlineStyles(VisualElement element, JObject styleObj, List<string> modifications)

@@ -36,7 +36,7 @@ class TestManageUIPathValidation:
     def test_create_rejects_path_outside_assets(self, monkeypatch):
         captured = {}
 
-        async def fake_send(ctx, instance, cmd, params, **kwargs):
+        async def fake_send(_ctx, _instance, _cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True}
 
@@ -53,7 +53,7 @@ class TestManageUIPathValidation:
         assert "Assets/" in resp["message"]
 
     def test_create_rejects_traversal(self, monkeypatch):
-        async def fake_send(ctx, instance, cmd, params, **kwargs):
+        async def fake_send(*_args, **_kwargs):
             return {"success": True}
 
         monkeypatch.setattr(manage_ui_mod, "send_mutation", fake_send)
@@ -70,7 +70,7 @@ class TestManageUIPathValidation:
         assert "traversal" in resp["message"] or "Assets/" in resp["message"]
 
     def test_create_rejects_invalid_extension(self, monkeypatch):
-        async def fake_send(ctx, instance, cmd, params, **kwargs):
+        async def fake_send(*_args, **_kwargs):
             return {"success": True}
 
         monkeypatch.setattr(manage_ui_mod, "send_mutation", fake_send)
@@ -88,7 +88,7 @@ class TestManageUIPathValidation:
     def test_create_accepts_uxml_extension(self, monkeypatch):
         captured = {}
 
-        async def fake_send(ctx, instance, cmd, params, **kwargs):
+        async def fake_send(_ctx, _instance, _cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "message": "Created"}
 
@@ -107,7 +107,7 @@ class TestManageUIPathValidation:
     def test_create_accepts_uss_extension(self, monkeypatch):
         captured = {}
 
-        async def fake_send(ctx, instance, cmd, params, **kwargs):
+        async def fake_send(_ctx, _instance, _cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "message": "Created"}
 
@@ -130,7 +130,7 @@ class TestManageUIContentsEncoding:
     def test_create_encodes_contents_as_base64(self, monkeypatch):
         captured = {}
 
-        async def fake_send(ctx, instance, cmd, params, **kwargs):
+        async def fake_send(_ctx, _instance, _cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "message": "Created"}
 
@@ -153,7 +153,7 @@ class TestManageUIContentsEncoding:
     def test_update_encodes_contents_as_base64(self, monkeypatch):
         captured = {}
 
-        async def fake_send(ctx, instance, cmd, params, **kwargs):
+        async def fake_send(_ctx, _instance, _cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "message": "Updated"}
 
@@ -178,7 +178,7 @@ class TestManageUIActionRouting:
     def test_read_uses_non_mutation_path(self, monkeypatch):
         captured = {}
 
-        async def fake_send(func, instance, cmd, params, **kwargs):
+        async def fake_send(_func, _instance, cmd, params, **kwargs):
             captured["cmd"] = cmd
             captured["params"] = params
             return {"success": True, "data": {"contents": "test"}}
@@ -197,7 +197,7 @@ class TestManageUIActionRouting:
     def test_create_uses_mutation_path(self, monkeypatch):
         captured = {}
 
-        async def fake_send(ctx, instance, cmd, params, **kwargs):
+        async def fake_send(_ctx, _instance, cmd, _params, **kwargs):
             captured["cmd"] = cmd
             return {"success": True, "message": "Created"}
 
@@ -215,7 +215,7 @@ class TestManageUIActionRouting:
     def test_attach_ui_document_params(self, monkeypatch):
         captured = {}
 
-        async def fake_send(ctx, instance, cmd, params, **kwargs):
+        async def fake_send(_ctx, _instance, _cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "message": "Attached"}
 
@@ -240,7 +240,7 @@ class TestManageUIActionRouting:
     def test_create_panel_settings_params(self, monkeypatch):
         captured = {}
 
-        async def fake_send(ctx, instance, cmd, params, **kwargs):
+        async def fake_send(_ctx, _instance, _cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "message": "Created"}
 
@@ -262,7 +262,7 @@ class TestManageUIActionRouting:
     def test_get_visual_tree_params(self, monkeypatch):
         captured = {}
 
-        async def fake_send(func, instance, cmd, params, **kwargs):
+        async def fake_send(_func, _instance, _cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "data": {"tree": {}}}
 
@@ -283,7 +283,7 @@ class TestManageUIActionRouting:
     def test_ping_uses_non_mutation_path(self, monkeypatch):
         captured = {}
 
-        async def fake_send(func, instance, cmd, params, **kwargs):
+        async def fake_send(_func, _instance, _cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "message": "pong"}
 
@@ -304,7 +304,7 @@ class TestManageUINoneRemoval:
     def test_none_params_excluded(self, monkeypatch):
         captured = {}
 
-        async def fake_send(func, instance, cmd, params, **kwargs):
+        async def fake_send(_func, _instance, _cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "data": {}}
 
@@ -332,7 +332,7 @@ class TestManageUIReadResponse:
     def test_read_decodes_base64_response(self, monkeypatch):
         encoded = base64.b64encode(SAMPLE_UXML.encode("utf-8")).decode("utf-8")
 
-        async def fake_send(func, instance, cmd, params, **kwargs):
+        async def fake_send(*_args, **_kwargs):
             return {
                 "success": True,
                 "data": {
@@ -364,7 +364,7 @@ class TestManageUIRenderUI:
     def test_render_ui_routes_params(self, monkeypatch):
         captured = {}
 
-        async def fake_send(ctx, instance, cmd, params, **kwargs):
+        async def fake_send(_ctx, _instance, _cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "message": "Rendered",
                     "data": {"path": "Assets/Screenshots/test.png"}}
@@ -390,7 +390,7 @@ class TestManageUIRenderUI:
     def test_render_ui_none_excluded(self, monkeypatch):
         captured = {}
 
-        async def fake_send(ctx, instance, cmd, params, **kwargs):
+        async def fake_send(_ctx, _instance, _cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "message": "ok"}
 
@@ -408,7 +408,7 @@ class TestManageUILinkStylesheet:
     def test_link_stylesheet_routes_params(self, monkeypatch):
         captured = {}
 
-        async def fake_send(ctx, instance, cmd, params, **kwargs):
+        async def fake_send(_ctx, _instance, _cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "message": "Linked"}
 
