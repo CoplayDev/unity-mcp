@@ -14,5 +14,5 @@ AssetOrigin:
   productId: 329908
   packageName: MCP for Unity | AI Driven Development
   packageVersion: 9.0.3
-  assetPath: Assets/MCPForUnity/Editor/Clients/Configurators/GeminiConfigurator.cs
+  assetPath: Assets/MCPForUnity/Editor/Clients/Configurators/GeminiCliConfigurator.cs
   uploadId: 855486
