@@ -20,6 +20,27 @@ namespace MCPForUnity.Editor.Tools
             ".uxml", ".uss"
         };
 
+        static ManageUI()
+        {
+            EditorApplication.quitting += CleanupRenderTextures;
+            AssemblyReloadEvents.beforeAssemblyReload += CleanupRenderTextures;
+        }
+
+        private static void CleanupRenderTextures()
+        {
+            foreach (var kvp in s_panelRTs)
+            {
+                if (kvp.Value == null) continue;
+                string assetPath = AssetDatabase.GetAssetPath(kvp.Value);
+                kvp.Value.Release();
+                if (!string.IsNullOrEmpty(assetPath))
+                    AssetDatabase.DeleteAsset(assetPath);
+                else
+                    UnityEngine.Object.DestroyImmediate(kvp.Value);
+            }
+            s_panelRTs.Clear();
+        }
+
         public static object HandleCommand(JObject @params)
         {
             string action = @params["action"]?.ToString()?.ToLowerInvariant();
@@ -116,7 +137,16 @@ namespace MCPForUnity.Editor.Tools
             string path = ValidatePath(p.Get("path"), out string pathError);
             if (pathError != null) return new ErrorResponse(pathError);
 
-            string contents = GetDecodedContents(p);
+            string contents;
+            try
+            {
+                contents = GetDecodedContents(p);
+            }
+            catch (ArgumentException ex)
+            {
+                return new ErrorResponse(ex.Message);
+            }
+
             if (contents == null)
             {
                 return new ErrorResponse("'contents' parameter is required for create.");
@@ -179,7 +209,16 @@ namespace MCPForUnity.Editor.Tools
             string path = ValidatePath(p.Get("path"), out string pathError);
             if (pathError != null) return new ErrorResponse(pathError);
 
-            string contents = GetDecodedContents(p);
+            string contents;
+            try
+            {
+                contents = GetDecodedContents(p);
+            }
+            catch (ArgumentException ex)
+            {
+                return new ErrorResponse(ex.Message);
+            }
+
             if (contents == null)
             {
                 return new ErrorResponse("'contents' parameter is required for update.");
@@ -235,7 +274,7 @@ namespace MCPForUnity.Editor.Tools
             }
 
             // Load or create PanelSettings
-            string panelSettingsPath = p.Get("panel_settings");
+            string panelSettingsPath = p.Get("panel_settings") ?? p.Get("panelSettings");
             PanelSettings panelSettings = null;
 
             if (!string.IsNullOrEmpty(panelSettingsPath))
@@ -455,7 +494,7 @@ namespace MCPForUnity.Editor.Tools
                         break;
 
                     case "sortingorder":
-                        if (TryFloat(val, out float so)) { ps.sortingOrder = so; changes.Add("sortingOrder"); }
+                        if (TryInt(val, out int so)) { ps.sortingOrder = so; changes.Add("sortingOrder"); }
                         break;
 
                     case "targetdisplay":
@@ -714,7 +753,9 @@ namespace MCPForUnity.Editor.Tools
         // renders into them automatically every frame.
         private static readonly Dictionary<int, RenderTexture> s_panelRTs = new();
 
-        // Play-mode coroutine capture state
+        // Play-mode coroutine capture state.  Only one capture is in-flight at a
+        // time; concurrent render_ui calls while a capture is pending are rejected
+        // with an explicit error.
         private static Texture2D s_pendingCaptureTex;
         private static bool s_pendingCaptureDone;
         private static bool s_pendingCaptureStarted;
@@ -725,8 +766,28 @@ namespace MCPForUnity.Editor.Tools
             private System.Collections.IEnumerator Start()
             {
                 yield return new WaitForEndOfFrame();
-                ManageUI.s_pendingCaptureTex = ScreenCapture.CaptureScreenshotAsTexture();
-                ManageUI.s_pendingCaptureDone = true;
+
+                if (!ScreenshotUtility.IsScreenCaptureModuleAvailable)
+                {
+                    Debug.LogError("[MCP] " + ScreenshotUtility.ScreenCaptureModuleNotAvailableError);
+                    ManageUI.s_pendingCaptureTex = null;
+                    ManageUI.s_pendingCaptureDone = false;
+                    ManageUI.s_pendingCaptureStarted = false;
+                    Destroy(gameObject);
+                    yield break;
+                }
+
+                try
+                {
+                    ManageUI.s_pendingCaptureTex = ScreenCapture.CaptureScreenshotAsTexture();
+                    ManageUI.s_pendingCaptureDone = true;
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[MCP] ScreenCapture failed: {ex.Message}");
+                    ManageUI.s_pendingCaptureTex = null;
+                    ManageUI.s_pendingCaptureDone = false;
+                }
                 ManageUI.s_pendingCaptureStarted = false;
                 Destroy(gameObject);
             }
@@ -831,17 +892,29 @@ namespace MCPForUnity.Editor.Tools
                 }
 
                 // ── Case 2: start a new capture ───────────────────────────────────
-                if (!s_pendingCaptureStarted)
+                // Verify the ScreenCapture module is enabled before attempting capture.
+                if (!ScreenshotUtility.IsScreenCaptureModuleAvailable)
                 {
-                    s_pendingCaptureDone = false;
-                    s_pendingCaptureTex = null;
-                    s_pendingCaptureStarted = true;
-                    var captureGo = new GameObject("__MCP_ScreenCapturer__")
-                    {
-                        hideFlags = HideFlags.HideAndDontSave
-                    };
-                    captureGo.AddComponent<MCP_ScreenCapturer>();
+                    return new ErrorResponse(ScreenshotUtility.ScreenCaptureModuleNotAvailableError);
                 }
+
+                // Only one capture in flight at a time.  If one is already pending,
+                // reject rather than silently overwriting the state.
+                if (s_pendingCaptureStarted)
+                {
+                    return new ErrorResponse(
+                        "A play-mode screen capture is already in progress. "
+                        + "Call render_ui again after the current capture completes.");
+                }
+
+                s_pendingCaptureDone = false;
+                s_pendingCaptureTex = null;
+                s_pendingCaptureStarted = true;
+                var captureGo = new GameObject("__MCP_ScreenCapturer__")
+                {
+                    hideFlags = HideFlags.HideAndDontSave
+                };
+                captureGo.AddComponent<MCP_ScreenCapturer>();
 
                 return new SuccessResponse(
                     "Play-mode screenshot capture queued (WaitForEndOfFrame). Call render_ui again to retrieve the rendered image.",
@@ -1057,7 +1130,14 @@ namespace MCPForUnity.Editor.Tools
             finally
             {
                 if (tempGo != null) UnityEngine.Object.DestroyImmediate(tempGo);
-                if (tempPs != null) UnityEngine.Object.DestroyImmediate(tempPs, true);
+                if (tempPs != null)
+                {
+                    string tempPsPath = AssetDatabase.GetAssetPath(tempPs);
+                    if (!string.IsNullOrEmpty(tempPsPath))
+                        AssetDatabase.DeleteAsset(tempPsPath);
+                    else
+                        UnityEngine.Object.DestroyImmediate(tempPs, true);
+                }
             }
         }
 
@@ -1601,18 +1681,34 @@ namespace MCPForUnity.Editor.Tools
         /// </summary>
         private static int FindUxmlBodyStart(string content)
         {
-            int idx = content.IndexOf("<ui:UXML", StringComparison.OrdinalIgnoreCase);
-            if (idx < 0)
-                idx = content.IndexOf("<UXML", StringComparison.OrdinalIgnoreCase);
-            if (idx < 0)
-                return -1;
+            int searchFrom = 0;
+            while (true)
+            {
+                int idx = content.IndexOf("<ui:UXML", searchFrom, StringComparison.OrdinalIgnoreCase);
+                if (idx < 0)
+                    idx = content.IndexOf("<UXML", searchFrom, StringComparison.OrdinalIgnoreCase);
+                if (idx < 0)
+                    return -1;
 
-            int closeTag = content.IndexOf('>', idx);
-            if (closeTag < 0) return -1;
-            // Self-closing tag cannot have children
-            if (closeTag > 0 && content[closeTag - 1] == '/') return -1;
+                // Skip matches inside XML comments (<!-- ... -->)
+                int commentStart = content.LastIndexOf("<!--", idx, StringComparison.Ordinal);
+                if (commentStart >= 0)
+                {
+                    int commentEnd = content.IndexOf("-->", commentStart + 4, StringComparison.Ordinal);
+                    if (commentEnd >= 0 && commentEnd + 3 > idx)
+                    {
+                        searchFrom = commentEnd + 3;
+                        continue;
+                    }
+                }
 
-            return closeTag + 1;
+                int closeTag = content.IndexOf('>', idx);
+                if (closeTag < 0) return -1;
+                // Self-closing tag cannot have children
+                if (closeTag > 0 && content[closeTag - 1] == '/') return -1;
+
+                return closeTag + 1;
+            }
         }
 
         // ---- Helpers ----
@@ -1651,9 +1747,11 @@ namespace MCPForUnity.Editor.Tools
                     {
                         return Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
                     }
-                    catch (FormatException)
+                    catch (FormatException ex)
                     {
-                        return null;
+                        throw new ArgumentException(
+                            "Parameter 'encodedContents' must be valid base64 when 'contentsEncoded' is true.",
+                            ex);
                     }
                 }
             }

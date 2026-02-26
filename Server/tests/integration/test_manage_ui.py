@@ -185,7 +185,7 @@ class TestManageUIActionRouting:
 
         monkeypatch.setattr(manage_ui_mod, "send_with_unity_instance", fake_send)
 
-        resp = run_async(manage_ui_mod.manage_ui(
+        run_async(manage_ui_mod.manage_ui(
             ctx=DummyContext(),
             action="read",
             path="Assets/UI/Test.uxml",

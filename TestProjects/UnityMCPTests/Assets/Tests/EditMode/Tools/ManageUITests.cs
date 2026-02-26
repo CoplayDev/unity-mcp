@@ -644,5 +644,75 @@ namespace MCPForUnityTests.Editor.Tools
                 UnityEngine.Object.DestroyImmediate(go);
             }
         }
+
+        // ---- Path traversal validation ----
+
+        [Test]
+        public void Create_TraversalPath_ReturnsError()
+        {
+            var result = ToJObject(ManageUI.HandleCommand(new JObject
+            {
+                ["action"] = "create",
+                ["path"] = "Assets/../etc/evil.uxml",
+                ["contents"] = "<ui:UXML />",
+            }));
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(result["error"].ToString(), Does.Contain("traversal"));
+        }
+
+        [Test]
+        public void Create_DotDotInMiddle_ReturnsError()
+        {
+            var result = ToJObject(ManageUI.HandleCommand(new JObject
+            {
+                ["action"] = "create",
+                ["path"] = "Assets/UI/../../secret.uxml",
+                ["contents"] = "<ui:UXML />",
+            }));
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(result["error"].ToString(), Does.Contain("traversal"));
+        }
+
+        [Test]
+        public void Read_TraversalPath_ReturnsError()
+        {
+            var result = ToJObject(ManageUI.HandleCommand(new JObject
+            {
+                ["action"] = "read",
+                ["path"] = "Assets/../secret.uxml",
+            }));
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(result["error"].ToString(), Does.Contain("traversal"));
+        }
+
+        [Test]
+        public void Update_TraversalPath_ReturnsError()
+        {
+            var result = ToJObject(ManageUI.HandleCommand(new JObject
+            {
+                ["action"] = "update",
+                ["path"] = "Assets/../../etc/passwd.uxml",
+                ["contents"] = "overwrite",
+            }));
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(result["error"].ToString(), Does.Contain("traversal"));
+        }
+
+        [Test]
+        public void Delete_TraversalPath_ReturnsError()
+        {
+            var result = ToJObject(ManageUI.HandleCommand(new JObject
+            {
+                ["action"] = "delete",
+                ["path"] = "Assets/../outside.uxml",
+            }));
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(result["error"].ToString(), Does.Contain("traversal"));
+        }
     }
 }
