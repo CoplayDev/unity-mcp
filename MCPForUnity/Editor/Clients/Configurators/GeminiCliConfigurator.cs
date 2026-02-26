@@ -9,7 +9,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
 {
     public class GeminiCliConfigurator : JsonFileMcpConfigurator
     {
-        public GeminiConfigurator() : base(new McpClient
+        public GeminiCliConfigurator() : base(new McpClient
         {
             name = "Gemini CLI",
             windowsConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".gemini", "settings.json"),
