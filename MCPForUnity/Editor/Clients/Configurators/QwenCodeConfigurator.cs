@@ -30,7 +30,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
         public override IList<string> GetInstallationSteps() => new List<string>
         {
-            "Ensure Qwen Code is installed (npm install -g @anthropic-ai/qwen-code or via official installer)",
+            "Ensure Qwen Code is installed (npm install -g @qwen-code/qwen-code or download from https://github.com/QwenLM/qwen-code)",
             "Open Qwen Code",
             "Click 'Auto Configure' to automatically add UnityMCP to settings.json",
             "OR click 'Manual Setup' to copy the configuration JSON",
