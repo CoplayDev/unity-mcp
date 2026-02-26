@@ -7,11 +7,11 @@ using UnityEditor;
 
 namespace MCPForUnity.Editor.Clients.Configurators
 {
-    public class GeminiConfigurator : JsonFileMcpConfigurator
+    public class GeminiCliConfigurator : JsonFileMcpConfigurator
     {
         public GeminiConfigurator() : base(new McpClient
         {
-            name = "Gemini",
+            name = "Gemini CLI",
             windowsConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".gemini", "settings.json"),
             macConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".gemini", "settings.json"),
             linuxConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".gemini", "settings.json"),
