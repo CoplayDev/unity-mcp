@@ -84,7 +84,7 @@ namespace MCPForUnity.Editor.Tools
                     continue;
                 }
 
-                string toolName = commandObj["tool"]?.ToString();
+                string toolName = StripMcpPrefix(commandObj["tool"]?.ToString());
                 var rawParams = commandObj["params"] as JObject ?? new JObject();
                 var commandParams = NormalizeParameterKeys(rawParams);
 
@@ -212,6 +212,32 @@ namespace MCPForUnity.Editor.Tools
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Strip MCP server namespace prefix from a tool name.
+        /// Clients may send prefixed names like "UnityMCP:manage_gameobject" (colon format)
+        /// or "mcp__UnityMCP__manage_gameobject" (double-underscore, Claude Code style).
+        /// </summary>
+        internal static string StripMcpPrefix(string toolName)
+        {
+            if (string.IsNullOrEmpty(toolName))
+                return toolName;
+
+            // Double-underscore format: "mcp__ServerName__tool_name"
+            if (toolName.StartsWith("mcp__", StringComparison.Ordinal))
+            {
+                int secondSep = toolName.IndexOf("__", 5, StringComparison.Ordinal);
+                if (secondSep >= 0 && secondSep + 2 < toolName.Length)
+                    return toolName.Substring(secondSep + 2);
+            }
+
+            // Colon format: "ServerName:tool_name"
+            int colonIndex = toolName.LastIndexOf(':');
+            if (colonIndex >= 0 && colonIndex + 1 < toolName.Length)
+                return toolName.Substring(colonIndex + 1);
+
+            return toolName;
         }
 
         private static JObject NormalizeParameterKeys(JObject source)
