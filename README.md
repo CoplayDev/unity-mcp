@@ -163,10 +163,18 @@ For **Strict** validation that catches undefined namespaces, types, and methods:
 5. Restart Unity
 
   <details>
-  <summary>Manual DLL installation (if NuGetForUnity isn't available)</summary>
+  <summary>One-click installer (recommended)</summary>
+
+  Open `Window > MCP for Unity`, scroll to the **Runtime Code Execution (Roslyn)** section in the Scripts/Validation tab, and click **Install Roslyn DLLs**. This downloads the required NuGet packages and places the DLLs in `Assets/Plugins/Roslyn/` automatically.
+
+  You can also run it from the menu: `Tools > MCP for Unity > Install Roslyn DLLs`.
+  </details>
+
+  <details>
+  <summary>Manual DLL installation (if the installer isn't available)</summary>
 
   1. Download `Microsoft.CodeAnalysis.CSharp.dll` and dependencies from [NuGet](https://www.nuget.org/packages/Microsoft.CodeAnalysis.CSharp/)
-  2. Place DLLs in `Assets/Plugins/` folder
+  2. Place DLLs in `Assets/Plugins/Roslyn/` folder
   3. Ensure .NET compatibility settings are correct
   4. Add `USE_ROSLYN` to Scripting Define Symbols
   5. Restart Unity
