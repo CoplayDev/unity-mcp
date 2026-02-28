@@ -20,6 +20,7 @@ namespace MCPForUnity.Editor.Setup
         private const string InstallDirKey = "UnityMcpSkillSync.InstallDir";
         private const string LastSyncedCommitKey = "UnityMcpSkillSync.LastSyncedCommit";
         private const string FixedSkillSubdir = "unity-mcp-skill";
+        private const string SyncOwnershipMarker = ".unity-mcp-skill-sync";
         private const string CodexCli = "codex";
         private const string ClaudeCli = "claude";
         private static readonly string[] BranchOptions = { "beta", "main" };
@@ -161,7 +162,10 @@ namespace MCPForUnity.Editor.Setup
                 }
 
                 var localFiles = ListFiles(installPath);
-                var plan = BuildPlan(snapshot.Files, localFiles);
+                var pathComparison = GetPathComparison(installPath);
+                var pathComparer = GetPathComparer(pathComparison);
+                EnsureManagedInstallRoot(installPath, localFiles.Keys, snapshot.Files.Keys, pathComparer);
+                var plan = BuildPlan(snapshot.Files, localFiles, pathComparer);
                 var commitChanged = !string.Equals(lastSyncedCommit, snapshot.CommitSha, StringComparison.Ordinal);
 
                 AppendLine($"Remote Commit: {ShortCommit(lastSyncedCommit)} -> {ShortCommit(snapshot.CommitSha)}");
@@ -172,10 +176,10 @@ namespace MCPForUnity.Editor.Setup
                 AppendSummary(plan, commitChanged);
                 LogPlanDetails(plan);
 
-                ApplyPlan(repoInfo, snapshot.CommitSha, snapshot.SubdirPath, installPath, plan);
+                ApplyPlan(repoInfo, snapshot.CommitSha, snapshot.SubdirPath, installPath, plan, pathComparison);
                 AppendLine("Files mirrored to install directory.");
 
-                ValidateFileHashes(installPath, snapshot.Files);
+                ValidateFileHashes(installPath, snapshot.Files, pathComparison);
                 EnqueueMainThreadAction(() => EditorPrefs.SetString(lastSyncedCommitKey, snapshot.CommitSha));
                 AppendLine($"Synced to commit: {snapshot.CommitSha}");
                 AppendLine("=== Sync Done ===");
@@ -273,8 +277,9 @@ namespace MCPForUnity.Editor.Setup
         private RemoteSnapshot FetchRemoteSnapshot(GitHubRepoInfo repoInfo, string branch, string subdir)
         {
             using var client = CreateGitHubClient();
-            var treeApiUrl = BuildTreeApiUrl(repoInfo, branch);
-            AppendLine($"Fetching remote directory tree: {treeApiUrl}");
+            var commitSha = FetchBranchHeadCommitSha(client, repoInfo, branch);
+            var treeApiUrl = BuildTreeApiUrl(repoInfo, commitSha);
+            AppendLine($"Fetching remote directory tree at commit {ShortCommit(commitSha)}: {treeApiUrl}");
             var json = DownloadString(client, treeApiUrl);
             var treeResponse = JsonUtility.FromJson<GitHubTreeResponse>(json);
             if (treeResponse == null || treeResponse.tree == null)
@@ -320,7 +325,13 @@ namespace MCPForUnity.Editor.Setup
                     continue;
                 }
 
-                remoteFiles[relativePath] = entry.sha.Trim().ToLowerInvariant();
+                if (!TryNormalizeRelativePath(relativePath, out var safeRelativePath))
+                {
+                    AppendLine($"Skip unsafe remote path: {remotePath}");
+                    continue;
+                }
+
+                remoteFiles[safeRelativePath] = entry.sha.Trim().ToLowerInvariant();
             }
 
             if (remoteFiles.Count == 0)
@@ -328,19 +339,33 @@ namespace MCPForUnity.Editor.Setup
                 throw new InvalidOperationException($"Remote directory not found: {normalizedSubdir}");
             }
 
-            var commitSha = treeResponse.sha?.Trim();
-            if (string.IsNullOrWhiteSpace(commitSha))
-            {
-                throw new InvalidOperationException("Remote directory tree response is missing commit SHA.");
-            }
-
             AppendLine($"Remote file count: {remoteFiles.Count}");
             return new RemoteSnapshot(commitSha, normalizedSubdir, remoteFiles);
         }
 
-        private static string BuildTreeApiUrl(GitHubRepoInfo repoInfo, string branch)
+        private string FetchBranchHeadCommitSha(HttpClient client, GitHubRepoInfo repoInfo, string branch)
         {
-            return $"https://api.github.com/repos/{Uri.EscapeDataString(repoInfo.Owner)}/{Uri.EscapeDataString(repoInfo.Repo)}/git/trees/{Uri.EscapeDataString(branch)}?recursive=1";
+            var branchApiUrl = BuildBranchApiUrl(repoInfo, branch);
+            AppendLine($"Fetching branch head commit: {branchApiUrl}");
+            var branchJson = DownloadString(client, branchApiUrl);
+            var branchResponse = JsonUtility.FromJson<GitHubBranchResponse>(branchJson);
+            var commitSha = branchResponse?.commit?.sha?.Trim();
+            if (string.IsNullOrWhiteSpace(commitSha))
+            {
+                throw new InvalidOperationException($"Failed to resolve branch head commit SHA for: {branch}");
+            }
+
+            return commitSha;
+        }
+
+        private static string BuildBranchApiUrl(GitHubRepoInfo repoInfo, string branch)
+        {
+            return $"https://api.github.com/repos/{Uri.EscapeDataString(repoInfo.Owner)}/{Uri.EscapeDataString(repoInfo.Repo)}/branches/{Uri.EscapeDataString(branch)}";
+        }
+
+        private static string BuildTreeApiUrl(GitHubRepoInfo repoInfo, string reference)
+        {
+            return $"https://api.github.com/repos/{Uri.EscapeDataString(repoInfo.Owner)}/{Uri.EscapeDataString(repoInfo.Repo)}/git/trees/{Uri.EscapeDataString(reference)}?recursive=1";
         }
 
         private static string BuildRawFileUrl(GitHubRepoInfo repoInfo, string commitSha, string remoteFilePath)
@@ -414,12 +439,73 @@ namespace MCPForUnity.Editor.Setup
             return $"{normalizedLeft}/{normalizedRight}";
         }
 
-        private static SyncPlan BuildPlan(Dictionary<string, string> remoteFiles, Dictionary<string, string> localFiles)
+        private static bool TryNormalizeRelativePath(string relativePath, out string normalizedPath)
+        {
+            normalizedPath = NormalizeRemotePath(relativePath);
+            if (string.IsNullOrWhiteSpace(normalizedPath) || Path.IsPathRooted(normalizedPath))
+            {
+                return false;
+            }
+
+            var segments = normalizedPath.Split('/');
+            if (segments.Length == 0)
+            {
+                return false;
+            }
+
+            foreach (var segment in segments)
+            {
+                if (string.IsNullOrWhiteSpace(segment) ||
+                    string.Equals(segment, ".", StringComparison.Ordinal) ||
+                    string.Equals(segment, "..", StringComparison.Ordinal) ||
+                    segment.IndexOf(':') >= 0)
+                {
+                    return false;
+                }
+            }
+
+            normalizedPath = string.Join("/", segments);
+            return true;
+        }
+
+        private static string ResolvePathUnderRoot(string root, string relativePath, StringComparison pathComparison)
+        {
+            if (!TryNormalizeRelativePath(relativePath, out var safeRelativePath))
+            {
+                throw new InvalidOperationException($"Unsafe relative path: {relativePath}");
+            }
+
+            var normalizedRoot = EnsureTrailingDirectorySeparator(Path.GetFullPath(root));
+            var combinedPath = Path.Combine(normalizedRoot, safeRelativePath.Replace('/', Path.DirectorySeparatorChar));
+            var fullPath = Path.GetFullPath(combinedPath);
+            if (!fullPath.StartsWith(normalizedRoot, pathComparison))
+            {
+                throw new InvalidOperationException($"Path escapes install root: {relativePath}");
+            }
+
+            return fullPath;
+        }
+
+        private static string EnsureTrailingDirectorySeparator(string path)
+        {
+            return path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        }
+
+        private static SyncPlan BuildPlan(Dictionary<string, string> remoteFiles, Dictionary<string, string> localFiles, StringComparer pathComparer)
         {
             var plan = new SyncPlan();
+            var localLookup = new Dictionary<string, string>(pathComparer);
+            foreach (var localEntry in localFiles)
+            {
+                if (!localLookup.ContainsKey(localEntry.Key))
+                {
+                    localLookup[localEntry.Key] = localEntry.Value;
+                }
+            }
+
             foreach (var remoteEntry in remoteFiles)
             {
-                if (!localFiles.TryGetValue(remoteEntry.Key, out var localPath))
+                if (!localLookup.TryGetValue(remoteEntry.Key, out var localPath))
                 {
                     plan.Added.Add(remoteEntry.Key);
                     continue;
@@ -432,9 +518,10 @@ namespace MCPForUnity.Editor.Setup
                 }
             }
 
+            var remoteLookup = new HashSet<string>(remoteFiles.Keys, pathComparer);
             foreach (var localRelativePath in localFiles.Keys)
             {
-                if (!remoteFiles.ContainsKey(localRelativePath))
+                if (!remoteLookup.Contains(localRelativePath))
                 {
                     plan.Deleted.Add(localRelativePath);
                 }
@@ -446,14 +533,14 @@ namespace MCPForUnity.Editor.Setup
             return plan;
         }
 
-        private void ApplyPlan(GitHubRepoInfo repoInfo, string commitSha, string remoteSubdir, string targetRoot, SyncPlan plan)
+        private void ApplyPlan(GitHubRepoInfo repoInfo, string commitSha, string remoteSubdir, string targetRoot, SyncPlan plan, StringComparison pathComparison)
         {
             using var client = CreateGitHubClient();
             foreach (var relativePath in plan.Added.Concat(plan.Updated))
             {
                 var remoteFilePath = CombineRemotePath(remoteSubdir, relativePath);
                 var downloadUrl = BuildRawFileUrl(repoInfo, commitSha, remoteFilePath);
-                var targetFile = Path.Combine(targetRoot, relativePath);
+                var targetFile = ResolvePathUnderRoot(targetRoot, relativePath, pathComparison);
                 var targetDirectory = Path.GetDirectoryName(targetFile);
                 if (!string.IsNullOrEmpty(targetDirectory))
                 {
@@ -467,7 +554,7 @@ namespace MCPForUnity.Editor.Setup
 
             foreach (var relativePath in plan.Deleted)
             {
-                var targetFile = Path.Combine(targetRoot, relativePath);
+                var targetFile = ResolvePathUnderRoot(targetRoot, relativePath, pathComparison);
                 if (File.Exists(targetFile))
                 {
                     File.Delete(targetFile);
@@ -477,12 +564,12 @@ namespace MCPForUnity.Editor.Setup
             RemoveEmptyDirectories(targetRoot);
         }
 
-        private void ValidateFileHashes(string installRoot, Dictionary<string, string> remoteFiles)
+        private void ValidateFileHashes(string installRoot, Dictionary<string, string> remoteFiles, StringComparison pathComparison)
         {
             var checkedCount = 0;
             foreach (var remoteEntry in remoteFiles)
             {
-                var localPath = Path.Combine(installRoot, remoteEntry.Key);
+                var localPath = ResolvePathUnderRoot(installRoot, remoteEntry.Key, pathComparison);
                 if (!File.Exists(localPath))
                 {
                     throw new InvalidOperationException($"Missing synced file: {remoteEntry.Key}");
@@ -527,10 +614,131 @@ namespace MCPForUnity.Editor.Setup
             foreach (var filePath in Directory.GetFiles(normalizedRoot, "*", SearchOption.AllDirectories))
             {
                 var relativePath = Path.GetRelativePath(normalizedRoot, filePath).Replace('\\', '/');
+                if (string.Equals(relativePath, SyncOwnershipMarker, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
                 map[relativePath] = filePath;
             }
 
             return map;
+        }
+
+        private static void EnsureManagedInstallRoot(
+            string installPath,
+            ICollection<string> localRelativePaths,
+            ICollection<string> remoteRelativePaths,
+            StringComparer pathComparer)
+        {
+            var markerPath = Path.Combine(installPath, SyncOwnershipMarker);
+            if (File.Exists(markerPath))
+            {
+                return;
+            }
+
+            if (localRelativePaths.Count > 0 && !CanAdoptLegacyManagedRoot(localRelativePaths, remoteRelativePaths, pathComparer))
+            {
+                throw new InvalidOperationException(
+                    "Install Dir contains unmanaged files. " +
+                    "Please choose an empty folder or an existing unity-mcp-skill folder.");
+            }
+
+            File.WriteAllText(markerPath, "managed-by-unity-mcp-skill-sync");
+        }
+
+        private static bool CanAdoptLegacyManagedRoot(
+            ICollection<string> localRelativePaths,
+            ICollection<string> remoteRelativePaths,
+            StringComparer pathComparer)
+        {
+            if (localRelativePaths.Count == 0)
+            {
+                return true;
+            }
+
+            var remoteTopLevels = new HashSet<string>(pathComparer);
+            foreach (var remotePath in remoteRelativePaths)
+            {
+                var topLevel = GetTopLevelSegment(remotePath);
+                if (!string.IsNullOrWhiteSpace(topLevel))
+                {
+                    remoteTopLevels.Add(topLevel);
+                }
+            }
+
+            if (remoteTopLevels.Count == 0)
+            {
+                return false;
+            }
+
+            var hasSkillDefinition = false;
+            foreach (var localPath in localRelativePaths)
+            {
+                if (pathComparer.Equals(localPath, "SKILL.md"))
+                {
+                    hasSkillDefinition = true;
+                }
+
+                var topLevel = GetTopLevelSegment(localPath);
+                if (string.IsNullOrWhiteSpace(topLevel) || !remoteTopLevels.Contains(topLevel))
+                {
+                    return false;
+                }
+            }
+
+            return hasSkillDefinition;
+        }
+
+        private static string GetTopLevelSegment(string relativePath)
+        {
+            if (string.IsNullOrWhiteSpace(relativePath))
+            {
+                return string.Empty;
+            }
+
+            var normalized = NormalizeRemotePath(relativePath);
+            var separatorIndex = normalized.IndexOf('/');
+            return separatorIndex < 0 ? normalized : normalized.Substring(0, separatorIndex);
+        }
+
+        private static StringComparison GetPathComparison(string root)
+        {
+            return IsCaseSensitiveFileSystem(root) ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+        }
+
+        private static StringComparer GetPathComparer(StringComparison pathComparison)
+        {
+            return pathComparison == StringComparison.Ordinal
+                ? StringComparer.Ordinal
+                : StringComparer.OrdinalIgnoreCase;
+        }
+
+        private static bool IsCaseSensitiveFileSystem(string root)
+        {
+            try
+            {
+                var probeName = $".mcp-case-probe-{Guid.NewGuid():N}";
+                var lowercasePath = Path.Combine(root, probeName.ToLowerInvariant());
+                var uppercasePath = Path.Combine(root, probeName.ToUpperInvariant());
+                File.WriteAllText(lowercasePath, string.Empty);
+                try
+                {
+                    return !File.Exists(uppercasePath);
+                }
+                finally
+                {
+                    if (File.Exists(lowercasePath))
+                    {
+                        File.Delete(lowercasePath);
+                    }
+                }
+            }
+            catch
+            {
+                // Conservative fallback for security checks.
+                return true;
+            }
         }
 
         private static void RemoveEmptyDirectories(string root)
@@ -816,6 +1024,18 @@ namespace MCPForUnity.Editor.Setup
             public string sha;
             public GitHubTreeEntry[] tree;
             public bool truncated;
+        }
+
+        [Serializable]
+        private sealed class GitHubBranchResponse
+        {
+            public GitHubBranchCommit commit;
+        }
+
+        [Serializable]
+        private sealed class GitHubBranchCommit
+        {
+            public string sha;
         }
 
         [Serializable]
