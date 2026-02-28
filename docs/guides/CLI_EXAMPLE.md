@@ -69,9 +69,32 @@ unity-mcp scene hierarchy [--limit 20] [--depth 3]
 unity-mcp scene active
 unity-mcp scene load "Assets/Scenes/Main.unity"
 unity-mcp scene save
-unity-mcp scene screenshot --name "capture"
+unity-mcp scene screenshot --filename "capture"
+unity-mcp scene screenshot --camera "MainCam" --include-image --max-resolution 512
+unity-mcp scene screenshot --look-at "Player" --view-position "0,10,-10"
+unity-mcp scene screenshot --batch surround --max-resolution 256
+unity-mcp scene screenshot --batch orbit --look-at "Player" --orbit-angles 8 --orbit-elevations "[0,30]"
+unity-mcp scene screenshot --batch orbit --look-at "Hero" --orbit-distance 5 --orbit-fov 40
 unity-mcp --format json scene hierarchy
 ```
+
+**Screenshot Parameters:**
+| Option | Description |
+|--------|-------------|
+| `--filename, -f` | Output filename (default: timestamp) |
+| `--supersize, -s` | Resolution multiplier 1–4 |
+| `--camera, -c` | Camera name/path/ID (default: Camera.main) |
+| `--include-image` | Return base64 PNG inline |
+| `--max-resolution, -r` | Max longest-edge pixels (default 640) |
+| `--batch, -b` | `surround` (6 angles) or `orbit` (configurable grid) — outputs a contact sheet |
+| `--look-at` | Target: GO name or `x,y,z` position |
+| `--view-position` | Camera position `x,y,z` |
+| `--view-rotation` | Camera rotation `x,y,z` |
+| `--orbit-angles` | Azimuth samples (default 8) |
+| `--orbit-elevations` | Vertical angles JSON, e.g. `[0,30,-15]` |
+| `--orbit-distance` | Distance from target (auto-fit if omitted) |
+| `--orbit-fov` | FOV degrees (default 60) |
+| `--output-dir, -o` | Save directory (default: `Assets/Screenshots/`) |
 
 **GameObject Operations**
 ```bash
