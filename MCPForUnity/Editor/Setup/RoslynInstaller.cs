@@ -1,9 +1,9 @@
 using System;
 using System.IO;
-using System.Net;
-using System.Text;
+using System.IO.Compression;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Networking;
 
 namespace MCPForUnity.Editor.Setup
 {
@@ -53,26 +53,31 @@ namespace MCPForUnity.Editor.Setup
             {
                 Directory.CreateDirectory(destFolder);
 
-#pragma warning disable SYSLIB0014
-                using (var client = new WebClient())
-#pragma warning restore SYSLIB0014
+                for (int i = 0; i < NuGetEntries.Length; i++)
                 {
-                    for (int i = 0; i < NuGetEntries.Length; i++)
+                    var (packageId, pkgVersion, dllPathInZip, dllName) = NuGetEntries[i];
+
+                    if (interactive)
                     {
-                        var (packageId, pkgVersion, dllPathInZip, dllName) = NuGetEntries[i];
+                        EditorUtility.DisplayProgressBar(
+                            "Installing Roslyn",
+                            $"Downloading {packageId} v{pkgVersion}...",
+                            (float)i / NuGetEntries.Length);
+                    }
 
-                        if (interactive)
-                        {
-                            EditorUtility.DisplayProgressBar(
-                                "Installing Roslyn",
-                                $"Downloading {packageId} v{pkgVersion}...",
-                                (float)i / NuGetEntries.Length);
-                        }
+                    string url =
+                        $"https://api.nuget.org/v3-flatcontainer/{packageId}/{pkgVersion}/{packageId}.{pkgVersion}.nupkg";
 
-                        string url =
-                            $"https://api.nuget.org/v3-flatcontainer/{packageId}/{pkgVersion}/{packageId}.{pkgVersion}.nupkg";
+                    using (var request = UnityWebRequest.Get(url))
+                    {
+                        request.SendWebRequest();
+                        while (!request.isDone)
+                            System.Threading.Thread.Sleep(50);
 
-                        byte[] nupkgBytes = client.DownloadData(url);
+                        if (request.result != UnityWebRequest.Result.Success)
+                            throw new Exception($"Failed to download {packageId}: {request.error}");
+
+                        byte[] nupkgBytes = request.downloadHandler.data;
                         byte[] dllBytes = ExtractFileFromZip(nupkgBytes, dllPathInZip);
 
                         if (dllBytes == null)
@@ -121,69 +126,28 @@ namespace MCPForUnity.Editor.Setup
             }
         }
 
-        /// <summary>
-        /// Extracts a single file from a ZIP archive byte array without System.IO.Compression.
-        /// Only supports Deflate (method 8) and Store (method 0) — sufficient for nupkg files.
-        /// </summary>
         private static byte[] ExtractFileFromZip(byte[] zipBytes, string entryPath)
         {
-            // Normalize path separators: ZIP spec uses forward slashes
             entryPath = entryPath.Replace('\\', '/');
-            int pos = 0;
 
-            while (pos + 30 <= zipBytes.Length)
+            using (var stream = new MemoryStream(zipBytes))
+            using (var archive = new ZipArchive(stream, ZipArchiveMode.Read))
             {
-                // Local file header signature = 0x04034b50
-                uint sig = ReadUInt32LE(zipBytes, pos);
-                if (sig != 0x04034b50)
-                    break;
-
-                ushort method = ReadUInt16LE(zipBytes, pos + 8);
-                uint compressedSize = ReadUInt32LE(zipBytes, pos + 18);
-                uint uncompressedSize = ReadUInt32LE(zipBytes, pos + 22);
-                ushort nameLen = ReadUInt16LE(zipBytes, pos + 26);
-                ushort extraLen = ReadUInt16LE(zipBytes, pos + 28);
-
-                string name = Encoding.UTF8.GetString(zipBytes, pos + 30, nameLen);
-                int dataStart = pos + 30 + nameLen + extraLen;
-
-                if (name.Replace('\\', '/').Equals(entryPath, StringComparison.OrdinalIgnoreCase))
+                foreach (var entry in archive.Entries)
                 {
-                    if (method == 0) // Store
+                    if (entry.FullName.Replace('\\', '/').Equals(entryPath, StringComparison.OrdinalIgnoreCase))
                     {
-                        byte[] result = new byte[uncompressedSize];
-                        Buffer.BlockCopy(zipBytes, dataStart, result, 0, (int)uncompressedSize);
-                        return result;
-                    }
-                    if (method == 8) // Deflate
-                    {
-                        using (var compressed = new MemoryStream(zipBytes, dataStart, (int)compressedSize))
-                        using (var deflate = new System.IO.Compression.DeflateStream(compressed, System.IO.Compression.CompressionMode.Decompress))
-                        using (var output = new MemoryStream((int)uncompressedSize))
+                        using (var entryStream = entry.Open())
+                        using (var output = new MemoryStream())
                         {
-                            deflate.CopyTo(output);
+                            entryStream.CopyTo(output);
                             return output.ToArray();
                         }
                     }
-
-                    Debug.LogWarning($"[MCP] Unsupported ZIP method {method} for {name}");
-                    return null;
                 }
-
-                pos = dataStart + (int)compressedSize;
             }
 
             return null;
-        }
-
-        private static ushort ReadUInt16LE(byte[] buf, int offset)
-        {
-            return (ushort)(buf[offset] | (buf[offset + 1] << 8));
-        }
-
-        private static uint ReadUInt32LE(byte[] buf, int offset)
-        {
-            return (uint)(buf[offset] | (buf[offset + 1] << 8) | (buf[offset + 2] << 16) | (buf[offset + 3] << 24));
         }
     }
 }

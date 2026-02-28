@@ -167,7 +167,7 @@ For **Strict** validation that catches undefined namespaces, types, and methods:
 
   Open `Window > MCP for Unity`, scroll to the **Runtime Code Execution (Roslyn)** section in the Scripts/Validation tab, and click **Install Roslyn DLLs**. This downloads the required NuGet packages and places the DLLs in `Assets/Plugins/Roslyn/` automatically.
 
-  You can also run it from the menu: `Tools > MCP for Unity > Install Roslyn DLLs`.
+  You can also run it from the menu: `Window > MCP For Unity > Install Roslyn DLLs`.
   </details>
 
   <details>
