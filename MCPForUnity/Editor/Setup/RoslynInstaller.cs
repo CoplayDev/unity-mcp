@@ -70,6 +70,7 @@ namespace MCPForUnity.Editor.Setup
 
                     using (var request = UnityWebRequest.Get(url))
                     {
+                        request.timeout = 30;
                         request.SendWebRequest();
                         while (!request.isDone)
                             System.Threading.Thread.Sleep(50);
