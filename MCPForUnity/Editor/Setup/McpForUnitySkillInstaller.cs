@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
 
-namespace Editor
+namespace MCPForUnity.Editor.Setup
 {
     public class McpForUnitySkillInstaller : EditorWindow
     {
