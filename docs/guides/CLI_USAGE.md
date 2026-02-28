@@ -211,7 +211,7 @@ unity-mcp custom_tool list
 | `--view-position` | string | Camera position as `x,y,z` (positioned screenshot) |
 | `--view-rotation` | string | Camera euler rotation as `x,y,z` (positioned screenshot) |
 | `--orbit-angles` | int | Number of azimuth steps around target (default 8) |
-| `--orbit-elevations` | string | Vertical angles as JSON array, e.g. `[0,30,-15]` (default `[0]`) |
+| `--orbit-elevations` | string | Vertical angles as JSON array, e.g. `[0,30,-15]` (default `[0, 30, -15]`) |
 | `--orbit-distance` | float | Camera distance from target in world units (auto-fit if omitted) |
 | `--orbit-fov` | float | Camera FOV in degrees (default 60) |
 | `--output-dir, -o` | string | Save directory (default: Unity project's `Assets/Screenshots/`) |

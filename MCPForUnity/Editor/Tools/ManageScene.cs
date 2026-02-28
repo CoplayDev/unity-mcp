@@ -63,7 +63,17 @@ namespace MCPForUnity.Editor.Tools
                 var arr = (JArray)token;
                 var result = new float[arr.Count];
                 for (int i = 0; i < arr.Count; i++)
-                    result[i] = arr[i].ToObject<float>();
+                {
+                    try
+                    {
+                        result[i] = arr[i].ToObject<float>();
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new Newtonsoft.Json.JsonException(
+                            $"Failed to parse float at index {i}: '{arr[i]}'", ex);
+                    }
+                }
                 return result;
             }
             // Single value → array of one
@@ -686,7 +696,7 @@ namespace MCPForUnity.Editor.Tools
         /// <summary>
         /// Captures screenshots from a configurable orbit around a target for visual QA.
         /// Supports custom azimuth count, elevation angles, distance, and FOV.
-        /// Returns all images as inline base64 PNGs (no files saved to disk).
+        /// Returns a single composite contact-sheet image (imageBase64) plus per-shot metadata (no files saved to disk).
         /// </summary>
         private static object CaptureOrbitBatch(SceneCommand cmd)
         {

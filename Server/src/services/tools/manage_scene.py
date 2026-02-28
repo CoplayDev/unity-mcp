@@ -201,11 +201,14 @@ async def manage_scene(
             params["orbitAngles"] = coerced_orbit_angles
         if orbit_elevations is not None:
             if isinstance(orbit_elevations, str):
-                import json as _json
                 try:
-                    orbit_elevations = _json.loads(orbit_elevations)
+                    orbit_elevations = json.loads(orbit_elevations)
                 except (ValueError, TypeError):
                     return {"success": False, "message": "orbit_elevations must be a JSON array of floats."}
+            if not isinstance(orbit_elevations, list) or not all(
+                isinstance(v, (int, float)) for v in orbit_elevations
+            ):
+                return {"success": False, "message": "orbit_elevations must be a list of numbers."}
             params["orbitElevations"] = orbit_elevations
         if orbit_distance is not None:
             try:

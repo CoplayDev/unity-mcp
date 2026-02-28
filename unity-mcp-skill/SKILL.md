@@ -84,7 +84,7 @@ batch_execute(
 | `view_position` | list | Camera position `[x,y,z]` for positioned screenshot |
 | `view_rotation` | list | Camera euler rotation `[x,y,z]` for positioned screenshot |
 | `orbit_angles` | int | Number of azimuth samples around the target (default 8) |
-| `orbit_elevations` | list | Vertical angles in degrees, e.g. `[0, 30, -15]` (default `[0]`) |
+| `orbit_elevations` | list | Vertical angles in degrees, e.g. `[0, 30, -15]` (default `[0, 30, -15]`) |
 | `orbit_distance` | float | Camera distance from target in world units (auto-calculated if omitted) |
 | `orbit_fov` | float | Camera field of view in degrees (default 60) |
 

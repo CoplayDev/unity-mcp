@@ -142,7 +142,7 @@ manage_scene(
     batch="orbit",               # str - "orbit" for configurable angle grid
     look_at="Player",            # str|int|list[float] - target to orbit around
     orbit_angles=8,              # int, default 8 - number of azimuth steps
-    orbit_elevations=[0, 30],    # list[float], default [0] - vertical angles in degrees
+    orbit_elevations=[0, 30],    # list[float], default [0, 30, -15] - vertical angles in degrees
     orbit_distance=10,           # float, optional - camera distance (auto-fit if omitted)
     orbit_fov=60,                # float, default 60 - camera FOV in degrees
     max_resolution=256           # int - per-tile resolution cap

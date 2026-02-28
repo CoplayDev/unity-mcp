@@ -285,13 +285,14 @@ namespace MCPForUnity.Runtime.Helpers
             RenderTexture prevRT = camera.targetTexture;
             RenderTexture prevActive = RenderTexture.active;
             var rt = RenderTexture.GetTemporary(width, height, 24, RenderTextureFormat.ARGB32);
+            Texture2D tex = null;
             try
             {
                 camera.targetTexture = rt;
                 camera.Render();
 
                 RenderTexture.active = rt;
-                var tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
                 tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
                 tex.Apply();
 
@@ -300,15 +301,19 @@ namespace MCPForUnity.Runtime.Helpers
                 {
                     var downscaled = DownscaleTexture(tex, targetMax);
                     DestroyTexture(tex);
+                    tex = null;
                     return downscaled;
                 }
-                return tex;
+                var result = tex;
+                tex = null; // transfer ownership to caller
+                return result;
             }
             finally
             {
                 camera.targetTexture = prevRT;
                 RenderTexture.active = prevActive;
                 RenderTexture.ReleaseTemporary(rt);
+                DestroyTexture(tex);
             }
         }
 
@@ -343,11 +348,13 @@ namespace MCPForUnity.Runtime.Helpers
             {
                 sheet = new Texture2D(sheetW, sheetH, TextureFormat.RGBA32, false);
 
-                // Fill background with dark gray
+                // Build the full sheet in a Color32[] buffer, then upload once
                 var bgColor = new Color32(30, 30, 30, 255);
-                Color32[] bgPixels = new Color32[sheetW * sheetH];
-                for (int i = 0; i < bgPixels.Length; i++) bgPixels[i] = bgColor;
-                sheet.SetPixels32(bgPixels);
+                Color32[] sheetPixels = new Color32[sheetW * sheetH];
+                for (int i = 0; i < sheetPixels.Length; i++) sheetPixels[i] = bgColor;
+
+                // Track label draw requests so we can apply them after the bulk upload
+                var labelDraws = new List<(string text, int x, int y, int h)>();
 
                 for (int idx = 0; idx < count; idx++)
                 {
@@ -357,31 +364,40 @@ namespace MCPForUnity.Runtime.Helpers
                     int x = padding + col * cellW;
                     int y = sheetH - padding - (row + 1) * cellH + padding;
 
-                    // Draw tile pixels
+                    // Copy tile pixels row-by-row using bulk operations
                     Color32[] tilePixels = tiles[idx].GetPixels32();
                     for (int ty = 0; ty < tileH; ty++)
                     {
-                        for (int tx = 0; tx < tileW; tx++)
-                        {
-                            sheet.SetPixel(x + tx, y + labelHeight + ty, tiles[idx].GetPixel(tx, ty));
-                        }
+                        int srcOffset = ty * tileW;
+                        int dstOffset = (y + labelHeight + ty) * sheetW + x;
+                        System.Array.Copy(tilePixels, srcOffset, sheetPixels, dstOffset, tileW);
                     }
 
                     // Draw label banner (dark background strip below tile)
                     var bannerColor = new Color32(20, 20, 20, 220);
                     for (int ly = 0; ly < labelHeight; ly++)
                     {
+                        int dstOffset = (y + ly) * sheetW + x;
                         for (int lx = 0; lx < tileW; lx++)
                         {
-                            sheet.SetPixel(x + lx, y + ly, bannerColor);
+                            sheetPixels[dstOffset + lx] = bannerColor;
                         }
                     }
 
-                    // Draw label text using simple pixel font
+                    // Queue label text drawing (applied after bulk pixel upload)
                     if (labels != null && idx < labels.Count && !string.IsNullOrEmpty(labels[idx]))
                     {
-                        DrawText(sheet, labels[idx], x + 3, y + 2, labelHeight - 4, Color.white);
+                        labelDraws.Add((labels[idx], x + 3, y + 2, labelHeight - 4));
                     }
+                }
+
+                // Upload all tile + banner pixels in one SetPixels32 call
+                sheet.SetPixels32(sheetPixels);
+
+                // Draw label text on top (small glyph-based writes, negligible cost)
+                foreach (var (text, lx, ly, lh) in labelDraws)
+                {
+                    DrawText(sheet, text, lx, ly, lh, Color.white);
                 }
 
                 sheet.Apply();
