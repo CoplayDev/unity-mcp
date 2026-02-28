@@ -109,7 +109,7 @@ manage_scene(
     include_transform=False      # bool - include local transforms
 )
 
-# Screenshot (file only — saves to Assets/)
+# Screenshot (file only — saves to Assets/Screenshots/)
 manage_scene(action="screenshot")
 
 # Screenshot with inline image (base64 PNG returned to AI)
@@ -120,13 +120,13 @@ manage_scene(
     max_resolution=512           # int, optional - downscale cap (default 640)
 )
 
-# Batch surround (6 angles around scene bounds, no file saved)
+# Batch surround — contact sheet of 6 fixed angles (front/back/left/right/top/bird_eye)
 manage_scene(
     action="screenshot",
-    batch="surround",            # str - "surround" for 6-angle capture
-    max_resolution=256           # int - keep low for batch (6 images)
+    batch="surround",            # str - "surround" for 6-angle contact sheet
+    max_resolution=256           # int - per-tile resolution cap
 )
-# Returns: front, back, left, right, top, bird_eye views
+# Returns: single composite contact sheet image with labeled tiles
 
 # Batch surround centered on a specific target
 manage_scene(
@@ -135,6 +135,19 @@ manage_scene(
     look_at="Player",            # str|int|list[float] - center surround on this target
     max_resolution=256
 )
+
+# Batch orbit — configurable multi-angle grid around a target
+manage_scene(
+    action="screenshot",
+    batch="orbit",               # str - "orbit" for configurable angle grid
+    look_at="Player",            # str|int|list[float] - target to orbit around
+    orbit_angles=8,              # int, default 8 - number of azimuth steps
+    orbit_elevations=[0, 30],    # list[float], default [0] - vertical angles in degrees
+    orbit_distance=10,           # float, optional - camera distance (auto-fit if omitted)
+    orbit_fov=60,                # float, default 60 - camera FOV in degrees
+    max_resolution=256           # int - per-tile resolution cap
+)
+# Returns: single composite contact sheet (angles × elevations tiles in a grid)
 
 # Positioned screenshot (temp camera at viewpoint, no file saved)
 manage_scene(

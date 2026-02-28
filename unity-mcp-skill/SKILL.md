@@ -71,32 +71,69 @@ batch_execute(
 
 ### 3. Use Screenshots to Verify Visual Results
 
+#### Screenshot Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `camera` | string | Camera name/path/ID. Defaults to `Camera.main` |
+| `include_image` | bool | Return base64 PNG inline (for AI vision) |
+| `max_resolution` | int | Max longest-edge pixels (default 640). Lower = smaller payload |
+| `supersize` | int | Resolution multiplier 1–4 for file-saved screenshots |
+| `batch` | string | `"surround"` (6 fixed angles) or `"orbit"` (configurable grid) |
+| `look_at` | string | Target: GameObject name/path/ID, or `"x,y,z"` world position |
+| `view_position` | list | Camera position `[x,y,z]` for positioned screenshot |
+| `view_rotation` | list | Camera euler rotation `[x,y,z]` for positioned screenshot |
+| `orbit_angles` | int | Number of azimuth samples around the target (default 8) |
+| `orbit_elevations` | list | Vertical angles in degrees, e.g. `[0, 30, -15]` (default `[0]`) |
+| `orbit_distance` | float | Camera distance from target in world units (auto-calculated if omitted) |
+| `orbit_fov` | float | Camera field of view in degrees (default 60) |
+
+#### Single Screenshots
+
 ```python
-# Basic screenshot (saves to Assets/, returns file path only)
+# Basic screenshot (saves to Assets/Screenshots/, returns file path)
 manage_scene(action="screenshot")
 
 # Inline screenshot (returns base64 PNG directly to the AI)
 manage_scene(action="screenshot", include_image=True)
 
-# Use a specific camera and cap resolution for smaller payloads
+# Specific camera + capped resolution for smaller payloads
 manage_scene(action="screenshot", camera="MainCamera", include_image=True, max_resolution=512)
 
-# Batch surround: captures front/back/left/right/top/bird_eye around the scene
+# Positioned screenshot: place a temp camera at a specific viewpoint
+manage_scene(action="screenshot", look_at="Player", view_position=[0, 10, -10], max_resolution=512)
+```
+
+#### Batch Screenshots (Contact Sheet)
+
+Batch modes return a **single composite contact sheet** image — a grid of labeled thumbnails — instead of separate files. This is ideal for AI scene understanding in one image.
+
+```python
+# Surround: 6 fixed angles (front/back/left/right/top/bird_eye)
 manage_scene(action="screenshot", batch="surround", max_resolution=256)
 
-# Batch surround centered on a specific object
+# Surround centered on a specific object
 manage_scene(action="screenshot", batch="surround", look_at="Player", max_resolution=256)
 
-# Positioned screenshot: place a temp camera and capture in one call
-manage_scene(action="screenshot", look_at="Player", view_position=[0, 10, -10], max_resolution=512)
+# Orbit: 8 angles at eye level around an object
+manage_scene(action="screenshot", batch="orbit", look_at="Player", orbit_angles=8)
+
+# Orbit: 10 angles, 3 elevation rings, custom distance
+manage_scene(action="screenshot", batch="orbit", look_at="Player",
+             orbit_angles=10, orbit_elevations=[0, 30, -15], orbit_distance=8)
+
+# Orbit: tight close-up with narrow FOV
+manage_scene(action="screenshot", batch="orbit", look_at="Treasure",
+             orbit_distance=3, orbit_fov=40, orbit_angles=6)
 ```
 
 **Best practices for AI scene understanding:**
 - Use `include_image=True` when you need to *see* the scene, not just save a file.
-- Use `batch="surround"` for a comprehensive overview (6 angles, one command).
-- Use `look_at`/`view_position` to capture from a specific viewpoint without needing a scene camera.
+- Use `batch="surround"` for a quick 6-angle overview of the whole scene.
+- Use `batch="orbit"` for detailed inspection of a specific object from many angles.
 - Keep `max_resolution` at 256–512 to balance quality vs. token cost.
-- Combine with `look_at` on `manage_gameobject` to orient a game camera before capturing.
+- Use `orbit_elevations` to get views from above/below, not just around.
+- Omit `orbit_distance` to let Unity auto-fit the object in frame.
 
 ```python
 # Agentic camera loop: point, shoot, analyze

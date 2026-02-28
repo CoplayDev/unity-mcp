@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEngine;
@@ -267,6 +268,216 @@ namespace MCPForUnity.Runtime.Helpers
                 RenderTexture.ReleaseTemporary(rt);
                 DestroyTexture(tex);
                 DestroyTexture(downscaled);
+            }
+        }
+
+        /// <summary>
+        /// Renders a camera to a Texture2D without saving to disk.
+        /// Caller owns the returned texture and must destroy it.
+        /// </summary>
+        public static Texture2D RenderCameraToTexture(Camera camera, int maxResolution = 640)
+        {
+            if (camera == null) throw new ArgumentNullException(nameof(camera));
+
+            int width = Mathf.Max(1, camera.pixelWidth > 0 ? camera.pixelWidth : Screen.width);
+            int height = Mathf.Max(1, camera.pixelHeight > 0 ? camera.pixelHeight : Screen.height);
+
+            RenderTexture prevRT = camera.targetTexture;
+            RenderTexture prevActive = RenderTexture.active;
+            var rt = RenderTexture.GetTemporary(width, height, 24, RenderTextureFormat.ARGB32);
+            try
+            {
+                camera.targetTexture = rt;
+                camera.Render();
+
+                RenderTexture.active = rt;
+                var tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+                tex.Apply();
+
+                int targetMax = maxResolution > 0 ? maxResolution : 640;
+                if (width > targetMax || height > targetMax)
+                {
+                    var downscaled = DownscaleTexture(tex, targetMax);
+                    DestroyTexture(tex);
+                    return downscaled;
+                }
+                return tex;
+            }
+            finally
+            {
+                camera.targetTexture = prevRT;
+                RenderTexture.active = prevActive;
+                RenderTexture.ReleaseTemporary(rt);
+            }
+        }
+
+        /// <summary>
+        /// Composites a list of tile textures into a single contact-sheet grid image.
+        /// Labels are drawn as white text on a dark banner at the bottom of each tile.
+        /// Returns base64 PNG plus dimensions. Destroys all input tile textures.
+        /// </summary>
+        public static (string base64, int width, int height) ComposeContactSheet(
+            List<Texture2D> tiles, List<string> labels, int padding = 4)
+        {
+            if (tiles == null || tiles.Count == 0)
+                throw new ArgumentException("No tiles to compose.", nameof(tiles));
+
+            int tileW = tiles[0].width;
+            int tileH = tiles[0].height;
+            int count = tiles.Count;
+
+            // Calculate grid: prefer wider than tall (cols >= rows)
+            int cols = Mathf.CeilToInt(Mathf.Sqrt(count));
+            int rows = Mathf.CeilToInt((float)count / cols);
+
+            int labelHeight = Mathf.Max(14, tileH / 12);
+            int cellW = tileW + padding;
+            int cellH = tileH + labelHeight + padding;
+
+            int sheetW = cols * cellW + padding;
+            int sheetH = rows * cellH + padding;
+
+            Texture2D sheet = null;
+            try
+            {
+                sheet = new Texture2D(sheetW, sheetH, TextureFormat.RGBA32, false);
+
+                // Fill background with dark gray
+                var bgColor = new Color32(30, 30, 30, 255);
+                Color32[] bgPixels = new Color32[sheetW * sheetH];
+                for (int i = 0; i < bgPixels.Length; i++) bgPixels[i] = bgColor;
+                sheet.SetPixels32(bgPixels);
+
+                for (int idx = 0; idx < count; idx++)
+                {
+                    int col = idx % cols;
+                    int row = idx / cols;
+                    // Place tiles top-left to bottom-right (Unity Texture2D y=0 is bottom)
+                    int x = padding + col * cellW;
+                    int y = sheetH - padding - (row + 1) * cellH + padding;
+
+                    // Draw tile pixels
+                    Color32[] tilePixels = tiles[idx].GetPixels32();
+                    for (int ty = 0; ty < tileH; ty++)
+                    {
+                        for (int tx = 0; tx < tileW; tx++)
+                        {
+                            sheet.SetPixel(x + tx, y + labelHeight + ty, tiles[idx].GetPixel(tx, ty));
+                        }
+                    }
+
+                    // Draw label banner (dark background strip below tile)
+                    var bannerColor = new Color32(20, 20, 20, 220);
+                    for (int ly = 0; ly < labelHeight; ly++)
+                    {
+                        for (int lx = 0; lx < tileW; lx++)
+                        {
+                            sheet.SetPixel(x + lx, y + ly, bannerColor);
+                        }
+                    }
+
+                    // Draw label text using simple pixel font
+                    if (labels != null && idx < labels.Count && !string.IsNullOrEmpty(labels[idx]))
+                    {
+                        DrawText(sheet, labels[idx], x + 3, y + 2, labelHeight - 4, Color.white);
+                    }
+                }
+
+                sheet.Apply();
+
+                byte[] png = sheet.EncodeToPNG();
+                string b64 = System.Convert.ToBase64String(png);
+                return (b64, sheetW, sheetH);
+            }
+            finally
+            {
+                foreach (var tile in tiles) DestroyTexture(tile);
+                DestroyTexture(sheet);
+            }
+        }
+
+        private static void DrawText(Texture2D tex, string text, int startX, int startY, int charHeight, Color color)
+        {
+            // Simple 5x7 bitmap font for basic ASCII characters
+            int charWidth = Mathf.Max(4, charHeight * 5 / 7);
+            int spacing = Mathf.Max(1, charWidth / 5);
+            int x = startX;
+
+            foreach (char c in text)
+            {
+                if (x + charWidth > tex.width) break;
+                ulong glyph = GetGlyph(c);
+                if (glyph != 0)
+                {
+                    for (int row = 0; row < 7; row++)
+                    {
+                        for (int col = 0; col < 5; col++)
+                        {
+                            bool on = ((glyph >> ((6 - row) * 5 + (4 - col))) & 1) == 1;
+                            if (!on) continue;
+                            // Scale the 5x7 glyph to charWidth x charHeight
+                            int px0 = x + col * charWidth / 5;
+                            int px1 = x + (col + 1) * charWidth / 5;
+                            int py0 = startY + (6 - row) * charHeight / 7;
+                            int py1 = startY + (7 - row) * charHeight / 7;
+                            for (int py = py0; py < py1 && py < tex.height; py++)
+                                for (int px = px0; px < px1 && px < tex.width; px++)
+                                    tex.SetPixel(px, py, color);
+                        }
+                    }
+                }
+                x += charWidth + spacing;
+            }
+        }
+
+        private static ulong GetGlyph(char c)
+        {
+            // 5x7 pixel font stored as 35-bit values (row0=bits34-30 ... row6=bits4-0)
+            // Each row is 5 wide, MSB=left. Row 0 is top.
+            switch (char.ToUpperInvariant(c))
+            {
+                case 'A': return 0b01110_10001_10001_11111_10001_10001_10001UL;
+                case 'B': return 0b11110_10001_10001_11110_10001_10001_11110UL;
+                case 'C': return 0b01110_10001_10000_10000_10000_10001_01110UL;
+                case 'D': return 0b11100_10010_10001_10001_10001_10010_11100UL;
+                case 'E': return 0b11111_10000_10000_11110_10000_10000_11111UL;
+                case 'F': return 0b11111_10000_10000_11110_10000_10000_10000UL;
+                case 'G': return 0b01110_10001_10000_10111_10001_10001_01110UL;
+                case 'H': return 0b10001_10001_10001_11111_10001_10001_10001UL;
+                case 'I': return 0b01110_00100_00100_00100_00100_00100_01110UL;
+                case 'K': return 0b10001_10010_10100_11000_10100_10010_10001UL;
+                case 'L': return 0b10000_10000_10000_10000_10000_10000_11111UL;
+                case 'M': return 0b10001_11011_10101_10101_10001_10001_10001UL;
+                case 'N': return 0b10001_11001_10101_10011_10001_10001_10001UL;
+                case 'O': return 0b01110_10001_10001_10001_10001_10001_01110UL;
+                case 'R': return 0b11110_10001_10001_11110_10100_10010_10001UL;
+                case 'S': return 0b01110_10001_10000_01110_00001_10001_01110UL;
+                case 'T': return 0b11111_00100_00100_00100_00100_00100_00100UL;
+                case 'U': return 0b10001_10001_10001_10001_10001_10001_01110UL;
+                case 'V': return 0b10001_10001_10001_10001_01010_01010_00100UL;
+                case 'W': return 0b10001_10001_10001_10101_10101_11011_10001UL;
+                case 'Y': return 0b10001_10001_01010_00100_00100_00100_00100UL;
+                case '0': return 0b01110_10011_10101_10101_10101_11001_01110UL;
+                case '1': return 0b00100_01100_00100_00100_00100_00100_01110UL;
+                case '2': return 0b01110_10001_00001_00010_00100_01000_11111UL;
+                case '3': return 0b01110_10001_00001_00110_00001_10001_01110UL;
+                case '4': return 0b00010_00110_01010_10010_11111_00010_00010UL;
+                case '5': return 0b11111_10000_11110_00001_00001_10001_01110UL;
+                case '6': return 0b01110_10001_10000_11110_10001_10001_01110UL;
+                case '7': return 0b11111_00001_00010_00100_01000_01000_01000UL;
+                case '8': return 0b01110_10001_10001_01110_10001_10001_01110UL;
+                case '9': return 0b01110_10001_10001_01111_00001_10001_01110UL;
+                case 'J': return 0b00111_00010_00010_00010_00010_10010_01100UL;
+                case 'P': return 0b11110_10001_10001_11110_10000_10000_10000UL;
+                case 'Q': return 0b01110_10001_10001_10001_10101_10010_01101UL;
+                case 'X': return 0b10001_01010_00100_00100_00100_01010_10001UL;
+                case 'Z': return 0b11111_00001_00010_00100_01000_10000_11111UL;
+                case '-': return 0b00000_00000_00000_11111_00000_00000_00000UL;
+                case '_': return 0b00000_00000_00000_00000_00000_00000_11111UL;
+                case ' ': return 0UL;
+                case '+': return 0b00000_00100_00100_11111_00100_00100_00000UL;
+                default:  return 0UL;
             }
         }
 

@@ -1,11 +1,15 @@
 """Scene CLI commands."""
 
+import base64
+import os
 import sys
+from datetime import datetime
+
 import click
 from typing import Optional, Any
 
 from cli.utils.config import get_config
-from cli.utils.output import format_output, print_error, print_success
+from cli.utils.output import format_output, print_error, print_success, print_info
 from cli.utils.connection import run_command, handle_unity_errors
 
 
@@ -225,7 +229,7 @@ def build_settings():
 @click.option(
     "--batch", "-b",
     default=None,
-    help="Batch capture mode: 'surround' for 6 angles around the scene."
+    help="Batch capture mode: 'surround' for 6 angles, 'orbit' for configurable grid."
 )
 @click.option(
     "--look-at",
@@ -242,11 +246,42 @@ def build_settings():
     default=None,
     help="Camera euler rotation as 'x,y,z'."
 )
+@click.option(
+    "--orbit-angles",
+    default=None,
+    type=int,
+    help="Number of azimuth samples for batch='orbit' (default 8)."
+)
+@click.option(
+    "--orbit-elevations",
+    default=None,
+    help="Elevation angles in degrees as JSON array, e.g. '[0,30,-15]'."
+)
+@click.option(
+    "--orbit-distance",
+    default=None,
+    type=float,
+    help="Camera distance from target for batch='orbit'."
+)
+@click.option(
+    "--orbit-fov",
+    default=None,
+    type=float,
+    help="Camera FOV in degrees for batch='orbit' (default 60)."
+)
+@click.option(
+    "--output-dir", "-o",
+    default=None,
+    help="Directory to save batch screenshots to (default: Unity project's Assets/Screenshots)."
+)
 @handle_unity_errors
 def screenshot(filename: Optional[str], supersize: int, camera: Optional[str],
                include_image: bool, max_resolution: Optional[int],
                batch: Optional[str], look_at: Optional[str],
-               view_position: Optional[str], view_rotation: Optional[str]):
+               view_position: Optional[str], view_rotation: Optional[str],
+               orbit_angles: Optional[int], orbit_elevations: Optional[str],
+               orbit_distance: Optional[float], orbit_fov: Optional[float],
+               output_dir: Optional[str]):
     """Capture a screenshot of the scene.
 
     \b
@@ -293,14 +328,91 @@ def screenshot(filename: Optional[str], supersize: int, camera: Optional[str],
         parts = view_rotation.split(",")
         if len(parts) == 3:
             params["viewRotation"] = [float(p.strip()) for p in parts]
+    if orbit_angles:
+        params["orbitAngles"] = orbit_angles
+    if orbit_elevations:
+        import json
+        try:
+            params["orbitElevations"] = json.loads(orbit_elevations)
+        except (json.JSONDecodeError, ValueError):
+            print_error(f"Invalid orbit-elevations JSON: {orbit_elevations}")
+            sys.exit(1)
+    if orbit_distance:
+        params["orbitDistance"] = orbit_distance
+    if orbit_fov:
+        params["orbitFov"] = orbit_fov
 
     result = run_command("manage_scene", params, config)
 
-    if batch and result.get("success"):
-        data = result.get("data", {})
-        count = len(data.get("screenshots", []))
-        print_success(f"Captured {count} batch screenshots")
+    # Unwrap the response: {"status":"success","result":{"success":true,"data":{...}}}
+    inner = result.get("result", result)  # fallback to result if no nesting
+    is_success = (result.get("status") == "success"
+                  or inner.get("success", False)
+                  or result.get("success", False))
+    data = inner.get("data", inner) if isinstance(inner, dict) else {}
+
+    if batch and is_success:
+        composite_b64 = data.get("imageBase64")
+        shots = data.get("shots", [])
+
+        if composite_b64:
+            # Determine output directory
+            if not output_dir:
+                output_dir = data.get("screenshotsFolder")
+            if not output_dir:
+                output_dir = os.getcwd()
+            output_dir = os.path.abspath(output_dir)
+            os.makedirs(output_dir, exist_ok=True)
+
+            mode_label = batch  # "orbit" or "surround"
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            fname = filename or f"{mode_label}_contact_{timestamp}.png"
+            if not fname.lower().endswith(".png"):
+                fname += ".png"
+            file_path = os.path.join(output_dir, fname)
+            try:
+                with open(file_path, "wb") as f:
+                    f.write(base64.b64decode(composite_b64))
+                w = data.get("imageWidth", "?")
+                h = data.get("imageHeight", "?")
+                print_success(f"Contact sheet ({w}x{h}, {len(shots)} shots) saved to {file_path}")
+            except Exception as e:
+                print_error(f"Failed to save {file_path}: {e}")
+        else:
+            print_success(f"Batch completed ({len(shots)} shots, no composite image returned)")
+
+        # Print metadata
+        meta = {k: v for k, v in data.items()
+                if k not in ("imageBase64", "screenshotsFolder", "shots")}
+        if meta:
+            print_info(f"  center={meta.get('sceneCenter')}, radius={meta.get('orbitRadius', meta.get('sceneRadius'))}, "
+                       f"fov={meta.get('orbitFov')}, size={meta.get('imageWidth')}x{meta.get('imageHeight')}")
     else:
-        click.echo(format_output(result, config.format))
-        if result.get("success"):
-            print_success("Screenshot captured")
+        # Handle positioned single-shot (returns base64 inline, no disk save from Unity)
+        if is_success:
+            b64 = data.get("imageBase64")
+            if b64 and not data.get("path"):
+                # Positioned screenshot — save to disk from base64
+                if not output_dir:
+                    output_dir = data.get("screenshotsFolder")
+                if not output_dir:
+                    output_dir = os.getcwd()
+                output_dir = os.path.abspath(output_dir)
+                os.makedirs(output_dir, exist_ok=True)
+
+                fname = filename or f"screenshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                if not fname.lower().endswith(".png"):
+                    fname += ".png"
+                file_path = os.path.join(output_dir, fname)
+                try:
+                    with open(file_path, "wb") as f:
+                        f.write(base64.b64decode(b64))
+                    print_success(f"Screenshot saved to {file_path}")
+                except Exception as e:
+                    print_error(f"Failed to save {file_path}: {e}")
+            else:
+                # Standard screenshot (already saved by Unity to Assets/Screenshots/)
+                click.echo(format_output(result, config.format))
+                print_success("Screenshot captured")
+        else:
+            click.echo(format_output(result, config.format))
