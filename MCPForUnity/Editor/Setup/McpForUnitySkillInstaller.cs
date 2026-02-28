@@ -76,31 +76,34 @@ namespace MCPForUnity.Editor.Setup
             EditorGUILayout.Space(4f);
 
             EditorGUILayout.LabelField("Config", EditorStyles.boldLabel);
-            _repoUrl = EditorGUILayout.TextField("Repo URL", _repoUrl);
-            var branchIndex = Array.IndexOf(BranchOptions, _targetBranch);
-            if (branchIndex < 0)
+            using (new EditorGUI.DisabledScope(_isRunning))
             {
-                branchIndex = 0;
+                _repoUrl = EditorGUILayout.TextField("Repo URL", _repoUrl);
+                var branchIndex = Array.IndexOf(BranchOptions, _targetBranch);
+                if (branchIndex < 0)
+                {
+                    branchIndex = 0;
+                }
+
+                var selectedBranchIndex = EditorGUILayout.Popup("Branch", branchIndex, BranchOptions);
+                _targetBranch = BranchOptions[selectedBranchIndex];
+
+                var cliIndex = Array.IndexOf(CliOptions, _cliType);
+                if (cliIndex < 0)
+                {
+                    cliIndex = 0;
+                }
+
+                var selectedCliIndex = EditorGUILayout.Popup("CLI", cliIndex, CliOptions);
+                if (selectedCliIndex != cliIndex)
+                {
+                    var previousCli = _cliType;
+                    _cliType = CliOptions[selectedCliIndex];
+                    TryApplyCliDefaultInstallPath(previousCli, _cliType);
+                }
+
+                _installDir = EditorGUILayout.TextField("Install Dir", _installDir);
             }
-
-            var selectedBranchIndex = EditorGUILayout.Popup("Branch", branchIndex, BranchOptions);
-            _targetBranch = BranchOptions[selectedBranchIndex];
-
-            var cliIndex = Array.IndexOf(CliOptions, _cliType);
-            if (cliIndex < 0)
-            {
-                cliIndex = 0;
-            }
-
-            var selectedCliIndex = EditorGUILayout.Popup("CLI", cliIndex, CliOptions);
-            if (selectedCliIndex != cliIndex)
-            {
-                var previousCli = _cliType;
-                _cliType = CliOptions[selectedCliIndex];
-                TryApplyCliDefaultInstallPath(previousCli, _cliType);
-            }
-
-            _installDir = EditorGUILayout.TextField("Install Dir", _installDir);
 
             EditorGUILayout.Space(8f);
             EditorGUILayout.BeginHorizontal();
@@ -142,19 +145,22 @@ namespace MCPForUnity.Editor.Setup
 
         private void RunSyncLatest()
         {
-            var lastSyncedCommitKey = GetLastSyncedCommitKey();
+            var repoUrl = _repoUrl;
+            var targetBranch = _targetBranch;
+            var installDir = _installDir;
+            var lastSyncedCommitKey = GetLastSyncedCommitKey(repoUrl, targetBranch);
             var lastSyncedCommit = EditorPrefs.GetString(lastSyncedCommitKey, string.Empty);
             ExecuteWithGuard(() =>
             {
                 AppendLine("=== Sync Start ===");
-                if (!TryParseGitHubRepository(_repoUrl, out var repoInfo))
+                if (!TryParseGitHubRepository(repoUrl, out var repoInfo))
                 {
-                    throw new InvalidOperationException($"Repo URL is not a recognized GitHub repository URL: {_repoUrl}");
+                    throw new InvalidOperationException($"Repo URL is not a recognized GitHub repository URL: {repoUrl}");
                 }
 
-                AppendLine($"Target repository: {repoInfo.Owner}/{repoInfo.Repo}@{_targetBranch}");
-                var snapshot = FetchRemoteSnapshot(repoInfo, _targetBranch, FixedSkillSubdir);
-                var installPath = GetInstallPath();
+                AppendLine($"Target repository: {repoInfo.Owner}/{repoInfo.Repo}@{targetBranch}");
+                var snapshot = FetchRemoteSnapshot(repoInfo, targetBranch, FixedSkillSubdir);
+                var installPath = ResolveAndValidateInstallPath(installDir);
 
                 if (!Directory.Exists(installPath))
                 {
@@ -170,8 +176,8 @@ namespace MCPForUnity.Editor.Setup
 
                 AppendLine($"Remote Commit: {ShortCommit(lastSyncedCommit)} -> {ShortCommit(snapshot.CommitSha)}");
                 AppendLine(commitChanged
-                    ? $"Commit: detected newer commit on {_targetBranch}."
-                    : $"Commit: no new commit on {_targetBranch} since last sync.");
+                    ? $"Commit: detected newer commit on {targetBranch}."
+                    : $"Commit: no new commit on {targetBranch} since last sync.");
                 AppendLine($"Plan => Added:{plan.Added.Count} Updated:{plan.Updated.Count} Deleted:{plan.Deleted.Count}");
                 AppendSummary(plan, commitChanged);
                 LogPlanDetails(plan);
@@ -211,9 +217,9 @@ namespace MCPForUnity.Editor.Setup
             });
         }
 
-        private string GetLastSyncedCommitKey()
+        private string GetLastSyncedCommitKey(string repoUrl, string targetBranch)
         {
-            var scope = $"{_repoUrl}|{_targetBranch}|{NormalizeRemotePath(FixedSkillSubdir)}";
+            var scope = $"{repoUrl}|{targetBranch}|{NormalizeRemotePath(FixedSkillSubdir)}";
             using var sha256 = SHA256.Create();
             var hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(scope));
             var suffix = BitConverter.ToString(hash).Replace("-", string.Empty).ToLowerInvariant();
@@ -761,9 +767,35 @@ namespace MCPForUnity.Editor.Setup
             }
         }
 
-        private string GetInstallPath()
+        private static string ResolveAndValidateInstallPath(string installDir)
         {
-            return ExpandPath(_installDir);
+            if (string.IsNullOrWhiteSpace(installDir))
+            {
+                throw new InvalidOperationException("Install Dir is empty. Please set a valid directory before syncing.");
+            }
+
+            var trimmed = installDir.Trim();
+            if (trimmed.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+            {
+                throw new InvalidOperationException($"Install Dir contains invalid path characters: {installDir}");
+            }
+
+            string expandedPath;
+            try
+            {
+                expandedPath = ExpandPath(trimmed);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Install Dir is invalid and cannot be resolved: {installDir}", ex);
+            }
+
+            if (string.IsNullOrWhiteSpace(expandedPath))
+            {
+                throw new InvalidOperationException("Install Dir resolved to an empty path. Please set a valid directory before syncing.");
+            }
+
+            return expandedPath;
         }
 
         private void TryApplyCliDefaultInstallPath(string previousCli, string currentCli)
