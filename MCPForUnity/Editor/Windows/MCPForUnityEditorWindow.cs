@@ -10,6 +10,7 @@ using MCPForUnity.Editor.Windows.Components.ClientConfig;
 using MCPForUnity.Editor.Windows.Components.Connection;
 using MCPForUnity.Editor.Windows.Components.Resources;
 using MCPForUnity.Editor.Windows.Components.Tools;
+using MCPForUnity.Editor.Setup;
 using MCPForUnity.Editor.Windows.Components.Validation;
 using UnityEditor;
 using UnityEditor.UIElements;
@@ -236,6 +237,9 @@ namespace MCPForUnity.Editor.Windows
                 clientConfigSection.OnClientConfigMismatch += (clientName, mismatchMessage) =>
                     connectionSection?.UpdateVersionMismatchWarning(clientName, mismatchMessage);
             }
+
+            // Build Roslyn install section (code-only, no UXML)
+            BuildRoslynSection(validationContainer);
 
             // Load and initialize Validation section
             var validationTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
@@ -664,6 +668,42 @@ namespace MCPForUnity.Editor.Windows
                     McpLog.Warn($"Health check verification failed: {ex.Message}");
                 }
             };
+        }
+
+        private static void BuildRoslynSection(VisualElement container)
+        {
+            var section = new VisualElement();
+            section.AddToClassList("section");
+
+            var title = new Label("Runtime Code Execution (Roslyn)");
+            title.AddToClassList("section-title");
+            section.Add(title);
+
+            var content = new VisualElement();
+            content.AddToClassList("section-content");
+
+            bool installed = RoslynInstaller.IsInstalled();
+
+            var statusLabel = new Label(installed
+                ? "\u2713  Roslyn DLLs are installed. The execute_code tool is available."
+                : "Roslyn DLLs are required for the execute_code tool (runtime C# compilation).");
+            statusLabel.AddToClassList("validation-description");
+            statusLabel.style.marginBottom = 4;
+            content.Add(statusLabel);
+
+            var button = new Button(() =>
+            {
+                RoslynInstaller.Install(interactive: true);
+                statusLabel.text = RoslynInstaller.IsInstalled()
+                    ? "\u2713  Roslyn DLLs are installed. The execute_code tool is available."
+                    : "Installation incomplete. Check the console for errors.";
+            });
+            button.text = installed ? "Reinstall Roslyn DLLs" : "Install Roslyn DLLs";
+            button.AddToClassList("action-button");
+            content.Add(button);
+
+            section.Add(content);
+            container.Add(section);
         }
     }
 }
