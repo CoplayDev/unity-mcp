@@ -71,6 +71,7 @@ def _extract_images(response: dict[str, Any], action: str) -> ToolResult | None:
         "Modifying actions: create, load, save. "
         "screenshot supports include_image=true to return an inline base64 PNG for AI vision. "
         "screenshot with batch='surround' captures 6 angles around the scene (no file saved) for comprehensive scene understanding. "
+        "screenshot with batch='orbit' captures configurable azimuth x elevation grid for visual QA (use orbit_angles, orbit_elevations, orbit_distance, orbit_fov). "
         "screenshot with look_at/view_position creates a temp camera at that viewpoint and returns an inline image."
     ),
     annotations=ToolAnnotations(
@@ -109,8 +110,9 @@ async def manage_scene(
                               "Use 256-512 for quick looks, 640-1024 for detail."] | None = None,
     # --- screenshot extended params (batch, positioned capture) ---
     batch: Annotated[str,
-                     "Batch capture mode. 'surround' captures 6 angles (front/back/left/right/top/bird_eye) "
-                     "around the scene or look_at target. Returns inline images, no file saved."] | None = None,
+                     "Batch capture mode. 'surround' captures 6 fixed angles (front/back/left/right/top/bird_eye). "
+                     "'orbit' captures configurable azimuth x elevation grid for visual QA (use orbit_angles, orbit_elevations, orbit_distance, orbit_fov). "
+                     "Both modes center on look_at target or scene bounds. Returns inline images, no file saved."] | None = None,
     look_at: Annotated[str | int | list[float],
                        "Target to aim the camera at before capture. Can be a GameObject name/path/ID or [x,y,z] position. "
                        "For batch='surround', centers the surround on this target. For single shots, creates a temp camera aimed here."] | None = None,
@@ -118,6 +120,16 @@ async def manage_scene(
                              "World position [x,y,z] to place the camera for a positioned screenshot."] | None = None,
     view_rotation: Annotated[list[float] | str,
                              "Euler rotation [x,y,z] for the camera. Overrides look_at aiming if both provided."] | None = None,
+    # --- orbit batch params ---
+    orbit_angles: Annotated[int | str,
+                            "Number of azimuth samples for batch='orbit' (default 8, max 36)."] | None = None,
+    orbit_elevations: Annotated[list[float] | str,
+                                "Elevation angles in degrees for batch='orbit' (default [0, 30, -15]). "
+                                "E.g., [0, 30, 60] for ground-level, mid, and high views."] | None = None,
+    orbit_distance: Annotated[float | str,
+                              "Camera distance from target for batch='orbit' (default auto from bounds)."] | None = None,
+    orbit_fov: Annotated[float | str,
+                         "Camera field of view in degrees for batch='orbit' (default 60)."] | None = None,
     # --- scene_view_frame params ---
     scene_view_target: Annotated[str | int,
                                  "GameObject reference for scene_view_frame (name, path, or instance ID)."] | None = None,
@@ -182,6 +194,32 @@ async def manage_scene(
             params["batch"] = batch
         if look_at is not None:
             params["lookAt"] = look_at
+
+        # orbit batch params
+        coerced_orbit_angles = coerce_int(orbit_angles, default=None)
+        if coerced_orbit_angles is not None:
+            params["orbitAngles"] = coerced_orbit_angles
+        if orbit_elevations is not None:
+            if isinstance(orbit_elevations, str):
+                try:
+                    orbit_elevations = json.loads(orbit_elevations)
+                except (ValueError, TypeError):
+                    return {"success": False, "message": "orbit_elevations must be a JSON array of floats."}
+            if not isinstance(orbit_elevations, list) or not all(
+                isinstance(v, (int, float)) for v in orbit_elevations
+            ):
+                return {"success": False, "message": "orbit_elevations must be a list of numbers."}
+            params["orbitElevations"] = orbit_elevations
+        if orbit_distance is not None:
+            try:
+                params["orbitDistance"] = float(orbit_distance)
+            except (ValueError, TypeError):
+                return {"success": False, "message": "orbit_distance must be a number."}
+        if orbit_fov is not None:
+            try:
+                params["orbitFov"] = float(orbit_fov)
+            except (ValueError, TypeError):
+                return {"success": False, "message": "orbit_fov must be a number."}
         if view_position is not None:
             vec, err = normalize_vector3(view_position, "view_position")
             if err:
