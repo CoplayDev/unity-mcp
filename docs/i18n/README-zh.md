@@ -33,7 +33,7 @@
 
 > [!TIP]
 > ```text
-> https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity
+> https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#main
 > ```
 
 **想要最新的 beta 版本？** 使用 beta 分支：

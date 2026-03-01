@@ -30,12 +30,24 @@
   },
   "tools": [
     {
+      "name": "apply_text_edits",
+      "description": "Apply text edits to script content"
+    },
+    {
       "name": "batch_execute",
       "description": "Execute multiple Unity operations in a single batch"
     },
     {
+      "name": "create_script",
+      "description": "Create new C# scripts"
+    },
+    {
       "name": "debug_request_context",
       "description": "Debug and inspect MCP request context"
+    },
+    {
+      "name": "delete_script",
+      "description": "Delete C# scripts"
     },
     {
       "name": "execute_custom_tool",
@@ -52,6 +64,14 @@
     {
       "name": "find_in_file",
       "description": "Search for content within Unity project files"
+    },
+    {
+      "name": "get_sha",
+      "description": "Get SHA hash of script content"
+    },
+    {
+      "name": "get_test_job",
+      "description": "Get status of async test job"
     },
     {
       "name": "manage_animation",
@@ -90,6 +110,10 @@
       "description": "Create, read, and modify C# scripts"
     },
     {
+      "name": "manage_script_capabilities",
+      "description": "Query script management capabilities"
+    },
+    {
       "name": "manage_scriptable_object",
       "description": "Create and modify ScriptableObjects"
     },
@@ -122,10 +146,6 @@
       "description": "Run Unity Test Framework tests"
     },
     {
-      "name": "get_test_job",
-      "description": "Get status of async test job"
-    },
-    {
       "name": "script_apply_edits",
       "description": "Apply code edits to C# scripts with validation"
     },
@@ -134,28 +154,8 @@
       "description": "Set the active Unity Editor instance for multi-instance workflows"
     },
     {
-      "name": "apply_text_edits",
-      "description": "Apply text edits to script content"
-    },
-    {
-      "name": "create_script",
-      "description": "Create new C# scripts"
-    },
-    {
-      "name": "delete_script",
-      "description": "Delete C# scripts"
-    },
-    {
       "name": "validate_script",
       "description": "Validate C# script syntax and compilation"
-    },
-    {
-      "name": "manage_script_capabilities",
-      "description": "Query script management capabilities"
-    },
-    {
-      "name": "get_sha",
-      "description": "Get SHA hash of script content"
     }
   ]
 }

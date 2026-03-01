@@ -56,6 +56,9 @@ namespace MCPForUnity.Editor.Tools.Vfx
             {
                 ps = go.AddComponent<ParticleSystem>();
                 addedParticleSystem = true;
+
+                // Apply sensible defaults so newly created particles aren't oversized.
+                RendererHelpers.SetSensibleParticleDefaults(ps);
             }
 
             var renderer = go.GetComponent<ParticleSystemRenderer>();
@@ -64,14 +67,11 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 RendererHelpers.EnsureMaterial(renderer);
             }
 
+            // Allow caller overrides for playOnAwake and looping.
             var main = ps.main;
             if (@params["playOnAwake"] != null)
             {
                 main.playOnAwake = @params["playOnAwake"].ToObject<bool>();
-            }
-            else
-            {
-                main.playOnAwake = false;
             }
             if (@params["looping"] != null)
             {
