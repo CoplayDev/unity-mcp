@@ -16,6 +16,14 @@ namespace MCPForUnity.Editor.Clients.Configurators
         })
         { }
 
+        public override bool SupportsSkills => true;
+
+        public override string GetSkillInstallPath()
+        {
+            var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            return Path.Combine(userHome, ".codex", "skills", "unity-mcp-skill");
+        }
+
         public override IList<string> GetInstallationSteps() => new List<string>
         {
             "Run 'codex config edit' in a terminal\nOR open the config file at the path above",
