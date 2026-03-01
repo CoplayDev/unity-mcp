@@ -1,5 +1,9 @@
 using System;
+using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Services;
+using MCPForUnity.Editor.Services.Transport;
+using MCPForUnity.Editor.Services.Transport.Transports;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditorInternal; // Required for tag management
@@ -101,6 +105,38 @@ namespace MCPForUnity.Editor.Tools
                     if (!toolNameResult.IsSuccess)
                         return new ErrorResponse(toolNameResult.ErrorMessage);
                     return SetActiveTool(toolNameResult.Value);
+                case "set_mcp_tool_enabled":
+                    var setToolEnabledNameResult = p.GetRequired(
+                        "toolName",
+                        "'toolName' parameter required for set_mcp_tool_enabled.");
+                    if (!setToolEnabledNameResult.IsSuccess)
+                    {
+                        return new ErrorResponse(setToolEnabledNameResult.ErrorMessage);
+                    }
+
+                    if (!p.Has("enabled"))
+                    {
+                        return new ErrorResponse("'enabled' parameter required for set_mcp_tool_enabled.");
+                    }
+
+                    bool? enabled = ParamCoercion.CoerceBoolNullable(p.GetRaw("enabled"));
+                    if (!enabled.HasValue)
+                    {
+                        return new ErrorResponse("'enabled' parameter must be a boolean.");
+                    }
+
+                    return SetMcpToolEnabled(setToolEnabledNameResult.Value, enabled.Value);
+                case "get_mcp_tool_enabled":
+                    var getToolEnabledNameResult = p.GetRequired(
+                        "toolName",
+                        "'toolName' parameter required for get_mcp_tool_enabled.");
+                    if (!getToolEnabledNameResult.IsSuccess)
+                    {
+                        return new ErrorResponse(getToolEnabledNameResult.ErrorMessage);
+                    }
+                    return GetMcpToolEnabled(getToolEnabledNameResult.Value);
+                case "list_mcp_tools":
+                    return ListMcpTools();
 
                 // Tag Management
                 case "add_tag":
@@ -136,7 +172,7 @@ namespace MCPForUnity.Editor.Tools
 
                 default:
                     return new ErrorResponse(
-                        $"Unknown action: '{action}'. Supported actions: play, pause, stop, set_active_tool, add_tag, remove_tag, add_layer, remove_layer. Use MCP resources for reading editor state, project info, tags, layers, selection, windows, prefab stage, and active tool."
+                        $"Unknown action: '{action}'. Supported actions: play, pause, stop, set_active_tool, set_mcp_tool_enabled, get_mcp_tool_enabled, list_mcp_tools, add_tag, remove_tag, add_layer, remove_layer. Use MCP resources for reading editor state, project info, tags, layers, selection, windows, prefab stage, and active tool."
                     );
             }
         }
@@ -175,6 +211,129 @@ namespace MCPForUnity.Editor.Tools
             catch (Exception e)
             {
                 return new ErrorResponse($"Error setting active tool: {e.Message}");
+            }
+        }
+
+        private static object SetMcpToolEnabled(string toolName, bool enabled)
+        {
+            if (string.IsNullOrWhiteSpace(toolName))
+            {
+                return new ErrorResponse("Tool name cannot be empty.");
+            }
+
+            var metadata = MCPServiceLocator.ToolDiscovery.GetToolMetadata(toolName);
+            if (metadata == null)
+            {
+                return new ErrorResponse($"Unknown tool '{toolName}'.");
+            }
+
+            if (!enabled && string.Equals(metadata.Name, "manage_editor", StringComparison.OrdinalIgnoreCase))
+            {
+                return new ErrorResponse($"Tool '{metadata.Name}' cannot be disabled.");
+            }
+
+            MCPServiceLocator.ToolDiscovery.SetToolEnabled(metadata.Name, enabled);
+            RefreshStdioStatusFile();
+            RefreshHttpToolRegistration();
+
+            return new SuccessResponse(
+                $"Tool '{metadata.Name}' {(enabled ? "enabled" : "disabled")} successfully.",
+                new
+                {
+                    toolName = metadata.Name,
+                    enabled
+                });
+        }
+
+        private static object GetMcpToolEnabled(string toolName)
+        {
+            if (string.IsNullOrWhiteSpace(toolName))
+            {
+                return new ErrorResponse("Tool name cannot be empty.");
+            }
+
+            var metadata = MCPServiceLocator.ToolDiscovery.GetToolMetadata(toolName);
+            if (metadata == null)
+            {
+                return new ErrorResponse($"Unknown tool '{toolName}'.");
+            }
+
+            bool enabled = MCPServiceLocator.ToolDiscovery.IsToolEnabled(metadata.Name);
+            return new SuccessResponse(
+                $"Tool '{metadata.Name}' is {(enabled ? "enabled" : "disabled")}.",
+                new
+                {
+                    toolName = metadata.Name,
+                    enabled
+                });
+        }
+
+        private static object ListMcpTools()
+        {
+            try
+            {
+                var discoveredTools = MCPServiceLocator.ToolDiscovery.DiscoverAllTools();
+                var toolStates = new JArray();
+
+                foreach (var tool in discoveredTools)
+                {
+                    toolStates.Add(new JObject
+                    {
+                        ["name"] = tool.Name,
+                        ["enabled"] = MCPServiceLocator.ToolDiscovery.IsToolEnabled(tool.Name),
+                        ["autoRegister"] = tool.AutoRegister,
+                        ["isBuiltIn"] = tool.IsBuiltIn
+                    });
+                }
+
+                return new SuccessResponse(
+                    $"Listed {toolStates.Count} MCP tools.",
+                    new JObject
+                    {
+                        ["toolCount"] = toolStates.Count,
+                        ["tools"] = toolStates
+                    });
+            }
+            catch (Exception e)
+            {
+                return new ErrorResponse($"Failed to list MCP tools: {e.Message}");
+            }
+        }
+
+        private static void RefreshStdioStatusFile()
+        {
+            if (!StdioBridgeHost.IsRunning)
+                return;
+
+            StdioBridgeHost.RefreshStatusFile("tool_toggle");
+        }
+
+        private static void RefreshHttpToolRegistration()
+        {
+            try
+            {
+                var transportManager = MCPServiceLocator.TransportManager;
+                var client = transportManager.GetClient(TransportMode.Http);
+                if (client == null || !client.IsConnected)
+                {
+                    return;
+                }
+
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await client.ReregisterToolsAsync().ConfigureAwait(false);
+                    }
+                    catch (Exception e)
+                    {
+                        McpLog.Warn($"Failed to reregister HTTP tools after tool toggle: {e.Message}");
+                    }
+                });
+            }
+            catch (Exception e)
+            {
+                McpLog.Warn($"Failed to schedule HTTP tool reregistration after tool toggle: {e.Message}");
             }
         }
 

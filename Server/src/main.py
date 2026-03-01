@@ -144,6 +144,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     global _unity_connection_pool, _server_version
     _server_version = get_package_version()
     logger.info(f"MCP for Unity Server v{_server_version} starting up")
+    unity_middleware = get_unity_instance_middleware()
 
     # Register custom tool management endpoints with FastMCP
     # Routes are declared globally below after FastMCP initialization
@@ -163,6 +164,11 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
         _plugin_registry = PluginRegistry()
         loop = asyncio.get_running_loop()
         PluginHub.configure(_plugin_registry, loop)
+
+    try:
+        await unity_middleware.start_stdio_tools_watcher()
+    except Exception:
+        logger.debug("Failed to start stdio tools watcher.", exc_info=True)
 
     # Record server startup telemetry
     start_time = time.time()
@@ -248,6 +254,10 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
             "plugin_registry": _plugin_registry,
         }
     finally:
+        try:
+            await unity_middleware.stop_stdio_tools_watcher()
+        except Exception:
+            logger.debug("Failed to stop stdio tools watcher.", exc_info=True)
         if _unity_connection_pool:
             _unity_connection_pool.disconnect_all()
         logger.info("MCP for Unity Server shut down")

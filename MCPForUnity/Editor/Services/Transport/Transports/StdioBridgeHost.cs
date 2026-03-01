@@ -1014,6 +1014,19 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             return false;
         }
 
+        public static void RefreshStatusFile(string reason = "manual_refresh")
+        {
+            try
+            {
+                heartbeatSeq++;
+                WriteHeartbeat(false, reason);
+            }
+            catch (Exception ex)
+            {
+                McpLog.Warn($"Failed to refresh stdio status file: {ex.Message}");
+            }
+        }
+
 
         public static void WriteHeartbeat(bool reloading, string reason = null)
         {
@@ -1025,7 +1038,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".unity-mcp");
                 }
                 Directory.CreateDirectory(dir);
-                string filePath = Path.Combine(dir, $"unity-mcp-status-{ComputeProjectHash(Application.dataPath)}.json");
+                string projectHash = ComputeProjectHash(Application.dataPath);
+                string filePath = Path.Combine(dir, $"unity-mcp-status-{projectHash}.json");
 
                 string projectName = "Unknown";
                 try
@@ -1047,14 +1061,33 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 }
                 catch { }
 
+                string[] enabledTools = Array.Empty<string>();
+                try
+                {
+                    var toolMetadata = MCPServiceLocator.ToolDiscovery.GetEnabledTools();
+                    enabledTools = toolMetadata
+                        ?.Select(tool => tool?.Name)
+                        .Where(name => !string.IsNullOrWhiteSpace(name))
+                        .Distinct(StringComparer.Ordinal)
+                        .OrderBy(name => name, StringComparer.Ordinal)
+                        .ToArray()
+                        ?? Array.Empty<string>();
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Warn($"Failed to resolve enabled tools for stdio status file: {ex.Message}");
+                }
+
                 var payload = new
                 {
                     unity_port = currentUnityPort,
                     reloading,
                     reason = reason ?? (reloading ? "reloading" : "ready"),
                     seq = heartbeatSeq,
+                    project_hash = projectHash,
                     project_path = Application.dataPath,
                     project_name = projectName,
+                    enabled_tools = enabledTools,
                     unity_version = Application.unityVersion,
                     last_heartbeat = DateTime.UtcNow.ToString("O")
                 };

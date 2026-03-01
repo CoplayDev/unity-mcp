@@ -1,14 +1,10 @@
 from typing import Annotated, Any
-from types import SimpleNamespace
 
 from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from services.registry import mcp_for_unity_tool
-from transport.legacy.unity_connection import get_unity_connection_pool
 from transport.unity_instance_middleware import get_unity_instance_middleware
-from transport.plugin_hub import PluginHub
-from core.config import config
 
 
 @mcp_for_unity_tool(
@@ -22,72 +18,6 @@ async def set_active_instance(
         ctx: Context,
         instance: Annotated[str, "Target instance (Name@hash, hash prefix, or port number in stdio mode)"]
 ) -> dict[str, Any]:
-    transport = (config.transport_mode or "stdio").lower()
-
-    # Port number shorthand (stdio only) — resolve to Name@hash via pool discovery
-    value = (instance or "").strip()
-    if value.isdigit():
-        if transport == "http":
-            return {
-                "success": False,
-                "error": f"Port-based targeting ('{value}') is not supported in HTTP transport mode. "
-                         "Use Name@hash or a hash prefix. Read mcpforunity://instances for available instances."
-            }
-        port_int = int(value)
-        pool = get_unity_connection_pool()
-        instances = pool.discover_all_instances(force_refresh=True)
-        match = next((inst for inst in instances if getattr(inst, "port", None) == port_int), None)
-        if match is None:
-            available = ", ".join(
-                f"{inst.id} (port {getattr(inst, 'port', '?')})" for inst in instances
-            ) or "none"
-            return {
-                "success": False,
-                "error": f"No Unity instance found on port {value}. Available: {available}."
-            }
-        resolved_id = match.id
-        middleware = get_unity_instance_middleware()
-        middleware.set_active_instance(ctx, resolved_id)
-        return {
-            "success": True,
-            "message": f"Active instance set to {resolved_id}",
-            "data": {
-                "instance": resolved_id,
-                "session_key": middleware.get_session_key(ctx),
-            },
-        }
-
-    # Discover running instances based on transport
-    if transport == "http":
-        # In remote-hosted mode, filter sessions by user_id
-        user_id = ctx.get_state(
-            "user_id") if config.http_remote_hosted else None
-        sessions_data = await PluginHub.get_sessions(user_id=user_id)
-        sessions = sessions_data.sessions
-        instances = []
-        for session_id, session in sessions.items():
-            project = session.project or "Unknown"
-            hash_value = session.hash
-            if not hash_value:
-                continue
-            inst_id = f"{project}@{hash_value}"
-            instances.append(SimpleNamespace(
-                id=inst_id,
-                hash=hash_value,
-                name=project,
-                session_id=session_id,
-            ))
-    else:
-        pool = get_unity_connection_pool()
-        instances = pool.discover_all_instances(force_refresh=True)
-
-    if not instances:
-        return {
-            "success": False,
-            "error": "No Unity instances are currently connected. Start Unity and press 'Start Session'."
-        }
-    ids = {inst.id: inst for inst in instances if getattr(inst, "id", None)}
-
     value = (instance or "").strip()
     if not value:
         return {
@@ -95,60 +25,26 @@ async def set_active_instance(
             "error": "Instance identifier is required. "
                      "Use mcpforunity://instances to copy a Name@hash or provide a hash prefix."
         }
-    resolved = None
-    if "@" in value:
-        resolved = ids.get(value)
-        if resolved is None:
-            return {
-                "success": False,
-                "error": f"Instance '{value}' not found. "
-                "Use mcpforunity://instances to copy an exact Name@hash."
-            }
-    else:
-        lookup = value.lower()
-        matches = []
-        for inst in instances:
-            if not getattr(inst, "id", None):
-                continue
-            inst_hash = getattr(inst, "hash", "")
-            if inst_hash and inst_hash.lower().startswith(lookup):
-                matches.append(inst)
-        if not matches:
-            return {
-                "success": False,
-                "error": f"Instance hash '{value}' does not match any running Unity editors. "
-                "Use mcpforunity://instances to confirm the available hashes."
-            }
-        if len(matches) > 1:
-            matching_ids = ", ".join(
-                inst.id for inst in matches if getattr(inst, "id", None)
-            ) or "multiple instances"
-            return {
-                "success": False,
-                "error": f"Instance hash '{value}' is ambiguous ({matching_ids}). "
-                "Provide the full Name@hash from mcpforunity://instances."
-            }
-        resolved = matches[0]
-
-    if resolved is None:
-        # Should be unreachable due to logic above, but satisfies static analysis
+    middleware = get_unity_instance_middleware()
+    try:
+        resolved_id = await middleware._resolve_instance_value(value, ctx)
+    except ValueError as exc:
         return {
             "success": False,
-            "error": "Internal error: Instance resolution failed."
+            "error": str(exc),
         }
 
     # Store selection in middleware (session-scoped)
-    middleware = get_unity_instance_middleware()
     # We use middleware.set_active_instance to persist the selection.
     # The session key is an internal detail but useful for debugging response.
-    middleware.set_active_instance(ctx, resolved.id)
+    middleware.set_active_instance(ctx, resolved_id)
     session_key = middleware.get_session_key(ctx)
 
     return {
         "success": True,
-        "message": f"Active instance set to {resolved.id}",
+        "message": f"Active instance set to {resolved_id}",
         "data": {
-            "instance": resolved.id,
+            "instance": resolved_id,
             "session_key": session_key,
         },
     }
