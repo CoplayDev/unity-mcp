@@ -30,7 +30,9 @@ namespace MCPForUnity.Editor.Clients
         public McpStatus Status => client.status;
         public ConfiguredTransport ConfiguredTransport => client.configuredTransport;
         public virtual bool SupportsAutoConfigure => true;
+        public virtual bool SupportsSkills => false;
         public virtual string GetConfigureActionLabel() => "Configure";
+        public virtual string GetSkillInstallPath() => null;
 
         public abstract string GetConfigPath();
         public abstract McpStatus CheckStatus(bool attemptAutoRewrite = true);
