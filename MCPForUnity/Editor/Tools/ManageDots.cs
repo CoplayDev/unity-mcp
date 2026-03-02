@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using Unity.Collections;
@@ -61,12 +62,11 @@ namespace MCPForUnity.Editor.Tools
             var worlds = new List<object>();
             foreach (var world in World.All)
             {
-                var systems = world.Systems;
                 worlds.Add(new Dictionary<string, object>
                 {
                     ["name"]         = world.Name,
                     ["is_created"]   = world.IsCreated,
-                    ["system_count"] = systems.Count,
+                    ["system_count"] = world.Systems.Count,
                     ["entity_count"] = world.EntityManager.UniversalQuery.CalculateEntityCount(),
                     ["flags"]        = world.Flags.ToString()
                 });
@@ -96,10 +96,10 @@ namespace MCPForUnity.Editor.Tools
             var componentTypes = new List<ComponentType>();
             foreach (string typeName in typeNames)
             {
-                int typeIndex = TypeManager.GetTypeIndexByName(typeName);
-                if (typeIndex == -1)
+                var resolvedType = ResolveComponentType(typeName);
+                if (resolvedType == null)
                     return new ErrorResponse($"Component type '{typeName}' not found. Check spelling or ensure the assembly is loaded.");
-                componentTypes.Add(ComponentType.FromTypeIndex(typeIndex));
+                componentTypes.Add(resolvedType.Value);
             }
 
             var em = world.EntityManager;
@@ -163,18 +163,17 @@ namespace MCPForUnity.Editor.Tools
 
             foreach (var sys in world.Systems)
             {
-                var managedType = sys.GetManagedType();
-                if (managedType == null) continue;
+                var sysType = sys.GetType();
 
-                string groupName = GetSystemGroupName(sys);
+                string groupName = GetSystemGroupName(sysType);
                 if (!string.IsNullOrEmpty(groupFilter) &&
                     !groupName.Contains(groupFilter, StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 systems.Add(new Dictionary<string, object>
                 {
-                    ["name"]    = managedType.Name,
-                    ["type"]    = managedType.FullName,
+                    ["name"]    = sysType.Name,
+                    ["type"]    = sysType.FullName,
                     ["group"]   = groupName,
                     ["enabled"] = sys.Enabled
                 });
@@ -193,36 +192,26 @@ namespace MCPForUnity.Editor.Tools
             if (string.IsNullOrEmpty(systemName))
                 return new ErrorResponse("'system_name' parameter is required.");
 
-            ComponentSystemBase system = null;
-            foreach (var sys in world.Systems)
-            {
-                var mt = sys.GetManagedType();
-                if (mt != null && (mt.Name == systemName || mt.FullName == systemName))
-                {
-                    system = sys;
-                    break;
-                }
-            }
-
+            ComponentSystemBase system = FindSystem(world, systemName);
             if (system == null)
                 return new ErrorResponse($"System '{systemName}' not found in world '{world.Name}'.");
 
-            var managedType = system.GetManagedType();
+            var sysType = system.GetType();
             var queries = new List<object>();
             foreach (var q in system.EntityQueries)
             {
                 queries.Add(new Dictionary<string, object>
                 {
                     ["entity_count"]    = q.CalculateEntityCount(),
-                    ["component_types"] = GetQueryComponentTypes(q)
+                    ["component_types"] = GetQueryComponentTypeNames(q)
                 });
             }
 
             return new SuccessResponse($"System '{systemName}' details.", new Dictionary<string, object>
             {
-                ["name"]           = managedType.Name,
-                ["full_name"]      = managedType.FullName,
-                ["group"]          = GetSystemGroupName(system),
+                ["name"]           = sysType.Name,
+                ["full_name"]      = sysType.FullName,
+                ["group"]          = GetSystemGroupName(sysType),
                 ["enabled"]        = system.Enabled,
                 ["query_count"]    = system.EntityQueries.Length,
                 ["queries"]        = queries
@@ -243,18 +232,13 @@ namespace MCPForUnity.Editor.Tools
             if (enabled == null)
                 return new ErrorResponse("'enabled' parameter is required (true/false).");
 
-            foreach (var sys in world.Systems)
-            {
-                var mt = sys.GetManagedType();
-                if (mt != null && (mt.Name == systemName || mt.FullName == systemName))
-                {
-                    sys.Enabled = enabled.Value;
-                    return new SuccessResponse(
-                        $"System '{systemName}' {(enabled.Value ? "enabled" : "disabled")} in world '{world.Name}'.");
-                }
-            }
+            ComponentSystemBase system = FindSystem(world, systemName);
+            if (system == null)
+                return new ErrorResponse($"System '{systemName}' not found in world '{world.Name}'.");
 
-            return new ErrorResponse($"System '{systemName}' not found in world '{world.Name}'.");
+            system.Enabled = enabled.Value;
+            return new SuccessResponse(
+                $"System '{systemName}' {(enabled.Value ? "enabled" : "disabled")} in world '{world.Name}'.");
         }
 
         #endregion
@@ -279,18 +263,27 @@ namespace MCPForUnity.Editor.Tools
             for (int i = 0; i < archetypes.Length; i++)
             {
                 var archetype = archetypes[i];
-                if (archetype.Archetype == null) continue;
-
                 int chunkCount = archetype.ChunkCount;
-                int entityCount = archetype.ChunkCapacity > 0 ? chunkCount > 0 ? archetype.EntityCount : 0 : 0;
-                int capacity = archetype.ChunkCapacity * chunkCount;
+                int chunkCapacity = archetype.ChunkCapacity;
+
+                // Use a query to count entities for this archetype
+                int entityCount = 0;
+                if (chunkCount > 0 && chunkCapacity > 0)
+                {
+                    // Estimate: chunkCount * average fill. For exact count, use query.
+                    // ChunkCapacity is per-chunk max; actual count needs CalculateEntityCount.
+                    // For perf snapshot, we use the universal query total and archetype breakdown.
+                    entityCount = chunkCount > 0 ? EstimateArchetypeEntityCount(archetype) : 0;
+                }
+
+                int capacity = chunkCapacity * chunkCount;
                 float utilization = capacity > 0 ? (float)entityCount / capacity * 100f : 0f;
 
                 totalChunks += chunkCount;
                 totalEntities += entityCount;
                 if (entityCount == 0 && chunkCount > 0) emptyChunks += chunkCount;
 
-                if (chunkCount > 0) // Only report non-empty archetypes
+                if (chunkCount > 0)
                 {
                     var componentNames = new List<string>();
                     var types = archetype.GetComponentTypes(Allocator.Temp);
@@ -306,7 +299,7 @@ namespace MCPForUnity.Editor.Tools
                         ["components"]      = componentNames,
                         ["chunk_count"]     = chunkCount,
                         ["entity_count"]    = entityCount,
-                        ["chunk_capacity"]  = archetype.ChunkCapacity,
+                        ["chunk_capacity"]  = chunkCapacity,
                         ["utilization_pct"] = Math.Round(utilization, 1)
                     });
                 }
@@ -320,7 +313,6 @@ namespace MCPForUnity.Editor.Tools
                 return bCount.CompareTo(aCount);
             });
 
-            // Limit to top archetypes
             int limit = p.GetInt("limit") ?? 20;
             if (archetypeStats.Count > limit)
                 archetypeStats = archetypeStats.Take(limit).ToList();
@@ -328,13 +320,50 @@ namespace MCPForUnity.Editor.Tools
             return new SuccessResponse($"Performance snapshot for world '{world.Name}'.", new Dictionary<string, object>
             {
                 ["world"]               = world.Name,
-                ["total_entities"]      = totalEntities,
+                ["total_entities"]      = world.EntityManager.UniversalQuery.CalculateEntityCount(),
                 ["total_archetypes"]    = archetypes.Length,
                 ["total_chunks"]        = totalChunks,
                 ["empty_chunks"]        = emptyChunks,
                 ["system_count"]        = world.Systems.Count,
                 ["top_archetypes"]      = archetypeStats
             });
+        }
+
+        /// <summary>
+        /// Estimates entity count for an archetype using unsafe access.
+        /// Falls back to chunk_count * chunk_capacity as upper bound.
+        /// </summary>
+        private static int EstimateArchetypeEntityCount(EntityArchetype archetype)
+        {
+            // EntityArchetype doesn't expose EntityCount directly in public API.
+            // Use reflection to access internal Archetype->EntityCount if available,
+            // otherwise return capacity as upper bound estimate.
+            try
+            {
+                // Try the internal StableHash-based approach
+                var archetypeField = typeof(EntityArchetype).GetField("Archetype",
+                    BindingFlags.NonPublic | BindingFlags.Instance);
+                if (archetypeField != null)
+                {
+                    // Box the struct to access the field
+                    object boxed = archetype;
+                    var ptr = archetypeField.GetValue(boxed);
+                    if (ptr != null)
+                    {
+                        // Archetype* has EntityCount property
+                        var entityCountProp = ptr.GetType().GetProperty("EntityCount");
+                        if (entityCountProp != null)
+                            return (int)entityCountProp.GetValue(ptr);
+                    }
+                }
+            }
+            catch
+            {
+                // Reflection failed, fall back to estimate
+            }
+
+            // Upper bound: all chunks fully utilized
+            return archetype.ChunkCapacity * archetype.ChunkCount;
         }
 
         #endregion
@@ -351,6 +380,40 @@ namespace MCPForUnity.Editor.Tools
             {
                 if (string.Equals(w.Name, worldName, StringComparison.OrdinalIgnoreCase))
                     return w;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Resolves a component type name to a ComponentType by searching all loaded assemblies.
+        /// Supports short names ("LocalTransform") and full names ("Unity.Transforms.LocalTransform").
+        /// </summary>
+        private static ComponentType? ResolveComponentType(string typeName)
+        {
+            // First, try iterating all registered ECS types via TypeManager
+            int typeCount = TypeManager.GetTypeCount();
+            for (int i = 1; i < typeCount; i++) // Start at 1; index 0 is Entity itself
+            {
+                var typeInfo = TypeManager.GetTypeInfo(i);
+                string debugName = typeInfo.DebugTypeName.ToString();
+
+                // Match by short name or full name
+                if (string.Equals(debugName, typeName, StringComparison.OrdinalIgnoreCase) ||
+                    debugName.EndsWith("." + typeName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return ComponentType.FromTypeIndex(i);
+                }
+            }
+            return null;
+        }
+
+        private static ComponentSystemBase FindSystem(World world, string systemName)
+        {
+            foreach (var sys in world.Systems)
+            {
+                var sysType = sys.GetType();
+                if (sysType.Name == systemName || sysType.FullName == systemName)
+                    return sys;
             }
             return null;
         }
@@ -404,7 +467,7 @@ namespace MCPForUnity.Editor.Tools
                             {
                                 var fields = new Dictionary<string, object>();
                                 foreach (var field in type.GetFields(
-                                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+                                    BindingFlags.Public | BindingFlags.Instance))
                                 {
                                     try
                                     {
@@ -429,43 +492,43 @@ namespace MCPForUnity.Editor.Tools
             }
             componentTypes.Dispose();
 
-            var archetype = em.GetChunk(entity).Archetype;
             return new Dictionary<string, object>
             {
                 ["index"]           = entity.Index,
                 ["version"]         = entity.Version,
-                ["archetype_hash"]  = archetype.GetHashCode(),
-                ["chunk_capacity"]  = archetype.ChunkCapacity,
                 ["component_count"] = components.Count,
                 ["components"]      = components
             };
         }
 
-        private static string GetSystemGroupName(ComponentSystemBase system)
+        private static string GetSystemGroupName(Type systemType)
         {
-            var type = system.GetManagedType();
-            if (type == null) return "Unknown";
-
-            var attr = type.GetCustomAttributes(typeof(UpdateInGroupAttribute), true);
-            if (attr.Length > 0)
+            var attrs = systemType.GetCustomAttributes(typeof(UpdateInGroupAttribute), true);
+            if (attrs.Length > 0)
             {
-                var groupAttr = (UpdateInGroupAttribute)attr[0];
+                var groupAttr = (UpdateInGroupAttribute)attrs[0];
                 return groupAttr.GroupType.Name;
             }
             return "Default";
         }
 
-        private static List<string> GetQueryComponentTypes(EntityQuery query)
+        private static List<string> GetQueryComponentTypeNames(EntityQuery query)
         {
-            var desc = query.GetEntityQueryDesc();
             var names = new List<string>();
-            if (desc.All != null)
+            try
             {
-                foreach (var ct in desc.All)
+                // Use GetEntityQueryDescs (works across Entities versions)
+                // Fall back to component type iteration via the query itself
+                using var types = query.GetQueryTypes(Allocator.Temp);
+                for (int i = 0; i < types.Length; i++)
                 {
-                    var info = TypeManager.GetTypeInfo(ct.TypeIndex);
+                    var info = TypeManager.GetTypeInfo(types[i].TypeIndex);
                     names.Add(info.DebugTypeName.ToString());
                 }
+            }
+            catch
+            {
+                names.Add("<unable to read query types>");
             }
             return names;
         }
