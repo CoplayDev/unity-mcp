@@ -3,7 +3,13 @@
     "rootNamespace": "MCPForUnity.Editor",
     "references": [
         "MCPForUnity.Runtime",
-        "Newtonsoft.Json"
+        "Newtonsoft.Json",
+        "GUID:734d92eba21c94caba915361bd5ac177",
+        "GUID:e0cd26848372d4e5c891c569017e11f1",
+        "GUID:d8b63aba1907145bea998dd612889d6b",
+        "GUID:63afb046c8423dd448ae7aba042ea63d",
+        "GUID:7a450cf7ca9694b5a8bfa3fd83ec635a",
+        "GUID:5f3cf485eb0554709a8abbeace890c86"
     ],
     "includePlatforms": [
         "Editor"
