@@ -13,6 +13,7 @@
                     <ui:Label name="client-status" text="Not Configured" class="status-text" />
                 </ui:VisualElement>
                 <ui:Button name="configure-button" text="Configure" class="action-button" />
+                <ui:Button name="install-skills-button" text="Install Skills" class="action-button" style="display: none;" />
             </ui:VisualElement>
             <ui:VisualElement class="setting-row" name="claude-cli-path-row" style="display: none;">
                 <ui:Label text="Claude CLI Path:" class="setting-label-small" />
