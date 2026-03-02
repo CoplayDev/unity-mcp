@@ -130,7 +130,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
                     bool isHttp = EditorConfigurationCache.Instance.UseHttpTransport;
                     noteLabel.text = isHttp
                         ? "Changes apply after reconnecting or re-registering tools."
-                        : "Stdio mode: per-tool toggles only affect HTTP transport. Use the manage_tools meta-tool to change group visibility in stdio sessions.";
+                        : "Stdio mode: toggles sync at startup. After changing toggles, ask the AI to run manage_tools with action 'sync' to refresh.";
                 }
             }
 

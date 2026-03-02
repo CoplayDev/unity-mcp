@@ -7,6 +7,7 @@ import logging
 import os
 import time
 import uuid
+import weakref
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from starlette.endpoints import WebSocketEndpoint
@@ -34,6 +35,32 @@ from transport.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ---------- MCP session tracking ----------
+# FastMCP doesn't expose active MCP client sessions.  We patch
+# ``MiddlewareServerSession.__aenter__`` once to register every new
+# session so we can send ``tools/list_changed`` notifications later.
+_active_mcp_sessions: weakref.WeakSet = weakref.WeakSet()
+_session_tracking_installed = False
+
+
+def _install_session_tracking() -> None:
+    """Patch *MiddlewareServerSession* to track active MCP client sessions."""
+    global _session_tracking_installed
+    if _session_tracking_installed:
+        return
+    _session_tracking_installed = True
+
+    from fastmcp.server.low_level import MiddlewareServerSession
+
+    _original_aenter = MiddlewareServerSession.__aenter__
+
+    async def _tracking_aenter(self):  # type: ignore[override]
+        result = await _original_aenter(self)
+        _active_mcp_sessions.add(self)
+        return result
+
+    MiddlewareServerSession.__aenter__ = _tracking_aenter  # type: ignore[assignment]
 
 
 class PluginDisconnectedError(RuntimeError):
@@ -107,6 +134,9 @@ class PluginHub(WebSocketEndpoint):
         cls._loop = loop or asyncio.get_running_loop()
         # Ensure coordination primitives are bound to the configured loop
         cls._lock = asyncio.Lock()
+        # Start tracking MCP client sessions for tool-change notifications
+        if mcp is not None:
+            _install_session_tracking()
 
     @classmethod
     def is_configured(cls) -> bool:
@@ -438,6 +468,10 @@ class PluginHub(WebSocketEndpoint):
         # (e.g. new Claude Code conversations) see the correct tool set.
         self._sync_server_tool_visibility(payload.tools)
 
+        # Notify any already-connected MCP clients (e.g. CC over stdio) that
+        # the tool list has changed so they re-fetch.
+        await cls._notify_mcp_tool_list_changed()
+
         try:
             from services.custom_tool_service import CustomToolService
 
@@ -526,6 +560,33 @@ class PluginHub(WebSocketEndpoint):
                 "Failed to sync server-level tool visibility",
                 exc_info=True,
             )
+
+    @classmethod
+    async def _notify_mcp_tool_list_changed(cls) -> None:
+        """Send ``tools/list_changed`` to every connected MCP client session.
+
+        After server-level tool visibility is updated (e.g. when Unity reports
+        its registered tools), existing MCP clients (especially stdio-based
+        ones like Claude Code) must be told to re-fetch the tool list.
+        FastMCP's ``mcp.enable()``/``mcp.disable()`` update the server-level
+        transforms but do **not** push notifications to already-connected
+        sessions — we do that here.
+        """
+        sessions = list(_active_mcp_sessions)
+        if not sessions:
+            return
+        for session in sessions:
+            try:
+                await session.send_tool_list_changed()
+            except Exception:
+                logger.debug(
+                    "Failed to notify MCP session of tool list change",
+                    exc_info=True,
+                )
+        logger.info(
+            "Sent tools/list_changed notification to %d MCP session(s)",
+            len(sessions),
+        )
 
     async def _handle_command_result(self, payload: CommandResultMessage) -> None:
         cls = type(self)

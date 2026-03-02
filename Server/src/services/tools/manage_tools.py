@@ -28,8 +28,10 @@ from services.registry import (
         "Manage which tool groups are visible in this session. "
         "Actions: list_groups (show all groups and their status), "
         "activate (enable a group), deactivate (disable a group), "
+        "sync (refresh visibility from Unity Editor's toggle states), "
         "reset (restore defaults). "
-        "Activating a group makes its tools appear; deactivating hides them."
+        "Activating a group makes its tools appear; deactivating hides them. "
+        "Use sync after toggling tools in the Unity Editor GUI."
     ),
     annotations=ToolAnnotations(
         title="Manage Tools",
@@ -39,7 +41,7 @@ from services.registry import (
 async def manage_tools(
     ctx: Context,
     action: Annotated[
-        Literal["list_groups", "activate", "deactivate", "reset"],
+        Literal["list_groups", "activate", "deactivate", "sync", "reset"],
         "Action to perform."
     ],
     group: Annotated[
@@ -77,6 +79,34 @@ async def manage_tools(
             "deactivated": group,
             "tools": get_group_tool_names().get(group, []),
             "message": f"Group '{group}' is now hidden.",
+        }
+
+    if action == "sync":
+        await ctx.info("Syncing tool visibility from Unity Editor...")
+        from services.tools import sync_tool_visibility_from_unity
+        result = await sync_tool_visibility_from_unity(notify=True)
+        if result.get("error"):
+            msg = result["error"]
+            if result.get("unsupported"):
+                msg = (
+                    "The connected Unity Editor does not support tool state syncing yet. "
+                    "Update the MCPForUnity package to the latest version, then try again. "
+                    "In the meantime, use activate/deactivate actions to toggle groups manually."
+                )
+            else:
+                msg = f"Failed to sync tool visibility from Unity. Is Unity running? ({msg})"
+            return {"error": msg}
+        return {
+            "synced": True,
+            "enabled_groups": result.get("enabled_groups", []),
+            "disabled_groups": result.get("disabled_groups", []),
+            "enabled_tool_count": result.get("enabled_tool_count", 0),
+            "total_tool_count": result.get("total_tool_count", 0),
+            "message": (
+                "Tool visibility synced from Unity Editor. "
+                f"Enabled groups: {', '.join(result.get('enabled_groups', []))}. "
+                f"Disabled groups: {', '.join(result.get('disabled_groups', []) or ['none'])}."
+            ),
         }
 
     if action == "reset":

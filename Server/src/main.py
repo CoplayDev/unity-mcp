@@ -201,6 +201,31 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
                     logger.info(
                         "Connected to default Unity instance on startup")
 
+                    # In stdio mode, query Unity for tool enabled states and sync
+                    # server-level visibility. In HTTP mode this is handled by
+                    # register_tools via WebSocket in PluginHub.
+                    if (config.transport_mode or "stdio").lower() != "http":
+                        try:
+                            from services.tools import sync_tool_visibility_from_unity
+                            sync_result = await sync_tool_visibility_from_unity(notify=False)
+                            if sync_result.get("synced"):
+                                logger.info(
+                                    "Stdio startup: synced tool visibility from Unity — "
+                                    "enabled=[%s], disabled=[%s]",
+                                    ", ".join(sync_result.get("enabled_groups", [])),
+                                    ", ".join(sync_result.get("disabled_groups", [])),
+                                )
+                            else:
+                                # Unsupported command = old Unity package; just debug-log
+                                log_fn = logger.debug if sync_result.get("unsupported") else logger.warning
+                                log_fn(
+                                    "Stdio startup: could not sync tool visibility: %s",
+                                    sync_result.get("error", "unknown"),
+                                )
+                        except Exception as sync_exc:
+                            logger.debug(
+                                "Stdio startup: tool visibility sync failed: %s", sync_exc)
+
                     # Record successful Unity connection (deferred)
                     threading.Timer(1.0, lambda: record_telemetry(
                         RecordType.UNITY_CONNECTION,
