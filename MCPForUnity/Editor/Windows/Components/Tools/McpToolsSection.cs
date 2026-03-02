@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using MCPForUnity.Editor.Clients;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Models;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Services.Transport;
 using MCPForUnity.Editor.Tools;
@@ -27,8 +29,11 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
         private Button enableAllButton;
         private Button disableAllButton;
         private Button rescanButton;
+        private Button reconfigureButton;
         private VisualElement categoryContainer;
         private List<ToolMetadata> allTools = new();
+        private readonly Dictionary<string, Toggle> groupToggleMap = new();
+        private readonly List<(Foldout foldout, string title, List<ToolMetadata> tools)> foldoutEntries = new();
 
         /// <summary>Human-friendly names for tool groups shown in the UI.</summary>
         private static readonly Dictionary<string, string> GroupDisplayNames = new(StringComparer.OrdinalIgnoreCase)
@@ -58,6 +63,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             enableAllButton = Root.Q<Button>("enable-all-button");
             disableAllButton = Root.Q<Button>("disable-all-button");
             rescanButton = Root.Q<Button>("rescan-button");
+            reconfigureButton = Root.Q<Button>("reconfigure-button");
             categoryContainer = Root.Q<VisualElement>("tool-category-container");
         }
 
@@ -100,6 +106,12 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
                     Refresh();
                 };
             }
+
+            if (reconfigureButton != null)
+            {
+                reconfigureButton.AddToClassList("tool-action-button");
+                reconfigureButton.clicked += OnReconfigureClientsClicked;
+            }
         }
 
         /// <summary>
@@ -111,6 +123,8 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
         public void Refresh()
         {
             toolToggleMap.Clear();
+            groupToggleMap.Clear();
+            foldoutEntries.Clear();
             categoryContainer?.Clear();
 
             var service = MCPServiceLocator.ToolDiscovery;
@@ -201,14 +215,34 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
 
             foldout.RegisterValueChangedCallback(evt =>
             {
+                if (evt.target != foldout) return;
                 EditorPrefs.SetBool(EditorPrefKeys.ToolFoldoutStatePrefix + prefsSuffix, evt.newValue);
             });
+
+            // Add a checkbox into the foldout header to toggle all tools in this group
+            bool allEnabled = enabledCount == toolList.Count;
+            var groupCheckbox = new Toggle { value = allEnabled };
+            groupCheckbox.AddToClassList("group-header-checkbox");
+            groupCheckbox.tooltip = $"Toggle all tools in \"{title}\" on or off.";
+
+            // Prevent the click from propagating to the foldout expand/collapse toggle
+            groupCheckbox.RegisterCallback<ClickEvent>(evt => evt.StopPropagation());
+            groupCheckbox.RegisterValueChangedCallback(evt =>
+            {
+                evt.StopPropagation();
+                SetGroupToolsState(toolList, evt.newValue, foldout, title);
+            });
+
+            // Insert the checkbox into the foldout's own header toggle element
+            foldout.Q<Toggle>()?.Add(groupCheckbox);
+            groupToggleMap[prefsSuffix] = groupCheckbox;
 
             foreach (var tool in toolList)
             {
                 foldout.Add(CreateToolRow(tool));
             }
 
+            foldoutEntries.Add((foldout, title, toolList));
             categoryContainer?.Add(foldout);
         }
 
@@ -294,6 +328,8 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             if (updateSummary)
             {
                 UpdateSummary();
+                UpdateFoldoutHeaders();
+                SyncGroupToggles();
             }
 
             if (reregisterTools)
@@ -354,11 +390,150 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             }
 
             UpdateSummary();
+            UpdateFoldoutHeaders();
+            SyncGroupToggles();
 
             if (hasChanges)
             {
                 // Trigger a single reregistration after bulk change
                 ReregisterToolsAsync();
+            }
+        }
+
+        private void SetGroupToolsState(List<ToolMetadata> groupTools, bool enabled, Foldout foldout, string title)
+        {
+            bool hasChanges = false;
+
+            foreach (var tool in groupTools)
+            {
+                if (toolToggleMap.TryGetValue(tool.Name, out var toggle))
+                {
+                    if (toggle.value != enabled)
+                    {
+                        toggle.SetValueWithoutNotify(enabled);
+                        HandleToggleChange(tool, enabled, updateSummary: false, reregisterTools: false);
+                        hasChanges = true;
+                    }
+                }
+                else
+                {
+                    bool currentEnabled = MCPServiceLocator.ToolDiscovery.IsToolEnabled(tool.Name);
+                    if (currentEnabled != enabled)
+                    {
+                        MCPServiceLocator.ToolDiscovery.SetToolEnabled(tool.Name, enabled);
+                        hasChanges = true;
+                    }
+                }
+            }
+
+            // Update the foldout header count
+            int enabledCount = groupTools.Count(t => MCPServiceLocator.ToolDiscovery.IsToolEnabled(t.Name));
+            foldout.text = $"{title} ({enabledCount}/{groupTools.Count})";
+
+            // Sync global group toggles after group change
+            SyncGroupToggles();
+
+            UpdateSummary();
+
+            if (hasChanges)
+            {
+                ReregisterToolsAsync();
+            }
+        }
+
+        /// <summary>
+        /// Synchronises group toggle checkmarks with actual tool states.
+        /// Called after individual tool toggles change so the group toggle
+        /// stays accurate.
+        /// </summary>
+        private void SyncGroupToggles()
+        {
+            // We need the grouped tool lists to check states.
+            var builtInTools = allTools.Where(IsBuiltIn).ToList();
+            var grouped = builtInTools
+                .GroupBy(t => t.Group ?? "core")
+                .ToDictionary(g => g.Key, g => g.ToList());
+            var customTools = allTools.Where(t => !IsBuiltIn(t)).ToList();
+
+            foreach (var kvp in groupToggleMap)
+            {
+                List<ToolMetadata> groupTools;
+                if (kvp.Key == "custom")
+                {
+                    groupTools = customTools;
+                }
+                else
+                {
+                    string groupKey = kvp.Key.StartsWith("group-") ? kvp.Key.Substring(6) : kvp.Key;
+                    if (!grouped.TryGetValue(groupKey, out groupTools))
+                        continue;
+                }
+
+                bool allEnabled = groupTools.All(t => MCPServiceLocator.ToolDiscovery.IsToolEnabled(t.Name));
+                kvp.Value.SetValueWithoutNotify(allEnabled);
+            }
+        }
+
+        private void OnReconfigureClientsClicked()
+        {
+            try
+            {
+                // Re-register tools with the server (HTTP mode)
+                ReregisterToolsAsync();
+
+                // Reconfigure all already-configured clients.
+                // For CLI-based clients Configure() is a toggle (unregister if
+                // configured, register if not), so we call it twice: first to
+                // unregister, then to re-register with the updated tool set.
+                var clients = MCPServiceLocator.Client.GetAllClients();
+                int success = 0;
+                int skipped = 0;
+                var messages = new List<string>();
+
+                foreach (var client in clients)
+                {
+                    try
+                    {
+                        client.CheckStatus(attemptAutoRewrite: false);
+
+                        if (client.Status != McpStatus.Configured)
+                        {
+                            skipped++;
+                            continue;
+                        }
+
+                        if (client is ClaudeCliMcpConfigurator)
+                        {
+                            // Toggle off (unregister), then toggle on (register)
+                            MCPServiceLocator.Client.ConfigureClient(client);
+                            MCPServiceLocator.Client.ConfigureClient(client);
+                        }
+                        else
+                        {
+                            // JSON-file clients: rewrite is idempotent
+                            MCPServiceLocator.Client.ConfigureClient(client);
+                        }
+
+                        success++;
+                        messages.Add($"✓ {client.DisplayName}: Reconfigured");
+                    }
+                    catch (Exception ex)
+                    {
+                        messages.Add($"⚠ {client.DisplayName}: {ex.Message}");
+                    }
+                }
+
+                string header = $"Reconfigured {success} client(s), skipped {skipped}.";
+                string body = messages.Count > 0
+                    ? header + "\n\n" + string.Join("\n", messages)
+                    : header;
+
+                EditorUtility.DisplayDialog("Reconfigure Clients", body, "OK");
+            }
+            catch (Exception ex)
+            {
+                EditorUtility.DisplayDialog("Reconfigure Failed", ex.Message, "OK");
+                McpLog.Error($"Reconfigure failed: {ex.Message}");
             }
         }
 
@@ -377,6 +552,15 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
 
             int enabledCount = allTools.Count(tool => MCPServiceLocator.ToolDiscovery.IsToolEnabled(tool.Name));
             summaryLabel.text = $"{enabledCount} of {allTools.Count} tools will register with connected clients.";
+        }
+
+        private void UpdateFoldoutHeaders()
+        {
+            foreach (var (foldout, title, tools) in foldoutEntries)
+            {
+                int enabledCount = tools.Count(t => MCPServiceLocator.ToolDiscovery.IsToolEnabled(t.Name));
+                foldout.text = $"{title} ({enabledCount}/{tools.Count})";
+            }
         }
 
         private void AddInfoLabel(string message)

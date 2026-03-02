@@ -328,14 +328,14 @@
 
 /* Tools Section */
 .tool-actions {
-    flex-direction: row;
-    flex-wrap: wrap;
+    flex-direction: column;
     margin-top: 8px;
     margin-bottom: 8px;
 }
 
 .tool-action-button {
     flex-grow: 1;
+    flex-basis: 0;
     min-width: 0;
     height: 26px;
     margin-bottom: 4px;
@@ -395,6 +395,18 @@
 
 .tool-parameters {
     -unity-font-style: italic;
+}
+
+/* Group enable/disable checkbox in the foldout header */
+.group-header-checkbox {
+    margin-left: 6px;
+    margin-right: 0;
+    flex-shrink: 0;
+}
+
+.group-header-checkbox > .unity-toggle__input > .unity-toggle__checkmark {
+    margin-top: 0;
+    margin-bottom: 0;
 }
 
 /* Advanced Settings */
