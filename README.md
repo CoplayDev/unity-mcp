@@ -6,7 +6,7 @@
 
 | Tool | Description | Actions |
 |------|-------------|---------|
-| `manage_dots` | Unity DOTS ECS debugging, entity inspection, and performance monitoring. Requires `com.unity.entities`. | `list_worlds`, `query_entities`, `get_entity`, `list_systems`, `get_system`, `performance_snapshot`, `toggle_system` |
+| `manage_dots` | Unity DOTS ECS debugging, entity inspection, and performance monitoring. Requires `com.unity.entities`. | `list_worlds`, `query_entities`, `get_entity`, `list_systems`, `get_system`, `performance_snapshot`, `toggle_system`, `list_component_types`, `create_entity`, `destroy_entity` |
 
 **CLI usage:**
 ```bash
@@ -17,6 +17,10 @@ unity-mcp dots systems                              # List systems with status
 unity-mcp dots system "MySystem"                    # System details & queries
 unity-mcp dots perf                                 # Performance snapshot
 unity-mcp dots toggle "MySystem" false              # Disable a system
+unity-mcp dots types                               # List all ECS component types
+unity-mcp dots types --filter "Transform"          # Filter by name
+unity-mcp dots create --components "LocalTransform" # Create debug entity
+unity-mcp dots destroy 42                          # Destroy entity
 ```
 
 ---

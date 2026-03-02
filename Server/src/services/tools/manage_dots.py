@@ -19,10 +19,13 @@ from transport.legacy.unity_connection import async_send_command_with_retry
     description=(
         "Debug and monitor Unity DOTS ECS at runtime. "
         "Actions: list_worlds (show all ECS Worlds), query_entities (find entities by component types), "
-        "get_entity (inspect single entity's components and field values), "
-        "list_systems (list systems with enabled status), get_system (system details and queries), "
+        "get_entity (inspect entity components incl. buffers, shared, enableable state), "
+        "list_systems (list systems with enabled status), get_system (system details, queries, ordering), "
         "performance_snapshot (chunk utilization, archetype stats, entity counts), "
-        "toggle_system (enable/disable a system for debugging). "
+        "toggle_system (enable/disable a system for debugging), "
+        "list_component_types (discover all registered ECS types with optional filter), "
+        "create_entity (create debug entity with components), "
+        "destroy_entity (destroy entity by index/version). "
         "Requires com.unity.entities package. Most actions work in Edit mode; "
         "performance_snapshot is most useful during Play mode."
     ),
@@ -36,18 +39,19 @@ async def manage_dots(
         Literal[
             "list_worlds", "query_entities", "get_entity",
             "list_systems", "get_system",
-            "performance_snapshot", "toggle_system"
+            "performance_snapshot", "toggle_system",
+            "list_component_types", "create_entity", "destroy_entity"
         ],
         "Action to perform on DOTS ECS data."
     ],
     # Entity query params
     component_types: Annotated[
         str,
-        "Comma-separated component type names for query_entities (e.g. 'LocalTransform,Velocity')"
+        "Comma-separated component type names for query_entities/create_entity (e.g. 'LocalTransform,Velocity')"
     ] | None = None,
-    # Entity get params
-    entity_index: Annotated[int, "Entity index for get_entity"] | None = None,
-    entity_version: Annotated[int, "Entity version for get_entity (default 1)"] | None = None,
+    # Entity get/destroy params
+    entity_index: Annotated[int, "Entity index for get_entity/destroy_entity"] | None = None,
+    entity_version: Annotated[int, "Entity version for get_entity/destroy_entity (default 1)"] | None = None,
     # System params
     system_name: Annotated[
         str,
@@ -63,8 +67,10 @@ async def manage_dots(
         "Target world name (defaults to DefaultGameObjectInjectionWorld)"
     ] | None = None,
     group: Annotated[str, "Filter systems by group name (for list_systems)"] | None = None,
+    filter: Annotated[str, "Name filter for list_component_types"] | None = None,
+    category: Annotated[str, "Category filter for list_component_types (e.g. 'BufferData', 'ComponentData')"] | None = None,
     # Paging
-    page_size: Annotated[int, "Max entities/archetypes to return (default 20, max 100)"] | None = None,
+    page_size: Annotated[int, "Max entities/types to return (default 20, max 200)"] | None = None,
     limit: Annotated[int, "Max archetypes in performance_snapshot (default 20)"] | None = None,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
@@ -78,6 +84,8 @@ async def manage_dots(
         "enabled": enabled,
         "world": world,
         "group": group,
+        "filter": filter,
+        "category": category,
         "page_size": page_size,
         "limit": limit,
     }

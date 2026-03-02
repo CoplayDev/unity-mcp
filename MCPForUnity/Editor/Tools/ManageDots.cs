@@ -13,7 +13,8 @@ namespace MCPForUnity.Editor.Tools
     /// <summary>
     /// MCP tool for Unity DOTS ECS debugging, inspection, and performance monitoring.
     /// Actions: list_worlds, query_entities, get_entity, list_systems, get_system,
-    ///          performance_snapshot, toggle_system
+    ///          performance_snapshot, toggle_system, list_component_types,
+    ///          create_entity, destroy_entity
     /// Requires com.unity.entities package.
     /// </summary>
     [McpForUnityTool("manage_dots", AutoRegister = false)]
@@ -36,16 +37,20 @@ namespace MCPForUnity.Editor.Tools
             {
                 return action switch
                 {
-                    "list_worlds"          => ListWorlds(p),
-                    "query_entities"       => QueryEntities(p),
-                    "get_entity"           => GetEntity(p),
-                    "list_systems"         => ListSystems(p),
-                    "get_system"           => GetSystem(p),
-                    "performance_snapshot" => PerformanceSnapshot(p),
-                    "toggle_system"        => ToggleSystem(p),
+                    "list_worlds"           => ListWorlds(p),
+                    "query_entities"        => QueryEntities(p),
+                    "get_entity"            => GetEntity(p),
+                    "list_systems"          => ListSystems(p),
+                    "get_system"            => GetSystem(p),
+                    "performance_snapshot"  => PerformanceSnapshot(p),
+                    "toggle_system"         => ToggleSystem(p),
+                    "list_component_types"  => ListComponentTypes(p),
+                    "create_entity"         => CreateEntity(p),
+                    "destroy_entity"        => DestroyEntity(p),
                     _ => new ErrorResponse(
                         $"Unknown action: '{action}'. Supported: list_worlds, query_entities, get_entity, " +
-                        "list_systems, get_system, performance_snapshot, toggle_system")
+                        "list_systems, get_system, performance_snapshot, toggle_system, " +
+                        "list_component_types, create_entity, destroy_entity")
                 };
             }
             catch (Exception e)
@@ -207,12 +212,27 @@ namespace MCPForUnity.Editor.Tools
                 });
             }
 
+            // Collect ordering attributes
+            var updateBefore = sysType.GetCustomAttributes(typeof(UpdateBeforeAttribute), true)
+                .Cast<UpdateBeforeAttribute>()
+                .Select(a => a.SystemType.Name)
+                .ToList();
+            var updateAfter = sysType.GetCustomAttributes(typeof(UpdateAfterAttribute), true)
+                .Cast<UpdateAfterAttribute>()
+                .Select(a => a.SystemType.Name)
+                .ToList();
+
+            bool isGroup = typeof(ComponentSystemGroup).IsAssignableFrom(sysType);
+
             return new SuccessResponse($"System '{systemName}' details.", new Dictionary<string, object>
             {
                 ["name"]           = sysType.Name,
                 ["full_name"]      = sysType.FullName,
                 ["group"]          = GetSystemGroupName(sysType),
                 ["enabled"]        = system.Enabled,
+                ["is_group"]       = isGroup,
+                ["update_before"]  = updateBefore,
+                ["update_after"]   = updateAfter,
                 ["query_count"]    = system.EntityQueries.Length,
                 ["queries"]        = queries
             });
@@ -239,6 +259,128 @@ namespace MCPForUnity.Editor.Tools
             system.Enabled = enabled.Value;
             return new SuccessResponse(
                 $"System '{systemName}' {(enabled.Value ? "enabled" : "disabled")} in world '{world.Name}'.");
+        }
+
+        #endregion
+
+        #region Component Type Discovery
+
+        private static object ListComponentTypes(ToolParams p)
+        {
+            string filter = p.Get("filter");
+            string categoryFilter = p.Get("category"); // ComponentData, BufferData, SharedComponentData, etc.
+            int pageSize = p.GetInt("page_size") ?? 50;
+            pageSize = Math.Clamp(pageSize, 1, 200);
+
+            int typeCount = TypeManager.GetTypeCount();
+            var types = new List<object>();
+
+            for (int i = 1; i < typeCount; i++)
+            {
+                var typeInfo = TypeManager.GetTypeInfo(i);
+                string debugName = typeInfo.DebugTypeName.ToString();
+
+                if (string.IsNullOrEmpty(debugName) || debugName == "null")
+                    continue;
+
+                // Apply name filter
+                if (!string.IsNullOrEmpty(filter) &&
+                    !debugName.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                // Apply category filter
+                string category = typeInfo.Category.ToString();
+                if (!string.IsNullOrEmpty(categoryFilter) &&
+                    !category.Contains(categoryFilter, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                types.Add(new Dictionary<string, object>
+                {
+                    ["name"]          = debugName,
+                    ["category"]      = category,
+                    ["type_index"]    = i,
+                    ["size_bytes"]    = typeInfo.SizeInChunk,
+                    ["is_zero_sized"] = typeInfo.IsZeroSized,
+                    ["is_buffer"]     = typeInfo.Category == TypeManager.TypeCategory.BufferData,
+                    ["is_shared"]     = typeInfo.Category == TypeManager.TypeCategory.ISharedComponentData,
+                    ["is_enableable"] = typeInfo.EnableableType
+                });
+
+                if (types.Count >= pageSize)
+                    break;
+            }
+
+            return new SuccessResponse(
+                $"Found {types.Count} component type(s) (of {typeCount - 1} total).", new Dictionary<string, object>
+                {
+                    ["total_registered"] = typeCount - 1,
+                    ["returned"]         = types.Count,
+                    ["types"]            = types
+                });
+        }
+
+        #endregion
+
+        #region Entity CRUD
+
+        private static object CreateEntity(ToolParams p)
+        {
+            var world = ResolveWorld(p);
+            if (world == null)
+                return new ErrorResponse("World not found. Use list_worlds to see available worlds.");
+
+            string componentTypesStr = p.Get("component_types");
+            var em = world.EntityManager;
+            Entity entity;
+
+            if (!string.IsNullOrEmpty(componentTypesStr))
+            {
+                string[] typeNames = componentTypesStr.Split(',')
+                    .Select(t => t.Trim())
+                    .Where(t => !string.IsNullOrEmpty(t))
+                    .ToArray();
+
+                var componentTypes = new List<ComponentType>();
+                foreach (string typeName in typeNames)
+                {
+                    var resolvedType = ResolveComponentType(typeName);
+                    if (resolvedType == null)
+                        return new ErrorResponse($"Component type '{typeName}' not found.");
+                    componentTypes.Add(resolvedType.Value);
+                }
+
+                var archetype = em.CreateArchetype(componentTypes.ToArray());
+                entity = em.CreateEntity(archetype);
+            }
+            else
+            {
+                entity = em.CreateEntity();
+            }
+
+            return new SuccessResponse(
+                $"Created entity (Index={entity.Index}, Version={entity.Version}) in world '{world.Name}'.",
+                SerializeEntityBrief(em, entity));
+        }
+
+        private static object DestroyEntity(ToolParams p)
+        {
+            var world = ResolveWorld(p);
+            if (world == null)
+                return new ErrorResponse("World not found. Use list_worlds to see available worlds.");
+
+            int? entityIndex = p.GetInt("entity_index");
+            int? entityVersion = p.GetInt("entity_version");
+            if (entityIndex == null)
+                return new ErrorResponse("'entity_index' parameter is required.");
+
+            var entity = new Entity { Index = entityIndex.Value, Version = entityVersion ?? 1 };
+            var em = world.EntityManager;
+
+            if (!em.Exists(entity))
+                return new ErrorResponse($"Entity (Index={entityIndex}, Version={entityVersion ?? 1}) does not exist.");
+
+            em.DestroyEntity(entity);
+            return new SuccessResponse($"Destroyed entity (Index={entityIndex}, Version={entityVersion ?? 1}) in world '{world.Name}'.");
         }
 
         #endregion
@@ -454,38 +596,33 @@ namespace MCPForUnity.Editor.Tools
                     ["is_zero_sized"] = typeInfo.IsZeroSized
                 };
 
-                // Try to read field values for IComponentData
-                if (!typeInfo.IsZeroSized && typeInfo.Category == TypeManager.TypeCategory.ComponentData)
+                // Check enableable component state
+                if (typeInfo.EnableableType)
                 {
                     try
                     {
-                        var type = componentTypes[i].GetManagedType();
-                        if (type != null)
-                        {
-                            var obj = em.Debug.GetComponentBoxed(entity, componentTypes[i]);
-                            if (obj != null)
-                            {
-                                var fields = new Dictionary<string, object>();
-                                foreach (var field in type.GetFields(
-                                    BindingFlags.Public | BindingFlags.Instance))
-                                {
-                                    try
-                                    {
-                                        fields[field.Name] = field.GetValue(obj)?.ToString() ?? "null";
-                                    }
-                                    catch
-                                    {
-                                        fields[field.Name] = "<unreadable>";
-                                    }
-                                }
-                                componentData["fields"] = fields;
-                            }
-                        }
+                        componentData["is_enabled"] = em.IsComponentEnabled(entity, componentTypes[i]);
                     }
                     catch
                     {
-                        // Some components can't be boxed safely
+                        componentData["is_enabled"] = "<unknown>";
                     }
+                }
+
+                // Read field values for IComponentData
+                if (!typeInfo.IsZeroSized && typeInfo.Category == TypeManager.TypeCategory.ComponentData)
+                {
+                    ReadComponentFields(em, entity, componentTypes[i], componentData);
+                }
+                // Read shared component data
+                else if (typeInfo.Category == TypeManager.TypeCategory.ISharedComponentData)
+                {
+                    ReadSharedComponentFields(em, entity, componentTypes[i], componentData);
+                }
+                // Read buffer element data
+                else if (typeInfo.Category == TypeManager.TypeCategory.BufferData)
+                {
+                    ReadBufferElements(em, entity, componentTypes[i], typeInfo, componentData);
                 }
 
                 components.Add(componentData);
@@ -499,6 +636,123 @@ namespace MCPForUnity.Editor.Tools
                 ["component_count"] = components.Count,
                 ["components"]      = components
             };
+        }
+
+        private static void ReadComponentFields(EntityManager em, Entity entity, ComponentType ct, Dictionary<string, object> data)
+        {
+            try
+            {
+                var type = ct.GetManagedType();
+                if (type == null) return;
+
+                var obj = em.Debug.GetComponentBoxed(entity, ct);
+                if (obj == null) return;
+
+                var fields = new Dictionary<string, object>();
+                foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Instance))
+                {
+                    try
+                    {
+                        fields[field.Name] = field.GetValue(obj)?.ToString() ?? "null";
+                    }
+                    catch
+                    {
+                        fields[field.Name] = "<unreadable>";
+                    }
+                }
+                data["fields"] = fields;
+            }
+            catch
+            {
+                // Some components can't be boxed safely
+            }
+        }
+
+        private static void ReadSharedComponentFields(EntityManager em, Entity entity, ComponentType ct, Dictionary<string, object> data)
+        {
+            try
+            {
+                var type = ct.GetManagedType();
+                if (type == null) return;
+
+                var obj = em.Debug.GetComponentBoxed(entity, ct);
+                if (obj == null) return;
+
+                var fields = new Dictionary<string, object>();
+                foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Instance))
+                {
+                    try
+                    {
+                        fields[field.Name] = field.GetValue(obj)?.ToString() ?? "null";
+                    }
+                    catch
+                    {
+                        fields[field.Name] = "<unreadable>";
+                    }
+                }
+                data["fields"] = fields;
+            }
+            catch
+            {
+                // Shared components may not be readable
+            }
+        }
+
+        private static void ReadBufferElements(EntityManager em, Entity entity, ComponentType ct, TypeManager.TypeInfo typeInfo, Dictionary<string, object> data)
+        {
+            try
+            {
+                var type = ct.GetManagedType();
+                if (type == null) return;
+
+                // Use reflection to call EntityManager.GetBuffer<T>(entity)
+                var getBufferMethod = typeof(EntityManager).GetMethod("GetBuffer",
+                    new[] { typeof(Entity), typeof(bool) });
+                if (getBufferMethod == null) return;
+
+                var genericMethod = getBufferMethod.MakeGenericMethod(type);
+                var buffer = genericMethod.Invoke(em, new object[] { entity, true }); // readOnly=true
+                if (buffer == null) return;
+
+                // Get Length property
+                var lengthProp = buffer.GetType().GetProperty("Length");
+                int length = lengthProp != null ? (int)lengthProp.GetValue(buffer) : 0;
+                data["buffer_length"] = length;
+
+                // Read up to 10 elements
+                int sampleCount = Math.Min(length, 10);
+                var elements = new List<object>();
+                var indexer = buffer.GetType().GetProperty("Item");
+                if (indexer != null)
+                {
+                    for (int e = 0; e < sampleCount; e++)
+                    {
+                        try
+                        {
+                            var elem = indexer.GetValue(buffer, new object[] { e });
+                            var fields = new Dictionary<string, object>();
+                            foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Instance))
+                            {
+                                try
+                                {
+                                    fields[field.Name] = field.GetValue(elem)?.ToString() ?? "null";
+                                }
+                                catch
+                                {
+                                    fields[field.Name] = "<unreadable>";
+                                }
+                            }
+                            elements.Add(fields);
+                        }
+                        catch { break; }
+                    }
+                }
+                data["elements"] = elements;
+            }
+            catch
+            {
+                data["buffer_length"] = "<unreadable>";
+            }
         }
 
         private static string GetSystemGroupName(Type systemType)

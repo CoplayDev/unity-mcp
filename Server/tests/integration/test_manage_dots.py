@@ -234,3 +234,79 @@ async def test_python_exception_caught(monkeypatch):
 
     assert resp["success"] is False
     assert "Unity not connected" in resp["message"]
+
+
+@pytest.mark.asyncio
+async def test_list_component_types_params(monkeypatch):
+    """list_component_types sends filter and category."""
+    captured = {}
+    monkeypatch.setattr(
+        manage_dots_mod, "async_send_command_with_retry",
+        _fake_send_factory(captured, {
+            "success": True,
+            "message": "Found 10 types.",
+            "data": {"total_registered": 200, "returned": 10, "types": []},
+        }),
+    )
+
+    resp = await manage_dots_mod.manage_dots(
+        ctx=DummyContext(),
+        action="list_component_types",
+        filter="Transform",
+        category="ComponentData",
+        page_size=50,
+    )
+
+    assert resp["success"] is True
+    assert captured["params"]["filter"] == "Transform"
+    assert captured["params"]["category"] == "ComponentData"
+    assert captured["params"]["page_size"] == 50
+
+
+@pytest.mark.asyncio
+async def test_create_entity_params(monkeypatch):
+    """create_entity sends component_types and world."""
+    captured = {}
+    monkeypatch.setattr(
+        manage_dots_mod, "async_send_command_with_retry",
+        _fake_send_factory(captured, {
+            "success": True,
+            "message": "Created entity.",
+            "data": {"index": 99, "version": 1, "components": ["LocalTransform"]},
+        }),
+    )
+
+    resp = await manage_dots_mod.manage_dots(
+        ctx=DummyContext(),
+        action="create_entity",
+        component_types="LocalTransform,Velocity",
+        world="Default World",
+    )
+
+    assert resp["success"] is True
+    assert captured["params"]["component_types"] == "LocalTransform,Velocity"
+    assert captured["params"]["world"] == "Default World"
+
+
+@pytest.mark.asyncio
+async def test_destroy_entity_params(monkeypatch):
+    """destroy_entity sends entity_index and entity_version."""
+    captured = {}
+    monkeypatch.setattr(
+        manage_dots_mod, "async_send_command_with_retry",
+        _fake_send_factory(captured, {
+            "success": True,
+            "message": "Destroyed entity.",
+        }),
+    )
+
+    resp = await manage_dots_mod.manage_dots(
+        ctx=DummyContext(),
+        action="destroy_entity",
+        entity_index=42,
+        entity_version=1,
+    )
+
+    assert resp["success"] is True
+    assert captured["params"]["entity_index"] == 42
+    assert captured["params"]["entity_version"] == 1

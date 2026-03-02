@@ -185,3 +185,84 @@ def toggle(system_name: str, enabled: bool, world: Optional[str]):
     if result.get("success"):
         state = "enabled" if enabled else "disabled"
         print_success(f"System '{system_name}' {state}")
+
+
+@dots.command("types")
+@click.option("--filter", "-f", default=None, help="Filter by component name.")
+@click.option("--category", "-c", default=None, help="Filter by category (ComponentData, BufferData, etc.).")
+@click.option("--page-size", "-n", type=int, default=None, help="Max types to return (default 50).")
+@handle_unity_errors
+def types(filter: Optional[str], category: Optional[str], page_size: Optional[int]):
+    """List all registered ECS component types.
+
+    \b
+    Examples:
+        unity-mcp dots types
+        unity-mcp dots types --filter "Transform"
+        unity-mcp dots types --category "BufferData" --page-size 100
+    """
+    config = get_config()
+
+    params: dict[str, Any] = {"action": "list_component_types"}
+    if filter:
+        params["filter"] = filter
+    if category:
+        params["category"] = category
+    if page_size:
+        params["page_size"] = page_size
+
+    result = run_command("manage_dots", params, config)
+    click.echo(format_output(result, config.format))
+
+
+@dots.command("create")
+@click.option("--components", "-c", default=None, help="Comma-separated component types (e.g. 'LocalTransform,Velocity').")
+@click.option("--world", "-w", default=None, help="Target world name.")
+@handle_unity_errors
+def create(components: Optional[str], world: Optional[str]):
+    """Create a debug entity with optional components.
+
+    \b
+    Examples:
+        unity-mcp dots create
+        unity-mcp dots create --components "LocalTransform,Velocity"
+        unity-mcp dots create --components "Health" --world "Server World"
+    """
+    config = get_config()
+
+    params: dict[str, Any] = {"action": "create_entity"}
+    if components:
+        params["component_types"] = components
+    if world:
+        params["world"] = world
+
+    result = run_command("manage_dots", params, config)
+    click.echo(format_output(result, config.format))
+
+
+@dots.command("destroy")
+@click.argument("entity_index", type=int)
+@click.option("--version", "-v", type=int, default=None, help="Entity version (default 1).")
+@click.option("--world", "-w", default=None, help="Target world name.")
+@handle_unity_errors
+def destroy(entity_index: int, version: Optional[int], world: Optional[str]):
+    """Destroy an entity by index.
+
+    \b
+    Examples:
+        unity-mcp dots destroy 42
+        unity-mcp dots destroy 42 --version 2 --world "Server World"
+    """
+    config = get_config()
+
+    params: dict[str, Any] = {
+        "action": "destroy_entity",
+        "entity_index": entity_index,
+    }
+    if version:
+        params["entity_version"] = version
+    if world:
+        params["world"] = world
+
+    result = run_command("manage_dots", params, config)
+    click.echo(format_output(result, config.format))
