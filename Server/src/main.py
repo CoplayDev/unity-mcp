@@ -347,21 +347,6 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
             "message": "MCP for Unity server is running"
         })
 
-    @mcp.custom_route("/api/debug/list-tools", methods=["GET"])
-    async def debug_list_tools(_: Request) -> JSONResponse:
-        """Diagnostic endpoint: returns registered tools and transform info (bypasses middleware)."""
-        try:
-            # Access the internal tool manager to avoid creating a dummy MCP context
-            tool_manager = mcp._tool_manager
-            all_tool_names = sorted(tool_manager.tools.keys()) if tool_manager else []
-            return JSONResponse({
-                "registered_count": len(all_tool_names),
-                "tools": all_tool_names,
-                "transform_count": len(mcp._transforms),
-            })
-        except Exception as e:
-            return JSONResponse({"error": str(e)}, status_code=500)
-
     @mcp.custom_route("/api/auth/login-url", methods=["GET"])
     async def auth_login_url(_: Request) -> JSONResponse:
         """Return the login URL for users to obtain/manage API keys."""

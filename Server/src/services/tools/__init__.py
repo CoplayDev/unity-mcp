@@ -77,7 +77,6 @@ def register_all_tools(mcp: FastMCP, *, project_scoped_tools: bool = True):
     logger.info(
         f"Default tool groups: {', '.join(sorted(DEFAULT_ENABLED_GROUPS))}. "
         f"Disabled: {', '.join(sorted(groups_to_disable))}. "
-        f"Transform count: {len(mcp._transforms)}. "
         "Use manage_tools to activate more."
     )
 

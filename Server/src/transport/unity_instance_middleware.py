@@ -432,19 +432,19 @@ class UnityInstanceMiddleware(Middleware):
         tools = await call_next(context)
 
         tool_names_from_fastmcp = sorted(getattr(t, "name", "?") for t in tools)
-        _diag.info(
+        _diag.debug(
             "on_list_tools: FastMCP returned %d tools: %s",
             len(tools), tool_names_from_fastmcp,
         )
 
         if not self._should_filter_tool_listing():
-            _diag.info("on_list_tools: skipping middleware filter (not HTTP or PluginHub not configured)")
+            _diag.debug("on_list_tools: skipping middleware filter (not HTTP or PluginHub not configured)")
             return tools
 
         self._refresh_tool_visibility_metadata_from_registry()
         enabled_tool_names = await self._resolve_enabled_tool_names_for_context(context)
         if enabled_tool_names is None:
-            _diag.info("on_list_tools: no Unity session data, returning %d tools from FastMCP as-is", len(tools))
+            _diag.debug("on_list_tools: no Unity session data, returning %d tools from FastMCP as-is", len(tools))
             return tools
 
         filtered = []
@@ -453,7 +453,7 @@ class UnityInstanceMiddleware(Middleware):
             if self._is_tool_visible(tool_name, enabled_tool_names):
                 filtered.append(tool)
 
-        _diag.info(
+        _diag.debug(
             "on_list_tools: filtered %d/%d tools visible (Unity register_tools). "
             "enabled_names=%s",
             len(filtered), len(tools), sorted(enabled_tool_names),
