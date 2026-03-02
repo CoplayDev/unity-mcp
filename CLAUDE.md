@@ -1,14 +1,18 @@
-# CLAUDE.md - Project Overview for AI Assistants
+# CLAUDE.md
 
-## What This Project Is
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**MCP for Unity** is a bridge that lets AI assistants (Claude, Cursor, Windsurf, etc.) control the Unity Editor through the Model Context Protocol (MCP). It enables AI-driven game development workflows - creating GameObjects, editing scripts, managing assets, running tests, and more.
+## Project Context
+
+**MCP for Unity** — a bridge that lets AI assistants (Claude, Cursor, Windsurf, etc.) control the Unity Editor through the Model Context Protocol (MCP). Forked from [CoplayDev/unity-mcp](https://github.com/CoplayDev/unity-mcp).
+
+**Fork strategy:** We avoid modifying upstream code. Studio-specific tools go in separate files. When syncing with upstream, our additions should not conflict.
 
 ## Architecture
 
 ```text
 AI Assistant (Claude/Cursor)
-        ↓ MCP Protocol (stdio/SSE)
+        ↓ MCP Protocol (stdio/HTTP)
 Python Server (Server/src/)
         ↓ WebSocket + HTTP
 Unity Editor Plugin (MCPForUnity/)
@@ -17,98 +21,83 @@ Scene, Assets, Scripts
 ```
 
 **Two codebases, one system:**
-- `Server/` - Python MCP server using FastMCP
-- `MCPForUnity/` - Unity C# Editor package
+- `Server/` — Python MCP server (FastMCP 2.x, Python 3.10+, managed by `uv`)
+- `MCPForUnity/` — Unity C# Editor package (Unity 2021.3+, Newtonsoft.Json)
 
-## Directory Structure
+## How the Tool System Works
 
-```text
-├── Server/                     # Python MCP Server
-│   ├── src/
-│   │   ├── cli/commands/       # Tool implementations (20 domain modules)
-│   │   ├── transport/          # MCP protocol, WebSocket bridge
-│   │   ├── services/           # Custom tools, resources
-│   │   └── core/               # Telemetry, logging, config
-│   └── tests/                  # 502 Python tests
-├── MCPForUnity/                # Unity Editor Package
-│   └── Editor/
-│       ├── Tools/              # C# tool implementations (42 files)
-│       ├── Services/           # Bridge, state management
-│       ├── Helpers/            # Utilities (27 files)
-│       └── Windows/            # Editor UI
-├── TestProjects/UnityMCPTests/ # Unity test project (605 tests)
-└── tools/                      # Build/release scripts
-```
+Tools are registered on **both sides** through a decorator/attribute pattern:
 
-## Code Philosophy
+**Python side** — `@mcp_for_unity_tool` decorator in `Server/src/services/tools/` registers MCP tools. Some tools forward to Unity (via `send_with_unity_instance`), others are server-only.
 
-### 1. Domain Symmetry
-Python CLI commands mirror C# Editor tools. Each domain (materials, prefabs, scripts, etc.) exists in both:
+**C# side** — `[McpForUnityTool]` attribute in `MCPForUnity/Editor/Tools/` marks classes that handle incoming commands from the Python server. Tool discovery is automatic via `ToolDiscoveryService`.
+
+**Domain symmetry:** Each domain exists in both codebases:
 - `Server/src/cli/commands/materials.py` ↔ `MCPForUnity/Editor/Tools/ManageMaterial.cs`
+- `Server/src/services/tools/manage_material.py` (MCP registration) routes to the C# handler
 
-### 2. Minimal Abstraction
-Avoid premature abstraction. Three similar lines of code is better than a helper that's used once. Only abstract when you have 3+ genuine use cases.
-
-### 3. Delete Rather Than Deprecate
-When removing functionality, delete it completely. No `_unused` renames, no `// removed` comments, no backwards-compatibility shims for internal code.
-
-### 4. Test Coverage Required
-Every new feature needs tests. We have 1100+ tests across Python and C#. Run them before PRs.
-
-### 5. Keep Tools Focused
-Each MCP tool does one thing well. Resist the urge to add "convenient" parameters that bloat the API surface.
-
-### 6. Use Resources for reading.
-Keep them smart and focused rather than "read everything" type resources. That way resources are quick and LLM-friendly. There are plenty of examples in the codebase to model on (gameobject, prefab, etc.)
+**The `cli/commands/` vs `services/tools/` split:** `services/tools/` contains the MCP tool definitions (what LLMs call). `cli/commands/` provides the `unity-mcp` CLI (`uv run python -m cli.main editor play`, etc.) — a separate interface using Click.
 
 ## Key Patterns
 
 ### Parameter Handling (C#)
-Use `ToolParams` for consistent parameter validation:
+`ToolParams` wraps `JObject` for consistent validation. Supports both snake_case and camelCase automatically:
 ```csharp
 var p = new ToolParams(parameters);
-var pageSize = p.GetInt("page_size", "pageSize") ?? 50;
-var name = p.RequireString("name");
+var name = p.GetRequired("name");     // returns Result<string> with error handling
+var size = p.GetInt("page_size") ?? 50;
 ```
 
-### Error Handling (Python CLI)
-Use the `@handle_unity_errors` decorator:
-```python
-@handle_unity_errors
-async def my_command(ctx, ...):
-    result = await call_unity_tool(...)
-```
+### Error Handling (Python)
+Use `@handle_unity_errors` decorator for CLI commands. For MCP tools, errors propagate through `send_with_unity_instance`.
 
-### Paging Large Results
-Always page results that could be large (hierarchies, components, search results):
-- Use `page_size` and `cursor` parameters
-- Return `next_cursor` when more results exist
+### Paging
+Always page results that could be large. Use `page_size` + `cursor` parameters, return `next_cursor` when more results exist.
 
-## Common Tasks
+## Commands
 
-### Running Tests
+### Python Tests
 ```bash
-# Python
-cd Server && uv run pytest tests/ -v
+cd Server
+uv run pytest tests/ -v                          # all tests
+uv run pytest tests/integration/test_find_gameobjects.py -v  # single file
+uv run pytest tests/ -k "test_name_pattern" -v   # by name pattern
+uv run pytest tests/ --cov --cov-report=html      # with coverage
+```
 
-# Unity - open TestProjects/UnityMCPTests in Unity, use Test Runner window
+### Unity C# Tests (via CLI, requires Unity + MCP bridge running)
+```bash
+cd Server
+uv run python -m cli.main editor tests                    # EditMode (default)
+uv run python -m cli.main editor tests --mode PlayMode    # PlayMode
+uv run python -m cli.main editor tests --async            # async launch
+uv run python -m cli.main editor poll-test <job_id> --wait 60  # poll async job
 ```
 
 ### Local Development
-1. Set **Server Source Override** in MCP for Unity Advanced Settings to your local `Server/` path
-2. Enable **Dev Mode** checkbox to force fresh installs
-3. Use `mcp_source.py` to switch Unity package sources
-4. Test on Windows and Mac if possible, and multiple clients (Claude Desktop and Claude Code are tricky for configuration       as of this writing)
+1. In Unity: **Window > MCP for Unity > Settings > Advanced Settings**
+2. Set **Server Source Override** to your local `Server/` path
+3. Enable **Dev Mode** to force fresh installs (`--refresh` on uvx)
+4. Use `python mcp_source.py` to switch Unity package source (upstream main/beta, your fork, or local path)
 
-### Adding a New Tool
-1. Add Python command in `Server/src/cli/commands/<domain>.py`
-2. Add C# implementation in `MCPForUnity/Editor/Tools/Manage<Domain>.cs`
-3. Add tests in both `Server/tests/` and `TestProjects/UnityMCPTests/Assets/Tests/`
+## Git Workflow
 
-## What Not To Do
+- **Branch off `beta`** for PRs — `main` is for stable releases only
+- Remote: `origin` → `git@github.com:tuha263/unity-mcp.git` (our fork)
+- Upstream: `CoplayDev/unity-mcp` (sync periodically)
 
-- Don't add features without tests
-- Don't create helper functions for one-time operations
-- Don't add error handling for scenarios that can't happen
-- Don't commit to `main` directly - branch off `beta` for PRs
-- Don't add docstrings/comments to code you didn't change
+## Adding a New Tool
+
+1. Create Python MCP tool in `Server/src/services/tools/manage_<domain>.py` using `@mcp_for_unity_tool`
+2. Create Python CLI command in `Server/src/cli/commands/<domain>.py` (optional, for CLI access)
+3. Create C# handler in `MCPForUnity/Editor/Tools/Manage<Domain>.cs` with `[McpForUnityTool]`
+4. Add tests in `Server/tests/` and `TestProjects/UnityMCPTests/Assets/Tests/`
+
+**For studio-specific tools:** Create new files rather than modifying existing upstream files to minimize merge conflicts.
+
+## Code Philosophy
+
+- **Minimal abstraction** — Three similar lines > a helper used once. Abstract only at 3+ use cases.
+- **Delete rather than deprecate** — No `_unused` renames or `// removed` comments.
+- **Keep tools focused** — One tool, one job. No "convenient" parameter bloat.
+- **Resources for reading** — Keep resources smart and focused, not "read everything" dumps.
