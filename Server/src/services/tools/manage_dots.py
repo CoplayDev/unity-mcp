@@ -25,7 +25,11 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "toggle_system (enable/disable a system for debugging), "
         "list_component_types (discover all registered ECS types with optional filter), "
         "create_entity (create debug entity with components), "
-        "destroy_entity (destroy entity by index/version). "
+        "destroy_entity (destroy entity by index/version), "
+        "set_component (modify a component field value at runtime), "
+        "add_component (add a component to an existing entity), "
+        "remove_component (remove a component from an entity), "
+        "query_count (fast entity count without fetching data). "
         "Requires com.unity.entities package. Most actions work in Edit mode; "
         "performance_snapshot is most useful during Play mode."
     ),
@@ -40,7 +44,8 @@ async def manage_dots(
             "list_worlds", "query_entities", "get_entity",
             "list_systems", "get_system",
             "performance_snapshot", "toggle_system",
-            "list_component_types", "create_entity", "destroy_entity"
+            "list_component_types", "create_entity", "destroy_entity",
+            "set_component", "add_component", "remove_component", "query_count"
         ],
         "Action to perform on DOTS ECS data."
     ],
@@ -61,6 +66,13 @@ async def manage_dots(
         bool | str,
         "Enable/disable for toggle_system (true/false)"
     ] | None = None,
+    # Component manipulation params
+    component_name: Annotated[
+        str,
+        "Component type name for set_component/add_component/remove_component"
+    ] | None = None,
+    field_name: Annotated[str, "Field name to modify (for set_component)"] | None = None,
+    field_value: Annotated[str, "New field value as string (for set_component)"] | None = None,
     # Filtering
     world: Annotated[
         str,
@@ -80,6 +92,9 @@ async def manage_dots(
         "component_types": component_types,
         "entity_index": entity_index,
         "entity_version": entity_version,
+        "component_name": component_name,
+        "field_name": field_name,
+        "field_value": field_value,
         "system_name": system_name,
         "enabled": enabled,
         "world": world,

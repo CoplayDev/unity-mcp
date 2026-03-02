@@ -14,7 +14,8 @@ namespace MCPForUnity.Editor.Tools
     /// MCP tool for Unity DOTS ECS debugging, inspection, and performance monitoring.
     /// Actions: list_worlds, query_entities, get_entity, list_systems, get_system,
     ///          performance_snapshot, toggle_system, list_component_types,
-    ///          create_entity, destroy_entity
+    ///          create_entity, destroy_entity, set_component,
+    ///          add_component, remove_component, query_count
     /// Requires com.unity.entities package.
     /// </summary>
     [McpForUnityTool("manage_dots", AutoRegister = false)]
@@ -47,10 +48,15 @@ namespace MCPForUnity.Editor.Tools
                     "list_component_types"  => ListComponentTypes(p),
                     "create_entity"         => CreateEntity(p),
                     "destroy_entity"        => DestroyEntity(p),
+                    "set_component"         => SetComponent(p),
+                    "add_component"         => AddComponent(p),
+                    "remove_component"      => RemoveComponent(p),
+                    "query_count"           => QueryCount(p),
                     _ => new ErrorResponse(
                         $"Unknown action: '{action}'. Supported: list_worlds, query_entities, get_entity, " +
                         "list_systems, get_system, performance_snapshot, toggle_system, " +
-                        "list_component_types, create_entity, destroy_entity")
+                        "list_component_types, create_entity, destroy_entity, " +
+                        "set_component, add_component, remove_component, query_count")
                 };
             }
             catch (Exception e)
@@ -381,6 +387,183 @@ namespace MCPForUnity.Editor.Tools
 
             em.DestroyEntity(entity);
             return new SuccessResponse($"Destroyed entity (Index={entityIndex}, Version={entityVersion ?? 1}) in world '{world.Name}'.");
+        }
+
+        private static object SetComponent(ToolParams p)
+        {
+            var world = ResolveWorld(p);
+            if (world == null)
+                return new ErrorResponse("World not found.");
+
+            int? entityIndex = p.GetInt("entity_index");
+            int? entityVersion = p.GetInt("entity_version");
+            if (entityIndex == null)
+                return new ErrorResponse("'entity_index' parameter is required.");
+
+            string componentName = p.Get("component_name");
+            if (string.IsNullOrEmpty(componentName))
+                return new ErrorResponse("'component_name' parameter is required.");
+
+            string fieldName = p.Get("field_name");
+            if (string.IsNullOrEmpty(fieldName))
+                return new ErrorResponse("'field_name' parameter is required.");
+
+            string fieldValue = p.Get("field_value");
+            if (fieldValue == null)
+                return new ErrorResponse("'field_value' parameter is required.");
+
+            var entity = new Entity { Index = entityIndex.Value, Version = entityVersion ?? 1 };
+            var em = world.EntityManager;
+
+            if (!em.Exists(entity))
+                return new ErrorResponse($"Entity (Index={entityIndex}, Version={entityVersion ?? 1}) does not exist.");
+
+            var ct = ResolveComponentType(componentName);
+            if (ct == null)
+                return new ErrorResponse($"Component type '{componentName}' not found.");
+
+            if (!em.HasComponent(entity, ct.Value))
+                return new ErrorResponse($"Entity does not have component '{componentName}'.");
+
+            try
+            {
+                var type = ct.Value.GetManagedType();
+                if (type == null)
+                    return new ErrorResponse($"Cannot resolve managed type for '{componentName}'.");
+
+                var obj = em.Debug.GetComponentBoxed(entity, ct.Value);
+                if (obj == null)
+                    return new ErrorResponse($"Cannot read component '{componentName}'.");
+
+                var field = type.GetField(fieldName, BindingFlags.Public | BindingFlags.Instance);
+                if (field == null)
+                    return new ErrorResponse($"Field '{fieldName}' not found on component '{componentName}'.");
+
+                // Parse the value to the correct type
+                object parsedValue = Convert.ChangeType(fieldValue, field.FieldType, System.Globalization.CultureInfo.InvariantCulture);
+                field.SetValue(obj, parsedValue);
+                em.Debug.SetComponentBoxed(entity, ct.Value, obj);
+
+                return new SuccessResponse(
+                    $"Set {componentName}.{fieldName} = {fieldValue} on entity (Index={entityIndex}, Version={entityVersion ?? 1}).",
+                    new Dictionary<string, object>
+                    {
+                        ["entity_index"] = entityIndex.Value,
+                        ["component"]    = componentName,
+                        ["field"]        = fieldName,
+                        ["value"]        = fieldValue
+                    });
+            }
+            catch (Exception e)
+            {
+                return new ErrorResponse($"Failed to set field: {e.Message}");
+            }
+        }
+
+        private static object AddComponent(ToolParams p)
+        {
+            var world = ResolveWorld(p);
+            if (world == null)
+                return new ErrorResponse("World not found.");
+
+            int? entityIndex = p.GetInt("entity_index");
+            int? entityVersion = p.GetInt("entity_version");
+            if (entityIndex == null)
+                return new ErrorResponse("'entity_index' parameter is required.");
+
+            string componentName = p.Get("component_name");
+            if (string.IsNullOrEmpty(componentName))
+                return new ErrorResponse("'component_name' parameter is required.");
+
+            var entity = new Entity { Index = entityIndex.Value, Version = entityVersion ?? 1 };
+            var em = world.EntityManager;
+
+            if (!em.Exists(entity))
+                return new ErrorResponse($"Entity (Index={entityIndex}, Version={entityVersion ?? 1}) does not exist.");
+
+            var ct = ResolveComponentType(componentName);
+            if (ct == null)
+                return new ErrorResponse($"Component type '{componentName}' not found.");
+
+            if (em.HasComponent(entity, ct.Value))
+                return new ErrorResponse($"Entity already has component '{componentName}'.");
+
+            em.AddComponent(entity, ct.Value);
+            return new SuccessResponse(
+                $"Added '{componentName}' to entity (Index={entityIndex}, Version={entityVersion ?? 1}).",
+                SerializeEntityBrief(em, entity));
+        }
+
+        private static object RemoveComponent(ToolParams p)
+        {
+            var world = ResolveWorld(p);
+            if (world == null)
+                return new ErrorResponse("World not found.");
+
+            int? entityIndex = p.GetInt("entity_index");
+            int? entityVersion = p.GetInt("entity_version");
+            if (entityIndex == null)
+                return new ErrorResponse("'entity_index' parameter is required.");
+
+            string componentName = p.Get("component_name");
+            if (string.IsNullOrEmpty(componentName))
+                return new ErrorResponse("'component_name' parameter is required.");
+
+            var entity = new Entity { Index = entityIndex.Value, Version = entityVersion ?? 1 };
+            var em = world.EntityManager;
+
+            if (!em.Exists(entity))
+                return new ErrorResponse($"Entity (Index={entityIndex}, Version={entityVersion ?? 1}) does not exist.");
+
+            var ct = ResolveComponentType(componentName);
+            if (ct == null)
+                return new ErrorResponse($"Component type '{componentName}' not found.");
+
+            if (!em.HasComponent(entity, ct.Value))
+                return new ErrorResponse($"Entity does not have component '{componentName}'.");
+
+            em.RemoveComponent(entity, ct.Value);
+            return new SuccessResponse(
+                $"Removed '{componentName}' from entity (Index={entityIndex}, Version={entityVersion ?? 1}).",
+                SerializeEntityBrief(em, entity));
+        }
+
+        private static object QueryCount(ToolParams p)
+        {
+            var world = ResolveWorld(p);
+            if (world == null)
+                return new ErrorResponse("World not found.");
+
+            string componentTypesStr = p.Get("component_types");
+            if (string.IsNullOrEmpty(componentTypesStr))
+                return new ErrorResponse("'component_types' parameter is required.");
+
+            string[] typeNames = componentTypesStr.Split(',')
+                .Select(t => t.Trim())
+                .Where(t => !string.IsNullOrEmpty(t))
+                .ToArray();
+
+            var componentTypes = new List<ComponentType>();
+            foreach (string typeName in typeNames)
+            {
+                var resolvedType = ResolveComponentType(typeName);
+                if (resolvedType == null)
+                    return new ErrorResponse($"Component type '{typeName}' not found.");
+                componentTypes.Add(resolvedType.Value);
+            }
+
+            var em = world.EntityManager;
+            using var query = em.CreateEntityQuery(componentTypes.ToArray());
+            int count = query.CalculateEntityCount();
+
+            return new SuccessResponse(
+                $"{count} entities match [{string.Join(", ", typeNames)}] in world '{world.Name}'.",
+                new Dictionary<string, object>
+                {
+                    ["count"]           = count,
+                    ["component_types"] = typeNames,
+                    ["world"]           = world.Name
+                });
         }
 
         #endregion

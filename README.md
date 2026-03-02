@@ -6,10 +6,14 @@
 
 | Tool | Description | Actions |
 |------|-------------|---------|
-| `manage_dots` | Unity DOTS ECS debugging, entity inspection, and performance monitoring. Requires `com.unity.entities`. | `list_worlds`, `query_entities`, `get_entity`, `list_systems`, `get_system`, `performance_snapshot`, `toggle_system`, `list_component_types`, `create_entity`, `destroy_entity` |
+| `manage_dots` | Unity DOTS ECS debugging, entity manipulation, and performance monitoring. Requires `com.unity.entities`. | `list_worlds`, `query_entities`, `get_entity`, `list_systems`, `get_system`, `performance_snapshot`, `toggle_system`, `list_component_types`, `create_entity`, `destroy_entity`, `set_component`, `add_component`, `remove_component`, `query_count` |
+| `manage_dots_physics` | Unity DOTS Physics debugging — raycasts, overlap queries, body inspection. Requires `com.unity.physics`. | `get_physics_world`, `raycast`, `overlap_aabb`, `list_colliders`, `get_body` |
+| `manage_dots_graphics` | Unity DOTS Entities Graphics — render stats, materials, meshes, entity rendering. Requires `com.unity.entities.graphics`. | `get_render_stats`, `list_rendered_entities`, `get_entity_rendering`, `list_registered_materials`, `list_registered_meshes` |
+| `manage_dots_subscene` | Unity DOTS SubScene management — load, unload, streaming status, sections. Requires `com.unity.entities`. | `list_subscenes`, `load_subscene`, `unload_subscene`, `get_subscene_status`, `list_sections` |
 
 **CLI usage:**
 ```bash
+# DOTS ECS
 unity-mcp dots worlds                              # List all ECS Worlds
 unity-mcp dots entities "LocalTransform,Velocity"   # Find entities by components
 unity-mcp dots entity 42                            # Inspect entity details
@@ -21,6 +25,32 @@ unity-mcp dots types                               # List all ECS component type
 unity-mcp dots types --filter "Transform"          # Filter by name
 unity-mcp dots create --components "LocalTransform" # Create debug entity
 unity-mcp dots destroy 42                          # Destroy entity
+unity-mcp dots set 42 "Health" "value" "75"        # Set component field
+unity-mcp dots add-component 42 "Velocity"         # Add component to entity
+unity-mcp dots remove-component 42 "Velocity"      # Remove component
+unity-mcp dots count "LocalTransform,Health"       # Count matching entities
+
+# DOTS Physics
+unity-mcp dots-physics world                       # Physics world stats
+unity-mcp dots-physics raycast "0,10,0" "0,-1,0"   # Cast ray downward
+unity-mcp dots-physics raycast "0,10,0" "0,-1,0" --distance 50
+unity-mcp dots-physics overlap "-5,-5,-5" "5,5,5"  # AABB overlap query
+unity-mcp dots-physics colliders                   # List physics colliders
+unity-mcp dots-physics body 5                      # Inspect body by index
+
+# DOTS Graphics
+unity-mcp dots-graphics stats                      # Render entity counts
+unity-mcp dots-graphics entities                   # List rendered entities
+unity-mcp dots-graphics entity 42                  # Entity render details
+unity-mcp dots-graphics materials                  # List unique materials
+unity-mcp dots-graphics meshes                     # List unique meshes
+
+# DOTS SubScene
+unity-mcp dots-subscene list                       # List all SubScenes
+unity-mcp dots-subscene load "Environment"         # Load a SubScene
+unity-mcp dots-subscene unload "Environment"       # Unload a SubScene
+unity-mcp dots-subscene status "Environment"       # Streaming status
+unity-mcp dots-subscene sections "Environment"     # List scene sections
 ```
 
 ---

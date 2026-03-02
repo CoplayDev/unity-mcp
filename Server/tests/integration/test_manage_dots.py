@@ -310,3 +310,93 @@ async def test_destroy_entity_params(monkeypatch):
     assert resp["success"] is True
     assert captured["params"]["entity_index"] == 42
     assert captured["params"]["entity_version"] == 1
+
+
+@pytest.mark.asyncio
+async def test_set_component_params(monkeypatch):
+    """set_component sends component_name, field_name, field_value."""
+    captured = {}
+    monkeypatch.setattr(
+        manage_dots_mod, "async_send_command_with_retry",
+        _fake_send_factory(captured),
+    )
+
+    resp = await manage_dots_mod.manage_dots(
+        ctx=DummyContext(),
+        action="set_component",
+        entity_index=42,
+        component_name="Health",
+        field_name="Current",
+        field_value="50",
+    )
+
+    assert resp["success"] is True
+    assert captured["params"]["component_name"] == "Health"
+    assert captured["params"]["field_name"] == "Current"
+    assert captured["params"]["field_value"] == "50"
+
+
+@pytest.mark.asyncio
+async def test_add_component_params(monkeypatch):
+    """add_component sends entity_index and component_name."""
+    captured = {}
+    monkeypatch.setattr(
+        manage_dots_mod, "async_send_command_with_retry",
+        _fake_send_factory(captured),
+    )
+
+    resp = await manage_dots_mod.manage_dots(
+        ctx=DummyContext(),
+        action="add_component",
+        entity_index=42,
+        component_name="Velocity",
+    )
+
+    assert resp["success"] is True
+    assert captured["params"]["entity_index"] == 42
+    assert captured["params"]["component_name"] == "Velocity"
+
+
+@pytest.mark.asyncio
+async def test_remove_component_params(monkeypatch):
+    """remove_component sends entity_index and component_name."""
+    captured = {}
+    monkeypatch.setattr(
+        manage_dots_mod, "async_send_command_with_retry",
+        _fake_send_factory(captured),
+    )
+
+    resp = await manage_dots_mod.manage_dots(
+        ctx=DummyContext(),
+        action="remove_component",
+        entity_index=42,
+        component_name="Velocity",
+    )
+
+    assert resp["success"] is True
+    assert captured["params"]["component_name"] == "Velocity"
+
+
+@pytest.mark.asyncio
+async def test_query_count_params(monkeypatch):
+    """query_count sends component_types."""
+    captured = {}
+    monkeypatch.setattr(
+        manage_dots_mod, "async_send_command_with_retry",
+        _fake_send_factory(captured, {
+            "success": True,
+            "message": "50 entities match.",
+            "data": {"count": 50, "component_types": ["Health"]},
+        }),
+    )
+
+    resp = await manage_dots_mod.manage_dots(
+        ctx=DummyContext(),
+        action="query_count",
+        component_types="Health,Velocity",
+        world="Default World",
+    )
+
+    assert resp["success"] is True
+    assert captured["params"]["component_types"] == "Health,Velocity"
+    assert captured["params"]["world"] == "Default World"

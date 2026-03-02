@@ -15,6 +15,22 @@
     ],
     "autoReferenced": true,
     "defineConstraints": [],
-    "versionDefines": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.entities",
+            "expression": "",
+            "define": "UNITY_ENTITIES"
+        },
+        {
+            "name": "com.unity.physics",
+            "expression": "",
+            "define": "UNITY_PHYSICS"
+        },
+        {
+            "name": "com.unity.entities.graphics",
+            "expression": "",
+            "define": "UNITY_ENTITIES_GRAPHICS"
+        }
+    ],
     "noEngineReferences": false
 }

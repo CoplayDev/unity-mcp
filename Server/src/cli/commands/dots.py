@@ -266,3 +266,122 @@ def destroy(entity_index: int, version: Optional[int], world: Optional[str]):
 
     result = run_command("manage_dots", params, config)
     click.echo(format_output(result, config.format))
+
+
+@dots.command("set")
+@click.argument("entity_index", type=int)
+@click.argument("component_name")
+@click.argument("field_name")
+@click.argument("field_value")
+@click.option("--version", "-v", type=int, default=None, help="Entity version (default 1).")
+@click.option("--world", "-w", default=None, help="Target world name.")
+@handle_unity_errors
+def set_field(entity_index: int, component_name: str, field_name: str, field_value: str,
+              version: Optional[int], world: Optional[str]):
+    """Set a component field value on an entity.
+
+    \b
+    Examples:
+        unity-mcp dots set 42 Health Current 50
+        unity-mcp dots set 42 Velocity Value "1,0,0"
+    """
+    config = get_config()
+
+    params: dict[str, Any] = {
+        "action": "set_component",
+        "entity_index": entity_index,
+        "component_name": component_name,
+        "field_name": field_name,
+        "field_value": field_value,
+    }
+    if version:
+        params["entity_version"] = version
+    if world:
+        params["world"] = world
+
+    result = run_command("manage_dots", params, config)
+    click.echo(format_output(result, config.format))
+
+
+@dots.command("add-component")
+@click.argument("entity_index", type=int)
+@click.argument("component_name")
+@click.option("--version", "-v", type=int, default=None, help="Entity version (default 1).")
+@click.option("--world", "-w", default=None, help="Target world name.")
+@handle_unity_errors
+def add_comp(entity_index: int, component_name: str, version: Optional[int], world: Optional[str]):
+    """Add a component to an existing entity.
+
+    \b
+    Examples:
+        unity-mcp dots add-component 42 Velocity
+        unity-mcp dots add-component 42 Health --world "Server World"
+    """
+    config = get_config()
+
+    params: dict[str, Any] = {
+        "action": "add_component",
+        "entity_index": entity_index,
+        "component_name": component_name,
+    }
+    if version:
+        params["entity_version"] = version
+    if world:
+        params["world"] = world
+
+    result = run_command("manage_dots", params, config)
+    click.echo(format_output(result, config.format))
+
+
+@dots.command("remove-component")
+@click.argument("entity_index", type=int)
+@click.argument("component_name")
+@click.option("--version", "-v", type=int, default=None, help="Entity version (default 1).")
+@click.option("--world", "-w", default=None, help="Target world name.")
+@handle_unity_errors
+def remove_comp(entity_index: int, component_name: str, version: Optional[int], world: Optional[str]):
+    """Remove a component from an entity.
+
+    \b
+    Examples:
+        unity-mcp dots remove-component 42 Velocity
+    """
+    config = get_config()
+
+    params: dict[str, Any] = {
+        "action": "remove_component",
+        "entity_index": entity_index,
+        "component_name": component_name,
+    }
+    if version:
+        params["entity_version"] = version
+    if world:
+        params["world"] = world
+
+    result = run_command("manage_dots", params, config)
+    click.echo(format_output(result, config.format))
+
+
+@dots.command("count")
+@click.argument("component_types")
+@click.option("--world", "-w", default=None, help="Target world name.")
+@handle_unity_errors
+def count(component_types: str, world: Optional[str]):
+    """Quick entity count by component types (no data fetched).
+
+    \b
+    Examples:
+        unity-mcp dots count "LocalTransform,Velocity"
+        unity-mcp dots count "Health" --world "Server World"
+    """
+    config = get_config()
+
+    params: dict[str, Any] = {
+        "action": "query_count",
+        "component_types": component_types,
+    }
+    if world:
+        params["world"] = world
+
+    result = run_command("manage_dots", params, config)
+    click.echo(format_output(result, config.format))
