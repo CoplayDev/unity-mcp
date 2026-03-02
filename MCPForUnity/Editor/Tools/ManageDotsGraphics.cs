@@ -1,13 +1,12 @@
 #if UNITY_ENTITIES_GRAPHICS
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Rendering;
+using UnityEngine;
 
 namespace MCPForUnity.Editor.Tools
 {
@@ -305,10 +304,13 @@ namespace MCPForUnity.Editor.Tools
                 try
                 {
                     var rma = em.GetSharedComponentManaged<RenderMeshArray>(entities[i]);
-                    if (rma.Materials != null)
+                    // Use MaterialReferences (1.2.1+), fallback to deprecated Materials
+                    var matRefs = rma.MaterialReferences;
+                    if (matRefs != null)
                     {
-                        foreach (var mat in rma.Materials)
+                        foreach (var matRef in matRefs)
                         {
+                            var mat = matRef.Value;
                             if (mat != null && materialSet.Add(mat.name))
                             {
                                 materialList.Add(new Dictionary<string, object>
@@ -359,10 +361,13 @@ namespace MCPForUnity.Editor.Tools
                 try
                 {
                     var rma = em.GetSharedComponentManaged<RenderMeshArray>(entities[i]);
-                    if (rma.Meshes != null)
+                    // Use MeshReferences (1.2.1+), fallback to deprecated Meshes
+                    var meshRefs = rma.MeshReferences;
+                    if (meshRefs != null)
                     {
-                        foreach (var mesh in rma.Meshes)
+                        foreach (var meshRef in meshRefs)
                         {
+                            var mesh = meshRef.Value;
                             if (mesh != null && meshSet.Add(mesh.name))
                             {
                                 meshList.Add(new Dictionary<string, object>

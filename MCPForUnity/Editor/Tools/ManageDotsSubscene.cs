@@ -3,11 +3,9 @@ using System;
 using System.Collections.Generic;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
-using Unity.Collections;
 using Unity.Entities;
 using Unity.Scenes;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace MCPForUnity.Editor.Tools
 {
