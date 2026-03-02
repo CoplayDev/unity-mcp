@@ -77,11 +77,12 @@ namespace MCPForUnity.Editor.Tools
             using (var q3 = em.CreateEntityQuery(typeof(RenderMeshArray)))
                 renderMeshArrayCount = q3.CalculateEntityCount();
 
-            // LODGroupEntity may not exist in all versions
+            // LODGroupWorldReferencePoint is internal — use reflection to count LOD entities
             lodGroupCount = 0;
             try
             {
-                var lodType = typeof(Unity.Rendering.LODGroupWorldReferencePoint);
+                var lodType = typeof(Unity.Rendering.MeshLODComponent).Assembly
+                    .GetType("Unity.Rendering.LODGroupWorldReferencePoint");
                 if (lodType != null)
                 {
                     using var qLod = em.CreateEntityQuery(ComponentType.ReadOnly(lodType));

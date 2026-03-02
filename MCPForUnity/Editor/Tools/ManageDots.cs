@@ -442,7 +442,19 @@ namespace MCPForUnity.Editor.Tools
                 // Parse the value to the correct type
                 object parsedValue = Convert.ChangeType(fieldValue, field.FieldType, System.Globalization.CultureInfo.InvariantCulture);
                 field.SetValue(obj, parsedValue);
-                em.Debug.SetComponentBoxed(entity, ct.Value, obj);
+
+                // SetComponentBoxed not available in public API — use SetComponentObject via reflection
+                var setMethod = typeof(EntityManager).GetMethod("SetComponentObject",
+                    BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance,
+                    null, new[] { typeof(Entity), typeof(ComponentType), typeof(object) }, null);
+                if (setMethod != null)
+                {
+                    setMethod.Invoke(em, new object[] { entity, ct.Value, obj });
+                }
+                else
+                {
+                    return new ErrorResponse("SetComponent is not supported in this version of Unity Entities.");
+                }
 
                 return new SuccessResponse(
                     $"Set {componentName}.{fieldName} = {fieldValue} on entity (Index={entityIndex}, Version={entityVersion ?? 1}).",
@@ -579,7 +591,8 @@ namespace MCPForUnity.Editor.Tools
             var em = world.EntityManager;
 
             // Archetype stats
-            using var archetypes = em.GetAllArchetypes(Allocator.Temp);
+            var archetypes = new NativeList<EntityArchetype>(Allocator.Temp);
+            em.GetAllArchetypes(archetypes);
             int totalChunks = 0;
             int totalEntities = 0;
             int emptyChunks = 0;
@@ -639,6 +652,8 @@ namespace MCPForUnity.Editor.Tools
             });
 
             int limit = p.GetInt("limit") ?? 20;
+            archetypes.Dispose();
+
             if (archetypeStats.Count > limit)
                 archetypeStats = archetypeStats.Take(limit).ToList();
 
@@ -954,13 +969,21 @@ namespace MCPForUnity.Editor.Tools
             var names = new List<string>();
             try
             {
-                // Use GetEntityQueryDescs (works across Entities versions)
-                // Fall back to component type iteration via the query itself
-                using var types = query.GetQueryTypes(Allocator.Temp);
-                for (int i = 0; i < types.Length; i++)
+                // GetQueryTypes is internal — use reflection
+                var method = typeof(EntityQuery).GetMethod("GetQueryTypes",
+                    BindingFlags.NonPublic | BindingFlags.Instance, null, Type.EmptyTypes, null);
+                if (method != null)
                 {
-                    var info = TypeManager.GetTypeInfo(types[i].TypeIndex);
-                    names.Add(info.DebugTypeName.ToString());
+                    var types = (ComponentType[])method.Invoke(query, null);
+                    foreach (var ct in types)
+                    {
+                        var info = TypeManager.GetTypeInfo(ct.TypeIndex);
+                        names.Add(info.DebugTypeName.ToString());
+                    }
+                }
+                else
+                {
+                    names.Add("<query types unavailable>");
                 }
             }
             catch

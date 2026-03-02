@@ -9,7 +9,8 @@
         "Unity.Mathematics",
         "Unity.Physics",
         "Unity.Entities.Graphics",
-        "Unity.Scenes"
+        "Unity.Scenes",
+        "Unity.Mathematics.Extensions"
     ],
     "includePlatforms": [
         "Editor"

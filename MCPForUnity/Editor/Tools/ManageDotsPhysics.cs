@@ -1,7 +1,6 @@
 #if UNITY_PHYSICS
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using Unity.Collections;
@@ -105,7 +104,7 @@ namespace MCPForUnity.Editor.Tools
             if (string.IsNullOrEmpty(directionStr))
                 return new ErrorResponse("'direction' parameter is required (e.g. '0,-1,0').");
 
-            float maxDistance = (float)(p.GetDouble("max_distance") ?? 100.0);
+            float maxDistance = p.GetFloat("max_distance") ?? 100f;
 
             if (!TryParseFloat3(originStr, out float3 origin))
                 return new ErrorResponse($"Invalid origin format: '{originStr}'. Expected 'x,y,z'.");
@@ -144,7 +143,7 @@ namespace MCPForUnity.Editor.Tools
                     {
                         ["entity_index"]    = hit.Entity.Index,
                         ["entity_version"]  = hit.Entity.Version,
-                        ["fraction"]        = Math.Round(hit.Fraction, 4),
+                        ["fraction"]        = System.Math.Round(hit.Fraction, 4),
                         ["position"]        = FormatFloat3(hit.Position),
                         ["surface_normal"]  = FormatFloat3(hit.SurfaceNormal),
                         ["body_index"]      = hit.RigidBodyIndex,
@@ -208,7 +207,7 @@ namespace MCPForUnity.Editor.Tools
                 collisionWorld.OverlapAabb(input, ref bodyIndices);
 
                 int pageSize = p.GetInt("page_size") ?? 20;
-                int sampleCount = Math.Min(pageSize, bodyIndices.Length);
+                int sampleCount = System.Math.Min(pageSize, bodyIndices.Length);
 
                 var results = new List<object>();
                 for (int i = 0; i < sampleCount; i++)
@@ -252,13 +251,13 @@ namespace MCPForUnity.Editor.Tools
 
             var em = world.EntityManager;
             int pageSize = p.GetInt("page_size") ?? 20;
-            pageSize = Math.Clamp(pageSize, 1, 100);
+            pageSize = System.Math.Clamp(pageSize, 1, 100);
 
             using var query = em.CreateEntityQuery(typeof(PhysicsCollider));
             int totalCount = query.CalculateEntityCount();
 
             var entities = query.ToEntityArray(Allocator.Temp);
-            int sampleCount = Math.Min(pageSize, entities.Length);
+            int sampleCount = System.Math.Min(pageSize, entities.Length);
 
             var results = new List<object>();
             for (int i = 0; i < sampleCount; i++)
@@ -344,7 +343,7 @@ namespace MCPForUnity.Editor.Tools
                     var motionVelocity = physicsWorld.MotionVelocities[bodyIndex.Value];
                     result["linear_velocity"]  = FormatFloat3(motionVelocity.LinearVelocity);
                     result["angular_velocity"] = FormatFloat3(motionVelocity.AngularVelocity);
-                    result["inverse_mass"]     = Math.Round(motionVelocity.InverseMass, 6);
+                    result["inverse_mass"]     = System.Math.Round(motionVelocity.InverseMass, 6);
                 }
 
                 return new SuccessResponse($"Physics body {bodyIndex} details.", result);

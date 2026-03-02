@@ -80,7 +80,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     try
                     {
-                        var sceneEntity = sub.SceneEntity;
+                        var sceneEntity = SceneSystem.GetSceneEntity(world.Unmanaged, sub.SceneGUID);
                         if (sceneEntity != Entity.Null)
                         {
                             data["scene_entity_index"] = sceneEntity.Index;
@@ -127,7 +127,7 @@ namespace MCPForUnity.Editor.Tools
                 if (!subscene.gameObject.activeSelf)
                     subscene.gameObject.SetActive(true);
 
-                var sceneEntity = subscene.SceneEntity;
+                var sceneEntity = SceneSystem.GetSceneEntity(world.Unmanaged, subscene.SceneGUID);
                 if (sceneEntity != Entity.Null)
                 {
                     // Add RequestSceneLoaded if not present
@@ -168,7 +168,7 @@ namespace MCPForUnity.Editor.Tools
 
             try
             {
-                var sceneEntity = subscene.SceneEntity;
+                var sceneEntity = SceneSystem.GetSceneEntity(world.Unmanaged, subscene.SceneGUID);
                 if (sceneEntity != Entity.Null)
                 {
                     SceneSystem.UnloadScene(
@@ -225,7 +225,7 @@ namespace MCPForUnity.Editor.Tools
 
             try
             {
-                var sceneEntity = subscene.SceneEntity;
+                var sceneEntity = SceneSystem.GetSceneEntity(world.Unmanaged, subscene.SceneGUID);
                 if (sceneEntity != Entity.Null)
                 {
                     result["scene_entity_index"] = sceneEntity.Index;
@@ -277,7 +277,7 @@ namespace MCPForUnity.Editor.Tools
 
             try
             {
-                var sceneEntity = subscene.SceneEntity;
+                var sceneEntity = SceneSystem.GetSceneEntity(world.Unmanaged, subscene.SceneGUID);
                 if (sceneEntity == Entity.Null)
                     return new ErrorResponse("SubScene has no scene entity. Is it loaded?");
 
