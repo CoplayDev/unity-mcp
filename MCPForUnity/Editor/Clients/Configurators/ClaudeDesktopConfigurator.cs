@@ -23,6 +23,14 @@ namespace MCPForUnity.Editor.Clients.Configurators
         })
         { }
 
+        public override bool SupportsSkills => true;
+
+        public override string GetSkillInstallPath()
+        {
+            var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            return Path.Combine(userHome, ".claude", "skills", "unity-mcp-skill");
+        }
+
         public override IList<string> GetInstallationSteps() => new List<string>
         {
             "Open Claude Desktop",

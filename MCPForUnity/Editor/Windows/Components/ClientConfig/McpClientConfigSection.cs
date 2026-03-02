@@ -10,6 +10,7 @@ using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
 using MCPForUnity.Editor.Services;
+using MCPForUnity.Editor.Setup;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -28,6 +29,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
         private VisualElement clientStatusIndicator;
         private Label clientStatusLabel;
         private Button configureButton;
+        private Button installSkillsButton;
         private VisualElement claudeCliPathRow;
         private TextField claudeCliPath;
         private Button browseClaudeButton;
@@ -45,6 +47,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
         private readonly HashSet<IMcpClientConfigurator> statusRefreshInFlight = new();
         private static readonly TimeSpan StatusRefreshInterval = TimeSpan.FromSeconds(45);
         private int selectedClientIndex = 0;
+        private bool isSkillSyncInProgress;
 
         // Events
         /// <summary>
@@ -77,6 +80,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
             clientStatusIndicator = Root.Q<VisualElement>("client-status-indicator");
             clientStatusLabel = Root.Q<Label>("client-status");
             configureButton = Root.Q<Button>("configure-button");
+            installSkillsButton = Root.Q<Button>("install-skills-button");
             claudeCliPathRow = Root.Q<VisualElement>("claude-cli-path-row");
             claudeCliPath = Root.Q<TextField>("claude-cli-path");
             browseClaudeButton = Root.Q<Button>("browse-claude-button");
@@ -117,6 +121,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
             UpdateClientStatus();
             UpdateManualConfiguration();
             UpdateClaudeCliPathVisibility();
+            UpdateInstallSkillsVisibility();
         }
 
         private void RegisterCallbacks()
@@ -142,10 +147,12 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                 UpdateClientStatus();
                 UpdateManualConfiguration();
                 UpdateClaudeCliPathVisibility();
+                UpdateInstallSkillsVisibility();
             });
 
             configureAllButton.clicked += OnConfigureAllClientsClicked;
             configureButton.clicked += OnConfigureClicked;
+            installSkillsButton.clicked += OnInstallSkillsClicked;
             browseClaudeButton.clicked += OnBrowseClaudeClicked;
             copyPathButton.clicked += OnCopyPathClicked;
             openFileButton.clicked += OnOpenFileClicked;
@@ -376,6 +383,64 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                     UpdateManualConfiguration();
                 };
             });
+        }
+
+        private void UpdateInstallSkillsVisibility()
+        {
+            if (installSkillsButton == null)
+                return;
+
+            bool visible = selectedClientIndex >= 0
+                           && selectedClientIndex < configurators.Count
+                           && configurators[selectedClientIndex].SupportsSkills;
+
+            installSkillsButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        private void OnInstallSkillsClicked()
+        {
+            if (isSkillSyncInProgress)
+                return;
+
+            if (selectedClientIndex < 0 || selectedClientIndex >= configurators.Count)
+                return;
+
+            var client = configurators[selectedClientIndex];
+            if (!client.SupportsSkills)
+                return;
+
+            string installPath = client.GetSkillInstallPath();
+            if (string.IsNullOrEmpty(installPath))
+                return;
+
+            string branch = AssetPathUtility.IsPreReleaseVersion() ? "beta" : "main";
+
+            isSkillSyncInProgress = true;
+            installSkillsButton.SetEnabled(false);
+            installSkillsButton.text = "Syncing...";
+
+            SkillSyncService.SyncAsync(installPath, branch, null, result =>
+                {
+                    isSkillSyncInProgress = false;
+                    installSkillsButton.SetEnabled(true);
+                    installSkillsButton.text = "Install Skills";
+
+                    if (result.Success)
+                    {
+                        bool noChanges = result.Added == 0 && result.Updated == 0 && result.Deleted == 0;
+                        string summary = noChanges
+                            ? "Skills are already up to date."
+                            : $"Added: {result.Added}, Updated: {result.Updated}, Deleted: {result.Deleted}";
+                        McpLog.Info($"SkillSync complete: {summary} ({installPath})");
+                        EditorUtility.DisplayDialog("Install Skills",
+                            $"{summary}\n\nInstalled at: {installPath}", "OK");
+                    }
+                    else
+                    {
+                        McpLog.Error($"SkillSync failed: {result.Error}");
+                        EditorUtility.DisplayDialog("Install Skills Failed", result.Error, "OK");
+                    }
+                });
         }
 
         private void OnBrowseClaudeClicked()
