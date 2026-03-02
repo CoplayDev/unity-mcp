@@ -14,6 +14,7 @@ from services.tools import get_unity_instance_from_context
 @mcp_for_unity_tool(
     name="execute_custom_tool",
     unity_target=None,
+    group=None,
     description="Execute a project-scoped custom tool registered by Unity.",
     annotations=ToolAnnotations(
         title="Execute Custom Tool",
@@ -21,7 +22,7 @@ from services.tools import get_unity_instance_from_context
     ),
 )
 async def execute_custom_tool(ctx: Context, tool_name: str, parameters: dict | None = None) -> MCPResponse:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
     if not unity_instance:
         return MCPResponse(
             success=False,
@@ -42,7 +43,7 @@ async def execute_custom_tool(ctx: Context, tool_name: str, parameters: dict | N
         )
 
     service = CustomToolService.get_instance()
-    user_id = get_user_id_from_context(ctx)
+    user_id = await get_user_id_from_context(ctx)
     return await service.execute_tool(
         project_id,
         tool_name,

@@ -51,7 +51,7 @@ async def manage_asset(
     page_number: Annotated[int | float | str,
                            "Page number for pagination (1-based)."] | None = None,
 ) -> dict[str, Any]:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     # Best-effort guard: if Unity is compiling/reloading or known external changes are pending,
     # wait/refresh to avoid stale reads and flaky timeouts.

@@ -16,6 +16,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
     /// <summary>
     /// Controller for the Tools section inside the MCP For Unity editor window.
     /// Provides discovery, filtering, and per-tool enablement toggles.
+    /// Tools are grouped by their Group property (core first, then alphabetical).
     /// </summary>
     public class McpToolsSection
     {
@@ -28,6 +29,17 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
         private Button rescanButton;
         private VisualElement categoryContainer;
         private List<ToolMetadata> allTools = new();
+
+        /// <summary>Human-friendly names for tool groups shown in the UI.</summary>
+        private static readonly Dictionary<string, string> GroupDisplayNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            { "core", "Core Tools" },
+            { "vfx", "VFX & Shaders" },
+            { "animation", "Animation" },
+            { "ui", "UI Toolkit" },
+            { "scripting_ext", "Scripting Extensions" },
+            { "testing", "Testing" },
+        };
 
         public VisualElement Root { get; }
 
@@ -92,6 +104,9 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
 
         /// <summary>
         /// Rebuilds the tool list and synchronises toggle states.
+        /// Tools are displayed in group-based foldouts: core first, then other
+        /// groups alphabetically. Custom (non-built-in) tools appear in a
+        /// separate "Custom Tools" foldout at the bottom.
         /// </summary>
         public void Refresh()
         {
@@ -100,8 +115,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
 
             var service = MCPServiceLocator.ToolDiscovery;
             allTools = service.DiscoverAllTools()
-                .OrderBy(tool => IsBuiltIn(tool) ? 0 : 1)
-                .ThenBy(tool => tool.Name, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(tool => tool.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
             bool hasTools = allTools.Count > 0;
@@ -111,6 +125,13 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             if (noteLabel != null)
             {
                 noteLabel.style.display = hasTools ? DisplayStyle.Flex : DisplayStyle.None;
+                if (hasTools)
+                {
+                    bool isHttp = EditorConfigurationCache.Instance.UseHttpTransport;
+                    noteLabel.text = isHttp
+                        ? "Changes apply after reconnecting or re-registering tools."
+                        : "Stdio mode: per-tool toggles only affect HTTP transport. Use the manage_tools meta-tool to change group visibility in stdio sessions.";
+                }
             }
 
             if (!hasTools)
@@ -120,19 +141,44 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
                 return;
             }
 
-            BuildCategory("Built-in Tools", "built-in", allTools.Where(IsBuiltIn));
-
+            // Partition into built-in and custom
+            var builtInTools = allTools.Where(IsBuiltIn).ToList();
             var customTools = allTools.Where(tool => !IsBuiltIn(tool)).ToList();
+
+            // Group built-in tools by their Group property
+            var grouped = builtInTools
+                .GroupBy(t => t.Group ?? "core")
+                .ToDictionary(g => g.Key, g => g.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase).ToList());
+
+            // Render "core" first, then remaining groups alphabetically
+            if (grouped.TryGetValue("core", out var coreTools))
+            {
+                BuildCategory(GetGroupDisplayName("core"), "group-core", coreTools);
+                grouped.Remove("core");
+            }
+
+            foreach (var kvp in grouped.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                BuildCategory(GetGroupDisplayName(kvp.Key), $"group-{kvp.Key}", kvp.Value);
+            }
+
+            // Custom tools at the bottom
             if (customTools.Count > 0)
             {
                 BuildCategory("Custom Tools", "custom", customTools);
             }
-            else
-            {
-                AddInfoLabel("No custom tools detected in loaded assemblies.");
-            }
 
             UpdateSummary();
+        }
+
+        private static string GetGroupDisplayName(string group)
+        {
+            if (GroupDisplayNames.TryGetValue(group, out var displayName))
+                return displayName;
+            // Fallback: capitalize first letter
+            return string.IsNullOrEmpty(group)
+                ? "Other"
+                : char.ToUpper(group[0]) + group.Substring(1);
         }
 
         private void BuildCategory(string title, string prefsSuffix, IEnumerable<ToolMetadata> tools)
@@ -143,10 +189,14 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
                 return;
             }
 
+            int enabledCount = toolList.Count(t => MCPServiceLocator.ToolDiscovery.IsToolEnabled(t.Name));
+
+            // Default foldout state: core is open, others collapsed
+            bool defaultOpen = prefsSuffix == "group-core";
             var foldout = new Foldout
             {
-                text = $"{title} ({toolList.Count})",
-                value = EditorPrefs.GetBool(EditorPrefKeys.ToolFoldoutStatePrefix + prefsSuffix, true)
+                text = $"{title} ({enabledCount}/{toolList.Count})",
+                value = EditorPrefs.GetBool(EditorPrefKeys.ToolFoldoutStatePrefix + prefsSuffix, defaultOpen)
             };
 
             foldout.RegisterValueChangedCallback(evt =>
@@ -201,7 +251,9 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             header.Add(tagsContainer);
             row.Add(header);
 
-            if (!string.IsNullOrWhiteSpace(tool.Description))
+            // Skip auto-generated placeholder descriptions like "Tool: find_gameobjects"
+            if (!string.IsNullOrWhiteSpace(tool.Description)
+                && !tool.Description.StartsWith("Tool: ", StringComparison.OrdinalIgnoreCase))
             {
                 var description = new Label(tool.Description);
                 description.AddToClassList("tool-item-description");
@@ -347,7 +399,21 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             screenshotButton.style.marginTop = 4;
             screenshotButton.tooltip = "Capture a screenshot to Assets/Screenshots via manage_scene.";
 
-            actions.Add(screenshotButton);
+            var multiviewButton = new Button(OnManageSceneMultiviewClicked)
+            {
+                text = "Capture Multiview"
+            };
+            multiviewButton.AddToClassList("tool-action-button");
+            multiviewButton.style.marginTop = 4;
+            multiviewButton.style.marginLeft = 4;
+            multiviewButton.tooltip = "Capture a 6-angle contact sheet around the scene centre and save to Assets/Screenshots.";
+
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.Add(screenshotButton);
+            row.Add(multiviewButton);
+
+            actions.Add(row);
             return actions;
         }
 
@@ -418,6 +484,45 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             catch (Exception ex)
             {
                 McpLog.Error($"Failed to capture screenshot: {ex.Message}");
+            }
+        }
+
+        private void OnManageSceneMultiviewClicked()
+        {
+            try
+            {
+                var response = ManageScene.ExecuteMultiviewScreenshot();
+                if (response is SuccessResponse success)
+                {
+                    // The data object is an anonymous type with imageBase64 — serialize to extract it
+                    var json = Newtonsoft.Json.Linq.JObject.FromObject(success.Data);
+                    string base64 = json["imageBase64"]?.ToString();
+                    if (!string.IsNullOrEmpty(base64))
+                    {
+                        string folder = System.IO.Path.Combine(UnityEngine.Application.dataPath, "Screenshots");
+                        if (!System.IO.Directory.Exists(folder))
+                            System.IO.Directory.CreateDirectory(folder);
+
+                        string fileName = $"Multiview_{System.DateTime.Now:yyyyMMdd_HHmmss}.png";
+                        string filePath = System.IO.Path.Combine(folder, fileName);
+                        System.IO.File.WriteAllBytes(filePath, Convert.FromBase64String(base64));
+                        AssetDatabase.Refresh();
+
+                        McpLog.Info($"Multiview contact sheet saved to Assets/Screenshots/{fileName}");
+                    }
+                    else
+                    {
+                        McpLog.Info(success.Message ?? "Multiview capture completed.");
+                    }
+                }
+                else if (response is ErrorResponse error && !string.IsNullOrWhiteSpace(error.Error))
+                {
+                    McpLog.Error(error.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                McpLog.Error($"Failed to capture multiview: {ex.Message}");
             }
         }
 

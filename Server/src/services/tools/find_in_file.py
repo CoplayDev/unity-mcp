@@ -83,7 +83,7 @@ async def find_in_file(
                            "Case insensitive search"] = True,
 ) -> dict[str, Any]:
     # project_root is currently unused but kept for interface consistency
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
     await ctx.info(
         f"Processing find_in_file: {uri} (unity_instance={unity_instance or 'default'})")
 

@@ -7,7 +7,7 @@ import logging
 import os
 import time
 import uuid
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from starlette.endpoints import WebSocketEndpoint
 from starlette.websockets import WebSocket, WebSocketState
@@ -17,6 +17,9 @@ from core.constants import API_KEY_HEADER
 from models.models import MCPResponse
 from transport.plugin_registry import PluginRegistry
 from services.api_key_service import ApiKeyService
+
+if TYPE_CHECKING:
+    from fastmcp import FastMCP
 from transport.models import (
     WelcomeMessage,
     RegisteredMessage,
@@ -78,6 +81,10 @@ class PluginHub(WebSocketEndpoint):
         "read_console", "get_editor_state", "ping"}
 
     _registry: PluginRegistry | None = None
+    _mcp: FastMCP | None = None
+    # Index into mcp._transforms where Unity's server-level overrides start.
+    # Transforms before this index are startup defaults; at and after are Unity syncs.
+    _unity_transform_start: int | None = None
     _connections: dict[str, WebSocket] = {}
     # command_id -> {"future": Future, "session_id": str}
     _pending: dict[str, dict[str, Any]] = {}
@@ -93,8 +100,10 @@ class PluginHub(WebSocketEndpoint):
         cls,
         registry: PluginRegistry,
         loop: asyncio.AbstractEventLoop | None = None,
+        mcp: FastMCP | None = None,
     ) -> None:
         cls._registry = registry
+        cls._mcp = mcp
         cls._loop = loop or asyncio.get_running_loop()
         # Ensure coordination primitives are bound to the configured loop
         cls._lock = asyncio.Lock()
@@ -425,6 +434,10 @@ class PluginHub(WebSocketEndpoint):
         logger.info(
             f"Registered {len(payload.tools)} tools for session {session_id}")
 
+        # Sync server-level FastMCP visibility so new MCP client sessions
+        # (e.g. new Claude Code conversations) see the correct tool set.
+        self._sync_server_tool_visibility(payload.tools)
+
         try:
             from services.custom_tool_service import CustomToolService
 
@@ -440,6 +453,78 @@ class PluginHub(WebSocketEndpoint):
                 "Unexpected error during global custom tool registration; "
                 "custom tools may not be available globally",
                 exc_info=exc,
+            )
+
+    @classmethod
+    def _sync_server_tool_visibility(cls, registered_tools: list) -> None:
+        """Sync FastMCP server-level tool group visibility to match Unity's state.
+
+        When Unity sends ``register_tools``, some groups may have been toggled
+        on/off via the Unity Editor GUI.  We mirror that state at the FastMCP
+        server level so that **new** MCP client sessions (e.g. a fresh Claude
+        Code conversation) see the correct tool set without requiring
+        ``manage_tools`` activation.
+
+        The startup ``register_all_tools()`` disables non-default groups via
+        ``mcp.disable(tags=...)``.  Here we append ``mcp.enable(tags=...)``
+        transforms for groups that Unity has enabled, effectively overriding
+        the startup defaults.  FastMCP processes transforms in order so later
+        ``enable`` calls override earlier ``disable`` calls.
+        """
+        mcp = cls._mcp
+        if mcp is None:
+            return
+
+        try:
+            from services.registry import get_group_tool_names, TOOL_GROUPS
+
+            registered_names: set[str] = set()
+            for tool in registered_tools:
+                name = getattr(tool, "name", None) if not isinstance(tool, dict) else tool.get("name")
+                if isinstance(name, str) and name:
+                    registered_names.add(name)
+
+            group_tools = get_group_tool_names()
+
+            # Reset Unity overrides: trim transforms back to where Unity started,
+            # then re-apply based on current registered tools.
+            if cls._unity_transform_start is not None:
+                mcp._transforms = mcp._transforms[:cls._unity_transform_start]
+            else:
+                # First time: record where startup transforms end.
+                cls._unity_transform_start = len(mcp._transforms)
+
+            enabled_groups: list[str] = []
+            disabled_groups: list[str] = []
+
+            for group_name in sorted(TOOL_GROUPS.keys()):
+                tool_names = group_tools.get(group_name, [])
+                has_any_registered = any(n in registered_names for n in tool_names)
+
+                if has_any_registered:
+                    # Override the startup disable with an enable.
+                    tag = f"group:{group_name}"
+                    mcp.enable(tags={tag}, components={"tool"})
+                    enabled_groups.append(group_name)
+                else:
+                    # Group not present in Unity's registered tools — disable it.
+                    tag = f"group:{group_name}"
+                    mcp.disable(tags={tag}, components={"tool"})
+                    disabled_groups.append(group_name)
+
+            if enabled_groups or disabled_groups:
+                logger.info(
+                    "Server-level tool visibility synced from Unity: "
+                    "enabled=[%s], disabled=[%s], total_transforms=%d, unity_start=%d",
+                    ", ".join(enabled_groups),
+                    ", ".join(disabled_groups),
+                    len(mcp._transforms),
+                    cls._unity_transform_start or 0,
+                )
+        except Exception:
+            logger.debug(
+                "Failed to sync server-level tool visibility",
+                exc_info=True,
             )
 
     async def _handle_command_result(self, payload: CommandResultMessage) -> None:

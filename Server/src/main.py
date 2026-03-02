@@ -162,7 +162,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     if _plugin_registry is None:
         _plugin_registry = PluginRegistry()
         loop = asyncio.get_running_loop()
-        PluginHub.configure(_plugin_registry, loop)
+        PluginHub.configure(_plugin_registry, loop, mcp=server)
 
     # Record server startup telemetry
     start_time = time.time()
@@ -346,6 +346,21 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
             "version": _server_version or "unknown",
             "message": "MCP for Unity server is running"
         })
+
+    @mcp.custom_route("/api/debug/list-tools", methods=["GET"])
+    async def debug_list_tools(_: Request) -> JSONResponse:
+        """Diagnostic endpoint: returns registered tools and transform info (bypasses middleware)."""
+        try:
+            # Access the internal tool manager to avoid creating a dummy MCP context
+            tool_manager = mcp._tool_manager
+            all_tool_names = sorted(tool_manager.tools.keys()) if tool_manager else []
+            return JSONResponse({
+                "registered_count": len(all_tool_names),
+                "tools": all_tool_names,
+                "transform_count": len(mcp._transforms),
+            })
+        except Exception as e:
+            return JSONResponse({"error": str(e)}, status_code=500)
 
     @mcp.custom_route("/api/auth/login-url", methods=["GET"])
     async def auth_login_url(_: Request) -> JSONResponse:
@@ -586,7 +601,10 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
             config.api_key_cache_ttl,
         )
 
-    # Mount plugin websocket hub at /hub/plugin when HTTP transport is active
+    # Mount plugin websocket hub at /hub/plugin when HTTP transport is active.
+    # NOTE: Uses FastMCP private API because custom_route() only supports HTTP
+    # methods, not WebSocket. _additional_http_routes accepts Starlette Route
+    # objects and is still present in FastMCP 3.x.
     existing_routes = [
         route for route in mcp._get_additional_http_routes()
         if isinstance(route, WebSocketRoute) and route.path == "/hub/plugin"

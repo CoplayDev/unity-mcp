@@ -149,7 +149,7 @@ async def manage_scene(
     include_transform: Annotated[bool | str,
                                  "If true, include local transform in node summaries."] | None = None,
 ) -> dict[str, Any] | ToolResult:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
     gate = await preflight(ctx, wait_for_no_compile=True, refresh_if_dirty=True)
     if gate is not None:
         return gate.model_dump()

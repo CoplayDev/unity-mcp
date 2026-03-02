@@ -30,7 +30,7 @@ class PrefabStageResponse(MCPResponse):
 )
 async def get_prefab_stage(ctx: Context) -> PrefabStageResponse | MCPResponse:
     """Get current prefab stage information."""
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
     response = await send_with_unity_instance(
         async_send_command_with_retry,
         unity_instance,

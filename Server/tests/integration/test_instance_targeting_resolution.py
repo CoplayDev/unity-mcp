@@ -14,11 +14,11 @@ async def test_manage_gameobject_uses_session_state(monkeypatch):
     set_unity_instance_middleware(middleware)
 
     ctx = DummyContext()
-    middleware.set_active_instance(ctx, "SessionProj@AAAA1111")
-    assert middleware.get_active_instance(ctx) == "SessionProj@AAAA1111"
+    await middleware.set_active_instance(ctx, "SessionProj@AAAA1111")
+    assert await middleware.get_active_instance(ctx) == "SessionProj@AAAA1111"
 
     # Simulate middleware injection into request state
-    ctx.set_state("unity_instance", "SessionProj@AAAA1111")
+    await ctx.set_state("unity_instance", "SessionProj@AAAA1111")
 
     captured = {}
 
@@ -60,7 +60,7 @@ async def test_manage_gameobject_without_active_instance(monkeypatch):
     set_unity_instance_middleware(middleware)
 
     ctx = DummyContext()
-    assert middleware.get_active_instance(ctx) is None
+    assert await middleware.get_active_instance(ctx) is None
     # Don't set any state in context
 
     captured = {}

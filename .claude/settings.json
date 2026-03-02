@@ -6,12 +6,6 @@
       "MultiEdit(reports/**)"
     ],
     "deny": [
-      "WebFetch",
-      "WebSearch",
-      "Task",
-      "TodoWrite",
-      "NotebookEdit",
-      "NotebookRead"
     ]
   }
 }

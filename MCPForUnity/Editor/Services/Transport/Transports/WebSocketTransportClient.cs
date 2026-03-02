@@ -539,7 +539,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     ["description"] = tool.Description,
                     ["structured_output"] = tool.StructuredOutput,
                     ["requires_polling"] = tool.RequiresPolling,
-                    ["poll_action"] = tool.PollAction
+                    ["poll_action"] = tool.PollAction,
+                    ["group"] = tool.Group ?? "core"
                 };
 
                 var paramsArray = new JArray();

@@ -22,6 +22,7 @@ _VALID_EXTENSIONS = {".uxml", ".uss"}
 
 
 @mcp_for_unity_tool(
+    group="ui",
     description=(
         "Manages Unity UI Toolkit elements (UXML documents, USS stylesheets, UIDocument components). "
         "Read-only actions: ping, read, get_visual_tree, list. "
@@ -155,7 +156,7 @@ async def manage_ui(
                         "Set element tooltip text. For modify_visual_element."] | None = None,
 
 ) -> dict[str, Any]:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     action_lower = action.lower()
 

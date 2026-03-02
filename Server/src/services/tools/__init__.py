@@ -9,7 +9,7 @@ from fastmcp import Context, FastMCP
 from core.telemetry_decorator import telemetry_tool
 from core.logging_decorator import log_execution
 from utils.module_discovery import discover_modules
-from services.registry import get_registered_tools
+from services.registry import get_registered_tools, TOOL_GROUPS, DEFAULT_ENABLED_GROUPS
 
 logger = logging.getLogger("mcp-for-unity-server")
 
@@ -26,6 +26,10 @@ def register_all_tools(mcp: FastMCP, *, project_scoped_tools: bool = True):
 
     Any .py file in this directory or subdirectories with @mcp_for_unity_tool decorated
     functions will be automatically registered.
+
+    After registration, non-default tool groups are disabled at the server level
+    so that new sessions only see the *core* tools (plus always-visible meta-tools).
+    Clients can activate additional groups at any time via ``manage_tools``.
     """
     logger.info("Auto-discovering MCP for Unity Server tools...")
     # Dynamic import of all modules in this directory
@@ -63,8 +67,22 @@ def register_all_tools(mcp: FastMCP, *, project_scoped_tools: bool = True):
 
     logger.info(f"Registered {len(tools)} MCP tools")
 
+    # Disable non-default groups at the server level so new sessions start lean.
+    # Tools with group=None (no tag) are unaffected and always visible.
+    groups_to_disable = set(TOOL_GROUPS.keys()) - DEFAULT_ENABLED_GROUPS
+    for group_name in sorted(groups_to_disable):
+        tag = f"group:{group_name}"
+        mcp.disable(tags={tag}, components={"tool"})
+        logger.debug(f"Disabled tool group at startup: {group_name}")
+    logger.info(
+        f"Default tool groups: {', '.join(sorted(DEFAULT_ENABLED_GROUPS))}. "
+        f"Disabled: {', '.join(sorted(groups_to_disable))}. "
+        f"Transform count: {len(mcp._transforms)}. "
+        "Use manage_tools to activate more."
+    )
 
-def get_unity_instance_from_context(
+
+async def get_unity_instance_from_context(
     ctx: Context,
     key: str = "unity_instance",
 ) -> str | None:
@@ -76,7 +94,7 @@ def get_unity_instance_from_context(
     get_state_fn = getattr(ctx, "get_state", None)
     if callable(get_state_fn):
         try:
-            return get_state_fn(key)
+            return await get_state_fn(key)
         except Exception:  # pragma: no cover - defensive
             pass
 

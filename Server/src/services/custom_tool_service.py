@@ -29,7 +29,7 @@ _DEFAULT_POLL_INTERVAL = 1.0
 _MAX_POLL_SECONDS = 600
 
 
-def get_user_id_from_context(ctx: Context) -> str | None:
+async def get_user_id_from_context(ctx: Context) -> str | None:
     """Read user_id from request-scoped context in remote-hosted mode."""
     if not config.http_remote_hosted:
         return None
@@ -39,7 +39,7 @@ def get_user_id_from_context(ctx: Context) -> str | None:
         return None
 
     try:
-        user_id = get_state("user_id")
+        user_id = await get_state("user_id")
     except Exception:
         return None
 
@@ -367,7 +367,7 @@ class CustomToolService:
 
     def _build_global_tool_handler(self, definition: ToolDefinitionModel):
         async def _handler(ctx: Context, **kwargs) -> MCPResponse:
-            unity_instance = get_unity_instance_from_context(ctx)
+            unity_instance = await get_unity_instance_from_context(ctx)
             if not unity_instance:
                 return MCPResponse(
                     success=False,
@@ -382,7 +382,7 @@ class CustomToolService:
                 )
 
             params = {k: v for k, v in kwargs.items() if v is not None}
-            user_id = get_user_id_from_context(ctx)
+            user_id = await get_user_id_from_context(ctx)
             service = CustomToolService.get_instance()
             return await service.execute_tool(
                 project_id,
