@@ -254,17 +254,17 @@ namespace MCPForUnity.Editor.Tools
             if (string.IsNullOrEmpty(systemName))
                 return new ErrorResponse("'system_name' parameter is required.");
 
-            bool? enabled = p.GetBool("enabled");
-            if (enabled == null)
+            if (!p.Has("enabled"))
                 return new ErrorResponse("'enabled' parameter is required (true/false).");
+            bool enabled = p.GetBool("enabled");
 
             ComponentSystemBase system = FindSystem(world, systemName);
             if (system == null)
                 return new ErrorResponse($"System '{systemName}' not found in world '{world.Name}'.");
 
-            system.Enabled = enabled.Value;
+            system.Enabled = enabled;
             return new SuccessResponse(
-                $"System '{systemName}' {(enabled.Value ? "enabled" : "disabled")} in world '{world.Name}'.");
+                $"System '{systemName}' {(enabled ? "enabled" : "disabled")} in world '{world.Name}'.");
         }
 
         #endregion
@@ -652,6 +652,7 @@ namespace MCPForUnity.Editor.Tools
             });
 
             int limit = p.GetInt("limit") ?? 20;
+            int totalArchetypes = archetypes.Length;
             archetypes.Dispose();
 
             if (archetypeStats.Count > limit)
@@ -661,7 +662,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 ["world"]               = world.Name,
                 ["total_entities"]      = world.EntityManager.UniversalQuery.CalculateEntityCount(),
-                ["total_archetypes"]    = archetypes.Length,
+                ["total_archetypes"]    = totalArchetypes,
                 ["total_chunks"]        = totalChunks,
                 ["empty_chunks"]        = emptyChunks,
                 ["system_count"]        = world.Systems.Count,
