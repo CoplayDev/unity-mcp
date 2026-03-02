@@ -16,7 +16,7 @@ namespace MCPForUnity.Editor.Tools
     ///          performance_snapshot, toggle_system
     /// Requires com.unity.entities package.
     /// </summary>
-    [McpForUnityTool("manage_dots")]
+    [McpForUnityTool("manage_dots", AutoRegister = false)]
     public static class ManageDots
     {
         public static object HandleCommand(JObject @params)
