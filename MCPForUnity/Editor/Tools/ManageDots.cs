@@ -114,6 +114,9 @@ namespace MCPForUnity.Editor.Tools
             }
 
             var em = world.EntityManager;
+            // Ad-hoc queries from outside a system have no tracked dependencies,
+            // so CalculateEntityCount() can't sync jobs automatically — complete them first.
+            em.CompleteAllTrackedJobs();
             using var query = em.CreateEntityQuery(componentTypes.ToArray());
             int totalCount = query.CalculateEntityCount();
 
@@ -304,7 +307,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     ["name"]          = debugName,
                     ["category"]      = category,
-                    ["type_index"]    = i,
+                    ["type_index"]    = typeInfo.TypeIndex.Value,
                     ["size_bytes"]    = typeInfo.SizeInChunk,
                     ["is_zero_sized"] = typeInfo.IsZeroSized,
                     ["is_buffer"]     = typeInfo.Category == TypeManager.TypeCategory.BufferData,
@@ -565,6 +568,7 @@ namespace MCPForUnity.Editor.Tools
             }
 
             var em = world.EntityManager;
+            em.CompleteAllTrackedJobs();
             using var query = em.CreateEntityQuery(componentTypes.ToArray());
             int count = query.CalculateEntityCount();
 
@@ -742,7 +746,8 @@ namespace MCPForUnity.Editor.Tools
                 if (string.Equals(debugName, typeName, StringComparison.OrdinalIgnoreCase) ||
                     debugName.EndsWith("." + typeName, StringComparison.OrdinalIgnoreCase))
                 {
-                    return ComponentType.FromTypeIndex(i);
+                    // Must use typeInfo.TypeIndex (includes type flags) not the raw loop index
+                    return ComponentType.FromTypeIndex(typeInfo.TypeIndex);
                 }
             }
             return null;
