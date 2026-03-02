@@ -1,5 +1,26 @@
 <img width="676" height="380" alt="MCP for Unity" src="docs/images/logo.png" />
 
+> **The1Studio Fork** — Forked from [CoplayDev/unity-mcp](https://github.com/CoplayDev/unity-mcp). We keep upstream code untouched and add studio-specific tools on top. Everything below this section is from the original project.
+
+## Studio-Added Tools
+
+| Tool | Description | Actions |
+|------|-------------|---------|
+| `manage_dots` | Unity DOTS ECS debugging, entity inspection, and performance monitoring. Requires `com.unity.entities`. | `list_worlds`, `query_entities`, `get_entity`, `list_systems`, `get_system`, `performance_snapshot`, `toggle_system` |
+
+**CLI usage:**
+```bash
+unity-mcp dots worlds                              # List all ECS Worlds
+unity-mcp dots entities "LocalTransform,Velocity"   # Find entities by components
+unity-mcp dots entity 42                            # Inspect entity details
+unity-mcp dots systems                              # List systems with status
+unity-mcp dots system "MySystem"                    # System details & queries
+unity-mcp dots perf                                 # Performance snapshot
+unity-mcp dots toggle "MySystem" false              # Disable a system
+```
+
+---
+
 | [English](README.md) | [简体中文](docs/i18n/README-zh.md) |
 |----------------------|---------------------------------|
 

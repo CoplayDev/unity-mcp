@@ -83,7 +83,7 @@ uv run python -m cli.main editor poll-test <job_id> --wait 60  # poll async job
 ## Git Workflow
 
 - **Branch off `beta`** for PRs — `main` is for stable releases only
-- Remote: `origin` → `git@github.com:tuha263/unity-mcp.git` (our fork)
+- Remote: `origin` → `git@github-the1studio:The1Studio/unity-mcp.git` (our fork)
 - Upstream: `CoplayDev/unity-mcp` (sync periodically)
 
 ## Adding a New Tool
