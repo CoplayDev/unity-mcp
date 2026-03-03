@@ -19,6 +19,13 @@ from starlette.routing import WebSocketRoute
 from starlette.responses import JSONResponse
 import argparse
 import asyncio
+
+# Fix to IPV4 Connection Issue #853
+# Will disable features in ProactorEventLoop including subprocess pipes and named pipes
+import sys
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 import logging
 from contextlib import asynccontextmanager
 import os
