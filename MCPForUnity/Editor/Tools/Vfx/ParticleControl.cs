@@ -56,6 +56,9 @@ namespace MCPForUnity.Editor.Tools.Vfx
             {
                 ps = go.AddComponent<ParticleSystem>();
                 addedParticleSystem = true;
+
+                // Apply sensible defaults so newly created particles aren't oversized.
+                RendererHelpers.SetSensibleParticleDefaults(ps);
             }
 
             var renderer = go.GetComponent<ParticleSystemRenderer>();
@@ -64,14 +67,11 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 RendererHelpers.EnsureMaterial(renderer);
             }
 
+            // Allow caller overrides for playOnAwake and looping.
             var main = ps.main;
             if (@params["playOnAwake"] != null)
             {
                 main.playOnAwake = @params["playOnAwake"].ToObject<bool>();
-            }
-            else
-            {
-                main.playOnAwake = false;
             }
             if (@params["looping"] != null)
             {
@@ -132,13 +132,17 @@ namespace MCPForUnity.Editor.Tools.Vfx
             ParticleSystem ps = ParticleCommon.FindParticleSystem(@params);
             if (ps == null) return new { success = false, message = "ParticleSystem not found" };
 
+            RendererHelpers.EnsureMaterialResult ensureResult = default;
+            bool materialChecked = false;
+
             // Ensure material is assigned before playing
             if (action == "play" || action == "restart")
             {
                 var renderer = ps.GetComponent<ParticleSystemRenderer>();
                 if (renderer != null)
                 {
-                    RendererHelpers.EnsureMaterial(renderer);
+                    ensureResult = RendererHelpers.EnsureMaterial(renderer);
+                    materialChecked = true;
                 }
             }
 
@@ -154,7 +158,13 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 default: return new { success = false, message = $"Unknown action: {action}" };
             }
 
-            return new { success = true, message = $"ParticleSystem {action}" };
+            return new
+            {
+                success = true,
+                message = $"ParticleSystem {action}",
+                materialReplaced = materialChecked ? ensureResult.MaterialReplaced : false,
+                replacementReason = materialChecked ? ensureResult.ReplacementReason : string.Empty,
+            };
         }
 
         public static object AddBurst(JObject @params)
@@ -164,9 +174,12 @@ namespace MCPForUnity.Editor.Tools.Vfx
 
             // Ensure material is assigned
             var renderer = ps.GetComponent<ParticleSystemRenderer>();
+            RendererHelpers.EnsureMaterialResult ensureResult = default;
+            bool materialChecked = false;
             if (renderer != null)
             {
-                RendererHelpers.EnsureMaterial(renderer);
+                ensureResult = RendererHelpers.EnsureMaterial(renderer);
+                materialChecked = true;
             }
 
             Undo.RecordObject(ps, "Add Burst");
@@ -190,7 +203,14 @@ namespace MCPForUnity.Editor.Tools.Vfx
             emission.SetBursts(bursts);
 
             EditorUtility.SetDirty(ps);
-            return new { success = true, message = $"Added burst at t={time}", burstIndex = idx };
+            return new
+            {
+                success = true,
+                message = $"Added burst at t={time}",
+                burstIndex = idx,
+                materialReplaced = materialChecked ? ensureResult.MaterialReplaced : false,
+                replacementReason = materialChecked ? ensureResult.ReplacementReason : string.Empty,
+            };
         }
 
         public static object ClearBursts(JObject @params)

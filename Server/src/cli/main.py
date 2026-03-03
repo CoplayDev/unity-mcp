@@ -185,9 +185,9 @@ def list_instances(ctx: Context):
 
 @cli.command("raw")
 @click.argument("command_type")
-@click.argument("params", required=False, default="{}")
+@click.argument("params", nargs=-1)
 @pass_context
-def raw_command(ctx: Context, command_type: str, params: str):
+def raw_command(ctx: Context, command_type: str, params: tuple):
     """Send a raw command to Unity.
 
     \b
@@ -198,8 +198,12 @@ def raw_command(ctx: Context, command_type: str, params: str):
     import json
     config = ctx.config or get_config()
 
+    # Join all remaining args into one string (Windows .exe entry points
+    # split quoted strings containing spaces into multiple args)
+    params_str = " ".join(params) if params else "{}"
+
     try:
-        params_dict = json.loads(params)
+        params_dict = json.loads(params_str)
     except json.JSONDecodeError as e:
         print_error(f"Invalid JSON params: {e}")
         sys.exit(1)

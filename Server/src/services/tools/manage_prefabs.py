@@ -85,7 +85,7 @@ async def manage_prefabs(
                 "message": f"Action '{action}' requires parameter '{param_name}'."
             }
 
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     # Preflight check for operations to ensure Unity is ready
     try:

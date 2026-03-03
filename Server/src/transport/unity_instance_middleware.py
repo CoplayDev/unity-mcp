@@ -21,6 +21,8 @@ from services.registry import get_registered_tools
 from transport.plugin_hub import PluginHub
 
 logger = logging.getLogger("mcp-for-unity-server")
+# Separate logger that propagates to root -> stderr so diagnostics show in console
+_diag = logging.getLogger("transport.unity_instance_middleware")
 
 # Store a global reference to the middleware instance so tools can interact
 # with it to set or clear the active unity instance.
@@ -77,7 +79,7 @@ class UnityInstanceMiddleware(Middleware):
         self._stdio_tools_watch_task: asyncio.Task | None = None
         self._last_stdio_tools_state_signature: tuple[tuple[str, tuple[str, ...]], ...] | None = None
 
-    def get_session_key(self, ctx) -> str:
+    async def get_session_key(self, ctx) -> str:
         """
         Derive a stable key for the calling session.
 
@@ -90,28 +92,28 @@ class UnityInstanceMiddleware(Middleware):
             return client_id
 
         # In remote-hosted mode, use user_id so different users get isolated instance selections
-        user_id = ctx.get_state("user_id")
+        user_id = await ctx.get_state("user_id")
         if isinstance(user_id, str) and user_id:
             return f"user:{user_id}"
 
         # Fallback to global for local dev stability
         return "global"
 
-    def set_active_instance(self, ctx, instance_id: str) -> None:
+    async def set_active_instance(self, ctx, instance_id: str) -> None:
         """Store the active instance for this session."""
-        key = self.get_session_key(ctx)
+        key = await self.get_session_key(ctx)
         with self._lock:
             self._active_by_key[key] = instance_id
 
-    def get_active_instance(self, ctx) -> str | None:
+    async def get_active_instance(self, ctx) -> str | None:
         """Retrieve the active instance for this session."""
-        key = self.get_session_key(ctx)
+        key = await self.get_session_key(ctx)
         with self._lock:
             return self._active_by_key.get(key)
 
-    def clear_active_instance(self, ctx) -> None:
+    async def clear_active_instance(self, ctx) -> None:
         """Clear the stored instance for this session."""
-        key = self.get_session_key(ctx)
+        key = await self.get_session_key(ctx)
         with self._lock:
             self._active_by_key.pop(key, None)
 
@@ -551,7 +553,7 @@ class UnityInstanceMiddleware(Middleware):
                             ids.append(f"{project}@{hash_value}")
                     if len(ids) == 1:
                         chosen = ids[0]
-                        self.set_active_instance(ctx, chosen)
+                        await self.set_active_instance(ctx, chosen)
                         logger.info(
                             "Auto-selected sole Unity instance via PluginHub: %s",
                             chosen,
@@ -589,7 +591,7 @@ class UnityInstanceMiddleware(Middleware):
                     ids = [inst_id for inst_id in ids if inst_id]
                     if len(ids) == 1:
                         chosen = ids[0]
-                        self.set_active_instance(ctx, chosen)
+                        await self.set_active_instance(ctx, chosen)
                         logger.info(
                             "Auto-selected sole Unity instance via stdio discovery: %s",
                             chosen,
@@ -645,7 +647,7 @@ class UnityInstanceMiddleware(Middleware):
                 "API key authentication required. Provide a valid X-API-Key header."
             )
         if user_id:
-            ctx.set_state("user_id", user_id)
+            await ctx.set_state("user_id", user_id)
 
         # Per-call routing: check if this tool call explicitly specifies unity_instance.
         # context.message.arguments is a mutable dict on CallToolRequestParams; resource
@@ -663,7 +665,7 @@ class UnityInstanceMiddleware(Middleware):
                     logger.debug("Per-call unity_instance resolved to: %s", active_instance)
 
         if not active_instance:
-            active_instance = self.get_active_instance(ctx)
+            active_instance = await self.get_active_instance(ctx)
         if not active_instance:
             active_instance = await self._maybe_autoselect_instance(ctx)
         if active_instance:
@@ -706,9 +708,9 @@ class UnityInstanceMiddleware(Middleware):
                         exc_info=True
                     )
 
-            ctx.set_state("unity_instance", active_instance)
+            await ctx.set_state("unity_instance", active_instance)
             if session_id is not None:
-                ctx.set_state("unity_session_id", session_id)
+                await ctx.set_state("unity_session_id", session_id)
 
     # =========================================================================
     # Middleware hooks
@@ -749,15 +751,33 @@ class UnityInstanceMiddleware(Middleware):
 
     async def on_list_tools(self, context: MiddlewareContext, call_next):
         """Filter MCP tool listing to the Unity-enabled set when session data is available."""
-        await self._inject_unity_instance(context)
+        try:
+            await self._inject_unity_instance(context)
+        except Exception as exc:
+            # Re-raise authentication errors so callers get a proper auth failure
+            if isinstance(exc, RuntimeError) and "authentication" in str(exc).lower():
+                raise
+            _diag.warning(
+                "on_list_tools: _inject_unity_instance failed (%s: %s), continuing without instance",
+                type(exc).__name__, exc,
+            )
+
         tools = await call_next(context)
 
+        tool_names_from_fastmcp = sorted(getattr(t, "name", "?") for t in tools)
+        _diag.debug(
+            "on_list_tools: FastMCP returned %d tools: %s",
+            len(tools), tool_names_from_fastmcp,
+        )
+
         if not self._should_filter_tool_listing():
+            _diag.debug("on_list_tools: skipping middleware filter (not HTTP or PluginHub not configured)")
             return tools
 
         self._refresh_tool_visibility_metadata_from_registry()
         enabled_tool_names = await self._resolve_enabled_tool_names_for_context(context)
         if enabled_tool_names is None:
+            _diag.debug("on_list_tools: no Unity session data, returning %d tools from FastMCP as-is", len(tools))
             return tools
 
         tool_visibility_snapshot = self._get_tool_visibility_snapshot()
@@ -767,6 +787,11 @@ class UnityInstanceMiddleware(Middleware):
             if self._is_tool_visible(tool_name, enabled_tool_names, tool_visibility_snapshot):
                 filtered.append(tool)
 
+        _diag.debug(
+            "on_list_tools: filtered %d/%d tools visible (Unity register_tools). "
+            "enabled_names=%s",
+            len(filtered), len(tools), sorted(enabled_tool_names),
+        )
         return filtered
 
     # =========================================================================
@@ -788,11 +813,11 @@ class UnityInstanceMiddleware(Middleware):
         transport = (config.transport_mode or "stdio").lower()
 
         if transport == "stdio":
-            active_instance = ctx.get_state("unity_instance")
+            active_instance = await ctx.get_state("unity_instance")
             return await self._resolve_enabled_tool_names_for_stdio_context(active_instance)
 
-        user_id = ctx.get_state("user_id") if config.http_remote_hosted else None
-        active_instance = ctx.get_state("unity_instance")
+        user_id = (await ctx.get_state("user_id")) if config.http_remote_hosted else None
+        active_instance = await ctx.get_state("unity_instance")
         project_hashes = self._resolve_candidate_project_hashes(active_instance)
         try:
             sessions_data = await PluginHub.get_sessions(user_id=user_id)

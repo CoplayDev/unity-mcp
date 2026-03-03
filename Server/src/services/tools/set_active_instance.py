@@ -9,6 +9,7 @@ from transport.unity_instance_middleware import get_unity_instance_middleware
 
 @mcp_for_unity_tool(
     unity_target=None,
+    group=None,
     description="Set the active Unity instance for this client/session. Accepts Name@hash, hash prefix, or port number (stdio only).",
     annotations=ToolAnnotations(
         title="Set Active Instance",
@@ -37,8 +38,8 @@ async def set_active_instance(
     # Store selection in middleware (session-scoped)
     # We use middleware.set_active_instance to persist the selection.
     # The session key is an internal detail but useful for debugging response.
-    middleware.set_active_instance(ctx, resolved_id)
-    session_key = middleware.get_session_key(ctx)
+    await middleware.set_active_instance(ctx, resolved_id)
+    session_key = await middleware.get_session_key(ctx)
 
     return {
         "success": True,

@@ -244,16 +244,21 @@ namespace MCPForUnity.Editor.Tools
 
         private static object SetRendererColor(JObject @params)
         {
-            string target = @params["target"]?.ToString();
-            string searchMethod = @params["searchMethod"]?.ToString();
-            JToken colorToken = @params["color"];
-            int slot = @params["slot"]?.ToObject<int>() ?? 0;
-            string mode = @params["mode"]?.ToString() ?? "property_block";
+            var p = new ToolParams(@params);
 
-            if (string.IsNullOrEmpty(target) || colorToken == null)
+            var targetResult = p.GetRequired("target");
+            var targetError = targetResult.GetOrError(out string target);
+            if (targetError != null) return targetError;
+
+            string searchMethod = p.Get("searchMethod");
+            JToken colorToken = p.GetRaw("color");
+            if (colorToken == null)
             {
-                return new ErrorResponse("target and color are required");
+                return new ErrorResponse("'color' parameter is required.");
             }
+
+            int slot = p.GetInt("slot") ?? 0;
+            string mode = p.Get("mode", "property_block");
 
             Color color;
             try
@@ -280,6 +285,8 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse($"GameObject {go.name} has no Renderer component");
             }
 
+            RendererHelpers.EnsureMaterial(renderer);
+
             if (mode == "property_block")
             {
                 if (slot < 0 || slot >= renderer.sharedMaterials.Length)
@@ -293,12 +300,26 @@ namespace MCPForUnity.Editor.Tools
                 if (renderer.sharedMaterials[slot] != null)
                 {
                     Material mat = renderer.sharedMaterials[slot];
-                    if (mat.HasProperty("_BaseColor")) block.SetColor("_BaseColor", color);
-                    else if (mat.HasProperty("_Color")) block.SetColor("_Color", color);
-                    else block.SetColor("_Color", color);
+                    bool wroteAnyProperty = false;
+                    if (mat.HasProperty("_BaseColor"))
+                    {
+                        block.SetColor("_BaseColor", color);
+                        wroteAnyProperty = true;
+                    }
+                    if (mat.HasProperty("_Color"))
+                    {
+                        block.SetColor("_Color", color);
+                        wroteAnyProperty = true;
+                    }
+                    if (!wroteAnyProperty)
+                    {
+                        block.SetColor("_BaseColor", color);
+                        block.SetColor("_Color", color);
+                    }
                 }
                 else
                 {
+                    block.SetColor("_BaseColor", color);
                     block.SetColor("_Color", color);
                 }
 
@@ -316,8 +337,7 @@ namespace MCPForUnity.Editor.Tools
                         return new ErrorResponse($"No material in slot {slot}");
                     }
                     Undo.RecordObject(mat, "Set Material Color");
-                    if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
-                    else mat.SetColor("_Color", color);
+                    SetColorProperties(mat, color);
                     EditorUtility.SetDirty(mat);
                     return new SuccessResponse("Set shared material color");
                 }
@@ -334,14 +354,91 @@ namespace MCPForUnity.Editor.Tools
                     }
                     // Note: Undo cannot fully revert material instantiation
                     Undo.RecordObject(mat, "Set Instance Material Color");
-                    if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
-                    else mat.SetColor("_Color", color);
+                    SetColorProperties(mat, color);
                     return new SuccessResponse("Set instance material color", new { warning = "Material instance created; Undo cannot fully revert instantiation." });
                 }
                 return new ErrorResponse("Invalid slot");
             }
+            else if (mode == "create_unique")
+            {
+                return CreateUniqueAndAssign(renderer, go, color, slot);
+            }
 
             return new ErrorResponse($"Unknown mode: {mode}");
+        }
+
+        private static void SetColorProperties(Material mat, Color color)
+        {
+            bool wrote = false;
+            if (mat.HasProperty("_BaseColor"))
+            {
+                mat.SetColor("_BaseColor", color);
+                wrote = true;
+            }
+            if (mat.HasProperty("_Color"))
+            {
+                mat.SetColor("_Color", color);
+                wrote = true;
+            }
+            if (!wrote)
+            {
+                mat.SetColor("_BaseColor", color);
+                mat.SetColor("_Color", color);
+            }
+        }
+
+        private static object CreateUniqueAndAssign(Renderer renderer, GameObject go, Color color, int slot)
+        {
+            string safeName = go.name.Replace(" ", "_");
+            string matPath = $"Assets/Materials/{safeName}_{go.GetInstanceID()}_mat.mat";
+            matPath = AssetPathUtility.SanitizeAssetPath(matPath);
+            if (matPath == null)
+            {
+                return new ErrorResponse($"Invalid GameObject name '{go.name}' — cannot build a safe material path.");
+            }
+
+            // Ensure the Materials directory exists
+            if (!AssetDatabase.IsValidFolder("Assets/Materials"))
+            {
+                AssetDatabase.CreateFolder("Assets", "Materials");
+            }
+
+            Material existing = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+            if (existing != null)
+            {
+                // Material already exists (e.g. retry) — update its color and re-assign
+                Undo.RecordObject(existing, "Update unique material color");
+                SetColorProperties(existing, color);
+                EditorUtility.SetDirty(existing);
+            }
+            else
+            {
+                Shader shader = RenderPipelineUtility.ResolveShader("Standard");
+                if (shader == null)
+                {
+                    return new ErrorResponse("Could not resolve a suitable shader for the active render pipeline.");
+                }
+
+                existing = new Material(shader);
+                SetColorProperties(existing, color);
+                AssetDatabase.CreateAsset(existing, matPath);
+            }
+
+            AssetDatabase.SaveAssets();
+
+            // Assign to renderer
+            Undo.RecordObject(renderer, "Assign unique material");
+            Material[] sharedMats = renderer.sharedMaterials;
+            if (slot < 0 || slot >= sharedMats.Length)
+            {
+                return new ErrorResponse($"Slot {slot} out of bounds (count: {sharedMats.Length})");
+            }
+            sharedMats[slot] = existing;
+            renderer.sharedMaterials = sharedMats;
+            EditorUtility.SetDirty(renderer);
+
+            return new SuccessResponse($"Created unique material at {matPath} and assigned to {go.name}",
+                new { materialPath = matPath });
         }
 
         private static object GetMaterialInfo(JObject @params)

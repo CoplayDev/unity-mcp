@@ -617,7 +617,13 @@ namespace MCPForUnity.Editor.Helpers
                     return true;
                 }
 
-                error = "Object reference must contain 'instanceID', 'guid', or 'path'.";
+                var nameToken = jObj["name"];
+                if (nameToken != null)
+                {
+                    return ResolveSceneObjectByName(prop, nameToken.ToString(), out error);
+                }
+
+                error = "Object reference must contain 'instanceID', 'guid', 'path', or 'name'.";
                 return false;
             }
 
@@ -636,11 +642,62 @@ namespace MCPForUnity.Editor.Helpers
                     prop.objectReferenceValue = resolved;
                     return true;
                 }
-                error = $"Cannot resolve object reference from string '{strVal}'.";
-                return false;
+
+                // Fall back to scene hierarchy lookup by name.
+                return ResolveSceneObjectByName(prop, strVal, out error);
             }
 
             error = $"Unsupported object reference format: {value.Type}.";
+            return false;
+        }
+
+        /// <summary>
+        /// Resolves a scene GameObject by name and assigns it (or a component on it)
+        /// to a SerializedProperty. Uses GameObjectLookup for robust search
+        /// including inactive objects and prefab stage support.
+        /// </summary>
+        private static bool ResolveSceneObjectByName(SerializedProperty prop, string name, out string error)
+        {
+            error = null;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                error = "Cannot resolve object reference from empty name.";
+                return false;
+            }
+
+            var ids = GameObjectLookup.SearchGameObjects(
+                GameObjectLookup.SearchMethod.ByName, name, includeInactive: true, maxResults: 1);
+
+            if (ids.Count == 0)
+            {
+                error = $"No GameObject named '{name}' found in scene.";
+                return false;
+            }
+
+            var go = GameObjectLookup.FindById(ids[0]);
+            if (go == null)
+            {
+                error = $"GameObject '{name}' found but could not be resolved.";
+                return false;
+            }
+
+            // If the property accepts a GameObject directly, assign it.
+            prop.objectReferenceValue = go;
+            if (prop.objectReferenceValue != null)
+                return true;
+
+            // The field type may expect a specific Component (e.g. Transform, Rigidbody).
+            // Try each component on the GameObject until one is accepted.
+            var components = go.GetComponents<Component>();
+            foreach (var comp in components)
+            {
+                if (comp == null) continue;
+                prop.objectReferenceValue = comp;
+                if (prop.objectReferenceValue != null)
+                    return true;
+            }
+
+            error = $"GameObject '{name}' found but no compatible component for property type.";
             return false;
         }
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 from services.tools.manage_vfx import manage_vfx
 
@@ -17,7 +18,7 @@ def test_manage_vfx_accepts_particle_create(monkeypatch) -> None:
 
     monkeypatch.setattr(
         "services.tools.manage_vfx.get_unity_instance_from_context",
-        lambda _ctx: "unity-instance-1",
+        AsyncMock(return_value="unity-instance-1"),
     )
     monkeypatch.setattr(
         "services.tools.manage_vfx.send_with_unity_instance",

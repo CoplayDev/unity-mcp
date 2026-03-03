@@ -7,7 +7,7 @@ description: Orchestrate Unity Editor via MCP (Model Context Protocol) tools and
 
 This skill helps you effectively use the Unity Editor with MCP tools and resources.
 
-## Template
+## Template Notice
 
 Examples in `references/workflows.md` and `references/tools-reference.md` are reusable templates. They may be inaccurate across Unity versions, package setups (UGUI/TMP/Input System), and project-specific conventions. Please check console, compilation errors, or use screenshot after implementation.
 
@@ -69,16 +69,77 @@ batch_execute(
 
 **Max 25 commands per batch by default (configurable in Unity MCP Tools window, max 100).** Use `fail_fast=True` for dependent operations.
 
-### 3. Use `screenshot` in manage_scene to Verify Visual Results
+### 3. Use Screenshots to Verify Visual Results
+
+#### Screenshot Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `camera` | string | Camera name/path/ID. Defaults to `Camera.main` |
+| `include_image` | bool | Return base64 PNG inline (for AI vision) |
+| `max_resolution` | int | Max longest-edge pixels (default 640). Lower = smaller payload |
+| `supersize` | int | Resolution multiplier 1–4 for file-saved screenshots |
+| `batch` | string | `"surround"` (6 fixed angles) or `"orbit"` (configurable grid) |
+| `look_at` | string | Target: GameObject name/path/ID, or `"x,y,z"` world position |
+| `view_position` | list | Camera position `[x,y,z]` for positioned screenshot |
+| `view_rotation` | list | Camera euler rotation `[x,y,z]` for positioned screenshot |
+| `orbit_angles` | int | Number of azimuth samples around the target (default 8) |
+| `orbit_elevations` | list | Vertical angles in degrees, e.g. `[0, 30, -15]` (default `[0, 30, -15]`) |
+| `orbit_distance` | float | Camera distance from target in world units (auto-calculated if omitted) |
+| `orbit_fov` | float | Camera field of view in degrees (default 60) |
+
+#### Single Screenshots
 
 ```python
-# Via manage_scene
-manage_scene(action="screenshot")  # Returns base64 image
+# Basic screenshot (saves to Assets/Screenshots/, returns file path)
+manage_scene(action="screenshot")
 
-# After creating/modifying objects, verify visually:
-# 1. Create objects
-# 2. capture screenshot
-# 3. Analyze if result matches intent
+# Inline screenshot (returns base64 PNG directly to the AI)
+manage_scene(action="screenshot", include_image=True)
+
+# Specific camera + capped resolution for smaller payloads
+manage_scene(action="screenshot", camera="MainCamera", include_image=True, max_resolution=512)
+
+# Positioned screenshot: place a temp camera at a specific viewpoint
+manage_scene(action="screenshot", look_at="Player", view_position=[0, 10, -10], max_resolution=512)
+```
+
+#### Batch Screenshots (Contact Sheet)
+
+Batch modes return a **single composite contact sheet** image — a grid of labeled thumbnails — instead of separate files. This is ideal for AI scene understanding in one image.
+
+```python
+# Surround: 6 fixed angles (front/back/left/right/top/bird_eye)
+manage_scene(action="screenshot", batch="surround", max_resolution=256)
+
+# Surround centered on a specific object
+manage_scene(action="screenshot", batch="surround", look_at="Player", max_resolution=256)
+
+# Orbit: 8 angles at eye level around an object
+manage_scene(action="screenshot", batch="orbit", look_at="Player", orbit_angles=8)
+
+# Orbit: 10 angles, 3 elevation rings, custom distance
+manage_scene(action="screenshot", batch="orbit", look_at="Player",
+             orbit_angles=10, orbit_elevations=[0, 30, -15], orbit_distance=8)
+
+# Orbit: tight close-up with narrow FOV
+manage_scene(action="screenshot", batch="orbit", look_at="Treasure",
+             orbit_distance=3, orbit_fov=40, orbit_angles=6)
+```
+
+**Best practices for AI scene understanding:**
+- Use `include_image=True` when you need to *see* the scene, not just save a file.
+- Use `batch="surround"` for a quick 6-angle overview of the whole scene.
+- Use `batch="orbit"` for detailed inspection of a specific object from many angles.
+- Keep `max_resolution` at 256–512 to balance quality vs. token cost.
+- Use `orbit_elevations` to get views from above/below, not just around.
+- Omit `orbit_distance` to let Unity auto-fit the object in frame.
+
+```python
+# Agentic camera loop: point, shoot, analyze
+manage_gameobject(action="look_at", target="MainCamera", look_at_target="Player")
+manage_scene(action="screenshot", camera="MainCamera", include_image=True, max_resolution=512)
+# → Analyze image, decide next action
 ```
 
 ### 4. Check Console After Major Changes
@@ -148,7 +209,7 @@ uri="file:///full/path/to/file.cs"
 | **Editor** | `manage_editor`, `execute_menu_item`, `read_console` | Editor control |
 | **Testing** | `run_tests`, `get_test_job` | Unity Test Framework |
 | **Batch** | `batch_execute` | Parallel/bulk operations |
-| **UI** | `batch_execute` with `manage_gameobject` + `manage_components` | Canvas, Panel, Button, Text, Slider, Toggle, Input Field (see [UI workflows](references/workflows.md#ui-creation-workflows)) |
+| **UI** | `manage_ui`, `batch_execute` with `manage_gameobject` + `manage_components` | **UI Toolkit**: Use `manage_ui` to create UXML/USS files, attach UIDocument, inspect visual trees. **uGUI (Canvas)**: Use `batch_execute` for Canvas, Panel, Button, Text, Slider, Toggle, Input Field. **Read `mcpforunity://project/info` first** to detect uGUI/TMP/Input System/UI Toolkit availability. (see [UI workflows](references/workflows.md#ui-creation-workflows)) |
 
 ## Common Workflows
 
