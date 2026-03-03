@@ -14,7 +14,7 @@ namespace MCPForUnity.Editor.Tools
     /// Actions: list_subscenes, load_subscene, unload_subscene, get_subscene_status, list_sections
     /// Requires com.unity.entities package (SubScene is part of Unity.Scenes).
     /// </summary>
-    [McpForUnityTool("manage_dots_subscene", AutoRegister = false)]
+    [McpForUnityTool("manage_dots_subscene", AutoRegister = true)]
     public static class ManageDotsSubscene
     {
         public static object HandleCommand(JObject @params)

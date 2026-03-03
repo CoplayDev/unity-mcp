@@ -18,7 +18,7 @@ namespace MCPForUnity.Editor.Tools
     ///          add_component, remove_component, query_count
     /// Requires com.unity.entities package.
     /// </summary>
-    [McpForUnityTool("manage_dots", AutoRegister = false)]
+    [McpForUnityTool("manage_dots", AutoRegister = true)]
     public static class ManageDots
     {
         public static object HandleCommand(JObject @params)

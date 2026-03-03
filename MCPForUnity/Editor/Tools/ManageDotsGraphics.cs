@@ -17,7 +17,7 @@ namespace MCPForUnity.Editor.Tools
     ///          list_registered_materials, list_registered_meshes
     /// Requires com.unity.entities.graphics package.
     /// </summary>
-    [McpForUnityTool("manage_dots_graphics", AutoRegister = false)]
+    [McpForUnityTool("manage_dots_graphics", AutoRegister = true)]
     public static class ManageDotsGraphics
     {
         public static object HandleCommand(JObject @params)

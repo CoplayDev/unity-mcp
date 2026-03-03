@@ -15,7 +15,7 @@ namespace MCPForUnity.Editor.Tools
     /// Actions: get_physics_world, raycast, overlap_aabb, list_colliders, get_body
     /// Requires com.unity.physics package.
     /// </summary>
-    [McpForUnityTool("manage_dots_physics", AutoRegister = false)]
+    [McpForUnityTool("manage_dots_physics", AutoRegister = true)]
     public static class ManageDotsPhysics
     {
         public static object HandleCommand(JObject @params)
