@@ -38,7 +38,7 @@ def _build_fastmcp_context(active_instance: str | None = None) -> Mock:
     ctx = Mock()
     ctx.client_id = "test-client"
     ctx.set_state = Mock(side_effect=lambda key, value: state.__setitem__(key, value))
-    ctx.get_state = Mock(side_effect=lambda key: state.get(key))
+    ctx.get_state = AsyncMock(side_effect=lambda key: state.get(key))
     return ctx
 
 
