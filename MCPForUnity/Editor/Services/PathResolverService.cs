@@ -123,9 +123,12 @@ namespace MCPForUnity.Editor.Services
                 }
 
 #if UNITY_EDITOR_WIN
-                // Fall back to PATH search (handles non-standard install locations)
-                string fromPath = ExecPath.FindInPathWindows("claude.exe");
-                if (!string.IsNullOrEmpty(fromPath)) return fromPath;
+                // Fall back to PATH search (handles non-standard install locations and npm shims)
+                foreach (var name in new[] { "claude.exe", "claude.cmd", "claude.ps1" })
+                {
+                    string fromPath = ExecPath.FindInPathWindows(name);
+                    if (!string.IsNullOrEmpty(fromPath)) return fromPath;
+                }
 #endif
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))

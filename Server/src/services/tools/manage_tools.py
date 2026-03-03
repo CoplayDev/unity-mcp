@@ -1,5 +1,5 @@
 """
-manage_tools – server-only meta-tool for dynamic tool group activation.
+manage_tools - server-only meta-tool for dynamic tool group activation.
 
 This tool lets the AI assistant (or user) discover available tool groups
 and selectively enable / disable them for the current session. Activating
@@ -53,11 +53,14 @@ async def manage_tools(
     if action == "list_groups":
         return _list_groups()
 
-    if action == "activate":
+    if action in ("activate", "deactivate"):
         if not group:
-            return {"error": "group is required for activate"}
+            return {"error": f"group is required for {action}"}
+        group = group.strip().lower()
         if group not in TOOL_GROUPS:
             return {"error": f"Unknown group '{group}'. Valid: {', '.join(sorted(TOOL_GROUPS))}"}
+
+    if action == "activate":
         tag = f"group:{group}"
         await ctx.info(f"Activating tool group: {group}")
         await ctx.enable_components(tags={tag}, components={"tool"})
@@ -68,10 +71,6 @@ async def manage_tools(
         }
 
     if action == "deactivate":
-        if not group:
-            return {"error": "group is required for deactivate"}
-        if group not in TOOL_GROUPS:
-            return {"error": f"Unknown group '{group}'. Valid: {', '.join(sorted(TOOL_GROUPS))}"}
         tag = f"group:{group}"
         await ctx.info(f"Deactivating tool group: {group}")
         await ctx.disable_components(tags={tag}, components={"tool"})

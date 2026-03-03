@@ -424,6 +424,9 @@ class UnityInstanceMiddleware(Middleware):
         try:
             await self._inject_unity_instance(context)
         except Exception as exc:
+            # Re-raise authentication errors so callers get a proper auth failure
+            if isinstance(exc, RuntimeError) and "authentication" in str(exc).lower():
+                raise
             _diag.warning(
                 "on_list_tools: _inject_unity_instance failed (%s: %s), continuing without instance",
                 type(exc).__name__, exc,
