@@ -62,7 +62,7 @@ async def manage_material(
                     "Assignment/modification mode"] | None = None,
 
 ) -> dict[str, Any]:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     # --- Normalize color with validation ---
     color, color_error = normalize_color(color, output_range="float")

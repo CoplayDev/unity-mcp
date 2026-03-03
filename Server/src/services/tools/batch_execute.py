@@ -85,7 +85,7 @@ async def batch_execute(
                                "Hint for the maximum number of parallel workers"] = None,
 ) -> dict[str, Any]:
     """Proxy the batch_execute tool to the Unity Editor transporter."""
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     if not isinstance(commands, list) or not commands:
         raise ValueError(
@@ -115,6 +115,13 @@ async def batch_execute(
         if not isinstance(params, dict):
             raise ValueError(
                 f"Command '{tool_name}' must specify parameters as an object/dict")
+
+        if "unity_instance" in params:
+            raise ValueError(
+                f"Command '{tool_name}' at index {index} contains 'unity_instance'. "
+                "Per-command instance routing is not supported inside batch_execute. "
+                "Set unity_instance on the outer batch_execute call to route the entire batch."
+            )
 
         normalized_commands.append({
             "tool": tool_name,

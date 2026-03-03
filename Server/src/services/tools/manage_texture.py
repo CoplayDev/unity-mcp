@@ -53,17 +53,26 @@ def _normalize_palette(value: Any) -> tuple[list[list[int]] | None, str | None]:
     if isinstance(value, str):
         if value in ("[object Object]", "undefined", "null", ""):
             return None, f"palette received invalid value: '{value}'"
-        value = parse_json_payload(value)
+        parsed = parse_json_payload(value)
+        # If parsing succeeded and result is a list, normalize and return
+        if isinstance(parsed, list):
+            value = parsed
+        # If parsing returned the original string (invalid JSON), treat as error
+        elif parsed == value:
+            return None, f"palette must be a list of colors, got invalid string: '{value}'"
+        else:
+            return None, f"palette must be a list of colors (list), got string that parsed to {type(parsed).__name__}"
 
+    # Validate and normalize each color in the palette
     if not isinstance(value, list):
         return None, f"palette must be a list of colors, got {type(value).__name__}"
 
     normalized = []
     for i, color in enumerate(value):
-        parsed, error = _normalize_color_int(color)
+        color_normalized, error = _normalize_color_int(color)
         if error:
             return None, f"palette[{i}]: {error}"
-        normalized.append(parsed)
+        normalized.append(color_normalized)
 
     return normalized, None
 
@@ -365,6 +374,7 @@ def _normalize_import_settings(value: Any) -> tuple[dict | None, str | None]:
 
 
 @mcp_for_unity_tool(
+    group="vfx",
     description=(
         "Procedural texture generation for Unity. Creates textures with solid fills, "
         "patterns (checkerboard, stripes, dots, grid, brick), gradients, and noise. "
@@ -405,7 +415,7 @@ async def manage_texture(
         "dots", "grid", "brick"
     ], "Pattern type for apply_pattern action"] | None = None,
 
-    palette: Annotated[list[list[int | float]],
+    palette: Annotated[list[list[int | float]] | str,
                        "Color palette as [[r,g,b,a], ...]. Accepts both 0-255 range or 0.0-1.0 normalized range"] | None = None,
 
     pattern_size: Annotated[int,
@@ -450,7 +460,7 @@ async def manage_texture(
         "sprite_mesh_type (full_rect/tight), sprite_extrude (0-32)"] | None = None,
 
 ) -> dict[str, Any]:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     # Preflight check
     gate = await preflight(ctx, wait_for_no_compile=True, refresh_if_dirty=True)

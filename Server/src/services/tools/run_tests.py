@@ -21,6 +21,9 @@ from utils.focus_nudge import nudge_unity_focus, should_nudge, reset_nudge_backo
 
 logger = logging.getLogger(__name__)
 
+# Strong references to background fire-and-forget tasks to prevent premature GC.
+_background_tasks: set[asyncio.Task] = set()
+
 
 async def _get_unity_project_path(unity_instance: str | None) -> str | None:
     """Get the project root path for a Unity instance (for focus nudging).
@@ -141,6 +144,7 @@ class GetTestJobResponse(MCPResponse):
 
 
 @mcp_for_unity_tool(
+    group="testing",
     description="Starts a Unity test run asynchronously and returns a job_id immediately. Poll with get_test_job for progress.",
     annotations=ToolAnnotations(
         title="Run Tests",
@@ -164,7 +168,7 @@ async def run_tests(
     include_details: Annotated[bool,
                                "Include details for all tests (default: false)"] = False,
 ) -> RunTestsStartResponse | MCPResponse:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     gate = await preflight(ctx, requires_no_tests=True, wait_for_no_compile=True, refresh_if_dirty=True)
     if isinstance(gate, MCPResponse):
@@ -209,6 +213,7 @@ async def run_tests(
 
 
 @mcp_for_unity_tool(
+    group="testing",
     description="Polls an async Unity test job by job_id.",
     annotations=ToolAnnotations(
         title="Get Test Job",
@@ -227,7 +232,7 @@ async def get_test_job(
                             "Reduces polling frequency and avoids client-side loop detection. "
                             "Recommended: 30-60 seconds. Returns immediately if tests complete sooner."] = None,
 ) -> GetTestJobResponse | MCPResponse:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     params: dict[str, Any] = {"job_id": job_id}
     if include_failed_tests:
@@ -279,7 +284,7 @@ async def get_test_job(
             # This handles OS-level throttling (e.g., macOS App Nap) that can
             # stall PlayMode tests when Unity is in the background.
             # Uses exponential backoff: 1s, 2s, 4s, 8s, 10s max between nudges.
-            progress = data.get("progress", {})
+            progress = data.get("progress") or {}
             editor_is_focused = progress.get("editor_is_focused", True)
             current_time_ms = int(time.time() * 1000)
 
@@ -310,8 +315,31 @@ async def get_test_job(
     
     # No wait_timeout - return immediately (original behavior)
     response = await _fetch_status()
-    if isinstance(response, dict):
-        if not response.get("success", True):
-            return MCPResponse(**response)
-        return GetTestJobResponse(**response)
-    return MCPResponse(success=False, error=str(response))
+    if not isinstance(response, dict):
+        return MCPResponse(success=False, error=str(response))
+    if not response.get("success", True):
+        return MCPResponse(**response)
+
+    # Fire-and-forget nudge check: even without wait_timeout, clients may poll
+    # externally. Check if Unity needs a nudge on every call so stalls get
+    # detected regardless of polling style.
+    data = response.get("data", {})
+    status = data.get("status", "")
+    if status == "running":
+        progress = data.get("progress") or {}
+        editor_is_focused = progress.get("editor_is_focused", True)
+        last_update_unix_ms = data.get("last_update_unix_ms")
+        current_time_ms = int(time.time() * 1000)
+        if should_nudge(
+            status=status,
+            editor_is_focused=editor_is_focused,
+            last_update_unix_ms=last_update_unix_ms,
+            current_time_ms=current_time_ms,
+        ):
+            logger.info(f"Test job {job_id} appears stalled (unfocused Unity), scheduling background nudge...")
+            project_path = await _get_unity_project_path(unity_instance)
+            task = asyncio.create_task(nudge_unity_focus(unity_project_path=project_path))
+            _background_tasks.add(task)
+            task.add_done_callback(_background_tasks.discard)
+
+    return GetTestJobResponse(**response)

@@ -34,6 +34,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             TimeSpan.FromSeconds(10),
             TimeSpan.FromSeconds(30)
         };
+        private static readonly TimeSpan ReconnectTailInterval = TimeSpan.FromSeconds(30);
 
         private static readonly TimeSpan DefaultKeepAliveInterval = TimeSpan.FromSeconds(15);
         private static readonly TimeSpan DefaultCommandTimeout = TimeSpan.FromSeconds(30);
@@ -85,6 +86,15 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             _apiKey = HttpEndpointUtility.IsRemoteScope()
                 ? EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty)
                 : string.Empty;
+
+            if (HttpEndpointUtility.IsRemoteScope()
+                && !HttpEndpointUtility.IsCurrentRemoteUrlAllowed(out string remoteUrlError))
+            {
+                string message = remoteUrlError ?? "HTTP Remote URL is not allowed by current security settings.";
+                _state = TransportState.Disconnected(TransportDisplayName, message);
+                McpLog.Error($"[WebSocket] {message}");
+                return false;
+            }
 
             // Get project root path (strip /Assets from dataPath) for focus nudging
             string dataPath = Application.dataPath;
@@ -158,6 +168,35 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             _lifecycleCts = null;
         }
 
+        /// <summary>
+        /// Synchronous teardown for use in beforeAssemblyReload where async is not possible.
+        /// Skips the graceful WebSocket close handshake and just disposes resources immediately.
+        /// The server handles ungraceful disconnects via its ping timeout.
+        /// </summary>
+        public void ForceStop()
+        {
+            try { _lifecycleCts?.Cancel(); } catch { }
+            try { _connectionCts?.Cancel(); } catch { }
+
+            if (_socket != null)
+            {
+                try { _socket.Abort(); } catch { }
+                try { _socket.Dispose(); } catch { }
+                _socket = null;
+            }
+
+            try { _connectionCts?.Dispose(); } catch { }
+            _connectionCts = null;
+            _receiveTask = null;
+            _keepAliveTask = null;
+            Interlocked.Exchange(ref _isReconnectingFlag, 0);
+            _isConnected = false;
+            _state = TransportState.Disconnected(TransportDisplayName);
+
+            try { _lifecycleCts?.Dispose(); } catch { }
+            _lifecycleCts = null;
+        }
+
         public async Task<bool> VerifyAsync()
         {
             if (_socket == null || _socket.State != WebSocketState.Open)
@@ -215,26 +254,53 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             _connectionCts = CancellationTokenSource.CreateLinkedTokenSource(token);
             CancellationToken connectionToken = _connectionCts.Token;
 
-            _socket?.Dispose();
-            _socket = new ClientWebSocket();
-            _socket.Options.KeepAliveInterval = _socketKeepAliveInterval;
+            Uri originalEndpoint = _endpointUri;
+            Uri connectedEndpoint = null;
+            Exception lastConnectError = null;
 
-            // Add API key header if configured (for remote-hosted mode)
-            if (!string.IsNullOrEmpty(_apiKey))
+            foreach (Uri candidate in BuildConnectionCandidateUris(originalEndpoint))
             {
-                _socket.Options.SetRequestHeader(AuthConstants.ApiKeyHeader, _apiKey);
+                connectionToken.ThrowIfCancellationRequested();
+
+                _socket?.Dispose();
+                _socket = new ClientWebSocket();
+                _socket.Options.KeepAliveInterval = _socketKeepAliveInterval;
+
+                // Add API key header if configured (for remote-hosted mode)
+                if (!string.IsNullOrEmpty(_apiKey))
+                {
+                    _socket.Options.SetRequestHeader(AuthConstants.ApiKeyHeader, _apiKey);
+                }
+
+                try
+                {
+                    await _socket.ConnectAsync(candidate, connectionToken).ConfigureAwait(false);
+                    connectedEndpoint = candidate;
+                    break;
+                }
+                catch (OperationCanceledException) when (connectionToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    lastConnectError = ex;
+                    McpLog.Debug($"[WebSocket] Connect failed for {candidate}: {ex.Message}");
+                }
             }
 
-            try
-            {
-                await _socket.ConnectAsync(_endpointUri, connectionToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
+            if (connectedEndpoint == null)
             {
                 string errorMsg = "Connection failed. Check that the server URL is correct, the server is running, and your API key (if required) is valid.";
-                McpLog.Error($"[WebSocket] {errorMsg} (Detail: {ex.Message})");
+                McpLog.Error($"[WebSocket] {errorMsg} (Detail: {lastConnectError?.Message ?? "Unknown error"})");
                 _state = TransportState.Disconnected(TransportDisplayName, errorMsg);
                 return false;
+            }
+
+            if (!string.Equals(connectedEndpoint.Host, originalEndpoint.Host, StringComparison.OrdinalIgnoreCase))
+            {
+                McpLog.Warn($"[WebSocket] Connected via fallback host '{connectedEndpoint.Host}' after '{originalEndpoint.Host}' failed.");
+                _endpointUri = connectedEndpoint;
             }
 
             StartBackgroundLoops(connectionToken);
@@ -474,7 +540,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     ["description"] = tool.Description,
                     ["structured_output"] = tool.StructuredOutput,
                     ["requires_polling"] = tool.RequiresPolling,
-                    ["poll_action"] = tool.PollAction
+                    ["poll_action"] = tool.PollAction,
+                    ["group"] = string.IsNullOrWhiteSpace(tool.Group) ? "core" : tool.Group
                 };
 
                 var paramsArray = new JArray();
@@ -504,6 +571,29 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
             await SendJsonAsync(payload, token).ConfigureAwait(false);
             McpLog.Info($"[WebSocket] Sent {tools.Count} tools registration", false);
+        }
+
+        public async Task ReregisterToolsAsync()
+        {
+            if (!IsConnected || _lifecycleCts == null)
+            {
+                McpLog.Warn("[WebSocket] Cannot reregister tools: not connected");
+                return;
+            }
+
+            try
+            {
+                await SendRegisterToolsAsync(_lifecycleCts.Token).ConfigureAwait(false);
+                McpLog.Info("[WebSocket] Tool reregistration completed", false);
+            }
+            catch (System.OperationCanceledException)
+            {
+                McpLog.Warn("[WebSocket] Tool reregistration cancelled");
+            }
+            catch (System.Exception ex)
+            {
+                McpLog.Error($"[WebSocket] Tool reregistration failed: {ex.Message}");
+            }
         }
 
         private async Task HandleExecuteAsync(JObject payload, CancellationToken token)
@@ -703,13 +793,29 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                         return;
                     }
                 }
+
+                // Schedule exhausted — keep retrying every 30 s indefinitely so a transient
+                // server outage longer than ~49 s doesn't leave the plugin permanently dead.
+                McpLog.Warn($"[WebSocket] Initial reconnect schedule exhausted. Retrying every {ReconnectTailInterval.TotalSeconds}s until cancelled.");
+                _state = _state.WithError($"Server unreachable – retrying every {ReconnectTailInterval.TotalSeconds} s");
+                while (!token.IsCancellationRequested)
+                {
+                    try { await Task.Delay(ReconnectTailInterval, token).ConfigureAwait(false); }
+                    catch (OperationCanceledException) { return; }
+
+                    if (await EstablishConnectionAsync(token).ConfigureAwait(false))
+                    {
+                        _state = TransportState.Connected(TransportDisplayName, sessionId: _sessionId, details: _endpointUri.ToString());
+                        _isConnected = true;
+                        McpLog.Info("[WebSocket] Reconnected to MCP server", false);
+                        return;
+                    }
+                }
             }
             finally
             {
                 Interlocked.Exchange(ref _isReconnectingFlag, 0);
             }
-
-            _state = TransportState.Disconnected(TransportDisplayName, "Failed to reconnect");
         }
 
         private static Uri BuildWebSocketUri(string baseUrl)
@@ -719,13 +825,18 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 throw new InvalidOperationException($"Invalid MCP base URL: {baseUrl}");
             }
 
-            // Replace bind-only addresses with localhost for client connections
+            // Replace bind-only addresses for client connections
             // 0.0.0.0 and :: are only valid for server binding, not client connections
             string host = httpUri.Host;
-            if (host == "0.0.0.0" || host == "::")
+            if (host == "0.0.0.0")
             {
-                McpLog.Warn($"[WebSocket] Base URL host '{host}' is bind-only; using 'localhost' for client connection.");
-                host = "localhost";
+                McpLog.Warn($"[WebSocket] Base URL host '{host}' is bind-only; using '127.0.0.1' for client connection.");
+                host = "127.0.0.1";
+            }
+            else if (host == "::")
+            {
+                McpLog.Warn($"[WebSocket] Base URL host '{host}' is bind-only; using '::1' for client connection.");
+                host = "::1";
             }
 
             var builder = new UriBuilder(httpUri)
@@ -736,6 +847,48 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             };
 
             return builder.Uri;
+        }
+
+        private static List<Uri> BuildConnectionCandidateUris(Uri endpointUri)
+        {
+            var candidates = new List<Uri>();
+            if (endpointUri == null)
+            {
+                return candidates;
+            }
+
+            candidates.Add(endpointUri);
+
+            if (!string.Equals(endpointUri.Host, "localhost", StringComparison.OrdinalIgnoreCase))
+            {
+                return candidates;
+            }
+
+            // Retry localhost using explicit loopback hosts to avoid DNS family ambiguity on some machines.
+            TryAddCandidate(candidates, endpointUri, "127.0.0.1");
+            TryAddCandidate(candidates, endpointUri, "::1");
+            return candidates;
+        }
+
+        private static void TryAddCandidate(List<Uri> candidates, Uri template, string host)
+        {
+            try
+            {
+                var builder = new UriBuilder(template) { Host = host };
+                Uri candidate = builder.Uri;
+                foreach (Uri existing in candidates)
+                {
+                    if (Uri.Compare(existing, candidate, UriComponents.AbsoluteUri, UriFormat.SafeUnescaped, StringComparison.OrdinalIgnoreCase) == 0)
+                    {
+                        return;
+                    }
+                }
+                candidates.Add(candidate);
+            }
+            catch
+            {
+                // Ignore malformed fallback candidate and continue with remaining options.
+            }
         }
     }
 }

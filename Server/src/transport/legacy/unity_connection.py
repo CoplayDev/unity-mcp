@@ -126,6 +126,36 @@ class UnityConnection:
             finally:
                 self.sock = None
 
+    def _ensure_live_connection(self) -> None:
+        """Detect and discard stale (peer-closed) sockets before sending.
+
+        After domain reload Unity closes all TCP connections. The Python side
+        may still hold a reference to the dead socket. A non-blocking peek
+        detects this so send_command can reconnect instead of writing to a dead
+        socket and getting 'Connection closed before reading expected bytes'.
+        """
+        if not self.sock:
+            return
+        orig_blocking = None
+        try:
+            orig_blocking = self.sock.getblocking()
+            self.sock.setblocking(False)
+            data = self.sock.recv(1, socket.MSG_PEEK)
+            if not data:
+                raise ConnectionError("peer closed")
+        except BlockingIOError:
+            pass  # No data pending; socket is alive
+        except Exception:
+            logger.debug("Stale socket detected; will reconnect on next send")
+            try:
+                self.sock.close()
+            except Exception:
+                pass
+            self.sock = None
+        finally:
+            if self.sock and orig_blocking is not None:
+                self.sock.setblocking(orig_blocking)
+
     def _read_exact(self, sock: socket.socket, count: int) -> bytes:
         data = bytearray()
         while len(data) < count:
@@ -305,6 +335,9 @@ class UnityConnection:
 
         for attempt in range(attempts + 1):
             try:
+                # Discard stale sockets left over from a previous domain reload
+                # so we reconnect instead of writing to a dead connection.
+                self._ensure_live_connection()
                 # Ensure connected (handshake occurs within connect())
                 t_conn_start = time.time()
                 if not self.sock and not self.connect():

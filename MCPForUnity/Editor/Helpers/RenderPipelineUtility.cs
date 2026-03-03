@@ -24,11 +24,18 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         private static Dictionary<string, Material> s_DefaultVFXMaterials = new Dictionary<string, Material>();
+        private static Dictionary<string, Material> s_DefaultSceneMaterials = new Dictionary<string, Material>();
 
         private static readonly string[] BuiltInLitShaders = { "Standard", "Legacy Shaders/Diffuse" };
         private static readonly string[] BuiltInUnlitShaders = { "Unlit/Color", "Unlit/Texture" };
+        private static readonly string[] BuiltInParticleShaders = { "Particles/Standard Unlit", "Particles/Alpha Blended", "Particles/Additive" };
         private static readonly string[] UrpLitShaders = { "Universal Render Pipeline/Lit", "Universal Render Pipeline/Simple Lit" };
         private static readonly string[] UrpUnlitShaders = { "Universal Render Pipeline/Unlit" };
+        private static readonly string[] UrpParticleShaders = {
+            "Universal Render Pipeline/Particles/Unlit",
+            "Universal Render Pipeline/Particles/Simple Lit",
+            "Universal Render Pipeline/Particles/Lit",
+        };
         private static readonly string[] HdrpLitShaders = { "HDRP/Lit", "High Definition Render Pipeline/Lit" };
         private static readonly string[] HdrpUnlitShaders = { "HDRP/Unlit", "High Definition Render Pipeline/Unlit" };
 
@@ -170,8 +177,8 @@ namespace MCPForUnity.Editor.Helpers
             var lowerName = shaderName.ToLowerInvariant();
             bool shaderLooksUrp = lowerName.Contains("universal render pipeline") || lowerName.Contains("urp/");
             bool shaderLooksHdrp = lowerName.Contains("high definition render pipeline") || lowerName.Contains("hdrp/");
-            bool shaderLooksBuiltin = lowerName.Contains("standard") || lowerName.Contains("legacy shaders/");
             bool shaderLooksSrp = shaderLooksUrp || shaderLooksHdrp;
+            bool shaderLooksBuiltin = LooksLikeBuiltInShader(lowerName, shaderLooksSrp);
 
             switch (activePipeline)
             {
@@ -204,6 +211,76 @@ namespace MCPForUnity.Editor.Helpers
             }
         }
 
+        internal static bool IsMaterialInvalidForActivePipeline(Material material, out string reason)
+        {
+            reason = null;
+            if (material == null)
+            {
+                reason = "missing_material";
+                return true;
+            }
+
+            Shader shader = material.shader;
+            if (shader == null)
+            {
+                reason = "missing_shader";
+                return true;
+            }
+
+            if (IsErrorShader(shader))
+            {
+                reason = "error_shader";
+                return true;
+            }
+
+            var pipeline = GetActivePipeline();
+            if (IsPipelineMismatch(shader.name, pipeline))
+            {
+                reason = "pipeline_mismatch";
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsErrorShader(Shader shader)
+        {
+            if (shader == null)
+            {
+                return true;
+            }
+
+            if (shader == Shader.Find("Hidden/InternalErrorShader"))
+            {
+                return true;
+            }
+
+            string shaderName = shader.name ?? string.Empty;
+            return shaderName.IndexOf("InternalErrorShader", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool IsPipelineMismatch(string shaderName, PipelineKind activePipeline)
+        {
+            if (string.IsNullOrEmpty(shaderName))
+            {
+                return true;
+            }
+
+            string lowerName = shaderName.ToLowerInvariant();
+            bool shaderLooksUrp = lowerName.Contains("universal render pipeline") || lowerName.Contains("urp/");
+            bool shaderLooksHdrp = lowerName.Contains("high definition render pipeline") || lowerName.Contains("hdrp/");
+            bool shaderLooksSrp = shaderLooksUrp || shaderLooksHdrp;
+            bool shaderLooksBuiltin = LooksLikeBuiltInShader(lowerName, shaderLooksSrp);
+
+            return activePipeline switch
+            {
+                PipelineKind.HighDefinition => shaderLooksUrp || (shaderLooksBuiltin && !shaderLooksHdrp),
+                PipelineKind.Universal => shaderLooksHdrp || (shaderLooksBuiltin && !shaderLooksUrp),
+                PipelineKind.BuiltIn => shaderLooksSrp,
+                _ => false,
+            };
+        }
+
         internal static Material GetOrCreateDefaultVFXMaterial(VFXComponentType componentType)
         {
             var pipeline = GetActivePipeline();
@@ -227,7 +304,7 @@ namespace MCPForUnity.Editor.Helpers
 
             if (material == null)
             {
-                Shader shader = ResolveDefaultUnlitShader(pipeline);
+                Shader shader = ResolveDefaultVFXShader(pipeline, componentType);
                 if (shader == null)
                 {
                     shader = Shader.Find("Unlit/Color");
@@ -276,6 +353,90 @@ namespace MCPForUnity.Editor.Helpers
             if (material != null)
             {
                 s_DefaultVFXMaterials[cacheKey] = material;
+            }
+
+            return material;
+        }
+
+        private static Shader ResolveDefaultVFXShader(PipelineKind pipeline, VFXComponentType componentType)
+        {
+            if (componentType == VFXComponentType.ParticleSystem)
+            {
+                return pipeline switch
+                {
+                    PipelineKind.Universal => TryFindShader(UrpParticleShaders) ?? ResolveDefaultUnlitShader(pipeline),
+                    PipelineKind.HighDefinition => TryFindShader(HdrpUnlitShaders) ?? ResolveDefaultUnlitShader(pipeline),
+                    PipelineKind.BuiltIn => TryFindShader(BuiltInParticleShaders) ?? ResolveDefaultUnlitShader(pipeline),
+                    PipelineKind.Custom => TryFindShader(UrpParticleShaders)
+                                           ?? TryFindShader(BuiltInParticleShaders)
+                                           ?? TryFindShader(HdrpUnlitShaders)
+                                           ?? ResolveDefaultUnlitShader(pipeline),
+                    _ => ResolveDefaultUnlitShader(pipeline),
+                };
+            }
+
+            return ResolveDefaultUnlitShader(pipeline);
+        }
+
+        private static bool LooksLikeBuiltInShader(string lowerName, bool shaderLooksSrp)
+        {
+            if (string.IsNullOrEmpty(lowerName))
+            {
+                return false;
+            }
+
+            if (lowerName == "standard" ||
+                lowerName.StartsWith("legacy shaders/", StringComparison.Ordinal) ||
+                lowerName.StartsWith("mobile/", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            // Built-in non-SRP shader families commonly seen on particles/old content.
+            if (!shaderLooksSrp &&
+                (lowerName.StartsWith("particles/", StringComparison.Ordinal) ||
+                 lowerName.StartsWith("unlit/", StringComparison.Ordinal)))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        internal static Material GetOrCreateDefaultSceneMaterial()
+        {
+            var pipeline = GetActivePipeline();
+            string cacheKey = $"{pipeline}_scene";
+            if (s_DefaultSceneMaterials.TryGetValue(cacheKey, out Material cached) && cached != null)
+            {
+                return cached;
+            }
+
+            Material material = null;
+            Shader shader = ResolveDefaultLitShader(pipeline) ?? ResolveDefaultUnlitShader(pipeline);
+            if (shader == null)
+            {
+                shader = Shader.Find("Unlit/Color");
+            }
+
+            if (shader != null)
+            {
+                material = new Material(shader);
+                material.name = $"Auto_Default_Scene_{pipeline}";
+                if (material.HasProperty("_Color"))
+                {
+                    material.SetColor("_Color", Color.white);
+                }
+                if (material.HasProperty("_BaseColor"))
+                {
+                    material.SetColor("_BaseColor", Color.white);
+                }
+                McpLog.Info($"[RenderPipelineUtility] Created default scene material using {shader.name}");
+            }
+
+            if (material != null)
+            {
+                s_DefaultSceneMaterials[cacheKey] = material;
             }
 
             return material;

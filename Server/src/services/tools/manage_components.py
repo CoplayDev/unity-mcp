@@ -14,7 +14,13 @@ from services.tools.preflight import preflight
 
 
 @mcp_for_unity_tool(
-    description="Manages components on GameObjects (add, remove, set_property). For reading component data, use the mcpforunity://scene/gameobject/{id}/components resource."
+    description=(
+        "Add, remove, or set properties on components attached to GameObjects. "
+        "Actions: add, remove, set_property. Requires target (instance ID or name) and component_type. "
+        "For READING component data, use the mcpforunity://scene/gameobject/{id}/components resource "
+        "or mcpforunity://scene/gameobject/{id}/component/{name} for a single component. "
+        "For creating/deleting GameObjects themselves, use manage_gameobject instead."
+    )
 )
 async def manage_components(
     ctx: Context,
@@ -59,7 +65,7 @@ async def manage_components(
     - Set single property: action="set_property", target="Enemy", component_type="Rigidbody", property="mass", value=5.0
     - Set multiple properties: action="set_property", target="Enemy", component_type="Rigidbody", properties={"mass": 5.0, "useGravity": false}
     """
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     gate = await preflight(ctx, wait_for_no_compile=True, refresh_if_dirty=True)
     if gate is not None:

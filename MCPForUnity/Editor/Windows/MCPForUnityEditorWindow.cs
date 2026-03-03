@@ -10,6 +10,7 @@ using MCPForUnity.Editor.Windows.Components.ClientConfig;
 using MCPForUnity.Editor.Windows.Components.Connection;
 using MCPForUnity.Editor.Windows.Components.Resources;
 using MCPForUnity.Editor.Windows.Components.Tools;
+using MCPForUnity.Editor.Setup;
 using MCPForUnity.Editor.Windows.Components.Validation;
 using UnityEditor;
 using UnityEditor.UIElements;
@@ -197,7 +198,7 @@ namespace MCPForUnity.Editor.Windows
             }
 
             // Initialize version label
-            UpdateVersionLabel(EditorConfigurationCache.Instance.UseBetaServer);
+            UpdateVersionLabel();
 
             SetupTabs();
 
@@ -237,6 +238,9 @@ namespace MCPForUnity.Editor.Windows
                     connectionSection?.UpdateVersionMismatchWarning(clientName, mismatchMessage);
             }
 
+            // Build Roslyn install section (code-only, no UXML)
+            BuildRoslynSection(validationContainer);
+
             // Load and initialize Validation section
             var validationTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
                 $"{basePath}/Editor/Windows/Components/Validation/McpValidationSection.uxml"
@@ -262,15 +266,15 @@ namespace MCPForUnity.Editor.Windows
                 advancedSection.OnGitUrlChanged += () =>
                     clientConfigSection?.UpdateManualConfiguration();
                 advancedSection.OnHttpServerCommandUpdateRequested += () =>
+                {
                     connectionSection?.UpdateHttpServerCommandDisplay();
+                    connectionSection?.UpdateConnectionStatus();
+                };
                 advancedSection.OnTestConnectionRequested += async () =>
                 {
                     if (connectionSection != null)
                         await connectionSection.VerifyBridgeConnectionAsync();
                 };
-                advancedSection.OnBetaModeChanged += UpdateVersionLabel;
-                advancedSection.OnBetaModeChanged += _ => clientConfigSection?.RefreshSelectedClient(forceImmediate: true);
-
                 // Wire up health status updates from Connection to Advanced
                 connectionSection?.SetHealthStatusUpdateCallback((isHealthy, statusText) =>
                     advancedSection?.UpdateHealthStatus(isHealthy, statusText));
@@ -326,7 +330,7 @@ namespace MCPForUnity.Editor.Windows
             RefreshAllData();
         }
 
-        private void UpdateVersionLabel(bool useBetaServer)
+        private void UpdateVersionLabel()
         {
             if (versionLabel == null)
             {
@@ -335,8 +339,8 @@ namespace MCPForUnity.Editor.Windows
 
             string version = AssetPathUtility.GetPackageVersion();
             versionLabel.text = $"v{version}";
-            versionLabel.tooltip = useBetaServer
-                ? "Beta server mode - fetching pre-release server versions from PyPI"
+            versionLabel.tooltip = AssetPathUtility.IsPreReleaseVersion()
+                ? $"MCP For Unity v{version} (pre-release package, using prerelease server channel)"
                 : $"MCP For Unity v{version}";
         }
 
@@ -607,7 +611,7 @@ namespace MCPForUnity.Editor.Windows
             {
                 case ActivePanel.Clients:
                     if (clientsPanel != null) clientsPanel.style.display = DisplayStyle.Flex;
-                    // Refresh client status when switching to Connect tab (e.g., after changing beta mode in Advanced)
+                    // Refresh client status when switching to Connect tab (e.g., after package/version changes).
                     clientConfigSection?.RefreshSelectedClient(forceImmediate: true);
                     break;
                 case ActivePanel.Validation:
@@ -664,6 +668,42 @@ namespace MCPForUnity.Editor.Windows
                     McpLog.Warn($"Health check verification failed: {ex.Message}");
                 }
             };
+        }
+
+        private static void BuildRoslynSection(VisualElement container)
+        {
+            var section = new VisualElement();
+            section.AddToClassList("section");
+
+            var title = new Label("Runtime Code Execution (Roslyn)");
+            title.AddToClassList("section-title");
+            section.Add(title);
+
+            var content = new VisualElement();
+            content.AddToClassList("section-content");
+
+            bool installed = RoslynInstaller.IsInstalled();
+
+            var statusLabel = new Label(installed
+                ? "\u2713  Roslyn DLLs are installed. The execute_code tool is available."
+                : "Roslyn DLLs are required for the execute_code tool (runtime C# compilation).");
+            statusLabel.AddToClassList("validation-description");
+            statusLabel.style.marginBottom = 4;
+            content.Add(statusLabel);
+
+            var button = new Button(() =>
+            {
+                RoslynInstaller.Install(interactive: true);
+                statusLabel.text = RoslynInstaller.IsInstalled()
+                    ? "\u2713  Roslyn DLLs are installed. The execute_code tool is available."
+                    : "Installation incomplete. Check the console for errors.";
+            });
+            button.text = installed ? "Reinstall Roslyn DLLs" : "Install Roslyn DLLs";
+            button.AddToClassList("action-button");
+            content.Add(button);
+
+            section.Add(content);
+            container.Add(section);
         }
     }
 }

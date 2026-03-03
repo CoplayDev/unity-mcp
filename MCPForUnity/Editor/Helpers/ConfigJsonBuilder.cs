@@ -52,6 +52,7 @@ namespace MCPForUnity.Editor.Helpers
             bool prefValue = EditorConfigurationCache.Instance.UseHttpTransport;
             bool clientSupportsHttp = client?.SupportsHttpTransport != false;
             bool useHttpTransport = clientSupportsHttp && prefValue;
+            bool isCline = client?.name == "Cline";
             string httpProperty = string.IsNullOrEmpty(client?.HttpUrlProperty) ? "url" : client.HttpUrlProperty;
             var urlPropsToRemove = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "url", "serverUrl" };
             urlPropsToRemove.Remove(httpProperty);
@@ -100,6 +101,11 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     unity["type"] = "http";
                 }
+                // Cline expects streamableHttp for HTTP endpoints.
+                else if (isCline)
+                {
+                    unity["type"] = "streamableHttp";
+                }
             }
             else
             {
@@ -119,10 +125,14 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     unity["type"] = "stdio";
                 }
+                else if (isCline)
+                {
+                    unity["type"] = "stdio";
+                }
             }
 
-            // Remove type for non-VSCode clients (except Claude Code which needs it)
-            if (!isVSCode && client?.name != "Claude Code" && unity["type"] != null)
+            // Remove type for non-VSCode clients (except clients that explicitly require it)
+            if (!isVSCode && client?.name != "Claude Code" && !isCline && unity["type"] != null)
             {
                 unity.Remove("type");
             }
@@ -170,12 +180,8 @@ namespace MCPForUnity.Editor.Helpers
             // Keep ordering consistent with other uvx builders: dev flags first, then --from <url>, then package name.
             var args = new List<string>();
 
-            // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
-            if (AssetPathUtility.ShouldForceUvxRefresh())
-            {
-                args.Add("--no-cache");
-                args.Add("--refresh");
-            }
+            foreach (var flag in AssetPathUtility.GetUvxDevFlagsList())
+                args.Add(flag);
 
             // Use centralized helper for beta server / prerelease args
             foreach (var arg in AssetPathUtility.GetBetaServerFromArgsList())

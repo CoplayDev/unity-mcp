@@ -57,8 +57,8 @@ def batch_run(file: str, parallel: bool, fail_fast: bool):
         print_error("JSON file must contain an array of commands")
         sys.exit(1)
 
-    if len(commands) > 25:
-        print_error(f"Maximum 25 commands per batch, got {len(commands)}")
+    if len(commands) > 40:
+        print_error(f"Maximum 40 commands per batch, got {len(commands)}")
         sys.exit(1)
 
     params: dict[str, Any] = {"commands": commands}
@@ -105,8 +105,8 @@ def batch_inline(commands_json: str, parallel: bool, fail_fast: bool):
 
     commands = parse_json_list_or_exit(commands_json, "commands")
 
-    if len(commands) > 25:
-        print_error(f"Maximum 25 commands per batch, got {len(commands)}")
+    if len(commands) > 40:
+        print_error(f"Maximum 40 commands per batch, got {len(commands)}")
         sys.exit(1)
 
     params: dict[str, Any] = {"commands": commands}

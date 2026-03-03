@@ -19,6 +19,13 @@ from starlette.routing import WebSocketRoute
 from starlette.responses import JSONResponse
 import argparse
 import asyncio
+
+# Fix to IPV4 Connection Issue #853
+# Will disable features in ProactorEventLoop including subprocess pipes and named pipes
+import sys
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 import logging
 from contextlib import asynccontextmanager
 import os
@@ -92,6 +99,10 @@ try:
     _fh.setLevel(getattr(logging, config.log_level))
     logger.addHandler(_fh)
     logger.propagate = False  # Prevent double logging to root logger
+    # Add file handler to root logger so __name__-based loggers (e.g. utils.focus_nudge,
+    # services.tools.run_tests) also write to the log file. Named loggers with
+    # propagate=False won't double-log.
+    logging.getLogger().addHandler(_fh)
     # Also route telemetry logger to the same rotating file and normal level
     try:
         tlog = logging.getLogger("unity-mcp-telemetry")
@@ -158,7 +169,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     if _plugin_registry is None:
         _plugin_registry = PluginRegistry()
         loop = asyncio.get_running_loop()
-        PluginHub.configure(_plugin_registry, loop)
+        PluginHub.configure(_plugin_registry, loop, mcp=server)
 
     # Record server startup telemetry
     start_time = time.time()
@@ -196,6 +207,31 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
                     _unity_connection_pool.get_connection()
                     logger.info(
                         "Connected to default Unity instance on startup")
+
+                    # In stdio mode, query Unity for tool enabled states and sync
+                    # server-level visibility. In HTTP mode this is handled by
+                    # register_tools via WebSocket in PluginHub.
+                    if (config.transport_mode or "stdio").lower() != "http":
+                        try:
+                            from services.tools import sync_tool_visibility_from_unity
+                            sync_result = await sync_tool_visibility_from_unity(notify=False)
+                            if sync_result.get("synced"):
+                                logger.info(
+                                    "Stdio startup: synced tool visibility from Unity — "
+                                    "enabled=[%s], disabled=[%s]",
+                                    ", ".join(sync_result.get("enabled_groups", [])),
+                                    ", ".join(sync_result.get("disabled_groups", [])),
+                                )
+                            else:
+                                # Unsupported command = old Unity package; just debug-log
+                                log_fn = logger.debug if sync_result.get("unsupported") else logger.warning
+                                log_fn(
+                                    "Stdio startup: could not sync tool visibility: %s",
+                                    sync_result.get("error", "unknown"),
+                                )
+                        except Exception as sync_exc:
+                            logger.debug(
+                                "Stdio startup: tool visibility sync failed: %s", sync_exc)
 
                     # Record successful Unity connection (deferred)
                     threading.Timer(1.0, lambda: record_telemetry(
@@ -268,7 +304,8 @@ This server provides tools to interact with the Unity Game Engine Editor.
 
 Targeting Unity instances:
 - Use the resource mcpforunity://instances to list active Unity sessions (Name@hash).
-- When multiple instances are connected, call set_active_instance with the exact Name@hash before using tools/resources. The server will error if multiple are connected and no active instance is set.
+- When multiple instances are connected, call set_active_instance with the exact Name@hash before using tools/resources to pin routing for the whole session. The server will error if multiple are connected and no active instance is set.
+- Alternatively, pass unity_instance as a parameter on any individual tool call to route just that call (e.g. unity_instance="MyGame@abc123", unity_instance="abc" for a hash prefix, or unity_instance="6401" for a port number in stdio mode). This does not change the session default.
 
 Important Workflows:
 
@@ -581,7 +618,10 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
             config.api_key_cache_ttl,
         )
 
-    # Mount plugin websocket hub at /hub/plugin when HTTP transport is active
+    # Mount plugin websocket hub at /hub/plugin when HTTP transport is active.
+    # NOTE: Uses FastMCP private API because custom_route() only supports HTTP
+    # methods, not WebSocket. _additional_http_routes accepts Starlette Route
+    # objects and is still present in FastMCP 3.x.
     existing_routes = [
         route for route in mcp._get_additional_http_routes()
         if isinstance(route, WebSocketRoute) and route.path == "/hub/plugin"
@@ -610,7 +650,7 @@ Environment Variables:
   UNITY_MCP_SKIP_STARTUP_CONNECT   Skip initial Unity connection attempt (set to 1/true/yes/on)
   UNITY_MCP_TELEMETRY_ENABLED   Enable telemetry (set to 1/true/yes/on)
   UNITY_MCP_TRANSPORT   Transport protocol: stdio or http (default: stdio)
-  UNITY_MCP_HTTP_URL   HTTP server URL (default: http://localhost:8080)
+  UNITY_MCP_HTTP_URL   HTTP server URL (default: http://127.0.0.1:8080)
   UNITY_MCP_HTTP_HOST   HTTP server host (overrides URL host)
   UNITY_MCP_HTTP_PORT   HTTP server port (overrides URL port)
 
@@ -619,7 +659,7 @@ Examples:
   python -m src.server --default-instance "MyProject"
 
   # Start with HTTP transport
-  python -m src.server --transport http --http-url http://localhost:8080
+  python -m src.server --transport http --http-url http://127.0.0.1:8080
 
   # Start with stdio transport (default)
   python -m src.server --transport stdio
@@ -646,9 +686,9 @@ Examples:
     parser.add_argument(
         "--http-url",
         type=str,
-        default="http://localhost:8080",
+        default="http://127.0.0.1:8080",
         metavar="URL",
-        help="HTTP server URL (default: http://localhost:8080). "
+        help="HTTP server URL (default: http://127.0.0.1:8080). "
              "Can also set via UNITY_MCP_HTTP_URL environment variable."
     )
     parser.add_argument(
@@ -799,7 +839,7 @@ Examples:
 
     # Allow individual host/port to override URL components
     http_host = args.http_host or os.environ.get(
-        "UNITY_MCP_HTTP_HOST") or parsed_url.hostname or "localhost"
+        "UNITY_MCP_HTTP_HOST") or parsed_url.hostname or "127.0.0.1"
 
     # Safely parse optional environment port (may be None or non-numeric)
     _env_port_str = os.environ.get("UNITY_MCP_HTTP_PORT")
@@ -829,7 +869,7 @@ Examples:
             logger.warning(
                 "Failed to write pidfile '%s': %s", args.pidfile, exc)
 
-    if args.http_url != "http://localhost:8080":
+    if args.http_url != "http://127.0.0.1:8080":
         logger.info(f"HTTP URL set to: {http_url}")
     if args.http_host:
         logger.info(f"HTTP host override: {http_host}")
@@ -850,7 +890,7 @@ Examples:
         http_url = os.environ.get("UNITY_MCP_HTTP_URL", args.http_url)
         parsed_url = urlparse(http_url)
         host = args.http_host or os.environ.get(
-            "UNITY_MCP_HTTP_HOST") or parsed_url.hostname or "localhost"
+            "UNITY_MCP_HTTP_HOST") or parsed_url.hostname or "127.0.0.1"
         port = args.http_port or _env_port or parsed_url.port or 8080
         logger.info(f"Starting FastMCP with HTTP transport on {host}:{port}")
         mcp.run(transport=transport, host=host, port=port)

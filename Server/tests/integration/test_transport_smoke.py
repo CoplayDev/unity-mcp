@@ -60,6 +60,39 @@ async def test_http_remote_smoke(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_http_forwards_retry_on_reload(monkeypatch):
+    """HTTP transport should pass retry_on_reload through to PluginHub."""
+    monkeypatch.setattr(config, "transport_mode", "http")
+    monkeypatch.setattr(config, "http_remote_hosted", False)
+
+    captured: dict[str, object] = {}
+
+    async def fake_send_command_for_instance(_instance, _command, _params, **kwargs):
+        captured.update(kwargs)
+        return {"status": "success", "result": {"data": {"via": "http"}}}
+
+    monkeypatch.setattr(
+        unity_transport.PluginHub,
+        "send_command_for_instance",
+        fake_send_command_for_instance,
+    )
+
+    async def _unused_send_fn(*_args, **_kwargs):
+        raise AssertionError("send_fn should not be used in HTTP mode")
+
+    result = await unity_transport.send_with_unity_instance(
+        _unused_send_fn,
+        None,
+        "manage_script",
+        {"action": "edit"},
+        retry_on_reload=False,
+    )
+
+    assert result["success"] is True
+    assert captured.get("retry_on_reload") is False
+
+
+@pytest.mark.asyncio
 async def test_stdio_smoke(monkeypatch):
     """Stdio transport should call the legacy send fn with instance_id."""
     monkeypatch.setattr(config, "transport_mode", "stdio")
