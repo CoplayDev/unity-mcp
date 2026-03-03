@@ -45,6 +45,7 @@ unity-mcp instance current                 # Show current instance
 **Editor Control**
 ```bash
 unity-mcp editor play|pause|stop           # Control play mode
+unity-mcp editor wait-compile [--timeout N] # Wait for scripts to compile
 unity-mcp editor console [--clear]         # Get/clear console logs
 unity-mcp editor refresh [--compile]       # Refresh assets
 unity-mcp editor menu "Edit/Project Settings..."  # Execute menu item
