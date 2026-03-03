@@ -13,6 +13,7 @@ from transport.plugin_hub import PluginHub
 
 
 @mcp_for_unity_tool(
+    unity_target=None,
     description="Return the current FastMCP request context details (client_id, session_id, and meta dump).",
     annotations=ToolAnnotations(
         title="Debug Request Context",

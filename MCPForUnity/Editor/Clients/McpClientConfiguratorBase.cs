@@ -30,7 +30,9 @@ namespace MCPForUnity.Editor.Clients
         public McpStatus Status => client.status;
         public ConfiguredTransport ConfiguredTransport => client.configuredTransport;
         public virtual bool SupportsAutoConfigure => true;
+        public virtual bool SupportsSkills => false;
         public virtual string GetConfigureActionLabel() => "Configure";
+        public virtual string GetSkillInstallPath() => null;
 
         public abstract string GetConfigPath();
         public abstract McpStatus CheckStatus(bool attemptAutoRewrite = true);
@@ -80,39 +82,13 @@ namespace MCPForUnity.Editor.Clients
         }
 
         /// <summary>
-        /// Gets the expected package source for validation, accounting for beta mode.
+        /// Gets the expected package source for validation based on the installed package version.
         /// This should match what Configure() would actually use for the --from argument.
         /// MUST be called from the main thread due to EditorPrefs access.
         /// </summary>
         protected static string GetExpectedPackageSourceForValidation()
         {
-            // Check for explicit override first
-            string gitUrlOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
-            if (!string.IsNullOrEmpty(gitUrlOverride))
-            {
-                return gitUrlOverride;
-            }
-
-            // Check beta mode using the same logic as GetUseBetaServerWithDynamicDefault
-            // (bypass cache to ensure fresh read)
-            bool useBetaServer;
-            bool hasPrefKey = EditorPrefs.HasKey(EditorPrefKeys.UseBetaServer);
-            if (hasPrefKey)
-            {
-                useBetaServer = EditorPrefs.GetBool(EditorPrefKeys.UseBetaServer, false);
-            }
-            else
-            {
-                // Dynamic default based on package version
-                useBetaServer = AssetPathUtility.IsPreReleaseVersion();
-            }
-
-            if (useBetaServer)
-            {
-                return "mcpforunityserver>=0.0.0a0";
-            }
-
-            // Standard mode uses exact version from package.json
+            // Includes explicit override, stable pin, or prerelease range depending on package version.
             return AssetPathUtility.GetMcpServerPackageSource();
         }
 
@@ -120,7 +96,7 @@ namespace MCPForUnity.Editor.Clients
         /// Checks if a package source string represents a beta/prerelease version.
         /// Beta versions include:
         /// - PyPI beta: "mcpforunityserver==9.4.0b20250203..." (contains 'b' before timestamp)
-        /// - PyPI prerelease range: "mcpforunityserver>=0.0.0a0" (used when beta mode is enabled)
+        /// - PyPI prerelease range: "mcpforunityserver>=0.0.0a0" (used for prerelease package builds)
         /// - Git beta branch: contains "@beta" or "-beta"
         /// </summary>
         protected static bool IsBetaPackageSource(string packageSource)
@@ -133,7 +109,7 @@ namespace MCPForUnity.Editor.Clients
             if (System.Text.RegularExpressions.Regex.IsMatch(packageSource, @"==\d+\.\d+\.\d+b\d+"))
                 return true;
 
-            // PyPI prerelease range: >=0.0.0a0 (used when "Use Beta Server" is enabled in Unity settings)
+            // PyPI prerelease range: >=0.0.0a0 (used for prerelease package builds)
             if (packageSource.Contains(">=0.0.0a0", StringComparison.OrdinalIgnoreCase))
                 return true;
 
@@ -266,12 +242,12 @@ namespace MCPForUnity.Editor.Clients
                             if (configuredIsBeta && !expectedIsBeta)
                             {
                                 hasVersionMismatch = true;
-                                mismatchReason = "Configured for beta server, but 'Use Beta Server' is disabled in Advanced settings.";
+                                mismatchReason = "Configured for prerelease server, but this package is stable. Re-configure to switch to stable.";
                             }
                             else if (!configuredIsBeta && expectedIsBeta)
                             {
                                 hasVersionMismatch = true;
-                                mismatchReason = "Configured for stable server, but 'Use Beta Server' is enabled in Advanced settings.";
+                                mismatchReason = "Configured for stable server, but this package is prerelease. Re-configure to switch to prerelease.";
                             }
                             else
                             {
@@ -449,12 +425,12 @@ namespace MCPForUnity.Editor.Clients
                                 if (configuredIsBeta && !expectedIsBeta)
                                 {
                                     hasVersionMismatch = true;
-                                    mismatchReason = "Configured for beta server, but 'Use Beta Server' is disabled in Advanced settings.";
+                                    mismatchReason = "Configured for prerelease server, but this package is stable. Re-configure to switch to stable.";
                                 }
                                 else if (!configuredIsBeta && expectedIsBeta)
                                 {
                                     hasVersionMismatch = true;
-                                    mismatchReason = "Configured for stable server, but 'Use Beta Server' is enabled in Advanced settings.";
+                                    mismatchReason = "Configured for stable server, but this package is prerelease. Re-configure to switch to prerelease.";
                                 }
                                 else
                                 {
@@ -579,7 +555,7 @@ namespace MCPForUnity.Editor.Clients
             string claudePath = MCPServiceLocator.Paths.GetClaudeCliPath();
             RuntimePlatform platform = Application.platform;
             bool isRemoteScope = HttpEndpointUtility.IsRemoteScope();
-            // Get expected package source considering beta mode (matches what Register() would use)
+            // Get expected package source for the installed package version (matches what Register() would use)
             string expectedPackageSource = GetExpectedPackageSourceForValidation();
             return CheckStatusWithProjectDir(projectDir, useHttpTransport, claudePath, platform, isRemoteScope, expectedPackageSource, attemptAutoRewrite);
         }
@@ -679,11 +655,11 @@ namespace MCPForUnity.Editor.Clients
 
                             if (configuredIsBeta && !expectedIsBeta)
                             {
-                                mismatchReason = "Configured for beta server, but 'Use Beta Server' is disabled in Advanced settings.";
+                                mismatchReason = "Configured for prerelease server, but this package is stable. Re-configure to switch to stable.";
                             }
                             else if (!configuredIsBeta && expectedIsBeta)
                             {
-                                mismatchReason = "Configured for stable server, but 'Use Beta Server' is enabled in Advanced settings.";
+                                mismatchReason = "Configured for stable server, but this package is prerelease. Re-configure to switch to prerelease.";
                             }
                             else
                             {
@@ -767,7 +743,7 @@ namespace MCPForUnity.Editor.Clients
         public void ConfigureWithCapturedValues(
             string projectDir, string claudePath, string pathPrepend,
             bool useHttpTransport, string httpUrl,
-            string uvxPath, string fromArgs, string packageName, bool shouldForceRefresh,
+            string uvxPath, string fromArgs, string packageName, string uvxDevFlags,
             string apiKey,
             Models.ConfiguredTransport serverTransport)
         {
@@ -778,7 +754,7 @@ namespace MCPForUnity.Editor.Clients
             else
             {
                 RegisterWithCapturedValues(projectDir, claudePath, pathPrepend,
-                    useHttpTransport, httpUrl, uvxPath, fromArgs, packageName, shouldForceRefresh,
+                    useHttpTransport, httpUrl, uvxPath, fromArgs, packageName, uvxDevFlags,
                     apiKey, serverTransport);
             }
         }
@@ -789,7 +765,7 @@ namespace MCPForUnity.Editor.Clients
         private void RegisterWithCapturedValues(
             string projectDir, string claudePath, string pathPrepend,
             bool useHttpTransport, string httpUrl,
-            string uvxPath, string fromArgs, string packageName, bool shouldForceRefresh,
+            string uvxPath, string fromArgs, string packageName, string uvxDevFlags,
             string apiKey,
             Models.ConfiguredTransport serverTransport)
         {
@@ -815,10 +791,8 @@ namespace MCPForUnity.Editor.Clients
             }
             else
             {
-                // Note: --reinstall is not supported by uvx, use --no-cache --refresh instead
-                string devFlags = shouldForceRefresh ? "--no-cache --refresh " : string.Empty;
                 // Use --scope local to register in the project-local config, avoiding conflicts with user-level config (#664)
-                args = $"mcp add --scope local --transport stdio UnityMCP -- \"{uvxPath}\" {devFlags}{fromArgs} {packageName}";
+                args = $"mcp add --scope local --transport stdio UnityMCP -- \"{uvxPath}\" {uvxDevFlags}{fromArgs} {packageName}";
             }
 
             // Remove any existing registrations from ALL scopes to prevent stale config conflicts (#664)
@@ -893,9 +867,7 @@ namespace MCPForUnity.Editor.Clients
             else
             {
                 var (uvxPath, _, packageName) = AssetPathUtility.GetUvxCommandParts();
-                // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
-                // Note: --reinstall is not supported by uvx, use --no-cache --refresh instead
-                string devFlags = AssetPathUtility.ShouldForceUvxRefresh() ? "--no-cache --refresh " : string.Empty;
+                string devFlags = AssetPathUtility.GetUvxDevFlags();
                 string fromArgs = AssetPathUtility.GetBetaServerFromArgs(quoteFromPath: true);
                 // Use --scope local to register in the project-local config, avoiding conflicts with user-level config (#664)
                 args = $"mcp add --scope local --transport stdio UnityMCP -- \"{uvxPath}\" {devFlags}{fromArgs} {packageName}";
@@ -1003,9 +975,7 @@ namespace MCPForUnity.Editor.Clients
                 return "# Error: Configuration not available - check paths in Advanced Settings";
             }
 
-            // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
-            // Note: --reinstall is not supported by uvx, use --no-cache --refresh instead
-            string devFlags = AssetPathUtility.ShouldForceUvxRefresh() ? "--no-cache --refresh " : string.Empty;
+            string devFlags = AssetPathUtility.GetUvxDevFlags();
             string fromArgs = AssetPathUtility.GetBetaServerFromArgs(quoteFromPath: true);
 
             return "# Register the MCP server with Claude Code:\n" +

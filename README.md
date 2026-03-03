@@ -13,7 +13,7 @@
 [![](https://badge.mcpx.dev?status=on 'MCP Enabled')](https://modelcontextprotocol.io/introduction)
 [![](https://img.shields.io/badge/License-MIT-red.svg 'MIT License')](https://opensource.org/licenses/MIT)
 
-**Create your Unity apps with LLMs!** MCP for Unity bridges AI assistants (Claude, Cursor, VS Code, etc.) with your Unity Editor via the [Model Context Protocol](https://modelcontextprotocol.io/introduction). Give your LLM the tools to manage assets, control scenes, edit scripts, and automate tasks.
+**Create your Unity apps with LLMs!** MCP for Unity bridges AI assistants (Claude, Claude Code, Cursor, VS Code, etc.) with your Unity Editor via the [Model Context Protocol](https://modelcontextprotocol.io/introduction). Give your LLM the tools to manage assets, control scenes, edit scripts, and automate tasks.
 
 <img alt="MCP for Unity building a scene" src="docs/images/building_scene.gif">
 
@@ -25,7 +25,7 @@
 
 * **Unity 2021.3 LTS+** — [Download Unity](https://unity.com/download)
 * **Python 3.10+** and **uv** — [Install uv](https://docs.astral.sh/uv/getting-started/installation/)
-* **An MCP Client** — [Claude Desktop](https://claude.ai/download) | [Cursor](https://www.cursor.com/en/downloads) | [VS Code Copilot](https://code.visualstudio.com/docs/copilot/overview) | [GitHub Copilot CLI](https://docs.github.com/en/copilot/concepts/agents/about-copilot-cli) | [Windsurf](https://windsurf.com)
+* **An MCP Client** — [Claude Desktop](https://claude.ai/download) | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | [Cursor](https://www.cursor.com/en/downloads) | [VS Code Copilot](https://code.visualstudio.com/docs/copilot/overview) | [GitHub Copilot CLI](https://docs.github.com/en/copilot/concepts/agents/about-copilot-cli) | [Windsurf](https://windsurf.com)
 
 ### 1. Install the Unity Package
 
@@ -76,10 +76,10 @@ openupm add com.coplaydev.unity-mcp
 * **Extensible** — Works with various MCP Clients
 
 ### Available Tools
-`apply_text_edits` • `batch_execute` • `create_script` • `debug_request_context` • `delete_script` • `execute_custom_tool` • `execute_menu_item` • `find_gameobjects` • `find_in_file` • `get_sha` • `get_test_job` • `manage_animation` • `manage_asset` • `manage_components` • `manage_editor` • `manage_gameobject` • `manage_material` • `manage_prefabs` • `manage_scene` • `manage_script` • `manage_script_capabilities` • `manage_scriptable_object` • `manage_shader` • `manage_texture` • `manage_vfx` • `read_console` • `refresh_unity` • `run_tests` • `script_apply_edits` • `set_active_instance` • `validate_script`
+`apply_text_edits` • `batch_execute` • `create_script` • `debug_request_context` • `delete_script` • `execute_custom_tool` • `execute_menu_item` • `find_gameobjects` • `find_in_file` • `get_sha` • `get_test_job` • `manage_animation` • `manage_asset` • `manage_components` • `manage_editor` • `manage_gameobject` • `manage_material` • `manage_prefabs` • `manage_scene` • `manage_script` • `manage_script_capabilities` • `manage_scriptable_object` • `manage_shader` • `manage_texture` • `manage_ui` • `manage_vfx` • `read_console` • `refresh_unity` • `run_tests` • `script_apply_edits` • `set_active_instance` • `validate_script`
 
 ### Available Resources
-`active_tool` • `custom_tools` • `editor_prefab_stage` • `editor_selection` • `editor_state` • `editor_windows` • `gameobject` • `gameobject_api` • `gameobject_component` • `gameobject_components` • `get_tests` • `menu_items` • `prefab_api` • `prefab_hierarchy` • `prefab_info` • `project_info` • `project_layers` • `project_tags` • `unity_instances`
+`custom_tools` • `editor_active_tool` • `editor_prefab_stage` • `editor_selection` • `editor_state` • `editor_windows` • `gameobject` • `gameobject_api` • `gameobject_component` • `gameobject_components` • `get_tests` • `get_tests_for_mode` • `menu_items` • `prefab_api` • `prefab_hierarchy` • `prefab_info` • `project_info` • `project_layers` • `project_tags` • `unity_instances`
 
 **Performance Tip:** Use `batch_execute` for multiple operations — it's 10-100x faster than individual calls!
 </details>
@@ -163,10 +163,18 @@ For **Strict** validation that catches undefined namespaces, types, and methods:
 5. Restart Unity
 
   <details>
-  <summary>Manual DLL installation (if NuGetForUnity isn't available)</summary>
+  <summary>One-click installer (recommended)</summary>
+
+  Open `Window > MCP for Unity`, scroll to the **Runtime Code Execution (Roslyn)** section in the Scripts/Validation tab, and click **Install Roslyn DLLs**. This downloads the required NuGet packages and places the DLLs in `Assets/Plugins/Roslyn/` automatically.
+
+  You can also run it from the menu: `Window > MCP For Unity > Install Roslyn DLLs`.
+  </details>
+
+  <details>
+  <summary>Manual DLL installation (if the installer isn't available)</summary>
 
   1. Download `Microsoft.CodeAnalysis.CSharp.dll` and dependencies from [NuGet](https://www.nuget.org/packages/Microsoft.CodeAnalysis.CSharp/)
-  2. Place DLLs in `Assets/Plugins/` folder
+  2. Place DLLs in `Assets/Plugins/Roslyn/` folder
   3. Ensure .NET compatibility settings are correct
   4. Add `USE_ROSLYN` to Scripting Define Symbols
   5. Restart Unity
@@ -200,6 +208,16 @@ See [README-DEV.md](docs/development/README-DEV.md) for development setup. For c
 <summary><strong>Telemetry & Privacy</strong></summary>
 
 Anonymous, privacy-focused telemetry (no code, no project names, no personal data). Opt out with `DISABLE_TELEMETRY=true`. See [TELEMETRY.md](docs/reference/TELEMETRY.md).
+</details>
+
+<details>
+<summary><strong>Security</strong></summary>
+
+Network defaults are intentionally fail-closed:
+* **HTTP Local** allows loopback-only hosts by default (`127.0.0.1`, `localhost`, `::1`).
+* Bind-all interfaces (`0.0.0.0`, `::`) require explicit opt-in in **Advanced Settings** via **Allow LAN Bind (HTTP Local)**.
+* **HTTP Remote** requires `https://` by default.
+* Plaintext `http://` for remote endpoints requires explicit opt-in via **Allow Insecure Remote HTTP**.
 </details>
 
 ---

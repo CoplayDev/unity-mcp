@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Services;
@@ -229,6 +230,13 @@ namespace MCPForUnity.Editor.Helpers
                 return "mcpforunityserver";
             }
 
+            // Package.json uses semver prerelease tags (e.g., 9.4.5-beta.1) that are not valid
+            // PEP 440 pins for uvx. Use the beta prerelease range instead of a pinned prerelease.
+            if (IsSemVerPreRelease(version))
+            {
+                return "mcpforunityserver>=0.0.0a0";
+            }
+
             return $"mcpforunityserver=={version}";
         }
 
@@ -307,9 +315,9 @@ namespace MCPForUnity.Editor.Helpers
 
         /// <summary>
         /// Builds the uvx package source arguments for the MCP server.
-        /// Handles beta server mode (prerelease from PyPI) vs standard mode (pinned version or override).
+        /// Handles prerelease package mode (prerelease from PyPI) vs stable mode (pinned version or override).
         /// Centralizes the prerelease logic to avoid duplication between HTTP and stdio transports.
-        /// Priority: explicit fromUrl override > beta server mode > default package.
+        /// Priority: explicit fromUrl override > package-version-driven prerelease mode > stable pinned package.
         /// NOTE: This overload reads from EditorPrefs/cache and MUST be called from the main thread.
         /// For background threads, use the overload that accepts pre-captured parameters.
         /// </summary>
@@ -317,22 +325,19 @@ namespace MCPForUnity.Editor.Helpers
         /// <returns>The package source arguments (e.g., "--prerelease explicit --from mcpforunityserver>=0.0.0a0")</returns>
         public static string GetBetaServerFromArgs(bool quoteFromPath = false)
         {
-            // Read values from cache/EditorPrefs on main thread
-            bool useBetaServer = Services.EditorConfigurationCache.Instance.UseBetaServer;
             string gitUrlOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
             string packageSource = GetMcpServerPackageSource();
-            return GetBetaServerFromArgs(useBetaServer, gitUrlOverride, packageSource, quoteFromPath);
+            return GetBetaServerFromArgs(gitUrlOverride, packageSource, quoteFromPath);
         }
 
         /// <summary>
         /// Thread-safe overload that accepts pre-captured values.
         /// Use this when calling from background threads.
         /// </summary>
-        /// <param name="useBetaServer">Pre-captured value from EditorConfigurationCache.Instance.UseBetaServer</param>
         /// <param name="gitUrlOverride">Pre-captured value from EditorPrefs GitUrlOverride</param>
         /// <param name="packageSource">Pre-captured value from GetMcpServerPackageSource()</param>
         /// <param name="quoteFromPath">Whether to quote the --from path</param>
-        public static string GetBetaServerFromArgs(bool useBetaServer, string gitUrlOverride, string packageSource, bool quoteFromPath = false)
+        public static string GetBetaServerFromArgs(string gitUrlOverride, string packageSource, bool quoteFromPath = false)
         {
             // Explicit override (local path, git URL, etc.) always wins
             if (!string.IsNullOrEmpty(gitUrlOverride))
@@ -341,8 +346,10 @@ namespace MCPForUnity.Editor.Helpers
                 return $"--from {fromValue}";
             }
 
-            // Beta server mode: use prerelease from PyPI
-            if (useBetaServer)
+            bool usePrereleaseRange = string.Equals(packageSource, "mcpforunityserver>=0.0.0a0", StringComparison.OrdinalIgnoreCase);
+
+            // Prerelease package mode: use prerelease from PyPI.
+            if (usePrereleaseRange)
             {
                 // Use --prerelease explicit with version specifier to only get prereleases of our package,
                 // not of dependencies (which can be broken on PyPI).
@@ -362,28 +369,25 @@ namespace MCPForUnity.Editor.Helpers
 
         /// <summary>
         /// Builds the uvx package source arguments as a list (for JSON config builders).
-        /// Priority: explicit fromUrl override > beta server mode > default package.
+        /// Priority: explicit fromUrl override > package-version-driven prerelease mode > stable pinned package.
         /// NOTE: This overload reads from EditorPrefs/cache and MUST be called from the main thread.
         /// For background threads, use the overload that accepts pre-captured parameters.
         /// </summary>
         /// <returns>List of arguments to add to uvx command</returns>
         public static System.Collections.Generic.IList<string> GetBetaServerFromArgsList()
         {
-            // Read values from cache/EditorPrefs on main thread
-            bool useBetaServer = Services.EditorConfigurationCache.Instance.UseBetaServer;
             string gitUrlOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
             string packageSource = GetMcpServerPackageSource();
-            return GetBetaServerFromArgsList(useBetaServer, gitUrlOverride, packageSource);
+            return GetBetaServerFromArgsList(gitUrlOverride, packageSource);
         }
 
         /// <summary>
         /// Thread-safe overload that accepts pre-captured values.
         /// Use this when calling from background threads.
         /// </summary>
-        /// <param name="useBetaServer">Pre-captured value from EditorConfigurationCache.Instance.UseBetaServer</param>
         /// <param name="gitUrlOverride">Pre-captured value from EditorPrefs GitUrlOverride</param>
         /// <param name="packageSource">Pre-captured value from GetMcpServerPackageSource()</param>
-        public static System.Collections.Generic.IList<string> GetBetaServerFromArgsList(bool useBetaServer, string gitUrlOverride, string packageSource)
+        public static System.Collections.Generic.IList<string> GetBetaServerFromArgsList(string gitUrlOverride, string packageSource)
         {
             var args = new System.Collections.Generic.List<string>();
 
@@ -395,8 +399,10 @@ namespace MCPForUnity.Editor.Helpers
                 return args;
             }
 
-            // Beta server mode: use prerelease from PyPI
-            if (useBetaServer)
+            bool usePrereleaseRange = string.Equals(packageSource, "mcpforunityserver>=0.0.0a0", StringComparison.OrdinalIgnoreCase);
+
+            // Prerelease package mode: use prerelease from PyPI.
+            if (usePrereleaseRange)
             {
                 args.Add("--prerelease");
                 args.Add("explicit");
@@ -433,6 +439,95 @@ namespace MCPForUnity.Editor.Helpers
             return IsLocalServerPath();
         }
 
+        private static bool _offlineCacheResult;
+        private static double _offlineCacheTimestamp = -999;
+        private const double OfflineCacheTtlSeconds = 30.0;
+
+        /// <summary>
+        /// Determines whether uvx should use --offline mode for faster startup.
+        /// Runs a lightweight probe (uvx --offline ... mcp-for-unity --help) with a 3-second timeout
+        /// to check if the package is already cached. If cached, --offline skips the network
+        /// dependency check that can hang for 30+ seconds on poor connections.
+        /// Returns false if force refresh is enabled (new download needed).
+        /// The result is cached for 30 seconds to avoid redundant subprocess spawns.
+        /// Must be called on the main thread (reads EditorPrefs).
+        /// </summary>
+        public static bool ShouldUseUvxOffline()
+        {
+            if (ShouldForceUvxRefresh())
+                return false;
+            return GetCachedOfflineProbeResult();
+        }
+
+        private static bool GetCachedOfflineProbeResult()
+        {
+            double now = EditorApplication.timeSinceStartup;
+            if (now - _offlineCacheTimestamp < OfflineCacheTtlSeconds)
+                return _offlineCacheResult;
+
+            bool result = RunOfflineProbe();
+            _offlineCacheResult = result;
+            _offlineCacheTimestamp = now;
+            return result;
+        }
+
+        private static bool RunOfflineProbe()
+        {
+            try
+            {
+                string uvxPath = MCPServiceLocator.Paths.GetUvxPath();
+                if (string.IsNullOrEmpty(uvxPath))
+                    return false;
+
+                string fromArgs = GetBetaServerFromArgs(quoteFromPath: false);
+                string probeArgs = string.IsNullOrEmpty(fromArgs)
+                    ? "--offline mcp-for-unity --help"
+                    : $"--offline {fromArgs} mcp-for-unity --help";
+
+                return ExecPath.TryRun(uvxPath, probeArgs, null, out _, out _, timeoutMs: 3000);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Returns the uvx dev-mode flags as a single string for command-line builders.
+        /// Returns "--no-cache --refresh " if force refresh is enabled,
+        /// "--offline " if the cache is warm, or string.Empty otherwise.
+        /// Must be called on the main thread (reads EditorPrefs).
+        /// </summary>
+        public static string GetUvxDevFlags()
+        {
+            bool forceRefresh = ShouldForceUvxRefresh();
+            return GetUvxDevFlags(forceRefresh, !forceRefresh && GetCachedOfflineProbeResult());
+        }
+
+        /// <summary>
+        /// Returns the uvx dev-mode flags from pre-captured bool values.
+        /// Use this overload when values were captured on the main thread for background use.
+        /// </summary>
+        public static string GetUvxDevFlags(bool forceRefresh, bool useOffline)
+        {
+            if (forceRefresh) return "--no-cache --refresh ";
+            if (useOffline) return "--offline ";
+            return string.Empty;
+        }
+
+        /// <summary>
+        /// Returns the uvx dev-mode flags as a list of individual arguments.
+        /// Suitable for callers that build argument lists (ConfigJsonBuilder, CodexConfigHelper).
+        /// Must be called on the main thread (reads EditorPrefs).
+        /// </summary>
+        public static IReadOnlyList<string> GetUvxDevFlagsList()
+        {
+            bool forceRefresh = ShouldForceUvxRefresh();
+            if (forceRefresh) return new[] { "--no-cache", "--refresh" };
+            if (GetCachedOfflineProbeResult()) return new[] { "--offline" };
+            return Array.Empty<string>();
+        }
+
         /// <summary>
         /// Returns true if the server URL is a local path (file:// or absolute path).
         /// </summary>
@@ -443,8 +538,18 @@ namespace MCPForUnity.Editor.Helpers
                 return false;
 
             // Check for file:// protocol or absolute local path
-            return fromUrl.StartsWith("file://", StringComparison.OrdinalIgnoreCase) ||
-                   System.IO.Path.IsPathRooted(fromUrl);
+            if (fromUrl.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            try
+            {
+                return System.IO.Path.IsPathRooted(fromUrl);
+            }
+            catch (System.ArgumentException)
+            {
+                // fromUrl contains characters illegal in paths (e.g. a remote URL)
+                return false;
+            }
         }
 
         /// <summary>
@@ -534,18 +639,26 @@ namespace MCPForUnity.Editor.Helpers
                 if (string.IsNullOrEmpty(version) || version == "unknown")
                     return false;
 
-                // Check for common prerelease indicators in semver format
-                // e.g., "9.3.0-beta.1", "9.3.0-alpha", "9.3.0-rc.2", "9.3.0-preview"
-                return version.Contains("-beta", StringComparison.OrdinalIgnoreCase) ||
-                       version.Contains("-alpha", StringComparison.OrdinalIgnoreCase) ||
-                       version.Contains("-rc", StringComparison.OrdinalIgnoreCase) ||
-                       version.Contains("-preview", StringComparison.OrdinalIgnoreCase) ||
-                       version.Contains("-pre", StringComparison.OrdinalIgnoreCase);
+                return IsSemVerPreRelease(version);
             }
             catch
             {
                 return false;
             }
+        }
+
+        private static bool IsSemVerPreRelease(string version)
+        {
+            if (string.IsNullOrEmpty(version))
+                return false;
+
+            // Common semver prerelease indicators:
+            // e.g., "9.3.0-beta.1", "9.3.0-alpha", "9.3.0-rc.2", "9.3.0-preview"
+            return version.Contains("-beta", StringComparison.OrdinalIgnoreCase) ||
+                   version.Contains("-alpha", StringComparison.OrdinalIgnoreCase) ||
+                   version.Contains("-rc", StringComparison.OrdinalIgnoreCase) ||
+                   version.Contains("-preview", StringComparison.OrdinalIgnoreCase) ||
+                   version.Contains("-pre", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

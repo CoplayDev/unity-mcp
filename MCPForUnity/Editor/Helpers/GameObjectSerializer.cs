@@ -450,10 +450,17 @@ namespace MCPForUnity.Editor.Helpers
                      propName == "worldToLocalMatrix" ||
                      propName == "localToWorldMatrix"))
                 {
-                    // McpLog.Info($"[GetComponentData] Explicitly skipping Transform property: {propName}");
                     skipProperty = true;
                 }
                 // --- End Skip Transform Properties ---
+
+                // --- Skip Collider properties that cause native crashes via PhysX ---
+                if (typeof(Collider).IsAssignableFrom(componentType) &&
+                    propName == "GeometryHolder")
+                {
+                    skipProperty = true;
+                }
+                // --- End Skip Collider Properties ---
 
                 // Skip if flagged
                 if (skipProperty)

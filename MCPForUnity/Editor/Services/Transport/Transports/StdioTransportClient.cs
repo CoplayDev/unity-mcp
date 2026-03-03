@@ -46,5 +46,12 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             return Task.FromResult(running);
         }
 
+        public Task ReregisterToolsAsync()
+        {
+            // Stdio transport doesn't support dynamic tool reregistration
+            // Tools are registered at server startup
+            return Task.CompletedTask;
+        }
+
     }
 }

@@ -76,19 +76,57 @@ class _DummyMiddlewareContext:
     pass
 
 
+class _DummyToolResult:
+    """Stub for fastmcp.server.server.ToolResult"""
+    def __init__(self, content=None, is_error=False):
+        self.content = content or []
+        self.is_error = is_error
+
+
 fastmcp.FastMCP = _DummyFastMCP
 fastmcp.Context = _DummyContext
 sys.modules.setdefault("fastmcp", fastmcp)
 
-# Stub fastmcp.server.middleware submodule
+# Stub fastmcp.server, fastmcp.server.middleware, fastmcp.server.server submodules
 fastmcp_server = types.ModuleType("fastmcp.server")
 fastmcp_server_middleware = types.ModuleType("fastmcp.server.middleware")
 fastmcp_server_middleware.Middleware = _DummyMiddleware
 fastmcp_server_middleware.MiddlewareContext = _DummyMiddlewareContext
+fastmcp_server_server = types.ModuleType("fastmcp.server.server")
+fastmcp_server_server.ToolResult = _DummyToolResult
 fastmcp.server = fastmcp_server
 fastmcp_server.middleware = fastmcp_server_middleware
+fastmcp_server.server = fastmcp_server_server
 sys.modules.setdefault("fastmcp.server", fastmcp_server)
 sys.modules.setdefault("fastmcp.server.middleware", fastmcp_server_middleware)
+sys.modules.setdefault("fastmcp.server.server", fastmcp_server_server)
+
+# Stub mcp.types for TextContent, ImageContent, ToolAnnotations
+_mcp_types = sys.modules.get("mcp.types")
+if _mcp_types is None:
+    _mcp_mod = sys.modules.setdefault("mcp", types.ModuleType("mcp"))
+    _mcp_types = types.ModuleType("mcp.types")
+
+    class _TextContent:
+        def __init__(self, **kwargs):
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+    class _ImageContent:
+        def __init__(self, **kwargs):
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+    class _ToolAnnotations:
+        def __init__(self, **kwargs):
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+    _mcp_types.TextContent = _TextContent
+    _mcp_types.ImageContent = _ImageContent
+    _mcp_types.ToolAnnotations = _ToolAnnotations
+    _mcp_mod.types = _mcp_types
+    sys.modules["mcp.types"] = _mcp_types
 
 # Note: starlette is now a proper dependency (via mcp package), so we don't stub it anymore.
 # The real starlette package will be imported when needed.

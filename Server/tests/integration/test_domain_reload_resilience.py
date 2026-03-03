@@ -104,6 +104,66 @@ async def test_plugin_hub_fails_after_timeout():
 
 
 @pytest.mark.asyncio
+async def test_plugin_hub_no_wait_when_retry_disabled(monkeypatch):
+    """retry_on_reload=False should skip reconnect wait loops."""
+    from transport.plugin_hub import PluginHub, NoUnitySessionError
+    from transport.plugin_registry import PluginRegistry
+
+    mock_registry = AsyncMock(spec=PluginRegistry)
+    mock_registry.get_session_id_by_hash = AsyncMock(return_value=None)
+    mock_registry.list_sessions = AsyncMock(return_value={})
+
+    original_registry = PluginHub._registry
+    original_lock = PluginHub._lock
+    PluginHub._registry = mock_registry
+    PluginHub._lock = asyncio.Lock()
+
+    monkeypatch.setenv("UNITY_MCP_SESSION_RESOLVE_MAX_WAIT_S", "20.0")
+
+    try:
+        with pytest.raises(NoUnitySessionError):
+            await PluginHub._resolve_session_id(
+                unity_instance="hash-missing",
+                retry_on_reload=False,
+            )
+
+        assert mock_registry.get_session_id_by_hash.await_count == 1
+        assert mock_registry.list_sessions.await_count == 1
+    finally:
+        PluginHub._registry = original_registry
+        PluginHub._lock = original_lock
+
+
+@pytest.mark.asyncio
+async def test_send_command_for_instance_fails_fast_on_stale_when_retry_disabled(monkeypatch):
+    """Stale HTTP session should not send command when retry_on_reload is disabled."""
+    from transport.plugin_hub import PluginHub
+
+    resolve_mock = AsyncMock(return_value="sess-stale")
+    ensure_mock = AsyncMock(return_value=False)
+    send_mock = AsyncMock()
+
+    monkeypatch.setattr(PluginHub, "_resolve_session_id", resolve_mock)
+    monkeypatch.setattr(PluginHub, "_ensure_live_connection", ensure_mock)
+    monkeypatch.setattr(PluginHub, "send_command", send_mock)
+
+    result = await PluginHub.send_command_for_instance(
+        unity_instance="Project@hash-stale",
+        command_type="manage_script",
+        params={"action": "edit"},
+        retry_on_reload=False,
+    )
+
+    assert result["success"] is False
+    assert result["hint"] == "retry"
+    assert result.get("data", {}).get("reason") == "stale_connection"
+    assert resolve_mock.await_count == 1
+    _, resolve_kwargs = resolve_mock.await_args
+    assert resolve_kwargs.get("retry_on_reload") is False
+    send_mock.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_read_console_during_simulated_reload(monkeypatch):
     """
     Simulate the stress test: create script (triggers reload) + rapid read_console calls.

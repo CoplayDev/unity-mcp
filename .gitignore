@@ -26,6 +26,9 @@ coverage.xml
 # Virtual environments
 .venv
 
+# Environment files (API keys)
+.env
+
 # Unity Editor
 *.unitypackage
 *.asset

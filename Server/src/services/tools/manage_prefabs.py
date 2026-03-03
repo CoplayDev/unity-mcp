@@ -29,6 +29,9 @@ REQUIRED_PARAMS = {
         "(single object or array for batch creation in one save). "
         "Example: create_child=[{\"name\": \"Child1\", \"primitive_type\": \"Sphere\", \"position\": [1,0,0]}, "
         "{\"name\": \"Child2\", \"primitive_type\": \"Cube\", \"parent\": \"Child1\"}]. "
+        "Use component_properties with modify_contents to set serialized fields on existing components "
+        "(e.g. component_properties={\"Rigidbody\": {\"mass\": 5.0}, \"MyScript\": {\"health\": 100}}). "
+        "Supports object references via {\"guid\": \"...\"}, {\"path\": \"Assets/...\"}, or {\"instanceID\": 123}. "
         "Use manage_asset action=search filterType=Prefab to list prefabs."
     ),
     annotations=ToolAnnotations(
@@ -64,6 +67,7 @@ async def manage_prefabs(
     components_to_add: Annotated[list[str], "Component types to add in modify_contents."] | None = None,
     components_to_remove: Annotated[list[str], "Component types to remove in modify_contents."] | None = None,
     create_child: Annotated[dict[str, Any] | list[dict[str, Any]], "Create child GameObject(s) in the prefab. Single object or array of objects, each with: name (required), parent (optional, defaults to target), primitive_type (optional: Cube, Sphere, Capsule, Cylinder, Plane, Quad), position, rotation, scale, components_to_add, tag, layer, set_active."] | None = None,
+    component_properties: Annotated[dict[str, dict[str, Any]], "Set properties on existing components in modify_contents. Keys are component type names, values are dicts of property name to value. Example: {\"Rigidbody\": {\"mass\": 5.0}, \"MyScript\": {\"health\": 100}}. Supports object references via {\"guid\": \"...\"}, {\"path\": \"Assets/...\"}, or {\"instanceID\": 123}."] | None = None,
 ) -> dict[str, Any]:
     # Back-compat: map 'name' → 'target' for create_from_gameobject (Unity accepts both)
     if action == "create_from_gameobject" and target is None and name is not None:
@@ -148,6 +152,8 @@ async def manage_prefabs(
             params["componentsToAdd"] = components_to_add
         if components_to_remove is not None:
             params["componentsToRemove"] = components_to_remove
+        if component_properties is not None:
+            params["componentProperties"] = component_properties
         if create_child is not None:
             # Normalize vector fields within create_child (handles single object or array)
             def normalize_child_params(child: Any, index: int | None = None) -> tuple[dict | None, str | None]:

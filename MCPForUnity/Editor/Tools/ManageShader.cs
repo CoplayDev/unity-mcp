@@ -67,7 +67,11 @@ namespace MCPForUnity.Editor.Tools
             if (!string.IsNullOrEmpty(relativeDir))
             {
                 relativeDir = AssetPathUtility.NormalizeSeparators(relativeDir).Trim('/');
-                if (relativeDir.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(relativeDir, "Assets", StringComparison.OrdinalIgnoreCase))
+                {
+                    relativeDir = "";
+                }
+                else if (relativeDir.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
                 {
                     relativeDir = relativeDir.Substring("Assets/".Length).TrimStart('/');
                 }

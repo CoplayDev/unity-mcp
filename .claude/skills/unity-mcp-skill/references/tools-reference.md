@@ -12,8 +12,39 @@ Complete reference for all MCP tools. Each tool includes parameters, types, and 
 - [Script Tools](#script-tools)
 - [Asset Tools](#asset-tools)
 - [Material & Shader Tools](#material--shader-tools)
+- [UI Tools](#ui-tools)
 - [Editor Control Tools](#editor-control-tools)
 - [Testing Tools](#testing-tools)
+
+---
+
+## Project Info Resource
+
+Read `mcpforunity://project/info` to detect project capabilities before making assumptions about UI, input, or rendering setup.
+
+**Returned fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `projectRoot` | string | Absolute path to project root |
+| `projectName` | string | Project folder name |
+| `unityVersion` | string | e.g. `"2022.3.20f1"` |
+| `platform` | string | Active build target e.g. `"StandaloneWindows64"` |
+| `assetsPath` | string | Absolute path to Assets folder |
+| `renderPipeline` | string | `"BuiltIn"`, `"Universal"`, `"HighDefinition"`, or `"Custom"` |
+| `activeInputHandler` | string | `"Old"`, `"New"`, or `"Both"` |
+| `packages.ugui` | bool | `com.unity.ugui` installed (Canvas, Image, Button, etc.) |
+| `packages.textmeshpro` | bool | `com.unity.textmeshpro` installed (TMP_Text, TMP_InputField) |
+| `packages.inputsystem` | bool | `com.unity.inputsystem` installed (InputAction, PlayerInput) |
+| `packages.uiToolkit` | bool | Always `true` for Unity 2021.3+ (UIDocument, VisualElement, UXML/USS) |
+| `packages.screenCapture` | bool | `com.unity.modules.screencapture` enabled (ScreenCapture API for screenshots) |
+
+**Key decision points:**
+
+- **UI system**: If `packages.uiToolkit` is true (always for Unity 2021+), use `manage_ui` for UI Toolkit workflows (UXML/USS). If `packages.ugui` is true, use Canvas + uGUI components via `batch_execute`. UI Toolkit is preferred for new UI — it uses a frontend-like workflow (UXML for structure, USS for styling).
+- **Text**: If `packages.textmeshpro` is true, use `TextMeshProUGUI` instead of legacy `Text`.
+- **Input**: Use `activeInputHandler` to decide EventSystem module — `StandaloneInputModule` (Old) vs `InputSystemUIInputModule` (New). See [workflows.md — Input System](workflows.md#input-system-old-vs-new).
+- **Shaders**: Use `renderPipeline` to pick correct shader names — `Standard` (BuiltIn) vs `Universal Render Pipeline/Lit` (URP) vs `HDRP/Lit` (HDRP).
 
 ---
 
@@ -66,7 +97,7 @@ refresh_unity(
 
 ### manage_scene
 
-Scene CRUD operations and hierarchy queries.
+Scene CRUD operations, hierarchy queries, screenshots, and scene view control.
 
 ```python
 # Get hierarchy (paginated)
@@ -78,8 +109,60 @@ manage_scene(
     include_transform=False      # bool - include local transforms
 )
 
-# Screenshot
-manage_scene(action="screenshot")  # Returns base64 PNG
+# Screenshot (file only — saves to Assets/Screenshots/)
+manage_scene(action="screenshot")
+
+# Screenshot with inline image (base64 PNG returned to AI)
+manage_scene(
+    action="screenshot",
+    camera="MainCamera",         # str, optional - camera name, path, or instance ID
+    include_image=True,          # bool, default False - return base64 PNG inline
+    max_resolution=512           # int, optional - downscale cap (default 640)
+)
+
+# Batch surround — contact sheet of 6 fixed angles (front/back/left/right/top/bird_eye)
+manage_scene(
+    action="screenshot",
+    batch="surround",            # str - "surround" for 6-angle contact sheet
+    max_resolution=256           # int - per-tile resolution cap
+)
+# Returns: single composite contact sheet image with labeled tiles
+
+# Batch surround centered on a specific target
+manage_scene(
+    action="screenshot",
+    batch="surround",
+    look_at="Player",            # str|int|list[float] - center surround on this target
+    max_resolution=256
+)
+
+# Batch orbit — configurable multi-angle grid around a target
+manage_scene(
+    action="screenshot",
+    batch="orbit",               # str - "orbit" for configurable angle grid
+    look_at="Player",            # str|int|list[float] - target to orbit around
+    orbit_angles=8,              # int, default 8 - number of azimuth steps
+    orbit_elevations=[0, 30],    # list[float], default [0, 30, -15] - vertical angles in degrees
+    orbit_distance=10,           # float, optional - camera distance (auto-fit if omitted)
+    orbit_fov=60,                # float, default 60 - camera FOV in degrees
+    max_resolution=256           # int - per-tile resolution cap
+)
+# Returns: single composite contact sheet (angles × elevations tiles in a grid)
+
+# Positioned screenshot (temp camera at viewpoint, no file saved)
+manage_scene(
+    action="screenshot",
+    look_at="Enemy",             # str|int|list[float] - target to aim at
+    view_position=[0, 10, -10],  # list[float], optional - camera position
+    view_rotation=[45, 0, 0],    # list[float], optional - euler angles (overrides look_at aim)
+    max_resolution=512
+)
+
+# Frame scene view on target
+manage_scene(
+    action="scene_view_frame",
+    scene_view_target="Player"   # str|int - GO name, path, or instance ID to frame
+)
 
 # Other actions
 manage_scene(action="get_active")        # Current scene info
@@ -166,6 +249,14 @@ manage_gameobject(
     distance=5.0,
     world_space=True
 )
+
+# Look at target (rotates GO to face a point or another GO)
+manage_gameobject(
+    action="look_at",
+    target="MainCamera",         # the GO to rotate
+    look_at_target="Player",     # str (GO name/path) or list[float] world position
+    look_at_up=[0, 1, 0]        # optional up vector, default [0,1,0]
+)
 ```
 
 ### manage_components
@@ -207,6 +298,24 @@ manage_components(
         "localScale": [2, 2, 2]
     }
 )
+
+# Set object reference property (reference another GameObject by name)
+manage_components(
+    action="set_property",
+    target="GameManager",
+    component_type="GameManagerScript",
+    property="targetObjects",
+    value=[{"name": "Flower_1"}, {"name": "Flower_2"}, {"name": "Bee_1"}]
+)
+
+# Object reference formats supported:
+# - {"name": "ObjectName"}     → Find GameObject in scene by name
+# - {"instanceID": 12345}      → Direct instance ID reference
+# - {"guid": "abc123..."}      → Asset GUID reference
+# - {"path": "Assets/..."}     → Asset path reference
+# - "Assets/Prefabs/My.prefab" → String shorthand for asset paths
+# - "ObjectName"               → String shorthand for scene name lookup
+# - 12345                      → Integer shorthand for instanceID
 ```
 
 ---
@@ -449,7 +558,10 @@ manage_material(
     action="set_renderer_color",
     target="MyCube",
     color=[1, 0, 0, 1],
-    mode="instance"              # "shared"|"instance"|"property_block"
+    mode="create_unique"          # Creates a unique .mat asset per object (persistent)
+    # Other modes: "property_block" (default, not persistent),
+    #              "shared" (mutates shared material — avoid for primitives),
+    #              "instance" (runtime only, not persistent)
 )
 ```
 
@@ -484,6 +596,76 @@ manage_texture(
     palette=[[255,0,0,255], [0,0,255,255]]
 )
 ```
+
+---
+
+## UI Tools
+
+### manage_ui
+
+Manage Unity UI Toolkit elements: UXML documents, USS stylesheets, UIDocument components, and visual tree inspection.
+
+```python
+# Create a UXML file
+manage_ui(
+    action="create",
+    path="Assets/UI/MainMenu.uxml",
+    contents='<ui:UXML xmlns:ui="UnityEngine.UIElements"><ui:Label text="Hello" /></ui:UXML>'
+)
+
+# Create a USS stylesheet
+manage_ui(
+    action="create",
+    path="Assets/UI/Styles.uss",
+    contents=".title { font-size: 32px; color: white; }"
+)
+
+# Read a UXML/USS file
+manage_ui(
+    action="read",
+    path="Assets/UI/MainMenu.uxml"
+)
+# Returns: {"success": true, "data": {"contents": "...", "path": "..."}}
+
+# Update an existing file
+manage_ui(
+    action="update",
+    path="Assets/UI/Styles.uss",
+    contents=".title { font-size: 48px; color: yellow; -unity-font-style: bold; }"
+)
+
+# Attach UIDocument to a GameObject
+manage_ui(
+    action="attach_ui_document",
+    target="UICanvas",                    # GameObject name or path
+    source_asset="Assets/UI/MainMenu.uxml",
+    panel_settings="Assets/UI/Panel.asset",  # optional, auto-creates if omitted
+    sort_order=0                          # optional, default 0
+)
+
+# Create PanelSettings asset
+manage_ui(
+    action="create_panel_settings",
+    path="Assets/UI/Panel.asset",
+    scale_mode="ScaleWithScreenSize",     # optional: "ConstantPixelSize"|"ConstantPhysicalSize"|"ScaleWithScreenSize"
+    reference_resolution={"width": 1920, "height": 1080}  # optional, for ScaleWithScreenSize
+)
+
+# Inspect the visual tree of a UIDocument
+manage_ui(
+    action="get_visual_tree",
+    target="UICanvas",                    # GameObject with UIDocument
+    max_depth=10                          # optional, default 10
+)
+# Returns: hierarchy of VisualElements with type, name, classes, styles, text, children
+```
+
+**UI Toolkit workflow:**
+
+1. Create UXML (structure, like HTML) and USS (styling, like CSS) files
+2. Create a PanelSettings asset (or let `attach_ui_document` auto-create one)
+3. Create an empty GameObject and attach UIDocument with the UXML source
+4. Use `get_visual_tree` to inspect the result
 
 ---
 
@@ -528,7 +710,6 @@ read_console(
     types=["error", "warning", "log"],  # or ["all"]
     count=10,                    # max messages (ignored with paging)
     filter_text="NullReference", # optional text filter
-    since_timestamp="2024-01-01T00:00:00Z",  # optional time filter
     page_size=50,
     cursor=0,
     format="detailed",           # "plain"|"detailed"|"json"

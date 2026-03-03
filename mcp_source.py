@@ -92,7 +92,7 @@ def write_json(path: pathlib.Path, data: dict) -> None:
 
 
 def build_options(repo_root: pathlib.Path, branch: str, origin_https: str):
-    upstream_main = "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity"
+    upstream_main = "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#main"
     upstream_beta = "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#beta"
     # Ensure origin is https
     origin = origin_https

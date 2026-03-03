@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from models import MCPResponse
 from services.custom_tool_service import (
     CustomToolService,
+    get_user_id_from_context,
     resolve_project_id_for_unity_instance,
     ToolDefinitionModel,
 )
@@ -42,7 +43,8 @@ async def get_custom_tools(ctx: Context) -> CustomToolsResourceResponse | MCPRes
         )
 
     service = CustomToolService.get_instance()
-    tools = await service.list_registered_tools(project_id)
+    user_id = get_user_id_from_context(ctx)
+    tools = await service.list_registered_tools(project_id, user_id=user_id)
 
     data = CustomToolsData(
         project_id=project_id,

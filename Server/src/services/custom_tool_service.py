@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from core.config import config
 from models.models import MCPResponse, ToolDefinitionModel, ToolParameterModel
 from core.logging_decorator import log_execution
 from core.telemetry_decorator import telemetry_tool
@@ -26,6 +27,23 @@ logger = logging.getLogger("mcp-for-unity-server")
 
 _DEFAULT_POLL_INTERVAL = 1.0
 _MAX_POLL_SECONDS = 600
+
+
+def get_user_id_from_context(ctx: Context) -> str | None:
+    """Read user_id from request-scoped context in remote-hosted mode."""
+    if not config.http_remote_hosted:
+        return None
+
+    get_state = getattr(ctx, "get_state", None)
+    if not callable(get_state):
+        return None
+
+    try:
+        user_id = get_state("user_id")
+    except Exception:
+        return None
+
+    return user_id if isinstance(user_id, str) and user_id else None
 
 
 class RegisterToolsPayload(BaseModel):
@@ -84,16 +102,25 @@ class CustomToolService:
             return JSONResponse(response.model_dump())
 
     # --- Public API for MCP tools ---------------------------------------
-    async def list_registered_tools(self, project_id: str) -> list[ToolDefinitionModel]:
+    async def list_registered_tools(
+        self,
+        project_id: str,
+        user_id: str | None = None,
+    ) -> list[ToolDefinitionModel]:
         legacy = list(self._project_tools.get(project_id, {}).values())
-        hub_tools = await PluginHub.get_tools_for_project(project_id)
+        hub_tools = await PluginHub.get_tools_for_project(project_id, user_id=user_id)
         return legacy + hub_tools
 
-    async def get_tool_definition(self, project_id: str, tool_name: str) -> ToolDefinitionModel | None:
+    async def get_tool_definition(
+        self,
+        project_id: str,
+        tool_name: str,
+        user_id: str | None = None,
+    ) -> ToolDefinitionModel | None:
         tool = self._project_tools.get(project_id, {}).get(tool_name)
         if tool:
             return tool
-        return await PluginHub.get_tool_definition(project_id, tool_name)
+        return await PluginHub.get_tool_definition(project_id, tool_name, user_id=user_id)
 
     async def execute_tool(
         self,
@@ -101,13 +128,14 @@ class CustomToolService:
         tool_name: str,
         unity_instance: str | None,
         params: dict[str, object] | None = None,
+        user_id: str | None = None,
     ) -> MCPResponse:
         params = params or {}
         logger.info(
             f"Executing tool '{tool_name}' for project '{project_id}' (instance={unity_instance}) with params: {params}"
         )
 
-        definition = await self.get_tool_definition(project_id, tool_name)
+        definition = await self.get_tool_definition(project_id, tool_name, user_id=user_id)
         if definition is None:
             return MCPResponse(
                 success=False,
@@ -119,6 +147,7 @@ class CustomToolService:
             unity_instance,
             tool_name,
             params,
+            user_id=user_id,
         )
 
         if not definition.requires_polling:
@@ -132,6 +161,7 @@ class CustomToolService:
             params,
             response,
             definition.poll_action or "status",
+            user_id=user_id,
         )
         logger.info(f"Tool '{tool_name}' polled response: {result}")
         return result
@@ -156,6 +186,7 @@ class CustomToolService:
         initial_params: dict[str, object],
         initial_response,
         poll_action: str,
+        user_id: str | None = None,
     ) -> MCPResponse:
         poll_params = dict(initial_params)
         poll_params["action"] = poll_action or "status"
@@ -180,7 +211,11 @@ class CustomToolService:
 
             try:
                 response = await send_with_unity_instance(
-                    async_send_command_with_retry, unity_instance, tool_name, poll_params
+                    async_send_command_with_retry,
+                    unity_instance,
+                    tool_name,
+                    poll_params,
+                    user_id=user_id,
                 )
             except Exception as exc:  # pragma: no cover - network/domain reload variability
                 logger.debug(f"Polling {tool_name} failed, will retry: {exc}")
@@ -347,8 +382,15 @@ class CustomToolService:
                 )
 
             params = {k: v for k, v in kwargs.items() if v is not None}
+            user_id = get_user_id_from_context(ctx)
             service = CustomToolService.get_instance()
-            return await service.execute_tool(project_id, definition.name, unity_instance, params)
+            return await service.execute_tool(
+                project_id,
+                definition.name,
+                unity_instance,
+                params,
+                user_id=user_id,
+            )
 
         _handler.__name__ = f"custom_tool_{definition.name}"
         _handler.__doc__ = definition.description or ""
