@@ -35,7 +35,7 @@ async def manage_editor(
                           "Layer name when adding and removing layers"] | None = None,
 ) -> dict[str, Any]:
     # Get active instance from request state (injected by middleware)
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     wait_for_completion_value = coerce_bool(wait_for_completion, default=None)
     enabled_value = coerce_bool(enabled, default=None)

@@ -117,7 +117,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
     ///
     /// For full parameter details, refer to Unity documentation for each component type.
     /// </summary>
-    [McpForUnityTool("manage_vfx", AutoRegister = false)]
+    [McpForUnityTool("manage_vfx", AutoRegister = false, Group = "vfx")]
     public static class ManageVFX
     {
         private static readonly Dictionary<string, string> ParamAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)

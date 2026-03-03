@@ -47,7 +47,7 @@ async def read_console(
 ) -> dict[str, Any]:
     # Get active instance from session state
     # Removed session_state import
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
     # Set defaults if values are None
     action = action if action is not None else 'get'
     

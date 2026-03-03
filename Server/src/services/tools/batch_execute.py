@@ -85,7 +85,7 @@ async def batch_execute(
                                "Hint for the maximum number of parallel workers"] = None,
 ) -> dict[str, Any]:
     """Proxy the batch_execute tool to the Unity Editor transporter."""
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     if not isinstance(commands, list) or not commands:
         raise ValueError(

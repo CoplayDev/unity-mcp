@@ -145,8 +145,8 @@ async def infer_single_instance_id(ctx: Context) -> str | None:
         # HTTP/WebSocket transport: derive from PluginHub sessions.
         try:
             # In remote-hosted mode, filter sessions by user_id
-            user_id = ctx.get_state(
-                "user_id") if config.http_remote_hosted else None
+            user_id = (await ctx.get_state(
+                "user_id")) if config.http_remote_hosted else None
             sessions_data = await PluginHub.get_sessions(user_id=user_id)
             sessions = sessions_data.sessions if hasattr(
                 sessions_data, "sessions") else {}
@@ -222,7 +222,7 @@ def _enrich_advice_and_staleness(state_v2: dict[str, Any]) -> dict[str, Any]:
     description="Canonical editor readiness snapshot. Includes advice and server-computed staleness.\n\nURI: mcpforunity://editor/state",
 )
 async def get_editor_state(ctx: Context) -> MCPResponse:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     response = await unity_transport.send_with_unity_instance(
         async_send_command_with_retry,

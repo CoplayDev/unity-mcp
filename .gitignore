@@ -26,6 +26,9 @@ coverage.xml
 # Virtual environments
 .venv
 
+# Environment files (API keys)
+.env
+
 # Unity Editor
 *.unitypackage
 *.asset
@@ -52,9 +55,9 @@ TestProjects/UnityMCPTests/Assets/Temp/
 # CI test reports (generated during test runs)
 reports/
 
-# Local Claude configs (not for repo)
-.claude/local/
-
 # Local testing harness
 scripts/local-test/
 .claude/settings.local.json
+
+# Ignore the .claude directory, since it might contain local/project-level setting such as deny and allowlist.
+/.claude

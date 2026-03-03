@@ -28,7 +28,7 @@ class CustomToolsResourceResponse(MCPResponse):
     description="Lists custom tools available for the active Unity project.\n\nURI: mcpforunity://custom-tools",
 )
 async def get_custom_tools(ctx: Context) -> CustomToolsResourceResponse | MCPResponse:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
     if not unity_instance:
         return MCPResponse(
             success=False,
@@ -43,7 +43,7 @@ async def get_custom_tools(ctx: Context) -> CustomToolsResourceResponse | MCPRes
         )
 
     service = CustomToolService.get_instance()
-    user_id = get_user_id_from_context(ctx)
+    user_id = await get_user_id_from_context(ctx)
     tools = await service.list_registered_tools(project_id, user_id=user_id)
 
     data = CustomToolsData(

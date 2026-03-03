@@ -20,6 +20,10 @@ if SRC is None:
 
 def test_no_print_statements_in_codebase():
     """Ensure no stray print/sys.stdout writes remain in server source."""
+    # CLI tools that intentionally print to stdout
+    ALLOWED_PRINT_FILES = {
+        Path("scene_generator") / "test_pipeline.py",
+    }
     offenders = []
     syntax_errors = []
     for py_file in SRC.rglob("*.py"):
@@ -56,8 +60,9 @@ def test_no_print_statements_in_codebase():
 
         v = StdoutVisitor()
         v.visit(tree)
-        if v.hit:
-            offenders.append(py_file.relative_to(SRC))
+        rel_path = py_file.relative_to(SRC)
+        if v.hit and rel_path not in ALLOWED_PRINT_FILES:
+            offenders.append(rel_path)
     assert not syntax_errors, "syntax errors in: " + \
         ", ".join(str(e) for e in syntax_errors)
     assert not offenders, "stdout writes found in: " + \

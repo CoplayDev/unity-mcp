@@ -1,4 +1,4 @@
-import asyncio
+import pytest
 import sys
 import types
 from types import SimpleNamespace
@@ -12,7 +12,8 @@ class DummyMiddlewareContext:
         self.fastmcp_context = ctx
 
 
-def test_auto_selects_single_instance_via_pluginhub(monkeypatch):
+@pytest.mark.asyncio
+async def test_auto_selects_single_instance_via_pluginhub(monkeypatch):
     plugin_hub = types.ModuleType("transport.plugin_hub")
 
     class PluginHub:
@@ -50,19 +51,20 @@ def test_auto_selects_single_instance_via_pluginhub(monkeypatch):
 
     monkeypatch.setattr(plugin_hub.PluginHub, "get_sessions", fake_get_sessions)
 
-    selected = asyncio.run(middleware._maybe_autoselect_instance(ctx))
+    selected = await middleware._maybe_autoselect_instance(ctx)
 
     assert selected == "Ramble@deadbeef"
-    assert middleware.get_active_instance(ctx) == "Ramble@deadbeef"
+    assert await middleware.get_active_instance(ctx) == "Ramble@deadbeef"
     assert call_count["sessions"] == 1
 
-    asyncio.run(middleware._inject_unity_instance(middleware_context))
+    await middleware._inject_unity_instance(middleware_context)
 
-    assert ctx.get_state("unity_instance") == "Ramble@deadbeef"
+    assert await ctx.get_state("unity_instance") == "Ramble@deadbeef"
     assert call_count["sessions"] == 1
 
 
-def test_auto_selects_single_instance_via_stdio(monkeypatch):
+@pytest.mark.asyncio
+async def test_auto_selects_single_instance_via_stdio(monkeypatch):
     plugin_hub = types.ModuleType("transport.plugin_hub")
 
     class PluginHub:
@@ -93,17 +95,18 @@ def test_auto_selects_single_instance_via_stdio(monkeypatch):
     unity_connection.get_unity_connection_pool = lambda: PoolStub()
     monkeypatch.setitem(sys.modules, "transport.legacy.unity_connection", unity_connection)
 
-    selected = asyncio.run(middleware._maybe_autoselect_instance(ctx))
+    selected = await middleware._maybe_autoselect_instance(ctx)
 
     assert selected == "UnityMCPTests@cc8756d4"
-    assert middleware.get_active_instance(ctx) == "UnityMCPTests@cc8756d4"
+    assert await middleware.get_active_instance(ctx) == "UnityMCPTests@cc8756d4"
 
-    asyncio.run(middleware._inject_unity_instance(middleware_context))
+    await middleware._inject_unity_instance(middleware_context)
 
-    assert ctx.get_state("unity_instance") == "UnityMCPTests@cc8756d4"
+    assert await ctx.get_state("unity_instance") == "UnityMCPTests@cc8756d4"
 
 
-def test_auto_select_handles_stdio_errors(monkeypatch):
+@pytest.mark.asyncio
+async def test_auto_select_handles_stdio_errors(monkeypatch):
     plugin_hub = types.ModuleType("transport.plugin_hub")
 
     class PluginHub:
@@ -130,7 +133,7 @@ def test_auto_select_handles_stdio_errors(monkeypatch):
     unity_connection.get_unity_connection_pool = lambda: PoolStub()
     monkeypatch.setitem(sys.modules, "transport.legacy.unity_connection", unity_connection)
 
-    selected = asyncio.run(middleware._maybe_autoselect_instance(ctx))
+    selected = await middleware._maybe_autoselect_instance(ctx)
 
     assert selected is None
-    assert middleware.get_active_instance(ctx) is None
+    assert await middleware.get_active_instance(ctx) is None
