@@ -10,7 +10,9 @@
         "Unity.Physics",
         "Unity.Entities.Graphics",
         "Unity.Scenes",
-        "Unity.Mathematics.Extensions"
+        "Unity.Mathematics.Extensions",
+        "Unity.ProBuilder",
+        "Unity.ProBuilder.Editor"
     ],
     "includePlatforms": [
         "Editor"
@@ -37,6 +39,11 @@
             "name": "com.unity.entities.graphics",
             "expression": "",
             "define": "UNITY_ENTITIES_GRAPHICS"
+        },
+        {
+            "name": "com.unity.probuilder",
+            "expression": "",
+            "define": "PROBUILDER"
         }
     ],
     "noEngineReferences": false

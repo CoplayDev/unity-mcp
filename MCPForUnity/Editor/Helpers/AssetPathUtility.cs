@@ -27,8 +27,8 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
-        /// Normalizes a Unity asset path by ensuring forward slashes are used and that it is rooted under "Assets/".
-        /// Also protects against path traversal attacks using "../" sequences.
+        /// Normalizes a Unity asset path by ensuring forward slashes are used and that it is rooted
+        /// under "Assets/" or "Packages/". Also protects against path traversal attacks.
         /// </summary>
         public static string SanitizeAssetPath(string path)
         {
@@ -46,8 +46,10 @@ namespace MCPForUnity.Editor.Helpers
                 return null;
             }
 
-            // Ensure path starts with Assets/
-            if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
+            // Accept both Assets/ and Packages/ as valid roots
+            bool isAssets   = path.StartsWith("Assets/",   StringComparison.OrdinalIgnoreCase);
+            bool isPackages = path.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase);
+            if (!isAssets && !isPackages)
             {
                 return "Assets/" + path.TrimStart('/');
             }
@@ -56,7 +58,7 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
-        /// Checks if a given asset path is valid and safe (no traversal, within Assets folder).
+        /// Checks if a given asset path is valid and safe (no traversal, within Assets/ or Packages/).
         /// </summary>
         /// <returns>True if the path is valid, false otherwise.</returns>
         public static bool IsValidAssetPath(string path)
@@ -69,8 +71,10 @@ namespace MCPForUnity.Editor.Helpers
             // Normalize for comparison
             string normalized = NormalizeSeparators(path);
 
-            // Must start with Assets/
-            if (!normalized.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
+            // Must start with Assets/ or Packages/
+            bool isAssets   = normalized.StartsWith("Assets/",   StringComparison.OrdinalIgnoreCase);
+            bool isPackages = normalized.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase);
+            if (!isAssets && !isPackages)
             {
                 return false;
             }
