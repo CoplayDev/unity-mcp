@@ -796,7 +796,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 // Schedule exhausted — keep retrying every 30 s indefinitely so a transient
                 // server outage longer than ~49 s doesn't leave the plugin permanently dead.
                 McpLog.Warn($"[WebSocket] Initial reconnect schedule exhausted. Retrying every {ReconnectTailInterval.TotalSeconds}s until cancelled.");
-                _state = _state.WithError("Server unreachable – retrying every 30 s");
+                _state = _state.WithError($"Server unreachable – retrying every {ReconnectTailInterval.TotalSeconds} s");
                 while (!token.IsCancellationRequested)
                 {
                     try { await Task.Delay(ReconnectTailInterval, token).ConfigureAwait(false); }
