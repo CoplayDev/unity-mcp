@@ -38,13 +38,14 @@ async def manage_editor(
     unity_instance = get_unity_instance_from_context(ctx)
 
     wait_for_completion_value = coerce_bool(wait_for_completion, default=None)
-    enabled_value = coerce_bool(enabled, default=None)
-
-    if enabled is not None and enabled_value is None:
-        return {
-            "success": False,
-            "message": "enabled must be a boolean value ('true'/'false').",
-        }
+    enabled_value = None
+    if action == "set_mcp_tool_enabled":
+        enabled_value = coerce_bool(enabled, default=None)
+        if enabled is not None and enabled_value is None:
+            return {
+                "success": False,
+                "message": "enabled must be a boolean value ('true'/'false').",
+            }
 
     try:
         # Diagnostics: quick telemetry checks

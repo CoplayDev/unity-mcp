@@ -71,3 +71,24 @@ def test_manage_editor_set_mcp_tool_enabled_sends_tool_list_changed(monkeypatch)
 
     assert result["success"] is True
     assert ctx.tool_list_changed_calls == 1
+
+
+def test_manage_editor_non_toggle_action_ignores_invalid_enabled(monkeypatch):
+    captured = {}
+
+    async def fake_send(_func, _instance, _tool_name, params, **_kwargs):
+        captured["params"] = params
+        return {"success": True, "message": "ok"}
+
+    monkeypatch.setattr(manage_editor_mod, "send_with_unity_instance", fake_send)
+
+    result = asyncio.run(
+        manage_editor_mod.manage_editor(
+            ctx=DummyContext(),
+            action="play",
+            enabled="invalid-bool",
+        )
+    )
+
+    assert result["success"] is True
+    assert "enabled" not in captured["params"]

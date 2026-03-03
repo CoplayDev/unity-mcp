@@ -331,7 +331,8 @@ class UnityInstanceMiddleware(Middleware):
         Returns a list of objects with .id (Name@hash) and .hash attributes.
         """
         transport = (config.transport_mode or "stdio").lower()
-        results: list = []
+        plugin_results: list = []
+        stdio_results: list = []
 
         if PluginHub.is_configured():
             try:
@@ -339,13 +340,15 @@ class UnityInstanceMiddleware(Middleware):
                 get_state_fn = getattr(ctx, "get_state", None)
                 if callable(get_state_fn) and config.http_remote_hosted:
                     user_id = get_state_fn("user_id")
+                    if asyncio.iscoroutine(user_id):
+                        user_id = await user_id
                 sessions_data = await PluginHub.get_sessions(user_id=user_id)
                 sessions = sessions_data.sessions or {}
                 for session_info in sessions.values():
                     project = getattr(session_info, "project", None) or "Unknown"
                     hash_value = getattr(session_info, "hash", None)
                     if hash_value:
-                        results.append(SimpleNamespace(
+                        plugin_results.append(SimpleNamespace(
                             id=f"{project}@{hash_value}",
                             hash=hash_value,
                             name=project,
@@ -355,17 +358,60 @@ class UnityInstanceMiddleware(Middleware):
                     raise
                 logger.debug("PluginHub instance discovery failed (%s)", type(exc).__name__, exc_info=True)
 
-        if not results and transport != "http":
+        if transport != "http":
             try:
                 from transport.legacy.unity_connection import get_unity_connection_pool
                 pool = get_unity_connection_pool()
-                results = pool.discover_all_instances(force_refresh=True)
+                stdio_results = pool.discover_all_instances(force_refresh=True) or []
             except Exception as exc:
                 if isinstance(exc, (SystemExit, KeyboardInterrupt)):
                     raise
                 logger.debug("Stdio instance discovery failed (%s)", type(exc).__name__, exc_info=True)
 
-        return results
+        # HTTP transport only uses PluginHub sessions.
+        if transport == "http":
+            return plugin_results
+
+        # Stdio transport uses a union so port-based routing continues to work
+        # even when PluginHub is also configured. Then de-duplicate by hash:
+        # same hash means the same Unity instance identity.
+        merged_inputs: list[tuple[object, int]] = []
+        for inst in plugin_results:
+            merged_inputs.append((inst, 0))
+        for inst in stdio_results:
+            merged_inputs.append((inst, 1))
+
+        if not merged_inputs:
+            return []
+
+        merged: list = []
+        merged_index_by_key: dict[str, int] = {}
+        merged_score_by_key: dict[str, tuple[bool, int]] = {}
+        for inst, source_priority in merged_inputs:
+            inst_hash = getattr(inst, "hash", None)
+            inst_id = getattr(inst, "id", None)
+            key = None
+            if isinstance(inst_hash, str) and inst_hash:
+                key = f"hash:{inst_hash.lower()}"
+            elif isinstance(inst_id, str) and inst_id:
+                key = f"id:{inst_id}"
+            else:
+                merged.append(inst)
+                continue
+
+            idx = merged_index_by_key.get(key)
+            current_score = (getattr(inst, "port", None) is not None, source_priority)
+            if idx is None:
+                merged_index_by_key[key] = len(merged)
+                merged_score_by_key[key] = current_score
+                merged.append(inst)
+                continue
+
+            if current_score > merged_score_by_key[key]:
+                merged[idx] = inst
+                merged_score_by_key[key] = current_score
+
+        return merged
 
     async def _resolve_instance_value(self, value: str, ctx) -> str:
         """
@@ -415,6 +461,28 @@ class UnityInstanceMiddleware(Middleware):
         if "@" in value:
             if value in ids:
                 return value
+
+            # tolerate source-specific naming differences when hash uniquely resolves
+            _, _, requested_hash = value.rpartition("@")
+            if requested_hash:
+                requested_hash_lc = requested_hash.lower()
+                hash_matches: list[object] = []
+                for inst in instances:
+                    inst_hash = getattr(inst, "hash", None)
+                    if isinstance(inst_hash, str) and inst_hash.lower() == requested_hash_lc:
+                        hash_matches.append(inst)
+                if hash_matches:
+                    preferred = max(
+                        hash_matches,
+                        key=lambda inst: (
+                            getattr(inst, "port", None) is not None,
+                            isinstance(getattr(inst, "id", None), str),
+                        ),
+                    )
+                    preferred_id = getattr(preferred, "id", None)
+                    if isinstance(preferred_id, str) and preferred_id:
+                        return preferred_id
+
             available = ", ".join(ids) or "none"
             raise ValueError(
                 f"Instance '{value}' not found. Available: {available}. "
@@ -423,10 +491,23 @@ class UnityInstanceMiddleware(Middleware):
 
         # Hash prefix match
         lookup = value.lower()
-        matches = [
-            inst for inst in instances
-            if getattr(inst, "hash", "") and getattr(inst, "hash", "").lower().startswith(lookup)
-        ]
+        matches_by_hash: dict[str, object] = {}
+        for inst in instances:
+            inst_hash = getattr(inst, "hash", "")
+            if not inst_hash or not inst_hash.lower().startswith(lookup):
+                continue
+
+            existing = matches_by_hash.get(inst_hash)
+            if existing is None:
+                matches_by_hash[inst_hash] = inst
+                continue
+
+            existing_has_port = getattr(existing, "port", None) is not None
+            current_has_port = getattr(inst, "port", None) is not None
+            if current_has_port and not existing_has_port:
+                matches_by_hash[inst_hash] = inst
+
+        matches = list(matches_by_hash.values())
         if len(matches) == 1:
             return matches[0].id
         if len(matches) > 1:
