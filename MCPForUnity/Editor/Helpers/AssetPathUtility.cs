@@ -27,8 +27,8 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
-        /// Normalizes a Unity asset path by ensuring forward slashes are used and that it is rooted
-        /// under "Assets/" or "Packages/". Also protects against path traversal attacks.
+        /// Normalizes a Unity asset path by ensuring forward slashes are used and that it is rooted under "Assets/".
+        /// Also protects against path traversal attacks using "../" sequences.
         /// </summary>
         public static string SanitizeAssetPath(string path)
         {
@@ -58,7 +58,7 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
-        /// Checks if a given asset path is valid and safe (no traversal, within Assets/ or Packages/).
+        /// Checks if a given asset path is valid and safe (no traversal, within Assets folder).
         /// </summary>
         /// <returns>True if the path is valid, false otherwise.</returns>
         public static bool IsValidAssetPath(string path)
@@ -107,28 +107,34 @@ namespace MCPForUnity.Editor.Helpers
         {
             try
             {
-                // Primary: derive root from this script's actual AssetDatabase path.
-                // For local file: packages with subdirectory layouts (e.g. file:repo/MCPForUnity),
-                // PackageInfo.assetPath returns the virtual prefix ("Packages/com.coplaydev.unity-mcp")
-                // but AssetDatabase.LoadAssetAtPath needs the physical-relative path that includes
-                // the subdirectory ("Packages/com.coplaydev.unity-mcp/MCPForUnity").
-                // GUIDToAssetPath always returns the path the AssetDatabase actually uses.
-                string[] guids = AssetDatabase.FindAssets($"t:Script {nameof(AssetPathUtility)}");
-                if (guids.Length > 0)
-                {
-                    string scriptPath = AssetDatabase.GUIDToAssetPath(guids[0]);
-                    // Script is at: {packageRoot}/Editor/Helpers/AssetPathUtility.cs
-                    int editorIndex = scriptPath.IndexOf("/Editor/", StringComparison.Ordinal);
-                    if (editorIndex >= 0)
-                        return scriptPath.Substring(0, editorIndex);
-                }
-
-                // Fallback: Package Manager virtual path (works for registry & standard local packages)
+                // Try Package Manager first (registry and local installs)
                 var packageInfo = PackageInfo.FindForAssembly(typeof(AssetPathUtility).Assembly);
                 if (packageInfo != null && !string.IsNullOrEmpty(packageInfo.assetPath))
+                {
                     return packageInfo.assetPath;
+                }
 
-                McpLog.Warn("Could not determine MCP package root path");
+                // Fallback to AssetDatabase for Asset Store installs (Assets/MCPForUnity)
+                string[] guids = AssetDatabase.FindAssets($"t:Script {nameof(AssetPathUtility)}");
+
+                if (guids.Length == 0)
+                {
+                    McpLog.Warn("Could not find AssetPathUtility script in AssetDatabase");
+                    return null;
+                }
+
+                string scriptPath = AssetDatabase.GUIDToAssetPath(guids[0]);
+
+                // Script is at: {packageRoot}/Editor/Helpers/AssetPathUtility.cs
+                // Extract {packageRoot}
+                int editorIndex = scriptPath.IndexOf("/Editor/", StringComparison.Ordinal);
+
+                if (editorIndex >= 0)
+                {
+                    return scriptPath.Substring(0, editorIndex);
+                }
+
+                McpLog.Warn($"Could not determine package root from script path: {scriptPath}");
                 return null;
             }
             catch (Exception ex)
