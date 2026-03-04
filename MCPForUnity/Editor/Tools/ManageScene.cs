@@ -240,6 +240,16 @@ namespace MCPForUnity.Editor.Tools
             return CaptureScreenshot(cmd);
         }
 
+        /// <summary>
+        /// Captures a 6-angle contact-sheet around the scene bounds centre.
+        /// Public so the tools UI can reuse the same logic.
+        /// </summary>
+        public static object ExecuteMultiviewScreenshot(int maxResolution = 480)
+        {
+            var cmd = new SceneCommand { maxResolution = maxResolution };
+            return CaptureSurroundBatch(cmd);
+        }
+
         private static object CreateScene(string fullPath, string relativePath)
         {
             if (File.Exists(fullPath))

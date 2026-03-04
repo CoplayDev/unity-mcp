@@ -12,7 +12,7 @@ using UnityEngine.UIElements;
 
 namespace MCPForUnity.Editor.Tools
 {
-    [McpForUnityTool("manage_ui", AutoRegister = false)]
+    [McpForUnityTool("manage_ui", AutoRegister = false, Group = "ui")]
     public static class ManageUI
     {
         private static readonly HashSet<string> ValidExtensions = new(StringComparer.OrdinalIgnoreCase)

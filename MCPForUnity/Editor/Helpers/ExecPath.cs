@@ -52,9 +52,14 @@ namespace MCPForUnity.Editor.Helpers
                 // Common npm global locations
                 string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) ?? string.Empty;
                 string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) ?? string.Empty;
+                string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) ?? string.Empty;
                 string[] candidates =
                 {
-                    // Prefer .cmd (most reliable from non-interactive processes)
+                    // Native installer locations
+                    Path.Combine(localAppData, "Programs", "claude", "claude.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "claude", "claude.exe"),
+                    Path.Combine(home, ".local", "bin", "claude.exe"),
+                    // npm global locations (.cmd preferred for non-interactive processes)
                     Path.Combine(appData, "npm", "claude.cmd"),
                     Path.Combine(localAppData, "npm", "claude.cmd"),
                     // Fall back to PowerShell shim if only .ps1 is present
@@ -277,7 +282,7 @@ namespace MCPForUnity.Editor.Helpers
 #endif
 
 #if UNITY_EDITOR_WIN
-        private static string FindInPathWindows(string exe, string extraPathPrepend = null)
+        internal static string FindInPathWindows(string exe, string extraPathPrepend = null)
         {
             try
             {

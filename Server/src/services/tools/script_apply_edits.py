@@ -736,7 +736,7 @@ async def script_apply_edits(
     namespace: Annotated[str,
                          "Namespace of the script to edit"] | None = None,
 ) -> dict[str, Any]:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
     await ctx.info(
         f"Processing script_apply_edits: {name} (unity_instance={unity_instance or 'default'})")
 
