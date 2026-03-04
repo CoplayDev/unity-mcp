@@ -113,14 +113,33 @@ namespace MCPForUnity.Editor.Windows
             string basePath = AssetPathUtility.GetMcpPackageRootPath();
 
             // Load main window UXML
-            var visualTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
-                $"{basePath}/Editor/Windows/MCPForUnityEditorWindow.uxml"
-            );
+            string uxmlPath = $"{basePath}/Editor/Windows/MCPForUnityEditorWindow.uxml";
+            var visualTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(uxmlPath);
+
+            // Fallback: search AssetDatabase directly if path-based load fails
+            // (handles local file: packages where virtual path doesn't resolve for non-script assets)
+            if (visualTree == null)
+            {
+                string[] uxmlGuids = AssetDatabase.FindAssets("t:VisualTreeAsset MCPForUnityEditorWindow");
+                foreach (string guid in uxmlGuids)
+                {
+                    string foundPath = AssetDatabase.GUIDToAssetPath(guid);
+                    if (foundPath.Contains("com.coplaydev.unity-mcp"))
+                    {
+                        visualTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(foundPath);
+                        if (visualTree != null)
+                        {
+                            McpLog.Info($"UXML loaded via FindAssets fallback at: {foundPath}");
+                            break;
+                        }
+                    }
+                }
+            }
 
             if (visualTree == null)
             {
                 McpLog.Error(
-                    $"Failed to load UXML at: {basePath}/Editor/Windows/MCPForUnityEditorWindow.uxml"
+                    $"Failed to load UXML at: {uxmlPath} (basePath={basePath})"
                 );
                 return;
             }
