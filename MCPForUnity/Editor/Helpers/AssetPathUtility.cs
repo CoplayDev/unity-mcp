@@ -111,10 +111,19 @@ namespace MCPForUnity.Editor.Helpers
                 var packageInfo = PackageInfo.FindForAssembly(typeof(AssetPathUtility).Assembly);
                 if (packageInfo != null && !string.IsNullOrEmpty(packageInfo.assetPath))
                 {
-                    return packageInfo.assetPath;
+                    string rootPath = packageInfo.assetPath;
+                    // Validate: Editor/ must exist below the returned path.
+                    // For local file: packages with a MCPForUnity/ subfolder, the UPM
+                    // virtual path may not resolve correctly, so check both layouts.
+                    if (AssetDatabase.IsValidFolder(rootPath + "/Editor"))
+                        return rootPath;
+                    string subfolderPath = rootPath + "/MCPForUnity";
+                    if (AssetDatabase.IsValidFolder(subfolderPath + "/Editor"))
+                        return subfolderPath;
+                    // Neither layout found — fall through to script-based resolution
                 }
 
-                // Fallback to AssetDatabase for Asset Store installs (Assets/MCPForUnity)
+                // Fallback: find the script asset and derive root from its path
                 string[] guids = AssetDatabase.FindAssets($"t:Script {nameof(AssetPathUtility)}");
 
                 if (guids.Length == 0)
