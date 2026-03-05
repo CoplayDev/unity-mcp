@@ -54,17 +54,17 @@ namespace MCPForUnity.Editor.Tools
                 (UnityStats.staticBatchedDrawCalls - UnityStats.staticBatches) +
                 (UnityStats.instancedBatchedDrawCalls - UnityStats.instancedBatches);
 
-            // CPU/render thread timing via ProfilerRecorder (works in Editor + Play)
+            // CPU/render thread timing via FrameTimingManager — reads previous frame's data,
+            // so it works correctly in a single call (no warmup frame needed).
             double cpuMainMs = 0;
             double renderThreadMs = 0;
-            using (var mainRec = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "Main Thread", 1))
-            using (var renderRec = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "Render Thread", 1))
+            FrameTimingManager.CaptureFrameTimings();
+            var timings = new FrameTiming[1];
+            uint timingCount = FrameTimingManager.GetLatestTimings(1, timings);
+            if (timingCount > 0)
             {
-                // Recorders need at least one frame; read last value if available
-                if (mainRec.Valid && mainRec.LastValue > 0)
-                    cpuMainMs = mainRec.LastValueAsDouble / 1_000_000.0; // ns → ms
-                if (renderRec.Valid && renderRec.LastValue > 0)
-                    renderThreadMs = renderRec.LastValueAsDouble / 1_000_000.0;
+                cpuMainMs = timings[0].cpuFrameTime;
+                renderThreadMs = timings[0].cpuRenderThreadFrameTime;
             }
 
             // Animation stats via ProfilerRecorder

@@ -17,7 +17,8 @@ from transport.legacy.unity_connection import async_send_command_with_retry
     description=(
         "Read Unity rendering and performance statistics. "
         "Actions: get_stats (draw calls, batches, triangles, vertices, FPS, "
-        "setPassCalls, shadowCasters, texture memory, batching breakdown), "
+        "setPassCalls, shadowCasters, texture memory, batching breakdown, "
+        "cpuMainMs and renderThreadMs from FrameTimingManager — previous-frame CPU/render-thread timings), "
         "get_memory (total allocated/reserved, mono heap, graphics driver memory), "
         "get_profiler (frame timing, time scale, system info incl. GPU/CPU). "
         "Most stats require Play mode with Game view visible."
