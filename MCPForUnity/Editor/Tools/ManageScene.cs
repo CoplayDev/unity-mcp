@@ -859,7 +859,7 @@ namespace MCPForUnity.Editor.Tools
 
         /// <summary>
         /// Captures a single screenshot from a temporary camera placed at view_position and aimed at look_at.
-        /// Returns inline base64 PNG (no file saved to disk).
+        /// Returns inline base64 PNG and also saves the image to Assets/Screenshots/.
         /// </summary>
         private static object CapturePositionedScreenshot(SceneCommand cmd)
         {
@@ -920,7 +920,28 @@ namespace MCPForUnity.Editor.Tools
 
                     var (b64, w, h) = ScreenshotUtility.RenderCameraToBase64(tempCam, maxRes);
 
+                    // Save to disk
                     string screenshotsFolder = Path.Combine(Application.dataPath, "Screenshots");
+                    Directory.CreateDirectory(screenshotsFolder);
+                    string fileName = $"screenshot-{DateTime.Now:yyyyMMdd-HHmmss}.png";
+                    string fullPath = Path.Combine(screenshotsFolder, fileName);
+                    // Ensure unique filename
+                    if (File.Exists(fullPath))
+                    {
+                        string baseName = Path.GetFileNameWithoutExtension(fullPath);
+                        string ext = Path.GetExtension(fullPath);
+                        int counter = 1;
+                        while (File.Exists(fullPath))
+                        {
+                            fullPath = Path.Combine(screenshotsFolder, $"{baseName}_{counter}{ext}");
+                            counter++;
+                        }
+                    }
+                    byte[] pngBytes = System.Convert.FromBase64String(b64);
+                    File.WriteAllBytes(fullPath, pngBytes);
+
+                    string assetsRelativePath = "Assets/Screenshots/" + Path.GetFileName(fullPath);
+
                     var data = new Dictionary<string, object>
                     {
                         { "imageBase64", b64 },
@@ -928,12 +949,13 @@ namespace MCPForUnity.Editor.Tools
                         { "imageHeight", h },
                         { "viewPosition", new[] { camPos.x, camPos.y, camPos.z } },
                         { "screenshotsFolder", screenshotsFolder },
+                        { "filePath", assetsRelativePath },
                     };
                     if (targetPos.HasValue)
                         data["lookAt"] = new[] { targetPos.Value.x, targetPos.Value.y, targetPos.Value.z };
 
                     return new SuccessResponse(
-                        $"Positioned screenshot captured (max {maxRes}px).",
+                        $"Positioned screenshot captured (max {maxRes}px) and saved to '{assetsRelativePath}'.",
                         data
                     );
                 }

@@ -15,20 +15,6 @@ Before applying a template:
 - Validate targets/components first via resources and `find_gameobjects`.
 - Treat names, enum values, and property payloads as placeholders to adapt.
 
-## Resource URIs: Do NOT Guess
-
-Resource URIs use a specific scheme — do NOT guess or fabricate them. If you are unsure of a URI, call `ListMcpResourcesTool(server="UnityMCP")` first to get the exact list. Common URIs:
-
-| Resource | URI |
-|----------|-----|
-| Editor state | `mcpforunity://editor/state` |
-| Project info | `mcpforunity://project/info` |
-| Scene GameObject API | `mcpforunity://scene/gameobject-api` |
-| Tags | `mcpforunity://project/tags` |
-| Layers | `mcpforunity://project/layers` |
-| Instances | `mcpforunity://instances` |
-| Custom tools | `mcpforunity://custom-tools` |
-
 ## Quick Start: Resource-First Workflow
 
 **Always read relevant resources before using tools.** This prevents errors and provides the necessary context.
@@ -71,69 +57,32 @@ batch_execute(
 
 ### 3. Use Screenshots to Verify Visual Results
 
-#### Screenshot Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `camera` | string | Camera name/path/ID. Defaults to `Camera.main` |
-| `include_image` | bool | Return base64 PNG inline (for AI vision) |
-| `max_resolution` | int | Max longest-edge pixels (default 640). Lower = smaller payload |
-| `supersize` | int | Resolution multiplier 1–4 for file-saved screenshots |
-| `batch` | string | `"surround"` (6 fixed angles) or `"orbit"` (configurable grid) |
-| `look_at` | string | Target: GameObject name/path/ID, or `"x,y,z"` world position |
-| `view_position` | list | Camera position `[x,y,z]` for positioned screenshot |
-| `view_rotation` | list | Camera euler rotation `[x,y,z]` for positioned screenshot |
-| `orbit_angles` | int | Number of azimuth samples around the target (default 8) |
-| `orbit_elevations` | list | Vertical angles in degrees, e.g. `[0, 30, -15]` (default `[0, 30, -15]`) |
-| `orbit_distance` | float | Camera distance from target in world units (auto-calculated if omitted) |
-| `orbit_fov` | float | Camera field of view in degrees (default 60) |
-
-#### Single Screenshots
-
 ```python
-# Basic screenshot (saves to Assets/Screenshots/, returns file path)
+# Basic screenshot (saves to Assets/, returns file path only)
 manage_scene(action="screenshot")
 
 # Inline screenshot (returns base64 PNG directly to the AI)
 manage_scene(action="screenshot", include_image=True)
 
-# Specific camera + capped resolution for smaller payloads
+# Use a specific camera and cap resolution for smaller payloads
 manage_scene(action="screenshot", camera="MainCamera", include_image=True, max_resolution=512)
 
-# Positioned screenshot: place a temp camera at a specific viewpoint
-manage_scene(action="screenshot", look_at="Player", view_position=[0, 10, -10], max_resolution=512)
-```
-
-#### Batch Screenshots (Contact Sheet)
-
-Batch modes return a **single composite contact sheet** image — a grid of labeled thumbnails — instead of separate files. This is ideal for AI scene understanding in one image.
-
-```python
-# Surround: 6 fixed angles (front/back/left/right/top/bird_eye)
+# Batch surround: captures front/back/left/right/top/bird_eye around the scene
 manage_scene(action="screenshot", batch="surround", max_resolution=256)
 
-# Surround centered on a specific object
+# Batch surround centered on a specific object
 manage_scene(action="screenshot", batch="surround", look_at="Player", max_resolution=256)
 
-# Orbit: 8 angles at eye level around an object
-manage_scene(action="screenshot", batch="orbit", look_at="Player", orbit_angles=8)
-
-# Orbit: 10 angles, 3 elevation rings, custom distance
-manage_scene(action="screenshot", batch="orbit", look_at="Player",
-             orbit_angles=10, orbit_elevations=[0, 30, -15], orbit_distance=8)
-
-# Orbit: tight close-up with narrow FOV
-manage_scene(action="screenshot", batch="orbit", look_at="Treasure",
-             orbit_distance=3, orbit_fov=40, orbit_angles=6)
+# Positioned screenshot: place a temp camera and capture in one call
+manage_scene(action="screenshot", look_at="Player", view_position=[0, 10, -10], max_resolution=512)
 ```
 
 **Best practices for AI scene understanding:**
 - Use `include_image=True` when you need to *see* the scene, not just save a file.
-- Use `batch="surround"` for a quick 6-angle overview of the whole scene.
-- Use `batch="orbit"` for detailed inspection of a specific object from many angles.
+- Use `batch="surround"` for a comprehensive overview (6 angles, one command).
+- Use `look_at`/`view_position` to capture from a specific viewpoint without needing a scene camera.
 - Keep `max_resolution` at 256–512 to balance quality vs. token cost.
-- Use `orbit_elevations` to get views from above/below, not just around.
-- Omit `orbit_distance` to let Unity auto-fit the object in frame.
+- Combine with `look_at` on `manage_gameobject` to orient a game camera before capturing.
 
 ```python
 # Agentic camera loop: point, shoot, analyze
@@ -209,6 +158,7 @@ uri="file:///full/path/to/file.cs"
 | **Editor** | `manage_editor`, `execute_menu_item`, `read_console` | Editor control |
 | **Testing** | `run_tests`, `get_test_job` | Unity Test Framework |
 | **Batch** | `batch_execute` | Parallel/bulk operations |
+| **ProBuilder** | `manage_probuilder` | 3D modeling, mesh editing, complex geometry. **When `com.unity.probuilder` is installed, prefer ProBuilder shapes over primitive GameObjects** for editable geometry, multi-material faces, or complex shapes. Supports 13 shape types, face/edge/vertex editing, smoothing, and per-face materials. See [ProBuilder Guide](references/probuilder-guide.md). |
 | **UI** | `manage_ui`, `batch_execute` with `manage_gameobject` + `manage_components` | **UI Toolkit**: Use `manage_ui` to create UXML/USS files, attach UIDocument, inspect visual trees. **uGUI (Canvas)**: Use `batch_execute` for Canvas, Panel, Button, Text, Slider, Toggle, Input Field. **Read `mcpforunity://project/info` first** to detect uGUI/TMP/Input System/UI Toolkit availability. (see [UI workflows](references/workflows.md#ui-creation-workflows)) |
 
 ## Common Workflows

@@ -12,6 +12,7 @@ from services.tools.manage_probuilder import (
     SHAPE_ACTIONS,
     MESH_ACTIONS,
     VERTEX_ACTIONS,
+    SELECTION_ACTIONS,
     UV_MATERIAL_ACTIONS,
     QUERY_ACTIONS,
     SMOOTHING_ACTIONS,
@@ -51,7 +52,7 @@ def mock_unity(monkeypatch):
 
 def test_all_actions_is_union_of_sub_lists():
     expected = set(
-        ["ping"] + SHAPE_ACTIONS + MESH_ACTIONS + VERTEX_ACTIONS
+        ["ping"] + SHAPE_ACTIONS + MESH_ACTIONS + VERTEX_ACTIONS + SELECTION_ACTIONS
         + UV_MATERIAL_ACTIONS + QUERY_ACTIONS + SMOOTHING_ACTIONS + UTILITY_ACTIONS
     )
     assert set(ALL_ACTIONS) == expected
@@ -463,3 +464,209 @@ def test_get_mesh_info_include_param_passthrough(mock_unity):
     assert result["success"] is True
     assert mock_unity["params"]["action"] == "get_mesh_info"
     assert mock_unity["params"]["properties"]["include"] == "faces"
+
+
+# ---------------------------------------------------------------------------
+# New actions: mesh editing additions
+# ---------------------------------------------------------------------------
+
+def test_duplicate_and_flip_sends_correct_params(mock_unity):
+    result = asyncio.run(
+        manage_probuilder(
+            SimpleNamespace(),
+            action="duplicate_and_flip",
+            target="MyCube",
+            properties={"faceIndices": [0, 1]},
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["action"] == "duplicate_and_flip"
+    assert mock_unity["params"]["properties"]["faceIndices"] == [0, 1]
+
+
+def test_create_polygon_sends_correct_params(mock_unity):
+    result = asyncio.run(
+        manage_probuilder(
+            SimpleNamespace(),
+            action="create_polygon",
+            target="MyCube",
+            properties={"vertexIndices": [0, 1, 2, 3], "unordered": True},
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["action"] == "create_polygon"
+    assert mock_unity["params"]["properties"]["vertexIndices"] == [0, 1, 2, 3]
+
+
+# ---------------------------------------------------------------------------
+# New actions: vertex operations
+# ---------------------------------------------------------------------------
+
+def test_weld_vertices_sends_correct_params(mock_unity):
+    result = asyncio.run(
+        manage_probuilder(
+            SimpleNamespace(),
+            action="weld_vertices",
+            target="MyCube",
+            properties={"vertexIndices": [0, 1, 2], "radius": 0.05},
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["action"] == "weld_vertices"
+    assert mock_unity["params"]["properties"]["radius"] == 0.05
+
+
+def test_insert_vertex_sends_correct_params(mock_unity):
+    result = asyncio.run(
+        manage_probuilder(
+            SimpleNamespace(),
+            action="insert_vertex",
+            target="MyCube",
+            properties={"edge": {"a": 0, "b": 1}, "point": [0.5, 0, 0]},
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["action"] == "insert_vertex"
+    assert mock_unity["params"]["properties"]["edge"] == {"a": 0, "b": 1}
+
+
+def test_append_vertices_to_edge_sends_correct_params(mock_unity):
+    result = asyncio.run(
+        manage_probuilder(
+            SimpleNamespace(),
+            action="append_vertices_to_edge",
+            target="MyCube",
+            properties={"edgeIndices": [0, 1], "count": 3},
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["action"] == "append_vertices_to_edge"
+    assert mock_unity["params"]["properties"]["count"] == 3
+
+
+# ---------------------------------------------------------------------------
+# New actions: selection
+# ---------------------------------------------------------------------------
+
+def test_select_faces_sends_correct_params(mock_unity):
+    result = asyncio.run(
+        manage_probuilder(
+            SimpleNamespace(),
+            action="select_faces",
+            target="MyCube",
+            properties={"direction": "up", "tolerance": 0.9},
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["action"] == "select_faces"
+    assert mock_unity["params"]["properties"]["direction"] == "up"
+    assert mock_unity["params"]["properties"]["tolerance"] == 0.9
+
+
+def test_selection_actions_in_all():
+    for action in SELECTION_ACTIONS:
+        assert action in ALL_ACTIONS, f"{action} should be in ALL_ACTIONS"
+
+
+# ---------------------------------------------------------------------------
+# New actions: utility
+# ---------------------------------------------------------------------------
+
+def test_set_pivot_sends_correct_params(mock_unity):
+    result = asyncio.run(
+        manage_probuilder(
+            SimpleNamespace(),
+            action="set_pivot",
+            target="MyCube",
+            properties={"position": [1.5, 0, 2.3]},
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["action"] == "set_pivot"
+    assert mock_unity["params"]["properties"]["position"] == [1.5, 0, 2.3]
+
+
+# ---------------------------------------------------------------------------
+# Edge specification by vertex pairs
+# ---------------------------------------------------------------------------
+
+def test_bevel_edges_with_vertex_pairs(mock_unity):
+    result = asyncio.run(
+        manage_probuilder(
+            SimpleNamespace(),
+            action="bevel_edges",
+            target="MyCube",
+            properties={"edges": [{"a": 0, "b": 1}, {"a": 2, "b": 3}], "amount": 0.15},
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["action"] == "bevel_edges"
+    assert mock_unity["params"]["properties"]["edges"] == [{"a": 0, "b": 1}, {"a": 2, "b": 3}]
+
+
+def test_extrude_edges_with_vertex_pairs(mock_unity):
+    result = asyncio.run(
+        manage_probuilder(
+            SimpleNamespace(),
+            action="extrude_edges",
+            target="MyCube",
+            properties={"edges": [{"a": 0, "b": 1}], "distance": 0.5},
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["properties"]["edges"] == [{"a": 0, "b": 1}]
+
+
+# ---------------------------------------------------------------------------
+# Detach faces with deleteSourceFaces
+# ---------------------------------------------------------------------------
+
+def test_detach_faces_with_delete_source(mock_unity):
+    result = asyncio.run(
+        manage_probuilder(
+            SimpleNamespace(),
+            action="detach_faces",
+            target="MyCube",
+            properties={"faceIndices": [0], "deleteSourceFaces": True},
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["properties"]["deleteSourceFaces"] is True
+
+
+# ---------------------------------------------------------------------------
+# Bridge edges with allowNonManifold
+# ---------------------------------------------------------------------------
+
+def test_bridge_edges_with_allow_non_manifold(mock_unity):
+    result = asyncio.run(
+        manage_probuilder(
+            SimpleNamespace(),
+            action="bridge_edges",
+            target="MyCube",
+            properties={
+                "edgeA": {"a": 0, "b": 1},
+                "edgeB": {"a": 2, "b": 3},
+                "allowNonManifold": True,
+            },
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["properties"]["allowNonManifold"] is True
+
+
+# ---------------------------------------------------------------------------
+# Merge vertices with collapseToFirst
+# ---------------------------------------------------------------------------
+
+def test_merge_vertices_with_collapse_to_first(mock_unity):
+    result = asyncio.run(
+        manage_probuilder(
+            SimpleNamespace(),
+            action="merge_vertices",
+            target="MyCube",
+            properties={"vertexIndices": [0, 1], "collapseToFirst": True},
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["properties"]["collapseToFirst"] is True

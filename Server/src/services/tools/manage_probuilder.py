@@ -17,10 +17,16 @@ MESH_ACTIONS = [
     "extrude_faces", "extrude_edges", "bevel_edges", "subdivide",
     "delete_faces", "bridge_edges", "connect_elements", "detach_faces",
     "flip_normals", "merge_faces", "combine_meshes", "merge_objects",
+    "duplicate_and_flip", "create_polygon",
 ]
 
 VERTEX_ACTIONS = [
-    "merge_vertices", "split_vertices", "move_vertices",
+    "merge_vertices", "weld_vertices", "split_vertices", "move_vertices",
+    "insert_vertex", "append_vertices_to_edge",
+]
+
+SELECTION_ACTIONS = [
+    "select_faces",
 ]
 
 UV_MATERIAL_ACTIONS = [
@@ -33,10 +39,10 @@ QUERY_ACTIONS = [
 
 SMOOTHING_ACTIONS = ["set_smoothing", "auto_smooth"]
 
-UTILITY_ACTIONS = ["center_pivot", "freeze_transform", "validate_mesh", "repair_mesh"]
+UTILITY_ACTIONS = ["center_pivot", "freeze_transform", "set_pivot", "validate_mesh", "repair_mesh"]
 
 ALL_ACTIONS = (
-    ["ping"] + SHAPE_ACTIONS + MESH_ACTIONS + VERTEX_ACTIONS
+    ["ping"] + SHAPE_ACTIONS + MESH_ACTIONS + VERTEX_ACTIONS + SELECTION_ACTIONS
     + UV_MATERIAL_ACTIONS + QUERY_ACTIONS + SMOOTHING_ACTIONS + UTILITY_ACTIONS
 )
 
@@ -73,21 +79,30 @@ def _normalize_probuilder_params(params: dict[str, Any]) -> dict[str, Any]:
         "extrudeHeight, flipNormals).\n\n"
         "MESH EDITING:\n"
         "- extrude_faces: Extrude faces outward (faceIndices, distance, method: FaceNormal/VertexNormal/IndividualFaces).\n"
-        "- extrude_edges: Extrude edges (edgeIndices, distance, asGroup).\n"
-        "- bevel_edges: Bevel edges (edgeIndices, amount 0-1).\n"
+        "- extrude_edges: Extrude edges (edgeIndices or edges [{a,b},...], distance, asGroup).\n"
+        "- bevel_edges: Bevel edges (edgeIndices or edges [{a,b},...], amount 0-1).\n"
         "- subdivide: Subdivide faces (faceIndices optional, all if omitted).\n"
         "- delete_faces: Delete faces (faceIndices).\n"
-        "- bridge_edges: Bridge two open edges (edgeA, edgeB as {a,b} vertex index pairs).\n"
-        "- connect_elements: Connect edges or faces (edgeIndices or faceIndices).\n"
-        "- detach_faces: Detach faces to new object (faceIndices, deleteSource).\n"
+        "- bridge_edges: Bridge two open edges (edgeA, edgeB as {a,b} pairs, allowNonManifold).\n"
+        "- connect_elements: Connect edges or faces (edgeIndices/edges or faceIndices).\n"
+        "- detach_faces: Detach faces (faceIndices, deleteSourceFaces: bool).\n"
         "- flip_normals: Flip face normals (faceIndices).\n"
         "- merge_faces: Merge faces into one (faceIndices).\n"
         "- combine_meshes: Combine multiple ProBuilder objects (targets: list of GameObjects).\n"
-        "- merge_objects: Merge multiple objects into one ProBuilder mesh (targets list, auto-converts non-ProBuilder objects).\n\n"
+        "- merge_objects: Merge objects into one ProBuilder mesh (targets list, auto-converts).\n"
+        "- duplicate_and_flip: Create double-sided geometry (faceIndices).\n"
+        "- create_polygon: Connect existing vertices into a new face (vertexIndices, unordered).\n\n"
         "VERTEX OPERATIONS:\n"
-        "- merge_vertices: Merge/weld vertices (vertexIndices).\n"
+        "- merge_vertices: Collapse vertices to single point (vertexIndices, collapseToFirst).\n"
+        "- weld_vertices: Weld vertices within proximity radius (vertexIndices, radius).\n"
         "- split_vertices: Split shared vertices (vertexIndices).\n"
-        "- move_vertices: Translate vertices (vertexIndices, offset [x,y,z]).\n\n"
+        "- move_vertices: Translate vertices (vertexIndices, offset [x,y,z]).\n"
+        "- insert_vertex: Insert vertex on edge ({a,b}) or face (faceIndex) at point [x,y,z].\n"
+        "- append_vertices_to_edge: Insert evenly-spaced points on edges (edgeIndices/edges, count).\n\n"
+        "SELECTION:\n"
+        "- select_faces: Select faces by criteria (direction: up/down/forward/back/left/right, "
+        "tolerance, growFrom, growAngle, floodFrom, floodAngle, loopFrom, ring). "
+        "Returns faceIndices array for use with other actions.\n\n"
         "UV & MATERIALS:\n"
         "- set_face_material: Assign material to faces (faceIndices optional — all faces when omitted, materialPath).\n"
         "- set_face_color: Set vertex color on faces (faceIndices optional — all faces when omitted, color [r,g,b,a]).\n"
@@ -103,6 +118,7 @@ def _normalize_probuilder_params(params: dict[str, Any]) -> dict[str, Any]:
         "- auto_smooth: Auto-assign smoothing groups by angle (angleThreshold: default 30).\n\n"
         "MESH UTILITIES:\n"
         "- center_pivot: Move pivot point to mesh bounds center.\n"
+        "- set_pivot: Set pivot to arbitrary world position (position [x,y,z]).\n"
         "- freeze_transform: Bake position/rotation/scale into vertex data, reset transform.\n"
         "- validate_mesh: Check mesh health (degenerate triangles, unused vertices). Read-only.\n"
         "- repair_mesh: Auto-fix degenerate triangles and unused vertices.\n\n"
@@ -138,6 +154,7 @@ async def manage_probuilder(
             "Shape creation": SHAPE_ACTIONS,
             "Mesh editing": MESH_ACTIONS,
             "Vertex operations": VERTEX_ACTIONS,
+            "Selection": SELECTION_ACTIONS,
             "UV & materials": UV_MATERIAL_ACTIONS,
             "Query": QUERY_ACTIONS,
             "Smoothing": SMOOTHING_ACTIONS,

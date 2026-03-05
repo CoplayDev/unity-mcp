@@ -11,6 +11,7 @@ Common workflows and patterns for effective Unity-MCP usage.
 - [Testing Workflows](#testing-workflows)
 - [Debugging Workflows](#debugging-workflows)
 - [UI Creation Workflows](#ui-creation-workflows)
+- [ProBuilder Workflows](#probuilder-workflows)
 - [Batch Operations](#batch-operations)
 
 ---
@@ -1422,6 +1423,88 @@ Both systems are active simultaneously. For UI, prefer `InputSystemUIInputModule
 ```
 
 > **Gotcha:** Adding `StandaloneInputModule` when `activeInputHandler` is `"New"` will cause a runtime error. Always check first.
+
+---
+
+## ProBuilder Workflows
+
+When `com.unity.probuilder` is installed, prefer ProBuilder shapes over primitive GameObjects for any geometry that needs editing, multi-material faces, or non-trivial shapes. Check availability first with `manage_probuilder(action="ping")`.
+
+See [ProBuilder Workflow Guide](probuilder-guide.md) for full reference with complex object examples.
+
+### ProBuilder vs Primitives Decision
+
+| Need | Use Primitives | Use ProBuilder |
+|------|---------------|----------------|
+| Simple placeholder cube | `manage_gameobject(action="create", primitive_type="Cube")` | - |
+| Editable geometry | - | `manage_probuilder(action="create_shape", ...)` |
+| Per-face materials | - | `set_face_material` |
+| Custom shapes (L-rooms, arches) | - | `create_poly_shape` or `create_shape` |
+| Mesh editing (extrude, bevel) | - | Face/edge/vertex operations |
+| Batch environment building | Either | ProBuilder + `batch_execute` |
+
+### Basic ProBuilder Scene Build
+
+```python
+# 1. Check ProBuilder availability
+manage_probuilder(action="ping")
+
+# 2. Create shapes (use batch for multiple)
+batch_execute(commands=[
+    {"tool": "manage_probuilder", "params": {
+        "action": "create_shape",
+        "properties": {"shape_type": "Cube", "name": "Floor", "width": 20, "height": 0.2, "depth": 20}
+    }},
+    {"tool": "manage_probuilder", "params": {
+        "action": "create_shape",
+        "properties": {"shape_type": "Cube", "name": "Wall1", "width": 20, "height": 3, "depth": 0.3,
+                       "position": [0, 1.5, 10]}
+    }},
+    {"tool": "manage_probuilder", "params": {
+        "action": "create_shape",
+        "properties": {"shape_type": "Cylinder", "name": "Pillar1", "radius": 0.4, "height": 3,
+                       "position": [5, 1.5, 5]}
+    }},
+])
+
+# 3. Edit geometry (always get_mesh_info first!)
+info = manage_probuilder(action="get_mesh_info", target="Wall1",
+    properties={"include": "faces"})
+# Find direction="front" face, subdivide it, delete center for a window
+
+# 4. Apply materials per face
+manage_probuilder(action="set_face_material", target="Floor",
+    properties={"faceIndices": [0], "materialPath": "Assets/Materials/Stone.mat"})
+
+# 5. Smooth organic shapes
+manage_probuilder(action="auto_smooth", target="Pillar1",
+    properties={"angleThreshold": 45})
+
+# 6. Screenshot to verify
+manage_scene(action="screenshot", include_image=True, max_resolution=512)
+```
+
+### Edit-Verify Loop Pattern
+
+Face indices change after every edit. Always re-query:
+
+```python
+# WRONG: Assume face indices are stable
+manage_probuilder(action="subdivide", target="Obj", properties={"faceIndices": [2]})
+manage_probuilder(action="delete_faces", target="Obj", properties={"faceIndices": [5]})  # Index may be wrong!
+
+# RIGHT: Re-query after each edit
+manage_probuilder(action="subdivide", target="Obj", properties={"faceIndices": [2]})
+info = manage_probuilder(action="get_mesh_info", target="Obj", properties={"include": "faces"})
+# Find the correct face by direction/center, then delete
+manage_probuilder(action="delete_faces", target="Obj", properties={"faceIndices": [correct_index]})
+```
+
+### Known Limitations
+
+- **`set_pivot`**: Broken -- vertex positions don't persist through mesh rebuild. Use `center_pivot` or Transform positioning.
+- **`convert_to_probuilder`**: Broken -- MeshImporter throws. Create shapes natively with `create_shape`/`create_poly_shape`.
+- **`subdivide`**: Uses `ConnectElements.Connect` (not traditional quad subdivision). Connects face midpoints.
 
 ---
 

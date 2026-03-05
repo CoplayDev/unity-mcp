@@ -40,22 +40,9 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
             for (int i = 0; i < positions.Count; i++)
                 newPositions[i] = (Vector3)positions[i] - localCenter;
 
-            // Set positions via reflection
-            var setPositionsMethod = ManageProBuilder._proBuilderMeshType.GetMethod("SetPositions",
-                BindingFlags.Instance | BindingFlags.Public);
-            if (setPositionsMethod == null)
-            {
-                // Try property setter via positions
-                var positionsField = ManageProBuilder._proBuilderMeshType.GetProperty("positions");
-                if (positionsField != null && positionsField.CanWrite)
-                    positionsField.SetValue(pbMesh, new List<Vector3>(newPositions));
-                else
-                    return new ErrorResponse("Cannot set vertex positions on ProBuilderMesh.");
-            }
-            else
-            {
-                setPositionsMethod.Invoke(pbMesh, new object[] { newPositions });
-            }
+            // Set positions via property setter
+            SetVertexPositions(pbMesh, newPositions);
+
 
             // Move transform to compensate
             var worldOffset = pbMesh.transform.TransformVector(localCenter);
@@ -98,20 +85,7 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
             pbMesh.transform.localScale = Vector3.one;
 
             // Set new positions (now in world space = new local space since identity)
-            var setPositionsMethod = ManageProBuilder._proBuilderMeshType.GetMethod("SetPositions",
-                BindingFlags.Instance | BindingFlags.Public);
-            if (setPositionsMethod == null)
-            {
-                var positionsProperty = ManageProBuilder._proBuilderMeshType.GetProperty("positions");
-                if (positionsProperty != null && positionsProperty.CanWrite)
-                    positionsProperty.SetValue(pbMesh, new List<Vector3>(worldPositions));
-                else
-                    return new ErrorResponse("Cannot set vertex positions on ProBuilderMesh.");
-            }
-            else
-            {
-                setPositionsMethod.Invoke(pbMesh, new object[] { worldPositions });
-            }
+            SetVertexPositions(pbMesh, worldPositions);
 
             ManageProBuilder.RefreshMesh(pbMesh);
 
@@ -187,6 +161,56 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
                     unusedVertices,
                     issues,
                 });
+        }
+
+        internal static object SetPivot(JObject @params)
+        {
+            var pbMesh = ManageProBuilder.RequireProBuilderMesh(@params);
+            var props = ManageProBuilder.ExtractProperties(@params);
+
+            var posToken = props["position"] ?? props["worldPosition"] ?? props["world_position"];
+            if (posToken == null)
+                return new ErrorResponse("position parameter is required ([x,y,z] in world space).");
+
+            var worldPosition = VectorParsing.ParseVector3OrDefault(posToken);
+
+            Undo.RecordObject(pbMesh, "Set Pivot");
+            Undo.RecordObject(pbMesh.transform, "Set Pivot");
+
+            // SetPivot moves the transform without moving the geometry visually.
+            // We need to offset vertex positions by the inverse of the transform change.
+            var positionsProp = ManageProBuilder._proBuilderMeshType.GetProperty("positions");
+            var positions = positionsProp?.GetValue(pbMesh) as System.Collections.IList;
+            if (positions == null || positions.Count == 0)
+                return new ErrorResponse("Could not read vertex positions.");
+
+            // Calculate delta in local space
+            var worldDelta = worldPosition - pbMesh.transform.position;
+            var localDelta = pbMesh.transform.InverseTransformVector(worldDelta);
+
+            // Offset all vertices by -localDelta to keep them in place visually
+            var newPositions = new Vector3[positions.Count];
+            for (int i = 0; i < positions.Count; i++)
+                newPositions[i] = (Vector3)positions[i] - localDelta;
+
+            SetVertexPositions(pbMesh, newPositions);
+
+            // Move transform to new pivot position
+            pbMesh.transform.position = worldPosition;
+
+            ManageProBuilder.RefreshMesh(pbMesh);
+
+            return new SuccessResponse("Pivot set to world position", new
+            {
+                position = new[] { Round(worldPosition.x), Round(worldPosition.y), Round(worldPosition.z) },
+            });
+        }
+
+        private static void SetVertexPositions(Component pbMesh, Vector3[] positions)
+        {
+            var positionsProp = ManageProBuilder._proBuilderMeshType.GetProperty("positions");
+            if (positionsProp != null && positionsProp.CanWrite)
+                positionsProp.SetValue(pbMesh, new List<Vector3>(positions));
         }
 
         internal static object RepairMesh(JObject @params)

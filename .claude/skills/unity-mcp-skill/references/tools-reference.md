@@ -797,7 +797,7 @@ Discover available custom tools via `mcpforunity://custom-tools` resource.
 
 ### manage_probuilder
 
-Unified tool for ProBuilder mesh operations. Requires `com.unity.probuilder` package.
+Unified tool for ProBuilder mesh operations. Requires `com.unity.probuilder` package. When available, **prefer ProBuilder over primitive GameObjects** for editable geometry, multi-material faces, or complex shapes.
 
 **Parameters:**
 
@@ -811,26 +811,35 @@ Unified tool for ProBuilder mesh operations. Requires `com.unity.probuilder` pac
 **Actions by category:**
 
 **Shape Creation:**
-- `create_shape` — Create ProBuilder primitive (shape_type, size, position, rotation, name)
+- `create_shape` — Create ProBuilder primitive (shape_type, size, position, rotation, name). 13 types: Cube, Cylinder, Sphere, Plane, Cone, Torus, Pipe, Arch, Stair, CurvedStair, Door, Prism
 - `create_poly_shape` — Create from 2D polygon footprint (points, extrudeHeight, flipNormals)
 
 **Mesh Editing:**
-- `extrude_faces` — Extrude faces (faceIndices, distance, method)
-- `extrude_edges` — Extrude edges (edgeIndices, distance, asGroup)
-- `bevel_edges` — Bevel edges (edgeIndices, amount 0-1)
-- `subdivide` — Subdivide faces (faceIndices optional)
+- `extrude_faces` — Extrude faces (faceIndices, distance, method: FaceNormal/VertexNormal/IndividualFaces)
+- `extrude_edges` — Extrude edges (edgeIndices or edges [{a,b},...], distance, asGroup)
+- `bevel_edges` — Bevel edges (edgeIndices or edges [{a,b},...], amount 0-1)
+- `subdivide` — Subdivide faces via ConnectElements (faceIndices optional)
 - `delete_faces` — Delete faces (faceIndices)
-- `bridge_edges` — Bridge two open edges (edgeA, edgeB as {a,b} pairs)
+- `bridge_edges` — Bridge two open edges (edgeA, edgeB as {a,b} pairs, allowNonManifold)
 - `connect_elements` — Connect edges/faces (edgeIndices or faceIndices)
-- `detach_faces` — Detach faces to new object (faceIndices, deleteSource)
+- `detach_faces` — Detach faces to new object (faceIndices, deleteSourceFaces)
 - `flip_normals` — Flip face normals (faceIndices)
 - `merge_faces` — Merge faces into one (faceIndices)
 - `combine_meshes` — Combine ProBuilder objects (targets list)
+- `merge_objects` — Merge objects with auto-convert (targets, name)
+- `duplicate_and_flip` — Create double-sided geometry (faceIndices)
+- `create_polygon` — Connect existing vertices into a new face (vertexIndices, unordered)
 
 **Vertex Operations:**
-- `merge_vertices` — Merge/weld vertices (vertexIndices)
+- `merge_vertices` — Collapse vertices to single point (vertexIndices, collapseToFirst)
+- `weld_vertices` — Weld vertices within proximity radius (vertexIndices, radius)
 - `split_vertices` — Split shared vertices (vertexIndices)
 - `move_vertices` — Translate vertices (vertexIndices, offset [x,y,z])
+- `insert_vertex` — Insert vertex on edge or face (edge {a,b} or faceIndex + point [x,y,z])
+- `append_vertices_to_edge` — Insert evenly-spaced points on edges (edgeIndices or edges, count)
+
+**Selection:**
+- `select_faces` — Select faces by criteria (direction + tolerance, growFrom + growAngle)
 
 **UV & Materials:**
 - `set_face_material` — Assign material to faces (faceIndices, materialPath)
@@ -840,10 +849,10 @@ Unified tool for ProBuilder mesh operations. Requires `com.unity.probuilder` pac
 **Query:**
 - `get_mesh_info` — Get mesh details with `include` parameter:
   - `"summary"` (default): counts, bounds, materials
-  - `"faces"`: + face normals, centers, and direction labels
-  - `"edges"`: + edge vertex pairs (capped at 200)
+  - `"faces"`: + face normals, centers, and direction labels (capped at 100)
+  - `"edges"`: + edge vertex pairs with world positions (capped at 200, deduplicated)
   - `"all"`: everything
-- `convert_to_probuilder` — Convert standard mesh to ProBuilder
+- `ping` — Check if ProBuilder is available
 
 **Smoothing:**
 - `set_smoothing` — Set smoothing group on faces (faceIndices, smoothingGroup: 0=hard, 1+=smooth)
@@ -855,9 +864,16 @@ Unified tool for ProBuilder mesh operations. Requires `com.unity.probuilder` pac
 - `validate_mesh` — Check mesh health (read-only diagnostics)
 - `repair_mesh` — Auto-fix degenerate triangles
 
+**Not Yet Working (known bugs):**
+- `set_pivot` — Vertex positions don't persist through mesh rebuild. Use `center_pivot` or Transform positioning instead.
+- `convert_to_probuilder` — MeshImporter throws internally. Create shapes natively instead.
+
 **Examples:**
 
 ```python
+# Check availability
+manage_probuilder(action="ping")
+
 # Create a cube
 manage_probuilder(action="create_shape", properties={"shape_type": "Cube", "name": "MyCube"})
 
@@ -868,6 +884,18 @@ manage_probuilder(action="get_mesh_info", target="MyCube", properties={"include"
 manage_probuilder(action="extrude_faces", target="MyCube",
     properties={"faceIndices": [2], "distance": 1.5})
 
+# Select all upward-facing faces
+manage_probuilder(action="select_faces", target="MyCube",
+    properties={"direction": "up", "tolerance": 0.7})
+
+# Create double-sided geometry (for room interiors)
+manage_probuilder(action="duplicate_and_flip", target="Room",
+    properties={"faceIndices": [0, 1, 2, 3, 4, 5]})
+
+# Weld nearby vertices
+manage_probuilder(action="weld_vertices", target="MyCube",
+    properties={"vertexIndices": [0, 1, 2, 3], "radius": 0.1})
+
 # Auto-smooth
 manage_probuilder(action="auto_smooth", target="MyCube", properties={"angleThreshold": 30})
 
@@ -876,4 +904,4 @@ manage_probuilder(action="center_pivot", target="MyCube")
 manage_probuilder(action="validate_mesh", target="MyCube")
 ```
 
-See also: [ProBuilder Workflow Guide](probuilder-guide.md) for detailed patterns.
+See also: [ProBuilder Workflow Guide](probuilder-guide.md) for detailed patterns and complex object examples.
