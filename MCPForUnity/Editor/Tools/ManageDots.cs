@@ -175,22 +175,59 @@ namespace MCPForUnity.Editor.Tools
             string groupFilter = p.Get("group");
             var systems = new List<object>();
 
+            // Build ISystem type lookup for group name resolution on unmanaged systems
+            var isystemTypes = BuildISystemTypeLookup();
+
+            // Track managed system full names to distinguish managed vs unmanaged
+            var managedTypesByName = new Dictionary<string, Type>();
             foreach (var sys in world.Systems)
+                managedTypesByName[sys.GetType().FullName] = sys.GetType();
+
+            // Enumerate ALL systems (managed + unmanaged) via WorldUnmanaged.GetAllSystems
+            var allHandles = world.Unmanaged.GetAllSystems(Allocator.Temp);
+            try
             {
-                var sysType = sys.GetType();
-
-                string groupName = GetSystemGroupName(sysType);
-                if (!string.IsNullOrEmpty(groupFilter) &&
-                    !groupName.Contains(groupFilter, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                systems.Add(new Dictionary<string, object>
+                for (int i = 0; i < allHandles.Length; i++)
                 {
-                    ["name"]    = sysType.Name,
-                    ["type"]    = sysType.FullName,
-                    ["group"]   = groupName,
-                    ["enabled"] = sys.Enabled
-                });
+                    try
+                    {
+                        ref var state = ref world.Unmanaged.ResolveSystemStateRef(allHandles[i]);
+                        string debugName = state.DebugName.ToString();
+                        if (string.IsNullOrEmpty(debugName)) continue;
+
+                        bool isManaged = managedTypesByName.ContainsKey(debugName);
+                        string shortName = debugName.Contains('.')
+                            ? debugName.Substring(debugName.LastIndexOf('.') + 1)
+                            : debugName;
+
+                        // Resolve Type for [UpdateInGroup] attribute
+                        Type sysType = null;
+                        if (isManaged)
+                            managedTypesByName.TryGetValue(debugName, out sysType);
+                        else
+                            isystemTypes.TryGetValue(shortName, out sysType);
+
+                        string groupName = sysType != null ? GetSystemGroupName(sysType) : "Unknown";
+
+                        if (!string.IsNullOrEmpty(groupFilter) &&
+                            !groupName.Contains(groupFilter, StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        systems.Add(new Dictionary<string, object>
+                        {
+                            ["name"]    = shortName,
+                            ["type"]    = debugName,
+                            ["group"]   = groupName,
+                            ["enabled"] = state.Enabled,
+                            ["kind"]    = isManaged ? "managed" : "unmanaged"
+                        });
+                    }
+                    catch { continue; }
+                }
+            }
+            finally
+            {
+                allHandles.Dispose();
             }
 
             return new SuccessResponse($"Found {systems.Count} system(s) in '{world.Name}'.", systems);
@@ -206,45 +243,83 @@ namespace MCPForUnity.Editor.Tools
             if (string.IsNullOrEmpty(systemName))
                 return new ErrorResponse("'system_name' parameter is required.");
 
-            ComponentSystemBase system = FindSystem(world, systemName);
-            if (system == null)
-                return new ErrorResponse($"System '{systemName}' not found in world '{world.Name}'.");
-
-            var sysType = system.GetType();
-            var queries = new List<object>();
-            foreach (var q in system.EntityQueries)
+            // Try managed system first
+            ComponentSystemBase managedSystem = FindSystem(world, systemName);
+            if (managedSystem != null)
             {
-                queries.Add(new Dictionary<string, object>
+                var sysType = managedSystem.GetType();
+                var queries = new List<object>();
+                foreach (var q in managedSystem.EntityQueries)
                 {
-                    ["entity_count"]    = q.CalculateEntityCount(),
-                    ["component_types"] = GetQueryComponentTypeNames(q)
+                    queries.Add(new Dictionary<string, object>
+                    {
+                        ["entity_count"]    = q.CalculateEntityCount(),
+                        ["component_types"] = GetQueryComponentTypeNames(q)
+                    });
+                }
+
+                var updateBefore = sysType.GetCustomAttributes(typeof(UpdateBeforeAttribute), true)
+                    .Cast<UpdateBeforeAttribute>()
+                    .Select(a => a.SystemType.Name)
+                    .ToList();
+                var updateAfter = sysType.GetCustomAttributes(typeof(UpdateAfterAttribute), true)
+                    .Cast<UpdateAfterAttribute>()
+                    .Select(a => a.SystemType.Name)
+                    .ToList();
+
+                bool isGroup = typeof(ComponentSystemGroup).IsAssignableFrom(sysType);
+
+                return new SuccessResponse($"System '{systemName}' details.", new Dictionary<string, object>
+                {
+                    ["name"]           = sysType.Name,
+                    ["full_name"]      = sysType.FullName,
+                    ["group"]          = GetSystemGroupName(sysType),
+                    ["enabled"]        = managedSystem.Enabled,
+                    ["is_group"]       = isGroup,
+                    ["kind"]           = "managed",
+                    ["update_before"]  = updateBefore,
+                    ["update_after"]   = updateAfter,
+                    ["query_count"]    = managedSystem.EntityQueries.Length,
+                    ["queries"]        = queries
                 });
             }
 
-            // Collect ordering attributes
-            var updateBefore = sysType.GetCustomAttributes(typeof(UpdateBeforeAttribute), true)
-                .Cast<UpdateBeforeAttribute>()
-                .Select(a => a.SystemType.Name)
-                .ToList();
-            var updateAfter = sysType.GetCustomAttributes(typeof(UpdateAfterAttribute), true)
-                .Cast<UpdateAfterAttribute>()
-                .Select(a => a.SystemType.Name)
-                .ToList();
-
-            bool isGroup = typeof(ComponentSystemGroup).IsAssignableFrom(sysType);
-
-            return new SuccessResponse($"System '{systemName}' details.", new Dictionary<string, object>
+            // Try unmanaged ISystem struct
+            var unmanagedResult = FindUnmanagedSystem(world, systemName);
+            if (unmanagedResult.HasValue)
             {
-                ["name"]           = sysType.Name,
-                ["full_name"]      = sysType.FullName,
-                ["group"]          = GetSystemGroupName(sysType),
-                ["enabled"]        = system.Enabled,
-                ["is_group"]       = isGroup,
-                ["update_before"]  = updateBefore,
-                ["update_after"]   = updateAfter,
-                ["query_count"]    = system.EntityQueries.Length,
-                ["queries"]        = queries
-            });
+                var (handle, resolvedType) = unmanagedResult.Value;
+                ref var state = ref world.Unmanaged.ResolveSystemStateRef(handle);
+                string debugName = state.DebugName.ToString();
+
+                var result = new Dictionary<string, object>
+                {
+                    ["name"]      = resolvedType?.Name ?? debugName,
+                    ["full_name"] = resolvedType?.FullName ?? debugName,
+                    ["group"]     = resolvedType != null ? GetSystemGroupName(resolvedType) : "Unknown",
+                    ["enabled"]   = state.Enabled,
+                    ["is_group"]  = false,
+                    ["kind"]      = "unmanaged"
+                };
+
+                if (resolvedType != null)
+                {
+                    result["update_before"] = resolvedType
+                        .GetCustomAttributes(typeof(UpdateBeforeAttribute), true)
+                        .Cast<UpdateBeforeAttribute>()
+                        .Select(a => a.SystemType.Name)
+                        .ToList();
+                    result["update_after"] = resolvedType
+                        .GetCustomAttributes(typeof(UpdateAfterAttribute), true)
+                        .Cast<UpdateAfterAttribute>()
+                        .Select(a => a.SystemType.Name)
+                        .ToList();
+                }
+
+                return new SuccessResponse($"System '{systemName}' details.", result);
+            }
+
+            return new ErrorResponse($"System '{systemName}' not found in world '{world.Name}'.");
         }
 
         private static object ToggleSystem(ToolParams p)
@@ -261,13 +336,26 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse("'enabled' parameter is required (true/false).");
             bool enabled = p.GetBool("enabled");
 
-            ComponentSystemBase system = FindSystem(world, systemName);
-            if (system == null)
-                return new ErrorResponse($"System '{systemName}' not found in world '{world.Name}'.");
+            // Try managed system first
+            ComponentSystemBase managedSystem = FindSystem(world, systemName);
+            if (managedSystem != null)
+            {
+                managedSystem.Enabled = enabled;
+                return new SuccessResponse(
+                    $"System '{systemName}' (managed) {(enabled ? "enabled" : "disabled")} in world '{world.Name}'.");
+            }
 
-            system.Enabled = enabled;
-            return new SuccessResponse(
-                $"System '{systemName}' {(enabled ? "enabled" : "disabled")} in world '{world.Name}'.");
+            // Try unmanaged ISystem struct
+            var unmanagedResult = FindUnmanagedSystem(world, systemName);
+            if (unmanagedResult.HasValue)
+            {
+                ref var state = ref world.Unmanaged.ResolveSystemStateRef(unmanagedResult.Value.Handle);
+                state.Enabled = enabled;
+                return new SuccessResponse(
+                    $"System '{systemName}' (unmanaged) {(enabled ? "enabled" : "disabled")} in world '{world.Name}'.");
+            }
+
+            return new ErrorResponse($"System '{systemName}' not found in world '{world.Name}'.");
         }
 
         #endregion
@@ -762,6 +850,65 @@ namespace MCPForUnity.Editor.Tools
                     return sys;
             }
             return null;
+        }
+
+        /// <summary>
+        /// Finds an unmanaged ISystem struct in the world by name.
+        /// Returns (SystemHandle, resolved Type) or null if not found.
+        /// </summary>
+        private static (SystemHandle Handle, Type SystemType)? FindUnmanagedSystem(
+            World world, string systemName)
+        {
+            var isystemTypes = BuildISystemTypeLookup();
+            var allHandles = world.Unmanaged.GetAllSystems(Allocator.Temp);
+            try
+            {
+                for (int i = 0; i < allHandles.Length; i++)
+                {
+                    try
+                    {
+                        ref var state = ref world.Unmanaged.ResolveSystemStateRef(allHandles[i]);
+                        string debugName = state.DebugName.ToString();
+                        string shortName = debugName.Contains('.')
+                            ? debugName.Substring(debugName.LastIndexOf('.') + 1)
+                            : debugName;
+
+                        if (shortName == systemName || debugName == systemName)
+                        {
+                            isystemTypes.TryGetValue(shortName, out var resolvedType);
+                            return (allHandles[i], resolvedType);
+                        }
+                    }
+                    catch { continue; }
+                }
+            }
+            finally
+            {
+                allHandles.Dispose();
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Scans loaded assemblies for ISystem struct types.
+        /// Returns a dictionary of short type name → Type.
+        /// </summary>
+        private static Dictionary<string, Type> BuildISystemTypeLookup()
+        {
+            var lookup = new Dictionary<string, Type>();
+            var isystemInterface = typeof(ISystem);
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                Type[] types;
+                try { types = asm.GetTypes(); }
+                catch { continue; }
+                foreach (var t in types)
+                {
+                    if (t.IsValueType && !t.IsAbstract && isystemInterface.IsAssignableFrom(t))
+                        lookup[t.Name] = t;
+                }
+            }
+            return lookup;
         }
 
         private static Dictionary<string, object> SerializeEntityBrief(EntityManager em, Entity entity)
