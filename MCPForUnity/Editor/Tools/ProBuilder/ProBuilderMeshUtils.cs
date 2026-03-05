@@ -273,6 +273,6 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
                 });
         }
 
-        private static float Round(float v) => (float)Math.Round(v, 4);
+        private static float Round(float v) => ManageProBuilder.Round(v);
     }
 }

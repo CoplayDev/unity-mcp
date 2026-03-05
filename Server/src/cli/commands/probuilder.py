@@ -13,6 +13,19 @@ from cli.utils.constants import SEARCH_METHOD_CHOICE_TAGGED
 _PB_TOP_LEVEL_KEYS = {"action", "target", "searchMethod", "properties"}
 
 
+def _parse_edges_param(edges: str) -> dict[str, Any]:
+    """Parse edge JSON into either 'edges' (vertex pairs) or 'edgeIndices' (flat indices)."""
+    import json
+    try:
+        parsed = json.loads(edges)
+    except json.JSONDecodeError:
+        print_error("Invalid JSON for edges parameter")
+        raise SystemExit(1)
+    if parsed and isinstance(parsed[0], dict):
+        return {"edges": parsed}
+    return {"edgeIndices": parsed}
+
+
 def _normalize_pb_params(params: dict[str, Any]) -> dict[str, Any]:
     params = dict(params)
     properties: dict[str, Any] = {}
@@ -191,24 +204,14 @@ def extrude_edges(target: str, edges: str, distance: float, as_group: bool,
         unity-mcp probuilder extrude-edges "MyCube" --edges '[{"a":0,"b":1}]' --distance 1
     """
     config = get_config()
-    import json
-    try:
-        parsed = json.loads(edges)
-    except json.JSONDecodeError:
-        print_error("Invalid JSON for edges parameter")
-        raise SystemExit(1)
 
     request: dict[str, Any] = {
         "action": "extrude_edges",
         "target": target,
         "distance": distance,
         "asGroup": as_group,
+        **_parse_edges_param(edges),
     }
-
-    if parsed and isinstance(parsed[0], dict):
-        request["edges"] = parsed
-    else:
-        request["edgeIndices"] = parsed
 
     if search_method:
         request["searchMethod"] = search_method
@@ -235,23 +238,13 @@ def bevel_edges(target: str, edges: str, amount: float, search_method: Optional[
         unity-mcp probuilder bevel-edges "MyCube" --edges '[{"a":0,"b":1}]' --amount 0.15
     """
     config = get_config()
-    import json
-    try:
-        parsed = json.loads(edges)
-    except json.JSONDecodeError:
-        print_error("Invalid JSON for edges parameter")
-        raise SystemExit(1)
 
     request: dict[str, Any] = {
         "action": "bevel_edges",
         "target": target,
         "amount": amount,
+        **_parse_edges_param(edges),
     }
-
-    if parsed and isinstance(parsed[0], dict):
-        request["edges"] = parsed
-    else:
-        request["edgeIndices"] = parsed
 
     if search_method:
         request["searchMethod"] = search_method

@@ -370,6 +370,19 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
         }
 
         /// <summary>
+        /// Create a typed List&lt;Face&gt; from a Face[] array for reflection calls
+        /// that require IEnumerable&lt;Face&gt;.
+        /// </summary>
+        private static System.Collections.IList ToTypedFaceList(Array faces)
+        {
+            var faceListType = typeof(List<>).MakeGenericType(_faceType);
+            var faceList = Activator.CreateInstance(faceListType) as System.Collections.IList;
+            foreach (var f in faces)
+                faceList.Add(f);
+            return faceList;
+        }
+
+        /// <summary>
         /// Collect unique (deduplicated) edges from the mesh.
         /// Edges shared between faces appear only once.
         /// </summary>
@@ -988,15 +1001,12 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
 
             // Get faces to subdivide (all faces if none specified)
             var faces = GetFacesByIndices(pbMesh, faceIndicesToken);
-            var faceListType = typeof(List<>).MakeGenericType(_faceType);
-            var faceList = Activator.CreateInstance(faceListType) as System.Collections.IList;
-            foreach (var f in faces)
-                faceList.Add(f);
+            var faceList = ToTypedFaceList(faces);
 
             // ProBuilder uses ConnectElements.Connect(mesh, faces) for face subdivision
             var connectMethod = _connectElementsType.GetMethods(BindingFlags.Static | BindingFlags.Public)
                 .FirstOrDefault(m => m.Name == "Connect" && m.GetParameters().Length == 2
-                    && m.GetParameters()[1].ParameterType.IsAssignableFrom(faceListType));
+                    && m.GetParameters()[1].ParameterType.IsAssignableFrom(faceList.GetType()));
 
             if (connectMethod == null)
                 return new ErrorResponse("ConnectElements.Connect (faces) method not found.");
@@ -1159,17 +1169,12 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
             if (faceIndicesToken != null)
             {
                 var faces = GetFacesByIndices(pbMesh, faceIndicesToken);
-
-                // Build IEnumerable<Face> compatible type (List<Face>)
-                var faceListType = typeof(List<>).MakeGenericType(_faceType);
-                var faceList = Activator.CreateInstance(faceListType) as System.Collections.IList;
-                foreach (var f in faces)
-                    faceList.Add(f);
+                var faceList = ToTypedFaceList(faces);
 
                 // Try Connect(ProBuilderMesh, IEnumerable<Face>)
                 var connectMethod = _connectElementsType.GetMethods(BindingFlags.Static | BindingFlags.Public)
                     .FirstOrDefault(m => m.Name == "Connect" && m.GetParameters().Length == 2
-                        && m.GetParameters()[1].ParameterType.IsAssignableFrom(faceListType));
+                        && m.GetParameters()[1].ParameterType.IsAssignableFrom(faceList.GetType()));
 
                 if (connectMethod == null)
                     return new ErrorResponse("ConnectElements.Connect (faces) method not found.");
@@ -1231,16 +1236,12 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
 
             Undo.RegisterCompleteObjectUndo(pbMesh, "Detach Faces");
 
-            // Build IEnumerable<Face> compatible list for reflection matching
-            var faceListType = typeof(List<>).MakeGenericType(_faceType);
-            var faceList = Activator.CreateInstance(faceListType) as System.Collections.IList;
-            foreach (var f in faces)
-                faceList.Add(f);
+            var faceList = ToTypedFaceList(faces);
 
             // Try overload: DetachFaces(ProBuilderMesh, IEnumerable<Face>, bool)
             var detachMethod = _extrudeElementsType.GetMethods(BindingFlags.Static | BindingFlags.Public)
                 .FirstOrDefault(m => m.Name == "DetachFaces" && m.GetParameters().Length == 3
-                    && m.GetParameters()[1].ParameterType.IsAssignableFrom(faceListType)
+                    && m.GetParameters()[1].ParameterType.IsAssignableFrom(faceList.GetType())
                     && m.GetParameters()[2].ParameterType == typeof(bool));
 
             if (detachMethod != null)
@@ -1252,7 +1253,7 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
                 // Fallback: DetachFaces(ProBuilderMesh, IEnumerable<Face>)
                 detachMethod = _extrudeElementsType.GetMethods(BindingFlags.Static | BindingFlags.Public)
                     .FirstOrDefault(m => m.Name == "DetachFaces" && m.GetParameters().Length == 2
-                        && m.GetParameters()[1].ParameterType.IsAssignableFrom(faceListType));
+                        && m.GetParameters()[1].ParameterType.IsAssignableFrom(faceList.GetType()));
 
                 if (detachMethod == null)
                     return new ErrorResponse("ExtrudeElements.DetachFaces method not found.");
@@ -1304,15 +1305,11 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
 
             Undo.RegisterCompleteObjectUndo(pbMesh, "Merge Faces");
 
-            // Build IEnumerable<Face> compatible type
-            var faceListType = typeof(List<>).MakeGenericType(_faceType);
-            var faceList = Activator.CreateInstance(faceListType) as System.Collections.IList;
-            foreach (var f in faces)
-                faceList.Add(f);
+            var faceList = ToTypedFaceList(faces);
 
             var mergeMethod = _mergeElementsType.GetMethods(BindingFlags.Static | BindingFlags.Public)
                 .FirstOrDefault(m => m.Name == "Merge" && m.GetParameters().Length == 2
-                    && m.GetParameters()[1].ParameterType.IsAssignableFrom(faceListType));
+                    && m.GetParameters()[1].ParameterType.IsAssignableFrom(faceList.GetType()));
 
             if (mergeMethod == null)
                 return new ErrorResponse("MergeElements.Merge method not found.");
@@ -1892,6 +1889,7 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
 
             var allFaces = GetFacesArray(pbMesh);
             var facesList = (System.Collections.IList)allFaces;
+            var selectedSet = new HashSet<int>();
             var selectedIndices = new List<int>();
 
             // Selection by direction
@@ -1916,7 +1914,10 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
                 {
                     var normal = ComputeFaceNormal(pbMesh, facesList[i]);
                     if (Vector3.Dot(normal, targetDir) > tolerance)
+                    {
+                        selectedSet.Add(i);
                         selectedIndices.Add(i);
+                    }
                 }
             }
 
@@ -1926,10 +1927,7 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
             if (growFromToken != null && _elementSelectionType != null)
             {
                 var seedFaces = GetFacesByIndices(pbMesh, growFromToken);
-                var faceListType = typeof(List<>).MakeGenericType(_faceType);
-                var seedList = Activator.CreateInstance(faceListType) as System.Collections.IList;
-                foreach (var f in seedFaces)
-                    seedList.Add(f);
+                var seedList = ToTypedFaceList(seedFaces);
 
                 var growMethod = _elementSelectionType.GetMethods(BindingFlags.Static | BindingFlags.Public)
                     .FirstOrDefault(m => m.Name == "GrowSelection" && m.GetParameters().Length == 3);
@@ -1942,7 +1940,7 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
                         foreach (var face in resultFaces)
                         {
                             int idx = IndexOfFace(facesList, face);
-                            if (idx >= 0 && !selectedIndices.Contains(idx))
+                            if (idx >= 0 && selectedSet.Add(idx))
                                 selectedIndices.Add(idx);
                         }
                     }
@@ -1955,10 +1953,7 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
             if (floodFromToken != null && _elementSelectionType != null)
             {
                 var seedFaces = GetFacesByIndices(pbMesh, floodFromToken);
-                var faceListType = typeof(List<>).MakeGenericType(_faceType);
-                var seedList = Activator.CreateInstance(faceListType) as System.Collections.IList;
-                foreach (var f in seedFaces)
-                    seedList.Add(f);
+                var seedList = ToTypedFaceList(seedFaces);
 
                 var floodMethod = _elementSelectionType.GetMethods(BindingFlags.Static | BindingFlags.Public)
                     .FirstOrDefault(m => m.Name == "FloodSelection" && m.GetParameters().Length == 3);
@@ -1971,7 +1966,7 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
                         foreach (var face in resultFaces)
                         {
                             int idx = IndexOfFace(facesList, face);
-                            if (idx >= 0 && !selectedIndices.Contains(idx))
+                            if (idx >= 0 && selectedSet.Add(idx))
                                 selectedIndices.Add(idx);
                         }
                     }
@@ -2002,7 +1997,7 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
                         foreach (var face in resultFaces)
                         {
                             int idx = IndexOfFace(facesList, face);
-                            if (idx >= 0 && !selectedIndices.Contains(idx))
+                            if (idx >= 0 && selectedSet.Add(idx))
                                 selectedIndices.Add(idx);
                         }
                     }
@@ -2168,55 +2163,43 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
 
             var autoUnwrapType = uvProperty.PropertyType;
 
+            // Resolve reflection members once outside the loop
+            var scaleField = autoUnwrapType.GetField("scale") ?? (MemberInfo)autoUnwrapType.GetProperty("scale");
+            var offsetField = autoUnwrapType.GetField("offset");
+            var rotField = autoUnwrapType.GetField("rotation");
+            var flipUField = autoUnwrapType.GetField("flipU");
+            var flipVField = autoUnwrapType.GetField("flipV");
+
+            var scaleToken = props["scale"];
+            var offsetToken = props["offset"];
+            var rotationToken = props["rotation"];
+            var flipUToken = props["flipU"] ?? props["flip_u"];
+            var flipVToken = props["flipV"] ?? props["flip_v"];
+
             foreach (var face in faces)
             {
                 var uvSettings = uvProperty.GetValue(face);
 
-                var scaleToken = props["scale"];
-                if (scaleToken != null)
+                if (scaleToken != null && scaleField is FieldInfo scaleFi)
                 {
-                    var scaleProp = autoUnwrapType.GetField("scale") ?? (MemberInfo)autoUnwrapType.GetProperty("scale");
-                    if (scaleProp is FieldInfo fi)
-                    {
-                        var scaleArr = scaleToken.ToObject<float[]>();
-                        fi.SetValue(uvSettings, new Vector2(scaleArr[0], scaleArr.Length > 1 ? scaleArr[1] : scaleArr[0]));
-                    }
+                    var scaleArr = scaleToken.ToObject<float[]>();
+                    scaleFi.SetValue(uvSettings, new Vector2(scaleArr[0], scaleArr.Length > 1 ? scaleArr[1] : scaleArr[0]));
                 }
 
-                var offsetToken = props["offset"];
-                if (offsetToken != null)
+                if (offsetToken != null && offsetField != null)
                 {
-                    var offsetField = autoUnwrapType.GetField("offset");
-                    if (offsetField != null)
-                    {
-                        var offsetArr = offsetToken.ToObject<float[]>();
-                        offsetField.SetValue(uvSettings, new Vector2(offsetArr[0], offsetArr.Length > 1 ? offsetArr[1] : 0f));
-                    }
+                    var offsetArr = offsetToken.ToObject<float[]>();
+                    offsetField.SetValue(uvSettings, new Vector2(offsetArr[0], offsetArr.Length > 1 ? offsetArr[1] : 0f));
                 }
 
-                var rotationToken = props["rotation"];
-                if (rotationToken != null)
-                {
-                    var rotField = autoUnwrapType.GetField("rotation");
-                    if (rotField != null)
-                        rotField.SetValue(uvSettings, rotationToken.Value<float>());
-                }
+                if (rotationToken != null && rotField != null)
+                    rotField.SetValue(uvSettings, rotationToken.Value<float>());
 
-                var flipUToken = props["flipU"] ?? props["flip_u"];
-                if (flipUToken != null)
-                {
-                    var flipUField = autoUnwrapType.GetField("flipU");
-                    if (flipUField != null)
-                        flipUField.SetValue(uvSettings, flipUToken.Value<bool>());
-                }
+                if (flipUToken != null && flipUField != null)
+                    flipUField.SetValue(uvSettings, flipUToken.Value<bool>());
 
-                var flipVToken = props["flipV"] ?? props["flip_v"];
-                if (flipVToken != null)
-                {
-                    var flipVField = autoUnwrapType.GetField("flipV");
-                    if (flipVField != null)
-                        flipVField.SetValue(uvSettings, flipVToken.Value<bool>());
-                }
+                if (flipVToken != null && flipVField != null)
+                    flipVField.SetValue(uvSettings, flipVToken.Value<bool>());
 
                 uvProperty.SetValue(face, uvSettings);
             }
@@ -2276,14 +2259,20 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
 
             if (include == "faces" || include == "all")
             {
+                var positionsPropFaces = _proBuilderMeshType.GetProperty("positions");
+                var positionsListFaces = positionsPropFaces?.GetValue(pbMesh) as System.Collections.IList;
+                var indexesPropFaces = _faceType.GetProperty("indexes");
+                var smGroupProp = _faceType.GetProperty("smoothingGroup");
+                var manualUVProp = _faceType.GetProperty("manualUV");
+
                 var faceDetails = new List<object>();
                 for (int i = 0; i < facesList.Count && i < 100; i++)
                 {
                     var face = facesList[i];
-                    var smGroup = _faceType.GetProperty("smoothingGroup")?.GetValue(face);
-                    var manualUV = _faceType.GetProperty("manualUV")?.GetValue(face);
-                    var normal = ComputeFaceNormal(pbMesh, face);
-                    var center = ComputeFaceCenter(pbMesh, face);
+                    var smGroup = smGroupProp?.GetValue(face);
+                    var manualUV = manualUVProp?.GetValue(face);
+                    var normal = ComputeFaceNormal(pbMesh, face, positionsListFaces, indexesPropFaces);
+                    var center = ComputeFaceCenter(pbMesh, face, positionsListFaces, indexesPropFaces);
                     var direction = ClassifyDirection(normal);
 
                     faceDetails.Add(new
@@ -2347,11 +2336,16 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
             return new SuccessResponse("ProBuilder mesh info", data);
         }
 
-        private static Vector3 ComputeFaceNormal(Component pbMesh, object face)
+        private static Vector3 ComputeFaceNormal(Component pbMesh, object face,
+            System.Collections.IList positions = null, PropertyInfo indexesProp = null)
         {
-            var positionsProp = _proBuilderMeshType.GetProperty("positions");
-            var positions = positionsProp?.GetValue(pbMesh) as System.Collections.IList;
-            var indexesProp = _faceType.GetProperty("indexes");
+            if (positions == null)
+            {
+                var positionsProp = _proBuilderMeshType.GetProperty("positions");
+                positions = positionsProp?.GetValue(pbMesh) as System.Collections.IList;
+            }
+            if (indexesProp == null)
+                indexesProp = _faceType.GetProperty("indexes");
             var indexes = indexesProp?.GetValue(face) as System.Collections.IList;
 
             if (positions == null || indexes == null || indexes.Count < 3)
@@ -2365,11 +2359,16 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
             return pbMesh.transform.rotation * localNormal;
         }
 
-        private static Vector3 ComputeFaceCenter(Component pbMesh, object face)
+        private static Vector3 ComputeFaceCenter(Component pbMesh, object face,
+            System.Collections.IList positions = null, PropertyInfo indexesProp = null)
         {
-            var positionsProp = _proBuilderMeshType.GetProperty("positions");
-            var positions = positionsProp?.GetValue(pbMesh) as System.Collections.IList;
-            var indexesProp = _faceType.GetProperty("indexes");
+            if (positions == null)
+            {
+                var positionsProp = _proBuilderMeshType.GetProperty("positions");
+                positions = positionsProp?.GetValue(pbMesh) as System.Collections.IList;
+            }
+            if (indexesProp == null)
+                indexesProp = _faceType.GetProperty("indexes");
             var indexes = indexesProp?.GetValue(face) as System.Collections.IList;
 
             if (positions == null || indexes == null || indexes.Count == 0)
@@ -2403,7 +2402,7 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
             return null;
         }
 
-        private static float Round(float v) => (float)Math.Round(v, 4);
+        internal static float Round(float v) => (float)Math.Round(v, 4);
 
         private static object ConvertToProBuilder(JObject @params)
         {
@@ -2471,13 +2470,5 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
             });
         }
 
-        // =====================================================================
-        // Legacy compatibility: CollectAllEdges (now returns unique edges)
-        // =====================================================================
-
-        internal static List<object> CollectAllEdges(Component pbMesh)
-        {
-            return CollectUniqueEdges(pbMesh);
-        }
     }
 }

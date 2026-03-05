@@ -46,27 +46,6 @@ ALL_ACTIONS = (
     + UV_MATERIAL_ACTIONS + QUERY_ACTIONS + SMOOTHING_ACTIONS + UTILITY_ACTIONS
 )
 
-_PROBUILDER_TOP_LEVEL_KEYS = {"action", "target", "searchMethod", "properties"}
-
-
-def _normalize_probuilder_params(params: dict[str, Any]) -> dict[str, Any]:
-    params = dict(params)
-    properties: dict[str, Any] = {}
-    for key in list(params.keys()):
-        if key in _PROBUILDER_TOP_LEVEL_KEYS:
-            continue
-        properties[key] = params.pop(key)
-
-    if properties:
-        existing = params.get("properties")
-        if isinstance(existing, dict):
-            params["properties"] = {**properties, **existing}
-        else:
-            params["properties"] = properties
-
-    return {k: v for k, v in params.items() if v is not None}
-
-
 @mcp_for_unity_tool(
     group="probuilder",
     description=(
