@@ -604,8 +604,8 @@ namespace MCPForUnity.Editor.Tools
                             if (r != null && r.gameObject.activeInHierarchy) targetBounds.Encapsulate(r.bounds);
                         }
                         center = targetBounds.center;
-                        radius = targetBounds.extents.magnitude * 1.8f;
-                        radius = Mathf.Max(radius, 3f);
+                        radius = targetBounds.extents.magnitude * 2.5f;
+                        radius = Mathf.Max(radius, 5f);
                     }
                 }
                 else
@@ -632,8 +632,8 @@ namespace MCPForUnity.Editor.Tools
                         return new ErrorResponse("No renderers found in the scene. Cannot determine scene bounds for batch capture.");
 
                     center = bounds.center;
-                    radius = bounds.extents.magnitude * 1.8f;
-                    radius = Mathf.Max(radius, 3f);
+                    radius = bounds.extents.magnitude * 2.5f;
+                    radius = Mathf.Max(radius, 5f);
                 }
 
                 // Define 6 viewpoints: front, back, left, right, top, bird's-eye (45° elevated front-right)
@@ -664,6 +664,10 @@ namespace MCPForUnity.Editor.Tools
                     {
                         tempCam.transform.position = pos;
                         tempCam.transform.LookAt(center);
+
+                        // Force material refresh before capture
+                        EditorApplication.QueuePlayerLoopUpdate();
+                        SceneView.RepaintAll();
 
                         Texture2D tile = ScreenshotUtility.RenderCameraToTexture(tempCam, maxRes);
                         tiles.Add(tile);
@@ -803,6 +807,10 @@ namespace MCPForUnity.Editor.Tools
                                              : elevDeg < 0 ? $"below{Mathf.Abs(elevDeg):F0}"
                                              : "level";
                             string angleLabel = $"{dirLabel}_{elevLabel}";
+
+                            // Force material refresh before capture
+                            EditorApplication.QueuePlayerLoopUpdate();
+                            SceneView.RepaintAll();
 
                             Texture2D tile = ScreenshotUtility.RenderCameraToTexture(tempCam, maxRes);
                             tiles.Add(tile);

@@ -15,6 +15,7 @@ Complete reference for all MCP tools. Each tool includes parameters, types, and 
 - [UI Tools](#ui-tools)
 - [Editor Control Tools](#editor-control-tools)
 - [Testing Tools](#testing-tools)
+- [ProBuilder Tools](#probuilder-tools)
 
 ---
 
@@ -789,3 +790,90 @@ execute_custom_tool(
 ```
 
 Discover available custom tools via `mcpforunity://custom-tools` resource.
+
+---
+
+## ProBuilder Tools
+
+### manage_probuilder
+
+Unified tool for ProBuilder mesh operations. Requires `com.unity.probuilder` package.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `action` | string | Yes | Action to perform (see categories below) |
+| `target` | string | Sometimes | Target GameObject name/path/id |
+| `search_method` | string | No | How to find target: `by_id`, `by_name`, `by_path`, `by_tag`, `by_layer` |
+| `properties` | dict | No | Action-specific parameters |
+
+**Actions by category:**
+
+**Shape Creation:**
+- `create_shape` — Create ProBuilder primitive (shape_type, size, position, rotation, name)
+- `create_poly_shape` — Create from 2D polygon footprint (points, extrudeHeight, flipNormals)
+
+**Mesh Editing:**
+- `extrude_faces` — Extrude faces (faceIndices, distance, method)
+- `extrude_edges` — Extrude edges (edgeIndices, distance, asGroup)
+- `bevel_edges` — Bevel edges (edgeIndices, amount 0-1)
+- `subdivide` — Subdivide faces (faceIndices optional)
+- `delete_faces` — Delete faces (faceIndices)
+- `bridge_edges` — Bridge two open edges (edgeA, edgeB as {a,b} pairs)
+- `connect_elements` — Connect edges/faces (edgeIndices or faceIndices)
+- `detach_faces` — Detach faces to new object (faceIndices, deleteSource)
+- `flip_normals` — Flip face normals (faceIndices)
+- `merge_faces` — Merge faces into one (faceIndices)
+- `combine_meshes` — Combine ProBuilder objects (targets list)
+
+**Vertex Operations:**
+- `merge_vertices` — Merge/weld vertices (vertexIndices)
+- `split_vertices` — Split shared vertices (vertexIndices)
+- `move_vertices` — Translate vertices (vertexIndices, offset [x,y,z])
+
+**UV & Materials:**
+- `set_face_material` — Assign material to faces (faceIndices, materialPath)
+- `set_face_color` — Set vertex color on faces (faceIndices, color [r,g,b,a])
+- `set_face_uvs` — Set UV params (faceIndices, scale, offset, rotation, flipU, flipV)
+
+**Query:**
+- `get_mesh_info` — Get mesh details with `include` parameter:
+  - `"summary"` (default): counts, bounds, materials
+  - `"faces"`: + face normals, centers, and direction labels
+  - `"edges"`: + edge vertex pairs (capped at 200)
+  - `"all"`: everything
+- `convert_to_probuilder` — Convert standard mesh to ProBuilder
+
+**Smoothing:**
+- `set_smoothing` — Set smoothing group on faces (faceIndices, smoothingGroup: 0=hard, 1+=smooth)
+- `auto_smooth` — Auto-assign smoothing groups by angle (angleThreshold: default 30)
+
+**Mesh Utilities:**
+- `center_pivot` — Move pivot to mesh bounds center
+- `freeze_transform` — Bake transform into vertices, reset transform
+- `validate_mesh` — Check mesh health (read-only diagnostics)
+- `repair_mesh` — Auto-fix degenerate triangles
+
+**Examples:**
+
+```python
+# Create a cube
+manage_probuilder(action="create_shape", properties={"shape_type": "Cube", "name": "MyCube"})
+
+# Get face info with directions
+manage_probuilder(action="get_mesh_info", target="MyCube", properties={"include": "faces"})
+
+# Extrude the top face (find it via direction="top" in get_mesh_info results)
+manage_probuilder(action="extrude_faces", target="MyCube",
+    properties={"faceIndices": [2], "distance": 1.5})
+
+# Auto-smooth
+manage_probuilder(action="auto_smooth", target="MyCube", properties={"angleThreshold": 30})
+
+# Cleanup workflow
+manage_probuilder(action="center_pivot", target="MyCube")
+manage_probuilder(action="validate_mesh", target="MyCube")
+```
+
+See also: [ProBuilder Workflow Guide](probuilder-guide.md) for detailed patterns.

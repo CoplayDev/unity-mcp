@@ -22,6 +22,7 @@ TOOL_GROUPS: dict[str, str] = {
     "ui": "UI Toolkit (UXML, USS, UIDocument)",
     "scripting_ext": "ScriptableObject management",
     "testing": "Test runner & async test jobs",
+    "probuilder": "ProBuilder 3D modeling – requires com.unity.probuilder package",
 }
 
 DEFAULT_ENABLED_GROUPS: set[str] = {"core"}

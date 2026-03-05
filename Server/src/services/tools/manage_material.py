@@ -55,7 +55,7 @@ async def manage_material(
     # assign_material_to_renderer / set_renderer_color
     target: Annotated[str,
                       "Target GameObject (name, path, or find instruction)"] | None = None,
-    search_method: Annotated[Literal["by_name", "by_path", "by_tag",
+    search_method: Annotated[Literal["by_id", "by_name", "by_path", "by_tag",
                                      "by_layer", "by_component"], "Search method for target"] | None = None,
     slot: Annotated[int, "Material slot index (0-based)"] | None = None,
     mode: Annotated[Literal["shared", "instance", "property_block"],

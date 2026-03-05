@@ -266,6 +266,28 @@ unity-mcp vfx trail set-time "Trail" 2.0
 unity-mcp vfx raw particle_set_main "Fire" --params '{"duration": 5}'
 ```
 
+### ProBuilder Operations
+
+Note: Requires com.unity.probuilder package installed in your Unity project.
+
+```bash
+# Create shapes
+unity-mcp probuilder create-shape Cube
+unity-mcp probuilder create-shape Torus --name "MyTorus" --params '{"rows": 16, "columns": 16}'
+unity-mcp probuilder create-shape Stair --position 0 0 5 --params '{"steps": 10}'
+
+# Create from polygon footprint
+unity-mcp probuilder create-poly --points "[[0,0,0],[5,0,0],[5,0,5],[0,0,5]]" --height 3
+
+# Get mesh info
+unity-mcp probuilder info "MyCube"
+
+# Raw ProBuilder actions (access all 21 actions)
+unity-mcp probuilder raw extrude_faces "MyCube" --params '{"faceIndices": [0], "distance": 1.0}'
+unity-mcp probuilder raw bevel_edges "MyCube" --params '{"edgeIndices": [0,1], "amount": 0.2}'
+unity-mcp probuilder raw set_face_material "MyCube" --params '{"faceIndices": [0], "materialPath": "Assets/Materials/Red.mat"}'
+```
+
 ### Batch Operations
 
 ```bash
@@ -388,6 +410,7 @@ unity-mcp raw read_console '{"count": 20}'
 | `vfx line` | `info`, `set-positions`, `create-line`, `create-circle`, `clear` |
 | `vfx trail` | `info`, `set-time`, `clear` |
 | `vfx` | `raw` (access all 60+ actions) |
+| `probuilder` | `create-shape`, `create-poly`, `info`, `raw` (access all 21 actions) |
 | `batch` | `run`, `inline`, `template` |
 | `animation` | `play`, `set-parameter` |
 | `audio` | `play`, `stop`, `volume` |
