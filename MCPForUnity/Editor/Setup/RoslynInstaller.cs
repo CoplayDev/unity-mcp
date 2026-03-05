@@ -17,6 +17,8 @@ namespace MCPForUnity.Editor.Setup
             ("microsoft.codeanalysis.csharp",    "4.12.0", "lib/netstandard2.0/Microsoft.CodeAnalysis.CSharp.dll","Microsoft.CodeAnalysis.CSharp.dll"),
             ("system.collections.immutable",     "8.0.0",  "lib/netstandard2.0/System.Collections.Immutable.dll", "System.Collections.Immutable.dll"),
             ("system.reflection.metadata",       "8.0.0",  "lib/netstandard2.0/System.Reflection.Metadata.dll",   "System.Reflection.Metadata.dll"),
+            // Required by System.Memory (transitive dependency for System.Reflection.Metadata on netstandard2.0)
+            ("system.runtime.compilerservices.unsafe", "4.5.3", "lib/netstandard2.0/System.Runtime.CompilerServices.Unsafe.dll", "System.Runtime.CompilerServices.Unsafe.dll"),
         };
 
         [MenuItem("Window/MCP For Unity/Install Roslyn DLLs", priority = 20)]
