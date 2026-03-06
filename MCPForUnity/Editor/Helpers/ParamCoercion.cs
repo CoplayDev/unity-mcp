@@ -78,6 +78,75 @@ namespace MCPForUnity.Editor.Helpers
             return null;
         }
 
+
+        /// <summary>
+        /// Coerces a JToken to a long value, handling strings and floats.
+        /// </summary>
+        /// <param name="token">The JSON token to coerce</param>
+        /// <param name="defaultValue">Default value if coercion fails</param>
+        /// <returns>The coerced long value or default</returns>
+        public static long CoerceLong(JToken token, long defaultValue)
+        {
+            if (token == null || token.Type == JTokenType.Null)
+                return defaultValue;
+
+            try
+            {
+                if (token.Type == JTokenType.Integer)
+                    return token.Value<long>();
+
+                var s = token.ToString().Trim();
+                if (s.Length == 0)
+                    return defaultValue;
+
+                if (long.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var l))
+                    return l;
+
+                if (double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var d))
+                    return (long)d;
+            }
+            catch
+            {
+                // Swallow and return default
+            }
+
+            return defaultValue;
+        }
+
+        /// <summary>
+        /// Coerces a JToken to a nullable long value.
+        /// Returns null if token is null, empty, or cannot be parsed.
+        /// </summary>
+        /// <param name="token">The JSON token to coerce</param>
+        /// <returns>The coerced long value or null</returns>
+        public static long? CoerceLongNullable(JToken token)
+        {
+            if (token == null || token.Type == JTokenType.Null)
+                return null;
+
+            try
+            {
+                if (token.Type == JTokenType.Integer)
+                    return token.Value<long>();
+
+                var s = token.ToString().Trim();
+                if (s.Length == 0)
+                    return null;
+
+                if (long.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var l))
+                    return l;
+
+                if (double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var d))
+                    return (long)d;
+            }
+            catch
+            {
+                // Swallow and return null
+            }
+
+            return null;
+        }
+
         /// <summary>
         /// Coerces a JToken to a boolean value, handling strings like "true", "1", etc.
         /// </summary>

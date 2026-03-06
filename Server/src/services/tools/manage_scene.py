@@ -70,6 +70,8 @@ def _extract_images(response: dict[str, Any], action: str) -> ToolResult | None:
         "Read-only actions: get_hierarchy, get_active, get_build_settings, screenshot, scene_view_frame. "
         "Modifying actions: create, load, save. "
         "screenshot supports include_image=true to return an inline base64 PNG for AI vision. "
+        "screenshot supports capture_source='scene_view' to capture the active Unity Scene View rendering. "
+        "When using capture_source='scene_view', optionally pass scene_view_target to frame before capture. "
         "screenshot with batch='surround' captures 6 angles around the scene (no file saved) for comprehensive scene understanding. "
         "screenshot with batch='orbit' captures configurable azimuth x elevation grid for visual QA (use orbit_angles, orbit_elevations, orbit_distance, orbit_fov). "
         "screenshot with look_at/view_position creates a temp camera at that viewpoint and returns an inline image."
@@ -108,6 +110,9 @@ async def manage_scene(
     max_resolution: Annotated[int | str,
                               "Max resolution (longest edge in pixels) for the inline image. Default 640. "
                               "Use 256-512 for quick looks, 640-1024 for detail."] | None = None,
+    capture_source: Annotated[Literal["game_view", "scene_view"],
+                              "Screenshot source. 'game_view' (default) captures via Game View / camera path; "
+                              "'scene_view' captures the active Unity Scene View rendering."] | None = None,
     # --- screenshot extended params (batch, positioned capture) ---
     batch: Annotated[str,
                      "Batch capture mode. 'surround' captures 6 fixed angles (front/back/left/right/top/bird_eye). "
@@ -188,6 +193,10 @@ async def manage_scene(
             params["includeImage"] = coerced_include_image
         if coerced_max_resolution is not None:
             params["maxResolution"] = coerced_max_resolution
+        if capture_source is not None:
+            if action != "screenshot":
+                return {"success": False, "message": "capture_source is only valid for action='screenshot'."}
+            params["captureSource"] = capture_source
 
         # screenshot extended params (batch, positioned capture)
         if batch:

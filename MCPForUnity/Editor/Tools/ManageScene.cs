@@ -29,6 +29,7 @@ namespace MCPForUnity.Editor.Tools
 
             // screenshot: camera selection, inline image, batch, view positioning
             public string camera { get; set; }
+            public string captureSource { get; set; }   // "game_view" (default) or "scene_view"
             public bool? includeImage { get; set; }
             public int? maxResolution { get; set; }
             public string batch { get; set; }           // "surround" or "orbit" for multi-angle batch capture
@@ -95,6 +96,7 @@ namespace MCPForUnity.Editor.Tools
 
                 // screenshot: camera selection, inline image, batch, view positioning
                 camera = (p["camera"])?.ToString(),
+                captureSource = (p["captureSource"] ?? p["capture_source"])?.ToString(),
                 includeImage = ParamCoercion.CoerceBoolNullable(p["includeImage"] ?? p["include_image"]),
                 maxResolution = ParamCoercion.CoerceIntNullable(p["maxResolution"] ?? p["max_resolution"]),
                 batch = (p["batch"])?.ToString(),
@@ -433,6 +435,46 @@ namespace MCPForUnity.Editor.Tools
         {
             try
             {
+                string fileName = cmd.fileName;
+                int resolvedSuperSize = (cmd.superSize.HasValue && cmd.superSize.Value > 0) ? cmd.superSize.Value : 1;
+                bool includeImage = cmd.includeImage ?? false;
+                int maxResolution = cmd.maxResolution ?? 0; // 0 = let ScreenshotUtility default to 640
+                string cameraRef = cmd.camera;
+                string captureSource = string.IsNullOrWhiteSpace(cmd.captureSource)
+                    ? "game_view"
+                    : cmd.captureSource.Trim().ToLowerInvariant();
+
+                if (captureSource != "game_view" && captureSource != "scene_view")
+                {
+                    return new ErrorResponse(
+                        $"Invalid capture_source '{cmd.captureSource}'. Valid values: 'game_view', 'scene_view'.");
+                }
+
+                if (captureSource == "scene_view")
+                {
+                    if (resolvedSuperSize > 1)
+                    {
+                        return new ErrorResponse(
+                            "capture_source='scene_view' does not support super_size above 1. Remove 'super_size' or use capture_source='game_view'.");
+                    }
+                    if (!string.IsNullOrEmpty(cmd.batch))
+                    {
+                        return new ErrorResponse(
+                            "capture_source='scene_view' does not support batch modes. Use capture_source='game_view' for batch capture.");
+                    }
+                    if ((cmd.lookAt != null && cmd.lookAt.Type != JTokenType.Null) || cmd.viewPosition.HasValue || cmd.viewRotation.HasValue)
+                    {
+                        return new ErrorResponse(
+                            "capture_source='scene_view' does not support look_at/view_position/view_rotation. Use scene_view_target to frame a Scene View object.");
+                    }
+                    if (!string.IsNullOrEmpty(cameraRef))
+                    {
+                        return new ErrorResponse(
+                            "capture_source='scene_view' does not support camera selection. Remove 'camera' or use capture_source='game_view'.");
+                    }
+                    return CaptureSceneViewScreenshot(cmd, fileName, resolvedSuperSize, includeImage, maxResolution);
+                }
+
                 // Batch capture (e.g., "surround" for 6 angles around the scene)
                 if (!string.IsNullOrEmpty(cmd.batch))
                 {
@@ -448,12 +490,6 @@ namespace MCPForUnity.Editor.Tools
                 {
                     return CapturePositionedScreenshot(cmd);
                 }
-
-                string fileName = cmd.fileName;
-                int resolvedSuperSize = (cmd.superSize.HasValue && cmd.superSize.Value > 0) ? cmd.superSize.Value : 1;
-                bool includeImage = cmd.includeImage ?? false;
-                int maxResolution = cmd.maxResolution ?? 0; // 0 = let ScreenshotUtility default to 640
-                string cameraRef = cmd.camera;
 
                 // Batch mode warning
                 if (Application.isBatchMode)
@@ -506,6 +542,7 @@ namespace MCPForUnity.Editor.Tools
                         { "superSize", result.SuperSize },
                         { "isAsync", false },
                         { "camera", targetCamera.name },
+                        { "captureSource", "game_view" },
                     };
                     if (includeImage && result.ImageBase64 != null)
                     {
@@ -560,12 +597,93 @@ namespace MCPForUnity.Editor.Tools
                         fullPath = defaultResult.FullPath,
                         superSize = defaultResult.SuperSize,
                         isAsync = defaultResult.IsAsync,
+                        captureSource = "game_view",
                     }
                 );
             }
             catch (Exception e)
             {
                 return new ErrorResponse($"Error capturing screenshot: {e.Message}");
+            }
+        }
+
+        private static object CaptureSceneViewScreenshot(
+            SceneCommand cmd,
+            string fileName,
+            int resolvedSuperSize,
+            bool includeImage,
+            int maxResolution)
+        {
+            if (Application.isBatchMode)
+            {
+                return new ErrorResponse("capture_source='scene_view' is not supported in batch mode.");
+            }
+
+            var sceneView = SceneView.lastActiveSceneView;
+            if (sceneView == null)
+            {
+                return new ErrorResponse(
+                    "No active Scene View found. Open a Scene View window first, then retry screenshot with capture_source='scene_view'.");
+            }
+
+            // Optional pre-frame so capture matches the intended editing target.
+            if (cmd.sceneViewTarget != null && cmd.sceneViewTarget.Type != JTokenType.Null)
+            {
+                var frameResult = FrameSceneView(new SceneCommand { sceneViewTarget = cmd.sceneViewTarget });
+                if (frameResult is ErrorResponse)
+                {
+                    return frameResult;
+                }
+            }
+
+            try
+            {
+                ScreenshotCaptureResult result = EditorWindowScreenshotUtility.CaptureSceneViewViewportToAssets(
+                    sceneView,
+                    fileName,
+                    resolvedSuperSize,
+                    ensureUniqueFileName: true,
+                    includeImage: includeImage,
+                    maxResolution: maxResolution,
+                    out int viewportWidth,
+                    out int viewportHeight);
+
+                AssetDatabase.ImportAsset(result.AssetsRelativePath, ImportAssetOptions.ForceSynchronousImport);
+                string sceneViewName = sceneView.titleContent?.text ?? "Scene";
+
+                var data = new Dictionary<string, object>
+                {
+                    { "path", result.AssetsRelativePath },
+                    { "fullPath", result.FullPath },
+                    { "superSize", result.SuperSize },
+                    { "isAsync", false },
+                    { "camera", sceneView.camera != null ? sceneView.camera.name : "SceneCamera" },
+                    { "captureSource", "scene_view" },
+                    { "captureMode", "scene_view_viewport" },
+                    { "sceneViewName", sceneViewName },
+                    { "viewportWidth", viewportWidth },
+                    { "viewportHeight", viewportHeight },
+                };
+
+                if (cmd.sceneViewTarget != null && cmd.sceneViewTarget.Type != JTokenType.Null)
+                {
+                    data["sceneViewTarget"] = cmd.sceneViewTarget;
+                }
+
+                if (includeImage && result.ImageBase64 != null)
+                {
+                    data["imageBase64"] = result.ImageBase64;
+                    data["imageWidth"] = result.ImageWidth;
+                    data["imageHeight"] = result.ImageHeight;
+                }
+
+                return new SuccessResponse(
+                    $"Scene View screenshot captured to '{result.AssetsRelativePath}' (scene view: {sceneViewName}).",
+                    data);
+            }
+            catch (Exception e)
+            {
+                return new ErrorResponse($"Error capturing Scene View screenshot: {e.Message}");
             }
         }
 
@@ -1045,30 +1163,7 @@ namespace MCPForUnity.Editor.Tools
                         return new ErrorResponse($"Target GameObject '{cmd.sceneViewTarget}' not found for scene_view_frame.");
                     }
 
-                    // Calculate bounds from renderers, colliders, or transform
-                    Bounds bounds = new Bounds(target.transform.position, Vector3.zero);
-                    var renderers = target.GetComponentsInChildren<Renderer>();
-                    if (renderers.Length > 0)
-                    {
-                        bounds = renderers[0].bounds;
-                        for (int i = 1; i < renderers.Length; i++)
-                            bounds.Encapsulate(renderers[i].bounds);
-                    }
-                    else
-                    {
-                        var colliders = target.GetComponentsInChildren<Collider>();
-                        if (colliders.Length > 0)
-                        {
-                            bounds = colliders[0].bounds;
-                            for (int i = 1; i < colliders.Length; i++)
-                                bounds.Encapsulate(colliders[i].bounds);
-                        }
-                        else
-                        {
-                            bounds = new Bounds(target.transform.position, Vector3.one);
-                        }
-                    }
-
+                    Bounds bounds = CalculateFrameBounds(target);
                     sceneView.Frame(bounds, false);
                     return new SuccessResponse($"Scene View framed on '{target.name}'.", new { target = target.name });
                 }
@@ -1092,6 +1187,104 @@ namespace MCPForUnity.Editor.Tools
             {
                 return new ErrorResponse($"Error framing Scene View: {e.Message}");
             }
+        }
+
+        private static Bounds CalculateFrameBounds(GameObject target)
+        {
+            if (target == null)
+                return new Bounds(Vector3.zero, Vector3.one);
+
+            if (TryGetRectTransformBounds(target, out Bounds rectBounds))
+                return rectBounds;
+
+            if (TryGetRendererBounds(target, out Bounds rendererBounds))
+                return rendererBounds;
+
+            if (TryGetColliderBounds(target, out Bounds colliderBounds))
+                return colliderBounds;
+
+            return new Bounds(target.transform.position, Vector3.one);
+        }
+
+        private static bool TryGetRectTransformBounds(GameObject target, out Bounds bounds)
+        {
+            bounds = default;
+            var rectTransforms = target.GetComponentsInChildren<RectTransform>(true);
+            bool hasBounds = false;
+            var corners = new Vector3[4];
+
+            foreach (var rectTransform in rectTransforms)
+            {
+                if (rectTransform == null)
+                    continue;
+                if (!rectTransform.gameObject.activeInHierarchy)
+                    continue;
+
+                rectTransform.GetWorldCorners(corners);
+                for (int i = 0; i < corners.Length; i++)
+                {
+                    if (!hasBounds)
+                    {
+                        bounds = new Bounds(corners[i], Vector3.zero);
+                        hasBounds = true;
+                    }
+                    else
+                    {
+                        bounds.Encapsulate(corners[i]);
+                    }
+                }
+            }
+
+            if (!hasBounds)
+                return false;
+
+            if (bounds.size.sqrMagnitude < 0.0001f)
+                bounds.Expand(1f);
+            return true;
+        }
+
+        private static bool TryGetRendererBounds(GameObject target, out Bounds bounds)
+        {
+            bounds = default;
+            var renderers = target.GetComponentsInChildren<Renderer>(true);
+            bool hasBounds = false;
+            foreach (var renderer in renderers)
+            {
+                if (renderer == null || !renderer.gameObject.activeInHierarchy)
+                    continue;
+                if (!hasBounds)
+                {
+                    bounds = renderer.bounds;
+                    hasBounds = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(renderer.bounds);
+                }
+            }
+            return hasBounds;
+        }
+
+        private static bool TryGetColliderBounds(GameObject target, out Bounds bounds)
+        {
+            bounds = default;
+            var colliders = target.GetComponentsInChildren<Collider>(true);
+            bool hasBounds = false;
+            foreach (var collider in colliders)
+            {
+                if (collider == null || !collider.gameObject.activeInHierarchy)
+                    continue;
+                if (!hasBounds)
+                {
+                    bounds = collider.bounds;
+                    hasBounds = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(collider.bounds);
+                }
+            }
+            return hasBounds;
         }
 
         private static void EnsureGameView()

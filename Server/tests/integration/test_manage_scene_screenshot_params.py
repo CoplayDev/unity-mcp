@@ -209,6 +209,49 @@ async def test_screenshot_batch_with_look_at_params(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_screenshot_scene_view_capture_params(monkeypatch):
+    """capture_source='scene_view' and scene_view_target are forwarded."""
+    captured = {}
+
+    async def fake_send(cmd, params, **kwargs):
+        captured["params"] = params
+        return {"success": True, "data": {"filePath": "Assets/shot.png"}}
+
+    monkeypatch.setattr(manage_scene_mod, "async_send_command_with_retry", fake_send)
+
+    await manage_scene_mod.manage_scene(
+        ctx=DummyContext(),
+        action="screenshot",
+        capture_source="scene_view",
+        scene_view_target="Canvas",
+        include_image=True,
+    )
+
+    p = captured["params"]
+    assert p["action"] == "screenshot"
+    assert p["captureSource"] == "scene_view"
+    assert p["sceneViewTarget"] == "Canvas"
+    assert p["includeImage"] is True
+
+
+@pytest.mark.asyncio
+async def test_capture_source_rejected_for_non_screenshot_action(monkeypatch):
+    async def fake_send(cmd, params, **kwargs):  # pragma: no cover - should not be called
+        return {"success": True, "data": {}}
+
+    monkeypatch.setattr(manage_scene_mod, "async_send_command_with_retry", fake_send)
+
+    result = await manage_scene_mod.manage_scene(
+        ctx=DummyContext(),
+        action="get_active",
+        capture_source="scene_view",
+    )
+
+    assert result["success"] is False
+    assert "capture_source is only valid" in result["message"]
+
+
+@pytest.mark.asyncio
 async def test_scene_view_frame_params(monkeypatch):
     captured = {}
 

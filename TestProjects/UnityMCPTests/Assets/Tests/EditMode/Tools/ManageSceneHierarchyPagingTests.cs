@@ -101,5 +101,20 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsNotNull(childItems);
             Assert.AreEqual(7, childItems.Count);
         }
+
+        [Test]
+        public void Screenshot_SceneViewRejectsSupersizeAboveOne()
+        {
+            var raw = ManageScene.HandleCommand(new JObject
+            {
+                ["action"] = "screenshot",
+                ["captureSource"] = "scene_view",
+                ["superSize"] = 2,
+            });
+            var response = raw as JObject ?? JObject.FromObject(raw);
+
+            Assert.IsFalse(response.Value<bool>("success"), response.ToString());
+            StringAssert.Contains("does not support super_size above 1", response.Value<string>("message"));
+        }
     }
 }
