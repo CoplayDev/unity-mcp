@@ -923,7 +923,9 @@ namespace MCPForUnity.Editor.Tools
                     // Save to disk
                     string screenshotsFolder = Path.Combine(Application.dataPath, "Screenshots");
                     Directory.CreateDirectory(screenshotsFolder);
-                    string fileName = $"screenshot-{DateTime.Now:yyyyMMdd-HHmmss}.png";
+                    string fileName = !string.IsNullOrEmpty(cmd.fileName)
+                        ? (cmd.fileName.EndsWith(".png", System.StringComparison.OrdinalIgnoreCase) ? cmd.fileName : cmd.fileName + ".png")
+                        : $"screenshot-{DateTime.Now:yyyyMMdd-HHmmss}.png";
                     string fullPath = Path.Combine(screenshotsFolder, fileName);
                     // Ensure unique filename
                     if (File.Exists(fullPath))
@@ -950,7 +952,7 @@ namespace MCPForUnity.Editor.Tools
                         { "imageHeight", h },
                         { "viewPosition", new[] { camPos.x, camPos.y, camPos.z } },
                         { "screenshotsFolder", screenshotsFolder },
-                        { "filePath", assetsRelativePath },
+                        { "path", assetsRelativePath },
                     };
                     if (targetPos.HasValue)
                         data["lookAt"] = new[] { targetPos.Value.x, targetPos.Value.y, targetPos.Value.z };
