@@ -806,7 +806,7 @@ Unified tool for ProBuilder mesh operations. Requires `com.unity.probuilder` pac
 | `action` | string | Yes | Action to perform (see categories below) |
 | `target` | string | Sometimes | Target GameObject name/path/id |
 | `search_method` | string | No | How to find target: `by_id`, `by_name`, `by_path`, `by_tag`, `by_layer` |
-| `properties` | dict | No | Action-specific parameters |
+| `properties` | dict \| string | No | Action-specific parameters (dict or JSON string) |
 
 **Actions by category:**
 

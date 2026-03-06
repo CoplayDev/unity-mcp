@@ -941,6 +941,7 @@ namespace MCPForUnity.Editor.Tools
                     File.WriteAllBytes(fullPath, pngBytes);
 
                     string assetsRelativePath = "Assets/Screenshots/" + Path.GetFileName(fullPath);
+                    AssetDatabase.ImportAsset(assetsRelativePath, ImportAssetOptions.ForceSynchronousImport);
 
                     var data = new Dictionary<string, object>
                     {
