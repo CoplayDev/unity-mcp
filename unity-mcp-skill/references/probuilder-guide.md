@@ -38,7 +38,7 @@ manage_probuilder(action="extrude_faces", target="MyCube",
 
 ## Shape Creation
 
-### All 13 Shape Types
+### All 12 Shape Types
 
 ```python
 # Basic shapes
@@ -139,11 +139,11 @@ manage_probuilder(action="bevel_edges", target="MyCube",
 ```python
 # Detach and keep original (default)
 manage_probuilder(action="detach_faces", target="MyCube",
-    properties={"faceIndices": [0, 1], "deleteSourceFaces": false})
+    properties={"faceIndices": [0, 1], "deleteSourceFaces": False})
 
 # Detach and remove from source
 manage_probuilder(action="detach_faces", target="MyCube",
-    properties={"faceIndices": [0, 1], "deleteSourceFaces": true})
+    properties={"faceIndices": [0, 1], "deleteSourceFaces": True})
 ```
 
 ### Select Faces by Direction

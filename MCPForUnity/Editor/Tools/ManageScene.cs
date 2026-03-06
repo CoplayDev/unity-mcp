@@ -655,6 +655,10 @@ namespace MCPForUnity.Editor.Tools
                 tempCam.farClipPlane = radius * 4f;
                 tempCam.clearFlags = CameraClearFlags.Skybox;
 
+                // Force material refresh once before capture loop
+                EditorApplication.QueuePlayerLoopUpdate();
+                SceneView.RepaintAll();
+
                 var tiles = new List<Texture2D>();
                 var tileLabels = new List<string>();
                 var shotMeta = new List<object>();
@@ -664,10 +668,6 @@ namespace MCPForUnity.Editor.Tools
                     {
                         tempCam.transform.position = pos;
                         tempCam.transform.LookAt(center);
-
-                        // Force material refresh before capture
-                        EditorApplication.QueuePlayerLoopUpdate();
-                        SceneView.RepaintAll();
 
                         Texture2D tile = ScreenshotUtility.RenderCameraToTexture(tempCam, maxRes);
                         tiles.Add(tile);
@@ -777,6 +777,10 @@ namespace MCPForUnity.Editor.Tools
                 tempCam.farClipPlane = radius * 4f;
                 tempCam.clearFlags = CameraClearFlags.Skybox;
 
+                // Force material refresh once before capture loop
+                EditorApplication.QueuePlayerLoopUpdate();
+                SceneView.RepaintAll();
+
                 var tiles = new List<Texture2D>();
                 var tileLabels = new List<string>();
                 var shotMeta = new List<object>();
@@ -807,10 +811,6 @@ namespace MCPForUnity.Editor.Tools
                                              : elevDeg < 0 ? $"below{Mathf.Abs(elevDeg):F0}"
                                              : "level";
                             string angleLabel = $"{dirLabel}_{elevLabel}";
-
-                            // Force material refresh before capture
-                            EditorApplication.QueuePlayerLoopUpdate();
-                            SceneView.RepaintAll();
 
                             Texture2D tile = ScreenshotUtility.RenderCameraToTexture(tempCam, maxRes);
                             tiles.Add(tile);

@@ -811,7 +811,7 @@ Unified tool for ProBuilder mesh operations. Requires `com.unity.probuilder` pac
 **Actions by category:**
 
 **Shape Creation:**
-- `create_shape` — Create ProBuilder primitive (shape_type, size, position, rotation, name). 13 types: Cube, Cylinder, Sphere, Plane, Cone, Torus, Pipe, Arch, Stair, CurvedStair, Door, Prism
+- `create_shape` — Create ProBuilder primitive (shape_type, size, position, rotation, name). 12 types: Cube, Cylinder, Sphere, Plane, Cone, Torus, Pipe, Arch, Stair, CurvedStair, Door, Prism
 - `create_poly_shape` — Create from 2D polygon footprint (points, extrudeHeight, flipNormals)
 
 **Mesh Editing:**
