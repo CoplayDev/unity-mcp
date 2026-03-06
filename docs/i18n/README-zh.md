@@ -17,6 +17,22 @@
 
 <img alt="MCP for Unity building a scene" src="../images/building_scene.gif">
 
+<details>
+<summary><strong>最近更新</strong></summary>
+
+* **v9.4.8 (beta)** — 新编辑器 UI、通过 `manage_tools` 实时切换工具、技能同步窗口、多视图截图、一键 Roslyn 安装器、支持 Qwen Code 与 Gemini CLI 客户端、通过 `manage_probuilder` 进行 ProBuilder 网格编辑。
+* **v9.4.7** — 支持按调用路由 Unity 实例、修复 macOS pyenv PATH 问题、脚本工具的域重载稳定性提升。
+* **v9.4.6** — 新增 `manage_animation` 工具、支持 Cline 客户端、失效连接检测、工具状态跨重载持久化。
+* **v9.4.4** — 可配置 `batch_execute` 限制、按会话状态过滤工具、修复 IPv6/IPv4 回环问题。
+
+<details>
+<summary>更早的版本</summary>
+
+<!-- 随着前 4 条轮换，在此添加更早的条目 -->
+
+</details>
+</details>
+
 ---
 
 ## 快速开始
