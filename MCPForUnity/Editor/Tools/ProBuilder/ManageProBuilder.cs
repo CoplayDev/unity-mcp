@@ -125,7 +125,55 @@ namespace MCPForUnity.Editor.Tools.ProBuilder
             _meshValidationType = Type.GetType("UnityEngine.ProBuilder.MeshOperations.MeshValidation, Unity.ProBuilder");
 
             _proBuilderAvailable = true;
+            PatchProBuilderDefaultMaterial();
             return true;
+        }
+
+        /// <summary>
+        /// Patches <c>ProBuilderDefault.mat</c> in memory to suppress unintended emission in URP projects.
+        /// </summary>
+        /// <remarks>
+        /// <b>Root cause:</b> The ProBuilder default material was authored in an HDRP context and ships
+        /// with <c>_EmissionColor = {1,1,1,1}</c> (full white) and
+        /// <c>m_LightmapFlags = RealtimeEmissive | BakedEmissive</c>.
+        /// In a URP project Unity's GI system reads these material properties <i>directly</i>,
+        /// bypassing the shader's own Emission block (which is correctly wired to black).
+        /// The result is that every fresh ProBuilder mesh is treated as a full-white emitter,
+        /// and any URP Bloom volume in the scene amplifies this into a visible glow artefact.
+        ///
+        /// <b>Fix:</b> Zero all emission colour properties and set
+        /// <c>globalIlluminationFlags = EmissiveIsBlack</c> on the loaded <see cref="Material"/>
+        /// object.  The change is in-memory only — package assets are read-only on disk — but
+        /// the GI system and Bloom post-process both re-query the material each frame, so the
+        /// patch is effective for the entire session.  It is re-applied automatically on every
+        /// domain reload because <see cref="EnsureProBuilder"/> is called on the first MCP
+        /// ProBuilder command of each session.
+        /// </remarks>
+        private static void PatchProBuilderDefaultMaterial()
+        {
+            const string defaultMatPath =
+                "Packages/com.unity.probuilder/Content/Resources/Materials/ProBuilderDefault.mat";
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(defaultMatPath);
+            if (mat == null) return;
+
+            bool changed = false;
+            foreach (var prop in new[] { "_EmissionColor", "_EmissionColorUI", "_EmissionColorWithMapUI" })
+            {
+                if (mat.HasProperty(prop) && mat.GetColor(prop) != Color.black)
+                {
+                    mat.SetColor(prop, Color.black);
+                    changed = true;
+                }
+            }
+
+            if (mat.globalIlluminationFlags != MaterialGlobalIlluminationFlags.EmissiveIsBlack)
+            {
+                mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.EmissiveIsBlack;
+                changed = true;
+            }
+
+            if (changed)
+                Debug.Log("[MCP] Patched ProBuilderDefault material: zeroed emission and set GI flags to EmissiveIsBlack.");
         }
 
         public static object HandleCommand(JObject @params)

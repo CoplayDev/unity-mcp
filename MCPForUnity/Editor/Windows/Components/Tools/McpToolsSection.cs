@@ -44,6 +44,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             { "ui", "UI Toolkit" },
             { "scripting_ext", "Scripting Extensions" },
             { "testing", "Testing" },
+            { "probuilder", "ProBuilder — Experimental" },
         };
 
         public VisualElement Root { get; }
@@ -203,6 +204,8 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
                 return;
             }
 
+            bool isExperimental = string.Equals(prefsSuffix, "group-probuilder", StringComparison.OrdinalIgnoreCase);
+
             int enabledCount = toolList.Count(t => MCPServiceLocator.ToolDiscovery.IsToolEnabled(t.Name));
 
             // Default foldout state: core is open, others collapsed
@@ -240,6 +243,18 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             foreach (var tool in toolList)
             {
                 foldout.Add(CreateToolRow(tool));
+            }
+
+            if (isExperimental)
+            {
+                var warning = new HelpBox(
+                    "ProBuilder support is experimental. Mesh editing operations may produce " +
+                    "unexpected results on complex topologies. Always save your scene before " +
+                    "performing destructive operations.",
+                    HelpBoxMessageType.Warning);
+                warning.style.marginTop = 4;
+                warning.style.marginBottom = 2;
+                foldout.Insert(0, warning);
             }
 
             foldoutEntries.Add((foldout, title, toolList));
