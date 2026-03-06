@@ -227,6 +227,13 @@ def build_settings():
     help="Max resolution (longest edge) for inline image. Default 640."
 )
 @click.option(
+    "--capture-source",
+    default="game_view",
+    type=click.Choice(["game_view", "scene_view"], case_sensitive=False),
+    show_default=True,
+    help="Screenshot source: game_view (default) or scene_view."
+)
+@click.option(
     "--batch", "-b",
     default=None,
     help="Batch capture mode: 'surround' for 6 angles, 'orbit' for configurable grid."
@@ -274,14 +281,20 @@ def build_settings():
     default=None,
     help="Directory to save batch screenshots to (default: Unity project's Assets/Screenshots)."
 )
+@click.option(
+    "--scene-view-target",
+    default=None,
+    help="When --capture-source scene_view, frame Scene View on this target (name/path/instance ID) before capture."
+)
 @handle_unity_errors
 def screenshot(filename: Optional[str], supersize: int, camera: Optional[str],
                include_image: bool, max_resolution: Optional[int],
+               capture_source: str,
                batch: Optional[str], look_at: Optional[str],
                view_position: Optional[str], view_rotation: Optional[str],
                orbit_angles: Optional[int], orbit_elevations: Optional[str],
                orbit_distance: Optional[float], orbit_fov: Optional[float],
-               output_dir: Optional[str]):
+               output_dir: Optional[str], scene_view_target: Optional[str]):
     """Capture a screenshot of the scene.
 
     \b
@@ -291,6 +304,8 @@ def screenshot(filename: Optional[str], supersize: int, camera: Optional[str],
         unity-mcp scene screenshot --supersize 2
         unity-mcp scene screenshot --camera "SecondCamera" --include-image
         unity-mcp scene screenshot --include-image --max-resolution 512
+        unity-mcp scene screenshot --capture-source scene_view --include-image
+        unity-mcp scene screenshot --capture-source scene_view --scene-view-target "Canvas"
         unity-mcp scene screenshot --batch surround --max-resolution 256
         unity-mcp scene screenshot --look-at "Player" --max-resolution 512
         unity-mcp scene screenshot --view-position "0,10,-10" --look-at "0,0,0"
@@ -308,6 +323,8 @@ def screenshot(filename: Optional[str], supersize: int, camera: Optional[str],
         params["includeImage"] = True
     if max_resolution:
         params["maxResolution"] = max_resolution
+    if capture_source:
+        params["captureSource"] = capture_source.lower()
     if batch:
         params["batch"] = batch
     if look_at:
@@ -341,6 +358,8 @@ def screenshot(filename: Optional[str], supersize: int, camera: Optional[str],
         params["orbitDistance"] = orbit_distance
     if orbit_fov:
         params["orbitFov"] = orbit_fov
+    if scene_view_target:
+        params["sceneViewTarget"] = scene_view_target
 
     result = run_command("manage_scene", params, config)
 

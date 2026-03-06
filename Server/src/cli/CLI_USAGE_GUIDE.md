@@ -102,6 +102,7 @@ unity-mcp gameobject modify "MyCube" --position 0 2 0
 
 # Take a screenshot
 unity-mcp scene screenshot
+unity-mcp scene screenshot --capture-source scene_view --include-image
 
 # Enter play mode
 unity-mcp editor play
@@ -370,6 +371,7 @@ unity-mcp scene save
 # Take screenshot
 unity-mcp scene screenshot
 unity-mcp scene screenshot --filename "my_screenshot" --supersize 2
+unity-mcp scene screenshot --capture-source scene_view --scene-view-target "Canvas" --include-image
 ```
 
 ### GameObject Commands
