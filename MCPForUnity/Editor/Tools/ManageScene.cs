@@ -452,6 +452,11 @@ namespace MCPForUnity.Editor.Tools
 
                 if (captureSource == "scene_view")
                 {
+                    if (resolvedSuperSize > 1)
+                    {
+                        return new ErrorResponse(
+                            "capture_source='scene_view' does not support super_size above 1. Remove 'super_size' or use capture_source='game_view'.");
+                    }
                     if (!string.IsNullOrEmpty(cmd.batch))
                     {
                         return new ErrorResponse(

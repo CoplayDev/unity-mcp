@@ -33,7 +33,7 @@ namespace MCPForUnity.Editor.Helpers
 
             FocusAndRepaint(sceneView);
 
-            Rect viewportRectPixels = GetSceneViewViewportScreenRectPixels(sceneView);
+            Rect viewportRectPixels = GetSceneViewViewportPixelRect(sceneView);
             viewportWidth = Mathf.RoundToInt(viewportRectPixels.width);
             viewportHeight = Mathf.RoundToInt(viewportRectPixels.height);
 
@@ -116,48 +116,16 @@ namespace MCPForUnity.Editor.Helpers
             }
         }
 
-        private static Rect GetSceneViewViewportScreenRectPixels(SceneView sceneView)
+        private static Rect GetSceneViewViewportPixelRect(SceneView sceneView)
         {
             float pixelsPerPoint = EditorGUIUtility.pixelsPerPoint;
-
-            Rect? cameraViewport = GetRectProperty(sceneView, "cameraViewport");
-            if (cameraViewport.HasValue && cameraViewport.Value.width > 0f && cameraViewport.Value.height > 0f)
-            {
-                Camera sceneCamera = sceneView.camera;
-                if (sceneCamera != null && sceneCamera.pixelWidth > 0 && sceneCamera.pixelHeight > 0)
-                {
-                    float cameraWidthPoints = sceneCamera.pixelWidth / pixelsPerPoint;
-                    float cameraHeightPoints = sceneCamera.pixelHeight / pixelsPerPoint;
-                    float rectWidthPoints = Mathf.Min(cameraViewport.Value.width, cameraWidthPoints);
-                    float rectHeightPoints = Mathf.Min(cameraViewport.Value.height, cameraHeightPoints);
-                    float rectXPoints = cameraViewport.Value.xMax - rectWidthPoints;
-                    float rectYPoints = cameraViewport.Value.yMax - rectHeightPoints;
-
-                    return new Rect(
-                        Mathf.Round(rectXPoints * pixelsPerPoint),
-                        Mathf.Round(rectYPoints * pixelsPerPoint),
-                        Mathf.Round(rectWidthPoints * pixelsPerPoint),
-                        Mathf.Round(rectHeightPoints * pixelsPerPoint));
-                }
-
-                return new Rect(
-                    Mathf.Round(cameraViewport.Value.x * pixelsPerPoint),
-                    Mathf.Round(cameraViewport.Value.y * pixelsPerPoint),
-                    Mathf.Round(cameraViewport.Value.width * pixelsPerPoint),
-                    Mathf.Round(cameraViewport.Value.height * pixelsPerPoint));
-            }
-
-            Rect windowRectPoints = GetWindowScreenRectPoints(sceneView);
-            if (windowRectPoints.width <= 0f || windowRectPoints.height <= 0f)
-                throw new InvalidOperationException("Failed to resolve Scene view window rect.");
-
             Rect viewportLocalPoints = GetViewportLocalRectPoints(sceneView, pixelsPerPoint);
             if (viewportLocalPoints.width <= 0f || viewportLocalPoints.height <= 0f)
                 throw new InvalidOperationException("Failed to resolve Scene view viewport rect.");
 
             return new Rect(
-                Mathf.Round((windowRectPoints.x + viewportLocalPoints.x) * pixelsPerPoint),
-                Mathf.Round((windowRectPoints.y + viewportLocalPoints.y) * pixelsPerPoint),
+                Mathf.Round(viewportLocalPoints.x * pixelsPerPoint),
+                Mathf.Round(viewportLocalPoints.y * pixelsPerPoint),
                 Mathf.Round(viewportLocalPoints.width * pixelsPerPoint),
                 Mathf.Round(viewportLocalPoints.height * pixelsPerPoint));
         }
@@ -183,24 +151,6 @@ namespace MCPForUnity.Editor.Helpers
                 Mathf.Max(0f, windowRect.height - viewportHeight),
                 Mathf.Min(windowRect.width, viewportWidth),
                 Mathf.Min(windowRect.height, viewportHeight));
-        }
-
-        private static Rect GetWindowScreenRectPoints(EditorWindow window)
-        {
-            object hostView = GetHostView(window);
-            Rect fallback = window.position;
-            if (hostView == null)
-                return fallback;
-
-            Rect? screenPosition = GetRectProperty(hostView, "screenPosition");
-            if (screenPosition.HasValue && screenPosition.Value.width > 0f && screenPosition.Value.height > 0f)
-                return screenPosition.Value;
-
-            Rect? windowPosition = GetRectProperty(hostView, "windowPosition");
-            if (windowPosition.HasValue && windowPosition.Value.width > 0f && windowPosition.Value.height > 0f)
-                return windowPosition.Value;
-
-            return fallback;
         }
 
         private static Texture2D CaptureViewRect(SceneView sceneView, Rect viewportRectPixels)

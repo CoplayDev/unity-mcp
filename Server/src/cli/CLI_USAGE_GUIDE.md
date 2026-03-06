@@ -104,6 +104,8 @@ unity-mcp gameobject modify "MyCube" --position 0 2 0
 unity-mcp scene screenshot
 unity-mcp scene screenshot --capture-source scene_view --include-image
 
+# Note: `--capture-source scene_view` only supports `--supersize 1`
+
 # Enter play mode
 unity-mcp editor play
 ```
@@ -372,6 +374,8 @@ unity-mcp scene save
 unity-mcp scene screenshot
 unity-mcp scene screenshot --filename "my_screenshot" --supersize 2
 unity-mcp scene screenshot --capture-source scene_view --scene-view-target "Canvas" --include-image
+
+# Note: `--capture-source scene_view` captures the current Scene View viewport and does not support `--supersize` values above 1.
 ```
 
 ### GameObject Commands
