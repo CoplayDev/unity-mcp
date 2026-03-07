@@ -20,15 +20,15 @@
 <details>
 <summary><strong>Recent Updates</strong></summary>
 
-* **v9.4.8 (beta)** — New editor UI, real-time tool toggling via `manage_tools`, skill sync window, multi-view screenshot, one-click Roslyn installer, Qwen Code & Gemini CLI clients, ProBuilder mesh editing via `manage_probuilder`.
+* **v9.5.2 (beta)** — New `manage_camera` tool with Cinemachine support (presets, priority, noise, blending, extensions), `cameras` resource, priority persistence fix via SerializedProperty.
+* **v9.4.8** — New editor UI, real-time tool toggling via `manage_tools`, skill sync window, multi-view screenshot, one-click Roslyn installer, Qwen Code & Gemini CLI clients, ProBuilder mesh editing via `manage_probuilder`.
 * **v9.4.7** — Per-call Unity instance routing, macOS pyenv PATH fix, domain reload resilience for script tools.
 * **v9.4.6** — New `manage_animation` tool, Cline client support, stale connection detection, tool state persistence across reloads.
-* **v9.4.4** — Configurable `batch_execute` limits, tool filtering by session state, IPv6/IPv4 loopback fixes.
 
 <details>
 <summary>Older releases</summary>
 
-<!-- Add older entries here as the top 4 rotate -->
+* **v9.4.4** — Configurable `batch_execute` limits, tool filtering by session state, IPv6/IPv4 loopback fixes.
 
 </details>
 </details>
@@ -92,10 +92,10 @@ openupm add com.coplaydev.unity-mcp
 * **Extensible** — Works with various MCP Clients
 
 ### Available Tools
-`apply_text_edits` • `batch_execute` • `create_script` • `debug_request_context` • `delete_script` • `execute_custom_tool` • `execute_menu_item` • `find_gameobjects` • `find_in_file` • `get_sha` • `get_test_job` • `manage_animation` • `manage_asset` • `manage_components` • `manage_editor` • `manage_gameobject` • `manage_material` • `manage_prefabs` • `manage_probuilder` • `manage_scene` • `manage_script` • `manage_script_capabilities` • `manage_scriptable_object` • `manage_shader` • `manage_texture` • `manage_tools` • `manage_ui` • `manage_vfx` • `read_console` • `refresh_unity` • `run_tests` • `script_apply_edits` • `set_active_instance` • `validate_script`
+`apply_text_edits` • `batch_execute` • `create_script` • `debug_request_context` • `delete_script` • `execute_custom_tool` • `execute_menu_item` • `find_gameobjects` • `find_in_file` • `get_sha` • `get_test_job` • `manage_animation` • `manage_asset` • `manage_camera` • `manage_components` • `manage_editor` • `manage_gameobject` • `manage_material` • `manage_prefabs` • `manage_probuilder` • `manage_scene` • `manage_script` • `manage_script_capabilities` • `manage_scriptable_object` • `manage_shader` • `manage_texture` • `manage_tools` • `manage_ui` • `manage_vfx` • `read_console` • `refresh_unity` • `run_tests` • `script_apply_edits` • `set_active_instance` • `validate_script`
 
 ### Available Resources
-`custom_tools` • `editor_active_tool` • `editor_prefab_stage` • `editor_selection` • `editor_state` • `editor_windows` • `gameobject` • `gameobject_api` • `gameobject_component` • `gameobject_components` • `get_tests` • `get_tests_for_mode` • `menu_items` • `prefab_api` • `prefab_hierarchy` • `prefab_info` • `project_info` • `project_layers` • `project_tags` • `tool_groups` • `unity_instances`
+`cameras` • `custom_tools` • `editor_active_tool` • `editor_prefab_stage` • `editor_selection` • `editor_state` • `editor_windows` • `gameobject` • `gameobject_api` • `gameobject_component` • `gameobject_components` • `get_tests` • `get_tests_for_mode` • `menu_items` • `prefab_api` • `prefab_hierarchy` • `prefab_info` • `project_info` • `project_layers` • `project_tags` • `tool_groups` • `unity_instances`
 
 **Performance Tip:** Use `batch_execute` for multiple operations — it's 10-100x faster than individual calls!
 </details>

@@ -46,6 +46,7 @@ namespace MCPForUnity.Runtime.Helpers
         private const string ScreenshotsFolderName = "Screenshots";
         private static bool s_loggedLegacyScreenCaptureFallback;
         private static bool? s_screenCaptureModuleAvailable;
+        private static System.Reflection.MethodInfo s_captureScreenshotMethod;
 
         /// <summary>
         /// Checks if the Screen Capture module (com.unity.modules.screencapture) is enabled.
@@ -57,9 +58,15 @@ namespace MCPForUnity.Runtime.Helpers
             {
                 if (!s_screenCaptureModuleAvailable.HasValue)
                 {
-                    // Check if ScreenCapture type exists (module might be disabled)
-                    s_screenCaptureModuleAvailable = Type.GetType("UnityEngine.ScreenCapture, UnityEngine.ScreenCaptureModule") != null
-                        || Type.GetType("UnityEngine.ScreenCapture, UnityEngine.CoreModule") != null;
+                    // Check if ScreenCapture type exists (module might be disabled in Package Manager > Built-in)
+                    var screenCaptureType = Type.GetType("UnityEngine.ScreenCapture, UnityEngine.ScreenCaptureModule")
+                        ?? Type.GetType("UnityEngine.ScreenCapture, UnityEngine.CoreModule");
+                    s_screenCaptureModuleAvailable = screenCaptureType != null;
+                    if (screenCaptureType != null)
+                    {
+                        s_captureScreenshotMethod = screenCaptureType.GetMethod("CaptureScreenshot",
+                            new Type[] { typeof(string), typeof(int) });
+                    }
                 }
                 return s_screenCaptureModuleAvailable.Value;
             }
@@ -96,24 +103,20 @@ namespace MCPForUnity.Runtime.Helpers
 
         public static ScreenshotCaptureResult CaptureToAssetsFolder(string fileName = null, int superSize = 1, bool ensureUniqueFileName = true)
         {
-#if UNITY_2022_1_OR_NEWER
-            // Check if Screen Capture module is available (can be disabled in Package Manager > Built-in)
-            if (IsScreenCaptureModuleAvailable)
+            // Use reflection to call ScreenCapture.CaptureScreenshot so the code compiles
+            // even when the Screen Capture module (com.unity.modules.screencapture) is disabled.
+            if (IsScreenCaptureModuleAvailable && s_captureScreenshotMethod != null)
             {
                 ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, isAsync: true);
-                ScreenCapture.CaptureScreenshot(result.AssetsRelativePath, result.SuperSize);
+                s_captureScreenshotMethod.Invoke(null, new object[] { result.AssetsRelativePath, result.SuperSize });
                 return result;
             }
             else
             {
-                // Module disabled - try camera fallback
+                // Module disabled or unavailable - try camera fallback
                 Debug.LogWarning("[MCP for Unity] " + ScreenCaptureModuleNotAvailableError);
                 return CaptureWithCameraFallback(fileName, superSize, ensureUniqueFileName);
             }
-#else
-            // Unity < 2022.1 - always use camera fallback
-            return CaptureWithCameraFallback(fileName, superSize, ensureUniqueFileName);
-#endif
         }
 
         private static ScreenshotCaptureResult CaptureWithCameraFallback(string fileName, int superSize, bool ensureUniqueFileName)
