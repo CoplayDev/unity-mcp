@@ -48,6 +48,18 @@ Here's what you need to do:
       - Find and update the "可用资源" (Available Resources) section
       - Keep tool/resource names in English, but you can translate descriptions if helpful
 
+   e) **README.md** — "Recent Updates" section
+      - Add a new entry at the top of the list for the current version
+      - Format: `* **vX.Y.Z (beta)** — Brief summary of what changed`
+      - Keep only 4 entries visible; move the oldest to the "Older releases" nested details block
+      - Remove `(beta)` from the previous entry that was beta
+      - Update `manifest.json` version field to match
+
+   f) **docs/i18n/README-zh.md** — "最近更新" section
+      - Mirror the same changes as the English "Recent Updates" section
+      - Translate the summary text to Chinese
+      - Same 4-entry rotation rule applies
+
 3. **Important formatting rules**:
    - Use backticks around tool/resource names
    - Separate items with • (bullet point)

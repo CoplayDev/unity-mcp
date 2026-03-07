@@ -94,12 +94,20 @@
       "description": "Create, modify, transform, and delete GameObjects"
     },
     {
+      "name": "manage_camera",
+      "description": "Manage cameras (Unity Camera + Cinemachine) with presets, pipelines, and blending"
+    },
+    {
       "name": "manage_material",
       "description": "Create and modify Unity materials and shaders"
     },
     {
       "name": "manage_prefabs",
       "description": "Create, instantiate, unpack, and modify prefabs"
+    },
+    {
+      "name": "manage_probuilder",
+      "description": "Create and edit ProBuilder meshes, shapes, and geometry operations"
     },
     {
       "name": "manage_scene",
