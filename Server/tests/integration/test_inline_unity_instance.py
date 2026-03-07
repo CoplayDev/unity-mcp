@@ -197,6 +197,99 @@ async def test_port_number_resolves_to_name_hash_stdio(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_port_number_resolves_with_pluginhub_session_present_in_stdio(monkeypatch):
+    """Port routing in stdio must still work even when PluginHub sessions exist."""
+    sessions = {
+        "sess-1": SimpleNamespace(project="FromPluginHub", hash="hub111"),
+    }
+    mw = _make_middleware(
+        monkeypatch,
+        transport="stdio",
+        plugin_hub_configured=True,
+        sessions=sessions,
+    )
+
+    unity_connection_mod = types.ModuleType("transport.legacy.unity_connection")
+
+    class PoolStub:
+        def discover_all_instances(self, force_refresh=False):
+            return [SimpleNamespace(id="FromPool@pool222", hash="pool222", port=6401)]
+
+    unity_connection_mod.get_unity_connection_pool = lambda: PoolStub()
+    monkeypatch.setitem(sys.modules, "transport.legacy.unity_connection", unity_connection_mod)
+
+    ctx = DummyContext()
+    ctx.client_id = "client-1"
+    mw_ctx = DummyMiddlewareContext(ctx, arguments={"unity_instance": "6401"})
+
+    await mw._inject_unity_instance(mw_ctx)
+
+    assert await ctx.get_state("unity_instance") == "FromPool@pool222"
+
+
+@pytest.mark.asyncio
+async def test_hash_prefix_resolves_when_pluginhub_and_stdio_report_same_hash(monkeypatch):
+    """Same hash from PluginHub and stdio should not be treated as ambiguous."""
+    sessions = {
+        "sess-1": SimpleNamespace(project="FromPluginHub", hash="abc123"),
+    }
+    mw = _make_middleware(
+        monkeypatch,
+        transport="stdio",
+        plugin_hub_configured=True,
+        sessions=sessions,
+    )
+
+    unity_connection_mod = types.ModuleType("transport.legacy.unity_connection")
+
+    class PoolStub:
+        def discover_all_instances(self, force_refresh=False):
+            return [SimpleNamespace(id="FromPool@abc123", hash="abc123", port=6401)]
+
+    unity_connection_mod.get_unity_connection_pool = lambda: PoolStub()
+    monkeypatch.setitem(sys.modules, "transport.legacy.unity_connection", unity_connection_mod)
+
+    ctx = DummyContext()
+    ctx.client_id = "client-1"
+    mw_ctx = DummyMiddlewareContext(ctx, arguments={"unity_instance": "abc123"})
+
+    await mw._inject_unity_instance(mw_ctx)
+
+    assert await ctx.get_state("unity_instance") == "FromPool@abc123"
+
+
+@pytest.mark.asyncio
+async def test_name_hash_alias_resolves_when_pluginhub_and_stdio_report_same_hash(monkeypatch):
+    """Name@hash should still resolve if the project name differs across sources."""
+    sessions = {
+        "sess-1": SimpleNamespace(project="FromPluginHub", hash="abc123"),
+    }
+    mw = _make_middleware(
+        monkeypatch,
+        transport="stdio",
+        plugin_hub_configured=True,
+        sessions=sessions,
+    )
+
+    unity_connection_mod = types.ModuleType("transport.legacy.unity_connection")
+
+    class PoolStub:
+        def discover_all_instances(self, force_refresh=False):
+            return [SimpleNamespace(id="FromPool@abc123", hash="abc123", port=6401)]
+
+    unity_connection_mod.get_unity_connection_pool = lambda: PoolStub()
+    monkeypatch.setitem(sys.modules, "transport.legacy.unity_connection", unity_connection_mod)
+
+    ctx = DummyContext()
+    ctx.client_id = "client-1"
+    mw_ctx = DummyMiddlewareContext(ctx, arguments={"unity_instance": "FromPluginHub@abc123"})
+
+    await mw._inject_unity_instance(mw_ctx)
+
+    assert await ctx.get_state("unity_instance") == "FromPool@abc123"
+
+
+@pytest.mark.asyncio
 async def test_port_number_not_found_raises(monkeypatch):
     """Port number with no matching instance raises ValueError."""
     instances = [SimpleNamespace(id="Proj@abc123", hash="abc123", port=6401)]
@@ -371,12 +464,9 @@ async def test_set_active_instance_port_stdio(monkeypatch):
 
     pool_instance = SimpleNamespace(id="Proj@abc123", hash="abc123", port=6401)
 
-    class FakePool:
-        def discover_all_instances(self, force_refresh=False):
-            return [pool_instance]
-
-    import services.tools.set_active_instance as sat
-    monkeypatch.setattr(sat, "get_unity_connection_pool", lambda: FakePool())
+    async def fake_discover(_ctx):
+        return [pool_instance]
+    monkeypatch.setattr(mw, "_discover_instances", fake_discover)
 
     from services.tools.set_active_instance import set_active_instance
 
