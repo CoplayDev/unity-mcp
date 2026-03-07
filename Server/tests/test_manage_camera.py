@@ -14,6 +14,7 @@ from services.tools.manage_camera import (
     CONFIGURATION_ACTIONS,
     EXTENSION_ACTIONS,
     CONTROL_ACTIONS,
+    CAPTURE_ACTIONS,
 )
 
 
@@ -50,7 +51,7 @@ def mock_unity(monkeypatch):
 def test_all_actions_is_union_of_sub_lists():
     expected = set(
         SETUP_ACTIONS + CREATION_ACTIONS + CONFIGURATION_ACTIONS
-        + EXTENSION_ACTIONS + CONTROL_ACTIONS
+        + EXTENSION_ACTIONS + CONTROL_ACTIONS + CAPTURE_ACTIONS
     )
     assert set(ALL_ACTIONS) == expected
 
@@ -60,7 +61,7 @@ def test_no_duplicate_actions():
 
 
 def test_all_actions_count():
-    assert len(ALL_ACTIONS) == 16
+    assert len(ALL_ACTIONS) == 18
 
 
 # ---------------------------------------------------------------------------
@@ -310,6 +311,140 @@ def test_list_cameras_sends_no_extra_params(mock_unity):
     )
     assert result["success"] is True
     assert mock_unity["params"]["action"] == "list_cameras"
+
+
+# ---------------------------------------------------------------------------
+# Capture actions
+# ---------------------------------------------------------------------------
+
+def test_screenshot_sends_basic_params(mock_unity):
+    result = asyncio.run(
+        manage_camera(
+            SimpleNamespace(),
+            action="screenshot",
+            camera="Main Camera",
+            include_image=True,
+            max_resolution=512,
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["action"] == "screenshot"
+    assert mock_unity["params"]["camera"] == "Main Camera"
+    assert mock_unity["params"]["includeImage"] is True
+    assert mock_unity["params"]["maxResolution"] == 512
+
+
+def test_screenshot_with_filename(mock_unity):
+    result = asyncio.run(
+        manage_camera(
+            SimpleNamespace(),
+            action="screenshot",
+            screenshot_file_name="test-capture",
+            screenshot_super_size=2,
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["fileName"] == "test-capture"
+    assert mock_unity["params"]["superSize"] == 2
+
+
+def test_screenshot_batch_surround(mock_unity):
+    result = asyncio.run(
+        manage_camera(
+            SimpleNamespace(),
+            action="screenshot",
+            batch="surround",
+            look_at="Player",
+            include_image=True,
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["batch"] == "surround"
+    assert mock_unity["params"]["lookAt"] == "Player"
+
+
+def test_screenshot_batch_orbit(mock_unity):
+    result = asyncio.run(
+        manage_camera(
+            SimpleNamespace(),
+            action="screenshot",
+            batch="orbit",
+            orbit_angles=6,
+            orbit_elevations=[0.0, 30.0],
+            orbit_distance=10.0,
+            orbit_fov=50.0,
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["batch"] == "orbit"
+    assert mock_unity["params"]["orbitAngles"] == 6
+    assert mock_unity["params"]["orbitElevations"] == [0.0, 30.0]
+    assert mock_unity["params"]["orbitDistance"] == 10.0
+    assert mock_unity["params"]["orbitFov"] == 50.0
+
+
+def test_screenshot_positioned(mock_unity):
+    result = asyncio.run(
+        manage_camera(
+            SimpleNamespace(),
+            action="screenshot",
+            view_position=[5.0, 3.0, -10.0],
+            look_at="Player",
+            include_image=True,
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["viewPosition"] == [5.0, 3.0, -10.0]
+    assert mock_unity["params"]["lookAt"] == "Player"
+
+
+def test_screenshot_multiview_sends_action(mock_unity):
+    result = asyncio.run(
+        manage_camera(SimpleNamespace(), action="screenshot_multiview")
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["action"] == "screenshot_multiview"
+
+
+def test_screenshot_params_not_sent_for_non_capture_actions(mock_unity):
+    """Screenshot params should be ignored for non-capture actions."""
+    result = asyncio.run(
+        manage_camera(
+            SimpleNamespace(),
+            action="ping",
+            camera="Main Camera",
+            include_image=True,
+            max_resolution=512,
+        )
+    )
+    assert result["success"] is True
+    assert "camera" not in mock_unity["params"]
+    assert "includeImage" not in mock_unity["params"]
+
+
+def test_screenshot_invalid_max_resolution(mock_unity):
+    result = asyncio.run(
+        manage_camera(
+            SimpleNamespace(),
+            action="screenshot",
+            max_resolution=0,
+        )
+    )
+    assert result["success"] is False
+    assert "max_resolution" in result["message"]
+
+
+def test_screenshot_invalid_orbit_elevations(mock_unity):
+    result = asyncio.run(
+        manage_camera(
+            SimpleNamespace(),
+            action="screenshot",
+            batch="orbit",
+            orbit_elevations="not-json",
+        )
+    )
+    assert result["success"] is False
+    assert "orbit_elevations" in result["message"]
 
 
 # ---------------------------------------------------------------------------

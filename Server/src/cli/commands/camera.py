@@ -469,3 +469,68 @@ def release_override():
     config = get_config()
     result = run_command(config, "manage_camera", {"action": "release_override"})
     format_output(result, config)
+
+
+# =============================================================================
+# Capture
+# =============================================================================
+
+@camera.command("screenshot")
+@click.option("--camera-ref", default=None, help="Camera to capture from (name/path/ID).")
+@click.option("--file-name", default=None, help="Output file name.")
+@click.option("--super-size", type=int, default=None, help="Supersize multiplier.")
+@click.option("--include-image/--no-include-image", default=None, help="Return inline base64 PNG.")
+@click.option("--max-resolution", type=int, default=None, help="Max resolution for inline image.")
+@click.option("--batch", default=None, type=click.Choice(["surround", "orbit"]),
+              help="Batch capture mode.")
+@click.option("--look-at", default=None, help="Target to aim at (name/path/ID or [x,y,z]).")
+@handle_unity_errors
+def screenshot(camera_ref, file_name, super_size, include_image, max_resolution, batch, look_at):
+    """Capture a screenshot from a camera.
+
+    \b
+    Examples:
+        unity-mcp camera screenshot
+        unity-mcp camera screenshot --camera-ref "CM FollowCam" --include-image --max-resolution 512
+        unity-mcp camera screenshot --batch surround --look-at Player
+    """
+    config = get_config()
+    params: dict[str, Any] = {"action": "screenshot"}
+    if camera_ref:
+        params["camera"] = camera_ref
+    if file_name:
+        params["fileName"] = file_name
+    if super_size is not None:
+        params["superSize"] = super_size
+    if include_image is not None:
+        params["includeImage"] = include_image
+    if max_resolution is not None:
+        params["maxResolution"] = max_resolution
+    if batch:
+        params["batch"] = batch
+    if look_at:
+        params["lookAt"] = look_at
+    result = run_command(config, "manage_camera", params)
+    format_output(result, config)
+
+
+@camera.command("screenshot-multiview")
+@click.option("--max-resolution", type=int, default=None, help="Max resolution per tile.")
+@click.option("--look-at", default=None, help="Center target for the multiview capture.")
+@handle_unity_errors
+def screenshot_multiview(max_resolution, look_at):
+    """Capture a 6-angle contact sheet around the scene.
+
+    \b
+    Examples:
+        unity-mcp camera screenshot-multiview
+        unity-mcp camera screenshot-multiview --look-at Player --max-resolution 480
+    """
+    config = get_config()
+    params: dict[str, Any] = {"action": "screenshot_multiview"}
+    if max_resolution is not None:
+        params["maxResolution"] = max_resolution
+    if look_at:
+        params["lookAt"] = look_at
+    result = run_command(config, "manage_camera", params)
+    format_output(result, config)

@@ -244,17 +244,17 @@ namespace MCPForUnity.Editor.Tools.Cameras
 
             try
             {
-                // ICinemachineCamera interface
-                var icmInterface = cmCamera.GetType().GetInterface("ICinemachineCamera")
-                                ?? cmCamera.GetType().GetInterface("Unity.Cinemachine.ICinemachineCamera");
-
+                // CM3 signature: SetCameraOverride(int overrideId, int priority,
+                //   ICinemachineCamera camA, ICinemachineCamera camB, float weightB, float deltaTime)
+                // -1 for overrideId creates a new override; same cam for A+B with weight=1 = instant switch
                 _overrideId = (int)method.Invoke(brain, new object[]
                 {
-                    _overrideId >= 0 ? _overrideId : 0,
-                    cmCamera, // overrideCamera
-                    cmCamera, // fromCamera (blend from current)
-                    0f,       // blend time = instant
-                    -1f       // timeout = permanent
+                    _overrideId >= 0 ? _overrideId : -1,
+                    999,      // high priority to win over all others
+                    cmCamera, // camA (at weight=0)
+                    cmCamera, // camB (at weight=1) — same camera = no blend
+                    1f,       // weightB = fully on camB
+                    -1f       // deltaTime = use default
                 });
             }
             catch (Exception ex)

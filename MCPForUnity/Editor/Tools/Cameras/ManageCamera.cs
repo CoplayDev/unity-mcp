@@ -59,6 +59,20 @@ namespace MCPForUnity.Editor.Tools.Cameras
 
                     case "list_cameras":
                         return CameraControl.ListCameras(@params);
+
+                    case "screenshot":
+                    case "screenshot_multiview":
+                    {
+                        // Delegate to ManageScene's screenshot infrastructure
+                        var shotParams = new JObject(@params);
+                        shotParams["action"] = "screenshot";
+                        if (action == "screenshot_multiview")
+                        {
+                            shotParams["batch"] = "surround";
+                            shotParams["includeImage"] = true;
+                        }
+                        return ManageScene.HandleCommand(shotParams);
+                    }
                 }
 
                 // Tier 2: Cinemachine-only actions
@@ -104,7 +118,8 @@ namespace MCPForUnity.Editor.Tools.Cameras
                     default:
                         return new ErrorResponse(
                             $"Unknown action: '{action}'. Valid actions: ping, create_camera, set_target, "
-                            + "set_lens, set_priority, list_cameras, ensure_brain, get_brain_status, "
+                            + "set_lens, set_priority, list_cameras, screenshot, screenshot_multiview, "
+                            + "ensure_brain, get_brain_status, "
                             + "set_body, set_aim, set_noise, add_extension, remove_extension, "
                             + "set_blend, force_camera, release_override.");
                 }
