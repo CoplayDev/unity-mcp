@@ -2,7 +2,7 @@ import pytest
 
 from .test_helpers import DummyContext
 import services.tools.manage_scene as manage_scene_mod
-from services.tools.manage_scene import _extract_images
+from services.tools.utils import extract_screenshot_images
 
 
 # ---------------------------------------------------------------------------
@@ -10,16 +10,16 @@ from services.tools.manage_scene import _extract_images
 # ---------------------------------------------------------------------------
 
 def test_extract_images_returns_none_for_non_dict():
-    assert _extract_images("not a dict", "screenshot") is None
+    assert extract_screenshot_images("not a dict") is None
 
 
 def test_extract_images_returns_none_for_failed_response():
-    assert _extract_images({"success": False}, "screenshot") is None
+    assert extract_screenshot_images({"success": False}) is None
 
 
 def test_extract_images_returns_none_when_no_base64():
     resp = {"success": True, "data": {"filePath": "Assets/shot.png"}}
-    assert _extract_images(resp, "screenshot") is None
+    assert extract_screenshot_images(resp) is None
 
 
 def test_extract_images_screenshot_returns_tool_result():
@@ -33,7 +33,7 @@ def test_extract_images_screenshot_returns_tool_result():
             "imageHeight": 512,
         },
     }
-    result = _extract_images(resp, "screenshot")
+    result = extract_screenshot_images(resp)
     assert result is not None
     # Should have TextContent + ImageContent
     assert len(result.content) == 2
@@ -58,7 +58,7 @@ def test_extract_images_batch_surround_returns_tool_result():
             ],
         },
     }
-    result = _extract_images(resp, "screenshot")
+    result = extract_screenshot_images(resp)
     assert result is not None
     # 1 text summary + 2*(label + image) = 5 blocks
     assert len(result.content) == 5
@@ -75,7 +75,7 @@ def test_extract_images_batch_surround_returns_tool_result():
 
 def test_extract_images_batch_no_screenshots():
     resp = {"success": True, "data": {"screenshots": []}}
-    assert _extract_images(resp, "screenshot") is None
+    assert extract_screenshot_images(resp) is None
 
 
 def test_extract_images_positioned_returns_tool_result():
@@ -90,15 +90,15 @@ def test_extract_images_positioned_returns_tool_result():
             "lookAt": [0, 0, 0],
         },
     }
-    result = _extract_images(resp, "screenshot")
+    result = extract_screenshot_images(resp)
     assert result is not None
     assert len(result.content) == 2
     assert result.content[1].data == "VIEW_B64"
 
 
-def test_extract_images_unknown_action():
-    resp = {"success": True, "data": {"imageBase64": "STUFF"}}
-    assert _extract_images(resp, "get_hierarchy") is None
+def test_extract_images_no_data_key():
+    resp = {"success": True}
+    assert extract_screenshot_images(resp) is None
 
 
 # ---------------------------------------------------------------------------

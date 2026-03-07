@@ -27,7 +27,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
                     var follow = CameraHelpers.GetReflectionProperty(cm, "Follow") as Transform;
                     var lookAt = CameraHelpers.GetReflectionProperty(cm, "LookAt") as Transform;
                     var isLive = CameraHelpers.GetReflectionProperty(cm, "IsLive");
-                    var priority = CameraHelpers.GetReflectionProperty(cm, "Priority");
+                    var priority = CameraHelpers.ReadCinemachinePriority(cm);
 
                     var body = CameraHelpers.GetPipelineComponent(cm, "Body");
                     var aim = CameraHelpers.GetPipelineComponent(cm, "Aim");
@@ -50,7 +50,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
                         instanceID = cm.gameObject.GetInstanceID(),
                         name = cm.gameObject.name,
                         isLive = isLive is bool b && b,
-                        priority = priority is int p ? p : 0,
+                        priority,
                         follow = follow != null ? new { name = follow.gameObject.name, instanceID = follow.gameObject.GetInstanceID() } : null,
                         lookAt = lookAt != null ? new { name = lookAt.gameObject.name, instanceID = lookAt.gameObject.GetInstanceID() } : null,
                         body = body?.GetType().Name,

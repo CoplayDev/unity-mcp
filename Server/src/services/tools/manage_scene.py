@@ -1,67 +1,15 @@
-import json
 from typing import Annotated, Literal, Any
 
 from fastmcp import Context
 from fastmcp.server.server import ToolResult
-from mcp.types import ToolAnnotations, TextContent, ImageContent
+from mcp.types import ToolAnnotations
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
-from services.tools.utils import coerce_int, coerce_bool, normalize_vector3
+from services.tools.utils import coerce_int, coerce_bool, build_screenshot_params, extract_screenshot_images
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 from services.tools.preflight import preflight
-
-
-def _extract_images(response: dict[str, Any], action: str) -> ToolResult | None:
-    """If the Unity response contains inline base64 images, return a ToolResult
-    with TextContent + ImageContent blocks. Returns None for normal text-only responses."""
-    if not isinstance(response, dict) or not response.get("success"):
-        return None
-
-    data = response.get("data")
-    if not isinstance(data, dict):
-        return None
-
-    if action == "screenshot":
-        # Batch images (surround mode) — multiple screenshots in one response
-        screenshots = data.get("screenshots")
-        if screenshots and isinstance(screenshots, list):
-            blocks: list[TextContent | ImageContent] = []
-            summary_screenshots = []
-            for s in screenshots:
-                summary_screenshots.append({k: v for k, v in s.items() if k != "imageBase64"})
-            text_result = {
-                "success": True,
-                "message": response.get("message", ""),
-                "data": {
-                    "sceneCenter": data.get("sceneCenter"),
-                    "sceneRadius": data.get("sceneRadius"),
-                    "screenshots": summary_screenshots,
-                },
-            }
-            blocks.append(TextContent(type="text", text=json.dumps(text_result)))
-            for s in screenshots:
-                b64 = s.get("imageBase64")
-                if b64:
-                    blocks.append(TextContent(type="text", text=f"[Angle: {s.get('angle', '?')}]"))
-                    blocks.append(ImageContent(type="image", data=b64, mimeType="image/png"))
-            return ToolResult(content=blocks)
-
-        # Single image (include_image or positioned capture)
-        image_b64 = data.get("imageBase64")
-        if not image_b64:
-            return None
-        text_data = {k: v for k, v in data.items() if k != "imageBase64"}
-        text_result = {"success": True, "message": response.get("message", ""), "data": text_data}
-        return ToolResult(
-            content=[
-                TextContent(type="text", text=json.dumps(text_result)),
-                ImageContent(type="image", data=image_b64, mimeType="image/png"),
-            ],
-        )
-
-    return None
 
 
 @mcp_for_unity_tool(
@@ -155,7 +103,6 @@ async def manage_scene(
         return gate.model_dump()
     try:
         coerced_build_index = coerce_int(build_index, default=None)
-        coerced_super_size = coerce_int(screenshot_super_size, default=None)
         coerced_page_size = coerce_int(page_size, default=None)
         coerced_cursor = coerce_int(cursor, default=None)
         coerced_max_nodes = coerce_int(max_nodes, default=None)
@@ -164,10 +111,6 @@ async def manage_scene(
             max_children_per_node, default=None)
         coerced_include_transform = coerce_bool(
             include_transform, default=None)
-        coerced_include_image = coerce_bool(include_image, default=None)
-        coerced_max_resolution = coerce_int(max_resolution, default=None)
-        if coerced_max_resolution is not None and coerced_max_resolution <= 0:
-            return {"success": False, "message": "max_resolution must be a positive integer greater than zero."}
 
         params: dict[str, Any] = {"action": action}
         if name:
@@ -176,60 +119,26 @@ async def manage_scene(
             params["path"] = path
         if coerced_build_index is not None:
             params["buildIndex"] = coerced_build_index
-        if screenshot_file_name:
-            params["fileName"] = screenshot_file_name
-        if coerced_super_size is not None:
-            params["superSize"] = coerced_super_size
 
-        # screenshot params
-        if camera:
-            params["camera"] = camera
-        if coerced_include_image is not None:
-            params["includeImage"] = coerced_include_image
-        if coerced_max_resolution is not None:
-            params["maxResolution"] = coerced_max_resolution
-
-        # screenshot extended params (batch, positioned capture)
-        if batch:
-            params["batch"] = batch
-        if look_at is not None:
-            params["lookAt"] = look_at
-
-        # orbit batch params
-        coerced_orbit_angles = coerce_int(orbit_angles, default=None)
-        if coerced_orbit_angles is not None:
-            params["orbitAngles"] = coerced_orbit_angles
-        if orbit_elevations is not None:
-            if isinstance(orbit_elevations, str):
-                try:
-                    orbit_elevations = json.loads(orbit_elevations)
-                except (ValueError, TypeError):
-                    return {"success": False, "message": "orbit_elevations must be a JSON array of floats."}
-            if not isinstance(orbit_elevations, list) or not all(
-                isinstance(v, (int, float)) for v in orbit_elevations
-            ):
-                return {"success": False, "message": "orbit_elevations must be a list of numbers."}
-            params["orbitElevations"] = orbit_elevations
-        if orbit_distance is not None:
-            try:
-                params["orbitDistance"] = float(orbit_distance)
-            except (ValueError, TypeError):
-                return {"success": False, "message": "orbit_distance must be a number."}
-        if orbit_fov is not None:
-            try:
-                params["orbitFov"] = float(orbit_fov)
-            except (ValueError, TypeError):
-                return {"success": False, "message": "orbit_fov must be a number."}
-        if view_position is not None:
-            vec, err = normalize_vector3(view_position, "view_position")
-            if err:
-                return {"success": False, "message": err}
-            params["viewPosition"] = vec
-        if view_rotation is not None:
-            vec, err = normalize_vector3(view_rotation, "view_rotation")
-            if err:
-                return {"success": False, "message": err}
-            params["viewRotation"] = vec
+        # screenshot params (shared with manage_camera)
+        screenshot_err = build_screenshot_params(
+            params,
+            screenshot_file_name=screenshot_file_name,
+            screenshot_super_size=screenshot_super_size,
+            camera=camera,
+            include_image=include_image,
+            max_resolution=max_resolution,
+            batch=batch,
+            look_at=look_at,
+            orbit_angles=orbit_angles,
+            orbit_elevations=orbit_elevations,
+            orbit_distance=orbit_distance,
+            orbit_fov=orbit_fov,
+            view_position=view_position,
+            view_rotation=view_rotation,
+        )
+        if screenshot_err is not None:
+            return screenshot_err
 
         # scene_view_frame params
         if scene_view_target is not None:
@@ -259,9 +168,10 @@ async def manage_scene(
             friendly = {"success": True, "message": response.get("message", "Scene operation successful."), "data": response.get("data")}
 
             # For screenshot actions, check if inline images should be returned as ImageContent
-            image_result = _extract_images(response, action)
-            if image_result is not None:
-                return image_result
+            if action == "screenshot":
+                image_result = extract_screenshot_images(response)
+                if image_result is not None:
+                    return image_result
 
             return friendly
         return response if isinstance(response, dict) else {"success": False, "message": str(response)}

@@ -89,8 +89,23 @@ namespace MCPForUnity.Editor.Tools.Cameras
             var cmType = CameraHelpers.CinemachineCameraType;
             var cmCamera = go.AddComponent(cmType);
 
-            // Set priority via reflection
-            CameraHelpers.SetReflectionProperty(cmCamera, "Priority", priority);
+            // PrioritySettings is a struct with Enabled + m_Value — use SerializedProperty
+            using (var so = new SerializedObject(cmCamera))
+            {
+                var priorityProp = so.FindProperty("Priority");
+                if (priorityProp != null)
+                {
+                    var enabledProp = priorityProp.FindPropertyRelative("Enabled");
+                    var valueProp = priorityProp.FindPropertyRelative("m_Value");
+                    if (enabledProp != null) enabledProp.boolValue = true;
+                    if (valueProp != null) valueProp.intValue = priority;
+                    so.ApplyModifiedProperties();
+                }
+                else
+                {
+                    CameraHelpers.SetReflectionProperty(cmCamera, "Priority", priority);
+                }
+            }
 
             // Add Body component
             string bodyName = null;
