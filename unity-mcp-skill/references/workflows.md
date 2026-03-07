@@ -11,6 +11,7 @@ Common workflows and patterns for effective Unity-MCP usage.
 - [Testing Workflows](#testing-workflows)
 - [Debugging Workflows](#debugging-workflows)
 - [UI Creation Workflows](#ui-creation-workflows)
+- [Camera & Cinemachine Workflows](#camera--cinemachine-workflows)
 - [ProBuilder Workflows](#probuilder-workflows)
 - [Batch Operations](#batch-operations)
 
@@ -1423,6 +1424,107 @@ Both systems are active simultaneously. For UI, prefer `InputSystemUIInputModule
 ```
 
 > **Gotcha:** Adding `StandaloneInputModule` when `activeInputHandler` is `"New"` will cause a runtime error. Always check first.
+
+---
+
+## Camera & Cinemachine Workflows
+
+### Setting Up a Third-Person Camera
+
+```python
+# 1. Check Cinemachine availability
+manage_camera(action="ping")
+
+# 2. Ensure Brain on main camera
+manage_camera(action="ensure_brain")
+
+# 3. Create third-person camera with preset
+manage_camera(action="create_camera", properties={
+    "name": "FollowCam", "preset": "third_person",
+    "follow": "Player", "lookAt": "Player", "priority": 20
+})
+
+# 4. Fine-tune body
+manage_camera(action="set_body", target="FollowCam", properties={
+    "cameraDistance": 5.0, "shoulderOffset": [0.5, 0.5, 0]
+})
+
+# 5. Add camera shake
+manage_camera(action="set_noise", target="FollowCam", properties={
+    "amplitudeGain": 0.3, "frequencyGain": 0.8
+})
+
+# 6. Verify with screenshot
+manage_camera(action="screenshot", camera="FollowCam", include_image=True, max_resolution=512)
+```
+
+### Multi-Camera Setup with Blending
+
+```python
+# 1. Read current cameras
+# Read mcpforunity://scene/cameras
+
+# 2. Create gameplay camera (highest priority = active by default)
+manage_camera(action="create_camera", properties={
+    "name": "GameplayCam", "preset": "follow",
+    "follow": "Player", "lookAt": "Player", "priority": 10
+})
+
+# 3. Create cinematic camera (lower priority, activated on demand)
+manage_camera(action="create_camera", properties={
+    "name": "CinematicCam", "preset": "dolly",
+    "lookAt": "CutsceneTarget", "priority": 5
+})
+
+# 4. Set blend transition
+manage_camera(action="set_blend", properties={"style": "EaseInOut", "duration": 2.0})
+
+# 5. Force cinematic camera for a cutscene
+manage_camera(action="force_camera", target="CinematicCam")
+
+# 6. Release override to return to priority-based selection
+manage_camera(action="release_override")
+```
+
+### Camera Without Cinemachine
+
+```python
+# Tier 1 actions work with plain Unity Camera
+manage_camera(action="create_camera", properties={
+    "name": "MainCam", "fieldOfView": 50
+})
+
+# Set lens
+manage_camera(action="set_lens", target="MainCam", properties={
+    "fieldOfView": 60, "nearClipPlane": 0.1, "farClipPlane": 1000
+})
+
+# Point camera at target (uses manage_gameobject look_at under the hood)
+manage_camera(action="set_target", target="MainCam", properties={
+    "lookAt": "Player"
+})
+
+# Screenshot from this camera
+manage_camera(action="screenshot", camera="MainCam", include_image=True, max_resolution=512)
+```
+
+### Camera Inspection Workflow
+
+```python
+# 1. Read all cameras via resource
+# Read mcpforunity://scene/cameras
+# → Shows brain status, all Cinemachine cameras (priority, pipeline, targets),
+#   all Unity cameras (FOV, depth, brain)
+
+# 2. Get brain status for blending info
+manage_camera(action="get_brain_status")
+
+# 3. List cameras via tool (alternative to resource)
+manage_camera(action="list_cameras")
+
+# 4. Multi-view screenshot to see from different angles
+manage_camera(action="screenshot_multiview", max_resolution=480)
+```
 
 ---
 

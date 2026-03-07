@@ -5,6 +5,7 @@ Resources provide read-only access to Unity state. Use resources to inspect befo
 ## Table of Contents
 
 - [Editor State Resources](#editor-state-resources)
+- [Camera Resources](#camera-resources)
 - [Scene & GameObject Resources](#scene--gameobject-resources)
 - [Prefab Resources](#prefab-resources)
 - [Project Resources](#project-resources)
@@ -122,6 +123,60 @@ mcpforunity://{category}/{resource_path}[?query_params]
   "isDirty": false
 }
 ```
+
+---
+
+## Camera Resources
+
+### mcpforunity://scene/cameras
+
+**Purpose:** List all cameras in the scene (Unity Camera + CinemachineCamera) with full status. Read this before using `manage_camera` to understand the current camera setup.
+
+**Returns:**
+```json
+{
+  "brain": {
+    "exists": true,
+    "gameObject": "Main Camera",
+    "instanceID": 55504,
+    "activeCameraName": "Cam_Cinematic",
+    "activeCameraID": -39420,
+    "isBlending": false
+  },
+  "cinemachineCameras": [
+    {
+      "instanceID": -39420,
+      "name": "Cam_Cinematic",
+      "isLive": true,
+      "priority": 50,
+      "follow": {"name": "CameraTarget", "instanceID": -26766},
+      "lookAt": {"name": "CameraTarget", "instanceID": -26766},
+      "body": "CinemachineThirdPersonFollow",
+      "aim": "CinemachineRotationComposer",
+      "noise": "CinemachineBasicMultiChannelPerlin",
+      "extensions": []
+    }
+  ],
+  "unityCameras": [
+    {
+      "instanceID": 55504,
+      "name": "Main Camera",
+      "depth": 0.0,
+      "fieldOfView": 50.0,
+      "hasBrain": true
+    }
+  ],
+  "cinemachineInstalled": true
+}
+```
+
+**Key Fields:**
+- `brain`: CinemachineBrain status — which camera is active, blend state
+- `cinemachineCameras`: All CinemachineCamera components with pipeline info (body, aim, noise, extensions)
+- `unityCameras`: All Unity Camera components with depth and FOV
+- `cinemachineInstalled`: Whether Cinemachine package is available
+
+**Use with:** `manage_camera` tool for creating/configuring cameras
 
 ---
 

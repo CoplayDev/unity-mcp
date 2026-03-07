@@ -60,6 +60,10 @@ Here's what you need to do:
       - Translate the summary text to Chinese
       - Same 4-entry rotation rule applies
 
+   g) **unity-mcp-skill** - Skill Update
+      - Detect if this feature needs extra care via Skills
+      - If so, update the .md files based on the updates
+
 3. **Important formatting rules**:
    - Use backticks around tool/resource names
    - Separate items with • (bullet point)
