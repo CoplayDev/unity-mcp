@@ -215,7 +215,12 @@ namespace MCPForUnity.Editor.Tools.Cameras
                         var styleProp = defaultBlendProp.FindPropertyRelative("Style")
                                      ?? defaultBlendProp.FindPropertyRelative("m_Style");
                         if (styleProp != null)
-                            ComponentOps.SetProperty(brain, "DefaultBlend.Style", new JValue(blendStyle), out _);
+                        {
+                            int idx = Array.FindIndex(styleProp.enumNames,
+                                n => n.Equals(blendStyle, StringComparison.OrdinalIgnoreCase));
+                            if (idx >= 0)
+                                styleProp.enumValueIndex = idx;
+                        }
                     }
                     if (blendDuration >= 0)
                     {
