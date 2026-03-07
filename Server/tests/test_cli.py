@@ -456,12 +456,6 @@ class TestSceneCommands:
             result = runner.invoke(cli, ["scene", "create", "NewLevel"])
             assert result.exit_code == 0
 
-    def test_scene_screenshot(self, runner, mock_unity_response):
-        """Test scene screenshot command."""
-        with patch("cli.commands.scene.run_command", return_value=mock_unity_response):
-            result = runner.invoke(
-                cli, ["scene", "screenshot", "--filename", "test"])
-            assert result.exit_code == 0
 
 
 # =============================================================================

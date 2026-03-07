@@ -6,6 +6,7 @@ using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace MCPForUnity.Editor.Tools.Graphics
 {
@@ -58,13 +59,14 @@ namespace MCPForUnity.Editor.Tools.Graphics
         // === bake_get_status ===
         internal static object GetStatus(JObject @params)
         {
+            bool running = Lightmapping.isRunning;
             return new
             {
                 success = true,
-                message = Lightmapping.isRunning ? "Light bake in progress." : "No bake running.",
+                message = running ? "Light bake in progress." : "No bake running.",
                 data = new
                 {
-                    isRunning = Lightmapping.isRunning,
+                    isRunning = running,
                     bakedGI = Lightmapping.bakedGI,
                     realtimeGI = Lightmapping.realtimeGI,
                     lightmapCount = LightmapSettings.lightmaps.Length
@@ -130,10 +132,10 @@ namespace MCPForUnity.Editor.Tools.Graphics
         // === bake_get_settings ===
         internal static object GetSettings(JObject @params)
         {
-            var settings = Lightmapping.lightingSettings;
+            var settings = EnsureLightingSettings();
             if (settings == null)
                 return new ErrorResponse(
-                    "No LightingSettings asset found. Create one in Window > Rendering > Lighting.");
+                    "Failed to create LightingSettings. Open Window > Rendering > Lighting manually.");
 
             var data = new Dictionary<string, object>
             {
@@ -148,7 +150,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
                 ["indirectSampleCount"] = settings.indirectSampleCount,
                 ["environmentSampleCount"] = settings.environmentSampleCount,
                 ["mixedBakeMode"] = settings.mixedBakeMode.ToString(),
-                ["compressLightmaps"] = settings.compressLightmaps,
+                ["lightmapCompression"] = settings.lightmapCompression.ToString(),
                 ["ao"] = settings.ao,
                 ["aoMaxDistance"] = settings.aoMaxDistance
             };
@@ -173,10 +175,10 @@ namespace MCPForUnity.Editor.Tools.Graphics
             if (settingsToken == null || !settingsToken.HasValues)
                 return new ErrorResponse("'settings' parameter is required (dict of property name to value).");
 
-            var lightingSettings = Lightmapping.lightingSettings;
+            var lightingSettings = EnsureLightingSettings();
             if (lightingSettings == null)
                 return new ErrorResponse(
-                    "No LightingSettings asset found. Create one in Window > Rendering > Lighting.");
+                    "Failed to create LightingSettings. Open Window > Rendering > Lighting manually.");
 
             Undo.RecordObject(lightingSettings, "Modify Lighting Settings");
 
@@ -387,6 +389,25 @@ namespace MCPForUnity.Editor.Tools.Graphics
             };
         }
 
+        // --- Helper: Ensure a LightingSettings asset exists ---
+        private static LightingSettings EnsureLightingSettings()
+        {
+            try
+            {
+                var settings = Lightmapping.lightingSettings;
+                if (settings != null) return settings;
+            }
+            catch { /* getter throws when no asset exists */ }
+
+            try
+            {
+                var settings = new LightingSettings { name = "LightingSettings" };
+                Lightmapping.lightingSettings = settings;
+                return Lightmapping.lightingSettings;
+            }
+            catch { return null; }
+        }
+
         // --- Helper: Find a GameObject by name or instanceID ---
         private static GameObject FindGameObject(string target)
         {
@@ -395,7 +416,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
 
             if (int.TryParse(target, out int instanceId))
             {
-                var byId = EditorUtility.InstanceIDToObject(instanceId) as GameObject;
+                var byId = EditorUtility.EntityIdToObject(instanceId) as GameObject;
                 if (byId != null) return byId;
             }
 
@@ -486,7 +507,16 @@ namespace MCPForUnity.Editor.Tools.Graphics
 
                 case "compresslightmaps":
                 case "compress_lightmaps":
-                    settings.compressLightmaps = ParamCoercion.CoerceBool(value, settings.compressLightmaps);
+                case "lightmapcompression":
+                case "lightmap_compression":
+                    var strVal = value?.ToString() ?? "";
+                    if (System.Enum.TryParse<LightmapCompression>(strVal, true, out var compression))
+                        settings.lightmapCompression = compression;
+                    else if (bool.TryParse(strVal, out var boolVal) || strVal == "0" || strVal == "1")
+                        settings.lightmapCompression = (strVal == "true" || strVal == "True" || strVal == "1")
+                            ? LightmapCompression.NormalQuality : LightmapCompression.None;
+                    else if (int.TryParse(strVal, out var intVal))
+                        settings.lightmapCompression = (LightmapCompression)intVal;
                     return true;
 
                 case "ao":

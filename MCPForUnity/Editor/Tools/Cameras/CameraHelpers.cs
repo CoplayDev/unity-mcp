@@ -141,7 +141,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
             if (!HasCinemachine || _cmBrainType == null)
                 return null;
 
-            return UnityEngine.Object.FindObjectOfType(_cmBrainType) as Component;
+            return UnityEngine.Object.FindFirstObjectByType(_cmBrainType) as Component;
         }
 
         internal static UnityEngine.Camera FindMainCamera()
@@ -149,7 +149,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
             var main = UnityEngine.Camera.main;
             if (main != null) return main;
 
-            var allCams = UnityEngine.Object.FindObjectsOfType<UnityEngine.Camera>();
+            var allCams = UnityEngine.Object.FindObjectsByType<UnityEngine.Camera>(FindObjectsSortMode.None);
             return allCams.Length > 0 ? allCams[0] : null;
         }
 

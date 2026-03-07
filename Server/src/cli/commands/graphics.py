@@ -9,6 +9,16 @@ def graphics():
     pass
 
 
+def _coerce_cli_value(val: str):
+    """Convert a CLI string value to bool/float/int/str."""
+    if val.lower() in ("true", "false"):
+        return val.lower() == "true"
+    try:
+        return float(val) if "." in val else int(val)
+    except ValueError:
+        return val
+
+
 @graphics.command("ping")
 @handle_unity_errors
 def ping():
@@ -16,7 +26,7 @@ def ping():
     config = get_config()
     params = {"action": "ping"}
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("volume-create")
@@ -39,7 +49,7 @@ def volume_create(name, is_global, weight, priority, profile_path):
     if profile_path:
         params["profile_path"] = profile_path
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("volume-add-effect")
@@ -51,7 +61,7 @@ def volume_add_effect(target, effect):
     config = get_config()
     params = {"action": "volume_add_effect", "target": target, "effect": effect}
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("volume-set-effect")
@@ -70,7 +80,7 @@ def volume_set_effect(target, effect, param):
         "parameters": parameters,
     }
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("volume-remove-effect")
@@ -82,7 +92,7 @@ def volume_remove_effect(target, effect):
     config = get_config()
     params = {"action": "volume_remove_effect", "target": target, "effect": effect}
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("volume-info")
@@ -93,7 +103,7 @@ def volume_info(target):
     config = get_config()
     params = {"action": "volume_get_info", "target": target}
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("volume-set-properties")
@@ -113,7 +123,7 @@ def volume_set_properties(target, weight, priority, is_global):
     if is_global is not None:
         params["is_global"] = is_global
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("volume-list-effects")
@@ -123,7 +133,7 @@ def volume_list_effects():
     config = get_config()
     params = {"action": "volume_list_effects"}
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("volume-create-profile")
@@ -137,7 +147,7 @@ def volume_create_profile(path, name):
     if name:
         params["name"] = name
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("pipeline-info")
@@ -147,7 +157,7 @@ def pipeline_info():
     config = get_config()
     params = {"action": "pipeline_get_info"}
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("pipeline-set-quality")
@@ -158,7 +168,7 @@ def pipeline_set_quality(level):
     config = get_config()
     params = {"action": "pipeline_set_quality", "level": level}
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("pipeline-settings")
@@ -167,7 +177,7 @@ def pipeline_settings():
     """Get detailed pipeline settings."""
     config = get_config()
     result = run_command("manage_graphics", {"action": "pipeline_get_settings"}, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("pipeline-set-settings")
@@ -177,19 +187,10 @@ def pipeline_settings():
 def pipeline_set_settings(setting):
     """Set pipeline asset settings."""
     config = get_config()
-    settings = {}
-    for key, val in setting:
-        # Auto-convert booleans and numbers
-        if val.lower() in ("true", "false"):
-            settings[key] = val.lower() == "true"
-        else:
-            try:
-                settings[key] = float(val) if "." in val else int(val)
-            except ValueError:
-                settings[key] = val
+    settings = {key: _coerce_cli_value(val) for key, val in setting}
     params = {"action": "pipeline_set_settings", "settings": settings}
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 # --- Bake commands ---
@@ -202,7 +203,7 @@ def bake_start(sync):
     config = get_config()
     params = {"action": "bake_start", "async": not sync}
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("bake-cancel")
@@ -211,7 +212,7 @@ def bake_cancel():
     """Cancel running bake."""
     config = get_config()
     result = run_command("manage_graphics", {"action": "bake_cancel"}, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("bake-status")
@@ -220,7 +221,7 @@ def bake_status():
     """Get bake progress/status."""
     config = get_config()
     result = run_command("manage_graphics", {"action": "bake_status"}, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("bake-clear")
@@ -229,7 +230,7 @@ def bake_clear():
     """Clear all baked lighting data."""
     config = get_config()
     result = run_command("manage_graphics", {"action": "bake_clear"}, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("bake-settings")
@@ -238,7 +239,7 @@ def bake_settings():
     """Get current lighting/bake settings."""
     config = get_config()
     result = run_command("manage_graphics", {"action": "bake_get_settings"}, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("bake-reflection-probe")
@@ -249,7 +250,7 @@ def bake_reflection_probe(target):
     config = get_config()
     params = {"action": "bake_reflection_probe", "target": target}
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("bake-set-settings")
@@ -259,18 +260,10 @@ def bake_reflection_probe(target):
 def bake_set_settings(setting):
     """Set lighting/bake settings."""
     config = get_config()
-    settings = {}
-    for key, val in setting:
-        if val.lower() in ("true", "false"):
-            settings[key] = val.lower() == "true"
-        else:
-            try:
-                settings[key] = float(val) if "." in val else int(val)
-            except ValueError:
-                settings[key] = val
+    settings = {key: _coerce_cli_value(val) for key, val in setting}
     params = {"action": "bake_set_settings", "settings": settings}
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("bake-create-probes")
@@ -286,7 +279,7 @@ def bake_create_probes(name, spacing):
     if spacing is not None:
         params["spacing"] = spacing
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("bake-create-reflection")
@@ -305,7 +298,7 @@ def bake_create_reflection(name, resolution, mode):
     if mode:
         params["mode"] = mode
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 # --- Stats commands ---
@@ -316,7 +309,7 @@ def stats():
     """Get rendering performance stats."""
     config = get_config()
     result = run_command("manage_graphics", {"action": "stats_get"}, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("stats-memory")
@@ -325,7 +318,7 @@ def stats_memory():
     """Get memory allocation stats."""
     config = get_config()
     result = run_command("manage_graphics", {"action": "stats_get_memory"}, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("stats-debug-mode")
@@ -336,7 +329,7 @@ def stats_debug_mode(mode):
     config = get_config()
     params = {"action": "stats_set_scene_debug", "mode": mode}
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 # --- Feature commands ---
@@ -347,7 +340,7 @@ def feature_list():
     """List URP renderer features."""
     config = get_config()
     result = run_command("manage_graphics", {"action": "feature_list"}, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("feature-add")
@@ -361,7 +354,7 @@ def feature_add(feature_type, name):
     if name:
         params["name"] = name
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("feature-remove")
@@ -377,7 +370,7 @@ def feature_remove(index, name):
     if name:
         params["name"] = name
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("feature-configure")
@@ -389,22 +382,14 @@ def feature_remove(index, name):
 def feature_configure(index, name, prop):
     """Configure properties on a renderer feature."""
     config = get_config()
-    properties = {}
-    for key, val in prop:
-        if val.lower() in ("true", "false"):
-            properties[key] = val.lower() == "true"
-        else:
-            try:
-                properties[key] = float(val) if "." in val else int(val)
-            except ValueError:
-                properties[key] = val
+    properties = {key: _coerce_cli_value(val) for key, val in prop}
     params = {"action": "feature_configure", "properties": properties}
     if index is not None:
         params["index"] = index
     if name:
         params["name"] = name
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("feature-reorder")
@@ -416,7 +401,7 @@ def feature_reorder(order):
     order_list = [int(x.strip()) for x in order.split(",")]
     params = {"action": "feature_reorder", "order": order_list}
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))
 
 
 @graphics.command("feature-toggle")
@@ -433,4 +418,4 @@ def feature_toggle(index, name, active):
     if name:
         params["name"] = name
     result = run_command("manage_graphics", params, config)
-    format_output(result, config)
+    click.echo(format_output(result, config.format))

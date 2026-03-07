@@ -4,7 +4,7 @@ using MCPForUnity.Editor.Helpers;
 
 namespace MCPForUnity.Editor.Tools.Graphics
 {
-    [McpForUnityTool("manage_graphics", AutoRegister = false, Group = "graphics")]
+    [McpForUnityTool("manage_graphics", AutoRegister = false, Group = "core")]
     public static class ManageGraphics
     {
         public static object HandleCommand(JObject @params)
@@ -24,14 +24,15 @@ namespace MCPForUnity.Editor.Tools.Graphics
                 {
                     // --- Health check ---
                     case "ping":
+                        var pipeName = GraphicsHelpers.GetPipelineName();
                         return new
                         {
                             success = true,
-                            message = $"Graphics tool ready. Pipeline: {GraphicsHelpers.GetPipelineName()}",
+                            message = $"Graphics tool ready. Pipeline: {pipeName}",
                             data = new
                             {
                                 pipeline = RenderPipelineUtility.GetActivePipeline().ToString(),
-                                pipelineName = GraphicsHelpers.GetPipelineName(),
+                                pipelineName = pipeName,
                                 hasVolumeSystem = GraphicsHelpers.HasVolumeSystem,
                                 hasURP = GraphicsHelpers.HasURP,
                                 hasHDRP = GraphicsHelpers.HasHDRP,

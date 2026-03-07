@@ -98,6 +98,10 @@
       "description": "Manage cameras (Unity Camera + Cinemachine) with presets, pipelines, and blending"
     },
     {
+      "name": "manage_graphics",
+      "description": "Manage rendering graphics: volumes, post-processing, light baking, rendering stats, pipeline settings, and URP renderer features"
+    },
+    {
       "name": "manage_material",
       "description": "Create and modify Unity materials and shaders"
     },

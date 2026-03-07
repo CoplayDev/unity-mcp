@@ -158,7 +158,7 @@ manage_gameobject(action="modify", target="Main Camera", position=[0, 5, -10],
     rotation=[30, 0, 0])
 
 # 5. Verify with screenshot
-manage_scene(action="screenshot")
+manage_camera(action="screenshot")
 
 # 6. Save scene
 manage_scene(action="save")
@@ -348,7 +348,7 @@ manage_material(
 )
 
 # 3. Verify visually
-manage_scene(action="screenshot")
+manage_camera(action="screenshot")
 ```
 
 ### Create Procedural Texture
@@ -558,7 +558,7 @@ for item in hierarchy["data"]["items"]:
         print(f"Object {item['name']} fell through floor!")
 
 # 3. Visual verification
-manage_scene(action="screenshot")
+manage_camera(action="screenshot")
 ```
 
 ---
@@ -1585,7 +1585,7 @@ manage_probuilder(action="auto_smooth", target="Pillar1",
     properties={"angleThreshold": 45})
 
 # 6. Screenshot to verify
-manage_scene(action="screenshot", include_image=True, max_resolution=512)
+manage_camera(action="screenshot", include_image=True, max_resolution=512)
 ```
 
 ### Edit-Verify Loop Pattern
@@ -1642,7 +1642,7 @@ manage_graphics(action="volume_set_effect", target="GlobalPostProcess",
     effect="Bloom", parameters={"intensity": 1.5})
 
 # 6. Screenshot to verify visual result
-manage_scene(action="screenshot", include_image=True, max_resolution=512)
+manage_camera(action="screenshot", include_image=True, max_resolution=512)
 ```
 
 **Tips:**
@@ -1678,10 +1678,10 @@ manage_graphics(action="feature_list")
 
 # 6. Toggle it on/off to compare
 manage_graphics(action="feature_toggle", index=0, active=False)  # disable
-manage_scene(action="screenshot", include_image=True, max_resolution=512)
+manage_camera(action="screenshot", include_image=True, max_resolution=512)
 
 manage_graphics(action="feature_toggle", index=0, active=True)   # re-enable
-manage_scene(action="screenshot", include_image=True, max_resolution=512)
+manage_camera(action="screenshot", include_image=True, max_resolution=512)
 
 # 7. Reorder features if needed (execution order matters)
 manage_graphics(action="feature_reorder", order=[1, 0, 2])

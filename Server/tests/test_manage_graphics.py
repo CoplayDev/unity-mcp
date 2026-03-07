@@ -742,11 +742,11 @@ def test_every_action_forwards_to_unity(mock_unity, action_name):
 # Tool registration
 # ---------------------------------------------------------------------------
 
-def test_tool_registered_with_graphics_group():
+def test_tool_registered_with_core_group():
     from services.registry.tool_registry import _tool_registry
 
     graphics_tools = [
         t for t in _tool_registry if t.get("name") == "manage_graphics"
     ]
     assert len(graphics_tools) == 1
-    assert graphics_tools[0]["group"] == "graphics"
+    assert graphics_tools[0]["group"] == "core"

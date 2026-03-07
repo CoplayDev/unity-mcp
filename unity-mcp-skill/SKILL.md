@@ -59,22 +59,22 @@ batch_execute(
 
 ```python
 # Basic screenshot (saves to Assets/, returns file path only)
-manage_scene(action="screenshot")
+manage_camera(action="screenshot")
 
 # Inline screenshot (returns base64 PNG directly to the AI)
-manage_scene(action="screenshot", include_image=True)
+manage_camera(action="screenshot", include_image=True)
 
 # Use a specific camera and cap resolution for smaller payloads
-manage_scene(action="screenshot", camera="MainCamera", include_image=True, max_resolution=512)
+manage_camera(action="screenshot", camera="MainCamera", include_image=True, max_resolution=512)
 
 # Batch surround: captures front/back/left/right/top/bird_eye around the scene
-manage_scene(action="screenshot", batch="surround", max_resolution=256)
+manage_camera(action="screenshot", batch="surround", max_resolution=256)
 
 # Batch surround centered on a specific object
-manage_scene(action="screenshot", batch="surround", look_at="Player", max_resolution=256)
+manage_camera(action="screenshot", batch="surround", look_at="Player", max_resolution=256)
 
 # Positioned screenshot: place a temp camera and capture in one call
-manage_scene(action="screenshot", look_at="Player", view_position=[0, 10, -10], max_resolution=512)
+manage_camera(action="screenshot", look_at="Player", view_position=[0, 10, -10], max_resolution=512)
 ```
 
 **Best practices for AI scene understanding:**
@@ -87,7 +87,7 @@ manage_scene(action="screenshot", look_at="Player", view_position=[0, 10, -10], 
 ```python
 # Agentic camera loop: point, shoot, analyze
 manage_gameobject(action="look_at", target="MainCamera", look_at_target="Player")
-manage_scene(action="screenshot", camera="MainCamera", include_image=True, max_resolution=512)
+manage_camera(action="screenshot", camera="MainCamera", include_image=True, max_resolution=512)
 # → Analyze image, decide next action
 
 # Alternative: use manage_camera for screenshot (same underlying infrastructure)

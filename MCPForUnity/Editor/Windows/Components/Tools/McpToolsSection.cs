@@ -319,7 +319,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
                 row.Add(parametersLabel);
             }
 
-            if (IsManageSceneTool(tool) || IsManageCameraTool(tool))
+            if (IsManageCameraTool(tool))
             {
                 row.Add(CreateManageSceneActions());
             }

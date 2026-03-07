@@ -441,4 +441,4 @@ These actions exist in the API but have known bugs that prevent them from workin
 5. **Auto-smooth for organic shapes** -- 30 degrees is a good default
 6. **Prefer ProBuilder over primitives** -- when the package is available and you need editable geometry
 7. **Use batch_execute** -- for creating multiple shapes or repetitive operations
-8. **Screenshot to verify** -- use `manage_scene(action="screenshot", include_image=True)` to check visual results after complex edits
+8. **Screenshot to verify** -- use `manage_camera(action="screenshot", include_image=True)` to check visual results after complex edits

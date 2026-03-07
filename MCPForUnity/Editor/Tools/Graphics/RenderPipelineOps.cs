@@ -68,8 +68,8 @@ namespace MCPForUnity.Editor.Tools.Graphics
         internal static object SetQuality(JObject @params)
         {
             var p = new ToolParams(@params);
-            string levelName = p.Get("level", "name");
-            int? levelIndex = p.GetInt("level", "index");
+            string levelName = p.Get("level");
+            int? levelIndex = p.GetInt("level");
 
             string[] names = QualitySettings.names;
             int targetIndex = -1;
@@ -151,7 +151,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
                 {
                     var prop = so.FindProperty(path);
                     if (prop != null)
-                        serializedSettings[path] = ReadSerializedPropertyValue(prop);
+                        serializedSettings[path] = GraphicsHelpers.ReadSerializedValue(prop);
                 }
             }
 
@@ -188,49 +188,49 @@ namespace MCPForUnity.Editor.Tools.Graphics
             var changed = new List<string>();
             var failed = new List<string>();
 
-            foreach (var prop in settingsToken.Properties())
+            using (var so = new SerializedObject(pipelineAsset))
             {
-                string propName = prop.Name;
-                JToken value = prop.Value;
-
-                // Try public property first
-                var publicProp = pipelineAsset.GetType().GetProperty(propName,
-                    BindingFlags.Public | BindingFlags.Instance);
-                if (publicProp != null && publicProp.CanWrite)
+                foreach (var prop in settingsToken.Properties())
                 {
-                    try
-                    {
-                        object converted = ConvertPropertyValue(value, publicProp.PropertyType);
-                        publicProp.SetValue(pipelineAsset, converted);
-                        changed.Add(propName);
-                        continue;
-                    }
-                    catch (Exception ex)
-                    {
-                        McpLog.Warn($"[RenderPipelineOps] Failed to set '{propName}' via property: {ex.Message}");
-                    }
-                }
+                    string propName = prop.Name;
+                    JToken value = prop.Value;
 
-                // Try SerializedObject fallback (for m_ prefixed properties)
-                string serializedPath = propName.StartsWith("m_") ? propName : $"m_{char.ToUpper(propName[0])}{propName.Substring(1)}";
-                using (var so = new SerializedObject(pipelineAsset))
-                {
+                    // Try public property first
+                    var publicProp = pipelineAsset.GetType().GetProperty(propName,
+                        BindingFlags.Public | BindingFlags.Instance);
+                    if (publicProp != null && publicProp.CanWrite)
+                    {
+                        try
+                        {
+                            object converted = ConvertPropertyValue(value, publicProp.PropertyType);
+                            publicProp.SetValue(pipelineAsset, converted);
+                            changed.Add(propName);
+                            continue;
+                        }
+                        catch (Exception ex)
+                        {
+                            McpLog.Warn($"[RenderPipelineOps] Failed to set '{propName}' via property: {ex.Message}");
+                        }
+                    }
+
+                    // Try SerializedObject fallback (for m_ prefixed properties)
+                    string serializedPath = propName.StartsWith("m_") ? propName : $"m_{char.ToUpper(propName[0])}{propName.Substring(1)}";
                     var sProp = so.FindProperty(serializedPath);
                     if (sProp == null && !propName.StartsWith("m_"))
                         sProp = so.FindProperty(propName);
 
                     if (sProp != null)
                     {
-                        if (SetSerializedPropertyValue(sProp, value))
+                        if (GraphicsHelpers.SetSerializedValue(sProp, value))
                         {
-                            so.ApplyModifiedProperties();
                             changed.Add(propName);
                             continue;
                         }
                     }
-                }
 
-                failed.Add(propName);
+                    failed.Add(propName);
+                }
+                so.ApplyModifiedProperties();
             }
 
             EditorUtility.SetDirty(pipelineAsset);
@@ -263,62 +263,6 @@ namespace MCPForUnity.Editor.Tools.Graphics
                     return Enum.ToObject(targetType, intVal);
             }
             return Convert.ChangeType(value.ToObject<object>(), targetType);
-        }
-
-        // --- Helper: Read a SerializedProperty value ---
-        private static object ReadSerializedPropertyValue(SerializedProperty prop)
-        {
-            return prop.propertyType switch
-            {
-                SerializedPropertyType.Boolean => prop.boolValue,
-                SerializedPropertyType.Integer => prop.intValue,
-                SerializedPropertyType.Float => prop.floatValue,
-                SerializedPropertyType.String => prop.stringValue,
-                SerializedPropertyType.Enum => prop.enumValueIndex < prop.enumNames.Length
-                    ? prop.enumNames[prop.enumValueIndex]
-                    : prop.enumValueIndex,
-                SerializedPropertyType.ObjectReference => prop.objectReferenceValue != null
-                    ? prop.objectReferenceValue.name
-                    : null,
-                _ => prop.propertyType.ToString()
-            };
-        }
-
-        // --- Helper: Set a SerializedProperty value ---
-        private static bool SetSerializedPropertyValue(SerializedProperty prop, JToken value)
-        {
-            try
-            {
-                switch (prop.propertyType)
-                {
-                    case SerializedPropertyType.Boolean:
-                        prop.boolValue = ParamCoercion.CoerceBool(value, false);
-                        return true;
-                    case SerializedPropertyType.Integer:
-                        prop.intValue = ParamCoercion.CoerceInt(value, 0);
-                        return true;
-                    case SerializedPropertyType.Float:
-                        prop.floatValue = ParamCoercion.CoerceFloat(value, 0f);
-                        return true;
-                    case SerializedPropertyType.String:
-                        prop.stringValue = value.ToString();
-                        return true;
-                    case SerializedPropertyType.Enum:
-                        if (value.Type == JTokenType.String)
-                        {
-                            for (int i = 0; i < prop.enumNames.Length; i++)
-                            {
-                                if (string.Equals(prop.enumNames[i], value.ToString(), StringComparison.OrdinalIgnoreCase))
-                                { prop.enumValueIndex = i; return true; }
-                            }
-                        }
-                        prop.enumValueIndex = ParamCoercion.CoerceInt(value, 0);
-                        return true;
-                    default:
-                        return false;
-                }
-            }
-            catch { return false; }
         }
 
         // --- Helper: Try to read a property value via reflection ---

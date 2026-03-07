@@ -13,7 +13,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
     {
         internal static object ListCameras(JObject @params)
         {
-            var unityCameras = UnityEngine.Object.FindObjectsOfType<UnityEngine.Camera>();
+            var unityCameras = UnityEngine.Object.FindObjectsByType<UnityEngine.Camera>(FindObjectsSortMode.None);
             var cameraList = new List<object>();
             var unityCamList = new List<object>();
 
@@ -21,7 +21,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
             if (CameraHelpers.HasCinemachine)
             {
                 var cmType = CameraHelpers.CinemachineCameraType;
-                var allCm = UnityEngine.Object.FindObjectsOfType(cmType);
+                var allCm = UnityEngine.Object.FindObjectsByType(cmType, FindObjectsSortMode.None);
                 foreach (Component cm in allCm)
                 {
                     var follow = CameraHelpers.GetReflectionProperty(cm, "Follow") as Transform;

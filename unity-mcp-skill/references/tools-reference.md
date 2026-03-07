@@ -113,7 +113,7 @@ manage_scene(
 )
 
 # Screenshot (file only — saves to Assets/Screenshots/)
-manage_scene(action="screenshot")
+manage_camera(action="screenshot")
 
 # Screenshot with inline image (base64 PNG returned to AI)
 manage_scene(

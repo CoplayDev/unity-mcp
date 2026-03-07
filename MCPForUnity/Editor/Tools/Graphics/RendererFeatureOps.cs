@@ -239,10 +239,10 @@ namespace MCPForUnity.Editor.Tools.Graphics
             var p = new ToolParams(@params);
             int? index = p.GetInt("index");
             string name = p.Get("name");
-            var propertiesToken = p.GetRaw("properties") as JObject;
+            var propertiesToken = (p.GetRaw("properties") ?? p.GetRaw("settings")) as JObject;
 
             if (propertiesToken == null)
-                return new ErrorResponse("'properties' dict is required.");
+                return new ErrorResponse("'properties' (or 'settings') dict is required.");
 
             var rendererData = GetRendererData(@params);
             if (rendererData == null)
@@ -500,33 +500,11 @@ namespace MCPForUnity.Editor.Tools.Graphics
                         if (iterator.name == "m_Script" || iterator.name == "m_ObjectHideFlags" || iterator.name == "m_Name")
                             continue;
 
-                        props[iterator.name] = ReadSerializedValue(iterator);
+                        props[iterator.name] = GraphicsHelpers.ReadSerializedValue(iterator);
                     } while (iterator.NextVisible(false));
                 }
             }
             return props;
-        }
-
-        private static object ReadSerializedValue(SerializedProperty prop)
-        {
-            return prop.propertyType switch
-            {
-                SerializedPropertyType.Boolean => prop.boolValue,
-                SerializedPropertyType.Integer => prop.intValue,
-                SerializedPropertyType.Float => prop.floatValue,
-                SerializedPropertyType.String => prop.stringValue,
-                SerializedPropertyType.Enum => prop.enumValueIndex < prop.enumNames.Length
-                    ? prop.enumNames[prop.enumValueIndex]
-                    : (object)prop.enumValueIndex,
-                SerializedPropertyType.ObjectReference => prop.objectReferenceValue != null
-                    ? prop.objectReferenceValue.name
-                    : null,
-                SerializedPropertyType.Color => $"({prop.colorValue.r:F2}, {prop.colorValue.g:F2}, {prop.colorValue.b:F2}, {prop.colorValue.a:F2})",
-                SerializedPropertyType.Vector2 => new { x = prop.vector2Value.x, y = prop.vector2Value.y },
-                SerializedPropertyType.Vector3 => new { x = prop.vector3Value.x, y = prop.vector3Value.y, z = prop.vector3Value.z },
-                SerializedPropertyType.LayerMask => prop.intValue,
-                _ => prop.propertyType.ToString()
-            };
         }
 
         private static (List<string> changed, List<string> failed) ApplyFeatureProperties(
@@ -542,7 +520,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
                     var sProp = so.FindProperty(prop.Name);
                     if (sProp != null)
                     {
-                        if (SetSerializedValue(sProp, prop.Value))
+                        if (GraphicsHelpers.SetSerializedValue(sProp, prop.Value))
                             changed.Add(prop.Name);
                         else
                             failed.Add(prop.Name);
@@ -552,7 +530,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
                         // Try nested: "settings.fieldName"
                         string nested = $"settings.{prop.Name}";
                         sProp = so.FindProperty(nested);
-                        if (sProp != null && SetSerializedValue(sProp, prop.Value))
+                        if (sProp != null && GraphicsHelpers.SetSerializedValue(sProp, prop.Value))
                             changed.Add(prop.Name);
                         else
                             failed.Add(prop.Name);
@@ -562,62 +540,6 @@ namespace MCPForUnity.Editor.Tools.Graphics
             }
 
             return (changed, failed);
-        }
-
-        private static bool SetSerializedValue(SerializedProperty prop, JToken value)
-        {
-            try
-            {
-                switch (prop.propertyType)
-                {
-                    case SerializedPropertyType.Boolean:
-                        prop.boolValue = ParamCoercion.CoerceBool(value, false);
-                        return true;
-                    case SerializedPropertyType.Integer:
-                        prop.intValue = ParamCoercion.CoerceInt(value, 0);
-                        return true;
-                    case SerializedPropertyType.Float:
-                        prop.floatValue = ParamCoercion.CoerceFloat(value, 0f);
-                        return true;
-                    case SerializedPropertyType.String:
-                        prop.stringValue = value.ToString();
-                        return true;
-                    case SerializedPropertyType.Enum:
-                        if (value.Type == JTokenType.String)
-                        {
-                            for (int i = 0; i < prop.enumNames.Length; i++)
-                            {
-                                if (string.Equals(prop.enumNames[i], value.ToString(), StringComparison.OrdinalIgnoreCase))
-                                { prop.enumValueIndex = i; return true; }
-                            }
-                        }
-                        prop.enumValueIndex = ParamCoercion.CoerceInt(value, 0);
-                        return true;
-                    case SerializedPropertyType.ObjectReference:
-                        if (value.Type == JTokenType.String)
-                        {
-                            string path = value.ToString();
-                            var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
-                            if (asset != null) { prop.objectReferenceValue = asset; return true; }
-                        }
-                        return false;
-                    case SerializedPropertyType.Color:
-                        if (value is JArray colorArr && colorArr.Count >= 3)
-                        {
-                            prop.colorValue = new Color(
-                                (float)colorArr[0], (float)colorArr[1], (float)colorArr[2],
-                                colorArr.Count >= 4 ? (float)colorArr[3] : 1f);
-                            return true;
-                        }
-                        return false;
-                    case SerializedPropertyType.LayerMask:
-                        prop.intValue = ParamCoercion.CoerceInt(value, 0);
-                        return true;
-                    default:
-                        return false;
-                }
-            }
-            catch { return false; }
         }
 
         private static void TrySetMaterial(ScriptableObject feature, string materialPath)

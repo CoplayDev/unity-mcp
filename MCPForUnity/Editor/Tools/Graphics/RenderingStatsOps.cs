@@ -60,23 +60,25 @@ namespace MCPForUnity.Editor.Tools.Graphics
             var p = new ToolParams(@params);
             string categoryName = p.Get("category");
 
+            // Default to "Render" category to avoid massive payloads (all categories = 300K+ chars)
             ProfilerCategory category = ProfilerCategory.Render;
             if (!string.IsNullOrEmpty(categoryName))
             {
                 category = TryResolveCategory(categoryName);
             }
 
-            var handles = ProfilerRecorderHandle.GetAvailable(category);
-            var counters = handles.Select(h =>
-            {
-                var desc = ProfilerRecorderHandle.GetDescription(h);
-                return new
+            var allHandles = new List<ProfilerRecorderHandle>();
+            ProfilerRecorderHandle.GetAvailable(allHandles);
+            var counters = allHandles
+                .Select(h => ProfilerRecorderHandle.GetDescription(h))
+                .Where(d => string.Equals(d.Category.Name, category.Name, StringComparison.OrdinalIgnoreCase))
+                .Select(d => new
                 {
-                    name = desc.Name,
-                    category = desc.Category.Name,
-                    unit = desc.UnitType.ToString()
-                };
-            }).OrderBy(c => c.name).ToList();
+                    name = d.Name,
+                    category = d.Category.Name,
+                    unit = d.UnitType.ToString()
+                })
+                .OrderBy(c => c.name).ToList();
 
             return new
             {
@@ -108,22 +110,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
             if (sceneView == null)
                 return new ErrorResponse("No active Scene View found.");
 
-            var builtinModes = SceneView.GetBuiltinCameraModes().ToList();
-            var matchingMode = builtinModes.FirstOrDefault(m => m.drawMode == drawMode);
-
-            if (matchingMode.drawMode == drawMode)
-            {
-                sceneView.cameraMode = matchingMode;
-            }
-            else
-            {
-                sceneView.cameraMode = new SceneView.CameraMode
-                {
-                    drawMode = drawMode,
-                    name = drawMode.ToString(),
-                    section = "Shading Mode"
-                };
-            }
+            sceneView.cameraMode = SceneView.GetBuiltinCameraMode(drawMode);
 
             sceneView.Repaint();
 
