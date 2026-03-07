@@ -197,11 +197,21 @@ namespace MCPForUnity.Editor.Helpers
         {
             error = null;
 
+            // Skip reflection for UnityEngine.Object types with JObject values
+            // so SerializedProperty can resolve guid/spriteName/fileID forms.
+            bool isJObjectValue = value != null && value.Type == JTokenType.Object;
+
             // Try property first
             PropertyInfo propInfo = type.GetProperty(propertyName, flags)
                                  ?? type.GetProperty(normalizedName, flags);
             if (propInfo != null && propInfo.CanWrite)
             {
+                if (isJObjectValue && typeof(UnityEngine.Object).IsAssignableFrom(propInfo.PropertyType))
+                {
+                    // Let SerializedProperty path handle complex object references.
+                    return false;
+                }
+
                 try
                 {
                     object convertedValue = PropertyConversion.ConvertToType(value, propInfo.PropertyType);
@@ -225,6 +235,12 @@ namespace MCPForUnity.Editor.Helpers
                                ?? type.GetField(normalizedName, flags);
             if (fieldInfo != null && !fieldInfo.IsInitOnly)
             {
+                if (isJObjectValue && typeof(UnityEngine.Object).IsAssignableFrom(fieldInfo.FieldType))
+                {
+                    // Let SerializedProperty path handle complex object references.
+                    return false;
+                }
+
                 try
                 {
                     object convertedValue = PropertyConversion.ConvertToType(value, fieldInfo.FieldType);
@@ -248,6 +264,12 @@ namespace MCPForUnity.Editor.Helpers
                      ?? FindSerializedFieldInHierarchy(type, normalizedName);
             if (fieldInfo != null)
             {
+                if (isJObjectValue && typeof(UnityEngine.Object).IsAssignableFrom(fieldInfo.FieldType))
+                {
+                    // Let SerializedProperty path handle complex object references.
+                    return false;
+                }
+
                 try
                 {
                     object convertedValue = PropertyConversion.ConvertToType(value, fieldInfo.FieldType);
@@ -599,6 +621,47 @@ namespace MCPForUnity.Editor.Helpers
                         error = $"No asset found for GUID '{guidToken}'.";
                         return false;
                     }
+
+                    var spriteNameToken = jObj["spriteName"];
+                    if (spriteNameToken != null)
+                    {
+                        string spriteName = spriteNameToken.ToString();
+                        var allAssets = AssetDatabase.LoadAllAssetsAtPath(path);
+                        foreach (var asset in allAssets)
+                        {
+                            if (asset is Sprite sprite && sprite.name == spriteName)
+                            {
+                                prop.objectReferenceValue = sprite;
+                                return true;
+                            }
+                        }
+
+                        error = $"Sprite '{spriteName}' not found in atlas '{path}'.";
+                        return false;
+                    }
+
+                    var fileIdToken = jObj["fileID"];
+                    if (fileIdToken != null)
+                    {
+                        long targetFileId = ParamCoercion.CoerceLong(fileIdToken, 0);
+                        if (targetFileId != 0)
+                        {
+                            var allAssets = AssetDatabase.LoadAllAssetsAtPath(path);
+                            foreach (var asset in allAssets)
+                            {
+                                if (asset is Sprite sprite)
+                                {
+                                    long spriteFileId = GetSpriteFileId(sprite);
+                                    if (spriteFileId == targetFileId)
+                                    {
+                                        prop.objectReferenceValue = sprite;
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     prop.objectReferenceValue = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
                     return true;
                 }
@@ -766,6 +829,23 @@ namespace MCPForUnity.Editor.Helpers
             }
             error = $"Unknown enum name '{s}'.";
             return false;
+        }
+
+
+        private static long GetSpriteFileId(Sprite sprite)
+        {
+            if (sprite == null)
+                return 0;
+
+            try
+            {
+                var globalId = GlobalObjectId.GetGlobalObjectIdSlow(sprite);
+                return (long)globalId.targetObjectId;
+            }
+            catch
+            {
+                return 0;
+            }
         }
     }
 }
