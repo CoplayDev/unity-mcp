@@ -44,6 +44,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
         public event Action OnGitUrlChanged;
         public event Action OnHttpServerCommandUpdateRequested;
         public event Action OnTestConnectionRequested;
+        public event Action OnPackageDeployed;
 
         public VisualElement Root { get; private set; }
 
@@ -489,6 +490,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             else
             {
                 EditorUtility.DisplayDialog("Deployment Complete", result.Message + (string.IsNullOrEmpty(result.BackupPath) ? string.Empty : $"\nBackup: {result.BackupPath}"), "OK");
+                OnPackageDeployed?.Invoke();
             }
 
             UpdateDeploymentSection();
@@ -506,6 +508,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             else
             {
                 EditorUtility.DisplayDialog("Restore Complete", result.Message, "OK");
+                OnPackageDeployed?.Invoke();
             }
 
             UpdateDeploymentSection();

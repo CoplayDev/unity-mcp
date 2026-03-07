@@ -275,6 +275,11 @@ namespace MCPForUnity.Editor.Windows
                     if (connectionSection != null)
                         await connectionSection.VerifyBridgeConnectionAsync();
                 };
+                advancedSection.OnPackageDeployed += () =>
+                {
+                    UpdateVersionLabel();
+                    QueueUpdateCheck();
+                };
                 // Wire up health status updates from Connection to Advanced
                 connectionSection?.SetHealthStatusUpdateCallback((isHealthy, statusText) =>
                     advancedSection?.UpdateHealthStatus(isHealthy, statusText));
