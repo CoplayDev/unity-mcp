@@ -15,6 +15,7 @@ Complete reference for all MCP tools. Each tool includes parameters, types, and 
 - [UI Tools](#ui-tools)
 - [Editor Control Tools](#editor-control-tools)
 - [Testing Tools](#testing-tools)
+- [Camera Tools](#camera-tools)
 - [ProBuilder Tools](#probuilder-tools)
 
 ---
@@ -793,6 +794,131 @@ Discover available custom tools via `mcpforunity://custom-tools` resource.
 
 ---
 
+## Camera Tools
+
+### manage_camera
+
+Unified camera management (Unity Camera + Cinemachine). Works without Cinemachine using basic Camera; unlocks presets, pipelines, and blending when Cinemachine is installed. Use `ping` to check availability.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `action` | string | Yes | Action to perform (see categories below) |
+| `target` | string | Sometimes | Target camera (name, path, or instance ID) |
+| `search_method` | string | No | `by_id`, `by_name`, `by_path` |
+| `properties` | dict \| string | No | Action-specific parameters |
+
+**Screenshot parameters** (for `screenshot` and `screenshot_multiview` actions):
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `camera` | string | Camera to capture from (defaults to Camera.main) |
+| `include_image` | bool | Return base64 PNG inline (default false) |
+| `max_resolution` | int | Downscale cap in px (default 640) |
+| `batch` | string | `"surround"` (6 angles) or `"orbit"` (configurable grid) |
+| `look_at` | string\|int\|list | Target to aim at (GO name/path/ID or [x,y,z]) |
+| `view_position` | list[float] | World position [x,y,z] to place camera |
+| `view_rotation` | list[float] | Euler rotation [x,y,z] (overrides look_at) |
+
+**Actions by category:**
+
+**Setup:**
+- `ping` — Check Cinemachine availability and version
+- `ensure_brain` — Ensure CinemachineBrain exists on main camera. Properties: `camera` (target camera), `defaultBlendStyle`, `defaultBlendDuration`
+- `get_brain_status` — Get Brain state (active camera, blend status)
+
+**Creation:**
+- `create_camera` — Create camera with optional preset. Properties: `name`, `preset` (follow/third_person/freelook/dolly/static/top_down/side_scroller), `follow`, `lookAt`, `priority`, `fieldOfView`. Falls back to basic Camera without Cinemachine.
+
+**Configuration:**
+- `set_target` — Set Follow and/or LookAt targets. Properties: `follow`, `lookAt` (GO name/path/ID)
+- `set_priority` — Set camera priority for Brain selection. Properties: `priority` (int)
+- `set_lens` — Configure lens. Properties: `fieldOfView`, `nearClipPlane`, `farClipPlane`, `orthographicSize`, `dutch`
+- `set_body` — Configure Body component (Cinemachine). Properties: `bodyType` (to swap), plus component-specific properties
+- `set_aim` — Configure Aim component (Cinemachine). Properties: `aimType` (to swap), plus component-specific properties
+- `set_noise` — Configure Noise (Cinemachine). Properties: `amplitudeGain`, `frequencyGain`
+
+**Extensions (Cinemachine):**
+- `add_extension` — Add extension. Properties: `extensionType` (CinemachineConfiner2D, CinemachineDeoccluder, CinemachineImpulseListener, CinemachineFollowZoom, CinemachineRecomposer, etc.)
+- `remove_extension` — Remove extension by type. Properties: `extensionType`
+
+**Control:**
+- `list_cameras` — List all cameras with status
+- `set_blend` — Configure default blend on Brain. Properties: `style` (Cut/EaseInOut/Linear/etc.), `duration`
+- `force_camera` — Override Brain to use specific camera
+- `release_override` — Release camera override
+
+**Capture:**
+- `screenshot` — Capture from a camera. Supports inline base64, batch surround/orbit, positioned capture.
+- `screenshot_multiview` — Shorthand for screenshot with batch='surround' and include_image=true.
+
+**Examples:**
+
+```python
+# Check Cinemachine availability
+manage_camera(action="ping")
+
+# Create a third-person camera following the player
+manage_camera(action="create_camera", properties={
+    "name": "FollowCam", "preset": "third_person",
+    "follow": "Player", "lookAt": "Player", "priority": 20
+})
+
+# Ensure Brain exists on main camera
+manage_camera(action="ensure_brain")
+
+# Configure body component
+manage_camera(action="set_body", target="FollowCam", properties={
+    "bodyType": "CinemachineThirdPersonFollow",
+    "cameraDistance": 5.0, "shoulderOffset": [0.5, 0.5, 0]
+})
+
+# Set aim
+manage_camera(action="set_aim", target="FollowCam", properties={
+    "aimType": "CinemachineRotationComposer"
+})
+
+# Add camera shake
+manage_camera(action="set_noise", target="FollowCam", properties={
+    "amplitudeGain": 0.5, "frequencyGain": 1.0
+})
+
+# Set priority to make this the active camera
+manage_camera(action="set_priority", target="FollowCam", properties={"priority": 50})
+
+# Force a specific camera
+manage_camera(action="force_camera", target="CinematicCam")
+
+# Release override (return to priority-based selection)
+manage_camera(action="release_override")
+
+# Configure blend transitions
+manage_camera(action="set_blend", properties={"style": "EaseInOut", "duration": 2.0})
+
+# Add deoccluder extension
+manage_camera(action="add_extension", target="FollowCam", properties={
+    "extensionType": "CinemachineDeoccluder"
+})
+
+# Screenshot from a specific camera
+manage_camera(action="screenshot", camera="FollowCam", include_image=True, max_resolution=512)
+
+# Multi-view screenshot (6-angle contact sheet)
+manage_camera(action="screenshot_multiview", max_resolution=480)
+
+# List all cameras
+manage_camera(action="list_cameras")
+```
+
+**Tier system:**
+- Tier 1 actions (ping, create_camera, set_target, set_lens, set_priority, list_cameras, screenshot, screenshot_multiview) work without Cinemachine — they fall back to basic Unity Camera.
+- Tier 2 actions (ensure_brain, get_brain_status, set_body, set_aim, set_noise, add/remove_extension, set_blend, force_camera, release_override) require `com.unity.cinemachine`. If called without Cinemachine, they return an error with a fallback suggestion.
+
+**Resource:** Read `mcpforunity://scene/cameras` for current camera state before modifying.
+
+---
+
 ## ProBuilder Tools
 
 ### manage_probuilder
@@ -806,7 +932,7 @@ Unified tool for ProBuilder mesh operations. Requires `com.unity.probuilder` pac
 | `action` | string | Yes | Action to perform (see categories below) |
 | `target` | string | Sometimes | Target GameObject name/path/id |
 | `search_method` | string | No | How to find target: `by_id`, `by_name`, `by_path`, `by_tag`, `by_layer` |
-| `properties` | dict | No | Action-specific parameters |
+| `properties` | dict \| string | No | Action-specific parameters (dict or JSON string) |
 
 **Actions by category:**
 
