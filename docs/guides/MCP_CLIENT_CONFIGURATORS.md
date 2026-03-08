@@ -169,7 +169,9 @@ Some clients cannot be handled by the generic JSON configurator alone.
 
 - Uses a custom configurator (`OpenClawConfigurator`) because OpenClaw MCP is plugin-driven.
 - Config file path is `~/.openclaw/openclaw.json`.
-- Unity MCP is configured through `plugins.entries.openclaw-mcp-bridge.config.servers`.
+- Unity MCP is configured through `plugins.entries.openclaw-mcp-bridge.config.servers.unityMCP`.
+- The bridge expects the MCP JSON-RPC endpoint URL (`http://127.0.0.1:<port>/mcp`), not just the HTTP base URL.
+- The bridge exposes a single proxy tool such as `unityMCP__call`, which then forwards to Unity MCP tool names.
 - OpenClaw support is HTTP-only (via `openclaw-mcp-bridge`).
 
 ---

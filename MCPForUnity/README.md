@@ -62,7 +62,9 @@ The window has four areas: Server Status, Unity Bridge, MCP Client Configuration
     - The window displays the resolved Claude CLI path when detected.
   - OpenClaw:
     - Uses `~/.openclaw/openclaw.json` and the `openclaw-mcp-bridge` plugin.
+    - MCP for Unity writes `plugins.entries.openclaw-mcp-bridge.config.servers.unityMCP`.
     - OpenClaw requires HTTP transport for MCP for Unity.
+    - The bridge exposes a proxy tool such as `unityMCP__call`.
 
 Notes:
 - The UI shows a status dot and a short status text (e.g., “Configured”, “uv Not Found”, “Claude Not Found”).

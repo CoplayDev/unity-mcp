@@ -17,6 +17,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
     {
         private const string PluginName = "openclaw-mcp-bridge";
         private const string ServerName = "unityMCP";
+        private const string TransportName = "http";
 
         public OpenClawConfigurator() : base(new McpClient
         {
@@ -50,21 +51,21 @@ namespace MCPForUnity.Editor.Clients.Configurators
                 }
 
                 JObject root = LoadConfig(path);
-                JObject unityServer = FindUnityServer(root);
+                JObject pluginEntry = root["plugins"]?["entries"]?[PluginName] as JObject;
+                JObject unityServer = FindUnityServer(pluginEntry?["config"]?["servers"]);
 
-                if (unityServer == null)
+                if (pluginEntry == null || unityServer == null || !IsEnabled(pluginEntry) || !IsEnabled(unityServer))
                 {
                     client.SetStatus(McpStatus.NotConfigured);
                     client.configuredTransport = ConfiguredTransport.Unknown;
                     return client.status;
                 }
 
-                string configuredUrl = unityServer["url"]?.ToString();
-                bool matches = UrlMatchesCurrentEndpoint(configuredUrl);
+                bool matches = ServerMatchesCurrentEndpoint(unityServer);
                 if (matches)
                 {
                     client.SetStatus(McpStatus.Configured);
-                    client.configuredTransport = ResolveTransport(configuredUrl);
+                    client.configuredTransport = ResolveTransport(unityServer["url"]?.ToString());
                     return client.status;
                 }
 
@@ -112,17 +113,9 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
             JObject pluginConfig = pluginEntry["config"] as JObject ?? new JObject();
             pluginEntry["config"] = pluginConfig;
-            pluginConfig["servers"] = UpsertUnityServer(pluginConfig["servers"] as JArray ?? new JArray());
-
-            if (pluginConfig["timeout"] == null)
-            {
-                pluginConfig["timeout"] = 30000;
-            }
-
-            if (pluginConfig["retries"] == null)
-            {
-                pluginConfig["retries"] = 1;
-            }
+            pluginConfig.Remove("timeout");
+            pluginConfig.Remove("retries");
+            pluginConfig["servers"] = UpsertUnityServer(pluginConfig["servers"]);
 
             McpConfigurationHelper.WriteAtomicFile(path, root.ToString(Formatting.Indented));
             client.SetStatus(McpStatus.Configured);
@@ -148,9 +141,10 @@ namespace MCPForUnity.Editor.Clients.Configurators
                             ["enabled"] = true,
                             ["config"] = new JObject
                             {
-                                ["servers"] = new JArray(BuildUnityServerEntry()),
-                                ["timeout"] = 30000,
-                                ["retries"] = 1
+                                ["servers"] = new JObject
+                                {
+                                    [ServerName] = BuildUnityServerEntry()
+                                }
                             }
                         }
                     }
@@ -165,6 +159,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
             "Install OpenClaw",
             "Install the bridge plugin: npm install -g openclaw-mcp-bridge (or pnpm add -g openclaw-mcp-bridge)",
             "In MCP for Unity, choose OpenClaw and click Configure",
+            "OpenClaw exposes a proxy tool such as unityMCP__call for Unity MCP access",
             "Restart OpenClaw"
         };
 
@@ -187,98 +182,136 @@ namespace MCPForUnity.Editor.Clients.Configurators
             }
         }
 
-        private JObject FindUnityServer(JObject root)
+        private JObject FindUnityServer(JToken serversToken)
         {
-            JArray servers = root["plugins"]?["entries"]?[PluginName]?["config"]?["servers"] as JArray;
-            if (servers == null)
+            if (serversToken is JObject serverMap)
             {
-                return null;
+                return serverMap[ServerName] as JObject;
             }
 
-            foreach (JToken token in servers)
+            if (serversToken is JArray legacyServers)
             {
-                JObject server = token as JObject;
-                if (server == null)
+                foreach (JToken token in legacyServers)
                 {
-                    continue;
-                }
+                    JObject server = token as JObject;
+                    if (server == null)
+                    {
+                        continue;
+                    }
 
-                string name = server["name"]?.ToString();
-                if (string.Equals(name, ServerName, StringComparison.OrdinalIgnoreCase))
-                {
-                    return server;
+                    string name = server["name"]?.ToString();
+                    if (string.Equals(name, ServerName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return server;
+                    }
                 }
             }
 
             return null;
         }
 
-        private JArray UpsertUnityServer(JArray servers)
+        private JObject UpsertUnityServer(JToken serversToken)
         {
-            JObject existing = null;
-            foreach (JToken token in servers)
+            JObject servers = NormalizeServers(serversToken);
+            JObject entry = servers[ServerName] as JObject ?? new JObject();
+
+            entry.Remove("name");
+            entry.Remove("prefix");
+            entry.Remove("healthCheck");
+            entry["enabled"] = true;
+            entry["url"] = HttpEndpointUtility.GetMcpRpcUrl();
+            entry["transport"] = TransportName;
+            entry["toolPrefix"] = ServerName;
+            servers[ServerName] = entry;
+
+            return servers;
+        }
+
+        private static JObject NormalizeServers(JToken serversToken)
+        {
+            if (serversToken is JObject serverMap)
             {
-                JObject candidate = token as JObject;
-                if (candidate == null)
+                return serverMap;
+            }
+
+            var normalized = new JObject();
+            if (!(serversToken is JArray legacyServers))
+            {
+                return normalized;
+            }
+
+            foreach (JToken token in legacyServers)
+            {
+                if (!(token is JObject legacyServer))
                 {
                     continue;
                 }
 
-                string name = candidate["name"]?.ToString();
-                if (string.Equals(name, ServerName, StringComparison.OrdinalIgnoreCase))
+                string name = legacyServer["name"]?.ToString();
+                if (string.IsNullOrWhiteSpace(name))
                 {
-                    existing = candidate;
-                    break;
+                    continue;
                 }
+
+                normalized[name] = legacyServer;
             }
 
-            JObject entry = existing ?? BuildUnityServerEntry();
-            entry["name"] = ServerName;
-            entry["url"] = HttpEndpointUtility.GetBaseUrl();
-            entry["prefix"] = "unity";
-            entry["healthCheck"] = true;
-
-            if (existing == null)
-            {
-                servers.Add(entry);
-            }
-
-            return servers;
+            return normalized;
         }
 
         private static JObject BuildUnityServerEntry()
         {
             return new JObject
             {
-                ["name"] = ServerName,
-                ["url"] = HttpEndpointUtility.GetBaseUrl(),
-                ["prefix"] = "unity",
-                ["healthCheck"] = true
+                ["enabled"] = true,
+                ["url"] = HttpEndpointUtility.GetMcpRpcUrl(),
+                ["transport"] = TransportName,
+                ["toolPrefix"] = ServerName,
+                ["requestTimeoutMs"] = 30000
             };
         }
 
-        private bool UrlMatchesCurrentEndpoint(string configuredUrl)
+        private bool ServerMatchesCurrentEndpoint(JObject server)
         {
-            if (string.IsNullOrWhiteSpace(configuredUrl))
+            if (server == null)
             {
                 return false;
             }
 
-            string baseUrl = HttpEndpointUtility.GetBaseUrl();
-            string rpcUrl = HttpEndpointUtility.GetMcpRpcUrl();
-            return UrlsEqual(configuredUrl, baseUrl) || UrlsEqual(configuredUrl, rpcUrl);
+            string configuredUrl = server["url"]?.ToString();
+            if (string.IsNullOrWhiteSpace(configuredUrl) ||
+                (!UrlsEqual(configuredUrl, HttpEndpointUtility.GetLocalMcpRpcUrl()) &&
+                 !UrlsEqual(configuredUrl, HttpEndpointUtility.GetRemoteMcpRpcUrl())))
+            {
+                return false;
+            }
+
+            string configuredTransport = server["transport"]?.ToString();
+            if (!string.IsNullOrWhiteSpace(configuredTransport) &&
+                !string.Equals(configuredTransport, TransportName, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            string toolPrefix = server["toolPrefix"]?.ToString();
+            return string.IsNullOrWhiteSpace(toolPrefix) ||
+                   string.Equals(toolPrefix, ServerName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsEnabled(JObject entry)
+        {
+            JToken enabledToken = entry["enabled"];
+            return enabledToken == null || enabledToken.Type != JTokenType.Boolean || enabledToken.Value<bool>();
         }
 
         private ConfiguredTransport ResolveTransport(string configuredUrl)
         {
-            if (UrlsEqual(configuredUrl, HttpEndpointUtility.GetRemoteBaseUrl()) ||
-                UrlsEqual(configuredUrl, HttpEndpointUtility.GetRemoteMcpRpcUrl()))
+            if (UrlsEqual(configuredUrl, HttpEndpointUtility.GetRemoteMcpRpcUrl()))
             {
                 return ConfiguredTransport.HttpRemote;
             }
 
-            if (UrlsEqual(configuredUrl, HttpEndpointUtility.GetLocalBaseUrl()) ||
-                UrlsEqual(configuredUrl, HttpEndpointUtility.GetLocalMcpRpcUrl()))
+            if (UrlsEqual(configuredUrl, HttpEndpointUtility.GetLocalMcpRpcUrl()))
             {
                 return ConfiguredTransport.Http;
             }
