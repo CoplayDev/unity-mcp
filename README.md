@@ -46,7 +46,7 @@
 
 * **Unity 2021.3 LTS+** — [Download Unity](https://unity.com/download)
 * **Python 3.10+** and **uv** — [Install uv](https://docs.astral.sh/uv/getting-started/installation/)
-* **An MCP Client** — [Claude Desktop](https://claude.ai/download) | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | [Cursor](https://www.cursor.com/en/downloads) | [VS Code Copilot](https://code.visualstudio.com/docs/copilot/overview) | [GitHub Copilot CLI](https://docs.github.com/en/copilot/concepts/agents/about-copilot-cli) | [Windsurf](https://windsurf.com)
+* **An MCP Client** — [Claude Desktop](https://claude.ai/download) | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | [Cursor](https://www.cursor.com/en/downloads) | [VS Code Copilot](https://code.visualstudio.com/docs/copilot/overview) | [GitHub Copilot CLI](https://docs.github.com/en/copilot/concepts/agents/about-copilot-cli) | [Windsurf](https://windsurf.com) | [OpenClaw](https://openclaw.ai)
 
 ### 1. Install the Unity Package
 
@@ -81,7 +81,7 @@ openupm add com.coplaydev.unity-mcp
 2. Click **Start Server** (launches HTTP server on `localhost:8080`)
 3. Select your MCP Client from the dropdown and click **Configure**
 4. Look for 🟢 "Connected ✓"
-5. **Connect your client:** Some clients (Cursor, Windsurf, Antigravity) require enabling an MCP toggle in settings, while others (Claude Desktop, Claude Code) auto-connect after configuration.
+5. **Connect your client:** Some clients (Cursor, Windsurf, Antigravity, OpenClaw) require enabling an MCP toggle or plugin in settings, while others (Claude Desktop, Claude Code) auto-connect after configuration.
 
 **That's it!** Try a prompt like: *"Create a red, blue and yellow cube"* or *"Build a simple player controller"*
 
