@@ -127,13 +127,17 @@ namespace MCPForUnity.Editor.Tools.Graphics
             string target = p.Get("target");
             if (string.IsNullOrEmpty(target))
             {
+#if UNITY_2022_2_OR_NEWER
                 var allVolumes = UnityEngine.Object.FindObjectsByType(VolumeType, FindObjectsSortMode.None);
+#else
+                var allVolumes = UnityEngine.Object.FindObjectsOfType(VolumeType);
+#endif
                 return allVolumes.Length > 0 ? allVolumes[0] as Component : null;
             }
 
             if (int.TryParse(target, out int instanceId))
             {
-                var byId = EditorUtility.EntityIdToObject(instanceId) as GameObject;
+                var byId = GameObjectLookup.ResolveInstanceID(instanceId) as GameObject;
                 if (byId != null) return byId.GetComponent(VolumeType);
             }
 

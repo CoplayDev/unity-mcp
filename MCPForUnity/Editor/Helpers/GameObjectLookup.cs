@@ -65,13 +65,24 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
+        /// Resolves an instance ID to a UnityEngine.Object.
+        /// Uses EntityIdToObject on Unity 6.3+ where InstanceIDToObject is obsolete.
+        /// </summary>
+        public static UnityEngine.Object ResolveInstanceID(int instanceId)
+        {
+#if UNITY_6000_3_OR_NEWER
+            return EditorUtility.EntityIdToObject(instanceId);
+#else
+            return EditorUtility.InstanceIDToObject(instanceId);
+#endif
+        }
+
+        /// <summary>
         /// Finds a GameObject by its instance ID.
         /// </summary>
         public static GameObject FindById(int instanceId)
         {
-#pragma warning disable CS0618 // Type or member is obsolete
-            return EditorUtility.InstanceIDToObject(instanceId) as GameObject;
-#pragma warning restore CS0618
+            return ResolveInstanceID(instanceId) as GameObject;
         }
 
         /// <summary>
@@ -105,9 +116,7 @@ namespace MCPForUnity.Editor.Helpers
                 case SearchMethod.ById:
                     if (int.TryParse(searchTerm, out int instanceId))
                     {
-#pragma warning disable CS0618 // Type or member is obsolete
-                        var obj = EditorUtility.InstanceIDToObject(instanceId) as GameObject;
-#pragma warning restore CS0618
+                        var obj = ResolveInstanceID(instanceId) as GameObject;
                         if (obj != null && (includeInactive || obj.activeInHierarchy))
                         {
                             results.Add(instanceId);

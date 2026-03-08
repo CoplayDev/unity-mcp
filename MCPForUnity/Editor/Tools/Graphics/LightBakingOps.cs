@@ -26,7 +26,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
             {
                 Lightmapping.BakeAsync();
                 return new PendingResponse(
-                    "Light bake started (async). Use bake_get_status to check progress.",
+                    "Light bake started (async). Use bake_status to check progress.",
                     pollIntervalSeconds: 2.0,
                     data: new { mode = "async" }
                 );
@@ -416,7 +416,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
 
             if (int.TryParse(target, out int instanceId))
             {
-                var byId = EditorUtility.EntityIdToObject(instanceId) as GameObject;
+                var byId = GameObjectLookup.ResolveInstanceID(instanceId) as GameObject;
                 if (byId != null) return byId;
             }
 
@@ -512,11 +512,13 @@ namespace MCPForUnity.Editor.Tools.Graphics
                     var strVal = value?.ToString() ?? "";
                     if (System.Enum.TryParse<LightmapCompression>(strVal, true, out var compression))
                         settings.lightmapCompression = compression;
-                    else if (bool.TryParse(strVal, out var boolVal) || strVal == "0" || strVal == "1")
-                        settings.lightmapCompression = (strVal == "true" || strVal == "True" || strVal == "1")
+                    else if (bool.TryParse(strVal, out var boolVal))
+                        settings.lightmapCompression = boolVal
                             ? LightmapCompression.NormalQuality : LightmapCompression.None;
                     else if (int.TryParse(strVal, out var intVal))
                         settings.lightmapCompression = (LightmapCompression)intVal;
+                    else
+                        return false;
                     return true;
 
                 case "ao":

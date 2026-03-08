@@ -596,7 +596,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             };
             screenshotButton.AddToClassList("tool-action-button");
             screenshotButton.style.marginTop = 4;
-            screenshotButton.tooltip = "Capture a screenshot to Assets/Screenshots via manage_scene.";
+            screenshotButton.tooltip = "Capture a screenshot to Assets/Screenshots via manage_camera.";
 
             var multiviewButton = new Button(OnManageSceneMultiviewClicked)
             {

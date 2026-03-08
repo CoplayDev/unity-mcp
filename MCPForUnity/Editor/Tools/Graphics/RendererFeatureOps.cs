@@ -370,6 +370,17 @@ namespace MCPForUnity.Editor.Tools.Graphics
                 for (int i = 0; i < newOrder.Count; i++)
                     rendererFeaturesPropSo.GetArrayElementAtIndex(i).objectReferenceValue = current[newOrder[i]];
 
+                // Also reorder the feature map to keep it in sync
+                var mapProp = so.FindProperty("m_RendererFeatureMap");
+                if (mapProp != null && mapProp.arraySize == featuresList.Count)
+                {
+                    var currentMap = new long[featuresList.Count];
+                    for (int i = 0; i < featuresList.Count; i++)
+                        currentMap[i] = mapProp.GetArrayElementAtIndex(i).longValue;
+                    for (int i = 0; i < newOrder.Count; i++)
+                        mapProp.GetArrayElementAtIndex(i).longValue = currentMap[newOrder[i]];
+                }
+
                 so.ApplyModifiedProperties();
             }
 

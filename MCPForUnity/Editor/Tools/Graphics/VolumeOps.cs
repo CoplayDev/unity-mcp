@@ -446,7 +446,11 @@ namespace MCPForUnity.Editor.Tools.Graphics
             if (!GraphicsHelpers.HasVolumeSystem)
                 return new { success = true, message = "Volume system not available.", data = new { volumes = new List<object>() } };
 
+#if UNITY_2022_2_OR_NEWER
             var allVolumes = UnityEngine.Object.FindObjectsByType(GraphicsHelpers.VolumeType, FindObjectsSortMode.None);
+#else
+            var allVolumes = UnityEngine.Object.FindObjectsOfType(GraphicsHelpers.VolumeType);
+#endif
             var volumeList = new List<object>();
 
             foreach (Component vol in allVolumes)
@@ -548,12 +552,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
             var param = field.GetValue(component);
             if (param == null) return false;
 
-            // Set overrideState = true
-            var overrideProp = param.GetType().GetProperty("overrideState");
-            if (overrideProp != null)
-                overrideProp.SetValue(param, true);
-
-            // Set value with type conversion
+            // Set value with type conversion, then enable override on success
             var valueProp = param.GetType().GetProperty("value");
             if (valueProp == null) return false;
 
@@ -561,6 +560,11 @@ namespace MCPForUnity.Editor.Tools.Graphics
             {
                 object converted = ConvertToParameterType(value, valueProp.PropertyType);
                 valueProp.SetValue(param, converted);
+
+                var overrideProp = param.GetType().GetProperty("overrideState");
+                if (overrideProp != null)
+                    overrideProp.SetValue(param, true);
+
                 return true;
             }
             catch (Exception ex)

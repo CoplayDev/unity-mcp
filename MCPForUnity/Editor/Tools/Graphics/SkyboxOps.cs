@@ -336,7 +336,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
 
             GameObject go = null;
             if (int.TryParse(target, out int instanceId))
-                go = EditorUtility.EntityIdToObject(instanceId) as GameObject;
+                go = GameObjectLookup.ResolveInstanceID(instanceId) as GameObject;
             if (go == null)
                 go = GameObject.Find(target);
             if (go == null)

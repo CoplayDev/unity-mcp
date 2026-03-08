@@ -234,6 +234,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
             }
 
             EditorUtility.SetDirty(pipelineAsset);
+            AssetDatabase.SaveAssets();
 
             var msg = $"Updated {changed.Count} pipeline setting(s)";
             if (failed.Count > 0)
