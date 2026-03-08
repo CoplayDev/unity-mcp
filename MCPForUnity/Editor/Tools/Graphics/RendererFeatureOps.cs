@@ -417,11 +417,11 @@ namespace MCPForUnity.Editor.Tools.Graphics
                 using (var so = new SerializedObject(pipelineAsset))
                 {
                     var renderersProp = so.FindProperty("m_RendererDataList");
-                    if (renderersProp != null && rendererIndex < renderersProp.arraySize)
-                    {
-                        var element = renderersProp.GetArrayElementAtIndex(rendererIndex);
-                        return element.objectReferenceValue;
-                    }
+                    if (renderersProp == null || rendererIndex >= renderersProp.arraySize)
+                        return null;
+
+                    var element = renderersProp.GetArrayElementAtIndex(rendererIndex);
+                    return element.objectReferenceValue;
                 }
             }
 

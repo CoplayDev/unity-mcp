@@ -23,6 +23,14 @@ namespace MCPForUnity.Editor.Tools.Graphics
             float weight = p.GetFloat("weight") ?? 1.0f;
             float priority = p.GetFloat("priority") ?? 0f;
             string profilePath = p.Get("profile_path");
+            if (!string.IsNullOrEmpty(profilePath))
+            {
+                if (!profilePath.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) &&
+                    !profilePath.StartsWith("Assets\\", StringComparison.OrdinalIgnoreCase))
+                    profilePath = "Assets/" + profilePath;
+                if (!profilePath.EndsWith(".asset", StringComparison.OrdinalIgnoreCase))
+                    profilePath += ".asset";
+            }
 
             var go = new GameObject(name);
             Undo.RegisterCreatedObjectUndo(go, $"Create Volume '{name}'");
