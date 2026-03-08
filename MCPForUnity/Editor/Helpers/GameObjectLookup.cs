@@ -66,15 +66,10 @@ namespace MCPForUnity.Editor.Helpers
 
         /// <summary>
         /// Resolves an instance ID to a UnityEngine.Object.
-        /// Uses EntityIdToObject on Unity 6.3+ where InstanceIDToObject is obsolete.
         /// </summary>
         public static UnityEngine.Object ResolveInstanceID(int instanceId)
         {
-#if UNITY_6000_3_OR_NEWER
-            return EditorUtility.EntityIdToObject(instanceId);
-#else
             return EditorUtility.InstanceIDToObject(instanceId);
-#endif
         }
 
         /// <summary>

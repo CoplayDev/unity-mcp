@@ -128,12 +128,15 @@ namespace MCPForUnity.Editor.Tools.Graphics
                 }
 
                 // Also update the map (m_RendererFeatureMap) if it exists
+                // Map stores persistent local file IDs, not transient instance IDs
                 var mapProp = so.FindProperty("m_RendererFeatureMap");
                 if (mapProp != null)
                 {
+                    long localId = 0;
+                    AssetDatabase.TryGetGUIDAndLocalFileIdentifier(feature, out _, out localId);
                     mapProp.arraySize++;
                     var mapElement = mapProp.GetArrayElementAtIndex(mapProp.arraySize - 1);
-                    mapElement.longValue = feature.GetInstanceID();
+                    mapElement.longValue = localId;
                     so.ApplyModifiedProperties();
                 }
             }
