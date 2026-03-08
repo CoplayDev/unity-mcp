@@ -419,3 +419,127 @@ def feature_toggle(index, name, active):
         params["name"] = name
     result = run_command("manage_graphics", params, config)
     click.echo(format_output(result, config.format))
+
+
+# --- Skybox / Environment commands ---
+
+@graphics.command("skybox-info")
+@handle_unity_errors
+def skybox_info():
+    """Get all environment settings (skybox, ambient, fog, reflection, sun)."""
+    config = get_config()
+    result = run_command("manage_graphics", {"action": "skybox_get"}, config)
+    click.echo(format_output(result, config.format))
+
+
+@graphics.command("skybox-set-material")
+@click.option("--material", "-m", required=True, help="Asset path to skybox material.")
+@handle_unity_errors
+def skybox_set_material(material):
+    """Set the skybox material by asset path."""
+    config = get_config()
+    params = {"action": "skybox_set_material", "material": material}
+    result = run_command("manage_graphics", params, config)
+    click.echo(format_output(result, config.format))
+
+
+@graphics.command("skybox-set-properties")
+@click.option("--prop", "-p", multiple=True, type=(str, str), required=True,
+              help="Material property key-value pair (e.g., -p _Exposure 1.3).")
+@handle_unity_errors
+def skybox_set_properties(prop):
+    """Set properties on the current skybox material."""
+    config = get_config()
+    properties = {key: _coerce_cli_value(val) for key, val in prop}
+    params = {"action": "skybox_set_properties", "properties": properties}
+    result = run_command("manage_graphics", params, config)
+    click.echo(format_output(result, config.format))
+
+
+@graphics.command("skybox-set-ambient")
+@click.option("--mode", "-m", default=None, help="Ambient mode: Skybox, Trilight, Flat, Custom.")
+@click.option("--intensity", "-i", type=float, default=None, help="Ambient intensity.")
+@click.option("--color", "-c", default=None, help="Sky/ambient color as 'r,g,b[,a]'.")
+@click.option("--equator-color", default=None, help="Equator color as 'r,g,b[,a]' (Trilight mode).")
+@click.option("--ground-color", default=None, help="Ground color as 'r,g,b[,a]' (Trilight mode).")
+@handle_unity_errors
+def skybox_set_ambient(mode, intensity, color, equator_color, ground_color):
+    """Set ambient lighting mode and colors."""
+    config = get_config()
+    params = {"action": "skybox_set_ambient"}
+    if mode:
+        params["ambient_mode"] = mode
+    if intensity is not None:
+        params["intensity"] = intensity
+    if color:
+        params["color"] = [float(x) for x in color.split(",")]
+    if equator_color:
+        params["equator_color"] = [float(x) for x in equator_color.split(",")]
+    if ground_color:
+        params["ground_color"] = [float(x) for x in ground_color.split(",")]
+    result = run_command("manage_graphics", params, config)
+    click.echo(format_output(result, config.format))
+
+
+@graphics.command("skybox-set-fog")
+@click.option("--enable/--disable", "fog_enabled", default=None, help="Enable or disable fog.")
+@click.option("--mode", "-m", default=None, help="Fog mode: Linear, Exponential, ExponentialSquared.")
+@click.option("--color", "-c", default=None, help="Fog color as 'r,g,b[,a]'.")
+@click.option("--density", "-d", type=float, default=None, help="Fog density.")
+@click.option("--start", type=float, default=None, help="Fog start distance (Linear).")
+@click.option("--end", type=float, default=None, help="Fog end distance (Linear).")
+@handle_unity_errors
+def skybox_set_fog(fog_enabled, mode, color, density, start, end):
+    """Enable and configure fog."""
+    config = get_config()
+    params = {"action": "skybox_set_fog"}
+    if fog_enabled is not None:
+        params["fog_enabled"] = fog_enabled
+    if mode:
+        params["fog_mode"] = mode
+    if color:
+        params["fog_color"] = [float(x) for x in color.split(",")]
+    if density is not None:
+        params["fog_density"] = density
+    if start is not None:
+        params["fog_start"] = start
+    if end is not None:
+        params["fog_end"] = end
+    result = run_command("manage_graphics", params, config)
+    click.echo(format_output(result, config.format))
+
+
+@graphics.command("skybox-set-reflection")
+@click.option("--intensity", "-i", type=float, default=None, help="Reflection intensity.")
+@click.option("--bounces", "-b", type=int, default=None, help="Reflection bounces.")
+@click.option("--mode", "-m", default=None, help="Reflection mode: Skybox, Custom.")
+@click.option("--resolution", "-r", type=int, default=None, help="Default reflection resolution.")
+@click.option("--cubemap", default=None, help="Custom cubemap asset path.")
+@handle_unity_errors
+def skybox_set_reflection(intensity, bounces, mode, resolution, cubemap):
+    """Configure environment reflection settings."""
+    config = get_config()
+    params = {"action": "skybox_set_reflection"}
+    if intensity is not None:
+        params["intensity"] = intensity
+    if bounces is not None:
+        params["bounces"] = bounces
+    if mode:
+        params["reflection_mode"] = mode
+    if resolution is not None:
+        params["resolution"] = resolution
+    if cubemap:
+        params["path"] = cubemap
+    result = run_command("manage_graphics", params, config)
+    click.echo(format_output(result, config.format))
+
+
+@graphics.command("skybox-set-sun")
+@click.option("--target", "-t", required=True, help="Light GameObject name or instance ID.")
+@handle_unity_errors
+def skybox_set_sun(target):
+    """Set the sun source light for the environment."""
+    config = get_config()
+    params = {"action": "skybox_set_sun", "target": target}
+    result = run_command("manage_graphics", params, config)
+    click.echo(format_output(result, config.format))

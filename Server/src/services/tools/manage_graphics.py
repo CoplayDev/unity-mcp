@@ -35,9 +35,15 @@ FEATURE_ACTIONS = [
     "feature_configure", "feature_toggle", "feature_reorder",
 ]
 
+SKYBOX_ACTIONS = [
+    "skybox_get", "skybox_set_material", "skybox_set_properties",
+    "skybox_set_ambient", "skybox_set_fog", "skybox_set_reflection",
+    "skybox_set_sun",
+]
+
 ALL_ACTIONS = (
     ["ping"] + VOLUME_ACTIONS + BAKE_ACTIONS + STATS_ACTIONS
-    + PIPELINE_ACTIONS + FEATURE_ACTIONS
+    + PIPELINE_ACTIONS + FEATURE_ACTIONS + SKYBOX_ACTIONS
 )
 
 
@@ -60,7 +66,15 @@ ALL_ACTIONS = (
         "PIPELINE:\n"
         "- pipeline_get_info, pipeline_set_quality, pipeline_get_settings, pipeline_set_settings\n\n"
         "FEATURES (URP only):\n"
-        "- feature_list, feature_add, feature_remove, feature_configure, feature_toggle, feature_reorder"
+        "- feature_list, feature_add, feature_remove, feature_configure, feature_toggle, feature_reorder\n\n"
+        "SKYBOX / ENVIRONMENT:\n"
+        "- skybox_get: Read all environment settings (material, ambient, fog, reflection, sun)\n"
+        "- skybox_set_material: Set skybox material by asset path\n"
+        "- skybox_set_properties: Set properties on current skybox material (tint, exposure, rotation)\n"
+        "- skybox_set_ambient: Set ambient lighting mode and colors\n"
+        "- skybox_set_fog: Enable/configure fog (mode, color, density, start/end distance)\n"
+        "- skybox_set_reflection: Set environment reflection settings\n"
+        "- skybox_set_sun: Set the sun source light"
     ),
     annotations=ToolAnnotations(title="Manage Graphics", destructiveHint=True),
 )
@@ -97,6 +111,20 @@ async def manage_graphics(
     # feature_add
     feature_type: Annotated[Optional[str], "Renderer feature type name."] = None,
     material: Annotated[Optional[str], "Material asset path for feature."] = None,
+    # skybox / environment
+    color: Annotated[Optional[list[float]], "Color [r,g,b,a] for ambient/fog."] = None,
+    intensity: Annotated[Optional[float], "Intensity value (ambient/reflection)."] = None,
+    ambient_mode: Annotated[Optional[str], "Ambient mode: Skybox, Trilight, Flat, Custom."] = None,
+    equator_color: Annotated[Optional[list[float]], "Equator color [r,g,b,a] (Trilight mode)."] = None,
+    ground_color: Annotated[Optional[list[float]], "Ground color [r,g,b,a] (Trilight mode)."] = None,
+    fog_enabled: Annotated[Optional[bool], "Enable or disable fog."] = None,
+    fog_mode: Annotated[Optional[str], "Fog mode: Linear, Exponential, ExponentialSquared."] = None,
+    fog_color: Annotated[Optional[list[float]], "Fog color [r,g,b,a]."] = None,
+    fog_density: Annotated[Optional[float], "Fog density (Exponential modes)."] = None,
+    fog_start: Annotated[Optional[float], "Fog start distance (Linear mode)."] = None,
+    fog_end: Annotated[Optional[float], "Fog end distance (Linear mode)."] = None,
+    bounces: Annotated[Optional[int], "Reflection bounces."] = None,
+    reflection_mode: Annotated[Optional[str], "Default reflection mode: Skybox, Custom."] = None,
 ) -> dict[str, Any]:
     action_lower = action.lower()
     if action_lower not in ALL_ACTIONS:
@@ -120,7 +148,13 @@ async def manage_graphics(
         "mode": mode, "hdr": hdr, "box_projection": box_projection,
         "positions": positions, "index": index, "active": active,
         "order": order, "async": async_bake, "type": feature_type,
-        "material": material,
+        "material": material, "color": color, "intensity": intensity,
+        "ambient_mode": ambient_mode, "equator_color": equator_color,
+        "ground_color": ground_color, "fog_enabled": fog_enabled,
+        "fog_mode": fog_mode, "fog_color": fog_color,
+        "fog_density": fog_density, "fog_start": fog_start,
+        "fog_end": fog_end, "bounces": bounces,
+        "reflection_mode": reflection_mode,
     }
     for key, val in param_map.items():
         if val is not None:

@@ -134,6 +134,22 @@ namespace MCPForUnity.Editor.Tools.Graphics
                         };
                     }
 
+                    // --- Skybox / Environment actions (always available) ---
+                    case "skybox_get":
+                        return SkyboxOps.GetEnvironment(@params);
+                    case "skybox_set_material":
+                        return SkyboxOps.SetMaterial(@params);
+                    case "skybox_set_properties":
+                        return SkyboxOps.SetMaterialProperties(@params);
+                    case "skybox_set_ambient":
+                        return SkyboxOps.SetAmbient(@params);
+                    case "skybox_set_fog":
+                        return SkyboxOps.SetFog(@params);
+                    case "skybox_set_reflection":
+                        return SkyboxOps.SetReflection(@params);
+                    case "skybox_set_sun":
+                        return SkyboxOps.SetSun(@params);
+
                     default:
                         return new ErrorResponse(
                             $"Unknown action: '{action}'. Valid actions: ping, "
@@ -144,7 +160,9 @@ namespace MCPForUnity.Editor.Tools.Graphics
                             + "bake_create_reflection_probe, bake_set_probe_positions, "
                             + "stats_get, stats_list_counters, stats_set_scene_debug, stats_get_memory, "
                             + "pipeline_get_info, pipeline_set_quality, pipeline_get_settings, pipeline_set_settings, "
-                            + "feature_list, feature_add, feature_remove, feature_configure, feature_toggle, feature_reorder.");
+                            + "feature_list, feature_add, feature_remove, feature_configure, feature_toggle, feature_reorder, "
+                            + "skybox_get, skybox_set_material, skybox_set_properties, skybox_set_ambient, "
+                            + "skybox_set_fog, skybox_set_reflection, skybox_set_sun.");
                 }
             }
             catch (Exception ex)

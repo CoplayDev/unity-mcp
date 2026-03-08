@@ -14,6 +14,7 @@ from services.tools.manage_graphics import (
     STATS_ACTIONS,
     PIPELINE_ACTIONS,
     FEATURE_ACTIONS,
+    SKYBOX_ACTIONS,
 )
 
 
@@ -50,7 +51,7 @@ def mock_unity(monkeypatch):
 def test_all_actions_is_union_of_sub_lists():
     expected = set(
         ["ping"] + VOLUME_ACTIONS + BAKE_ACTIONS + STATS_ACTIONS
-        + PIPELINE_ACTIONS + FEATURE_ACTIONS
+        + PIPELINE_ACTIONS + FEATURE_ACTIONS + SKYBOX_ACTIONS
     )
     assert set(ALL_ACTIONS) == expected
 
@@ -60,7 +61,7 @@ def test_no_duplicate_actions():
 
 
 def test_all_actions_count():
-    assert len(ALL_ACTIONS) == 33
+    assert len(ALL_ACTIONS) == 40
 
 
 def test_volume_actions_count():
@@ -736,6 +737,213 @@ def test_every_action_forwards_to_unity(mock_unity, action_name):
     assert result["success"] is True
     assert mock_unity["tool_name"] == "manage_graphics"
     assert mock_unity["params"]["action"] == action_name
+
+
+# ---------------------------------------------------------------------------
+# Tool registration
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Skybox actions
+# ---------------------------------------------------------------------------
+
+def test_skybox_actions_count():
+    assert len(SKYBOX_ACTIONS) == 7
+
+
+def test_skybox_get_sends_action(mock_unity):
+    result = asyncio.run(
+        manage_graphics(SimpleNamespace(), action="skybox_get")
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["action"] == "skybox_get"
+
+
+def test_skybox_set_material_sends_material(mock_unity):
+    result = asyncio.run(
+        manage_graphics(
+            SimpleNamespace(),
+            action="skybox_set_material",
+            material="Assets/Materials/MySkybox.mat",
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["action"] == "skybox_set_material"
+    assert mock_unity["params"]["material"] == "Assets/Materials/MySkybox.mat"
+
+
+def test_skybox_set_properties_sends_properties(mock_unity):
+    result = asyncio.run(
+        manage_graphics(
+            SimpleNamespace(),
+            action="skybox_set_properties",
+            properties={"_Exposure": 1.3, "_Rotation": 90},
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["action"] == "skybox_set_properties"
+    assert mock_unity["params"]["properties"]["_Exposure"] == 1.3
+    assert mock_unity["params"]["properties"]["_Rotation"] == 90
+
+
+def test_skybox_set_ambient_with_mode_and_colors(mock_unity):
+    result = asyncio.run(
+        manage_graphics(
+            SimpleNamespace(),
+            action="skybox_set_ambient",
+            ambient_mode="Trilight",
+            color=[0.5, 0.6, 0.8, 1.0],
+            equator_color=[0.4, 0.4, 0.5, 1.0],
+            ground_color=[0.2, 0.15, 0.1, 1.0],
+            intensity=1.2,
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["action"] == "skybox_set_ambient"
+    assert mock_unity["params"]["ambient_mode"] == "Trilight"
+    assert mock_unity["params"]["color"] == [0.5, 0.6, 0.8, 1.0]
+    assert mock_unity["params"]["equator_color"] == [0.4, 0.4, 0.5, 1.0]
+    assert mock_unity["params"]["ground_color"] == [0.2, 0.15, 0.1, 1.0]
+    assert mock_unity["params"]["intensity"] == 1.2
+
+
+def test_skybox_set_ambient_minimal(mock_unity):
+    result = asyncio.run(
+        manage_graphics(SimpleNamespace(), action="skybox_set_ambient")
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["action"] == "skybox_set_ambient"
+    assert "ambient_mode" not in mock_unity["params"]
+    assert "color" not in mock_unity["params"]
+
+
+def test_skybox_set_fog_all_params(mock_unity):
+    result = asyncio.run(
+        manage_graphics(
+            SimpleNamespace(),
+            action="skybox_set_fog",
+            fog_enabled=True,
+            fog_mode="Linear",
+            fog_color=[0.5, 0.5, 0.6, 1.0],
+            fog_density=0.02,
+            fog_start=10.0,
+            fog_end=100.0,
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["action"] == "skybox_set_fog"
+    assert mock_unity["params"]["fog_enabled"] is True
+    assert mock_unity["params"]["fog_mode"] == "Linear"
+    assert mock_unity["params"]["fog_color"] == [0.5, 0.5, 0.6, 1.0]
+    assert mock_unity["params"]["fog_density"] == 0.02
+    assert mock_unity["params"]["fog_start"] == 10.0
+    assert mock_unity["params"]["fog_end"] == 100.0
+
+
+def test_skybox_set_fog_disable(mock_unity):
+    result = asyncio.run(
+        manage_graphics(
+            SimpleNamespace(),
+            action="skybox_set_fog",
+            fog_enabled=False,
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["fog_enabled"] is False
+
+
+def test_skybox_set_reflection_all_params(mock_unity):
+    result = asyncio.run(
+        manage_graphics(
+            SimpleNamespace(),
+            action="skybox_set_reflection",
+            intensity=0.8,
+            bounces=3,
+            reflection_mode="Custom",
+            resolution=512,
+            path="Assets/Cubemaps/EnvCubemap.exr",
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["action"] == "skybox_set_reflection"
+    assert mock_unity["params"]["intensity"] == 0.8
+    assert mock_unity["params"]["bounces"] == 3
+    assert mock_unity["params"]["reflection_mode"] == "Custom"
+    assert mock_unity["params"]["resolution"] == 512
+    assert mock_unity["params"]["path"] == "Assets/Cubemaps/EnvCubemap.exr"
+
+
+def test_skybox_set_reflection_minimal(mock_unity):
+    result = asyncio.run(
+        manage_graphics(SimpleNamespace(), action="skybox_set_reflection")
+    )
+    assert result["success"] is True
+    assert mock_unity["params"] == {"action": "skybox_set_reflection"}
+
+
+def test_skybox_set_sun_sends_target(mock_unity):
+    result = asyncio.run(
+        manage_graphics(
+            SimpleNamespace(),
+            action="skybox_set_sun",
+            target="Directional Light",
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["action"] == "skybox_set_sun"
+    assert mock_unity["params"]["target"] == "Directional Light"
+
+
+def test_skybox_set_ambient_mode_maps_correctly(mock_unity):
+    """ambient_mode param passes through as ambient_mode key."""
+    result = asyncio.run(
+        manage_graphics(
+            SimpleNamespace(),
+            action="skybox_set_ambient",
+            ambient_mode="Flat",
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["ambient_mode"] == "Flat"
+
+
+def test_skybox_fog_mode_maps_correctly(mock_unity):
+    """fog_mode param passes through as fog_mode key."""
+    result = asyncio.run(
+        manage_graphics(
+            SimpleNamespace(),
+            action="skybox_set_fog",
+            fog_mode="ExponentialSquared",
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["fog_mode"] == "ExponentialSquared"
+
+
+def test_skybox_reflection_mode_maps_correctly(mock_unity):
+    """reflection_mode param passes through as reflection_mode key."""
+    result = asyncio.run(
+        manage_graphics(
+            SimpleNamespace(),
+            action="skybox_set_reflection",
+            reflection_mode="Skybox",
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["reflection_mode"] == "Skybox"
+
+
+def test_skybox_bounces_maps_correctly(mock_unity):
+    """bounces param passes through as bounces key."""
+    result = asyncio.run(
+        manage_graphics(
+            SimpleNamespace(),
+            action="skybox_set_reflection",
+            bounces=5,
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["bounces"] == 5
 
 
 # ---------------------------------------------------------------------------
