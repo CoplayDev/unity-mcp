@@ -1058,7 +1058,7 @@ namespace MCPForUnity.Editor.Tools
                         try
                         {
                             rt = RenderTexture.GetTemporary(preview.width, preview.height);
-                            Graphics.Blit(preview, rt);
+                            UnityEngine.Graphics.Blit(preview, rt);
                             RenderTexture.active = rt;
                             readablePreview = new Texture2D(preview.width, preview.height, TextureFormat.RGB24, false);
                             readablePreview.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);

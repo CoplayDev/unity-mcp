@@ -101,7 +101,7 @@ unity-mcp gameobject create "MyCube" --primitive Cube
 unity-mcp gameobject modify "MyCube" --position 0 2 0
 
 # Take a screenshot
-unity-mcp scene screenshot
+unity-mcp camera screenshot
 
 # Enter play mode
 unity-mcp editor play
@@ -367,9 +367,9 @@ unity-mcp scene load "Assets/Scenes/MyScene.unity"
 # Save current scene
 unity-mcp scene save
 
-# Take screenshot
-unity-mcp scene screenshot
-unity-mcp scene screenshot --filename "my_screenshot" --supersize 2
+# Take screenshot (use camera command)
+unity-mcp camera screenshot
+unity-mcp camera screenshot --file-name "my_screenshot" --super-size 2
 ```
 
 ### GameObject Commands

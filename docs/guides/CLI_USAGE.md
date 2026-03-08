@@ -68,31 +68,13 @@ unity-mcp scene active
 unity-mcp scene load "Assets/Scenes/Main.unity"
 unity-mcp scene save
 
-# Take screenshot (saves to Assets/Screenshots/)
-unity-mcp scene screenshot
-unity-mcp scene screenshot --filename "level_preview"
-unity-mcp scene screenshot --supersize 2
-unity-mcp scene screenshot --camera "SecondCamera" --include-image
-
-# Positioned screenshot (single shot from a custom viewpoint)
-unity-mcp scene screenshot --view-position "0,10,-10" --look-at "0,0,0"
-unity-mcp scene screenshot --look-at "Player" --max-resolution 512
-```
-
-#### Batch Screenshots (Contact Sheet)
-
-Batch modes output a single composite contact-sheet PNG — a labeled grid of all captured angles.
-
-```bash
-# Surround: 6 fixed angles (front/back/left/right/top/bird_eye)
-unity-mcp scene screenshot --batch surround --max-resolution 256
-unity-mcp scene screenshot --batch surround --look-at "Player"
-
-# Orbit: configurable multi-angle grid around a target
-unity-mcp scene screenshot --batch orbit --look-at "Player" --orbit-angles 8
-unity-mcp scene screenshot --batch orbit --look-at "Player" --orbit-angles 10 --orbit-elevations "[0,30,-15]"
-unity-mcp scene screenshot --batch orbit --look-at "Main Camera" --orbit-angles 4 --max-resolution 512
-unity-mcp scene screenshot --batch orbit --look-at "0,1,0" --orbit-distance 10 --output-dir ./my_shots
+# Screenshots (use camera command)
+unity-mcp camera screenshot
+unity-mcp camera screenshot --file-name "level_preview"
+unity-mcp camera screenshot --camera-ref "SecondCamera" --include-image
+unity-mcp camera screenshot --batch surround --max-resolution 256
+unity-mcp camera screenshot --batch orbit --look-at "Player"
+unity-mcp camera screenshot-multiview --look-at "Player" --max-resolution 480
 ```
 
 ### GameObject Operations
@@ -396,7 +378,7 @@ unity-mcp raw read_console '{"count": 20}'
 | Group | Subcommands |
 |-------|-------------|
 | `instance` | `list`, `set`, `current` |
-| `scene` | `hierarchy`, `active`, `load`, `save`, `create`, `screenshot`, `build-settings` |
+| `scene` | `hierarchy`, `active`, `load`, `save`, `create`, `build-settings` |
 | `code` | `read`, `search` |
 | `gameobject` | `find`, `create`, `modify`, `delete`, `duplicate`, `move` |
 | `component` | `add`, `remove`, `set`, `modify` |

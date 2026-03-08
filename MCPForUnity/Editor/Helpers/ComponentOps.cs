@@ -564,7 +564,7 @@ namespace MCPForUnity.Editor.Helpers
             if (value.Type == JTokenType.Integer)
             {
                 int id = value.Value<int>();
-                var resolved = EditorUtility.InstanceIDToObject(id);
+                var resolved = GameObjectLookup.ResolveInstanceID(id);
                 if (resolved == null)
                 {
                     error = $"No object found with instanceID {id}.";
@@ -580,7 +580,7 @@ namespace MCPForUnity.Editor.Helpers
                 if (idToken != null)
                 {
                     int id = ParamCoercion.CoerceInt(idToken, 0);
-                    var resolved = EditorUtility.InstanceIDToObject(id);
+                    var resolved = GameObjectLookup.ResolveInstanceID(id);
                     if (resolved == null)
                     {
                         error = $"No object found with instanceID {id}.";

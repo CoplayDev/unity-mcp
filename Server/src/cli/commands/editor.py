@@ -208,6 +208,44 @@ def set_tool(tool_name: str):
         print_success(f"Set active tool: {tool_name}")
 
 
+@editor.command("deploy")
+@handle_unity_errors
+def deploy():
+    """Deploy MCPForUnity package from configured source.
+
+    Copies the configured MCPForUnity source folder into the project's
+    installed package location. The source path must be set in the
+    MCP for Unity Advanced Settings first. Triggers recompilation.
+
+    \b
+    Examples:
+        unity-mcp editor deploy
+    """
+    config = get_config()
+    result = run_command("manage_editor", {"action": "deploy_package"}, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success("Package deployed")
+
+
+@editor.command("restore")
+@handle_unity_errors
+def restore():
+    """Restore MCPForUnity package from last backup.
+
+    Reverts the last deployment by restoring from backup.
+
+    \b
+    Examples:
+        unity-mcp editor restore
+    """
+    config = get_config()
+    result = run_command("manage_editor", {"action": "restore_package"}, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success("Package restored from backup")
+
+
 @editor.command("menu")
 @click.argument("menu_path")
 @handle_unity_errors
