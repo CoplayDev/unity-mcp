@@ -81,7 +81,7 @@ openupm add com.coplaydev.unity-mcp
 2. Click **Start Server** (launches HTTP server on `localhost:8080`)
 3. Select your MCP Client from the dropdown and click **Configure**
 4. Look for 🟢 "Connected ✓"
-5. **Connect your client:** Some clients (Cursor, Windsurf, Antigravity, OpenClaw) require enabling an MCP toggle or plugin in settings. OpenClaw also needs the `openclaw-mcp-bridge` plugin enabled. Others (Claude Desktop, Claude Code) auto-connect after configuration.
+5. **Connect your client:** Some clients (Cursor, Windsurf, Antigravity, OpenClaw) require enabling an MCP toggle or plugin in settings. OpenClaw also needs the `openclaw-mcp-bridge` plugin enabled and follows the currently selected MCP for Unity transport (`HTTP` or `stdio`). Others (Claude Desktop, Claude Code) auto-connect after configuration.
 
 **That's it!** Try a prompt like: *"Create a red, blue and yellow cube"* or *"Build a simple player controller"*
 

@@ -17,7 +17,9 @@ namespace MCPForUnity.Editor.Clients.Configurators
     {
         private const string PluginName = "openclaw-mcp-bridge";
         private const string ServerName = "unityMCP";
-        private const string TransportName = "http";
+        private const string HttpTransportName = "http";
+        private const string StdioTransportName = "stdio";
+        private const string StdioUrl = "stdio://local";
 
         public OpenClawConfigurator() : base(new McpClient
         {
@@ -65,7 +67,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
                 if (matches)
                 {
                     client.SetStatus(McpStatus.Configured);
-                    client.configuredTransport = ResolveTransport(unityServer["url"]?.ToString());
+                    client.configuredTransport = ResolveTransport(unityServer);
                     return client.status;
                 }
 
@@ -90,12 +92,6 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
         public override void Configure()
         {
-            if (!EditorConfigurationCache.Instance.UseHttpTransport)
-            {
-                throw new InvalidOperationException(
-                    "OpenClaw uses HTTP MCP via openclaw-mcp-bridge. Switch transport to HTTP in MCP for Unity settings first.");
-            }
-
             string path = GetConfigPath();
             McpConfigurationHelper.EnsureConfigDirectoryExists(path);
 
@@ -124,12 +120,6 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
         public override string GetManualSnippet()
         {
-            if (!EditorConfigurationCache.Instance.UseHttpTransport)
-            {
-                return "# OpenClaw integration requires HTTP transport.\n"
-                    + "# Switch to HTTP in MCP for Unity settings, then configure OpenClaw again.";
-            }
-
             JObject snippet = new JObject
             {
                 ["plugins"] = new JObject
@@ -159,8 +149,9 @@ namespace MCPForUnity.Editor.Clients.Configurators
             "Install OpenClaw",
             "Install the bridge plugin: npm install -g openclaw-mcp-bridge (or pnpm add -g openclaw-mcp-bridge)",
             "In MCP for Unity, choose OpenClaw and click Configure",
+            "OpenClaw uses the currently selected MCP for Unity transport (HTTP or stdio)",
             "OpenClaw exposes a proxy tool such as unityMCP__call for Unity MCP access",
-            "Restart OpenClaw"
+            "Restart OpenClaw if the plugin does not hot-reload the new config"
         };
 
         private JObject LoadConfig(string path)
@@ -214,14 +205,21 @@ namespace MCPForUnity.Editor.Clients.Configurators
         {
             JObject servers = NormalizeServers(serversToken);
             JObject entry = servers[ServerName] as JObject ?? new JObject();
+            JObject desiredEntry = BuildUnityServerEntry();
 
             entry.Remove("name");
             entry.Remove("prefix");
             entry.Remove("healthCheck");
-            entry["enabled"] = true;
-            entry["url"] = HttpEndpointUtility.GetMcpRpcUrl();
-            entry["transport"] = TransportName;
-            entry["toolPrefix"] = ServerName;
+            entry.Remove("command");
+            entry.Remove("args");
+            entry.Remove("env");
+            entry.Remove("connectTimeoutMs");
+
+            foreach (var property in desiredEntry.Properties())
+            {
+                entry[property.Name] = property.Value.DeepClone();
+            }
+
             servers[ServerName] = entry;
 
             return servers;
@@ -261,11 +259,46 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
         private static JObject BuildUnityServerEntry()
         {
+            ConfiguredTransport transport = HttpEndpointUtility.GetCurrentServerTransport();
+            if (transport == ConfiguredTransport.Stdio)
+            {
+                var (uvxPath, _, packageName) = AssetPathUtility.GetUvxCommandParts();
+                if (string.IsNullOrWhiteSpace(uvxPath))
+                {
+                    throw new InvalidOperationException("uvx not found. Install uv/uvx or set the override in Advanced Settings.");
+                }
+
+                var args = new JArray();
+                foreach (string value in AssetPathUtility.GetUvxDevFlagsList())
+                {
+                    args.Add(value);
+                }
+                foreach (string value in AssetPathUtility.GetBetaServerFromArgsList())
+                {
+                    args.Add(value);
+                }
+                args.Add(packageName);
+                args.Add("--transport");
+                args.Add("stdio");
+
+                return new JObject
+                {
+                    ["enabled"] = true,
+                    ["url"] = StdioUrl,
+                    ["transport"] = StdioTransportName,
+                    ["command"] = uvxPath,
+                    ["args"] = args,
+                    ["toolPrefix"] = ServerName,
+                    ["requestTimeoutMs"] = 60000,
+                    ["connectTimeoutMs"] = 15000
+                };
+            }
+
             return new JObject
             {
                 ["enabled"] = true,
                 ["url"] = HttpEndpointUtility.GetMcpRpcUrl(),
-                ["transport"] = TransportName,
+                ["transport"] = HttpTransportName,
                 ["toolPrefix"] = ServerName,
                 ["requestTimeoutMs"] = 30000
             };
@@ -278,19 +311,31 @@ namespace MCPForUnity.Editor.Clients.Configurators
                 return false;
             }
 
-            string configuredUrl = server["url"]?.ToString();
-            if (string.IsNullOrWhiteSpace(configuredUrl) ||
-                (!UrlsEqual(configuredUrl, HttpEndpointUtility.GetLocalMcpRpcUrl()) &&
-                 !UrlsEqual(configuredUrl, HttpEndpointUtility.GetRemoteMcpRpcUrl())))
+            ConfiguredTransport expectedTransport = HttpEndpointUtility.GetCurrentServerTransport();
+            ConfiguredTransport configuredTransport = ResolveTransport(server);
+            if (configuredTransport != expectedTransport)
             {
                 return false;
             }
 
-            string configuredTransport = server["transport"]?.ToString();
-            if (!string.IsNullOrWhiteSpace(configuredTransport) &&
-                !string.Equals(configuredTransport, TransportName, StringComparison.OrdinalIgnoreCase))
+            if (configuredTransport == ConfiguredTransport.Stdio)
             {
-                return false;
+                string configuredUrl = server["url"]?.ToString();
+                string command = server["command"]?.ToString();
+                if (!UrlsEqual(configuredUrl, StdioUrl) || string.IsNullOrWhiteSpace(command))
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                string configuredUrl = server["url"]?.ToString();
+                if (string.IsNullOrWhiteSpace(configuredUrl) ||
+                    (!UrlsEqual(configuredUrl, HttpEndpointUtility.GetLocalMcpRpcUrl()) &&
+                     !UrlsEqual(configuredUrl, HttpEndpointUtility.GetRemoteMcpRpcUrl())))
+                {
+                    return false;
+                }
             }
 
             string toolPrefix = server["toolPrefix"]?.ToString();
@@ -304,8 +349,17 @@ namespace MCPForUnity.Editor.Clients.Configurators
             return enabledToken == null || enabledToken.Type != JTokenType.Boolean || enabledToken.Value<bool>();
         }
 
-        private ConfiguredTransport ResolveTransport(string configuredUrl)
+        private ConfiguredTransport ResolveTransport(JObject server)
         {
+            string configuredTransport = server?["transport"]?.ToString();
+            string configuredUrl = server?["url"]?.ToString();
+
+            if (string.Equals(configuredTransport, StdioTransportName, StringComparison.OrdinalIgnoreCase) ||
+                UrlsEqual(configuredUrl, StdioUrl))
+            {
+                return ConfiguredTransport.Stdio;
+            }
+
             if (UrlsEqual(configuredUrl, HttpEndpointUtility.GetRemoteMcpRpcUrl()))
             {
                 return ConfiguredTransport.HttpRemote;
