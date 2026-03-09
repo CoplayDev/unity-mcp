@@ -154,10 +154,6 @@
       "description": "Manage Visual Effects, particle systems, and trails"
     },
     {
-      "name": "query_packages",
-      "description": "Query Unity package information: list, search, info, and status"
-    },
-    {
       "name": "read_console",
       "description": "Read Unity Editor console output (logs, warnings, errors)"
     },

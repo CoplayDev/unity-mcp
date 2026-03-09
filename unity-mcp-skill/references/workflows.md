@@ -1753,21 +1753,21 @@ manage_graphics(action="stats_get")
 
 ```python
 # 1. Check what's installed
-query_packages(action="ping")
-query_packages(action="list_packages")
+manage_packages(action="ping")
+manage_packages(action="list_packages")
 # Poll status until complete
-query_packages(action="status", job_id="<job_id>")
+manage_packages(action="status", job_id="<job_id>")
 
 # 2. Install the package
 manage_packages(action="add_package", package="com.unity.inputsystem")
 # Poll until domain reload completes
-query_packages(action="status", job_id="<job_id>")
+manage_packages(action="status", job_id="<job_id>")
 
 # 3. Verify no compilation errors
 read_console(types=["error"], count=10)
 
 # 4. Confirm it's installed
-query_packages(action="get_package_info", package="com.unity.inputsystem")
+manage_packages(action="get_package_info", package="com.unity.inputsystem")
 ```
 
 ### Add OpenUPM Registry and Install Package
@@ -1786,7 +1786,7 @@ manage_packages(action="resolve_packages")
 
 # 3. Install a package from OpenUPM
 manage_packages(action="add_package", package="com.cysharp.unitask")
-query_packages(action="status", job_id="<job_id>")
+manage_packages(action="status", job_id="<job_id>")
 ```
 
 ### Safe Package Removal
@@ -1798,7 +1798,7 @@ manage_packages(action="remove_package", package="com.unity.modules.ui")
 
 # 2. Force removal if you're sure
 manage_packages(action="remove_package", package="com.unity.modules.ui", force=True)
-query_packages(action="status", job_id="<job_id>")
+manage_packages(action="status", job_id="<job_id>")
 ```
 
 ### Install from Git URL (e.g., NuGetForUnity)
@@ -1809,7 +1809,7 @@ manage_packages(
     action="add_package",
     package="https://github.com/GlitchEnzo/NuGetForUnity.git?path=/src/NuGetForUnity"
 )
-query_packages(action="status", job_id="<job_id>")
+manage_packages(action="status", job_id="<job_id>")
 ```
 
 ---

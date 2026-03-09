@@ -1074,11 +1074,11 @@ manage_graphics(action="feature_reorder", order=[2, 0, 1])
 
 ## Package Tools
 
-### query_packages (read-only)
+### manage_packages
 
-Query Unity package information. Use this for all read operations — it has `readOnlyHint=true` so clients know it's safe.
+Manage Unity packages: query, install, remove, embed, and configure registries. Install/remove trigger domain reload.
 
-**Actions:**
+**Query Actions (read-only):**
 
 | Action | Parameters | Description |
 |--------|-----------|-------------|
@@ -1088,23 +1088,7 @@ Query Unity package information. Use this for all read operations — it has `re
 | `ping` | — | Check package manager availability, Unity version, package count |
 | `status` | `job_id` (optional) | Poll async job status; omit job_id for latest job |
 
-**Example — List installed packages:**
-```python
-query_packages(action="list_packages")
-# Returns job_id, then poll:
-query_packages(action="status", job_id="<job_id>")
-```
-
-**Example — Search for a package:**
-```python
-query_packages(action="search_packages", query="input system")
-```
-
-### manage_packages (destructive)
-
-Modify Unity packages. Has `destructiveHint=true` — install/remove trigger domain reload.
-
-**Actions:**
+**Mutating Actions:**
 
 | Action | Parameters | Description |
 |--------|-----------|-------------|
@@ -1121,11 +1105,23 @@ Modify Unity packages. Has `destructiveHint=true` — install/remove trigger dom
 - `file:` paths: allowed with warning
 - Invalid names (uppercase, missing dots): rejected
 
+**Example — List installed packages:**
+```python
+manage_packages(action="list_packages")
+# Returns job_id, then poll:
+manage_packages(action="status", job_id="<job_id>")
+```
+
+**Example — Search for a package:**
+```python
+manage_packages(action="search_packages", query="input system")
+```
+
 **Example — Install a package:**
 ```python
 manage_packages(action="add_package", package="com.unity.inputsystem")
 # Poll until complete:
-query_packages(action="status", job_id="<job_id>")
+manage_packages(action="status", job_id="<job_id>")
 ```
 
 **Example — Remove with dependency check:**

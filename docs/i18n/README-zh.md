@@ -20,7 +20,7 @@
 <details>
 <summary><strong>最近更新</strong></summary>
 
-* **v9.5.4 (beta)** — 新增 `manage_packages` 和 `query_packages` 工具：安装、移除、搜索和管理 Unity 包及作用域注册表。包含输入验证、移除时依赖检查和 git URL 警告。
+* **v9.5.4 (beta)** — 新增 `manage_packages` 工具：安装、移除、搜索和管理 Unity 包及作用域注册表。包含输入验证、移除时依赖检查和 git URL 警告。
 * **v9.5.3** — 新增 `manage_graphics` 工具（33个操作）：体积/后处理、光照烘焙、渲染统计、管线设置、URP渲染器特性。3个新资源：`volumes`、`rendering_stats`、`renderer_features`。
 * **v9.5.2** — 新增 `manage_camera` 工具，支持 Cinemachine（预设、优先级、噪声、混合、扩展）、`cameras` 资源、通过 SerializedProperty 修复优先级持久化问题。
 * **v9.4.8** — 新编辑器 UI、通过 `manage_tools` 实时切换工具、技能同步窗口、多视图截图、一键 Roslyn 安装器、支持 Qwen Code 与 Gemini CLI 客户端、通过 `manage_probuilder` 进行 ProBuilder 网格编辑。
@@ -94,7 +94,7 @@ openupm add com.coplaydev.unity-mcp
 * **可扩展** — 可与多种 MCP Client 配合使用
 
 ### 可用工具
-`apply_text_edits` • `batch_execute` • `create_script` • `debug_request_context` • `delete_script` • `execute_custom_tool` • `execute_menu_item` • `find_gameobjects` • `find_in_file` • `get_sha` • `get_test_job` • `manage_animation` • `manage_asset` • `manage_camera` • `manage_components` • `manage_editor` • `manage_gameobject` • `manage_graphics` • `manage_material` • `manage_packages` • `manage_prefabs` • `manage_probuilder` • `manage_scene` • `manage_script` • `manage_script_capabilities` • `manage_scriptable_object` • `manage_shader` • `manage_texture` • `manage_tools` • `manage_ui` • `manage_vfx` • `query_packages` • `read_console` • `refresh_unity` • `run_tests` • `script_apply_edits` • `set_active_instance` • `validate_script`
+`apply_text_edits` • `batch_execute` • `create_script` • `debug_request_context` • `delete_script` • `execute_custom_tool` • `execute_menu_item` • `find_gameobjects` • `find_in_file` • `get_sha` • `get_test_job` • `manage_animation` • `manage_asset` • `manage_camera` • `manage_components` • `manage_editor` • `manage_gameobject` • `manage_graphics` • `manage_material` • `manage_packages` • `manage_prefabs` • `manage_probuilder` • `manage_scene` • `manage_script` • `manage_script_capabilities` • `manage_scriptable_object` • `manage_shader` • `manage_texture` • `manage_tools` • `manage_ui` • `manage_vfx` •`read_console` • `refresh_unity` • `run_tests` • `script_apply_edits` • `set_active_instance` • `validate_script`
 
 ### 可用资源
 `cameras` • `custom_tools` • `renderer_features` • `rendering_stats` • `volumes` • `editor_active_tool` • `editor_prefab_stage` • `editor_selection` • `editor_state` • `editor_windows` • `gameobject` • `gameobject_api` • `gameobject_component` • `gameobject_components` • `get_tests` • `get_tests_for_mode` • `menu_items` • `prefab_api` • `prefab_hierarchy` • `prefab_info` • `project_info` • `project_layers` • `project_tags` • `tool_groups` • `unity_instances`
