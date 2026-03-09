@@ -84,9 +84,7 @@ namespace MCPForUnity.Editor.Tools
             if (!packageResult.IsSuccess)
                 return new ErrorResponse(packageResult.ErrorMessage);
 
-            string package = packageResult.Value;
-
-            var (isValid, warning) = ValidatePackageIdentifier(package);
+            var (isValid, warning, package) = ValidatePackageIdentifier(packageResult.Value);
             if (!isValid)
                 return new ErrorResponse(warning);
 
@@ -128,6 +126,12 @@ namespace MCPForUnity.Editor.Tools
             if (!force)
             {
                 var dependents = GetDependentPackages(package);
+                if (dependents == null)
+                {
+                    return new ErrorResponse(
+                        $"Cannot remove '{package}': failed to look up dependent packages. " +
+                        "Set force=true to remove anyway.");
+                }
                 if (dependents.Length > 0)
                 {
                     string depList = string.Join(", ", dependents);
@@ -186,13 +190,24 @@ namespace MCPForUnity.Editor.Tools
                     return new ErrorResponse($"No job found with ID '{jobId}'.");
             }
 
-            // If job is still running, check in-memory request
-            if (job.Status == PackageJobStatus.Running && PendingRequests.TryGetValue(job.JobId, out var req))
+            // If job is still running, check in-memory request or attempt recovery
+            if (job.Status == PackageJobStatus.Running)
             {
-                if (req.IsCompleted)
+                if (PendingRequests.TryGetValue(job.JobId, out var req))
                 {
-                    FinalizeRequest(job.JobId, req);
-                    job = PackageJobManager.GetJob(job.JobId);
+                    if (req.IsCompleted)
+                    {
+                        FinalizeRequest(job.JobId, req);
+                        job = PackageJobManager.GetJob(job.JobId);
+                    }
+                }
+                else
+                {
+                    // No in-memory request (lost after domain reload) — re-run recovery
+                    long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    PackageJobManager.TryRecoverJob(job, nowMs);
+                    if (job.Status != PackageJobStatus.Running)
+                        PackageJobManager.PersistToSessionState();
                 }
             }
 
@@ -659,10 +674,10 @@ namespace MCPForUnity.Editor.Tools
             return description.Substring(0, maxLength) + "...";
         }
 
-        private static (bool isValid, string warning) ValidatePackageIdentifier(string package)
+        private static (bool isValid, string warning, string normalized) ValidatePackageIdentifier(string package)
         {
             if (string.IsNullOrWhiteSpace(package))
-                return (false, "Package identifier cannot be empty.");
+                return (false, "Package identifier cannot be empty.", null);
 
             // Git URLs — allow but warn
             if (package.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
@@ -672,25 +687,32 @@ namespace MCPForUnity.Editor.Tools
                 package.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
             {
                 return (true,
-                    $"Installing from git URL. Ensure this is a trusted source — git packages execute code on import.");
+                    $"Installing from git URL. Ensure this is a trusted source — git packages execute code on import.",
+                    package);
             }
 
             // File paths — allow but warn
             if (package.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
             {
                 return (true,
-                    $"Installing from local path. Ensure this path contains trusted package code.");
+                    $"Installing from local path. Ensure this path contains trusted package code.",
+                    package);
             }
 
-            // Normal package ID: strip version suffix for validation
-            string name = package.Contains('@') ? package.Substring(0, package.IndexOf('@')) : package;
-            if (!Regex.IsMatch(name, @"^[a-zA-Z][a-zA-Z0-9._-]*(\.[a-zA-Z0-9._-]+)+$"))
+            // Normal package ID: lowercase the name portion (Unity requires lowercase)
+            string normalized = package.Contains('@')
+                ? package.Substring(0, package.IndexOf('@')).ToLowerInvariant() + package.Substring(package.IndexOf('@'))
+                : package.ToLowerInvariant();
+
+            string name = normalized.Contains('@') ? normalized.Substring(0, normalized.IndexOf('@')) : normalized;
+            if (!Regex.IsMatch(name, @"^[a-z][a-z0-9._-]*(\.[a-z0-9._-]+)+$"))
             {
                 return (false,
-                    $"'{package}' is not a valid package identifier. Expected format: com.company.package or com.company.package@version.");
+                    $"'{package}' is not a valid package identifier. Expected format: com.company.package or com.company.package@version.",
+                    null);
             }
 
-            return (true, null);
+            return (true, null, normalized);
         }
 
         private static string[] GetDependentPackages(string packageName)
@@ -708,7 +730,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch
             {
-                return Array.Empty<string>();
+                return null;
             }
         }
     }

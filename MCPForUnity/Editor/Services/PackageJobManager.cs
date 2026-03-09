@@ -123,7 +123,7 @@ namespace MCPForUnity.Editor.Services
             }
         }
 
-        private static void TryRecoverJob(PackageJob job, long nowMs)
+        internal static void TryRecoverJob(PackageJob job, long nowMs)
         {
             try
             {
@@ -131,7 +131,7 @@ namespace MCPForUnity.Editor.Services
                 var allPackages = PackageInfo.GetAllRegisteredPackages();
                 var info = FindPackageInfo(allPackages, packageName, job.Package);
 
-                if (job.Operation == "add")
+                if (job.Operation == "add" || job.Operation == "embed")
                 {
                     if (info != null)
                     {
@@ -140,15 +140,15 @@ namespace MCPForUnity.Editor.Services
                         job.LastUpdateUnixMs = nowMs;
                         job.ResultVersion = info.version;
                         job.ResultName = info.name;
-                        McpLog.Info($"[PackageJobManager] Recovered add job {job.JobId}: {info.name}@{info.version} installed.");
+                        McpLog.Info($"[PackageJobManager] Recovered {job.Operation} job {job.JobId}: {info.name}@{info.version} installed.");
                     }
                     else if (nowMs - job.StartedUnixMs > DomainReloadTimeoutMs)
                     {
                         job.Status = PackageJobStatus.Failed;
                         job.FinishedUnixMs = nowMs;
                         job.LastUpdateUnixMs = nowMs;
-                        job.Error = "Package installation timed out after domain reload.";
-                        McpLog.Warn($"[PackageJobManager] Timed out add job {job.JobId} for '{job.Package}'.");
+                        job.Error = $"Package {job.Operation} timed out after domain reload.";
+                        McpLog.Warn($"[PackageJobManager] Timed out {job.Operation} job {job.JobId} for '{job.Package}'.");
                     }
                 }
                 else if (job.Operation == "remove")
@@ -218,7 +218,7 @@ namespace MCPForUnity.Editor.Services
             return packageIdentifier;
         }
 
-        private static void PersistToSessionState()
+        internal static void PersistToSessionState()
         {
             try
             {

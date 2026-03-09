@@ -164,6 +164,20 @@ def resolve():
         print_success("Packages resolved")
 
 
+@packages.command("list-registries")
+@handle_unity_errors
+def list_registries():
+    """List all scoped registries.
+
+    \b
+    Examples:
+        unity-mcp packages list-registries
+    """
+    config = get_config()
+    result = run_command("manage_packages", {"action": "list_registries"}, config)
+    click.echo(format_output(result, config.format))
+
+
 @packages.command("add-registry")
 @click.argument("registry_name")
 @click.option("--url", required=True, help="Registry URL.")
