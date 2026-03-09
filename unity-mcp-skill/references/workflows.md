@@ -14,6 +14,7 @@ Common workflows and patterns for effective Unity-MCP usage.
 - [Camera & Cinemachine Workflows](#camera--cinemachine-workflows)
 - [ProBuilder Workflows](#probuilder-workflows)
 - [Graphics & Rendering Workflows](#graphics--rendering-workflows)
+- [Package Management Workflows](#package-management-workflows)
 - [Package Deployment Workflows](#package-deployment-workflows)
 - [Batch Operations](#batch-operations)
 
@@ -1743,6 +1744,73 @@ manage_graphics(action="stats_get")
 - Use `bake_cancel` to abort a long bake.
 - `bake_clear` removes all baked data (lightmaps, probes). Use before re-baking from scratch.
 - For large scenes, use `async_bake=True` (default) and poll `bake_status` periodically.
+
+---
+
+## Package Management Workflows
+
+### Install a Package and Verify
+
+```python
+# 1. Check what's installed
+query_packages(action="ping")
+query_packages(action="list_packages")
+# Poll status until complete
+query_packages(action="status", job_id="<job_id>")
+
+# 2. Install the package
+manage_packages(action="add_package", package="com.unity.inputsystem")
+# Poll until domain reload completes
+query_packages(action="status", job_id="<job_id>")
+
+# 3. Verify no compilation errors
+read_console(types=["error"], count=10)
+
+# 4. Confirm it's installed
+query_packages(action="get_package_info", package="com.unity.inputsystem")
+```
+
+### Add OpenUPM Registry and Install Package
+
+```python
+# 1. Add the OpenUPM scoped registry
+manage_packages(
+    action="add_registry",
+    name="OpenUPM",
+    url="https://package.openupm.com",
+    scopes=["com.cysharp"]
+)
+
+# 2. Force resolution to pick up the new registry
+manage_packages(action="resolve_packages")
+
+# 3. Install a package from OpenUPM
+manage_packages(action="add_package", package="com.cysharp.unitask")
+query_packages(action="status", job_id="<job_id>")
+```
+
+### Safe Package Removal
+
+```python
+# 1. Check dependencies before removing
+manage_packages(action="remove_package", package="com.unity.modules.ui")
+# If blocked: "Cannot remove: 3 package(s) depend on it"
+
+# 2. Force removal if you're sure
+manage_packages(action="remove_package", package="com.unity.modules.ui", force=True)
+query_packages(action="status", job_id="<job_id>")
+```
+
+### Install from Git URL (e.g., NuGetForUnity)
+
+```python
+# Git URLs trigger a security warning — ensure the source is trusted
+manage_packages(
+    action="add_package",
+    package="https://github.com/GlitchEnzo/NuGetForUnity.git?path=/src/NuGetForUnity"
+)
+query_packages(action="status", job_id="<job_id>")
+```
 
 ---
 
