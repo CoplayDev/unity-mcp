@@ -690,10 +690,7 @@ namespace MCPForUnity.Editor.Tools
         {
             try
             {
-                // Strip version suffix
-                string name = packageName.Contains('@')
-                    ? packageName.Substring(0, packageName.IndexOf('@'))
-                    : packageName;
+                string name = PackageJobManager.ExtractPackageName(packageName);
 
                 var allPackages = PackageInfo.GetAllRegisteredPackages();
                 return allPackages

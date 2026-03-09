@@ -129,15 +129,13 @@ namespace MCPForUnity.Editor.Services
             {
                 string packageName = ExtractPackageName(job.Package);
                 var allPackages = PackageInfo.GetAllRegisteredPackages();
-                bool found = allPackages.Any(p =>
+                var info = allPackages.FirstOrDefault(p =>
                     string.Equals(p.name, packageName, StringComparison.OrdinalIgnoreCase));
 
                 if (job.Operation == "add")
                 {
-                    if (found)
+                    if (info != null)
                     {
-                        var info = allPackages.First(p =>
-                            string.Equals(p.name, packageName, StringComparison.OrdinalIgnoreCase));
                         job.Status = PackageJobStatus.Succeeded;
                         job.FinishedUnixMs = nowMs;
                         job.LastUpdateUnixMs = nowMs;
@@ -156,7 +154,7 @@ namespace MCPForUnity.Editor.Services
                 }
                 else if (job.Operation == "remove")
                 {
-                    if (!found)
+                    if (info == null)
                     {
                         job.Status = PackageJobStatus.Succeeded;
                         job.FinishedUnixMs = nowMs;
@@ -179,7 +177,7 @@ namespace MCPForUnity.Editor.Services
             }
         }
 
-        private static string ExtractPackageName(string packageIdentifier)
+        internal static string ExtractPackageName(string packageIdentifier)
         {
             if (string.IsNullOrEmpty(packageIdentifier))
                 return packageIdentifier;
