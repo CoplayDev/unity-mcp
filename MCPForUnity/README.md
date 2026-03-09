@@ -17,7 +17,7 @@ The window has four areas: Server Status, Unity Bridge, MCP Client Configuration
    - Install Python and/or uv/uvx if missing so the server can be managed locally.
    - For Claude Code, ensure the `claude` CLI is installed.
 4. Click “Start Bridge” if the Unity Bridge shows “Stopped”.
-5. Use your MCP client (Cursor, VS Code, Windsurf, OpenClaw, Claude Code) to connect.
+5. Use your MCP client (Cursor, VS Code, OpenClaw, Claude Code) to connect.
 
 ---
 

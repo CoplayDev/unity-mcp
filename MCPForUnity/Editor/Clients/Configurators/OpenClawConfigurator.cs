@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
 using MCPForUnity.Editor.Services;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using UnityEditor;
 
 namespace MCPForUnity.Editor.Clients.Configurators
 {
@@ -56,7 +58,14 @@ namespace MCPForUnity.Editor.Clients.Configurators
                 JObject pluginEntry = root["plugins"]?["entries"]?[PluginName] as JObject;
                 JObject unityServer = FindUnityServer(pluginEntry?["config"]?["servers"]);
 
-                if (pluginEntry == null || unityServer == null || !IsEnabled(pluginEntry) || !IsEnabled(unityServer))
+                if (pluginEntry == null || unityServer == null)
+                {
+                    client.SetStatus(McpStatus.MissingConfig);
+                    client.configuredTransport = ConfiguredTransport.Unknown;
+                    return client.status;
+                }
+
+                if (!IsEnabled(pluginEntry) || !IsEnabled(unityServer))
                 {
                     client.SetStatus(McpStatus.NotConfigured);
                     client.configuredTransport = ConfiguredTransport.Unknown;
@@ -92,6 +101,9 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
         public override void Configure()
         {
+            if (EditorPrefs.GetBool(EditorPrefKeys.LockCursorConfig, false))
+                return;
+
             string path = GetConfigPath();
             McpConfigurationHelper.EnsureConfigDirectoryExists(path);
 
@@ -109,8 +121,8 @@ namespace MCPForUnity.Editor.Clients.Configurators
 
             JObject pluginConfig = pluginEntry["config"] as JObject ?? new JObject();
             pluginEntry["config"] = pluginConfig;
-            pluginConfig.Remove("timeout");
-            pluginConfig.Remove("retries");
+            pluginConfig.Remove("timeout");  // removed in openclaw-mcp-bridge v2+
+            pluginConfig.Remove("retries");  // removed in openclaw-mcp-bridge v2+
             pluginConfig["servers"] = UpsertUnityServer(pluginConfig["servers"]);
 
             McpConfigurationHelper.WriteAtomicFile(path, root.ToString(Formatting.Indented));
@@ -323,6 +335,16 @@ namespace MCPForUnity.Editor.Clients.Configurators
                 string configuredUrl = server["url"]?.ToString();
                 string command = server["command"]?.ToString();
                 if (!UrlsEqual(configuredUrl, StdioUrl) || string.IsNullOrWhiteSpace(command))
+                {
+                    return false;
+                }
+
+                // Validate the --from package source hasn't drifted (e.g. stable vs prerelease switch)
+                string[] args = (server["args"] as JArray)?.ToObject<string[]>();
+                string configuredSource = McpConfigurationHelper.ExtractUvxUrl(args);
+                string expectedSource = GetExpectedPackageSourceForValidation();
+                if (!string.IsNullOrEmpty(configuredSource) && !string.IsNullOrEmpty(expectedSource) &&
+                    !McpConfigurationHelper.PathsEqual(configuredSource, expectedSource))
                 {
                     return false;
                 }
