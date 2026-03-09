@@ -129,8 +129,7 @@ namespace MCPForUnity.Editor.Services
             {
                 string packageName = ExtractPackageName(job.Package);
                 var allPackages = PackageInfo.GetAllRegisteredPackages();
-                var info = allPackages.FirstOrDefault(p =>
-                    string.Equals(p.name, packageName, StringComparison.OrdinalIgnoreCase));
+                var info = FindPackageInfo(allPackages, packageName, job.Package);
 
                 if (job.Operation == "add")
                 {
@@ -175,6 +174,34 @@ namespace MCPForUnity.Editor.Services
             {
                 McpLog.Warn($"[PackageJobManager] Recovery check failed for job {job.JobId}: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Find a PackageInfo by name, falling back to packageId or git/local source for non-standard identifiers.
+        /// </summary>
+        private static PackageInfo FindPackageInfo(PackageInfo[] allPackages, string packageName, string originalIdentifier)
+        {
+            // Direct name match (handles normal com.company.package identifiers)
+            var info = allPackages.FirstOrDefault(p =>
+                string.Equals(p.name, packageName, StringComparison.OrdinalIgnoreCase));
+            if (info != null)
+                return info;
+
+            // For git URLs / file: paths, packageName == originalIdentifier and won't match .name.
+            // Try matching by packageId or source (git/local).
+            bool isGitOrFile = originalIdentifier.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+                               || originalIdentifier.StartsWith("git", StringComparison.OrdinalIgnoreCase)
+                               || originalIdentifier.StartsWith("file:", StringComparison.OrdinalIgnoreCase)
+                               || originalIdentifier.EndsWith(".git", StringComparison.OrdinalIgnoreCase);
+
+            if (!isGitOrFile)
+                return null;
+
+            return allPackages.FirstOrDefault(p =>
+                p.source == PackageSource.Git || p.source == PackageSource.Local
+                    ? p.packageId != null && p.packageId.Contains(originalIdentifier)
+                      || p.resolvedPath != null && p.resolvedPath.Contains(originalIdentifier)
+                    : false);
         }
 
         internal static string ExtractPackageName(string packageIdentifier)

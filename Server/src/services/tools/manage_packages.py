@@ -11,7 +11,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 ALL_ACTIONS = [
     "list_packages", "search_packages", "get_package_info", "ping", "status",
     "add_package", "remove_package", "embed_package", "resolve_packages",
-    "add_registry", "remove_registry",
+    "add_registry", "remove_registry", "list_registries",
 ]
 
 
@@ -35,11 +35,12 @@ async def _send_packages_command(
         "- search_packages: Search Unity registry by keyword\n"
         "- get_package_info: Get details about a specific installed package\n"
         "- ping: Check package manager availability\n"
-        "- status: Poll async job status (for add/remove/list/search operations)\n\n"
+        "- status: Poll async job status (job_id required for list/search; optional for add/remove/embed)\n\n"
         "INSTALL/REMOVE:\n"
         "- add_package: Install a package (name, name@version, git URL, or file: path)\n"
         "- remove_package: Remove a package (checks dependents; use force=true to override)\n\n"
         "REGISTRIES:\n"
+        "- list_registries: List all scoped registries\n"
         "- add_registry: Add a scoped registry (e.g., OpenUPM)\n"
         "- remove_registry: Remove a scoped registry\n\n"
         "UTILITY:\n"

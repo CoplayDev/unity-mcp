@@ -141,7 +141,11 @@ def embed_package(package: str):
     result = run_command("manage_packages", {"action": "embed_package", "package": package}, config)
     click.echo(format_output(result, config.format))
     if result.get("success"):
-        print_success(f"Package embedded: {package}")
+        job_id = (result.get("data") or {}).get("job_id")
+        if job_id:
+            print_info(f"Embedding started. Poll with: unity-mcp packages status {job_id}")
+        else:
+            print_success(f"Package embedded: {package}")
 
 
 @packages.command("resolve")

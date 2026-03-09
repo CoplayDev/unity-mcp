@@ -1086,7 +1086,7 @@ Manage Unity packages: query, install, remove, embed, and configure registries. 
 | `search_packages` | `query` | Search Unity registry by keyword (async, returns job_id) |
 | `get_package_info` | `package` | Get details about a specific installed package |
 | `ping` | — | Check package manager availability, Unity version, package count |
-| `status` | `job_id` (optional) | Poll async job status; omit job_id for latest job |
+| `status` | `job_id` (required for list/search; optional for add/remove/embed) | Poll async job status; omit job_id to poll latest add/remove/embed job |
 
 **Mutating Actions:**
 

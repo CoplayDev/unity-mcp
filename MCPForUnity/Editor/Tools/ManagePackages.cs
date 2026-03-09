@@ -38,35 +38,42 @@ namespace MCPForUnity.Editor.Tools
 
             string action = actionResult.Value.ToLowerInvariant();
 
-            switch (action)
+            try
             {
-                case "add_package":
-                    return AddPackage(p);
-                case "remove_package":
-                    return RemovePackage(p);
-                case "status":
-                    return GetStatus(p);
-                case "list_packages":
-                    return ListPackages(p);
-                case "search_packages":
-                    return SearchPackages(p);
-                case "get_package_info":
-                    return GetPackageInfo(p);
-                case "list_registries":
-                    return ListRegistries();
-                case "add_registry":
-                    return AddRegistry(p);
-                case "remove_registry":
-                    return RemoveRegistry(p);
-                case "embed_package":
-                    return EmbedPackage(p);
-                case "resolve_packages":
-                    return ResolvePackages();
-                case "ping":
-                    return Ping();
-                default:
-                    return new ErrorResponse(
-                        $"Unknown action: '{action}'. Supported actions: add_package, remove_package, status, list_packages, search_packages, get_package_info, list_registries, add_registry, remove_registry, embed_package, resolve_packages, ping.");
+                switch (action)
+                {
+                    case "add_package":
+                        return AddPackage(p);
+                    case "remove_package":
+                        return RemovePackage(p);
+                    case "status":
+                        return GetStatus(p);
+                    case "list_packages":
+                        return ListPackages(p);
+                    case "search_packages":
+                        return SearchPackages(p);
+                    case "get_package_info":
+                        return GetPackageInfo(p);
+                    case "list_registries":
+                        return ListRegistries();
+                    case "add_registry":
+                        return AddRegistry(p);
+                    case "remove_registry":
+                        return RemoveRegistry(p);
+                    case "embed_package":
+                        return EmbedPackage(p);
+                    case "resolve_packages":
+                        return ResolvePackages();
+                    case "ping":
+                        return Ping();
+                    default:
+                        return new ErrorResponse(
+                            $"Unknown action: '{action}'. Supported actions: add_package, remove_package, status, list_packages, search_packages, get_package_info, list_registries, add_registry, remove_registry, embed_package, resolve_packages, ping.");
+                }
+            }
+            catch (Exception ex)
+            {
+                return new ErrorResponse(ex.Message, new { stackTrace = ex.StackTrace });
             }
         }
 
@@ -391,7 +398,7 @@ namespace MCPForUnity.Editor.Tools
                 }).ToArray();
 
                 return new SuccessResponse(
-                    $"Found {result.Length} scoped registr(y/ies).",
+                    $"Found {result.Length} scoped {(result.Length == 1 ? "registry" : "registries")}.",
                     new { registries = result, count = result.Length }
                 );
             }
