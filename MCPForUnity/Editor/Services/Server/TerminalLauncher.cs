@@ -80,7 +80,7 @@ namespace MCPForUnity.Editor.Services.Server
             string escapedScriptForArg = script.Replace("\"", "\\\"");
             string bashCmdArgs = $"bash -c \"{escapedScriptForArg}\"";
 
-            string[] terminals = { "gnome-terminal", "xterm", "konsole", "xfce4-terminal" };
+            string[] terminals = { "kitty", "gnome-terminal", "konsole", "xfce4-terminal", "xterm" };
             string terminalCmd = null;
 
             foreach (var term in terminals)
@@ -112,7 +112,12 @@ namespace MCPForUnity.Editor.Services.Server
 
             // Different terminals have different argument formats
             string args;
-            if (terminalCmd == "gnome-terminal")
+            if (terminalCmd == "kitty")
+            {
+                // kitty: `kitty bash -c "..."` — no special flags needed, keeps window open via `exec bash`
+                args = bashCmdArgs;
+            }
+            else if (terminalCmd == "gnome-terminal")
             {
                 args = $"-- {bashCmdArgs}";
             }
