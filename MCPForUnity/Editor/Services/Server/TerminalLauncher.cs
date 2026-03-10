@@ -70,77 +70,16 @@ namespace MCPForUnity.Editor.Services.Server
                 CreateNoWindow = true
             };
 #else
-            // Linux: Try common terminal emulators
-            // We use bash -c to execute the command, so we must properly quote/escape for bash
-            // Escape single quotes for the inner bash string
-            string escapedCommandLinux = command.Replace("'", "'\\''");
-            // Wrap the command in single quotes for bash -c
-            string script = $"'{escapedCommandLinux}; exec bash'";
-            // Escape double quotes for the outer Process argument string
-            string escapedScriptForArg = script.Replace("\"", "\\\"");
-            string bashCmdArgs = $"bash -c \"{escapedScriptForArg}\"";
-
-            string[] terminals = { "kitty", "gnome-terminal", "konsole", "xfce4-terminal", "xterm" };
-            string terminalCmd = null;
-
-            foreach (var term in terminals)
-            {
-                try
-                {
-                    var which = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = "which",
-                        Arguments = term,
-                        UseShellExecute = false,
-                        RedirectStandardOutput = true,
-                        CreateNoWindow = true
-                    });
-                    which.WaitForExit(5000); // Wait for up to 5 seconds, the command is typically instantaneous
-                    if (which.ExitCode == 0)
-                    {
-                        terminalCmd = term;
-                        break;
-                    }
-                }
-                catch { }
-            }
-
-            if (terminalCmd == null)
-            {
-                terminalCmd = "xterm"; // Fallback
-            }
-
-            // Different terminals have different argument formats
-            string args;
-            if (terminalCmd == "kitty")
-            {
-                // kitty: `kitty bash -c "..."` — no special flags needed, keeps window open via `exec bash`
-                args = bashCmdArgs;
-            }
-            else if (terminalCmd == "gnome-terminal")
-            {
-                args = $"-- {bashCmdArgs}";
-            }
-            else if (terminalCmd == "konsole")
-            {
-                args = $"-e {bashCmdArgs}";
-            }
-            else if (terminalCmd == "xfce4-terminal")
-            {
-                // xfce4-terminal expects -e "command string" or -e command arg
-                args = $"--hold -e \"{bashCmdArgs.Replace("\"", "\\\"")}\"";
-            }
-            else // xterm and others
-            {
-                args = $"-hold -e {bashCmdArgs}";
-            }
-
+            // Linux: Run headless via bash — no terminal window needed.
+            // Server logs are still available via Unity console (MCP-FOR-UNITY prefix).
             return new System.Diagnostics.ProcessStartInfo
             {
-                FileName = terminalCmd,
-                Arguments = args,
+                FileName = "/bin/bash",
+                Arguments = $"-c \"{command.Replace("\"", "\\\"")}\"",
                 UseShellExecute = false,
-                CreateNoWindow = true
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
             };
 #endif
         }
