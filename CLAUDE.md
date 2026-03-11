@@ -8,10 +8,10 @@
 
 ```text
 AI Assistant (Claude/Cursor)
-        ↓ MCP Protocol (stdio/SSE)
-Python Server (Server/src/)
+        ↓ MCP Protocol (stdio / SSE / HTTP)
+Python Server (Server/src/)   [MCP port 6500]
         ↓ WebSocket + HTTP
-Unity Editor Plugin (MCPForUnity/)
+Unity Editor Plugin (MCPForUnity/)   [Unity port 6400]
         ↓ Unity Editor API
 Scene, Assets, Scripts
 ```
@@ -20,14 +20,22 @@ Scene, Assets, Scripts
 - `Server/` - Python MCP server using FastMCP
 - `MCPForUnity/` - Unity C# Editor package
 
+**Transport modes** (set via `--transport` flag or `ServerConfig.transport_mode`):
+- `stdio` — default; used by Claude Desktop, Claude Code
+- `sse` / `http` — for remote/hosted deployments; requires API key auth when `http_remote_hosted=True`
+- Docker: `docker-compose.yml` runs the server in HTTP mode on port 8080
+
 ## Directory Structure
 
 ```text
 ├── Server/                     # Python MCP Server
 │   ├── src/
-│   │   ├── cli/commands/       # Tool implementations (20 domain modules)
-│   │   ├── transport/          # MCP protocol, WebSocket bridge
-│   │   ├── services/           # Custom tools, resources
+│   │   ├── cli/commands/       # Tool implementations (20 domain modules, see below)
+│   │   ├── transport/          # MCP protocol, WebSocket bridge, plugin hub
+│   │   ├── services/           # Custom tools, MCP resources, state
+│   │   │   └── resources/      # MCP Resources (gameobject, prefab, editor_state, etc.)
+│   │   ├── models/             # Shared data models and Unity response types
+│   │   ├── utils/              # Shared utilities
 │   │   └── core/               # Telemetry, logging, config
 │   └── tests/                  # 502 Python tests
 ├── MCPForUnity/                # Unity Editor Package
@@ -36,9 +44,15 @@ Scene, Assets, Scripts
 │       ├── Services/           # Bridge, state management
 │       ├── Helpers/            # Utilities (27 files)
 │       └── Windows/            # Editor UI
+├── CustomTools/                # User-defined custom MCP tools (loaded at runtime)
+├── unity-mcp-skill/            # Claude Code skill for Unity-MCP workflows (SKILL.md)
 ├── TestProjects/UnityMCPTests/ # Unity test project (605 tests)
+├── docker-compose.yml          # Runs server in HTTP mode on port 8080
 └── tools/                      # Build/release scripts
 ```
+
+**The 20 tool domains** (`Server/src/cli/commands/` ↔ `MCPForUnity/Editor/Tools/`):
+`animation`, `asset`, `audio`, `batch`, `code`, `component`, `editor`, `gameobject`, `instance`, `lighting`, `material`, `prefab`, `probuilder`, `scene`, `script`, `shader`, `texture`, `tool`, `ui`, `vfx`
 
 ## Code Philosophy
 
@@ -59,7 +73,7 @@ Every new feature needs tests. We have 1100+ tests across Python and C#. Run the
 Each MCP tool does one thing well. Resist the urge to add "convenient" parameters that bloat the API surface.
 
 ### 6. Use Resources for reading.
-Keep them smart and focused rather than "read everything" type resources. That way resources are quick and LLM-friendly. There are plenty of examples in the codebase to model on (gameobject, prefab, etc.)
+MCP Resources are distinct from Tools — they are read-only data providers exposed to the AI client separately from tool calls. Keep them focused (not "read everything" dumps) so they stay quick and LLM-friendly. Implementations live in `Server/src/services/resources/`. Model new ones on existing examples (`gameobject.py`, `prefab.py`, `editor_state.py`, etc.).
 
 ## Key Patterns
 
@@ -110,5 +124,5 @@ cd Server && uv run pytest tests/ -v
 - Don't add features without tests
 - Don't create helper functions for one-time operations
 - Don't add error handling for scenarios that can't happen
-- Don't commit to `main` directly - branch off `beta` for PRs
+- Don't commit to `main` directly — `main` is the stable release branch; branch off `beta` (active development) for all PRs
 - Don't add docstrings/comments to code you didn't change
