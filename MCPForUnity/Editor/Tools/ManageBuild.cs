@@ -65,10 +65,10 @@ namespace MCPForUnity.Editor.Tools
                 ["product_name"] = PlayerSettings.productName,
                 ["application_identifier"] = PlayerSettings.applicationIdentifier,
                 ["bundle_version"] = PlayerSettings.bundleVersion,
-                ["default_icon"] = PlayerSettings.GetIconsForTargetGroup(BuildTargetGroup.Unknown)?.Length > 0,
+                ["default_icon"] = PlayerSettings.GetIcons(UnityEditor.Build.NamedBuildTarget.Unknown, IconKind.Any)?.Length > 0,
                 ["color_space"] = PlayerSettings.colorSpace.ToString(),
-                ["scripting_backend"] = PlayerSettings.GetScriptingBackend(EditorUserBuildSettings.selectedBuildTargetGroup).ToString(),
-                ["api_compatibility_level"] = PlayerSettings.GetApiCompatibilityLevel(EditorUserBuildSettings.selectedBuildTargetGroup).ToString(),
+                ["scripting_backend"] = PlayerSettings.GetScriptingBackend(UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(EditorUserBuildSettings.selectedBuildTargetGroup)).ToString(),
+                ["api_compatibility_level"] = PlayerSettings.GetApiCompatibilityLevel(UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(EditorUserBuildSettings.selectedBuildTargetGroup)).ToString(),
             });
         }
 

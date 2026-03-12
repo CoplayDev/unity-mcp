@@ -408,7 +408,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 GameObject go = null;
                 if (int.TryParse(target, out int id))
-                    go = UnityEditor.EditorUtility.InstanceIDToObject(id) as GameObject;
+                    go = UnityEditor.EditorUtility.EntityIdToObject(id) as GameObject;
                 if (go == null)
                     go = GameObject.Find(target);
                 if (go != null)

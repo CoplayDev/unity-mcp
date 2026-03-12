@@ -229,7 +229,7 @@ namespace MCPForUnity.Editor.Tools
 
             GameObject go = null;
             if (int.TryParse(target, out int id))
-                go = EditorUtility.InstanceIDToObject(id) as GameObject;
+                go = EditorUtility.EntityIdToObject(id) as GameObject;
             if (go == null)
                 go = GameObject.Find(target);
             if (go == null) return (null, $"GameObject not found: '{target}'");
