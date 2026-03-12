@@ -270,6 +270,10 @@ def register_commands():
         ("cli.commands.dots_physics", "dots-physics"),
         ("cli.commands.dots_graphics", "dots-graphics"),
         ("cli.commands.dots_subscene", "dots-subscene"),
+        ("cli.commands.probuilder", "probuilder"),
+        ("cli.commands.camera", "camera"),
+        ("cli.commands.graphics", "graphics"),
+        ("cli.commands.packages", "packages"),
     ]
 
     for module_name, command_name in optional_commands:

@@ -161,7 +161,7 @@ def set_property(path: str, property_name: str, value: str):
 )
 @click.option(
     "--mode", "-m",
-    type=click.Choice(["shared", "instance", "property_block"]),
+    type=click.Choice(["shared", "instance", "property_block", "create_unique"]),
     default="shared",
     help="Assignment mode."
 )
@@ -208,9 +208,9 @@ def assign(material_path: str, target: str, search_method: Optional[str], slot: 
 )
 @click.option(
     "--mode", "-m",
-    type=click.Choice(["shared", "instance", "property_block"]),
-    default="property_block",
-    help="Modification mode."
+    type=click.Choice(["shared", "instance", "property_block", "create_unique"]),
+    default="create_unique",
+    help="Modification mode (default: create_unique — persistent per-object material)."
 )
 @handle_unity_errors
 def set_renderer_color(target: str, r: float, g: float, b: float, a: float, search_method: Optional[str], mode: str):

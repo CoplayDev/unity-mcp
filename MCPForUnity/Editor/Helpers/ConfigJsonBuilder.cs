@@ -92,19 +92,16 @@ namespace MCPForUnity.Editor.Helpers
                     if (unity["headers"] != null) unity.Remove("headers");
                 }
 
-                if (isVSCode)
-                {
-                    unity["type"] = "http";
-                }
-                // Also add type for Claude Code (uses mcpServers layout but needs type field)
-                else if (client?.name == "Claude Code")
-                {
-                    unity["type"] = "http";
-                }
                 // Cline expects streamableHttp for HTTP endpoints.
-                else if (isCline)
+                if (isCline)
                 {
                     unity["type"] = "streamableHttp";
+                }
+                else
+                {
+                    // "type" is standard MCP protocol; include for all clients to avoid
+                    // clients that default to SSE when they see a URL without a type field.
+                    unity["type"] = "http";
                 }
             }
             else
@@ -121,20 +118,8 @@ namespace MCPForUnity.Editor.Helpers
                 if (unity["url"] != null) unity.Remove("url");
                 if (unity["serverUrl"] != null) unity.Remove("serverUrl");
 
-                if (isVSCode)
-                {
-                    unity["type"] = "stdio";
-                }
-                else if (isCline)
-                {
-                    unity["type"] = "stdio";
-                }
-            }
-
-            // Remove type for non-VSCode clients (except clients that explicitly require it)
-            if (!isVSCode && client?.name != "Claude Code" && !isCline && unity["type"] != null)
-            {
-                unity.Remove("type");
+                // Include type for all clients — standard MCP protocol field.
+                unity["type"] = "stdio";
             }
 
             bool requiresEnv = client?.EnsureEnvObject == true;

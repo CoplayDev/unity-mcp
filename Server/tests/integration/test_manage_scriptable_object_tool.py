@@ -1,10 +1,11 @@
-import asyncio
+import pytest
 
 from .test_helpers import DummyContext
 import services.tools.manage_scriptable_object as mod
 
 
-def test_manage_scriptable_object_forwards_create_params(monkeypatch):
+@pytest.mark.asyncio
+async def test_manage_scriptable_object_forwards_create_params(monkeypatch):
     captured = {}
 
     async def fake_async_send(cmd, params, **kwargs):
@@ -15,9 +16,9 @@ def test_manage_scriptable_object_forwards_create_params(monkeypatch):
     monkeypatch.setattr(mod, "async_send_command_with_retry", fake_async_send)
 
     ctx = DummyContext()
-    ctx.set_state("unity_instance", "UnityMCPTests@dummy")
+    await ctx.set_state("unity_instance", "UnityMCPTests@dummy")
 
-    result = asyncio.run(
+    result = await (
         mod.manage_scriptable_object(
             ctx=ctx,
             action="create",
@@ -40,7 +41,8 @@ def test_manage_scriptable_object_forwards_create_params(monkeypatch):
     assert captured["params"]["patches"][0]["propertyPath"] == "displayName"
 
 
-def test_manage_scriptable_object_forwards_modify_params(monkeypatch):
+@pytest.mark.asyncio
+async def test_manage_scriptable_object_forwards_modify_params(monkeypatch):
     captured = {}
 
     async def fake_async_send(cmd, params, **kwargs):
@@ -51,9 +53,9 @@ def test_manage_scriptable_object_forwards_modify_params(monkeypatch):
     monkeypatch.setattr(mod, "async_send_command_with_retry", fake_async_send)
 
     ctx = DummyContext()
-    ctx.set_state("unity_instance", "UnityMCPTests@dummy")
+    await ctx.set_state("unity_instance", "UnityMCPTests@dummy")
 
-    result = asyncio.run(
+    result = await (
         mod.manage_scriptable_object(
             ctx=ctx,
             action="modify",
@@ -69,7 +71,8 @@ def test_manage_scriptable_object_forwards_modify_params(monkeypatch):
     assert captured["params"]["patches"][0]["op"] == "array_resize"
 
 
-def test_manage_scriptable_object_forwards_dry_run_param(monkeypatch):
+@pytest.mark.asyncio
+async def test_manage_scriptable_object_forwards_dry_run_param(monkeypatch):
     captured = {}
 
     async def fake_async_send(cmd, params, **kwargs):
@@ -80,9 +83,9 @@ def test_manage_scriptable_object_forwards_dry_run_param(monkeypatch):
     monkeypatch.setattr(mod, "async_send_command_with_retry", fake_async_send)
 
     ctx = DummyContext()
-    ctx.set_state("unity_instance", "UnityMCPTests@dummy")
+    await ctx.set_state("unity_instance", "UnityMCPTests@dummy")
 
-    result = asyncio.run(
+    result = await (
         mod.manage_scriptable_object(
             ctx=ctx,
             action="modify",
@@ -99,7 +102,8 @@ def test_manage_scriptable_object_forwards_dry_run_param(monkeypatch):
     assert captured["params"]["target"] == {"guid": "abc123"}
 
 
-def test_manage_scriptable_object_dry_run_string_coercion(monkeypatch):
+@pytest.mark.asyncio
+async def test_manage_scriptable_object_dry_run_string_coercion(monkeypatch):
     """Test that dry_run accepts string 'true' and coerces to boolean."""
     captured = {}
 
@@ -111,9 +115,9 @@ def test_manage_scriptable_object_dry_run_string_coercion(monkeypatch):
     monkeypatch.setattr(mod, "async_send_command_with_retry", fake_async_send)
 
     ctx = DummyContext()
-    ctx.set_state("unity_instance", "UnityMCPTests@dummy")
+    await ctx.set_state("unity_instance", "UnityMCPTests@dummy")
 
-    result = asyncio.run(
+    result = await (
         mod.manage_scriptable_object(
             ctx=ctx,
             action="modify",

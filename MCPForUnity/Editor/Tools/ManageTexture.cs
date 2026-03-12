@@ -13,7 +13,7 @@ namespace MCPForUnity.Editor.Tools
     /// Supports patterns (checkerboard, stripes, dots, grid, brick),
     /// gradients, noise, and direct pixel manipulation.
     /// </summary>
-    [McpForUnityTool("manage_texture", AutoRegister = false)]
+    [McpForUnityTool("manage_texture", AutoRegister = false, Group = "vfx")]
     public static class ManageTexture
     {
         private const int MaxTextureDimension = 1024;

@@ -182,7 +182,7 @@ async def refresh_unity(
     wait_for_ready: Annotated[bool,
                               "If true, wait until editor_state.advice.ready_for_tools is true"] = True,
 ) -> MCPResponse | dict[str, Any]:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     params: dict[str, Any] = {
         "mode": mode,

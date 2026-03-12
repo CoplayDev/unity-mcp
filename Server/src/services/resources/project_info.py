@@ -30,7 +30,7 @@ class ProjectInfoResponse(MCPResponse):
 )
 async def get_project_info(ctx: Context) -> ProjectInfoResponse | MCPResponse:
     """Get static project configuration information."""
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
     response = await send_with_unity_instance(
         async_send_command_with_retry,
         unity_instance,

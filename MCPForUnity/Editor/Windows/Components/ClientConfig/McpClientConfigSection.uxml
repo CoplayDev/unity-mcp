@@ -20,6 +20,12 @@
                 <ui:TextField name="claude-cli-path" readonly="true" class="path-display-field" />
                 <ui:Button name="browse-claude-button" text="Browse" class="icon-button" />
             </ui:VisualElement>
+            <ui:VisualElement class="setting-row" name="client-project-dir-row" style="display: none;">
+                <ui:Label text="Client Project Dir:" class="setting-label-small" />
+                <ui:TextField name="client-project-dir" readonly="true" class="path-display-field" />
+                <ui:Button name="browse-project-dir-button" text="Browse" class="icon-button" />
+                <ui:Button name="clear-project-dir-button" text="Clear" class="icon-button" />
+            </ui:VisualElement>
             <ui:Foldout name="manual-config-foldout" text="Manual Configuration" value="false" class="manual-config-foldout">
                 <ui:VisualElement class="manual-config-content">
                     <ui:Label text="Config Path:" class="config-label" />

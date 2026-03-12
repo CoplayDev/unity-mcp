@@ -132,7 +132,8 @@ namespace MCPForUnity.Editor.Services
                     AssemblyName = type.Assembly.GetName().Name,
                     AutoRegister = toolAttr.AutoRegister,
                     RequiresPolling = toolAttr.RequiresPolling,
-                    PollAction = string.IsNullOrEmpty(toolAttr.PollAction) ? "status" : toolAttr.PollAction
+                    PollAction = string.IsNullOrEmpty(toolAttr.PollAction) ? "status" : toolAttr.PollAction,
+                    Group = toolAttr.Group ?? "core"
                 };
 
                 metadata.IsBuiltIn = StringCaseUtility.IsBuiltInMcpType(

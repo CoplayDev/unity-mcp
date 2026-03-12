@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace MCPForUnity.Editor.Tools.Animation
 {
-    [McpForUnityTool("manage_animation", AutoRegister = false)]
+    [McpForUnityTool("manage_animation", AutoRegister = false, Group = "animation")]
     public static class ManageAnimation
     {
         private static readonly Dictionary<string, string> ParamAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)

@@ -258,7 +258,7 @@ namespace MCPForUnity.Editor.Tools
             }
 
             int slot = p.GetInt("slot") ?? 0;
-            string mode = p.Get("mode", "property_block");
+            string mode = p.Get("mode", "create_unique");
 
             Color color;
             try
@@ -390,7 +390,18 @@ namespace MCPForUnity.Editor.Tools
         private static object CreateUniqueAndAssign(Renderer renderer, GameObject go, Color color, int slot)
         {
             string safeName = go.name.Replace(" ", "_");
-            string matPath = $"Assets/Materials/{safeName}_{go.GetInstanceID()}_mat.mat";
+
+            // Derive material folder from the scene context so generated materials
+            // live next to the scene/generation folder instead of a global dump.
+            string materialFolder = "Assets/Materials";
+            var scene = go.scene;
+            if (scene.IsValid() && !string.IsNullOrEmpty(scene.path))
+            {
+                string sceneDir = System.IO.Path.GetDirectoryName(scene.path).Replace("\\", "/");
+                materialFolder = $"{sceneDir}/Materials";
+            }
+
+            string matPath = $"{materialFolder}/{safeName}_{go.GetInstanceID()}_mat.mat";
             matPath = AssetPathUtility.SanitizeAssetPath(matPath);
             if (matPath == null)
             {
@@ -398,9 +409,11 @@ namespace MCPForUnity.Editor.Tools
             }
 
             // Ensure the Materials directory exists
-            if (!AssetDatabase.IsValidFolder("Assets/Materials"))
+            if (!AssetDatabase.IsValidFolder(materialFolder))
             {
-                AssetDatabase.CreateFolder("Assets", "Materials");
+                string parentDir = System.IO.Path.GetDirectoryName(materialFolder).Replace("\\", "/");
+                string folderName = System.IO.Path.GetFileName(materialFolder);
+                AssetDatabase.CreateFolder(parentDir, folderName);
             }
 
             Material existing = AssetDatabase.LoadAssetAtPath<Material>(matPath);

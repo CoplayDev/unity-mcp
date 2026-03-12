@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using Newtonsoft.Json.Linq;
@@ -134,6 +136,208 @@ namespace MCPForUnityTests.Editor.Tools
             }
 
             return braceCount == 0;
+        }
+
+        /// <summary>
+        /// Calls ValidateScriptSyntax via reflection and returns the error list.
+        /// This exercises CheckDuplicateMethodSignatures (called from ValidateScriptSyntax).
+        /// </summary>
+        private List<string> CallValidateScriptSyntaxUnity(string contents)
+        {
+            var validationLevelType = typeof(ManageScript).GetNestedType("ValidationLevel",
+                BindingFlags.NonPublic);
+            Assert.IsNotNull(validationLevelType, "ValidationLevel enum must exist");
+            var basicLevel = Enum.ToObject(validationLevelType, 0); // ValidationLevel.Basic
+
+            var method = typeof(ManageScript).GetMethod("ValidateScriptSyntax",
+                BindingFlags.NonPublic | BindingFlags.Static, null,
+                new[] { typeof(string), validationLevelType, typeof(string[]).MakeByRefType() }, null);
+            Assert.IsNotNull(method, "ValidateScriptSyntax method must exist");
+
+            var args = new object[] { contents, basicLevel, null };
+            method.Invoke(null, args);
+            var errArray = (string[])args[2];
+            return errArray != null ? errArray.ToList() : new List<string>();
+        }
+
+        private bool HasDuplicateMethodError(List<string> errors)
+        {
+            return errors.Any(e => e.Contains("Duplicate method signature detected"));
+        }
+
+        // --- Duplicate method detection: false positive tests ---
+
+        [Test]
+        public void DuplicateDetection_LineCommentedMethod_NotFlagged()
+        {
+            string code = @"using UnityEngine;
+public class Foo : MonoBehaviour
+{
+    public void DoStuff(int x) { }
+    // public void DoStuff(int x) { }
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsFalse(HasDuplicateMethodError(errors),
+                "A method in a line comment should not be flagged as duplicate");
+        }
+
+        [Test]
+        public void DuplicateDetection_BlockCommentedMethod_NotFlagged()
+        {
+            string code = @"using UnityEngine;
+public class Foo : MonoBehaviour
+{
+    public void DoStuff(int x) { }
+    /* public void DoStuff(int x) { } */
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsFalse(HasDuplicateMethodError(errors),
+                "A method in a block comment should not be flagged as duplicate");
+        }
+
+        [Test]
+        public void DuplicateDetection_InnerClassSameMethod_NotFlagged()
+        {
+            string code = @"using UnityEngine;
+public class Outer : MonoBehaviour
+{
+    public void Init(int x) { }
+
+    private class Inner
+    {
+        public void Init(int x) { }
+    }
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsFalse(HasDuplicateMethodError(errors),
+                "Same method name in outer and inner class should not be flagged");
+        }
+
+        [Test]
+        public void DuplicateDetection_DifferentTypeOverloads_NotFlagged()
+        {
+            string code = @"using UnityEngine;
+public class Foo : MonoBehaviour
+{
+    public void Process(int x) { }
+    public void Process(string x) { }
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsFalse(HasDuplicateMethodError(errors),
+                "Overloads with different param types but same count should not be flagged");
+        }
+
+        // --- Duplicate method detection: true positive tests ---
+
+        [Test]
+        public void DuplicateDetection_ExpressionBodiedDuplicate_Flagged()
+        {
+            string code = @"using UnityEngine;
+public class Foo : MonoBehaviour
+{
+    public int GetValue(int x) => x * 2;
+    public int GetValue(int x) => x * 3;
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsTrue(HasDuplicateMethodError(errors),
+                "Expression-bodied duplicate methods should be flagged");
+        }
+
+        [Test]
+        public void DuplicateDetection_ExactDuplicate_Flagged()
+        {
+            string code = @"using UnityEngine;
+public class Foo : MonoBehaviour
+{
+    public void DoStuff(int x) { }
+    public void DoStuff(int x) { }
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsTrue(HasDuplicateMethodError(errors),
+                "Exact duplicate methods should be flagged");
+        }
+
+        [Test]
+        public void DuplicateDetection_SameTypeDifferentParamName_Flagged()
+        {
+            // This is the real anchor_replace corruption pattern
+            string code = @"using UnityEngine;
+public class Foo : MonoBehaviour
+{
+    public void Initialize(string name) { }
+    public void Initialize(string label) { }
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsTrue(HasDuplicateMethodError(errors),
+                "Same-type different-name duplicates (corruption pattern) should be flagged");
+        }
+
+        [Test]
+        public void DuplicateDetection_GenericParamDuplicate_Flagged()
+        {
+            string code = @"using UnityEngine;
+using System.Collections.Generic;
+public class Foo : MonoBehaviour
+{
+    public void Process(Dictionary<string, int> data) { }
+    public void Process(Dictionary<string, int> other) { }
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsTrue(HasDuplicateMethodError(errors),
+                "Generic param duplicates with different names should be flagged");
+        }
+
+        // --- Keyword false positive tests ---
+
+        [Test]
+        public void DuplicateDetection_CSharpKeywords_NotMatchedAsMethods()
+        {
+            string code = @"using UnityEngine;
+public class Foo : MonoBehaviour
+{
+    public void Update()
+    {
+        if (true) { }
+        if (true) { }
+        for (int i = 0; i < 10; i++) { }
+        for (int j = 0; j < 5; j++) { }
+        while (true) { break; }
+        while (false) { break; }
+        foreach (var x in new int[0]) { }
+        foreach (var y in new int[0]) { }
+        switch (0) { default: break; }
+        switch (1) { default: break; }
+        lock (this) { }
+        lock (this) { }
+        using (var d = new System.IO.MemoryStream()) { }
+        using (var e = new System.IO.MemoryStream()) { }
+        typeof(int);
+        typeof(string);
+    }
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsFalse(HasDuplicateMethodError(errors),
+                "C# keywords (if, for, while, etc.) should not be matched as duplicate methods");
+        }
+
+        [Test]
+        public void HandleCommand_PathWithCsExtension_StripsFilename()
+        {
+            // When path ends with .cs (full file path instead of directory),
+            // HandleCommand should strip the filename to avoid doubled paths
+            // like "Assets/Scripts/Foo.cs/Foo.cs".
+            var paramsObj = new JObject
+            {
+                ["action"] = "read",
+                ["name"] = "TestScript",
+                ["path"] = "Assets/Scripts/TestScript.cs"
+            };
+
+            var result = ManageScript.HandleCommand(paramsObj);
+            // The script won't exist, but the error path should NOT contain doubled filename
+            string json = Newtonsoft.Json.JsonConvert.SerializeObject(result);
+            Assert.IsFalse(json.Contains("TestScript.cs/TestScript.cs"),
+                "Path ending in .cs should be treated as directory, not produce doubled filename");
         }
     }
 }

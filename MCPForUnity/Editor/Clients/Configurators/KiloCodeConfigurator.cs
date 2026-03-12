@@ -13,7 +13,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
             windowsConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Code", "User", "globalStorage", "kilocode.kilo-code", "settings", "mcp_settings.json"),
             macConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Application Support", "Code", "User", "globalStorage", "kilocode.kilo-code", "settings", "mcp_settings.json"),
             linuxConfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "Code", "User", "globalStorage", "kilocode.kilo-code", "settings", "mcp_settings.json"),
-            IsVsCodeLayout = true
+            IsVsCodeLayout = false
         })
         { }
 

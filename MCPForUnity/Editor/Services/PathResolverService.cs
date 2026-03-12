@@ -114,13 +114,22 @@ namespace MCPForUnity.Editor.Services
                 {
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "claude", "claude.exe"),
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "claude", "claude.exe"),
-                    "claude.exe"
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin", "claude.exe"),
                 };
 
                 foreach (var c in candidates)
                 {
                     if (File.Exists(c)) return c;
                 }
+
+#if UNITY_EDITOR_WIN
+                // Fall back to PATH search (handles non-standard install locations and npm shims)
+                foreach (var name in new[] { "claude.exe", "claude.cmd", "claude.ps1" })
+                {
+                    string fromPath = ExecPath.FindInPathWindows(name);
+                    if (!string.IsNullOrEmpty(fromPath)) return fromPath;
+                }
+#endif
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {

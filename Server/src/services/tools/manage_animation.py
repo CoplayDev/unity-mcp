@@ -32,6 +32,7 @@ ALL_ACTIONS = ANIMATOR_ACTIONS + CONTROLLER_ACTIONS + CLIP_ACTIONS #Not loaded i
 
 
 @mcp_for_unity_tool(
+    group="animation",
     description=(
         "Manage Unity animation: Animator control and AnimationClip creation. "
         "Action prefixes: animator_* (play, crossfade, set parameters, get info), "
@@ -86,7 +87,7 @@ async def manage_animation(
                 ),
             }
 
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     params_dict: dict[str, Any] = {"action": action_normalized}
     if properties is not None:

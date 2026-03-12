@@ -240,6 +240,16 @@ namespace MCPForUnity.Editor.Tools
             return CaptureScreenshot(cmd);
         }
 
+        /// <summary>
+        /// Captures a 6-angle contact-sheet around the scene bounds centre.
+        /// Public so the tools UI can reuse the same logic.
+        /// </summary>
+        public static object ExecuteMultiviewScreenshot(int maxResolution = 480)
+        {
+            var cmd = new SceneCommand { maxResolution = maxResolution };
+            return CaptureSurroundBatch(cmd);
+        }
+
         private static object CreateScene(string fullPath, string relativePath)
         {
             if (File.Exists(fullPath))
@@ -471,7 +481,11 @@ namespace MCPForUnity.Editor.Tools
                         targetCamera = Camera.main;
                         if (targetCamera == null)
                         {
+#if UNITY_2022_2_OR_NEWER
+                            var allCams = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None);
+#else
                             var allCams = UnityEngine.Object.FindObjectsOfType<Camera>();
+#endif
                             targetCamera = allCams.Length > 0 ? allCams[0] : null;
                         }
                     }
@@ -508,7 +522,11 @@ namespace MCPForUnity.Editor.Tools
 
                 // Default path: use ScreenCapture API if available, camera fallback otherwise
                 bool screenCaptureAvailable = ScreenshotUtility.IsScreenCaptureModuleAvailable;
+#if UNITY_2022_2_OR_NEWER
+                bool hasCameraFallback = Camera.main != null || UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None).Length > 0;
+#else
                 bool hasCameraFallback = Camera.main != null || UnityEngine.Object.FindObjectsOfType<Camera>().Length > 0;
+#endif
 
 #if UNITY_2022_1_OR_NEWER
                 if (!screenCaptureAvailable && !hasCameraFallback)
@@ -594,8 +612,8 @@ namespace MCPForUnity.Editor.Tools
                             if (r != null && r.gameObject.activeInHierarchy) targetBounds.Encapsulate(r.bounds);
                         }
                         center = targetBounds.center;
-                        radius = targetBounds.extents.magnitude * 1.8f;
-                        radius = Mathf.Max(radius, 3f);
+                        radius = targetBounds.extents.magnitude * 2.5f;
+                        radius = Mathf.Max(radius, 5f);
                     }
                 }
                 else
@@ -603,7 +621,11 @@ namespace MCPForUnity.Editor.Tools
                     // Default: calculate combined bounds of all renderers in the scene
                     Bounds bounds = new Bounds(Vector3.zero, Vector3.zero);
                     bool hasBounds = false;
+#if UNITY_2022_2_OR_NEWER
+                    var renderers = UnityEngine.Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+#else
                     var renderers = UnityEngine.Object.FindObjectsOfType<Renderer>();
+#endif
                     foreach (var r in renderers)
                     {
                         if (r == null || !r.gameObject.activeInHierarchy) continue;
@@ -622,8 +644,8 @@ namespace MCPForUnity.Editor.Tools
                         return new ErrorResponse("No renderers found in the scene. Cannot determine scene bounds for batch capture.");
 
                     center = bounds.center;
-                    radius = bounds.extents.magnitude * 1.8f;
-                    radius = Mathf.Max(radius, 3f);
+                    radius = bounds.extents.magnitude * 2.5f;
+                    radius = Mathf.Max(radius, 5f);
                 }
 
                 // Define 6 viewpoints: front, back, left, right, top, bird's-eye (45° elevated front-right)
@@ -644,6 +666,10 @@ namespace MCPForUnity.Editor.Tools
                 tempCam.nearClipPlane = 0.1f;
                 tempCam.farClipPlane = radius * 4f;
                 tempCam.clearFlags = CameraClearFlags.Skybox;
+
+                // Force material refresh once before capture loop
+                EditorApplication.QueuePlayerLoopUpdate();
+                SceneView.RepaintAll();
 
                 var tiles = new List<Texture2D>();
                 var tileLabels = new List<string>();
@@ -740,7 +766,11 @@ namespace MCPForUnity.Editor.Tools
                     // Default: calculate combined bounds of all renderers in the scene
                     Bounds bounds = new Bounds(Vector3.zero, Vector3.zero);
                     bool hasBounds = false;
+#if UNITY_2022_2_OR_NEWER
+                    var renderers = UnityEngine.Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+#else
                     var renderers = UnityEngine.Object.FindObjectsOfType<Renderer>();
+#endif
                     foreach (var r in renderers)
                     {
                         if (r == null || !r.gameObject.activeInHierarchy) continue;
@@ -762,6 +792,10 @@ namespace MCPForUnity.Editor.Tools
                 tempCam.nearClipPlane = 0.1f;
                 tempCam.farClipPlane = radius * 4f;
                 tempCam.clearFlags = CameraClearFlags.Skybox;
+
+                // Force material refresh once before capture loop
+                EditorApplication.QueuePlayerLoopUpdate();
+                SceneView.RepaintAll();
 
                 var tiles = new List<Texture2D>();
                 var tileLabels = new List<string>();
@@ -841,7 +875,7 @@ namespace MCPForUnity.Editor.Tools
 
         /// <summary>
         /// Captures a single screenshot from a temporary camera placed at view_position and aimed at look_at.
-        /// Returns inline base64 PNG (no file saved to disk).
+        /// Returns inline base64 PNG and also saves the image to Assets/Screenshots/.
         /// </summary>
         private static object CapturePositionedScreenshot(SceneCommand cmd)
         {
@@ -902,7 +936,31 @@ namespace MCPForUnity.Editor.Tools
 
                     var (b64, w, h) = ScreenshotUtility.RenderCameraToBase64(tempCam, maxRes);
 
+                    // Save to disk
                     string screenshotsFolder = Path.Combine(Application.dataPath, "Screenshots");
+                    Directory.CreateDirectory(screenshotsFolder);
+                    string fileName = !string.IsNullOrEmpty(cmd.fileName)
+                        ? (cmd.fileName.EndsWith(".png", System.StringComparison.OrdinalIgnoreCase) ? cmd.fileName : cmd.fileName + ".png")
+                        : $"screenshot-{DateTime.Now:yyyyMMdd-HHmmss}.png";
+                    string fullPath = Path.Combine(screenshotsFolder, fileName);
+                    // Ensure unique filename
+                    if (File.Exists(fullPath))
+                    {
+                        string baseName = Path.GetFileNameWithoutExtension(fullPath);
+                        string ext = Path.GetExtension(fullPath);
+                        int counter = 1;
+                        while (File.Exists(fullPath))
+                        {
+                            fullPath = Path.Combine(screenshotsFolder, $"{baseName}_{counter}{ext}");
+                            counter++;
+                        }
+                    }
+                    byte[] pngBytes = System.Convert.FromBase64String(b64);
+                    File.WriteAllBytes(fullPath, pngBytes);
+
+                    string assetsRelativePath = "Assets/Screenshots/" + Path.GetFileName(fullPath);
+                    AssetDatabase.ImportAsset(assetsRelativePath, ImportAssetOptions.ForceSynchronousImport);
+
                     var data = new Dictionary<string, object>
                     {
                         { "imageBase64", b64 },
@@ -910,12 +968,13 @@ namespace MCPForUnity.Editor.Tools
                         { "imageHeight", h },
                         { "viewPosition", new[] { camPos.x, camPos.y, camPos.z } },
                         { "screenshotsFolder", screenshotsFolder },
+                        { "path", assetsRelativePath },
                     };
                     if (targetPos.HasValue)
                         data["lookAt"] = new[] { targetPos.Value.x, targetPos.Value.y, targetPos.Value.z };
 
                     return new SuccessResponse(
-                        $"Positioned screenshot captured (max {maxRes}px).",
+                        $"Positioned screenshot captured (max {maxRes}px) and saved to '{assetsRelativePath}'.",
                         data
                     );
                 }
@@ -953,13 +1012,17 @@ namespace MCPForUnity.Editor.Tools
             // Try instance ID
             if (int.TryParse(cameraRef, out int id))
             {
-                var obj = EditorUtility.InstanceIDToObject(id);
+                var obj = GameObjectLookup.ResolveInstanceID(id);
                 if (obj is Camera cam) return cam;
                 if (obj is GameObject go) return go.GetComponent<Camera>();
             }
 
             // Search all cameras by name or path
+#if UNITY_2022_2_OR_NEWER
+            var allCams = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None);
+#else
             var allCams = UnityEngine.Object.FindObjectsOfType<Camera>();
+#endif
             foreach (var cam in allCams)
             {
                 if (cam.name == cameraRef) return cam;
@@ -1034,7 +1097,11 @@ namespace MCPForUnity.Editor.Tools
                     // Frame entire scene by computing combined bounds of all renderers
                     Bounds allBounds = new Bounds(Vector3.zero, Vector3.zero);
                     bool hasAny = false;
+#if UNITY_2022_2_OR_NEWER
+                    foreach (var r in UnityEngine.Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+#else
                     foreach (var r in UnityEngine.Object.FindObjectsOfType<Renderer>())
+#endif
                     {
                         if (r == null || !r.gameObject.activeInHierarchy) continue;
                         if (!hasAny) { allBounds = r.bounds; hasAny = true; }
@@ -1325,7 +1392,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     if (int.TryParse(targetToken.ToString(), out int id))
                     {
-                        var obj = EditorUtility.InstanceIDToObject(id);
+                        var obj = GameObjectLookup.ResolveInstanceID(id);
                         if (obj is GameObject go) return go;
                         if (obj is Component c) return c.gameObject;
                     }

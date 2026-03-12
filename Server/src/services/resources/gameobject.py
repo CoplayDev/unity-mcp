@@ -133,7 +133,7 @@ class GameObjectResponse(MCPResponse):
 )
 async def get_gameobject(ctx: Context, instance_id: str) -> MCPResponse:
     """Get GameObject data by instance ID."""
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     id_int, error = _validate_instance_id(instance_id)
     if error:
@@ -180,7 +180,7 @@ async def get_gameobject_components(
     include_properties: bool = True
 ) -> MCPResponse:
     """Get all components on a GameObject."""
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     id_int, error = _validate_instance_id(instance_id)
     if error:
@@ -224,7 +224,7 @@ async def get_gameobject_component(
     component_name: str
 ) -> MCPResponse:
     """Get a specific component on a GameObject."""
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     id_int, error = _validate_instance_id(instance_id)
     if error:

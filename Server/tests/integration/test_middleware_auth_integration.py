@@ -57,17 +57,18 @@ class TestMiddlewareAuthEnforcement:
         middleware_ctx.fastmcp_context = ctx
 
         # Set an active instance so the middleware doesn't try to auto-select
-        middleware.set_active_instance(ctx, "Proj@hash1")
+        await middleware.set_active_instance(ctx, "Proj@hash1")
         # Register a matching session so resolution doesn't fail
         await registry.register("s1", "Proj", "hash1", "2022", user_id="user-55")
 
         await middleware._inject_unity_instance(middleware_ctx)
 
-        assert ctx.get_state("user_id") == "user-55"
+        assert await ctx.get_state("user_id") == "user-55"
 
 
 class TestMiddlewareSessionKey:
-    def test_get_session_key_uses_user_id_fallback(self):
+    @pytest.mark.asyncio
+    async def test_get_session_key_uses_user_id_fallback(self):
         """When no client_id, middleware should use user:$user_id as session key."""
         from transport.unity_instance_middleware import UnityInstanceMiddleware
 
@@ -77,12 +78,13 @@ class TestMiddlewareSessionKey:
         # Simulate no client_id attribute
         if hasattr(ctx, "client_id"):
             delattr(ctx, "client_id")
-        ctx.set_state("user_id", "user-77")
+        await ctx.set_state("user_id", "user-77")
 
-        key = middleware.get_session_key(ctx)
+        key = await middleware.get_session_key(ctx)
         assert key == "user:user-77"
 
-    def test_get_session_key_prefers_client_id(self):
+    @pytest.mark.asyncio
+    async def test_get_session_key_prefers_client_id(self):
         """client_id should take precedence over user_id."""
         from transport.unity_instance_middleware import UnityInstanceMiddleware
 
@@ -90,9 +92,9 @@ class TestMiddlewareSessionKey:
 
         ctx = DummyContext()
         ctx.client_id = "client-abc"
-        ctx.set_state("user_id", "user-77")
+        await ctx.set_state("user_id", "user-77")
 
-        key = middleware.get_session_key(ctx)
+        key = await middleware.get_session_key(ctx)
         assert key == "client-abc"
 
 

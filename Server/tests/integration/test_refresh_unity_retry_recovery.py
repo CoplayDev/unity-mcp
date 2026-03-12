@@ -16,7 +16,7 @@ async def test_refresh_unity_recovers_from_retry_disconnect(monkeypatch):
     from services.tools.refresh_unity import refresh_unity
 
     ctx = DummyContext()
-    ctx.set_state("unity_instance", "UnityMCPTests@cc8756d4cce0805a")
+    await ctx.set_state("unity_instance", "UnityMCPTests@cc8756d4cce0805a")
 
     # Seed dirty state
     inst = "UnityMCPTests@cc8756d4cce0805a"

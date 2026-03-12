@@ -46,11 +46,11 @@ class DummyContext:
     async def error(self, message):
         self.log_error.append(message)
 
-    def set_state(self, key, value):
+    async def set_state(self, key, value):
         """Set state value (mimics FastMCP context.set_state)"""
         self._state[key] = value
 
-    def get_state(self, key, default=None):
+    async def get_state(self, key, default=None):
         """Get state value (mimics FastMCP context.get_state)"""
         return self._state.get(key, default)
 

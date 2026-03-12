@@ -46,10 +46,13 @@ namespace MCPForUnity.Editor.Helpers
                 return null;
             }
 
-            // Accept both Assets/ and Packages/ as valid roots
-            bool isAssets   = path.StartsWith("Assets/",   StringComparison.OrdinalIgnoreCase);
-            bool isPackages = path.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase);
-            if (!isAssets && !isPackages)
+            // Ensure path starts with Assets/
+            if (string.Equals(path, "Assets", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Assets";
+            }
+            if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase)
+                && !path.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase))
             {
                 return "Assets/" + path.TrimStart('/');
             }

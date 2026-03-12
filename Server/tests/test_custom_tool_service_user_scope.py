@@ -68,7 +68,7 @@ async def test_execute_custom_tool_threads_user_id_from_context(monkeypatch):
 
     ctx = Mock()
     state = {"unity_instance": "Project@project-hash", "user_id": "user-1"}
-    ctx.get_state = Mock(side_effect=lambda key: state.get(key))
+    ctx.get_state = AsyncMock(side_effect=lambda key, default=None: state.get(key, default))
 
     service = Mock()
     service.execute_tool = AsyncMock(return_value=MCPResponse(success=True, message="ok"))
@@ -92,7 +92,7 @@ async def test_custom_tools_resource_threads_user_id_from_context(monkeypatch):
 
     ctx = Mock()
     state = {"unity_instance": "Project@project-hash", "user_id": "user-1"}
-    ctx.get_state = Mock(side_effect=lambda key: state.get(key))
+    ctx.get_state = AsyncMock(side_effect=lambda key, default=None: state.get(key, default))
 
     service = Mock()
     service.list_registered_tools = AsyncMock(

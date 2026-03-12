@@ -69,7 +69,7 @@ async def find_gameobjects(
     - mcpforunity://scene/gameobject/{id}/components - Get all components
     - mcpforunity://scene/gameobject/{id}/component/{name} - Get specific component
     """
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     # Validate required parameters before preflight I/O
     if not search_term:

@@ -43,6 +43,7 @@ ALL_ACTIONS = ["ping"] + PARTICLE_ACTIONS + VFX_ACTIONS + LINE_ACTIONS + TRAIL_A
 
 
 @mcp_for_unity_tool(
+    group="vfx",
     description=(
         "Manage Unity VFX components (ParticleSystem, VisualEffect, LineRenderer, TrailRenderer). "
         "Action prefixes: particle_*, vfx_*, line_*, trail_*. "
@@ -97,7 +98,7 @@ async def manage_vfx(
                 ),
             }
 
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     params_dict: dict[str, Any] = {"action": action_normalized}
     if properties is not None:

@@ -40,8 +40,8 @@ async def unity_instances(ctx: Context) -> dict[str, Any]:
         if transport == "http":
             # HTTP/WebSocket transport: query PluginHub
             # In remote-hosted mode, filter sessions by user_id
-            user_id = ctx.get_state(
-                "user_id") if config.http_remote_hosted else None
+            user_id = (await ctx.get_state(
+                "user_id")) if config.http_remote_hosted else None
             sessions_data = await PluginHub.get_sessions(user_id=user_id)
             sessions = sessions_data.sessions
 

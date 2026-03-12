@@ -115,7 +115,7 @@ class TestInstanceListResourceIsolation:
         from tests.integration.test_helpers import DummyContext
 
         ctx = DummyContext()
-        ctx.set_state("user_id", "userA")
+        await ctx.set_state("user_id", "userA")
 
         result = await unity_instances(ctx)
 
@@ -145,11 +145,11 @@ class TestSetActiveInstanceIsolation:
         )
 
         ctx = DummyContext()
-        ctx.set_state("user_id", "userA")
+        await ctx.set_state("user_id", "userA")
 
         result = await set_active_instance(ctx, "ProjectAlpha@hashA1")
         assert result["success"] is True
-        assert middleware.get_active_instance(ctx) == "ProjectAlpha@hashA1"
+        assert await middleware.get_active_instance(ctx) == "ProjectAlpha@hashA1"
 
     @pytest.mark.asyncio
     async def test_set_active_instance_rejects_other_users_instance(self, monkeypatch):
@@ -169,7 +169,7 @@ class TestSetActiveInstanceIsolation:
         )
 
         ctx = DummyContext()
-        ctx.set_state("user_id", "userA")
+        await ctx.set_state("user_id", "userA")
 
         # UserA tries to select UserB's instance -> should fail
         result = await set_active_instance(ctx, "ProjectBeta@hashB1")

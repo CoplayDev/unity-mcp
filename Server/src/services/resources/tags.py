@@ -21,7 +21,7 @@ class TagsResponse(MCPResponse):
 )
 async def get_tags(ctx: Context) -> TagsResponse | MCPResponse:
     """Get all project tags."""
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
     response = await send_with_unity_instance(
         async_send_command_with_retry,
         unity_instance,

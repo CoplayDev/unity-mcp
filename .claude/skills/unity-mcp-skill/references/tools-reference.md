@@ -15,6 +15,8 @@ Complete reference for all MCP tools. Each tool includes parameters, types, and 
 - [UI Tools](#ui-tools)
 - [Editor Control Tools](#editor-control-tools)
 - [Testing Tools](#testing-tools)
+- [Camera Tools](#camera-tools)
+- [ProBuilder Tools](#probuilder-tools)
 
 ---
 
@@ -667,6 +669,8 @@ manage_ui(
 3. Create an empty GameObject and attach UIDocument with the UXML source
 4. Use `get_visual_tree` to inspect the result
 
+**Important:** Always use `<ui:Style>` (with the `ui:` namespace prefix) in UXML files, not bare `<Style>`. UI Builder will fail to open files that use `<Style>` without the prefix.
+
 ---
 
 ## Editor Control Tools
@@ -789,3 +793,243 @@ execute_custom_tool(
 ```
 
 Discover available custom tools via `mcpforunity://custom-tools` resource.
+
+---
+
+## Camera Tools
+
+### manage_camera
+
+Unified camera management (Unity Camera + Cinemachine). Works without Cinemachine using basic Camera; unlocks presets, pipelines, and blending when Cinemachine is installed. Use `ping` to check availability.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `action` | string | Yes | Action to perform (see categories below) |
+| `target` | string | Sometimes | Target camera (name, path, or instance ID) |
+| `search_method` | string | No | `by_id`, `by_name`, `by_path` |
+| `properties` | dict \| string | No | Action-specific parameters |
+
+**Screenshot parameters** (for `screenshot` and `screenshot_multiview` actions):
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `camera` | string | Camera to capture from (defaults to Camera.main) |
+| `include_image` | bool | Return base64 PNG inline (default false) |
+| `max_resolution` | int | Downscale cap in px (default 640) |
+| `batch` | string | `"surround"` (6 angles) or `"orbit"` (configurable grid) |
+| `look_at` | string\|int\|list | Target to aim at (GO name/path/ID or [x,y,z]) |
+| `view_position` | list[float] | World position [x,y,z] to place camera |
+| `view_rotation` | list[float] | Euler rotation [x,y,z] (overrides look_at) |
+
+**Actions by category:**
+
+**Setup:**
+- `ping` — Check Cinemachine availability and version
+- `ensure_brain` — Ensure CinemachineBrain exists on main camera. Properties: `camera` (target camera), `defaultBlendStyle`, `defaultBlendDuration`
+- `get_brain_status` — Get Brain state (active camera, blend status)
+
+**Creation:**
+- `create_camera` — Create camera with optional preset. Properties: `name`, `preset` (follow/third_person/freelook/dolly/static/top_down/side_scroller), `follow`, `lookAt`, `priority`, `fieldOfView`. Falls back to basic Camera without Cinemachine.
+
+**Configuration:**
+- `set_target` — Set Follow and/or LookAt targets. Properties: `follow`, `lookAt` (GO name/path/ID)
+- `set_priority` — Set camera priority for Brain selection. Properties: `priority` (int)
+- `set_lens` — Configure lens. Properties: `fieldOfView`, `nearClipPlane`, `farClipPlane`, `orthographicSize`, `dutch`
+- `set_body` — Configure Body component (Cinemachine). Properties: `bodyType` (to swap), plus component-specific properties
+- `set_aim` — Configure Aim component (Cinemachine). Properties: `aimType` (to swap), plus component-specific properties
+- `set_noise` — Configure Noise (Cinemachine). Properties: `amplitudeGain`, `frequencyGain`
+
+**Extensions (Cinemachine):**
+- `add_extension` — Add extension. Properties: `extensionType` (CinemachineConfiner2D, CinemachineDeoccluder, CinemachineImpulseListener, CinemachineFollowZoom, CinemachineRecomposer, etc.)
+- `remove_extension` — Remove extension by type. Properties: `extensionType`
+
+**Control:**
+- `list_cameras` — List all cameras with status
+- `set_blend` — Configure default blend on Brain. Properties: `style` (Cut/EaseInOut/Linear/etc.), `duration`
+- `force_camera` — Override Brain to use specific camera
+- `release_override` — Release camera override
+
+**Capture:**
+- `screenshot` — Capture from a camera. Supports inline base64, batch surround/orbit, positioned capture.
+- `screenshot_multiview` — Shorthand for screenshot with batch='surround' and include_image=true.
+
+**Examples:**
+
+```python
+# Check Cinemachine availability
+manage_camera(action="ping")
+
+# Create a third-person camera following the player
+manage_camera(action="create_camera", properties={
+    "name": "FollowCam", "preset": "third_person",
+    "follow": "Player", "lookAt": "Player", "priority": 20
+})
+
+# Ensure Brain exists on main camera
+manage_camera(action="ensure_brain")
+
+# Configure body component
+manage_camera(action="set_body", target="FollowCam", properties={
+    "bodyType": "CinemachineThirdPersonFollow",
+    "cameraDistance": 5.0, "shoulderOffset": [0.5, 0.5, 0]
+})
+
+# Set aim
+manage_camera(action="set_aim", target="FollowCam", properties={
+    "aimType": "CinemachineRotationComposer"
+})
+
+# Add camera shake
+manage_camera(action="set_noise", target="FollowCam", properties={
+    "amplitudeGain": 0.5, "frequencyGain": 1.0
+})
+
+# Set priority to make this the active camera
+manage_camera(action="set_priority", target="FollowCam", properties={"priority": 50})
+
+# Force a specific camera
+manage_camera(action="force_camera", target="CinematicCam")
+
+# Release override (return to priority-based selection)
+manage_camera(action="release_override")
+
+# Configure blend transitions
+manage_camera(action="set_blend", properties={"style": "EaseInOut", "duration": 2.0})
+
+# Add deoccluder extension
+manage_camera(action="add_extension", target="FollowCam", properties={
+    "extensionType": "CinemachineDeoccluder"
+})
+
+# Screenshot from a specific camera
+manage_camera(action="screenshot", camera="FollowCam", include_image=True, max_resolution=512)
+
+# Multi-view screenshot (6-angle contact sheet)
+manage_camera(action="screenshot_multiview", max_resolution=480)
+
+# List all cameras
+manage_camera(action="list_cameras")
+```
+
+**Tier system:**
+- Tier 1 actions (ping, create_camera, set_target, set_lens, set_priority, list_cameras, screenshot, screenshot_multiview) work without Cinemachine — they fall back to basic Unity Camera.
+- Tier 2 actions (ensure_brain, get_brain_status, set_body, set_aim, set_noise, add/remove_extension, set_blend, force_camera, release_override) require `com.unity.cinemachine`. If called without Cinemachine, they return an error with a fallback suggestion.
+
+**Resource:** Read `mcpforunity://scene/cameras` for current camera state before modifying.
+
+---
+
+## ProBuilder Tools
+
+### manage_probuilder
+
+Unified tool for ProBuilder mesh operations. Requires `com.unity.probuilder` package. When available, **prefer ProBuilder over primitive GameObjects** for editable geometry, multi-material faces, or complex shapes.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `action` | string | Yes | Action to perform (see categories below) |
+| `target` | string | Sometimes | Target GameObject name/path/id |
+| `search_method` | string | No | How to find target: `by_id`, `by_name`, `by_path`, `by_tag`, `by_layer` |
+| `properties` | dict \| string | No | Action-specific parameters (dict or JSON string) |
+
+**Actions by category:**
+
+**Shape Creation:**
+- `create_shape` — Create ProBuilder primitive (shape_type, size, position, rotation, name). 12 types: Cube, Cylinder, Sphere, Plane, Cone, Torus, Pipe, Arch, Stair, CurvedStair, Door, Prism
+- `create_poly_shape` — Create from 2D polygon footprint (points, extrudeHeight, flipNormals)
+
+**Mesh Editing:**
+- `extrude_faces` — Extrude faces (faceIndices, distance, method: FaceNormal/VertexNormal/IndividualFaces)
+- `extrude_edges` — Extrude edges (edgeIndices or edges [{a,b},...], distance, asGroup)
+- `bevel_edges` — Bevel edges (edgeIndices or edges [{a,b},...], amount 0-1)
+- `subdivide` — Subdivide faces via ConnectElements (faceIndices optional)
+- `delete_faces` — Delete faces (faceIndices)
+- `bridge_edges` — Bridge two open edges (edgeA, edgeB as {a,b} pairs, allowNonManifold)
+- `connect_elements` — Connect edges/faces (edgeIndices or faceIndices)
+- `detach_faces` — Detach faces to new object (faceIndices, deleteSourceFaces)
+- `flip_normals` — Flip face normals (faceIndices)
+- `merge_faces` — Merge faces into one (faceIndices)
+- `combine_meshes` — Combine ProBuilder objects (targets list)
+- `merge_objects` — Merge objects with auto-convert (targets, name)
+- `duplicate_and_flip` — Create double-sided geometry (faceIndices)
+- `create_polygon` — Connect existing vertices into a new face (vertexIndices, unordered)
+
+**Vertex Operations:**
+- `merge_vertices` — Collapse vertices to single point (vertexIndices, collapseToFirst)
+- `weld_vertices` — Weld vertices within proximity radius (vertexIndices, radius)
+- `split_vertices` — Split shared vertices (vertexIndices)
+- `move_vertices` — Translate vertices (vertexIndices, offset [x,y,z])
+- `insert_vertex` — Insert vertex on edge or face (edge {a,b} or faceIndex + point [x,y,z])
+- `append_vertices_to_edge` — Insert evenly-spaced points on edges (edgeIndices or edges, count)
+
+**Selection:**
+- `select_faces` — Select faces by criteria (direction + tolerance, growFrom + growAngle)
+
+**UV & Materials:**
+- `set_face_material` — Assign material to faces (faceIndices, materialPath)
+- `set_face_color` — Set vertex color on faces (faceIndices, color [r,g,b,a])
+- `set_face_uvs` — Set UV params (faceIndices, scale, offset, rotation, flipU, flipV)
+
+**Query:**
+- `get_mesh_info` — Get mesh details with `include` parameter:
+  - `"summary"` (default): counts, bounds, materials
+  - `"faces"`: + face normals, centers, and direction labels (capped at 100)
+  - `"edges"`: + edge vertex pairs with world positions (capped at 200, deduplicated)
+  - `"all"`: everything
+- `ping` — Check if ProBuilder is available
+
+**Smoothing:**
+- `set_smoothing` — Set smoothing group on faces (faceIndices, smoothingGroup: 0=hard, 1+=smooth)
+- `auto_smooth` — Auto-assign smoothing groups by angle (angleThreshold: default 30)
+
+**Mesh Utilities:**
+- `center_pivot` — Move pivot to mesh bounds center
+- `freeze_transform` — Bake transform into vertices, reset transform
+- `validate_mesh` — Check mesh health (read-only diagnostics)
+- `repair_mesh` — Auto-fix degenerate triangles
+
+**Not Yet Working (known bugs):**
+- `set_pivot` — Vertex positions don't persist through mesh rebuild. Use `center_pivot` or Transform positioning instead.
+- `convert_to_probuilder` — MeshImporter throws internally. Create shapes natively instead.
+
+**Examples:**
+
+```python
+# Check availability
+manage_probuilder(action="ping")
+
+# Create a cube
+manage_probuilder(action="create_shape", properties={"shape_type": "Cube", "name": "MyCube"})
+
+# Get face info with directions
+manage_probuilder(action="get_mesh_info", target="MyCube", properties={"include": "faces"})
+
+# Extrude the top face (find it via direction="top" in get_mesh_info results)
+manage_probuilder(action="extrude_faces", target="MyCube",
+    properties={"faceIndices": [2], "distance": 1.5})
+
+# Select all upward-facing faces
+manage_probuilder(action="select_faces", target="MyCube",
+    properties={"direction": "up", "tolerance": 0.7})
+
+# Create double-sided geometry (for room interiors)
+manage_probuilder(action="duplicate_and_flip", target="Room",
+    properties={"faceIndices": [0, 1, 2, 3, 4, 5]})
+
+# Weld nearby vertices
+manage_probuilder(action="weld_vertices", target="MyCube",
+    properties={"vertexIndices": [0, 1, 2, 3], "radius": 0.1})
+
+# Auto-smooth
+manage_probuilder(action="auto_smooth", target="MyCube", properties={"angleThreshold": 30})
+
+# Cleanup workflow
+manage_probuilder(action="center_pivot", target="MyCube")
+manage_probuilder(action="validate_mesh", target="MyCube")
+```
+
+See also: [ProBuilder Workflow Guide](probuilder-guide.md) for detailed patterns and complex object examples.

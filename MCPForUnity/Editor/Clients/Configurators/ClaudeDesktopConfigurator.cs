@@ -56,7 +56,7 @@ namespace MCPForUnity.Editor.Clients.Configurators
             if (useHttp)
             {
                 return "# Claude Desktop does not support HTTP transport.\n" +
-                       "# Open Advanced Settings and disable HTTP transport to use stdio, then regenerate.";
+                       "# In Connect tab, change the Transport option from HTTP to stdio, then regenerate.";
             }
 
             return base.GetManualSnippet();

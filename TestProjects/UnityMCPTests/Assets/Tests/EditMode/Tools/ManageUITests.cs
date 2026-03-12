@@ -645,6 +645,154 @@ namespace MCPForUnityTests.Editor.Tools
             }
         }
 
+        // ---- UXML validation ----
+
+        [Test]
+        public void Create_MalformedXml_ReturnsError_FileNotWritten()
+        {
+            string path = $"{TempRoot}/Malformed_{Guid.NewGuid():N}.uxml";
+            string badContent = "<ui:UXML><ui:Label text=\"unclosed\">";
+
+            var result = ToJObject(ManageUI.HandleCommand(new JObject
+            {
+                ["action"] = "create",
+                ["path"] = path,
+                ["contents"] = badContent,
+            }));
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(result["error"].ToString(), Does.Contain("Malformed XML"));
+
+            // Verify file was NOT written
+            string fullPath = Path.Combine(Application.dataPath,
+                path.Substring("Assets/".Length)).Replace('/', Path.DirectorySeparatorChar);
+            Assert.IsFalse(File.Exists(fullPath), "Malformed UXML should not be written to disk");
+        }
+
+        [Test]
+        public void Create_MissingNamespace_WritesWithWarning()
+        {
+            string path = $"{TempRoot}/NoNs_{Guid.NewGuid():N}.uxml";
+            string content = "<ui:UXML><ui:Label text=\"hi\" /></ui:UXML>";
+
+            var result = ToJObject(ManageUI.HandleCommand(new JObject
+            {
+                ["action"] = "create",
+                ["path"] = path,
+                ["contents"] = content,
+            }));
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            var data = result["data"] as JObject;
+            Assert.IsNotNull(data);
+            var warnings = data["validationWarnings"] as JArray;
+            Assert.IsNotNull(warnings, "Should have validationWarnings");
+            Assert.That(warnings.ToString(), Does.Contain("Missing namespace"));
+        }
+
+        [Test]
+        public void Create_ValidUxml_NoWarnings()
+        {
+            string path = $"{TempRoot}/Valid_{Guid.NewGuid():N}.uxml";
+            string content = "<ui:UXML xmlns:ui=\"UnityEngine.UIElements\"><ui:Label text=\"ok\" /></ui:UXML>";
+
+            var result = ToJObject(ManageUI.HandleCommand(new JObject
+            {
+                ["action"] = "create",
+                ["path"] = path,
+                ["contents"] = content,
+            }));
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            var data = result["data"] as JObject;
+            Assert.IsNull(data?["validationWarnings"],
+                "Fully valid UXML should not have validationWarnings");
+        }
+
+        [Test]
+        public void Create_WrongRootElement_WritesWithWarning()
+        {
+            string path = $"{TempRoot}/WrongRoot_{Guid.NewGuid():N}.uxml";
+            string content = "<div xmlns:ui=\"UnityEngine.UIElements\"><ui:Label text=\"hi\" /></div>";
+
+            var result = ToJObject(ManageUI.HandleCommand(new JObject
+            {
+                ["action"] = "create",
+                ["path"] = path,
+                ["contents"] = content,
+            }));
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            var data = result["data"] as JObject;
+            var warnings = data["validationWarnings"] as JArray;
+            Assert.IsNotNull(warnings, "Should have validationWarnings");
+            Assert.That(warnings.ToString(), Does.Contain("Root element"));
+        }
+
+        [Test]
+        public void Create_EmptyContent_ReturnsError()
+        {
+            string path = $"{TempRoot}/Empty_{Guid.NewGuid():N}.uxml";
+
+            var result = ToJObject(ManageUI.HandleCommand(new JObject
+            {
+                ["action"] = "create",
+                ["path"] = path,
+                ["contents"] = "   ",
+            }));
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(result["error"].ToString(), Does.Contain("empty"));
+        }
+
+        [Test]
+        public void Update_MalformedXml_ReturnsError_FileNotChanged()
+        {
+            string path = $"{TempRoot}/UpdateMalformed_{Guid.NewGuid():N}.uxml";
+            string original = "<ui:UXML xmlns:ui=\"UnityEngine.UIElements\" />";
+
+            ManageUI.HandleCommand(new JObject
+            {
+                ["action"] = "create",
+                ["path"] = path,
+                ["contents"] = original,
+            });
+
+            string badContent = "<ui:UXML><broken>";
+            var result = ToJObject(ManageUI.HandleCommand(new JObject
+            {
+                ["action"] = "update",
+                ["path"] = path,
+                ["contents"] = badContent,
+            }));
+
+            Assert.IsFalse(result.Value<bool>("success"));
+            Assert.That(result["error"].ToString(), Does.Contain("Malformed XML"));
+
+            // Verify original content was preserved
+            string fullPath = Path.Combine(Application.dataPath,
+                path.Substring("Assets/".Length)).Replace('/', Path.DirectorySeparatorChar);
+            string actual = File.ReadAllText(fullPath);
+            Assert.AreEqual(original, actual, "Original file content should be preserved");
+        }
+
+        [Test]
+        public void Create_Uss_SkipsUxmlValidation()
+        {
+            string path = $"{TempRoot}/NoValidation_{Guid.NewGuid():N}.uss";
+            // USS is CSS-like, not XML — validation should be skipped
+            string content = "This is not valid XML <broken>";
+
+            var result = ToJObject(ManageUI.HandleCommand(new JObject
+            {
+                ["action"] = "create",
+                ["path"] = path,
+                ["contents"] = content,
+            }));
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+        }
+
         // ---- Path traversal validation ----
 
         [Test]

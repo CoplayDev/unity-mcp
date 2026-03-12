@@ -46,7 +46,7 @@ async def get_tests(ctx: Context) -> GetTestsResponse | MCPResponse:
     For advanced filtering or pagination control, use the run_tests tool which
     accepts mode, filter, page_size, and cursor parameters.
     """
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     response = await send_with_unity_instance(
         async_send_command_with_retry,
@@ -77,7 +77,7 @@ async def get_tests_for_mode(
     Returns the first page of tests using Unity's default pagination (50 items).
     For advanced filtering or pagination control, use the run_tests tool.
     """
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     response = await send_with_unity_instance(
         async_send_command_with_retry,

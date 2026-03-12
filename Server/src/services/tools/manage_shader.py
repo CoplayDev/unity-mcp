@@ -11,6 +11,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 
 
 @mcp_for_unity_tool(
+    group="vfx",
     description="Manages shader scripts in Unity (create, read, update, delete). Read-only action: read. Modifying actions: create, update, delete.",
     annotations=ToolAnnotations(
         title="Manage Shader",
@@ -28,7 +29,7 @@ async def manage_shader(
 ) -> dict[str, Any]:
     # Get active instance from session state
     # Removed session_state import
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
     try:
         # Prepare parameters for Unity
         params = {

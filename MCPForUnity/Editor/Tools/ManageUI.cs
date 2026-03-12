@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Xml;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Runtime.Helpers;
 using Newtonsoft.Json.Linq;
@@ -12,13 +13,16 @@ using UnityEngine.UIElements;
 
 namespace MCPForUnity.Editor.Tools
 {
-    [McpForUnityTool("manage_ui", AutoRegister = false)]
+    [McpForUnityTool("manage_ui", AutoRegister = false, Group = "ui")]
     public static class ManageUI
     {
         private static readonly HashSet<string> ValidExtensions = new(StringComparer.OrdinalIgnoreCase)
         {
             ".uxml", ".uss"
         };
+
+        // UTF-8 without BOM — UI Builder in Unity 6 can fail to open UXML files with a BOM.
+        private static readonly Encoding Utf8NoBom = new UTF8Encoding(false);
 
         static ManageUI()
         {
@@ -167,10 +171,35 @@ namespace MCPForUnity.Editor.Tools
                 Directory.CreateDirectory(dir);
             }
 
-            File.WriteAllText(fullPath, contents, Encoding.UTF8);
+            bool isUxml = path.EndsWith(".uxml", StringComparison.OrdinalIgnoreCase);
+            var validationWarnings = new List<string>();
+
+            if (isUxml)
+            {
+                string xmlError = ValidateUxmlContent(contents, validationWarnings);
+                if (xmlError != null)
+                {
+                    return new ErrorResponse($"UXML validation failed — file was NOT written. {xmlError}");
+                }
+            }
+
+            File.WriteAllText(fullPath, contents, Utf8NoBom);
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
 
-            return new SuccessResponse($"Created {Path.GetExtension(path).TrimStart('.')} file at {path}",
+            if (isUxml)
+            {
+                ValidateUxmlPostImport(path, validationWarnings);
+            }
+
+            string ext = Path.GetExtension(path).TrimStart('.');
+            if (validationWarnings.Count > 0)
+            {
+                return new SuccessResponse(
+                    $"Created {ext} file at {path} with {validationWarnings.Count} warning(s)",
+                    new { path, validationWarnings });
+            }
+
+            return new SuccessResponse($"Created {ext} file at {path}",
                 new { path });
         }
 
@@ -233,10 +262,35 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse($"File not found: {path}. Use 'create' action for new files.");
             }
 
-            File.WriteAllText(fullPath, contents, Encoding.UTF8);
+            bool isUxml = path.EndsWith(".uxml", StringComparison.OrdinalIgnoreCase);
+            var validationWarnings = new List<string>();
+
+            if (isUxml)
+            {
+                string xmlError = ValidateUxmlContent(contents, validationWarnings);
+                if (xmlError != null)
+                {
+                    return new ErrorResponse($"UXML validation failed — file was NOT updated. {xmlError}");
+                }
+            }
+
+            File.WriteAllText(fullPath, contents, Utf8NoBom);
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
 
-            return new SuccessResponse($"Updated {Path.GetExtension(path).TrimStart('.')} file at {path}",
+            if (isUxml)
+            {
+                ValidateUxmlPostImport(path, validationWarnings);
+            }
+
+            string ext = Path.GetExtension(path).TrimStart('.');
+            if (validationWarnings.Count > 0)
+            {
+                return new SuccessResponse(
+                    $"Updated {ext} file at {path} with {validationWarnings.Count} warning(s)",
+                    new { path, validationWarnings });
+            }
+
+            return new SuccessResponse($"Updated {ext} file at {path}",
                 new { path });
         }
 
@@ -1203,10 +1257,10 @@ namespace MCPForUnity.Editor.Tools
             if (insertIdx < 0)
                 return new ErrorResponse("Could not find insertion point. Ensure UXML has a root <ui:UXML> or <UXML> element.");
 
-            string styleTag = $"\n    <Style src=\"project://database/{stylesheetPath}\" />";
+            string styleTag = $"\n    <ui:Style src=\"project://database/{stylesheetPath}\" />";
             content = content.Insert(insertIdx, styleTag);
 
-            File.WriteAllText(fullPath, content, Encoding.UTF8);
+            File.WriteAllText(fullPath, content, Utf8NoBom);
             AssetDatabase.ImportAsset(uxmlPath, ImportAssetOptions.ForceUpdate);
 
             return new SuccessResponse($"Linked stylesheet '{stylesheetPath}' to '{uxmlPath}'.",
@@ -1783,6 +1837,72 @@ namespace MCPForUnity.Editor.Tools
             }
 
             return p.Get("contents");
+        }
+
+        /// <summary>
+        /// Validates UXML content before writing to disk.
+        /// Returns null if valid, or an error message if malformed.
+        /// Populates warnings list with non-fatal issues.
+        /// Uses XmlParserContext to pre-declare common UXML namespace prefixes
+        /// (ui, uie, engine, editor) since Unity's parser is more lenient than System.Xml.
+        /// </summary>
+        private static string ValidateUxmlContent(string contents, List<string> warnings)
+        {
+            if (string.IsNullOrWhiteSpace(contents))
+                return "UXML content is empty.";
+
+            var nt = new NameTable();
+            var nsMgr = new XmlNamespaceManager(nt);
+            nsMgr.AddNamespace("ui", "UnityEngine.UIElements");
+            nsMgr.AddNamespace("uie", "UnityEditor.UIElements");
+            nsMgr.AddNamespace("engine", "UnityEngine.UIElements");
+            nsMgr.AddNamespace("editor", "UnityEditor.UIElements");
+            var ctx = new XmlParserContext(nt, nsMgr, null, XmlSpace.Default);
+
+            string rootLocalName = null;
+            try
+            {
+                using (var reader = XmlReader.Create(new StringReader(contents), null, ctx))
+                {
+                    while (reader.Read())
+                    {
+                        if (reader.NodeType == XmlNodeType.Element && rootLocalName == null)
+                            rootLocalName = reader.LocalName;
+                    }
+                }
+            }
+            catch (XmlException ex)
+            {
+                return $"Malformed XML at line {ex.LineNumber}, position {ex.LinePosition}: {ex.Message}";
+            }
+
+            if (rootLocalName == null)
+                return "UXML content has no root element.";
+
+            if (rootLocalName != "UXML")
+                warnings.Add($"Root element is <{rootLocalName}>, expected <UXML> or <ui:UXML>.");
+
+            if (!contents.Contains("UnityEngine.UIElements"))
+            {
+                warnings.Add("Missing namespace declaration xmlns:ui=\"UnityEngine.UIElements\". " +
+                              "UI Builder may fail to open this file.");
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Validates a UXML asset after import by attempting to load it as a VisualTreeAsset.
+        /// </summary>
+        private static void ValidateUxmlPostImport(string assetPath, List<string> warnings)
+        {
+            var asset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(assetPath);
+            if (asset == null)
+            {
+                warnings.Add("Unity failed to parse the UXML file. " +
+                              "The file was written but UI Builder will not be able to open it. " +
+                              "Check the console for details.");
+            }
         }
     }
 }

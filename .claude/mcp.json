@@ -1,16 +1,8 @@
 {
   "mcpServers": {
     "UnityMCP": {
-      "type": "stdio",
-      "command": "uv",
-      "args": [
-        "run",
-        "--directory",
-        "${workspaceFolder}/Server",
-        "src/main.py",
-        "--transport",
-        "stdio"
-      ]
+      "type": "http",
+      "url": "http://localhost:8080/mcp"
     }
   }
 }

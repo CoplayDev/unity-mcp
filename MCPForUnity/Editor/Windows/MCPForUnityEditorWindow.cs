@@ -275,6 +275,11 @@ namespace MCPForUnity.Editor.Windows
                     if (connectionSection != null)
                         await connectionSection.VerifyBridgeConnectionAsync();
                 };
+                advancedSection.OnPackageDeployed += () =>
+                {
+                    UpdateVersionLabel();
+                    QueueUpdateCheck();
+                };
                 // Wire up health status updates from Connection to Advanced
                 connectionSection?.SetHealthStatusUpdateCallback((isHealthy, statusText) =>
                     advancedSection?.UpdateHealthStatus(isHealthy, statusText));
@@ -328,6 +333,7 @@ namespace MCPForUnity.Editor.Windows
 
             // Initial updates
             RefreshAllData();
+            QueueUpdateCheck();
         }
 
         private void UpdateVersionLabel()
@@ -512,7 +518,6 @@ namespace MCPForUnity.Editor.Windows
 
             advancedSection?.UpdatePathOverrides();
             clientConfigSection?.RefreshSelectedClient();
-            QueueUpdateCheck();
         }
 
         private void SetupTabs()
@@ -685,8 +690,8 @@ namespace MCPForUnity.Editor.Windows
             bool installed = RoslynInstaller.IsInstalled();
 
             var statusLabel = new Label(installed
-                ? "\u2713  Roslyn DLLs are installed. The execute_code tool is available."
-                : "Roslyn DLLs are required for the execute_code tool (runtime C# compilation).");
+                ? "\u2713  Roslyn DLLs are installed. The runtime_compilation tool is available."
+                : "Roslyn DLLs are required for the runtime_compilation tool (runtime C# compilation).");
             statusLabel.AddToClassList("validation-description");
             statusLabel.style.marginBottom = 4;
             content.Add(statusLabel);
@@ -695,7 +700,7 @@ namespace MCPForUnity.Editor.Windows
             {
                 RoslynInstaller.Install(interactive: true);
                 statusLabel.text = RoslynInstaller.IsInstalled()
-                    ? "\u2713  Roslyn DLLs are installed. The execute_code tool is available."
+                    ? "\u2713  Roslyn DLLs are installed. The runtime_compilation tool is available."
                     : "Installation incomplete. Check the console for errors.";
             });
             button.text = installed ? "Reinstall Roslyn DLLs" : "Install Roslyn DLLs";

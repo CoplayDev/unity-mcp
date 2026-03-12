@@ -13,6 +13,7 @@ from core.config import config
 
 @mcp_for_unity_tool(
     unity_target=None,
+    group=None,
     description="Set the active Unity instance for this client/session. Accepts Name@hash, hash prefix, or port number (stdio only).",
     annotations=ToolAnnotations(
         title="Set Active Instance",
@@ -47,21 +48,21 @@ async def set_active_instance(
             }
         resolved_id = match.id
         middleware = get_unity_instance_middleware()
-        middleware.set_active_instance(ctx, resolved_id)
+        await middleware.set_active_instance(ctx, resolved_id)
         return {
             "success": True,
             "message": f"Active instance set to {resolved_id}",
             "data": {
                 "instance": resolved_id,
-                "session_key": middleware.get_session_key(ctx),
+                "session_key": await middleware.get_session_key(ctx),
             },
         }
 
     # Discover running instances based on transport
     if transport == "http":
         # In remote-hosted mode, filter sessions by user_id
-        user_id = ctx.get_state(
-            "user_id") if config.http_remote_hosted else None
+        user_id = (await ctx.get_state(
+            "user_id")) if config.http_remote_hosted else None
         sessions_data = await PluginHub.get_sessions(user_id=user_id)
         sessions = sessions_data.sessions
         instances = []
@@ -141,8 +142,8 @@ async def set_active_instance(
     middleware = get_unity_instance_middleware()
     # We use middleware.set_active_instance to persist the selection.
     # The session key is an internal detail but useful for debugging response.
-    middleware.set_active_instance(ctx, resolved.id)
-    session_key = middleware.get_session_key(ctx)
+    await middleware.set_active_instance(ctx, resolved.id)
+    session_key = await middleware.get_session_key(ctx)
 
     return {
         "success": True,

@@ -22,6 +22,7 @@ namespace MCPForUnity.Editor.Constants
 
         internal const string UvxPathOverride = "MCPForUnity.UvxPath";
         internal const string ClaudeCliPathOverride = "MCPForUnity.ClaudeCliPath";
+        internal const string ClientProjectDirOverride = "MCPForUnity.ClientProjectDir";
 
         internal const string HttpBaseUrl = "MCPForUnity.HttpUrl";
         internal const string HttpRemoteBaseUrl = "MCPForUnity.HttpRemoteUrl";
@@ -65,6 +66,8 @@ namespace MCPForUnity.Editor.Constants
 
         internal const string ApiKey = "MCPForUnity.ApiKey";
 
+        internal const string AutoStartOnLoad = "MCPForUnity.AutoStartOnLoad";
         internal const string BatchExecuteMaxCommands = "MCPForUnity.BatchExecute.MaxCommands";
+        internal const string LogRecordEnabled = "MCPForUnity.LogRecordEnabled";
     }
 }

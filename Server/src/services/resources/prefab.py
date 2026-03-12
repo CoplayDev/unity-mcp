@@ -121,7 +121,7 @@ class PrefabInfoResponse(MCPResponse):
 )
 async def get_prefab_info(ctx: Context, encoded_path: str) -> MCPResponse:
     """Get prefab asset info by path."""
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     # Decode the URL-encoded path
     decoded_path = _decode_prefab_path(encoded_path)
@@ -173,7 +173,7 @@ class PrefabHierarchyResponse(MCPResponse):
 )
 async def get_prefab_hierarchy(ctx: Context, encoded_path: str) -> MCPResponse:
     """Get prefab hierarchy by path."""
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     # Decode the URL-encoded path
     decoded_path = _decode_prefab_path(encoded_path)

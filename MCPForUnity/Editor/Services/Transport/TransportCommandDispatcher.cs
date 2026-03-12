@@ -361,17 +361,56 @@ namespace MCPForUnity.Editor.Services.Transport
                     return;
                 }
 
+                var logType = resourceMeta != null ? "resource" : toolMeta != null ? "tool" : "unknown";
+                var sw = McpLogRecord.IsEnabled ? System.Diagnostics.Stopwatch.StartNew() : null;
                 var result = CommandRegistry.ExecuteCommand(command.type, parameters, pending.CompletionSource);
 
                 if (result == null)
                 {
                     // Async command – cleanup after completion on next editor frame to preserve order.
-                    pending.CompletionSource.Task.ContinueWith(_ =>
+                    var capturedType = command.type;
+                    var capturedParams = parameters;
+                    var capturedLogType = logType;
+                    pending.CompletionSource.Task.ContinueWith(t =>
                     {
+                        sw?.Stop();
+                        var logStatus = "SUCCESS";
+                        string logError = null;
+                        if (t.IsFaulted)
+                        {
+                            logStatus = "ERROR";
+                            logError = t.Exception?.InnerException?.Message;
+                        }
+                        else if (t.IsCompletedSuccessfully && t.Result != null)
+                        {
+                            try
+                            {
+                                var resultObj = JObject.Parse(t.Result);
+                                if (string.Equals(resultObj.Value<string>("status"), "error", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    logStatus = "ERROR";
+                                    logError = resultObj.Value<string>("error");
+                                }
+                            }
+                            catch { }
+                        }
+                        McpLogRecord.Log(capturedType, capturedParams, capturedLogType,
+                            logStatus, sw?.ElapsedMilliseconds ?? 0, logError);
                         EditorApplication.delayCall += () => RemovePending(id, pending);
                     }, TaskScheduler.Default);
                     return;
                 }
+
+                sw?.Stop();
+
+                string syncLogStatus = "SUCCESS";
+                string syncLogError = null;
+                if (result is ErrorResponse errResp)
+                {
+                    syncLogStatus = "ERROR";
+                    syncLogError = errResp.Error;
+                }
+                McpLogRecord.Log(command.type, parameters, logType, syncLogStatus, sw?.ElapsedMilliseconds ?? 0, syncLogError);
 
                 var response = new { status = "success", result };
                 pending.TrySetResult(JsonConvert.SerializeObject(response));

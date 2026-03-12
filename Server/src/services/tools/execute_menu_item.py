@@ -25,7 +25,7 @@ async def execute_menu_item(
     menu_path: Annotated[str,
                          "Menu path for 'execute' or 'exists' (e.g., 'File/Save Project')"] | None = None,
 ) -> MCPResponse:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
     params_dict: dict[str, Any] = {"menuPath": menu_path}
     params_dict = {k: v for k, v in params_dict.items() if v is not None}
     result = await send_with_unity_instance(async_send_command_with_retry, unity_instance, "execute_menu_item", params_dict)

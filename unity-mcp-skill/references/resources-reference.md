@@ -5,6 +5,8 @@ Resources provide read-only access to Unity state. Use resources to inspect befo
 ## Table of Contents
 
 - [Editor State Resources](#editor-state-resources)
+- [Camera Resources](#camera-resources)
+- [Graphics Resources](#graphics-resources)
 - [Scene & GameObject Resources](#scene--gameobject-resources)
 - [Prefab Resources](#prefab-resources)
 - [Project Resources](#project-resources)
@@ -21,7 +23,7 @@ All resources use `mcpforunity://` scheme:
 mcpforunity://{category}/{resource_path}[?query_params]
 ```
 
-**Categories:** `editor`, `scene`, `prefab`, `project`, `menu-items`, `custom-tools`, `tests`, `instances`
+**Categories:** `editor`, `scene`, `prefab`, `project`, `pipeline`, `rendering`, `menu-items`, `custom-tools`, `tests`, `instances`
 
 ---
 
@@ -122,6 +124,156 @@ mcpforunity://{category}/{resource_path}[?query_params]
   "isDirty": false
 }
 ```
+
+---
+
+## Camera Resources
+
+### mcpforunity://scene/cameras
+
+**Purpose:** List all cameras in the scene (Unity Camera + CinemachineCamera) with full status. Read this before using `manage_camera` to understand the current camera setup.
+
+**Returns:**
+```json
+{
+  "brain": {
+    "exists": true,
+    "gameObject": "Main Camera",
+    "instanceID": 55504,
+    "activeCameraName": "Cam_Cinematic",
+    "activeCameraID": -39420,
+    "isBlending": false
+  },
+  "cinemachineCameras": [
+    {
+      "instanceID": -39420,
+      "name": "Cam_Cinematic",
+      "isLive": true,
+      "priority": 50,
+      "follow": {"name": "CameraTarget", "instanceID": -26766},
+      "lookAt": {"name": "CameraTarget", "instanceID": -26766},
+      "body": "CinemachineThirdPersonFollow",
+      "aim": "CinemachineRotationComposer",
+      "noise": "CinemachineBasicMultiChannelPerlin",
+      "extensions": []
+    }
+  ],
+  "unityCameras": [
+    {
+      "instanceID": 55504,
+      "name": "Main Camera",
+      "depth": 0.0,
+      "fieldOfView": 50.0,
+      "hasBrain": true
+    }
+  ],
+  "cinemachineInstalled": true
+}
+```
+
+**Key Fields:**
+- `brain`: CinemachineBrain status — which camera is active, blend state
+- `cinemachineCameras`: All CinemachineCamera components with pipeline info (body, aim, noise, extensions)
+- `unityCameras`: All Unity Camera components with depth and FOV
+- `cinemachineInstalled`: Whether Cinemachine package is available
+
+**Use with:** `manage_camera` tool for creating/configuring cameras
+
+---
+
+## Graphics Resources
+
+### mcpforunity://scene/volumes
+
+**Purpose:** List all Volume components in the scene with effects and parameters. Read this before using `manage_graphics` volume actions.
+
+**Returns:**
+```json
+{
+  "pipeline": "Universal (URP)",
+  "volumes": [
+    {
+      "name": "PostProcessVolume",
+      "instance_id": -24600,
+      "is_global": true,
+      "weight": 1.0,
+      "priority": 0,
+      "blend_distance": 0,
+      "profile": "MyProfile",
+      "profile_path": "Assets/Settings/MyProfile.asset",
+      "effects": [
+        {
+          "type": "Bloom",
+          "active": true,
+          "overridden_params": ["intensity", "threshold", "scatter"]
+        },
+        {
+          "type": "Vignette",
+          "active": true,
+          "overridden_params": ["intensity", "smoothness"]
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Key Fields:**
+- `is_global`: Whether the volume applies everywhere or only within its collider bounds
+- `effects[].overridden_params`: Which parameters are actively overridden (not using defaults)
+- `profile_path`: Empty string for embedded profiles, asset path for shared profiles
+
+**Use with:** `manage_graphics` volume actions (volume_create, volume_add_effect, volume_set_effect, etc.)
+
+### mcpforunity://rendering/stats
+
+**Purpose:** Current rendering performance counters (draw calls, batches, triangles, memory).
+
+**Returns:**
+```json
+{
+  "draw_calls": 42,
+  "batches": 35,
+  "set_pass_calls": 12,
+  "triangles": 15234,
+  "vertices": 8456,
+  "dynamic_batches": 5,
+  "static_batches": 20,
+  "shadow_casters": 3,
+  "render_textures": 8,
+  "render_textures_bytes": 16777216,
+  "visible_skinned_meshes": 2
+}
+```
+
+**Use with:** `manage_graphics` stats actions (stats_get, stats_list_counters, stats_get_memory)
+
+### mcpforunity://pipeline/renderer-features
+
+**Purpose:** URP renderer features on the active renderer (SSAO, Decals, etc.).
+
+**Returns:**
+```json
+{
+  "rendererDataName": "PC_Renderer",
+  "features": [
+    {
+      "index": 0,
+      "name": "ScreenSpaceAmbientOcclusion",
+      "type": "ScreenSpaceAmbientOcclusion",
+      "isActive": true,
+      "properties": { "m_Settings": "Generic" }
+    }
+  ]
+}
+```
+
+**Key Fields:**
+- `index`: Position in the feature list (use for feature_toggle, feature_remove, feature_configure)
+- `isActive`: Whether the feature is enabled
+- `rendererDataName`: Which URP renderer data asset is active
+
+**Use with:** `manage_graphics` feature actions (feature_list, feature_add, feature_remove, feature_toggle, etc.)
 
 ---
 

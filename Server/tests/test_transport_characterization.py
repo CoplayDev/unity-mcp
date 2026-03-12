@@ -60,8 +60,8 @@ def mock_context():
     ctx.client_id = "test-client-456"
 
     state_storage = {}
-    ctx.set_state = Mock(side_effect=lambda k, v: state_storage.__setitem__(k, v))
-    ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
+    ctx.set_state = AsyncMock(side_effect=lambda k, v: state_storage.__setitem__(k, v))
+    ctx.get_state = AsyncMock(side_effect=lambda k: state_storage.get(k))
     ctx.info = AsyncMock()
 
     return ctx
@@ -105,7 +105,8 @@ async def configured_plugin_hub(plugin_registry):
 class TestUnityInstanceMiddlewareSessionManagement:
     """Test instance routing and per-session state management."""
 
-    def test_middleware_stores_instance_per_session(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_middleware_stores_instance_per_session(self, mock_context):
         """
         Current behavior: Middleware maintains independent instance selection
         per session using get_session_key() derivation.
@@ -113,13 +114,14 @@ class TestUnityInstanceMiddlewareSessionManagement:
         middleware = UnityInstanceMiddleware()
         instance_id = "TestProject@abc123def456"
 
-        middleware.set_active_instance(mock_context, instance_id)
-        retrieved = middleware.get_active_instance(mock_context)
+        await middleware.set_active_instance(mock_context, instance_id)
+        retrieved = await middleware.get_active_instance(mock_context)
 
         assert retrieved == instance_id, \
             "Middleware must store and retrieve instance per session"
 
-    def test_middleware_uses_client_id_over_session_id(self):
+    @pytest.mark.asyncio
+    async def test_middleware_uses_client_id_over_session_id(self):
         """
         Current behavior: get_session_key() prioritizes client_id for stability,
         falling back to 'global' when unavailable.
@@ -130,10 +132,11 @@ class TestUnityInstanceMiddlewareSessionManagement:
         ctx.client_id = "stable-client-id"
         ctx.session_id = "unstable-session-id"
 
-        key = middleware.get_session_key(ctx)
+        key = await middleware.get_session_key(ctx)
         assert key == "stable-client-id"
 
-    def test_middleware_falls_back_to_global_key(self):
+    @pytest.mark.asyncio
+    async def test_middleware_falls_back_to_global_key(self):
         """
         Current behavior: When client_id is None/missing, use 'global' key.
         This allows single-user local mode to work without session tracking.
@@ -143,11 +146,13 @@ class TestUnityInstanceMiddlewareSessionManagement:
         ctx = Mock()
         ctx.client_id = None
         ctx.session_id = "session-id"
+        ctx.get_state = AsyncMock(return_value=None)
 
-        key = middleware.get_session_key(ctx)
+        key = await middleware.get_session_key(ctx)
         assert key == "global"
 
-    def test_middleware_isolates_multiple_sessions(self):
+    @pytest.mark.asyncio
+    async def test_middleware_isolates_multiple_sessions(self):
         """
         Current behavior: Different sessions (different client_ids) maintain
         separate instance selections.
@@ -162,13 +167,14 @@ class TestUnityInstanceMiddlewareSessionManagement:
         ctx2.client_id = "client-2"
         ctx2.session_id = "session-2"
 
-        middleware.set_active_instance(ctx1, "Project1@hash1")
-        middleware.set_active_instance(ctx2, "Project2@hash2")
+        await middleware.set_active_instance(ctx1, "Project1@hash1")
+        await middleware.set_active_instance(ctx2, "Project2@hash2")
 
-        assert middleware.get_active_instance(ctx1) == "Project1@hash1"
-        assert middleware.get_active_instance(ctx2) == "Project2@hash2"
+        assert await middleware.get_active_instance(ctx1) == "Project1@hash1"
+        assert await middleware.get_active_instance(ctx2) == "Project2@hash2"
 
-    def test_middleware_clear_instance(self, mock_context):
+    @pytest.mark.asyncio
+    async def test_middleware_clear_instance(self, mock_context):
         """
         Current behavior: clear_active_instance() removes stored instance
         for the session, allowing reset to None.
@@ -176,13 +182,14 @@ class TestUnityInstanceMiddlewareSessionManagement:
         middleware = UnityInstanceMiddleware()
         instance_id = "TestProject@xyz"
 
-        middleware.set_active_instance(mock_context, instance_id)
-        assert middleware.get_active_instance(mock_context) == instance_id
+        await middleware.set_active_instance(mock_context, instance_id)
+        assert await middleware.get_active_instance(mock_context) == instance_id
 
-        middleware.clear_active_instance(mock_context)
-        assert middleware.get_active_instance(mock_context) is None
+        await middleware.clear_active_instance(mock_context)
+        assert await middleware.get_active_instance(mock_context) is None
 
-    def test_middleware_thread_safe_updates(self):
+    @pytest.mark.asyncio
+    async def test_middleware_thread_safe_updates(self):
         """
         Current behavior: Middleware uses RLock to serialize access to
         _active_by_key dictionary.
@@ -195,10 +202,10 @@ class TestUnityInstanceMiddlewareSessionManagement:
         # Rapidly update instances (would race without locking)
         for i in range(10):
             instance = f"Project{i}@hash{i}"
-            middleware.set_active_instance(ctx, instance)
+            await middleware.set_active_instance(ctx, instance)
 
         # Final state should be consistent
-        assert middleware.get_active_instance(ctx) == "Project9@hash9"
+        assert await middleware.get_active_instance(ctx) == "Project9@hash9"
 
 
 # ============================================================================
@@ -218,7 +225,7 @@ class TestUnityInstanceMiddlewareInjection:
         middleware = UnityInstanceMiddleware()
         instance_id = "Project@abc123"
 
-        middleware.set_active_instance(mock_context, instance_id)
+        await middleware.set_active_instance(mock_context, instance_id)
 
         # Create middleware context wrapper
         middleware_ctx = Mock()
@@ -244,7 +251,7 @@ class TestUnityInstanceMiddlewareInjection:
         middleware = UnityInstanceMiddleware()
         instance_id = "Project@hash123"
 
-        middleware.set_active_instance(mock_context, instance_id)
+        await middleware.set_active_instance(mock_context, instance_id)
 
         middleware_ctx = Mock()
         middleware_ctx.fastmcp_context = mock_context
@@ -292,7 +299,7 @@ class TestUnityInstanceMiddlewareInjection:
         middleware_ctx = Mock()
         middleware_ctx.fastmcp_context = mock_context
 
-        mock_context.set_state("unity_instance", "Project@abc123")
+        await mock_context.set_state("unity_instance", "Project@abc123")
         monkeypatch.setattr(config, "transport_mode", "http")
 
         available_tools = [
@@ -346,7 +353,7 @@ class TestUnityInstanceMiddlewareInjection:
         middleware_ctx = Mock()
         middleware_ctx.fastmcp_context = mock_context
 
-        mock_context.set_state("unity_instance", "Project@abc123")
+        await mock_context.set_state("unity_instance", "Project@abc123")
         monkeypatch.setattr(config, "transport_mode", "http")
 
         original_tools = [
@@ -399,7 +406,7 @@ class TestUnityInstanceMiddlewareInjection:
         middleware_ctx = Mock()
         middleware_ctx.fastmcp_context = mock_context
 
-        mock_context.set_state("unity_instance", "Project@abc123")
+        await mock_context.set_state("unity_instance", "Project@abc123")
         monkeypatch.setattr(config, "transport_mode", "http")
 
         original_tools = [
@@ -455,7 +462,7 @@ class TestUnityInstanceMiddlewareInjection:
         middleware_ctx = Mock()
         middleware_ctx.fastmcp_context = mock_context
 
-        mock_context.set_state("unity_instance", "Project@abc123")
+        await mock_context.set_state("unity_instance", "Project@abc123")
         monkeypatch.setattr(config, "transport_mode", "http")
 
         original_tools = [
@@ -498,8 +505,8 @@ class TestUnityInstanceMiddlewareInjection:
         middleware_ctx = Mock()
         middleware_ctx.fastmcp_context = mock_context
 
-        mock_context.set_state("unity_instance", "Project@abc123")
-        mock_context.set_state("user_id", "user-123")
+        await mock_context.set_state("unity_instance", "Project@abc123")
+        await mock_context.set_state("user_id", "user-123")
         monkeypatch.setattr(config, "transport_mode", "http")
         monkeypatch.setattr(config, "http_remote_hosted", True)
 
@@ -534,7 +541,7 @@ class TestUnityInstanceMiddlewareInjection:
         middleware_ctx = Mock()
         middleware_ctx.fastmcp_context = mock_context
 
-        mock_context.set_state("unity_instance", "Project@stale-hash")
+        await mock_context.set_state("unity_instance", "Project@stale-hash")
         monkeypatch.setattr(config, "transport_mode", "http")
 
         original_tools = [
@@ -573,7 +580,7 @@ class TestUnityInstanceMiddlewareInjection:
         middleware_ctx = Mock()
         middleware_ctx.fastmcp_context = mock_context
 
-        mock_context.set_state("unity_instance", "Project@abc123")
+        await mock_context.set_state("unity_instance", "Project@abc123")
         monkeypatch.setattr(config, "transport_mode", "http")
 
         original_tools = [
@@ -618,7 +625,7 @@ class TestUnityInstanceMiddlewareInjection:
         middleware_ctx = Mock()
         middleware_ctx.fastmcp_context = mock_context
 
-        mock_context.set_state("unity_instance", "Project@abc123")
+        await mock_context.set_state("unity_instance", "Project@abc123")
         monkeypatch.setattr(config, "transport_mode", "http")
 
         original_tools = [
@@ -740,7 +747,7 @@ class TestAutoSelectInstance:
                 instance = await middleware._maybe_autoselect_instance(mock_context)
 
         assert instance == "TestProject@abc123"
-        assert middleware.get_active_instance(mock_context) == "TestProject@abc123"
+        assert await middleware.get_active_instance(mock_context) == "TestProject@abc123"
 
     @pytest.mark.asyncio
     async def test_autoselect_fails_with_multiple_instances(self, mock_context):
@@ -809,7 +816,7 @@ class TestPluginRegistryFunctionality:
         Current behavior: register() creates a new PluginSession and stores
         it by session_id and project_hash.
         """
-        session = await plugin_registry.register(
+        session, _ = await plugin_registry.register(
             session_id="sess-abc",
             project_name="TestProject",
             project_hash="hash123",
@@ -897,7 +904,7 @@ class TestPluginRegistryFunctionality:
         """
         Current behavior: touch() updates the connected_at timestamp on heartbeat.
         """
-        session = await plugin_registry.register(
+        session, _ = await plugin_registry.register(
             session_id="sess-y",
             project_name="Project",
             project_hash="hash-y",
@@ -1452,7 +1459,8 @@ class TestTransportEdgeCases:
 
         assert instance is None
 
-    def test_middleware_handles_client_id_false_but_not_none(self):
+    @pytest.mark.asyncio
+    async def test_middleware_handles_client_id_false_but_not_none(self):
         """
         Current behavior: get_session_key checks isinstance(client_id, str) AND len,
         so falsy non-string values fall through to 'global'.
@@ -1462,8 +1470,9 @@ class TestTransportEdgeCases:
         ctx = Mock()
         ctx.client_id = ""  # Empty string
         ctx.session_id = "session-id"
+        ctx.get_state = AsyncMock(return_value=None)
 
-        key = middleware.get_session_key(ctx)
+        key = await middleware.get_session_key(ctx)
         assert key == "global"  # Empty string doesn't pass isinstance+truthy check
 
     def test_plugin_hub_encoding_is_json(self):
@@ -1506,10 +1515,10 @@ class TestTransportIntegration:
         )
 
         # Middleware stores the instance
-        middleware.set_active_instance(mock_context, "Project@hash-interact")
+        await middleware.set_active_instance(mock_context, "Project@hash-interact")
 
         # Application can use middleware to route
-        instance = middleware.get_active_instance(mock_context)
+        instance = await middleware.get_active_instance(mock_context)
         assert instance == "Project@hash-interact"
 
         # And registry to find session
@@ -1534,10 +1543,10 @@ class TestTransportIntegration:
         )
 
         # 2. User selects instance via middleware
-        middleware.set_active_instance(mock_context, "CompleteProject@hash-complete")
+        await middleware.set_active_instance(mock_context, "CompleteProject@hash-complete")
 
         # 3. Tools route using both middleware + registry
-        selected_instance = middleware.get_active_instance(mock_context)
+        selected_instance = await middleware.get_active_instance(mock_context)
         assert selected_instance == "CompleteProject@hash-complete"
 
         # Extract hash and resolve back to session

@@ -22,6 +22,7 @@ _VALID_EXTENSIONS = {".uxml", ".uss"}
 
 
 @mcp_for_unity_tool(
+    group="ui",
     description=(
         "Manages Unity UI Toolkit elements (UXML documents, USS stylesheets, UIDocument components). "
         "Read-only actions: ping, read, get_visual_tree, list. "
@@ -41,7 +42,9 @@ _VALID_EXTENSIONS = {".uxml", ".uss"}
         "     call render_ui a second time to retrieve the saved PNG (hasContent will be true).\n"
         "   - In editor mode: assigns a RenderTexture to PanelSettings (best-effort; may stay blank).\n"
         "9. Use detach_ui_document to remove UIDocument from a GameObject\n"
-        "10. Use delete to remove .uxml/.uss files"
+        "10. Use delete to remove .uxml/.uss files\n\n"
+        "Important: Always use <ui:Style> (with the ui: namespace prefix) in UXML, not bare <Style>. "
+        "UI Builder will fail to open files that use <Style> without the prefix."
     ),
     annotations=ToolAnnotations(
         title="Manage UI",
@@ -155,7 +158,7 @@ async def manage_ui(
                         "Set element tooltip text. For modify_visual_element."] | None = None,
 
 ) -> dict[str, Any]:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     action_lower = action.lower()
 

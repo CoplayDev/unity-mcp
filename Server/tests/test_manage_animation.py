@@ -3,7 +3,7 @@
 import asyncio
 import json
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from click.testing import CliRunner
 
 from cli.commands.animation import animation
@@ -98,7 +98,7 @@ class TestManageAnimationToolValidation:
         from services.tools.manage_animation import manage_animation
 
         ctx = MagicMock()
-        ctx.get_state = MagicMock(return_value=None)
+        ctx.get_state = AsyncMock(return_value=None)
 
         result = asyncio.run(manage_animation(ctx, action="invalid_action"))
         assert result["success"] is False
@@ -108,7 +108,7 @@ class TestManageAnimationToolValidation:
         from services.tools.manage_animation import manage_animation
 
         ctx = MagicMock()
-        ctx.get_state = MagicMock(return_value=None)
+        ctx.get_state = AsyncMock(return_value=None)
 
         result = asyncio.run(manage_animation(ctx, action="animator_nonexistent"))
         assert result["success"] is False
@@ -118,7 +118,7 @@ class TestManageAnimationToolValidation:
         from services.tools.manage_animation import manage_animation
 
         ctx = MagicMock()
-        ctx.get_state = MagicMock(return_value=None)
+        ctx.get_state = AsyncMock(return_value=None)
 
         result = asyncio.run(manage_animation(ctx, action="clip_nonexistent"))
         assert result["success"] is False
@@ -128,7 +128,7 @@ class TestManageAnimationToolValidation:
         from services.tools.manage_animation import manage_animation
 
         ctx = MagicMock()
-        ctx.get_state = MagicMock(return_value=None)
+        ctx.get_state = AsyncMock(return_value=None)
 
         result = asyncio.run(manage_animation(ctx, action="controller_nonexistent"))
         assert result["success"] is False
@@ -138,7 +138,7 @@ class TestManageAnimationToolValidation:
         from services.tools.manage_animation import manage_animation
 
         ctx = MagicMock()
-        ctx.get_state = MagicMock(return_value=None)
+        ctx.get_state = AsyncMock(return_value=None)
 
         result = asyncio.run(manage_animation(ctx, action="bogus"))
         assert result["success"] is False
