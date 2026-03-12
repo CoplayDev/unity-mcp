@@ -12,7 +12,18 @@
         "Unity.Scenes",
         "Unity.Mathematics.Extensions",
         "Unity.ProBuilder",
-        "Unity.ProBuilder.Editor"
+        "Unity.ProBuilder.Editor",
+        "Unity.Cinemachine",
+        "Unity.Timeline",
+        "Unity.InputSystem",
+        "Unity.Splines",
+        "Unity.Addressables",
+        "Unity.Addressables.Editor",
+        "Unity.Localization",
+        "Unity.Netcode.Runtime",
+        "Unity.Behavior",
+        "Unity.AI.Navigation",
+        "Unity.AI.Navigation.Editor"
     ],
     "includePlatforms": [
         "Editor"
@@ -44,6 +55,56 @@
             "name": "com.unity.probuilder",
             "expression": "",
             "define": "PROBUILDER"
+        },
+        {
+            "name": "com.unity.cinemachine",
+            "expression": "",
+            "define": "UNITY_CINEMACHINE"
+        },
+        {
+            "name": "com.unity.timeline",
+            "expression": "",
+            "define": "UNITY_TIMELINE"
+        },
+        {
+            "name": "com.unity.inputsystem",
+            "expression": "",
+            "define": "UNITY_INPUT_SYSTEM"
+        },
+        {
+            "name": "com.unity.2d.tilemap",
+            "expression": "",
+            "define": "UNITY_TILEMAP"
+        },
+        {
+            "name": "com.unity.addressables",
+            "expression": "",
+            "define": "UNITY_ADDRESSABLES"
+        },
+        {
+            "name": "com.unity.splines",
+            "expression": "",
+            "define": "UNITY_SPLINES"
+        },
+        {
+            "name": "com.unity.localization",
+            "expression": "",
+            "define": "UNITY_LOCALIZATION"
+        },
+        {
+            "name": "com.unity.netcode.gameobjects",
+            "expression": "",
+            "define": "UNITY_NETCODE"
+        },
+        {
+            "name": "com.unity.behavior",
+            "expression": "",
+            "define": "UNITY_BEHAVIOR"
+        },
+        {
+            "name": "com.unity.ai.navigation",
+            "expression": "",
+            "define": "UNITY_AI_NAVIGATION"
         }
     ],
     "noEngineReferences": false
