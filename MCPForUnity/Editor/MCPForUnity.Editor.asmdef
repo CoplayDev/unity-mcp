@@ -23,7 +23,8 @@
         "Unity.Netcode.Runtime",
         "Unity.Behavior",
         "Unity.AI.Navigation",
-        "Unity.AI.Navigation.Editor"
+        "Unity.AI.Navigation.Editor",
+        "Unity.RenderPipelines.Core.Runtime"
     ],
     "includePlatforms": [
         "Editor"
@@ -105,6 +106,11 @@
             "name": "com.unity.ai.navigation",
             "expression": "",
             "define": "UNITY_AI_NAVIGATION"
+        },
+        {
+            "name": "com.unity.render-pipelines.core",
+            "expression": "",
+            "define": "UNITY_RENDER_PIPELINES_CORE"
         }
     ],
     "noEngineReferences": false
