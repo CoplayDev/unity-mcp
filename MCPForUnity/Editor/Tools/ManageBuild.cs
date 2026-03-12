@@ -65,7 +65,7 @@ namespace MCPForUnity.Editor.Tools
                 ["product_name"] = PlayerSettings.productName,
                 ["application_identifier"] = PlayerSettings.applicationIdentifier,
                 ["bundle_version"] = PlayerSettings.bundleVersion,
-                ["default_icon"] = PlayerSettings.GetIconsForTargetGroup(UnityEditor.Build.NamedBuildTarget.Unknown)?.Length > 0,
+                ["default_icon"] = PlayerSettings.GetIconsForTargetGroup(BuildTargetGroup.Unknown)?.Length > 0,
                 ["color_space"] = PlayerSettings.colorSpace.ToString(),
                 ["scripting_backend"] = PlayerSettings.GetScriptingBackend(EditorUserBuildSettings.selectedBuildTargetGroup).ToString(),
                 ["api_compatibility_level"] = PlayerSettings.GetApiCompatibilityLevel(EditorUserBuildSettings.selectedBuildTargetGroup).ToString(),
@@ -248,8 +248,8 @@ namespace MCPForUnity.Editor.Tools
         {
             var namedTarget = GetNamedBuildTarget(p.Get("platform"));
 
-            string definesStr;
-            PlayerSettings.GetScriptingDefineSymbols(namedTarget, out definesStr);
+            PlayerSettings.GetScriptingDefineSymbols(namedTarget, out var definesArr);
+            var definesStr = string.Join(";", definesArr);
 
             var defines = string.IsNullOrEmpty(definesStr)
                 ? Array.Empty<string>()

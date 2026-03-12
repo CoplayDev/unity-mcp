@@ -174,7 +174,28 @@ namespace MCPForUnity.Editor.Tools
             var el = root.Q(queryStr);
             if (el == null) return new ErrorResponse($"Element not found for query '{queryStr}'.");
 
-            el.style.SetPropertyFromString(property, value);
+            var styleProp = el.style.GetType().GetProperty(property,
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase);
+            if (styleProp == null)
+                return new ErrorResponse($"Style property '{property}' not found on IStyle.");
+
+            try
+            {
+                // Try to parse and set via reflection
+                var propType = styleProp.PropertyType;
+                if (propType == typeof(StyleFloat))
+                    styleProp.SetValue(el.style, new StyleFloat(float.Parse(value, System.Globalization.CultureInfo.InvariantCulture)));
+                else if (propType == typeof(StyleInt))
+                    styleProp.SetValue(el.style, new StyleInt(int.Parse(value)));
+                else if (propType == typeof(StyleLength))
+                    styleProp.SetValue(el.style, new StyleLength(float.Parse(value, System.Globalization.CultureInfo.InvariantCulture)));
+                else
+                    return new ErrorResponse($"Unsupported style type '{propType.Name}' for property '{property}'.");
+            }
+            catch (Exception ex)
+            {
+                return new ErrorResponse($"Failed to set style: {ex.Message}");
+            }
 
             return new SuccessResponse($"Style '{property}' set on element matching '{queryStr}'.");
         }

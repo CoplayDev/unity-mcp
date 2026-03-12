@@ -55,7 +55,7 @@ namespace MCPForUnity.Editor.Tools
 
                 try
                 {
-                    var recorder = ProfilerRecorder.StartNew(ProfilerCategory.Any, name);
+                    var recorder = ProfilerRecorder.StartNew(ProfilerCategory.Internal, name);
                     if (recorder.Valid && recorder.Count > 0)
                     {
                         results[name] = recorder.LastValue;
