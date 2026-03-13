@@ -398,6 +398,62 @@ def test_screenshot_positioned(mock_unity):
     assert mock_unity["params"]["lookAt"] == "Player"
 
 
+def test_screenshot_scene_view_capture_params(mock_unity):
+    result = asyncio.run(
+        manage_camera(
+            SimpleNamespace(),
+            action="screenshot",
+            capture_source="scene_view",
+            scene_view_target="Canvas",
+            include_image=True,
+        )
+    )
+    assert result["success"] is True
+    assert mock_unity["params"]["captureSource"] == "scene_view"
+    assert mock_unity["params"]["sceneViewTarget"] == "Canvas"
+    assert mock_unity["params"]["includeImage"] is True
+
+
+def test_screenshot_invalid_capture_source(mock_unity):
+    result = asyncio.run(
+        manage_camera(
+            SimpleNamespace(),
+            action="screenshot",
+            capture_source="editor_view",
+        )
+    )
+    assert result["success"] is False
+    assert "capture_source must be either" in result["message"]
+    assert "params" not in mock_unity
+
+
+def test_screenshot_scene_view_rejects_batch_in_python(mock_unity):
+    result = asyncio.run(
+        manage_camera(
+            SimpleNamespace(),
+            action="screenshot",
+            capture_source="scene_view",
+            batch="surround",
+        )
+    )
+    assert result["success"] is False
+    assert "does not support batch modes" in result["message"]
+    assert "params" not in mock_unity
+
+
+def test_screenshot_scene_view_target_requires_scene_view_capture(mock_unity):
+    result = asyncio.run(
+        manage_camera(
+            SimpleNamespace(),
+            action="screenshot",
+            scene_view_target="Canvas",
+        )
+    )
+    assert result["success"] is False
+    assert "scene_view_target is only valid" in result["message"]
+    assert "params" not in mock_unity
+
+
 def test_screenshot_multiview_sends_action(mock_unity):
     result = asyncio.run(
         manage_camera(SimpleNamespace(), action="screenshot_multiview")

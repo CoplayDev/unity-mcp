@@ -464,6 +464,7 @@ def build_screenshot_params(
     camera: str | None = None,
     include_image: bool | str | None = None,
     max_resolution: int | str | None = None,
+    capture_source: str | None = None,
     batch: str | None = None,
     look_at: str | int | list[float] | None = None,
     orbit_angles: int | str | None = None,
@@ -472,6 +473,7 @@ def build_screenshot_params(
     orbit_fov: float | str | None = None,
     view_position: list[float] | str | None = None,
     view_rotation: list[float] | str | None = None,
+    scene_view_target: str | int | None = None,
 ) -> dict[str, Any] | None:
     """Populate screenshot-related keys in *params* dict. Returns an error dict
     if validation fails, or None on success.
@@ -493,6 +495,14 @@ def build_screenshot_params(
         if coerced_max_resolution <= 0:
             return {"success": False, "message": "max_resolution must be a positive integer."}
         params["maxResolution"] = coerced_max_resolution
+    if capture_source is not None:
+        normalized_capture_source = str(capture_source).strip().lower()
+        if normalized_capture_source not in {"game_view", "scene_view"}:
+            return {
+                "success": False,
+                "message": "capture_source must be either 'game_view' or 'scene_view'.",
+            }
+        params["captureSource"] = normalized_capture_source
     if batch:
         params["batch"] = batch
     if look_at is not None:
@@ -533,5 +543,34 @@ def build_screenshot_params(
         if err:
             return {"success": False, "message": err}
         params["viewRotation"] = vec
+    if scene_view_target is not None:
+        if params.get("captureSource") != "scene_view":
+            return {
+                "success": False,
+                "message": "scene_view_target is only valid with capture_source='scene_view'.",
+            }
+        params["sceneViewTarget"] = scene_view_target
+
+    if params.get("captureSource") == "scene_view":
+        if coerced_super_size is not None and coerced_super_size > 1:
+            return {
+                "success": False,
+                "message": "capture_source='scene_view' does not support super_size above 1.",
+            }
+        if batch:
+            return {
+                "success": False,
+                "message": "capture_source='scene_view' does not support batch modes.",
+            }
+        if look_at is not None or view_position is not None or view_rotation is not None:
+            return {
+                "success": False,
+                "message": "capture_source='scene_view' does not support look_at/view_position/view_rotation.",
+            }
+        if camera:
+            return {
+                "success": False,
+                "message": "capture_source='scene_view' does not support camera selection.",
+            }
 
     return None

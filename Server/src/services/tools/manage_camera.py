@@ -63,7 +63,8 @@ ALL_ACTIONS = SETUP_ACTIONS + CREATION_ACTIONS + CONFIGURATION_ACTIONS + EXTENSI
         "CAPTURE:\n"
         "- screenshot: Capture from a camera. Supports include_image=true for inline base64 PNG, "
         "batch='surround' for 6-angle contact sheet, batch='orbit' for configurable grid, "
-        "look_at/view_position for positioned capture.\n"
+        "look_at/view_position for positioned capture, and capture_source='scene_view' to capture "
+        "the active Unity Scene View viewport.\n"
         "- screenshot_multiview: Shorthand for screenshot with batch='surround' and include_image=true."
     ),
     annotations=ToolAnnotations(
@@ -94,6 +95,9 @@ async def manage_camera(
         "If true, return screenshot as inline base64 PNG. Default false."] = None,
     max_resolution: Annotated[int | str | None,
         "Max resolution (longest edge px) for inline image. Default 640."] = None,
+    capture_source: Annotated[Literal["game_view", "scene_view"] | None,
+        "Screenshot source. 'game_view' (default) captures the game/camera path; "
+        "'scene_view' captures the active Unity Scene View viewport."] = None,
     batch: Annotated[str | None,
         "Batch capture mode: 'surround' (6 angles) or 'orbit' (configurable grid)."] = None,
     look_at: Annotated[str | int | list[float] | None,
@@ -102,6 +106,8 @@ async def manage_camera(
         "World position [x,y,z] to place camera for positioned capture."] = None,
     view_rotation: Annotated[list[float] | str | None,
         "Euler rotation [x,y,z] for camera. Overrides look_at if both provided."] = None,
+    scene_view_target: Annotated[str | int | None,
+        "Optional GameObject reference to frame in the Scene View before capture when capture_source='scene_view'."] = None,
     orbit_angles: Annotated[int | str | None,
         "Number of azimuth samples for batch='orbit' (default 8, max 36)."] = None,
     orbit_elevations: Annotated[list[float] | str | None,
@@ -154,6 +160,7 @@ async def manage_camera(
             camera=camera,
             include_image=include_image,
             max_resolution=max_resolution,
+            capture_source=capture_source,
             batch=batch,
             look_at=look_at,
             orbit_angles=orbit_angles,
@@ -162,6 +169,7 @@ async def manage_camera(
             orbit_fov=orbit_fov,
             view_position=view_position,
             view_rotation=view_rotation,
+            scene_view_target=scene_view_target,
         )
         if err is not None:
             return err

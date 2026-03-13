@@ -481,17 +481,23 @@ def release_override():
 @click.option("--super-size", type=int, default=None, help="Supersize multiplier.")
 @click.option("--include-image/--no-include-image", default=None, help="Return inline base64 PNG.")
 @click.option("--max-resolution", type=int, default=None, help="Max resolution for inline image.")
+@click.option("--capture-source", default=None,
+              type=click.Choice(["game_view", "scene_view"], case_sensitive=False),
+              help="Capture source: game_view (default) or scene_view.")
 @click.option("--batch", default=None, type=click.Choice(["surround", "orbit"]),
               help="Batch capture mode.")
 @click.option("--look-at", default=None, help="Target to aim at (name/path/ID or [x,y,z]).")
+@click.option("--scene-view-target", default=None,
+              help="Target to frame before capture when using --capture-source scene_view.")
 @handle_unity_errors
-def screenshot(camera_ref, file_name, super_size, include_image, max_resolution, batch, look_at):
+def screenshot(camera_ref, file_name, super_size, include_image, max_resolution, capture_source, batch, look_at, scene_view_target):
     """Capture a screenshot from a camera.
 
     \b
     Examples:
         unity-mcp camera screenshot
         unity-mcp camera screenshot --camera-ref "CM FollowCam" --include-image --max-resolution 512
+        unity-mcp camera screenshot --capture-source scene_view --scene-view-target Canvas --include-image
         unity-mcp camera screenshot --batch surround --look-at Player
     """
     config = get_config()
@@ -506,10 +512,14 @@ def screenshot(camera_ref, file_name, super_size, include_image, max_resolution,
         params["includeImage"] = include_image
     if max_resolution is not None:
         params["maxResolution"] = max_resolution
+    if capture_source:
+        params["captureSource"] = capture_source
     if batch:
         params["batch"] = batch
     if look_at:
         params["lookAt"] = look_at
+    if scene_view_target:
+        params["sceneViewTarget"] = scene_view_target
     result = run_command(config, "manage_camera", params)
     format_output(result, config)
 
