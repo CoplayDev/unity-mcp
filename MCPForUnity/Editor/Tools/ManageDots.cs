@@ -52,11 +52,12 @@ namespace MCPForUnity.Editor.Tools
                     "add_component"         => AddComponent(p),
                     "remove_component"      => RemoveComponent(p),
                     "query_count"           => QueryCount(p),
+                    "inspect_bdp_tree"      => InspectBdpTree(p),
                     _ => new ErrorResponse(
                         $"Unknown action: '{action}'. Supported: list_worlds, query_entities, get_entity, " +
                         "list_systems, get_system, performance_snapshot, toggle_system, " +
                         "list_component_types, create_entity, destroy_entity, " +
-                        "set_component, add_component, remove_component, query_count")
+                        "set_component, add_component, remove_component, query_count, inspect_bdp_tree")
                 };
             }
             catch (Exception e)
@@ -159,7 +160,17 @@ namespace MCPForUnity.Editor.Tools
             if (!em.Exists(entity))
                 return new ErrorResponse($"Entity (Index={entityIndex}, Version={entityVersion ?? 1}) does not exist.");
 
-            return new SuccessResponse($"Entity {entity} details.", SerializeEntityFull(em, entity));
+            // Optional component filter — only return specified components
+            string componentFilter = p.Get("component_types");
+            HashSet<string> filterSet = null;
+            if (!string.IsNullOrEmpty(componentFilter))
+            {
+                filterSet = new HashSet<string>(
+                    componentFilter.Split(',').Select(s => s.Trim()),
+                    StringComparer.OrdinalIgnoreCase);
+            }
+
+            return new SuccessResponse($"Entity {entity} details.", SerializeEntityFull(em, entity, filterSet));
         }
 
         #endregion
@@ -930,7 +941,7 @@ namespace MCPForUnity.Editor.Tools
             };
         }
 
-        private static Dictionary<string, object> SerializeEntityFull(EntityManager em, Entity entity)
+        private static Dictionary<string, object> SerializeEntityFull(EntityManager em, Entity entity, HashSet<string> componentFilter = null)
         {
             var componentTypes = em.GetComponentTypes(entity, Allocator.Temp);
             var components = new List<object>();
@@ -939,6 +950,16 @@ namespace MCPForUnity.Editor.Tools
             {
                 var typeInfo = TypeManager.GetTypeInfo(componentTypes[i].TypeIndex);
                 string typeName = typeInfo.DebugTypeName.ToString();
+
+                // Apply component filter if specified
+                if (componentFilter != null && componentFilter.Count > 0)
+                {
+                    string shortName = typeName.Contains('.')
+                        ? typeName.Substring(typeName.LastIndexOf('.') + 1)
+                        : typeName;
+                    if (!componentFilter.Contains(shortName) && !componentFilter.Contains(typeName))
+                        continue;
+                }
                 var componentData = new Dictionary<string, object>
                 {
                     ["name"]          = typeName,
@@ -1144,6 +1165,237 @@ namespace MCPForUnity.Editor.Tools
                 names.Add("<unable to read query types>");
             }
             return names;
+        }
+
+        #endregion
+
+        #region BDP Tree Inspection
+
+        private static object InspectBdpTree(ToolParams p)
+        {
+            var world = ResolveWorld(p);
+            if (world == null)
+                return new ErrorResponse("World not found. Use list_worlds to see available worlds.");
+
+            int? entityIndex = p.GetInt("entity_index");
+            int? entityVersion = p.GetInt("entity_version");
+            if (entityIndex == null)
+                return new ErrorResponse("'entity_index' parameter is required.");
+
+            var entity = new Entity { Index = entityIndex.Value, Version = entityVersion ?? 1 };
+            var em = world.EntityManager;
+
+            if (!em.Exists(entity))
+                return new ErrorResponse($"Entity (Index={entityIndex}, Version={entityVersion ?? 1}) does not exist.");
+
+            // Resolve BDP component types dynamically (avoids hard reference to BDP assembly)
+            var taskComponentType = ResolveManagedType("TaskComponent");
+            var branchComponentType = ResolveManagedType("BranchComponent");
+            var evaluateFlagCt = ResolveComponentType("EvaluateFlag");
+
+            if (taskComponentType == null)
+                return new ErrorResponse("TaskComponent type not found. Is Behavior Designer Pro installed?");
+
+            var componentTypes = em.GetComponentTypes(entity, Allocator.Temp);
+            bool hasTaskBuffer = false;
+            bool hasBranchBuffer = false;
+            for (int i = 0; i < componentTypes.Length; i++)
+            {
+                var ti = TypeManager.GetTypeInfo(componentTypes[i].TypeIndex);
+                string name = ti.DebugTypeName.ToString();
+                string shortName = name.Contains('.') ? name.Substring(name.LastIndexOf('.') + 1) : name;
+                if (shortName == "TaskComponent") hasTaskBuffer = true;
+                if (shortName == "BranchComponent") hasBranchBuffer = true;
+            }
+            componentTypes.Dispose();
+
+            if (!hasTaskBuffer)
+                return new ErrorResponse($"Entity {entity} does not have a TaskComponent buffer. Not a BDP entity.");
+
+            var result = new Dictionary<string, object>
+            {
+                ["entity_index"] = entity.Index,
+                ["entity_version"] = entity.Version
+            };
+
+            // Read EvaluateFlag state
+            if (evaluateFlagCt.HasValue)
+            {
+                try
+                {
+                    if (em.HasComponent(entity, evaluateFlagCt.Value))
+                        result["evaluate_flag_enabled"] = em.IsComponentEnabled(entity, evaluateFlagCt.Value);
+                    else
+                        result["evaluate_flag_enabled"] = "not_present";
+                }
+                catch { result["evaluate_flag_enabled"] = "<unreadable>"; }
+            }
+            else
+            {
+                result["evaluate_flag_enabled"] = "type_not_registered";
+            }
+
+            // Read TaskComponent buffer via reflection
+            var tasks = ReadBdpBuffer(em, entity, taskComponentType);
+            if (tasks != null)
+            {
+                result["task_count"] = tasks.Count;
+                result["tasks"] = tasks;
+
+                // Find active/running tasks
+                var activeTasks = new List<object>();
+                foreach (var taskObj in tasks)
+                {
+                    if (taskObj is not Dictionary<string, object> task) continue;
+                    if (task.TryGetValue("fields", out var fieldsObj) && fieldsObj is Dictionary<string, object> fields)
+                    {
+                        string status = fields.TryGetValue("Status", out var s) ? s?.ToString() : null;
+                        if (status != null && status != "Inactive")
+                        {
+                            var taskSummary = new Dictionary<string, object>
+                            {
+                                ["index"] = fields.TryGetValue("Index", out var idx) ? idx : "?",
+                                ["status"] = status,
+                                ["branch_index"] = fields.TryGetValue("BranchIndex", out var bi) ? bi : "?",
+                                ["task_name"] = ResolveBdpTaskName(fields)
+                            };
+                            activeTasks.Add(taskSummary);
+                        }
+                    }
+                }
+                result["active_tasks"] = activeTasks;
+            }
+
+            // Read BranchComponent buffer via reflection
+            if (hasBranchBuffer && branchComponentType != null)
+            {
+                var branches = ReadBdpBuffer(em, entity, branchComponentType);
+                if (branches != null)
+                {
+                    result["branch_count"] = branches.Count;
+                    result["branches"] = branches;
+                }
+            }
+
+            return new SuccessResponse($"BDP tree state for Entity {entity}.", result);
+        }
+
+        private static List<object> ReadBdpBuffer(EntityManager em, Entity entity, Type bufferType)
+        {
+            try
+            {
+                // M-1 fix: Find generic GetBuffer<T> by definition to avoid overload fragility
+                var getBufferMethod = typeof(EntityManager)
+                    .GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                    .FirstOrDefault(m => m.Name == "GetBuffer"
+                                      && m.IsGenericMethodDefinition
+                                      && m.GetParameters().Length == 2
+                                      && m.GetParameters()[1].ParameterType == typeof(bool));
+                if (getBufferMethod == null) return null;
+
+                var genericMethod = getBufferMethod.MakeGenericMethod(bufferType);
+                var buffer = genericMethod.Invoke(em, new object[] { entity, true });
+                if (buffer == null) return null;
+
+                var lengthProp = buffer.GetType().GetProperty("Length");
+                int length = lengthProp != null ? (int)lengthProp.GetValue(buffer) : 0;
+
+                var elements = new List<object>();
+                var indexer = buffer.GetType().GetProperty("Item");
+                if (indexer == null) return null;
+
+                // Include both public and serialized private fields
+                var allFields = bufferType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
+                for (int e = 0; e < length; e++)
+                {
+                    try
+                    {
+                        var elem = indexer.GetValue(buffer, new object[] { e });
+                        var fields = new Dictionary<string, object>();
+                        foreach (var field in allFields)
+                        {
+                            // Include public fields and private fields with [SerializeField]
+                            if (!field.IsPublic &&
+                                !Attribute.IsDefined(field, typeof(UnityEngine.SerializeField)))
+                                continue;
+
+                            try
+                            {
+                                var val = field.GetValue(elem);
+                                // Use clean name (strip m_ prefix for private backing fields)
+                                string fieldName = field.Name;
+                                if (fieldName.StartsWith("m_"))
+                                    fieldName = fieldName.Substring(2);
+
+                                if (field.FieldType == typeof(ComponentType))
+                                {
+                                    var ct = (ComponentType)val;
+                                    var managedType = ct.GetManagedType();
+                                    fields[fieldName] = managedType != null ? managedType.Name : ct.ToString();
+                                }
+                                else
+                                {
+                                    fields[fieldName] = val?.ToString() ?? "null";
+                                }
+                            }
+                            catch { fields[field.Name] = "<unreadable>"; }
+                        }
+                        elements.Add(new Dictionary<string, object> { ["fields"] = fields });
+                    }
+                    catch { continue; }
+                }
+                return elements;
+            }
+            catch { return null; }
+        }
+
+        private static string ResolveBdpTaskName(Dictionary<string, object> taskFields)
+        {
+            // FlagComponentType contains the task's flag component (e.g., HasEnemyInRangeFlag)
+            if (taskFields.TryGetValue("FlagComponentType", out var flagName) && flagName != null)
+            {
+                string name = flagName.ToString();
+                // Clean up common suffixes to get task name
+                if (name.EndsWith("Flag")) name = name.Substring(0, name.Length - 4);
+                if (name.EndsWith("Tag")) name = name.Substring(0, name.Length - 3);
+                if (name.EndsWith("Component")) name = name.Substring(0, name.Length - 9);
+                return name;
+            }
+            return "Unknown";
+        }
+
+        /// <summary>
+        /// Resolves a managed System.Type by name from all loaded assemblies.
+        /// Matches IBufferElementData or IComponentData types. Results are cached.
+        /// </summary>
+        private static readonly Dictionary<string, Type> s_managedTypeCache = new();
+
+        private static Type ResolveManagedType(string typeName)
+        {
+            if (s_managedTypeCache.TryGetValue(typeName, out var cached)) return cached;
+
+            Type found = null;
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                try
+                {
+                    foreach (var type in assembly.GetTypes())
+                    {
+                        if (type.Name == typeName &&
+                            (typeof(IBufferElementData).IsAssignableFrom(type) ||
+                             typeof(IComponentData).IsAssignableFrom(type)))
+                        {
+                            found = type;
+                            break;
+                        }
+                    }
+                }
+                catch { continue; }
+                if (found != null) break;
+            }
+            s_managedTypeCache[typeName] = found;
+            return found;
         }
 
         #endregion

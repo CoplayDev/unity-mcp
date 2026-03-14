@@ -1,7 +1,9 @@
 """
 Tool for Unity DOTS ECS debugging, entity inspection, and performance monitoring.
 Actions: list_worlds, query_entities, get_entity, list_systems, get_system,
-         performance_snapshot, toggle_system.
+         performance_snapshot, toggle_system, list_component_types,
+         create_entity, destroy_entity, set_component, add_component,
+         remove_component, query_count, inspect_bdp_tree.
 Requires com.unity.entities package in the Unity project.
 """
 from typing import Annotated, Any, Literal
@@ -19,7 +21,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
     description=(
         "Debug and monitor Unity DOTS ECS at runtime. "
         "Actions: list_worlds (show all ECS Worlds), query_entities (find entities by component types), "
-        "get_entity (inspect entity components incl. buffers, shared, enableable state), "
+        "get_entity (inspect entity components — use component_types to filter specific components), "
         "list_systems (list systems with enabled status), get_system (system details, queries, ordering), "
         "performance_snapshot (chunk utilization, archetype stats, entity counts), "
         "toggle_system (enable/disable a system for debugging), "
@@ -29,9 +31,10 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "set_component (modify a component field value at runtime), "
         "add_component (add a component to an existing entity), "
         "remove_component (remove a component from an entity), "
-        "query_count (fast entity count without fetching data). "
+        "query_count (fast entity count without fetching data), "
+        "inspect_bdp_tree (show BDP behavior tree state — active branch, running task, task statuses). "
         "Requires com.unity.entities package. Most actions work in Edit mode; "
-        "performance_snapshot is most useful during Play mode."
+        "performance_snapshot and inspect_bdp_tree are most useful during Play mode."
     ),
     annotations=ToolAnnotations(
         title="Manage DOTS",
@@ -45,14 +48,15 @@ async def manage_dots(
             "list_systems", "get_system",
             "performance_snapshot", "toggle_system",
             "list_component_types", "create_entity", "destroy_entity",
-            "set_component", "add_component", "remove_component", "query_count"
+            "set_component", "add_component", "remove_component", "query_count",
+            "inspect_bdp_tree"
         ],
         "Action to perform on DOTS ECS data."
     ],
     # Entity query params
     component_types: Annotated[
         str,
-        "Comma-separated component type names for query_entities/create_entity (e.g. 'LocalTransform,Velocity')"
+        "Comma-separated component type names for query_entities/create_entity/get_entity filter (e.g. 'Health,NavigationTarget')"
     ] | None = None,
     # Entity get/destroy params
     entity_index: Annotated[int, "Entity index for get_entity/destroy_entity"] | None = None,
