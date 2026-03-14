@@ -248,6 +248,7 @@ namespace MCPForUnity.Editor.Tools
         private static object HandleAsyncSubmit(JObject @params, JArray commandsToken)
         {
             bool atomic = @params.Value<bool?>("atomic") ?? false;
+            bool failFast = @params.Value<bool?>("fail_fast") ?? @params.Value<bool?>("failFast") ?? false;
             string agent = @params.Value<string>("agent") ?? "anonymous";
             string label = @params.Value<string>("label") ?? "";
 
@@ -284,11 +285,21 @@ namespace MCPForUnity.Editor.Tools
                         var result = CommandRegistry.InvokeCommandAsync(cmd.Tool, cmd.Params)
                             .ConfigureAwait(true).GetAwaiter().GetResult();
                         job.Results.Add(result);
+
+                        // fail_fast: stop on first failure result
+                        if (failFast && result is IMcpResponse resp && !resp.Success)
+                        {
+                            job.Status = JobStatus.Failed;
+                            job.Error = $"Command '{cmd.Tool}' failed (fail_fast).";
+                            job.CompletedAt = DateTime.UtcNow;
+                            return new ErrorResponse(job.Error,
+                                new { ticket = job.Ticket, results = job.Results });
+                        }
                     }
                     catch (Exception ex)
                     {
                         job.Results.Add(new ErrorResponse(ex.Message));
-                        if (atomic)
+                        if (atomic || failFast)
                         {
                             job.Status = JobStatus.Failed;
                             job.Error = ex.Message;

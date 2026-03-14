@@ -21,6 +21,11 @@ namespace MCPForUnity.Editor.Tools
 
         static readonly TimeSpan TicketExpiry = TimeSpan.FromMinutes(5);
 
+        // Watchdog: detect when IsEditorBusy blocks the queue for too long
+        static readonly TimeSpan BusyWatchdogTimeout = TimeSpan.FromSeconds(90);
+        DateTime _busyBlockedSince = DateTime.MaxValue;
+        bool _watchdogWarned;
+
         /// <summary>
         /// Predicate that returns true when domain-reload operations should be deferred.
         /// Default always returns false. CommandGatewayState wires this to the real checks.
@@ -214,6 +219,35 @@ namespace MCPForUnity.Editor.Tools
         public void ProcessTick(Func<string, JObject, Task<object>> executeCommand)
         {
             _store.CleanExpired(TicketExpiry);
+
+            // Watchdog: if IsEditorBusy has been blocking the heavy queue for too long,
+            // auto-clear stuck test jobs. This prevents orphaned test jobs (from domain
+            // reloads mid-test) from permanently stalling the queue.
+            if (IsEditorBusy())
+            {
+                if (_busyBlockedSince == DateTime.MaxValue)
+                    _busyBlockedSince = DateTime.UtcNow;
+                else if (DateTime.UtcNow - _busyBlockedSince > BusyWatchdogTimeout)
+                {
+                    if (!_watchdogWarned)
+                    {
+                        _watchdogWarned = true;
+                        var elapsed = DateTime.UtcNow - _busyBlockedSince;
+                        MCPForUnity.Editor.Helpers.McpLog.Warn(
+                            $"[CommandQueue] Watchdog: IsEditorBusy has been true for {elapsed.TotalSeconds:F0}s. " +
+                            $"Auto-clearing stuck test job to unblock queue.");
+                    }
+
+                    // Auto-clear the stuck test job
+                    if (MCPForUnity.Editor.Services.TestJobManager.HasRunningJob)
+                        MCPForUnity.Editor.Services.TestJobManager.ClearStuckJob();
+                }
+            }
+            else
+            {
+                _busyBlockedSince = DateTime.MaxValue;
+                _watchdogWarned = false;
+            }
 
             // Clean completed smooth jobs
             _smoothInFlight.RemoveAll(ticket =>
