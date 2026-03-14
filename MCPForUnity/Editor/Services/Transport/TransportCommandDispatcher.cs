@@ -361,6 +361,47 @@ namespace MCPForUnity.Editor.Services.Transport
                     return;
                 }
 
+                // --- Tier-aware dispatch ---
+                var declaredTier = CommandRegistry.GetToolTier(command.type);
+                var effectiveTier = CommandClassifier.Classify(command.type, declaredTier, parameters);
+
+                if (effectiveTier != ExecutionTier.Instant)
+                {
+                    // Route Smooth/Heavy through the gateway queue for tier-aware scheduling,
+                    // heavy exclusivity, domain-reload guards, and CancellationToken support.
+                    var job = CommandGatewayState.Queue.SubmitSingle(command.type, parameters, "transport");
+
+                    async void AwaitGateway()
+                    {
+                        try
+                        {
+                            var gatewayResult = await CommandGatewayState.AwaitJob(job);
+                            if (gatewayResult is IMcpResponse mcpResp && !mcpResp.Success)
+                            {
+                                var errResponse = new { status = "error", result = gatewayResult };
+                                pending.TrySetResult(JsonConvert.SerializeObject(errResponse));
+                            }
+                            else
+                            {
+                                var okResponse = new { status = "success", result = gatewayResult };
+                                pending.TrySetResult(JsonConvert.SerializeObject(okResponse));
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            pending.TrySetResult(SerializeError(ex.Message, command.type, ex.StackTrace));
+                        }
+                        finally
+                        {
+                            EditorApplication.delayCall += () => RemovePending(id, pending);
+                        }
+                    }
+
+                    AwaitGateway();
+                    return;
+                }
+
+                // --- Instant tier: execute directly (existing path) ---
                 var result = CommandRegistry.ExecuteCommand(command.type, parameters, pending.CompletionSource);
 
                 if (result == null)
@@ -373,8 +414,8 @@ namespace MCPForUnity.Editor.Services.Transport
                     return;
                 }
 
-                var response = new { status = "success", result };
-                pending.TrySetResult(JsonConvert.SerializeObject(response));
+                var directResponse = new { status = "success", result };
+                pending.TrySetResult(JsonConvert.SerializeObject(directResponse));
                 RemovePending(id, pending);
             }
             catch (Exception ex)
