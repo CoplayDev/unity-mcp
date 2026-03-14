@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
@@ -53,6 +54,29 @@ namespace MCPForUnity.Editor.Tools
             // Smooth and Instant are handled differently (see ProcessTick)
 
             return job;
+        }
+
+        /// <summary>
+        /// Submit a single command as a 1-command batch job. Convenience wrapper for
+        /// TransportCommandDispatcher gateway routing.
+        /// </summary>
+        public BatchJob SubmitSingle(string tool, JObject parameters, string agent)
+        {
+            var toolTier = CommandRegistry.GetToolTier(tool);
+            var effectiveTier = CommandClassifier.Classify(tool, toolTier, parameters);
+
+            var commands = new List<BatchCommand>(1)
+            {
+                new BatchCommand
+                {
+                    Tool = tool,
+                    Params = parameters ?? new JObject(),
+                    Tier = effectiveTier,
+                    CausesDomainReload = CommandClassifier.CausesDomainReload(tool, parameters)
+                }
+            };
+
+            return Submit(agent, tool, atomic: false, commands);
         }
 
         /// <summary>
@@ -125,6 +149,76 @@ namespace MCPForUnity.Editor.Tools
                 _activeHeavyTicket = null;
             _smoothInFlight.Remove(ticket);
             return _store.Remove(ticket);
+        }
+
+        /// <summary>
+        /// Emergency flush: cancel ALL jobs (queued, running, smooth in-flight),
+        /// signal CancellationTokens on running jobs, and reset queue state.
+        /// Called from the emergency flush menu item to unfreeze the editor.
+        /// </summary>
+        public int FlushAll()
+        {
+            int flushed = 0;
+
+            // Cancel the active heavy job
+            if (_activeHeavyTicket != null)
+            {
+                var heavy = _store.GetJob(_activeHeavyTicket);
+                if (heavy != null)
+                {
+                    heavy.Cts?.Cancel();
+                    heavy.Status = JobStatus.Cancelled;
+                    heavy.Error = "Flushed by emergency flush.";
+                    heavy.CompletedAt = DateTime.UtcNow;
+                    flushed++;
+                }
+                _activeHeavyTicket = null;
+            }
+
+            // Cancel smooth in-flight jobs
+            foreach (var ticket in _smoothInFlight.ToList())
+            {
+                var job = _store.GetJob(ticket);
+                if (job != null)
+                {
+                    job.Cts?.Cancel();
+                    job.Status = JobStatus.Cancelled;
+                    job.Error = "Flushed by emergency flush.";
+                    job.CompletedAt = DateTime.UtcNow;
+                    flushed++;
+                }
+            }
+            _smoothInFlight.Clear();
+
+            // Cancel all queued jobs
+            while (_heavyQueue.Count > 0)
+            {
+                var ticket = _heavyQueue.Dequeue();
+                var job = _store.GetJob(ticket);
+                if (job != null && job.Status == JobStatus.Queued)
+                {
+                    job.Status = JobStatus.Cancelled;
+                    job.Error = "Flushed by emergency flush.";
+                    job.CompletedAt = DateTime.UtcNow;
+                    flushed++;
+                }
+            }
+
+            // Cancel any remaining queued jobs in the store
+            foreach (var job in _store.GetQueuedJobs().ToList())
+            {
+                job.Status = JobStatus.Cancelled;
+                job.Error = "Flushed by emergency flush.";
+                job.CompletedAt = DateTime.UtcNow;
+                flushed++;
+            }
+
+            // Reset watchdog
+            _busyBlockedSince = DateTime.MaxValue;
+            _watchdogWarned = false;
+
+            McpLog.Warn($"[CommandQueue] Emergency flush: cancelled {flushed} job(s).");
+            return flushed;
         }
 
         /// <summary>
@@ -216,7 +310,7 @@ namespace MCPForUnity.Editor.Tools
         /// <summary>
         /// Called every EditorApplication.update frame. Processes the queue.
         /// </summary>
-        public void ProcessTick(Func<string, JObject, Task<object>> executeCommand)
+        public void ProcessTick(Func<string, JObject, CancellationToken, Task<object>> executeCommand)
         {
             _store.CleanExpired(TicketExpiry);
 
@@ -253,7 +347,7 @@ namespace MCPForUnity.Editor.Tools
             _smoothInFlight.RemoveAll(ticket =>
             {
                 var j = _store.GetJob(ticket);
-                return j == null || j.Status == JobStatus.Done || j.Status == JobStatus.Failed;
+                return j == null || j.Status == JobStatus.Done || j.Status == JobStatus.Failed || j.Status == JobStatus.Cancelled;
             });
 
             // 1. Check if active heavy finished
@@ -272,13 +366,14 @@ namespace MCPForUnity.Editor.Tools
                     return; // One-frame cooldown
                 }
 
-                if (heavy.Status == JobStatus.Done || heavy.Status == JobStatus.Failed)
+                if (heavy.Status == JobStatus.Done || heavy.Status == JobStatus.Failed || heavy.Status == JobStatus.Cancelled)
                 {
                     // Hold the heavy slot while the editor is still busy from side-effects.
                     // e.g., run_tests starts tests asynchronously and returns instantly, but
                     // the TestRunner is still running. We keep the slot occupied so domain-reload
                     // jobs can't be dequeued until the async operation completes.
-                    if (IsEditorBusy())
+                    // Skip the hold for cancelled jobs (emergency flush should unblock immediately).
+                    if (heavy.Status != JobStatus.Cancelled && IsEditorBusy())
                         return;
 
                     _activeHeavyTicket = null;
@@ -342,11 +437,13 @@ namespace MCPForUnity.Editor.Tools
         }
 
         /// <summary>
-        /// Execute all commands in a job sequentially.
+        /// Execute all commands in a job sequentially, respecting CancellationToken.
         /// </summary>
-        async Task ExecuteJob(BatchJob job, Func<string, JObject, Task<object>> executeCommand)
+        async Task ExecuteJob(BatchJob job, Func<string, JObject, CancellationToken, Task<object>> executeCommand)
         {
+            job.Cts = new CancellationTokenSource();
             job.Status = JobStatus.Running;
+            var ct = job.Cts.Token;
 
             if (job.Atomic)
             {
@@ -359,10 +456,12 @@ namespace MCPForUnity.Editor.Tools
             {
                 for (int i = 0; i < job.Commands.Count; i++)
                 {
+                    ct.ThrowIfCancellationRequested();
+
                     job.CurrentIndex = i;
                     var cmd = job.Commands[i];
 
-                    var result = await executeCommand(cmd.Tool, cmd.Params);
+                    var result = await executeCommand(cmd.Tool, cmd.Params, ct);
                     job.Results.Add(result);
 
                     // Check for failure
@@ -398,6 +497,14 @@ namespace MCPForUnity.Editor.Tools
                     job.CompletedAt = DateTime.UtcNow;
                 }
             }
+            catch (OperationCanceledException)
+            {
+                if (job.Atomic && job.UndoGroup >= 0)
+                    Undo.RevertAllInCurrentGroup();
+                job.Error = "Cancelled.";
+                job.Status = JobStatus.Cancelled;
+                job.CompletedAt = DateTime.UtcNow;
+            }
             catch (Exception ex)
             {
                 if (job.Atomic && job.UndoGroup >= 0)
@@ -405,6 +512,11 @@ namespace MCPForUnity.Editor.Tools
                 job.Error = ex.Message;
                 job.Status = JobStatus.Failed;
                 job.CompletedAt = DateTime.UtcNow;
+            }
+            finally
+            {
+                job.Cts?.Dispose();
+                job.Cts = null;
             }
         }
     }
