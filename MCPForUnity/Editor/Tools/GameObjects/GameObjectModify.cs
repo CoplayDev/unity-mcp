@@ -34,7 +34,7 @@ namespace MCPForUnity.Editor.Tools.GameObjects
 
             bool modified = false;
 
-            string name = @params["name"]?.ToString();
+            string name = @params["name"]?.ToString() ?? @params["new_name"]?.ToString() ?? @params["newName"]?.ToString();
             if (!string.IsNullOrEmpty(name) && targetGo.name != name)
             {
                 // Check if we're renaming the root object of an open prefab stage

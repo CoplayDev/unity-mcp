@@ -17,7 +17,7 @@ namespace MCPForUnity.Editor.Tools
     ///
     /// Patching is performed via SerializedObject/SerializedProperty paths (Unity-native), not reflection.
     /// </summary>
-    [McpForUnityTool("manage_scriptable_object", AutoRegister = false)]
+    [McpForUnityTool("manage_scriptable_object", AutoRegister = false, Group = "scripting_ext")]
     public static class ManageScriptableObject
     {
         private const string CodeCompilingOrReloading = "compiling_or_reloading";
@@ -924,20 +924,22 @@ namespace MCPForUnity.Editor.Tools
                 switch (prop.propertyType)
                 {
                     case SerializedPropertyType.Integer:
-                        // Use ParamCoercion for robust int parsing
-                        int intVal = ParamCoercion.CoerceInt(valueToken, int.MinValue);
-                        if (intVal == int.MinValue && valueToken?.Type != JTokenType.Integer)
+                        if (valueToken == null || valueToken.Type == JTokenType.Null)
                         {
-                            // Double-check: if it's actually int.MinValue or failed to parse
-                            if (valueToken == null || valueToken.Type == JTokenType.Null ||
-                                (valueToken.Type == JTokenType.String && !int.TryParse(valueToken.ToString(), out _)))
-                            {
-                                message = "Expected integer value.";
-                                return false;
-                            }
+                            message = "Expected integer value.";
+                            return false;
                         }
-                        prop.intValue = intVal;
-                        message = "Set int.";
+                        if (valueToken.Type != JTokenType.Integer && valueToken.Type != JTokenType.Float
+                            && !long.TryParse(valueToken.ToString(), out _))
+                        {
+                            message = "Expected integer value.";
+                            return false;
+                        }
+                        if (prop.type == "long")
+                            prop.longValue = ParamCoercion.CoerceLong(valueToken, 0);
+                        else
+                            prop.intValue = ParamCoercion.CoerceInt(valueToken, 0);
+                        message = prop.type == "long" ? "Set long." : "Set int.";
                         return true;
 
                     case SerializedPropertyType.Boolean:

@@ -100,7 +100,7 @@ async def apply_text_edits(
     options: Annotated[dict[str, Any],
                        "Optional options, used to pass additional options to the script editor"] | None = None,
 ) -> dict[str, Any]:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
     await ctx.info(
         f"Processing apply_text_edits: {uri} (unity_instance={unity_instance or 'default'})")
     name, directory = _split_uri(uri)
@@ -396,7 +396,7 @@ async def create_script(
     script_type: Annotated[str, "Script type (e.g., 'C#')"] | None = None,
     namespace: Annotated[str, "Namespace for the script"] | None = None,
 ) -> dict[str, Any]:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
     await ctx.info(
         f"Processing create_script: {path} (unity_instance={unity_instance or 'default'})")
     name = os.path.splitext(os.path.basename(path))[0]
@@ -452,7 +452,7 @@ async def delete_script(
     uri: Annotated[str, "URI of the script to delete under Assets/ directory, mcpforunity://path/Assets/... or file://... or Assets/..."],
 ) -> dict[str, Any]:
     """Delete a C# script by URI."""
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
     await ctx.info(
         f"Processing delete_script: {uri} (unity_instance={unity_instance or 'default'})")
     name, directory = _split_uri(uri)
@@ -490,7 +490,7 @@ async def validate_script(
     include_diagnostics: Annotated[bool,
                                    "Include full diagnostics and summary"] = False,
 ) -> dict[str, Any]:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
     await ctx.info(
         f"Processing validate_script: {uri} (unity_instance={unity_instance or 'default'})")
     name, directory = _split_uri(uri)
@@ -540,7 +540,7 @@ async def manage_script(
                            "Type hint (e.g., 'MonoBehaviour')"] | None = None,
     namespace: Annotated[str, "Namespace for the script"] | None = None,
 ) -> dict[str, Any]:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
     await ctx.info(
         f"Processing manage_script: {action} (unity_instance={unity_instance or 'default'})")
     try:
@@ -614,6 +614,7 @@ async def manage_script(
 
 @mcp_for_unity_tool(
     unity_target=None,
+    group=None,
     description=(
         """Get manage_script capabilities (supported ops, limits, and guards).
     Returns:
@@ -663,7 +664,7 @@ async def get_sha(
     ctx: Context,
     uri: Annotated[str, "URI of the script to edit under Assets/ directory, mcpforunity://path/Assets/... or file://... or Assets/..."],
 ) -> dict[str, Any]:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
     await ctx.info(
         f"Processing get_sha: {uri} (unity_instance={unity_instance or 'default'})")
     try:

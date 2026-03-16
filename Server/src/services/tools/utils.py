@@ -400,3 +400,168 @@ def normalize_color(value: Any, output_range: str = "float") -> tuple[list[float
         return None, f"Failed to parse color string: {value}"
 
     return None, f"color must be a list, dict, hex string, or JSON string, got {type(value).__name__}"
+
+
+def extract_screenshot_images(response: dict[str, Any]) -> "ToolResult | None":
+    """If a Unity response contains inline base64 images, return a ToolResult
+    with TextContent + ImageContent blocks. Returns None for normal text-only responses.
+
+    Shared screenshot handling (used by manage_camera).
+    """
+    from fastmcp.server.server import ToolResult
+    from mcp.types import TextContent, ImageContent
+
+    if not isinstance(response, dict) or not response.get("success"):
+        return None
+
+    data = response.get("data")
+    if not isinstance(data, dict):
+        return None
+
+    # Batch images (surround/orbit mode) — multiple screenshots in one response
+    screenshots = data.get("screenshots")
+    if screenshots and isinstance(screenshots, list):
+        blocks: list[TextContent | ImageContent] = []
+        summary_screenshots = []
+        for s in screenshots:
+            summary_screenshots.append({k: v for k, v in s.items() if k != "imageBase64"})
+        text_result = {
+            "success": True,
+            "message": response.get("message", ""),
+            "data": {
+                "sceneCenter": data.get("sceneCenter"),
+                "sceneRadius": data.get("sceneRadius"),
+                "screenshots": summary_screenshots,
+            },
+        }
+        blocks.append(TextContent(type="text", text=json.dumps(text_result)))
+        for s in screenshots:
+            b64 = s.get("imageBase64")
+            if b64:
+                blocks.append(TextContent(type="text", text=f"[Angle: {s.get('angle', '?')}]"))
+                blocks.append(ImageContent(type="image", data=b64, mimeType="image/png"))
+        return ToolResult(content=blocks)
+
+    # Single image (include_image or positioned capture) or contact sheet
+    image_b64 = data.get("imageBase64")
+    if not image_b64:
+        return None
+    text_data = {k: v for k, v in data.items() if k != "imageBase64"}
+    text_result = {"success": True, "message": response.get("message", ""), "data": text_data}
+    return ToolResult(
+        content=[
+            TextContent(type="text", text=json.dumps(text_result)),
+            ImageContent(type="image", data=image_b64, mimeType="image/png"),
+        ],
+    )
+
+
+def build_screenshot_params(
+    params: dict[str, Any],
+    *,
+    screenshot_file_name: str | None = None,
+    screenshot_super_size: int | str | None = None,
+    camera: str | None = None,
+    include_image: bool | str | None = None,
+    max_resolution: int | str | None = None,
+    capture_source: str | None = None,
+    batch: str | None = None,
+    view_target: str | int | list[float] | None = None,
+    orbit_angles: int | str | None = None,
+    orbit_elevations: list[float] | str | None = None,
+    orbit_distance: float | str | None = None,
+    orbit_fov: float | str | None = None,
+    view_position: list[float] | str | None = None,
+    view_rotation: list[float] | str | None = None,
+) -> dict[str, Any] | None:
+    """Populate screenshot-related keys in *params* dict. Returns an error dict
+    if validation fails, or None on success.
+
+    Shared screenshot handling (used by manage_camera).
+    """
+    if screenshot_file_name:
+        params["fileName"] = screenshot_file_name
+    coerced_super_size = coerce_int(screenshot_super_size, default=None)
+    if coerced_super_size is not None:
+        params["superSize"] = coerced_super_size
+    if camera:
+        params["camera"] = camera
+    coerced_include_image = coerce_bool(include_image, default=None)
+    if coerced_include_image is not None:
+        params["includeImage"] = coerced_include_image
+    coerced_max_resolution = coerce_int(max_resolution, default=None)
+    if coerced_max_resolution is not None:
+        if coerced_max_resolution <= 0:
+            return {"success": False, "message": "max_resolution must be a positive integer."}
+        params["maxResolution"] = coerced_max_resolution
+    if capture_source is not None:
+        normalized_capture_source = str(capture_source).strip().lower()
+        if normalized_capture_source not in {"game_view", "scene_view"}:
+            return {
+                "success": False,
+                "message": "capture_source must be either 'game_view' or 'scene_view'.",
+            }
+        params["captureSource"] = normalized_capture_source
+    if batch:
+        params["batch"] = batch
+    if view_target is not None:
+        params["viewTarget"] = view_target
+
+    # Orbit params
+    coerced_orbit_angles = coerce_int(orbit_angles, default=None)
+    if coerced_orbit_angles is not None:
+        params["orbitAngles"] = coerced_orbit_angles
+    if orbit_elevations is not None:
+        if isinstance(orbit_elevations, str):
+            try:
+                orbit_elevations = json.loads(orbit_elevations)
+            except (ValueError, TypeError):
+                return {"success": False, "message": "orbit_elevations must be a JSON array of floats."}
+        if not isinstance(orbit_elevations, list) or not all(
+            isinstance(v, (int, float)) for v in orbit_elevations
+        ):
+            return {"success": False, "message": "orbit_elevations must be a list of numbers."}
+        params["orbitElevations"] = orbit_elevations
+    coerced_orbit_distance = coerce_float(orbit_distance, default=None)
+    if orbit_distance is not None and coerced_orbit_distance is None:
+        return {"success": False, "message": "orbit_distance must be a number."}
+    if coerced_orbit_distance is not None:
+        params["orbitDistance"] = coerced_orbit_distance
+    coerced_orbit_fov = coerce_float(orbit_fov, default=None)
+    if orbit_fov is not None and coerced_orbit_fov is None:
+        return {"success": False, "message": "orbit_fov must be a number."}
+    if coerced_orbit_fov is not None:
+        params["orbitFov"] = coerced_orbit_fov
+    if view_position is not None:
+        vec, err = normalize_vector3(view_position, "view_position")
+        if err:
+            return {"success": False, "message": err}
+        params["viewPosition"] = vec
+    if view_rotation is not None:
+        vec, err = normalize_vector3(view_rotation, "view_rotation")
+        if err:
+            return {"success": False, "message": err}
+        params["viewRotation"] = vec
+    if params.get("captureSource") == "scene_view":
+        if coerced_super_size is not None and coerced_super_size > 1:
+            return {
+                "success": False,
+                "message": "capture_source='scene_view' does not support super_size above 1.",
+            }
+        if batch:
+            return {
+                "success": False,
+                "message": "capture_source='scene_view' does not support batch modes.",
+            }
+        if view_position is not None or view_rotation is not None:
+            return {
+                "success": False,
+                "message": "capture_source='scene_view' does not support view_position/view_rotation.",
+            }
+        if camera:
+            return {
+                "success": False,
+                "message": "capture_source='scene_view' does not support camera selection.",
+            }
+
+    return None

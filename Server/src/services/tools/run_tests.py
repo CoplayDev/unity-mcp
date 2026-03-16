@@ -144,6 +144,7 @@ class GetTestJobResponse(MCPResponse):
 
 
 @mcp_for_unity_tool(
+    group="testing",
     description="Starts a Unity test run asynchronously and returns a job_id immediately. Poll with get_test_job for progress.",
     annotations=ToolAnnotations(
         title="Run Tests",
@@ -167,7 +168,7 @@ async def run_tests(
     include_details: Annotated[bool,
                                "Include details for all tests (default: false)"] = False,
 ) -> RunTestsStartResponse | MCPResponse:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     gate = await preflight(ctx, requires_no_tests=True, wait_for_no_compile=True, refresh_if_dirty=True)
     if isinstance(gate, MCPResponse):
@@ -212,6 +213,7 @@ async def run_tests(
 
 
 @mcp_for_unity_tool(
+    group="testing",
     description="Polls an async Unity test job by job_id.",
     annotations=ToolAnnotations(
         title="Get Test Job",
@@ -230,7 +232,7 @@ async def get_test_job(
                             "Reduces polling frequency and avoids client-side loop detection. "
                             "Recommended: 30-60 seconds. Returns immediately if tests complete sooner."] = None,
 ) -> GetTestJobResponse | MCPResponse:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     params: dict[str, Any] = {"job_id": job_id}
     if include_failed_tests:

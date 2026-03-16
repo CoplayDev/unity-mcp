@@ -41,7 +41,7 @@ async def manage_material(
 
     # create
     shader: Annotated[str, "Shader name (default: Standard)"] | None = None,
-    properties: Annotated[dict[str, Any],
+    properties: Annotated[dict[str, Any] | str,
                           "Initial properties to set as {name: value} dict."] | None = None,
 
     # set_material_shader_property
@@ -55,14 +55,14 @@ async def manage_material(
     # assign_material_to_renderer / set_renderer_color
     target: Annotated[str,
                       "Target GameObject (name, path, or find instruction)"] | None = None,
-    search_method: Annotated[Literal["by_name", "by_path", "by_tag",
+    search_method: Annotated[Literal["by_id", "by_name", "by_path", "by_tag",
                                      "by_layer", "by_component"], "Search method for target"] | None = None,
     slot: Annotated[int, "Material slot index (0-based)"] | None = None,
-    mode: Annotated[Literal["shared", "instance", "property_block"],
-                    "Assignment/modification mode"] | None = None,
+    mode: Annotated[Literal["shared", "instance", "property_block", "create_unique"],
+                    "Assignment/modification mode; behavior when omitted is action-specific on the Unity side."] | None = None,
 
 ) -> dict[str, Any]:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     # --- Normalize color with validation ---
     color, color_error = normalize_color(color, output_range="float")

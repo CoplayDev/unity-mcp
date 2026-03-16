@@ -148,6 +148,12 @@ namespace MCPForUnity.Editor.Tools
 
             // Optional parameters
             string path = p.Get("path"); // Relative to Assets/
+            // If the caller passed a full file path (e.g. "Assets/Scripts/Foo.cs"),
+            // strip the filename so path is treated as a directory.
+            if (path != null && path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+            {
+                path = Path.GetDirectoryName(path)?.Replace('\\', '/');
+            }
             string contents = null;
 
             // Check if we have base64 encoded contents
@@ -2276,6 +2282,9 @@ namespace MCPForUnity.Editor.Tools
                 return false;
             }
 
+            // Basic structural validation: check for duplicate method signatures
+            CheckDuplicateMethodSignatures(contents, errorList);
+
 #if USE_ROSLYN
             // Advanced Roslyn-based validation: only run for Standard+; fail on Roslyn errors
             if (level >= ValidationLevel.Standard)
@@ -2518,6 +2527,57 @@ namespace MCPForUnity.Editor.Tools
         }
 #endif
 
+        private static int CountTopLevelParams(string paramStr)
+        {
+            if (string.IsNullOrWhiteSpace(paramStr)) return 0;
+            int depth = 0, count = 1;
+            foreach (char c in paramStr)
+            {
+                if (c == '<' || c == '(' || c == '[') depth++;
+                else if (c == '>' || c == ')' || c == ']') depth--;
+                else if (c == ',' && depth == 0) count++;
+            }
+            return count;
+        }
+
+        /// <summary>
+        /// Extracts only the type portions from a parameter list, dropping parameter names.
+        /// e.g. "Dictionary&lt;string, int&gt; data, List&lt;Vector3&gt; points" → "Dictionary&lt;string, int&gt;, List&lt;Vector3&gt;"
+        /// </summary>
+        private static string ExtractParamTypes(string paramStr)
+        {
+            if (string.IsNullOrWhiteSpace(paramStr)) return "";
+            var types = new System.Text.StringBuilder();
+            // Split at top-level commas (respecting <> depth)
+            int depth = 0, start = 0;
+            for (int i = 0; i <= paramStr.Length; i++)
+            {
+                char c = i < paramStr.Length ? paramStr[i] : ','; // sentinel
+                if (c == '<' || c == '(' || c == '[') depth++;
+                else if (c == '>' || c == ')' || c == ']') depth--;
+                else if (c == ',' && depth == 0)
+                {
+                    string param = paramStr.Substring(start, i - start).Trim();
+                    if (types.Length > 0) types.Append(", ");
+                    // The type is everything except the last token (the name).
+                    // But if the last token ends with '>' or ']', it's all type (e.g. "List<int>").
+                    // Find the last whitespace that is NOT inside <> brackets.
+                    int lastSplit = -1;
+                    int d2 = 0;
+                    for (int j = 0; j < param.Length; j++)
+                    {
+                        char pc = param[j];
+                        if (pc == '<' || pc == '(' || pc == '[') d2++;
+                        else if (pc == '>' || pc == ')' || pc == ']') d2--;
+                        else if (d2 == 0 && char.IsWhiteSpace(pc)) lastSplit = j;
+                    }
+                    types.Append(lastSplit > 0 ? param.Substring(0, lastSplit).Trim() : param);
+                    start = i + 1;
+                }
+            }
+            return Regex.Replace(types.ToString(), @"\s+", " ");
+        }
+
         /// <summary>
         /// Validates Unity-specific coding rules and best practices
         /// //TODO: Naive Unity Checks and not really yield any results, need to be improved
@@ -2581,7 +2641,138 @@ namespace MCPForUnity.Editor.Tools
             {
                 errors.Add("WARNING: String concatenation in Update() can cause garbage collection issues");
             }
+
         }
+
+        /// <summary>
+        /// Checks for duplicate method signatures (same name + param types + scope).
+        /// Catches corruption from anchor_replace overshoot and similar edit mistakes.
+        /// Runs at Basic level since duplicates are structural errors, not style warnings.
+        /// </summary>
+        private static void CheckDuplicateMethodSignatures(string contents, System.Collections.Generic.List<string> errors)
+        {
+            // Step 1: Build a code-only view (comments/strings replaced with spaces)
+            var codeChars = contents.ToCharArray();
+            {
+                var lexer = new CSharpLexer(contents);
+                while (true)
+                {
+                    int startPos = lexer.Position;
+                    if (!lexer.Advance(out _)) break;
+                    if (lexer.InNonCode)
+                    {
+                        for (int i = startPos; i < lexer.Position && i < codeChars.Length; i++)
+                            if (codeChars[i] != '\n') codeChars[i] = ' ';
+                    }
+                }
+            }
+            var codeOnly = new string(codeChars);
+
+            // Step 2: Build containing type name at each position via single pass
+            var typePattern = new Regex(
+                @"\b(?:class|struct|interface|record)\s+(\w+)",
+                RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2));
+            // Map opening-brace position -> fully qualified type name
+            var typeBraceMap = new System.Collections.Generic.Dictionary<int, string>();
+            {
+                var typeMatches = typePattern.Matches(codeOnly);
+                // Pre-scan: for each type declaration, find its opening brace and record full name
+                // We need to process in order and track nesting, so do a single forward pass
+                var preStack = new System.Collections.Generic.List<(string name, int openDepth)>();
+                int preBd = 0;
+                int nextTm = 0;
+                for (int i = 0; i < codeOnly.Length; i++)
+                {
+                    while (nextTm < typeMatches.Count && typeMatches[nextTm].Index == i)
+                    {
+                        int bp = codeOnly.IndexOf('{', typeMatches[nextTm].Index + typeMatches[nextTm].Length);
+                        if (bp >= 0)
+                        {
+                            string tn = typeMatches[nextTm].Groups[1].Value;
+                            string fn = preStack.Count > 0 ? preStack[preStack.Count - 1].name + "." + tn : tn;
+                            typeBraceMap[bp] = fn;
+                        }
+                        nextTm++;
+                    }
+                    if (codeOnly[i] == '{')
+                    {
+                        if (typeBraceMap.TryGetValue(i, out string mappedType))
+                            preStack.Add((mappedType, preBd));
+                        preBd++;
+                    }
+                    else if (codeOnly[i] == '}')
+                    {
+                        preBd = Math.Max(0, preBd - 1);
+                        if (preStack.Count > 0 && preStack[preStack.Count - 1].openDepth == preBd)
+                            preStack.RemoveAt(preStack.Count - 1);
+                    }
+                }
+            }
+            // Second pass: build per-position containing type array
+            var containingTypeArr = new string[codeOnly.Length];
+            {
+                var stack = new System.Collections.Generic.List<(string name, int openDepth)>();
+                int bd2 = 0;
+                string current = "";
+                for (int i = 0; i < codeOnly.Length; i++)
+                {
+                    if (codeOnly[i] == '{')
+                    {
+                        if (typeBraceMap.TryGetValue(i, out string tn))
+                        {
+                            stack.Add((tn, bd2));
+                            current = tn;
+                        }
+                        bd2++;
+                    }
+                    else if (codeOnly[i] == '}')
+                    {
+                        bd2 = Math.Max(0, bd2 - 1);
+                        if (stack.Count > 0 && stack[stack.Count - 1].openDepth == bd2)
+                        {
+                            stack.RemoveAt(stack.Count - 1);
+                            current = stack.Count > 0 ? stack[stack.Count - 1].name : "";
+                        }
+                    }
+                    containingTypeArr[i] = current;
+                }
+            }
+
+            // Step 3: Match method signatures on code-only text (includes => for expression-bodied)
+            var methodSigPattern = new Regex(
+                @"(?:(?:public|private|protected|internal)\s+)?(?:(?:static|virtual|override|abstract|sealed|async|new)\s+)*\S+\s+(\w+)\s*\(([^)]*)\)\s*(?:where\s+\S+\s*:\s*\S+\s*)?(?:[{;]|=>)",
+                RegexOptions.Multiline | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2));
+            var sigMatches = methodSigPattern.Matches(codeOnly);
+            var seen = new System.Collections.Generic.Dictionary<string, int>(System.StringComparer.Ordinal);
+            foreach (Match sm in sigMatches)
+            {
+                string methodName = sm.Groups[1].Value;
+                if (IsCSharpKeyword(methodName)) continue;
+                int paramCount = CountTopLevelParams(sm.Groups[2].Value);
+                string paramTypes = ExtractParamTypes(sm.Groups[2].Value);
+                string containingType = containingTypeArr[sm.Index];
+                string key = $"{containingType}/{methodName}/{paramCount}/{paramTypes}";
+                if (seen.TryGetValue(key, out _))
+                    errors.Add($"ERROR: Duplicate method signature detected: '{methodName}' with {paramCount} parameter(s). This may indicate a corrupted edit.");
+                else
+                    seen[key] = 1;
+            }
+        }
+
+        private static readonly System.Collections.Generic.HashSet<string> CSharpKeywords =
+            new System.Collections.Generic.HashSet<string>(System.StringComparer.Ordinal)
+            {
+                "if", "else", "for", "foreach", "while", "do", "switch", "case",
+                "try", "catch", "finally", "throw", "return", "yield", "await",
+                "lock", "using", "fixed", "checked", "unchecked", "typeof", "sizeof",
+                "nameof", "default", "new", "stackalloc", "when", "in", "is", "as",
+                "ref", "out", "params", "this", "base", "null", "true", "false",
+                "get", "set", "var", "dynamic", "where", "from", "select", "group",
+                "into", "orderby", "join", "let", "on", "equals", "by", "ascending",
+                "descending"
+            };
+
+        private static bool IsCSharpKeyword(string name) => CSharpKeywords.Contains(name);
 
         /// <summary>
         /// Validates semantic rules and common coding issues

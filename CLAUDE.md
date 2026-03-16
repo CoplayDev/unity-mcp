@@ -1,4 +1,6 @@
-# CLAUDE.md - Project Overview for AI Assistants
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## What This Project Is
 
@@ -8,7 +10,7 @@
 
 ```text
 AI Assistant (Claude/Cursor)
-        ↓ MCP Protocol (stdio/SSE)
+        ↓ MCP Protocol (stdio/HTTP)
 Python Server (Server/src/)
         ↓ WebSocket + HTTP
 Unity Editor Plugin (MCPForUnity/)
@@ -20,31 +22,29 @@ Scene, Assets, Scripts
 - `Server/` - Python MCP server using FastMCP
 - `MCPForUnity/` - Unity C# Editor package
 
-## Directory Structure
+### Three Layers on the Python Side
 
-```text
-├── Server/                     # Python MCP Server
-│   ├── src/
-│   │   ├── cli/commands/       # Tool implementations (20 domain modules)
-│   │   ├── transport/          # MCP protocol, WebSocket bridge
-│   │   ├── services/           # Custom tools, resources
-│   │   └── core/               # Telemetry, logging, config
-│   └── tests/                  # 502 Python tests
-├── MCPForUnity/                # Unity Editor Package
-│   └── Editor/
-│       ├── Tools/              # C# tool implementations (42 files)
-│       ├── Services/           # Bridge, state management
-│       ├── Helpers/            # Utilities (27 files)
-│       └── Windows/            # Editor UI
-├── TestProjects/UnityMCPTests/ # Unity test project (605 tests)
-└── tools/                      # Build/release scripts
-```
+The Python server has three distinct layers. These are **not** auto-generated from each other:
+
+| Layer | Location | Framework | Purpose |
+|-------|----------|-----------|---------|
+| **MCP Tools** | `Server/src/services/tools/` | FastMCP (`@mcp_for_unity_tool`) | Exposed to AI assistants via MCP protocol |
+| **CLI Commands** | `Server/src/cli/commands/` | Click (`@click.command`) | Terminal interface for developers |
+| **Resources** | `Server/src/services/resources/` | FastMCP (`@mcp_for_unity_resource`) | Read-only state exposed to AI assistants |
+
+MCP tools call Unity via WebSocket (`send_with_unity_instance`). CLI commands call Unity via HTTP (`run_command`). Both route to the same C# `HandleCommand` methods.
+
+### Transport Modes
+
+- **Stdio**: Single-agent only. Separate Python process per client. Legacy TCP bridge to Unity. New connections stomp old ones.
+- **HTTP**: Multi-agent ready. Single shared Python server. WebSocket hub at `/hub/plugin`. Session isolation via `client_id`.
 
 ## Code Philosophy
 
 ### 1. Domain Symmetry
-Python CLI commands mirror C# Editor tools. Each domain (materials, prefabs, scripts, etc.) exists in both:
-- `Server/src/cli/commands/materials.py` ↔ `MCPForUnity/Editor/Tools/ManageMaterial.cs`
+Python MCP tools mirror C# Editor tools. Each domain exists in both:
+- `Server/src/services/tools/manage_material.py` ↔ `MCPForUnity/Editor/Tools/ManageMaterial.cs`
+- CLI commands (`Server/src/cli/commands/`) also mirror these but are a separate implementation.
 
 ### 2. Minimal Abstraction
 Avoid premature abstraction. Three similar lines of code is better than a helper that's used once. Only abstract when you have 3+ genuine use cases.
@@ -53,17 +53,72 @@ Avoid premature abstraction. Three similar lines of code is better than a helper
 When removing functionality, delete it completely. No `_unused` renames, no `// removed` comments, no backwards-compatibility shims for internal code.
 
 ### 4. Test Coverage Required
-Every new feature needs tests. We have 1100+ tests across Python and C#. Run them before PRs.
+Every new feature needs tests. Run them before PRs.
 
 ### 5. Keep Tools Focused
 Each MCP tool does one thing well. Resist the urge to add "convenient" parameters that bloat the API surface.
 
-### 6. Use Resources for reading.
-Keep them smart and focused rather than "read everything" type resources. That way resources are quick and LLM-friendly. There are plenty of examples in the codebase to model on (gameobject, prefab, etc.)
+### 6. Use Resources for Reading
+Keep them smart and focused rather than "read everything" type resources. Resources should be quick and LLM-friendly.
 
 ## Key Patterns
 
-### Parameter Handling (C#)
+### Python MCP Tool Registration
+Tools in `Server/src/services/tools/` are auto-discovered. Use the `@mcp_for_unity_tool` decorator:
+```python
+from services.registry import mcp_for_unity_tool
+
+@mcp_for_unity_tool(
+    description="Does something in Unity.",
+    group="core",  # core (default), vfx, animation, ui, scripting_ext, testing, probuilder
+)
+async def manage_something(
+    ctx: Context,
+    action: Annotated[Literal["create", "delete"], "Action to perform"],
+) -> dict[str, Any]:
+    unity_instance = await get_unity_instance_from_context(ctx)
+    params = {"action": action}
+    response = await send_with_unity_instance(async_send_command_with_retry, unity_instance, "manage_something", params)
+    return response
+```
+
+The `group` parameter controls tool visibility. Only `"core"` is enabled by default. Non-core groups (vfx, animation, etc.) start disabled and are toggled via `manage_tools`.
+
+### Python CLI Error Handling
+CLI commands (not MCP tools) use the `@handle_unity_errors` decorator:
+```python
+@handle_unity_errors
+async def my_command(ctx, ...):
+    result = await call_unity_tool(...)
+```
+
+### C# Tool Registration
+Tools are auto-discovered by `CommandRegistry` via reflection. Use the `[McpForUnityTool]` attribute:
+```csharp
+[McpForUnityTool("manage_something", AutoRegister = false, Group = "core")]
+public static class ManageSomething
+{
+    // Sync handler (most tools):
+    public static object HandleCommand(JObject @params)
+    {
+        var p = new ToolParams(@params);
+        // ...
+        return new SuccessResponse("Done.", new { data = result });
+    }
+
+    // OR async handler (for long-running operations like play-test, refresh, batch):
+    public static async Task<object> HandleCommand(JObject @params)
+    {
+        // CommandRegistry detects Task return type automatically
+        await SomeAsyncOperation();
+        return new SuccessResponse("Done.");
+    }
+}
+```
+
+Async handlers use `EditorApplication.update` polling with `TaskCompletionSource` — see `RefreshUnity.cs` for the canonical pattern.
+
+### C# Parameter Handling
 Use `ToolParams` for consistent parameter validation:
 ```csharp
 var p = new ToolParams(parameters);
@@ -71,25 +126,32 @@ var pageSize = p.GetInt("page_size", "pageSize") ?? 50;
 var name = p.RequireString("name");
 ```
 
-### Error Handling (Python CLI)
-Use the `@handle_unity_errors` decorator:
-```python
-@handle_unity_errors
-async def my_command(ctx, ...):
-    result = await call_unity_tool(...)
-```
+### C# Resources
+Resources use `[McpForUnityResource]` and follow the same `HandleCommand` pattern as tools. They provide read-only state to AI assistants.
 
 ### Paging Large Results
 Always page results that could be large (hierarchies, components, search results):
 - Use `page_size` and `cursor` parameters
 - Return `next_cursor` when more results exist
 
-## Common Tasks
+### Composing Tools Internally (C#)
+Use `CommandRegistry.InvokeCommandAsync` to call other tools from within a handler:
+```csharp
+var result = await CommandRegistry.InvokeCommandAsync("read_console", consoleParams);
+```
+
+## Commands
 
 ### Running Tests
 ```bash
-# Python
+# Python (all tests)
 cd Server && uv run pytest tests/ -v
+
+# Python (single test file)
+cd Server && uv run pytest tests/test_manage_material.py -v
+
+# Python (single test by name)
+cd Server && uv run pytest tests/ -k "test_create_material" -v
 
 # Unity - open TestProjects/UnityMCPTests in Unity, use Test Runner window
 ```
@@ -98,12 +160,14 @@ cd Server && uv run pytest tests/ -v
 1. Set **Server Source Override** in MCP for Unity Advanced Settings to your local `Server/` path
 2. Enable **Dev Mode** checkbox to force fresh installs
 3. Use `mcp_source.py` to switch Unity package sources
-4. Test on Windows and Mac if possible, and multiple clients (Claude Desktop and Claude Code are tricky for configuration       as of this writing)
+4. Test on Windows and Mac if possible, and multiple clients (Claude Desktop and Claude Code are tricky for configuration as of this writing)
 
 ### Adding a New Tool
-1. Add Python command in `Server/src/cli/commands/<domain>.py`
-2. Add C# implementation in `MCPForUnity/Editor/Tools/Manage<Domain>.cs`
-3. Add tests in both `Server/tests/` and `TestProjects/UnityMCPTests/Assets/Tests/`
+1. Add Python MCP tool in `Server/src/services/tools/manage_<domain>.py` using `@mcp_for_unity_tool`
+2. Add Python CLI commands in `Server/src/cli/commands/<domain>.py` using Click
+3. Add C# implementation in `MCPForUnity/Editor/Tools/Manage<Domain>.cs` with `[McpForUnityTool]`
+4. Add Python tests in `Server/tests/test_manage_<domain>.py`
+5. Add Unity tests in `TestProjects/UnityMCPTests/Assets/Tests/`
 
 ## What Not To Do
 

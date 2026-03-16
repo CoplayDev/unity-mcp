@@ -94,6 +94,12 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse(error ?? $"Failed to add component '{componentTypeName}'.");
             }
 
+            // When adding VFX-related components (ParticleSystem, LineRenderer, TrailRenderer),
+            // ensure the renderer has a material compatible with the active render pipeline.
+            // Without this, newly added ParticleSystems in URP/HDRP projects get Unity's default
+            // Built-in RP particle material, which renders as magenta.
+            EnsureVfxRendererMaterial(targetGo, newComponent);
+
             // Set properties if provided
             JObject properties = @params["properties"] as JObject ?? @params["componentProperties"] as JObject;
             if (properties != null && properties.HasValues)
@@ -265,6 +271,40 @@ namespace MCPForUnity.Editor.Tools
         #endregion
 
         #region Helpers
+
+        /// <summary>
+        /// When a VFX-capable component is added (ParticleSystem, LineRenderer, TrailRenderer),
+        /// ensures its renderer material is valid for the active render pipeline.
+        /// This prevents magenta rendering in URP/HDRP projects where the default built-in
+        /// particle/line materials use incompatible shaders.
+        /// </summary>
+        private static void EnsureVfxRendererMaterial(GameObject go, Component addedComponent)
+        {
+            Renderer renderer = null;
+
+            if (addedComponent is ParticleSystem ps)
+            {
+                renderer = go.GetComponent<ParticleSystemRenderer>();
+
+                // Apply sensible defaults so newly added ParticleSystems aren't oversized.
+                // These are overridden by any subsequent particle_set_* calls.
+                RendererHelpers.SetSensibleParticleDefaults(ps);
+            }
+            else if (addedComponent is Renderer r)
+            {
+                // Covers LineRenderer, TrailRenderer, and any other Renderer subclass
+                renderer = r;
+            }
+
+            if (renderer != null)
+            {
+                var result = RendererHelpers.EnsureMaterial(renderer);
+                if (result.MaterialReplaced)
+                {
+                    McpLog.Info($"[ManageComponents] Auto-assigned pipeline-compatible material to {renderer.GetType().Name} on '{go.name}' (reason: {result.ReplacementReason}).");
+                }
+            }
+        }
 
         /// <summary>
         /// Marks the appropriate scene as dirty for the given GameObject.

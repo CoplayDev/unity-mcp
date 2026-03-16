@@ -47,7 +47,7 @@ async def manage_components(
                      "Value to set (for set_property action)"] | None = None,
     # For add/set_property - multiple properties
     properties: Annotated[
-        dict[str, Any],
+        dict[str, Any] | str,
         "Dictionary of property names to values. Example: {\"mass\": 5.0, \"useGravity\": false}"
     ] | None = None,
 ) -> dict[str, Any]:
@@ -65,7 +65,7 @@ async def manage_components(
     - Set single property: action="set_property", target="Enemy", component_type="Rigidbody", property="mass", value=5.0
     - Set multiple properties: action="set_property", target="Enemy", component_type="Rigidbody", properties={"mass": 5.0, "useGravity": false}
     """
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     gate = await preflight(ctx, wait_for_no_compile=True, refresh_if_dirty=True)
     if gate is not None:

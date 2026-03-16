@@ -456,12 +456,25 @@ class TestSceneCommands:
             result = runner.invoke(cli, ["scene", "create", "NewLevel"])
             assert result.exit_code == 0
 
-    def test_scene_screenshot(self, runner, mock_unity_response):
-        """Test scene screenshot command."""
-        with patch("cli.commands.scene.run_command", return_value=mock_unity_response):
-            result = runner.invoke(
-                cli, ["scene", "screenshot", "--filename", "test"])
+
+class TestCameraCommands:
+    """Tests for Camera CLI commands."""
+
+    def test_camera_screenshot_scene_view(self, runner, mock_unity_response):
+        with patch("cli.commands.camera.run_command", return_value=mock_unity_response) as mock_run:
+            result = runner.invoke(cli, [
+                "camera", "screenshot",
+                "--capture-source", "scene_view",
+                "--view-target", "Canvas",
+                "--include-image",
+            ])
             assert result.exit_code == 0
+            mock_run.assert_called_once()
+            params = mock_run.call_args[0][2]
+            assert params["captureSource"] == "scene_view"
+            assert params["viewTarget"] == "Canvas"
+            assert params["includeImage"] is True
+
 
 
 # =============================================================================

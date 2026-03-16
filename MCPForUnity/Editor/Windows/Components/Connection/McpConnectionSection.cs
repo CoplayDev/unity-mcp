@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using MCPForUnity.Editor.Clients;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Models;
@@ -1058,6 +1059,15 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
 
             // If client transport is unknown, hide the warning (we can't determine mismatch)
             if (clientTransport == ConfiguredTransport.Unknown)
+            {
+                transportMismatchWarning.RemoveFromClassList("visible");
+                return;
+            }
+
+            // When a project dir override is active the registered transport belongs
+            // to a different project and may legitimately differ from the local server
+            // transport, so skip the mismatch check.
+            if (ClaudeCliMcpConfigurator.HasClientProjectDirOverride)
             {
                 transportMismatchWarning.RemoveFromClassList("visible");
                 return;

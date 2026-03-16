@@ -43,5 +43,11 @@ namespace MCPForUnity.Editor.Clients
 
         /// <summary>Returns ordered human-readable installation steps.</summary>
         System.Collections.Generic.IList<string> GetInstallationSteps();
+
+        /// <summary>True if this client supports skill installation/sync.</summary>
+        bool SupportsSkills { get; }
+
+        /// <summary>Returns the absolute path where skills should be installed, or null if unsupported.</summary>
+        string GetSkillInstallPath();
     }
 }

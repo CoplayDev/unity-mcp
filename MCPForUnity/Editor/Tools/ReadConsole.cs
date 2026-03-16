@@ -248,10 +248,13 @@ namespace MCPForUnity.Editor.Tools
 
             try
             {
-                // LogEntries requires calling Start/Stop around GetEntries/GetEntryInternal
-                _startGettingEntriesMethod.Invoke(null, null);
-
-                int totalEntries = (int)_getCountMethod.Invoke(null, null);
+                // LogEntries requires calling Start/Stop around GetEntries/GetEntryInternal.
+                // StartGettingEntries() returns the entry count — use it instead of GetCount()
+                // which may return stale values within an active iteration session.
+                object startResult = _startGettingEntriesMethod.Invoke(null, null);
+                int totalEntries = startResult is int startCount
+                    ? startCount
+                    : (int)_getCountMethod.Invoke(null, null);
                 // Create instance to pass to GetEntryInternal - Ensure the type is correct
                 Type logEntryType = typeof(EditorApplication).Assembly.GetType(
                     "UnityEditor.LogEntry"

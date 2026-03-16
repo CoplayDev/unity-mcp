@@ -197,11 +197,21 @@ namespace MCPForUnity.Editor.Helpers
         {
             error = null;
 
+            // Skip reflection for UnityEngine.Object types with JObject values
+            // so SerializedProperty can resolve guid/spriteName/fileID forms.
+            bool isJObjectValue = value != null && value.Type == JTokenType.Object;
+
             // Try property first
             PropertyInfo propInfo = type.GetProperty(propertyName, flags)
                                  ?? type.GetProperty(normalizedName, flags);
             if (propInfo != null && propInfo.CanWrite)
             {
+                if (isJObjectValue && typeof(UnityEngine.Object).IsAssignableFrom(propInfo.PropertyType))
+                {
+                    // Let SerializedProperty path handle complex object references.
+                    return false;
+                }
+
                 try
                 {
                     object convertedValue = PropertyConversion.ConvertToType(value, propInfo.PropertyType);
@@ -225,6 +235,12 @@ namespace MCPForUnity.Editor.Helpers
                                ?? type.GetField(normalizedName, flags);
             if (fieldInfo != null && !fieldInfo.IsInitOnly)
             {
+                if (isJObjectValue && typeof(UnityEngine.Object).IsAssignableFrom(fieldInfo.FieldType))
+                {
+                    // Let SerializedProperty path handle complex object references.
+                    return false;
+                }
+
                 try
                 {
                     object convertedValue = PropertyConversion.ConvertToType(value, fieldInfo.FieldType);
@@ -248,6 +264,12 @@ namespace MCPForUnity.Editor.Helpers
                      ?? FindSerializedFieldInHierarchy(type, normalizedName);
             if (fieldInfo != null)
             {
+                if (isJObjectValue && typeof(UnityEngine.Object).IsAssignableFrom(fieldInfo.FieldType))
+                {
+                    // Let SerializedProperty path handle complex object references.
+                    return false;
+                }
+
                 try
                 {
                     object convertedValue = PropertyConversion.ConvertToType(value, fieldInfo.FieldType);
@@ -444,6 +466,25 @@ namespace MCPForUnity.Editor.Helpers
                 return false;
 
             so.ApplyModifiedProperties();
+
+            // Readback verification for ObjectReference — these can silently fail
+            if (prop.propertyType == SerializedPropertyType.ObjectReference
+                && value != null
+                && !(value is JValue jv && jv.Type == JTokenType.Null))
+            {
+                so.Update();
+                var verifyProp = so.FindProperty(propertyName)
+                              ?? so.FindProperty(normalizedName);
+                if (verifyProp != null
+                    && verifyProp.propertyType == SerializedPropertyType.ObjectReference
+                    && verifyProp.objectReferenceValue == null)
+                {
+                    error = $"Property '{propertyName}' was set but the object reference did not persist. " +
+                            "Check that the referenced object exists and is the correct type.";
+                    return false;
+                }
+            }
+
             return true;
         }
 
@@ -500,17 +541,17 @@ namespace MCPForUnity.Editor.Helpers
                 switch (prop.propertyType)
                 {
                     case SerializedPropertyType.Integer:
-                        int intVal = ParamCoercion.CoerceInt(value, int.MinValue);
-                        if (intVal == int.MinValue && value?.Type != JTokenType.Integer)
+                        if (value == null || value.Type == JTokenType.Null
+                            || (value.Type != JTokenType.Integer && value.Type != JTokenType.Float
+                                && !long.TryParse(value.ToString(), out _)))
                         {
-                            if (value == null || value.Type == JTokenType.Null ||
-                                (value.Type == JTokenType.String && !int.TryParse(value.ToString(), out _)))
-                            {
-                                error = "Expected integer value.";
-                                return false;
-                            }
+                            error = "Expected integer value.";
+                            return false;
                         }
-                        prop.intValue = intVal;
+                        if (prop.type == "long")
+                            prop.longValue = ParamCoercion.CoerceLong(value, 0);
+                        else
+                            prop.intValue = ParamCoercion.CoerceInt(value, 0);
                         return true;
 
                     case SerializedPropertyType.Boolean:
@@ -564,30 +605,31 @@ namespace MCPForUnity.Editor.Helpers
             if (value.Type == JTokenType.Integer)
             {
                 int id = value.Value<int>();
-                var resolved = EditorUtility.InstanceIDToObject(id);
+                var resolved = GameObjectLookup.ResolveInstanceID(id);
                 if (resolved == null)
                 {
                     error = $"No object found with instanceID {id}.";
                     return false;
                 }
-                prop.objectReferenceValue = resolved;
-                return true;
+                return AssignObjectReference(prop, resolved, null, out error);
             }
 
             if (value is JObject jObj)
             {
+                // Optional component type filter — e.g. {"instanceID": 123, "component": "Button"}
+                string componentFilter = jObj["component"]?.ToString();
+
                 var idToken = jObj["instanceID"];
                 if (idToken != null)
                 {
                     int id = ParamCoercion.CoerceInt(idToken, 0);
-                    var resolved = EditorUtility.InstanceIDToObject(id);
+                    var resolved = GameObjectLookup.ResolveInstanceID(id);
                     if (resolved == null)
                     {
                         error = $"No object found with instanceID {id}.";
                         return false;
                     }
-                    prop.objectReferenceValue = resolved;
-                    return true;
+                    return AssignObjectReference(prop, resolved, componentFilter, out error);
                 }
 
                 var guidToken = jObj["guid"];
@@ -599,8 +641,52 @@ namespace MCPForUnity.Editor.Helpers
                         error = $"No asset found for GUID '{guidToken}'.";
                         return false;
                     }
-                    prop.objectReferenceValue = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
-                    return true;
+
+                    var spriteNameToken = jObj["spriteName"];
+                    if (spriteNameToken != null)
+                    {
+                        string spriteName = spriteNameToken.ToString();
+                        var allAssets = AssetDatabase.LoadAllAssetsAtPath(path);
+                        foreach (var asset in allAssets)
+                        {
+                            if (asset is Sprite sprite && sprite.name == spriteName)
+                            {
+                                prop.objectReferenceValue = sprite;
+                                return true;
+                            }
+                        }
+
+                        error = $"Sprite '{spriteName}' not found in atlas '{path}'.";
+                        return false;
+                    }
+
+                    var fileIdToken = jObj["fileID"];
+                    if (fileIdToken != null)
+                    {
+                        long targetFileId = fileIdToken.Value<long>();
+                        if (targetFileId != 0)
+                        {
+                            var allAssets = AssetDatabase.LoadAllAssetsAtPath(path);
+                            foreach (var asset in allAssets)
+                            {
+                                if (asset is Sprite sprite)
+                                {
+                                    long spriteFileId = GetSpriteFileId(sprite);
+                                    if (spriteFileId == targetFileId)
+                                    {
+                                        prop.objectReferenceValue = sprite;
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+
+                        error = $"Sprite with fileID '{targetFileId}' not found in atlas '{path}'.";
+                        return false;
+                    }
+
+                    var loaded = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
+                    return AssignObjectReference(prop, loaded, componentFilter, out error);
                 }
 
                 var pathToken = jObj["path"];
@@ -613,14 +699,13 @@ namespace MCPForUnity.Editor.Helpers
                         error = $"No asset found at path '{pathToken}'.";
                         return false;
                     }
-                    prop.objectReferenceValue = resolved;
-                    return true;
+                    return AssignObjectReference(prop, resolved, componentFilter, out error);
                 }
 
                 var nameToken = jObj["name"];
                 if (nameToken != null)
                 {
-                    return ResolveSceneObjectByName(prop, nameToken.ToString(), out error);
+                    return ResolveSceneObjectByName(prop, nameToken.ToString(), componentFilter, out error);
                 }
 
                 error = "Object reference must contain 'instanceID', 'guid', 'path', or 'name'.";
@@ -630,6 +715,16 @@ namespace MCPForUnity.Editor.Helpers
             if (value.Type == JTokenType.String)
             {
                 string strVal = value.ToString();
+
+                // Try as instanceID if the string is purely numeric
+                if (int.TryParse(strVal, out int parsedId))
+                {
+                    var resolved = GameObjectLookup.ResolveInstanceID(parsedId);
+                    if (resolved != null)
+                        return AssignObjectReference(prop, resolved, null, out error);
+                    // Not a valid instanceID — fall through to path/name resolution
+                }
+
                 if (strVal.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || strVal.Contains("/"))
                 {
                     string sanitized = AssetPathUtility.SanitizeAssetPath(strVal);
@@ -639,15 +734,74 @@ namespace MCPForUnity.Editor.Helpers
                         error = $"No asset found at path '{strVal}'.";
                         return false;
                     }
-                    prop.objectReferenceValue = resolved;
-                    return true;
+                    return AssignObjectReference(prop, resolved, null, out error);
                 }
 
                 // Fall back to scene hierarchy lookup by name.
-                return ResolveSceneObjectByName(prop, strVal, out error);
+                return ResolveSceneObjectByName(prop, strVal, null, out error);
             }
 
             error = $"Unsupported object reference format: {value.Type}.";
+            return false;
+        }
+
+        /// <summary>
+        /// Assigns a resolved object to a SerializedProperty, with automatic component fallback.
+        /// If the resolved object is a GameObject but the property expects a Component type,
+        /// searches the GameObject's components for a compatible one.
+        /// Optionally filters by component type name (e.g. "Button", "Rigidbody").
+        /// </summary>
+        private static bool AssignObjectReference(SerializedProperty prop, UnityEngine.Object resolved, string componentFilter, out string error)
+        {
+            error = null;
+            if (resolved == null)
+            {
+                error = "Resolved object is null.";
+                return false;
+            }
+
+            // If a component filter is specified and the resolved object is a GameObject,
+            // find the specific component by type name.
+            if (!string.IsNullOrEmpty(componentFilter) && resolved is GameObject filterGo)
+            {
+                var components = filterGo.GetComponents<Component>();
+                foreach (var comp in components)
+                {
+                    if (comp == null) continue;
+                    if (string.Equals(comp.GetType().Name, componentFilter, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(comp.GetType().FullName, componentFilter, StringComparison.OrdinalIgnoreCase))
+                    {
+                        prop.objectReferenceValue = comp;
+                        if (prop.objectReferenceValue != null)
+                            return true;
+                    }
+                }
+                error = $"Component '{componentFilter}' not found on GameObject '{filterGo.name}'.";
+                return false;
+            }
+
+            // Try direct assignment first
+            prop.objectReferenceValue = resolved;
+            if (prop.objectReferenceValue != null)
+                return true;
+
+            // If the resolved object is a GameObject but the property expects a Component,
+            // try each component on the GameObject until one is accepted.
+            if (resolved is GameObject go)
+            {
+                var components = go.GetComponents<Component>();
+                foreach (var comp in components)
+                {
+                    if (comp == null) continue;
+                    prop.objectReferenceValue = comp;
+                    if (prop.objectReferenceValue != null)
+                        return true;
+                }
+                error = $"GameObject '{go.name}' found but no compatible component for the property type.";
+                return false;
+            }
+
+            error = $"Object '{resolved.name}' (type: {resolved.GetType().Name}) is not compatible with the property type.";
             return false;
         }
 
@@ -656,7 +810,7 @@ namespace MCPForUnity.Editor.Helpers
         /// to a SerializedProperty. Uses GameObjectLookup for robust search
         /// including inactive objects and prefab stage support.
         /// </summary>
-        private static bool ResolveSceneObjectByName(SerializedProperty prop, string name, out string error)
+        private static bool ResolveSceneObjectByName(SerializedProperty prop, string name, string componentFilter, out string error)
         {
             error = null;
             if (string.IsNullOrWhiteSpace(name))
@@ -681,24 +835,7 @@ namespace MCPForUnity.Editor.Helpers
                 return false;
             }
 
-            // If the property accepts a GameObject directly, assign it.
-            prop.objectReferenceValue = go;
-            if (prop.objectReferenceValue != null)
-                return true;
-
-            // The field type may expect a specific Component (e.g. Transform, Rigidbody).
-            // Try each component on the GameObject until one is accepted.
-            var components = go.GetComponents<Component>();
-            foreach (var comp in components)
-            {
-                if (comp == null) continue;
-                prop.objectReferenceValue = comp;
-                if (prop.objectReferenceValue != null)
-                    return true;
-            }
-
-            error = $"GameObject '{name}' found but no compatible component for property type.";
-            return false;
+            return AssignObjectReference(prop, go, componentFilter, out error);
         }
 
         /// <summary>
@@ -766,6 +903,23 @@ namespace MCPForUnity.Editor.Helpers
             }
             error = $"Unknown enum name '{s}'.";
             return false;
+        }
+
+        private static long GetSpriteFileId(Sprite sprite)
+        {
+            if (sprite == null)
+                return 0;
+
+            try
+            {
+                var globalId = GlobalObjectId.GetGlobalObjectIdSlow(sprite);
+                return unchecked((long)globalId.targetObjectId);
+            }
+            catch (Exception ex)
+            {
+                McpLog.Warn($"Failed to get fileID for sprite '{sprite.name}' (instanceID={sprite.GetInstanceID()}): {ex.Message}");
+                return 0;
+            }
         }
     }
 }

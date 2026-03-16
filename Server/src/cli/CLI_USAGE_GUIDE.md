@@ -101,7 +101,7 @@ unity-mcp gameobject create "MyCube" --primitive Cube
 unity-mcp gameobject modify "MyCube" --position 0 2 0
 
 # Take a screenshot
-unity-mcp scene screenshot
+unity-mcp camera screenshot
 
 # Enter play mode
 unity-mcp editor play
@@ -367,9 +367,9 @@ unity-mcp scene load "Assets/Scenes/MyScene.unity"
 # Save current scene
 unity-mcp scene save
 
-# Take screenshot
-unity-mcp scene screenshot
-unity-mcp scene screenshot --filename "my_screenshot" --supersize 2
+# Take screenshot (use camera command)
+unity-mcp camera screenshot
+unity-mcp camera screenshot --file-name "my_screenshot" --super-size 2
 ```
 
 ### GameObject Commands
@@ -604,12 +604,206 @@ unity-mcp animation set-parameter "Character" "IsRunning" true --type bool
 unity-mcp animation set-parameter "Character" "Jump" "" --type trigger
 ```
 
+### Camera Commands
+
+```bash
+# Check Cinemachine availability
+unity-mcp camera ping
+
+# List all cameras in scene
+unity-mcp camera list
+
+# Create cameras (plain or with Cinemachine presets)
+unity-mcp camera create                                     # Basic camera
+unity-mcp camera create --name "FollowCam" --preset follow --follow "Player" --look-at "Player"
+unity-mcp camera create --preset third_person --follow "Player" --fov 50
+unity-mcp camera create --preset dolly --look-at "Player"
+unity-mcp camera create --preset top_down --follow "Player"
+unity-mcp camera create --preset side_scroller --follow "Player"
+unity-mcp camera create --preset static --fov 40
+
+# Set targets on existing camera
+unity-mcp camera set-target "FollowCam" --follow "Player" --look-at "Enemy"
+
+# Lens settings
+unity-mcp camera set-lens "MainCam" --fov 60 --near 0.1 --far 1000
+unity-mcp camera set-lens "OrthoCamera" --ortho-size 10
+
+# Priority (higher = preferred by CinemachineBrain)
+unity-mcp camera set-priority "FollowCam" --priority 15
+
+# Cinemachine Body/Aim/Noise configuration
+unity-mcp camera set-body "FollowCam" --body-type "CinemachineFollow"
+unity-mcp camera set-body "FollowCam" --body-type "CinemachineFollow" --props '{"TrackerSettings": {"BindingMode": 1}}'
+unity-mcp camera set-aim "FollowCam" --aim-type "CinemachineRotationComposer"
+unity-mcp camera set-noise "FollowCam" --amplitude 1.5 --frequency 0.5
+
+# Extensions
+unity-mcp camera add-extension "FollowCam" CinemachineConfiner3D
+unity-mcp camera remove-extension "FollowCam" CinemachineConfiner3D
+
+# Brain (ensure Brain exists on main camera, set default blend)
+unity-mcp camera ensure-brain
+unity-mcp camera ensure-brain --blend-style "EaseInOut" --blend-duration 1.5
+unity-mcp camera brain-status
+unity-mcp camera set-blend --style "Cut" --duration 0
+
+# Force/release camera override
+unity-mcp camera force "FollowCam"
+unity-mcp camera release
+
+# Screenshots
+unity-mcp camera screenshot
+unity-mcp camera screenshot --file-name "my_capture" --super-size 2
+unity-mcp camera screenshot --camera-ref "SecondCamera" --include-image
+unity-mcp camera screenshot --max-resolution 256
+unity-mcp camera screenshot --batch surround --max-resolution 256
+unity-mcp camera screenshot --batch orbit --view-target "Player"
+unity-mcp camera screenshot --capture-source scene_view --view-target "Canvas" --include-image
+unity-mcp camera screenshot-multiview --view-target "Player" --max-resolution 480
+```
+
+### Graphics Commands
+
+```bash
+# Check graphics system status
+unity-mcp graphics ping
+
+# --- Volumes ---
+# Create a Volume (global or local)
+unity-mcp graphics volume-create --name "PostProcessing" --global
+unity-mcp graphics volume-create --name "LocalFog" --local --weight 0.8 --priority 1
+
+# Add/remove/configure effects on a Volume
+unity-mcp graphics volume-add-effect --target "PostProcessing" --effect "Bloom"
+unity-mcp graphics volume-set-effect --target "PostProcessing" --effect "Bloom" -p intensity 1.5 -p threshold 0.9
+unity-mcp graphics volume-remove-effect --target "PostProcessing" --effect "Bloom"
+unity-mcp graphics volume-info --target "PostProcessing"
+unity-mcp graphics volume-set-properties --target "PostProcessing" --weight 0.5 --priority 2 --local
+unity-mcp graphics volume-list-effects
+unity-mcp graphics volume-create-profile --path "Assets/Profiles/MyProfile.asset" --name "MyProfile"
+
+# --- Render Pipeline ---
+unity-mcp graphics pipeline-info
+unity-mcp graphics pipeline-settings
+unity-mcp graphics pipeline-set-quality --level "High"
+unity-mcp graphics pipeline-set-settings -s renderScale 1.5 -s msaaSampleCount 4
+
+# --- Light Baking ---
+unity-mcp graphics bake-start
+unity-mcp graphics bake-start --sync               # Wait for completion
+unity-mcp graphics bake-status
+unity-mcp graphics bake-cancel
+unity-mcp graphics bake-clear
+unity-mcp graphics bake-settings
+unity-mcp graphics bake-set-settings -s lightmapResolution 64 -s directSamples 32
+unity-mcp graphics bake-reflection-probe --target "ReflectionProbe1"
+unity-mcp graphics bake-create-probes --name "LightProbes" --spacing 5
+unity-mcp graphics bake-create-reflection --name "ReflProbe" --resolution 512 --mode Realtime
+
+# --- Rendering Stats ---
+unity-mcp graphics stats
+unity-mcp graphics stats-memory
+unity-mcp graphics stats-debug-mode --mode "Wireframe"
+
+# --- URP Renderer Features ---
+unity-mcp graphics feature-list
+unity-mcp graphics feature-add --type "ScreenSpaceAmbientOcclusion" --name "SSAO"
+unity-mcp graphics feature-remove --name "SSAO"
+unity-mcp graphics feature-configure --name "SSAO" -p Intensity 1.5 -p Radius 0.3
+unity-mcp graphics feature-reorder --order "0,2,1,3"
+unity-mcp graphics feature-toggle --name "SSAO" --active
+unity-mcp graphics feature-toggle --name "SSAO" --inactive
+
+# --- Skybox & Environment ---
+unity-mcp graphics skybox-info
+unity-mcp graphics skybox-set-material --material "Assets/Materials/NightSky.mat"
+unity-mcp graphics skybox-set-properties -p _Tint "0.5,0.5,1,1" -p _Exposure 1.2
+unity-mcp graphics skybox-set-ambient --mode Flat --color "0.2,0.2,0.3"
+unity-mcp graphics skybox-set-ambient --mode Trilight --color "0.4,0.6,0.8" --equator-color "0.3,0.3,0.3" --ground-color "0.1,0.1,0.1"
+unity-mcp graphics skybox-set-fog --enable --mode ExponentialSquared --color "0.7,0.8,0.9" --density 0.02
+unity-mcp graphics skybox-set-fog --disable
+unity-mcp graphics skybox-set-reflection --intensity 1.0 --bounces 2 --mode Custom --resolution 256
+unity-mcp graphics skybox-set-sun --target "DirectionalLight"
+```
+
+### Package Commands
+
+```bash
+# Check package manager status
+unity-mcp packages ping
+
+# List installed packages
+unity-mcp packages list
+
+# Search Unity registry
+unity-mcp packages search "cinemachine"
+unity-mcp packages search "probuilder"
+
+# Get package details
+unity-mcp packages info "com.unity.cinemachine"
+
+# Install / remove packages
+unity-mcp packages add "com.unity.cinemachine"
+unity-mcp packages add "com.unity.cinemachine@4.1.1"
+unity-mcp packages remove "com.unity.cinemachine"
+unity-mcp packages remove "com.unity.cinemachine" --force    # Skip confirmation
+
+# Embed package for local editing
+unity-mcp packages embed "com.unity.cinemachine"
+
+# Force package re-resolution
+unity-mcp packages resolve
+
+# Check async operation status
+unity-mcp packages status <job_id>
+
+# Scoped registries
+unity-mcp packages list-registries
+unity-mcp packages add-registry "My Registry" --url "https://registry.example.com" -s "com.example"
+unity-mcp packages remove-registry "My Registry"
+```
+
+### Texture Commands
+
+```bash
+# Create procedural textures
+unity-mcp texture create "Assets/Textures/Red.png" --width 128 --height 128 --color "1,0,0,1"
+unity-mcp texture create "Assets/Textures/Check.png" --pattern checkerboard --palette "1,0,0,1;0,0,1,1"
+unity-mcp texture create "Assets/Textures/Brick.png" --width 256 --height 256 --pattern brick
+unity-mcp texture create "Assets/Textures/Grid.png" --pattern grid --width 512 --height 512
+
+# Available patterns: checkerboard, stripes, stripes_h, stripes_v, stripes_diag, dots, grid, brick
+
+# Create from image file
+unity-mcp texture create "Assets/Textures/Photo.png" --image-path "/path/to/source.png"
+
+# Create with custom import settings
+unity-mcp texture create "Assets/Textures/Normal.png" --import-settings '{"textureType": "NormalMap", "filterMode": "Trilinear"}'
+
+# Create sprites (auto-configures import settings for 2D)
+unity-mcp texture sprite "Assets/Sprites/Player.png" --width 32 --height 32 --color "0,0.5,1,1"
+unity-mcp texture sprite "Assets/Sprites/Tile.png" --pattern checkerboard --ppu 16 --pivot "0.5,0"
+
+# Modify existing texture pixels
+unity-mcp texture modify "Assets/Textures/Existing.png" --set-pixels '{"x":0,"y":0,"width":16,"height":16,"color":[1,0,0,1]}'
+
+# Delete texture
+unity-mcp texture delete "Assets/Textures/Old.png"
+unity-mcp texture delete "Assets/Textures/Old.png" --force
+```
+
 ### Code Commands
 
 ```bash
 # Read source files
 unity-mcp code read "Assets/Scripts/Player.cs"
 unity-mcp code read "Assets/Scripts/Player.cs" --start-line 10 --line-count 20
+
+# Search with regex
+unity-mcp code search "class.*Player" "Assets/Scripts/Player.cs"
+unity-mcp code search "TODO|FIXME" "Assets/Scripts/Utils.cs"
+unity-mcp code search "void Update" "Assets/Scripts/Game.cs" --max-results 20
 ```
 
 ### Raw Commands
@@ -622,6 +816,9 @@ unity-mcp raw manage_scene '{"action": "get_active"}'
 unity-mcp raw manage_gameobject '{"action": "create", "name": "Test"}'
 unity-mcp raw manage_components '{"action": "add", "target": "Test", "componentType": "Rigidbody"}'
 unity-mcp raw manage_editor '{"action": "play"}'
+unity-mcp raw manage_camera '{"action": "screenshot", "include_image": true}'
+unity-mcp raw manage_graphics '{"action": "volume_get_info", "target": "PostProcessing"}'
+unity-mcp raw manage_packages '{"action": "list_packages"}'
 ```
 
 ---

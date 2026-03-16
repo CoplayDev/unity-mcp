@@ -328,17 +328,21 @@
 
 /* Tools Section */
 .tool-actions {
-    flex-direction: row;
-    flex-wrap: wrap;
+    flex-direction: column;
     margin-top: 8px;
     margin-bottom: 8px;
 }
 
 .tool-action-button {
     flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: 0;
     min-width: 0;
     height: 26px;
     margin-bottom: 4px;
+    overflow: hidden;
+    -unity-text-overflow-position: end;
+    text-overflow: ellipsis;
 }
 
 .tool-category-container {
@@ -378,8 +382,10 @@
     padding: 2px 6px;
     margin-left: 4px;
     margin-top: 2px;
-    background-color: rgba(100, 100, 100, 0.25);
+    background-color: rgba(200, 200, 200, 1);
     border-radius: 3px;
+    border-width: 1px;
+    border-color: rgba(160, 160, 160, 1);
     color: rgba(40, 40, 40, 1);
 }
 
@@ -393,6 +399,18 @@
 
 .tool-parameters {
     -unity-font-style: italic;
+}
+
+/* Group enable/disable checkbox in the foldout header */
+.group-header-checkbox {
+    margin-left: 6px;
+    margin-right: 0;
+    flex-shrink: 0;
+}
+
+.group-header-checkbox > .unity-toggle__input > .unity-toggle__checkmark {
+    margin-top: 0;
+    margin-bottom: 0;
 }
 
 /* Advanced Settings */
@@ -529,8 +547,9 @@
 }
 
 .unity-theme-dark .tool-tag {
-    color: rgba(220, 220, 220, 1);
-    background-color: rgba(80, 80, 80, 0.6);
+    color: rgba(255, 255, 255, 0.9);
+    background-color: rgba(90, 95, 105, 1);
+    border-color: rgba(110, 115, 125, 1);
 }
 
 .unity-theme-dark .tool-item {

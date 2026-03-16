@@ -14,13 +14,14 @@ from transport.plugin_hub import PluginHub
 
 @mcp_for_unity_tool(
     unity_target=None,
+    group=None,
     description="Return the current FastMCP request context details (client_id, session_id, and meta dump).",
     annotations=ToolAnnotations(
         title="Debug Request Context",
         readOnlyHint=True,
     ),
 )
-def debug_request_context(ctx: Context) -> dict[str, Any]:
+async def debug_request_context(ctx: Context) -> dict[str, Any]:
     # Check request_context properties
     rc = getattr(ctx, "request_context", None)
     rc_client_id = getattr(rc, "client_id", None)
@@ -47,8 +48,8 @@ def debug_request_context(ctx: Context) -> dict[str, Any]:
 
     # Get session state info via middleware
     middleware = get_unity_instance_middleware()
-    derived_key = middleware.get_session_key(ctx)
-    active_instance = middleware.get_active_instance(ctx)
+    derived_key = await middleware.get_session_key(ctx)
+    active_instance = await middleware.get_active_instance(ctx)
 
     # Debugging middleware internals
     # NOTE: These fields expose internal implementation details and may change between versions.

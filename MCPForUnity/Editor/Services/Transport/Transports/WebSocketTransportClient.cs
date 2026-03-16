@@ -34,6 +34,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
             TimeSpan.FromSeconds(10),
             TimeSpan.FromSeconds(30)
         };
+        private static readonly TimeSpan ReconnectTailInterval = TimeSpan.FromSeconds(30);
 
         private static readonly TimeSpan DefaultKeepAliveInterval = TimeSpan.FromSeconds(15);
         private static readonly TimeSpan DefaultCommandTimeout = TimeSpan.FromSeconds(30);
@@ -539,7 +540,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     ["description"] = tool.Description,
                     ["structured_output"] = tool.StructuredOutput,
                     ["requires_polling"] = tool.RequiresPolling,
-                    ["poll_action"] = tool.PollAction
+                    ["poll_action"] = tool.PollAction,
+                    ["group"] = string.IsNullOrWhiteSpace(tool.Group) ? "core" : tool.Group
                 };
 
                 var paramsArray = new JArray();
@@ -791,13 +793,29 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                         return;
                     }
                 }
+
+                // Schedule exhausted — keep retrying every 30 s indefinitely so a transient
+                // server outage longer than ~49 s doesn't leave the plugin permanently dead.
+                McpLog.Warn($"[WebSocket] Initial reconnect schedule exhausted. Retrying every {ReconnectTailInterval.TotalSeconds}s until cancelled.");
+                _state = _state.WithError($"Server unreachable – retrying every {ReconnectTailInterval.TotalSeconds} s");
+                while (!token.IsCancellationRequested)
+                {
+                    try { await Task.Delay(ReconnectTailInterval, token).ConfigureAwait(false); }
+                    catch (OperationCanceledException) { return; }
+
+                    if (await EstablishConnectionAsync(token).ConfigureAwait(false))
+                    {
+                        _state = TransportState.Connected(TransportDisplayName, sessionId: _sessionId, details: _endpointUri.ToString());
+                        _isConnected = true;
+                        McpLog.Info("[WebSocket] Reconnected to MCP server", false);
+                        return;
+                    }
+                }
             }
             finally
             {
                 Interlocked.Exchange(ref _isReconnectingFlag, 0);
             }
-
-            _state = TransportState.Disconnected(TransportDisplayName, "Failed to reconnect");
         }
 
         private static Uri BuildWebSocketUri(string baseUrl)

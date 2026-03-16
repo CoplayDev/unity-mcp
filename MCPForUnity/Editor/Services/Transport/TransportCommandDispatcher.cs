@@ -385,6 +385,8 @@ namespace MCPForUnity.Editor.Services.Transport
                     return;
                 }
 
+                var logType = resourceMeta != null ? "resource" : toolMeta != null ? "tool" : "unknown";
+
                 // --- Tier-aware dispatch ---
                 var declaredTier = CommandRegistry.GetToolTier(command.type);
                 var effectiveTier = CommandClassifier.Classify(command.type, declaredTier, parameters);
@@ -394,25 +396,31 @@ namespace MCPForUnity.Editor.Services.Transport
                     // Route Smooth/Heavy through the gateway queue for tier-aware scheduling,
                     // heavy exclusivity, domain-reload guards, and CancellationToken support.
                     var job = CommandGatewayState.Queue.SubmitSingle(command.type, parameters, "transport");
+                    var gatewaySw = McpLogRecord.IsEnabled ? System.Diagnostics.Stopwatch.StartNew() : null;
 
                     async void AwaitGateway()
                     {
                         try
                         {
                             var gatewayResult = await CommandGatewayState.AwaitJob(job);
+                            gatewaySw?.Stop();
                             if (gatewayResult is IMcpResponse mcpResp && !mcpResp.Success)
                             {
+                                McpLogRecord.Log(command.type, parameters, logType, "ERROR", gatewaySw?.ElapsedMilliseconds ?? 0, (gatewayResult as ErrorResponse)?.Error);
                                 var errResponse = new { status = "error", result = gatewayResult, _queue = new { ticket = job.Ticket, tier = job.Tier.ToString().ToLowerInvariant(), queued = true } };
                                 pending.TrySetResult(JsonConvert.SerializeObject(errResponse));
                             }
                             else
                             {
+                                McpLogRecord.Log(command.type, parameters, logType, "SUCCESS", gatewaySw?.ElapsedMilliseconds ?? 0, null);
                                 var okResponse = new { status = "success", result = gatewayResult, _queue = new { ticket = job.Ticket, tier = job.Tier.ToString().ToLowerInvariant(), queued = true } };
                                 pending.TrySetResult(JsonConvert.SerializeObject(okResponse));
                             }
                         }
                         catch (Exception ex)
                         {
+                            gatewaySw?.Stop();
+                            McpLogRecord.Log(command.type, parameters, logType, "ERROR", gatewaySw?.ElapsedMilliseconds ?? 0, ex.Message);
                             pending.TrySetResult(SerializeError(ex.Message, command.type, ex.StackTrace));
                         }
                         finally
@@ -426,17 +434,55 @@ namespace MCPForUnity.Editor.Services.Transport
                 }
 
                 // --- Instant tier: execute directly (existing path) ---
+                var sw = McpLogRecord.IsEnabled ? System.Diagnostics.Stopwatch.StartNew() : null;
                 var result = CommandRegistry.ExecuteCommand(command.type, parameters, pending.CompletionSource);
 
                 if (result == null)
                 {
                     // Async command – cleanup after completion on next editor frame to preserve order.
-                    pending.CompletionSource.Task.ContinueWith(_ =>
+                    var capturedType = command.type;
+                    var capturedParams = parameters;
+                    var capturedLogType = logType;
+                    pending.CompletionSource.Task.ContinueWith(t =>
                     {
+                        sw?.Stop();
+                        var logStatus = "SUCCESS";
+                        string logError = null;
+                        if (t.IsFaulted)
+                        {
+                            logStatus = "ERROR";
+                            logError = t.Exception?.InnerException?.Message;
+                        }
+                        else if (t.IsCompletedSuccessfully && t.Result != null)
+                        {
+                            try
+                            {
+                                var resultObj = JObject.Parse(t.Result);
+                                if (string.Equals(resultObj.Value<string>("status"), "error", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    logStatus = "ERROR";
+                                    logError = resultObj.Value<string>("error");
+                                }
+                            }
+                            catch { }
+                        }
+                        McpLogRecord.Log(capturedType, capturedParams, capturedLogType,
+                            logStatus, sw?.ElapsedMilliseconds ?? 0, logError);
                         EditorApplication.delayCall += () => RemovePending(id, pending);
                     }, TaskScheduler.Default);
                     return;
                 }
+
+                sw?.Stop();
+
+                string syncLogStatus = "SUCCESS";
+                string syncLogError = null;
+                if (result is ErrorResponse errResp)
+                {
+                    syncLogStatus = "ERROR";
+                    syncLogError = errResp.Error;
+                }
+                McpLogRecord.Log(command.type, parameters, logType, syncLogStatus, sw?.ElapsedMilliseconds ?? 0, syncLogError);
 
                 var directResponse = new { status = "success", result };
                 pending.TrySetResult(JsonConvert.SerializeObject(directResponse));

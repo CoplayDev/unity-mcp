@@ -678,7 +678,7 @@ def _err(code: str, message: str, *, expected: dict[str, Any] | None = None, rew
     - Use replace_method/delete_method for whole-method changes (keeps signatures balanced)
     - Avoid whole-file regex deletes; validators will guard unbalanced braces
     - For tail insertions, prefer anchor/regex_replace on final brace (class closing)
-    - Pass options.validate='standard' for structural checks; 'relaxed' for interior-only edits
+    - Pass options.validate='standard' for structural checks; 'basic' for interior-only edits
     Canonical fields (use these exact keys):
     - op: replace_method | insert_method | delete_method | anchor_insert | anchor_delete | anchor_replace
     - className: string (defaults to 'name' if omitted on method/class ops)
@@ -736,7 +736,7 @@ async def script_apply_edits(
     namespace: Annotated[str,
                          "Namespace of the script to edit"] | None = None,
 ) -> dict[str, Any]:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
     await ctx.info(
         f"Processing script_apply_edits: {name} (unity_instance={unity_instance or 'default'})")
 

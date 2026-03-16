@@ -12,7 +12,7 @@ namespace MCPForUnity.Editor.Tools
     /// <summary>
     /// Handles CRUD operations for shader files within the Unity project.
     /// </summary>
-    [McpForUnityTool("manage_shader", AutoRegister = false, Tier = ExecutionTier.Heavy)]
+    [McpForUnityTool("manage_shader", AutoRegister = false, Tier = ExecutionTier.Heavy, Group = "vfx")]
     public static class ManageShader
     {
         /// <summary>

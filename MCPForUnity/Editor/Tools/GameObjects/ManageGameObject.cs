@@ -80,7 +80,7 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                 return new ErrorResponse(
                     $"Target '{targetPath}' is a prefab asset. " +
                     $"Use 'manage_asset' with action='modify' for prefab asset modifications, " +
-                    $"or 'manage_prefabs' with action='open_stage' to edit the prefab in isolation mode."
+                    $"or 'manage_prefabs' with action='modify_contents' to edit the prefab headlessly, or 'manage_editor' with action='close_prefab_stage' to exit prefab editing mode."
                 );
             }
             // --- End Prefab Asset Check ---

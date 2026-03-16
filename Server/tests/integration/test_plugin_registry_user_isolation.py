@@ -10,7 +10,7 @@ class TestRegistryUserIsolation:
     @pytest.mark.asyncio
     async def test_register_with_user_id_stores_composite_key(self):
         registry = PluginRegistry()
-        session = await registry.register(
+        session, _ = await registry.register(
             "sess-1", "MyProject", "hash1", "2022.3", user_id="user-A"
         )
         assert session.user_id == "user-A"
@@ -30,14 +30,34 @@ class TestRegistryUserIsolation:
         assert not_found is None
 
     @pytest.mark.asyncio
+    async def test_register_same_user_same_hash_evicts_previous_session(self):
+        """Same user + project_hash: second registration evicts the first session."""
+        registry = PluginRegistry()
+
+        first_session, first_evicted = await registry.register(
+            "sess-1", "MyProject", "hash1", "2022.3", user_id="user-A"
+        )
+        assert first_session.session_id == "sess-1"
+        assert first_evicted is None
+
+        second_session, second_evicted = await registry.register(
+            "sess-2", "MyProject", "hash1", "2022.3", user_id="user-A"
+        )
+        assert second_session.session_id == "sess-2"
+        assert second_evicted == "sess-1"
+
+    @pytest.mark.asyncio
     async def test_cross_user_isolation_same_hash(self):
         """Two users registering with the same project_hash get independent sessions."""
         registry = PluginRegistry()
-        sess_a = await registry.register("sA", "Proj", "hash1", "2022", user_id="userA")
-        sess_b = await registry.register("sB", "Proj", "hash1", "2022", user_id="userB")
+        sess_a, evicted_a = await registry.register("sA", "Proj", "hash1", "2022", user_id="userA")
+        sess_b, evicted_b = await registry.register("sB", "Proj", "hash1", "2022", user_id="userB")
 
         assert sess_a.session_id == "sA"
         assert sess_b.session_id == "sB"
+        # Different users should not evict each other's sessions
+        assert evicted_a is None
+        assert evicted_b is None
 
         # Each user resolves to their own session
         assert await registry.get_session_id_by_hash("hash1", "userA") == "sA"

@@ -8,9 +8,14 @@
             </ui:VisualElement>
             <ui:Label name="tools-summary" class="help-text" text="Discovering tools..." />
             <ui:VisualElement name="tools-actions" class="tool-actions">
-                <ui:Button name="enable-all-button" text="Enable All" class="tool-action-button" />
-                <ui:Button name="disable-all-button" text="Disable All" class="tool-action-button" />
-                <ui:Button name="rescan-button" text="Rescan" class="tool-action-button" />
+                <ui:VisualElement style="flex-direction: row;">
+                    <ui:Button name="enable-all-button" text="Enable All" class="tool-action-button" />
+                    <ui:Button name="disable-all-button" text="Disable All" class="tool-action-button" />
+                </ui:VisualElement>
+                <ui:VisualElement style="flex-direction: row;">
+                    <ui:Button name="rescan-button" text="Rescan" class="tool-action-button" />
+                    <ui:Button name="reconfigure-button" text="Reconfigure Clients" class="tool-action-button" />
+                </ui:VisualElement>
             </ui:VisualElement>
             <ui:Label name="tools-note" class="help-text" text="Changes apply after reconnecting or re-registering tools." />
             <ui:VisualElement name="tool-category-container" class="tool-category-container" />

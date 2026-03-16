@@ -55,12 +55,16 @@ class PluginRegistry:
         unity_version: str,
         project_path: str | None = None,
         user_id: str | None = None,
-    ) -> PluginSession:
+    ) -> tuple[PluginSession, str | None]:
         """Register (or replace) a plugin session.
 
         If an existing session already claims the same ``project_hash`` (and ``user_id``
         in remote-hosted mode) it will be replaced, ensuring that reconnect scenarios
         always map to the latest WebSocket connection.
+
+        Returns:
+            A tuple of (new_session, evicted_session_id). The evicted ID is None
+            when no previous session was replaced.
         """
         if config.http_remote_hosted and not user_id:
             raise ValueError("user_id is required in remote-hosted mode")
@@ -79,6 +83,7 @@ class PluginRegistry:
             )
 
             # Remove old mapping for this hash if it existed under a different session
+            evicted_session_id: str | None = None
             if user_id:
                 # Remote-hosted mode: use composite key (user_id, project_hash)
                 composite_key = (user_id, project_hash)
@@ -86,16 +91,18 @@ class PluginRegistry:
                     composite_key)
                 if previous_session_id and previous_session_id != session_id:
                     self._sessions.pop(previous_session_id, None)
+                    evicted_session_id = previous_session_id
                 self._user_hash_to_session[composite_key] = session_id
             else:
                 # Local mode: use project_hash only
                 previous_session_id = self._hash_to_session.get(project_hash)
                 if previous_session_id and previous_session_id != session_id:
                     self._sessions.pop(previous_session_id, None)
+                    evicted_session_id = previous_session_id
                 self._hash_to_session[project_hash] = session_id
 
             self._sessions[session_id] = session
-            return session
+            return session, evicted_session_id
 
     async def touch(self, session_id: str) -> None:
         """Update the ``connected_at`` timestamp when a heartbeat is received."""

@@ -367,6 +367,22 @@ namespace MCPForUnity.Editor.Tools
             return new ErrorResponse($"Unknown mode: {mode}");
         }
 
+        private static void EnsureAssetFolderExists(string assetFolderPath)
+        {
+            if (AssetDatabase.IsValidFolder(assetFolderPath))
+                return;
+
+            string[] parts = assetFolderPath.Replace('\\', '/').Split('/');
+            string current = parts[0]; // "Assets"
+            for (int i = 1; i < parts.Length; i++)
+            {
+                string next = current + "/" + parts[i];
+                if (!AssetDatabase.IsValidFolder(next))
+                    AssetDatabase.CreateFolder(current, parts[i]);
+                current = next;
+            }
+        }
+
         private static void SetColorProperties(Material mat, Color color)
         {
             bool wrote = false;
@@ -390,18 +406,26 @@ namespace MCPForUnity.Editor.Tools
         private static object CreateUniqueAndAssign(Renderer renderer, GameObject go, Color color, int slot)
         {
             string safeName = go.name.Replace(" ", "_");
-            string matPath = $"Assets/Materials/{safeName}_{go.GetInstanceID()}_mat.mat";
+
+            // Derive material folder from the scene context so generated materials
+            // live next to the scene/generation folder instead of a global dump.
+            string materialFolder = "Assets/Materials";
+            var scene = go.scene;
+            if (scene.IsValid() && !string.IsNullOrEmpty(scene.path) && scene.path.StartsWith("Assets/"))
+            {
+                string sceneDir = System.IO.Path.GetDirectoryName(scene.path).Replace("\\", "/");
+                materialFolder = $"{sceneDir}/Materials";
+            }
+
+            string matPath = $"{materialFolder}/{safeName}_{go.GetInstanceID()}_mat.mat";
             matPath = AssetPathUtility.SanitizeAssetPath(matPath);
             if (matPath == null)
             {
                 return new ErrorResponse($"Invalid GameObject name '{go.name}' — cannot build a safe material path.");
             }
 
-            // Ensure the Materials directory exists
-            if (!AssetDatabase.IsValidFolder("Assets/Materials"))
-            {
-                AssetDatabase.CreateFolder("Assets", "Materials");
-            }
+            // Ensure the Materials directory exists (recursive)
+            EnsureAssetFolderExists(materialFolder);
 
             Material existing = AssetDatabase.LoadAssetAtPath<Material>(matPath);
             if (existing != null)

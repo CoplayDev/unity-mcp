@@ -31,6 +31,15 @@ namespace MCPForUnity.Editor.Tools
         public bool AutoRegister { get; set; } = true;
 
         /// <summary>
+        /// Tool group for dynamic visibility on the Python server.
+        /// Core tools are enabled by default; other groups start hidden and
+        /// can be activated per-session via the manage_tools meta-tool.
+        /// Valid groups: core, vfx, animation, ui, scripting_ext, testing, menu.
+        /// Set to null for server meta-tools that should always be visible.
+        /// </summary>
+        public string Group { get; set; } = "core";
+
+        /// <summary>
         /// Enables the polling middleware for long-running tools. When true, Unity
         /// should return a PendingResponse and the Python side will poll using
         /// <see cref="PollAction"/> until completion.

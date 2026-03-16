@@ -408,7 +408,6 @@ namespace MCPForUnityTests.Editor.Helpers
         private static void AssertTransportConfiguration(JObject unity, McpClient client)
         {
             bool useHttp = EditorPrefs.GetBool(UseHttpTransportPrefKey, true);
-            bool isVSCode = client.IsVsCodeLayout;
             bool isWindsurf = string.Equals(client.HttpUrlProperty, "serverUrl", StringComparison.OrdinalIgnoreCase);
 
             if (useHttp)
@@ -429,16 +428,9 @@ namespace MCPForUnityTests.Editor.Helpers
                 Assert.IsNull(unity["command"], "HTTP transport should remove command");
                 Assert.IsNull(unity["args"], "HTTP transport should remove args");
 
-                if (isVSCode)
-                {
-                    Assert.AreEqual("http", (string)unity["type"],
-                        "VSCode entries should advertise HTTP transport");
-                }
-                else
-                {
-                    Assert.IsNull(unity["type"],
-                        "Non-VSCode entries should not include type metadata in HTTP mode");
-                }
+                // "type" is now included for all clients (standard MCP protocol field).
+                Assert.AreEqual("http", (string)unity["type"],
+                    "All entries should advertise HTTP transport type");
             }
             else
             {
@@ -458,16 +450,9 @@ namespace MCPForUnityTests.Editor.Helpers
                 Assert.AreEqual("stdio", args[transportIndex + 1],
                     "--transport should be followed by stdio mode");
 
-                if (isVSCode)
-                {
-                    Assert.AreEqual("stdio", (string)unity["type"],
-                        "VSCode entries should advertise stdio transport");
-                }
-                else
-                {
-                    Assert.IsNull(unity["type"],
-                        "Non-VSCode entries should not include type metadata in stdio mode");
-                }
+                // "type" is now included for all clients (standard MCP protocol field).
+                Assert.AreEqual("stdio", (string)unity["type"],
+                    "All entries should advertise stdio transport type");
             }
         }
 

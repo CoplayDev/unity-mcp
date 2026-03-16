@@ -292,5 +292,30 @@ namespace MCPForUnity.Editor.Helpers
             if (@params["generateLightingData"] != null && setGenerateLightingData != null) { setGenerateLightingData(@params["generateLightingData"].ToObject<bool>()); changes.Add("generateLightingData"); }
         }
 
+        /// <summary>
+        /// Applies sensible default values to a newly-created ParticleSystem.
+        /// Unity's raw defaults (startSize=1, startSpeed=5, startLifetime=5, maxParticles=1000)
+        /// produce oversized particle clouds in most scenes. These gentler defaults are a better
+        /// starting point that callers can override with particle_set_main or set_property.
+        /// </summary>
+        public static void SetSensibleParticleDefaults(ParticleSystem ps)
+        {
+            if (ps == null) return;
+
+            var main = ps.main;
+            main.startSize = new ParticleSystem.MinMaxCurve(0.1f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(1f);
+            main.startLifetime = new ParticleSystem.MinMaxCurve(2f);
+            main.maxParticles = 100;
+            main.playOnAwake = false;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+
+            var emission = ps.emission;
+            emission.rateOverTime = new ParticleSystem.MinMaxCurve(20f);
+
+            var shape = ps.shape;
+            shape.radius = 0.25f;
+        }
+
     }
 }

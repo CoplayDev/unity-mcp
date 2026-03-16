@@ -11,6 +11,11 @@ Common workflows and patterns for effective Unity-MCP usage.
 - [Testing Workflows](#testing-workflows)
 - [Debugging Workflows](#debugging-workflows)
 - [UI Creation Workflows](#ui-creation-workflows)
+- [Camera & Cinemachine Workflows](#camera--cinemachine-workflows)
+- [ProBuilder Workflows](#probuilder-workflows)
+- [Graphics & Rendering Workflows](#graphics--rendering-workflows)
+- [Package Management Workflows](#package-management-workflows)
+- [Package Deployment Workflows](#package-deployment-workflows)
 - [Batch Operations](#batch-operations)
 
 ---
@@ -111,8 +116,8 @@ manage_script(
     path="Assets/Scripts/MyScript.cs",
     contents="using UnityEngine;\n\npublic class MyScript : MonoBehaviour { ... }"
 )
-# Then refresh and check console
-refresh_unity(mode="force", scope="scripts", compile="request", wait_for_ready=True)
+# manage_script update auto-triggers import + compile — just wait and check console
+# Read mcpforunity://editor/state → wait until is_compiling == false
 read_console(types=["error"], count=10)
 ```
 
@@ -154,7 +159,7 @@ manage_gameobject(action="modify", target="Main Camera", position=[0, 5, -10],
     rotation=[30, 0, 0])
 
 # 5. Verify with screenshot
-manage_scene(action="screenshot")
+manage_camera(action="screenshot")
 
 # 6. Save scene
 manage_scene(action="save")
@@ -205,7 +210,7 @@ for i in range(10):
 ### Create New Script and Attach
 
 ```python
-# 1. Create script
+# 1. Create script (automatically triggers import + compilation)
 create_script(
     path="Assets/Scripts/EnemyAI.cs",
     contents='''using UnityEngine;
@@ -214,7 +219,7 @@ public class EnemyAI : MonoBehaviour
 {
     public float speed = 5f;
     public Transform target;
-    
+
     void Update()
     {
         if (target != null)
@@ -226,8 +231,8 @@ public class EnemyAI : MonoBehaviour
 }'''
 )
 
-# 2. CRITICAL: Refresh and compile
-refresh_unity(mode="force", scope="scripts", compile="request", wait_for_ready=True)
+# 2. Wait for compilation to finish
+# Read mcpforunity://editor/state → wait until is_compiling == false
 
 # 3. Check for errors
 console = read_console(types=["error"], count=10)
@@ -237,7 +242,7 @@ if console["messages"]:
 else:
     # 4. Attach to GameObject
     manage_gameobject(action="modify", target="Enemy", components_to_add=["EnemyAI"])
-    
+
     # 5. Set component properties
     manage_components(
         action="set_property",
@@ -283,8 +288,8 @@ validate_script(
     level="standard"
 )
 
-# 5. Refresh
-refresh_unity(mode="force", scope="scripts", compile="request", wait_for_ready=True)
+# 5. Wait for compilation (script_apply_edits auto-triggers import + compile)
+# Read mcpforunity://editor/state → wait until is_compiling == false
 
 # 6. Check console
 read_console(types=["error"], count=10)
@@ -344,7 +349,7 @@ manage_material(
 )
 
 # 3. Verify visually
-manage_scene(action="screenshot")
+manage_camera(action="screenshot")
 ```
 
 ### Create Procedural Texture
@@ -413,6 +418,35 @@ for asset in result["assets"]:
     info = manage_prefabs(action="get_info", prefab_path=prefab_path)
     print(f"Prefab: {prefab_path}, Children: {info['childCount']}")
 ```
+
+### Instantiate Prefab in Scene
+
+Use `manage_gameobject` (not `manage_prefabs`) to place prefab instances in the scene.
+
+```python
+# Full path
+manage_gameobject(
+    action="create",
+    name="Enemy_1",
+    prefab_path="Assets/Prefabs/Enemy.prefab",
+    position=[5, 0, 3],
+    parent="Enemies"
+)
+
+# Smart lookup — just the prefab name works too
+manage_gameobject(action="create", name="Enemy_2", prefab_path="Enemy", position=[10, 0, 3])
+
+# Batch-spawn multiple instances
+batch_execute(commands=[
+    {"tool": "manage_gameobject", "params": {
+        "action": "create", "name": f"Enemy_{i}",
+        "prefab_path": "Enemy", "position": [i * 3, 0, 0], "parent": "Enemies"
+    }}
+    for i in range(5)
+])
+```
+
+> **Note:** `manage_prefabs` is for headless prefab editing (inspect, modify contents, create from GameObject). To *instantiate* a prefab into the scene, always use `manage_gameobject(action="create", prefab_path="...")`.
 
 ---
 
@@ -483,8 +517,8 @@ public class PlayerTests
 }'''
 )
 
-# 2. Refresh
-refresh_unity(mode="force", scope="scripts", compile="request", wait_for_ready=True)
+# 2. Wait for compilation (create_script auto-triggers import + compile)
+# Read mcpforunity://editor/state → wait until is_compiling == false
 
 # 3. Run test (expect pass for this simple test)
 result = run_tests(mode="EditMode", test_names=["PlayerTests.TestPlayerStartsAtOrigin"])
@@ -554,14 +588,14 @@ for item in hierarchy["data"]["items"]:
         print(f"Object {item['name']} fell through floor!")
 
 # 3. Visual verification
-manage_scene(action="screenshot")
+manage_camera(action="screenshot")
 ```
 
 ---
 
 ## UI Creation Workflows
 
-Unity UI (Canvas-based UGUI) requires specific component hierarchies. Use `batch_execute` with `fail_fast=True` to create complete UI elements in a single call.
+Unity has two UI systems: **UI Toolkit** (modern, recommended) and **uGUI** (Canvas-based, legacy). Use `manage_ui` for UI Toolkit workflows, and `batch_execute` with `manage_gameobject` + `manage_components` for uGUI.
 
 > **Template warning:** This section is a skill template library, not a guaranteed source of truth. Examples may be inaccurate for your Unity version, package setup, or project conventions.
 > **Use safely:**
@@ -582,7 +616,9 @@ Unity UI (Canvas-based UGUI) requires specific component hierarchies. Use `batch
 #   "packages": {
 #     "ugui": true/false,        — com.unity.ugui (Canvas, Image, Button, etc.)
 #     "textmeshpro": true/false,  — com.unity.textmeshpro (TextMeshProUGUI)
-#     "inputsystem": true/false   — com.unity.inputsystem (new Input System)
+#     "inputsystem": true/false,  — com.unity.inputsystem (new Input System)
+#     "uiToolkit": true/false,    — UI Toolkit (always true for Unity 2021.3+)
+#     "screenCapture": true/false  — ScreenCapture module enabled
 #   }
 # }
 ```
@@ -591,12 +627,117 @@ Unity UI (Canvas-based UGUI) requires specific component hierarchies. Use `batch
 
 | project_info field | Value | What to use |
 |---|---|---|
-| `packages.ugui` | `true` | Canvas-based UI (Image, Button, etc.) |
-| `packages.textmeshpro` | `true` | `TextMeshProUGUI` for text |
+| `packages.uiToolkit` | `true` | **Preferred:** Use `manage_ui` for UI Toolkit (UXML/USS) |
+| `packages.ugui` | `true` | Canvas-based UI (Image, Button, etc.) via `batch_execute` |
+| `packages.textmeshpro` | `true` | `TextMeshProUGUI` for text (uGUI) |
 | `packages.textmeshpro` | `false` | `UnityEngine.UI.Text` (legacy, lower quality) |
-| `activeInputHandler` | `"Old"` | `StandaloneInputModule` for EventSystem |
-| `activeInputHandler` | `"New"` | `InputSystemUIInputModule` for EventSystem |
+| `activeInputHandler` | `"Old"` | `StandaloneInputModule` for EventSystem (uGUI) |
+| `activeInputHandler` | `"New"` | `InputSystemUIInputModule` for EventSystem (uGUI) |
 | `activeInputHandler` | `"Both"` | Either works; prefer `InputSystemUIInputModule` for UI |
+
+### UI Toolkit Workflows (manage_ui)
+
+UI Toolkit uses a web-like approach: **UXML** (like HTML) for structure, **USS** (like CSS) for styling. This is the preferred UI system for new projects.
+
+> **Important:** Always use `<ui:Style>` (with the `ui:` namespace prefix) in UXML, not bare `<Style>`. UI Builder will fail to open files that use `<Style>` without the prefix.
+
+#### Create a Complete UI Screen
+
+```python
+# 1. Create UXML document (structure)
+manage_ui(
+    action="create",
+    path="Assets/UI/MainMenu.uxml",
+    contents='''<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+    <ui:Style src="Assets/UI/MainMenu.uss" />
+    <ui:VisualElement name="root" class="root-container">
+        <ui:Label text="My Game" class="title" />
+        <ui:Button text="Play" name="play-btn" class="menu-button" />
+        <ui:Button text="Settings" name="settings-btn" class="menu-button" />
+        <ui:Button text="Quit" name="quit-btn" class="menu-button" />
+    </ui:VisualElement>
+</ui:UXML>'''
+)
+
+# 2. Create USS stylesheet (styling)
+manage_ui(
+    action="create",
+    path="Assets/UI/MainMenu.uss",
+    contents='''.root-container {
+    flex-grow: 1;
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.8);
+}
+.title {
+    font-size: 48px;
+    color: white;
+    -unity-font-style: bold;
+    margin-bottom: 40px;
+}
+.menu-button {
+    width: 300px;
+    height: 60px;
+    font-size: 24px;
+    margin: 8px;
+    background-color: rgb(50, 120, 200);
+    color: white;
+    border-radius: 8px;
+}
+.menu-button:hover {
+    background-color: rgb(70, 140, 220);
+}'''
+)
+
+# 3. Create a GameObject and attach UIDocument
+manage_gameobject(action="create", name="UIRoot")
+manage_ui(
+    action="attach_ui_document",
+    target="UIRoot",
+    source_asset="Assets/UI/MainMenu.uxml"
+    # panel_settings auto-created if omitted
+)
+
+# 4. Verify the visual tree
+manage_ui(action="get_visual_tree", target="UIRoot", max_depth=5)
+```
+
+#### Update Existing UI
+
+```python
+# Read current content
+result = manage_ui(action="read", path="Assets/UI/MainMenu.uss")
+# Modify and update
+manage_ui(
+    action="update",
+    path="Assets/UI/MainMenu.uss",
+    contents=".title { font-size: 64px; color: yellow; }"
+)
+```
+
+#### Custom PanelSettings
+
+```python
+# Create PanelSettings with ScaleWithScreenSize
+manage_ui(
+    action="create_panel_settings",
+    path="Assets/UI/GamePanelSettings.asset",
+    scale_mode="ScaleWithScreenSize",
+    reference_resolution={"width": 1920, "height": 1080}
+)
+
+# Attach UIDocument with custom PanelSettings
+manage_ui(
+    action="attach_ui_document",
+    target="UIRoot",
+    source_asset="Assets/UI/MainMenu.uxml",
+    panel_settings="Assets/UI/GamePanelSettings.asset"
+)
+```
+
+### uGUI (Canvas-Based) Workflows
+
+The sections below cover legacy Canvas-based UI using `batch_execute`. Use these when working with existing uGUI projects or when UI Toolkit is not suitable.
 
 ### RectTransform Sizing (Critical for All UI Children)
 
@@ -1320,7 +1461,463 @@ Both systems are active simultaneously. For UI, prefer `InputSystemUIInputModule
 
 ---
 
+## Camera & Cinemachine Workflows
+
+### Setting Up a Third-Person Camera
+
+```python
+# 1. Check Cinemachine availability
+manage_camera(action="ping")
+
+# 2. Ensure Brain on main camera
+manage_camera(action="ensure_brain")
+
+# 3. Create third-person camera with preset
+manage_camera(action="create_camera", properties={
+    "name": "FollowCam", "preset": "third_person",
+    "follow": "Player", "lookAt": "Player", "priority": 20
+})
+
+# 4. Fine-tune body
+manage_camera(action="set_body", target="FollowCam", properties={
+    "cameraDistance": 5.0, "shoulderOffset": [0.5, 0.5, 0]
+})
+
+# 5. Add camera shake
+manage_camera(action="set_noise", target="FollowCam", properties={
+    "amplitudeGain": 0.3, "frequencyGain": 0.8
+})
+
+# 6. Verify with screenshot
+manage_camera(action="screenshot", camera="FollowCam", include_image=True, max_resolution=512)
+```
+
+### Multi-Camera Setup with Blending
+
+```python
+# 1. Read current cameras
+# Read mcpforunity://scene/cameras
+
+# 2. Create gameplay camera (highest priority = active by default)
+manage_camera(action="create_camera", properties={
+    "name": "GameplayCam", "preset": "follow",
+    "follow": "Player", "lookAt": "Player", "priority": 10
+})
+
+# 3. Create cinematic camera (lower priority, activated on demand)
+manage_camera(action="create_camera", properties={
+    "name": "CinematicCam", "preset": "dolly",
+    "lookAt": "CutsceneTarget", "priority": 5
+})
+
+# 4. Set blend transition
+manage_camera(action="set_blend", properties={"style": "EaseInOut", "duration": 2.0})
+
+# 5. Force cinematic camera for a cutscene
+manage_camera(action="force_camera", target="CinematicCam")
+
+# 6. Release override to return to priority-based selection
+manage_camera(action="release_override")
+```
+
+### Camera Without Cinemachine
+
+```python
+# Tier 1 actions work with plain Unity Camera
+manage_camera(action="create_camera", properties={
+    "name": "MainCam", "fieldOfView": 50
+})
+
+# Set lens
+manage_camera(action="set_lens", target="MainCam", properties={
+    "fieldOfView": 60, "nearClipPlane": 0.1, "farClipPlane": 1000
+})
+
+# Point camera at target (uses manage_gameobject look_at under the hood)
+manage_camera(action="set_target", target="MainCam", properties={
+    "lookAt": "Player"
+})
+
+# Screenshot from this camera
+manage_camera(action="screenshot", camera="MainCam", include_image=True, max_resolution=512)
+```
+
+### Camera Inspection Workflow
+
+```python
+# 1. Read all cameras via resource
+# Read mcpforunity://scene/cameras
+# → Shows brain status, all Cinemachine cameras (priority, pipeline, targets),
+#   all Unity cameras (FOV, depth, brain)
+
+# 2. Get brain status for blending info
+manage_camera(action="get_brain_status")
+
+# 3. List cameras via tool (alternative to resource)
+manage_camera(action="list_cameras")
+
+# 4. Multi-view screenshot to see from different angles
+manage_camera(action="screenshot_multiview", max_resolution=480)
+```
+
+### Scene View Screenshot Workflow
+
+Use `capture_source="scene_view"` to capture the editor's Scene View viewport — useful for seeing gizmos, wireframes, grid, debug overlays, and objects without cameras.
+
+```python
+# 1. Capture the Scene View as-is
+manage_camera(action="screenshot", capture_source="scene_view", include_image=True)
+
+# 2. Frame on a specific object first, then capture
+manage_camera(action="screenshot", capture_source="scene_view",
+    view_target="Player", include_image=True, max_resolution=512)
+
+# 3. Frame on UI Canvas (RectTransform bounds are supported)
+manage_camera(action="screenshot", capture_source="scene_view",
+    view_target="Canvas", include_image=True)
+
+# Limitations: scene_view does not support batch, view_position, view_rotation, or camera selection.
+# Use capture_source="game_view" (default) for those features.
+```
+
+---
+
+## ProBuilder Workflows
+
+When `com.unity.probuilder` is installed, prefer ProBuilder shapes over primitive GameObjects for any geometry that needs editing, multi-material faces, or non-trivial shapes. Check availability first with `manage_probuilder(action="ping")`.
+
+See [ProBuilder Workflow Guide](probuilder-guide.md) for full reference with complex object examples.
+
+### ProBuilder vs Primitives Decision
+
+| Need | Use Primitives | Use ProBuilder |
+|------|---------------|----------------|
+| Simple placeholder cube | `manage_gameobject(action="create", primitive_type="Cube")` | - |
+| Editable geometry | - | `manage_probuilder(action="create_shape", ...)` |
+| Per-face materials | - | `set_face_material` |
+| Custom shapes (L-rooms, arches) | - | `create_poly_shape` or `create_shape` |
+| Mesh editing (extrude, bevel) | - | Face/edge/vertex operations |
+| Batch environment building | Either | ProBuilder + `batch_execute` |
+
+### Basic ProBuilder Scene Build
+
+```python
+# 1. Check ProBuilder availability
+manage_probuilder(action="ping")
+
+# 2. Create shapes (use batch for multiple)
+batch_execute(commands=[
+    {"tool": "manage_probuilder", "params": {
+        "action": "create_shape",
+        "properties": {"shape_type": "Cube", "name": "Floor", "width": 20, "height": 0.2, "depth": 20}
+    }},
+    {"tool": "manage_probuilder", "params": {
+        "action": "create_shape",
+        "properties": {"shape_type": "Cube", "name": "Wall1", "width": 20, "height": 3, "depth": 0.3,
+                       "position": [0, 1.5, 10]}
+    }},
+    {"tool": "manage_probuilder", "params": {
+        "action": "create_shape",
+        "properties": {"shape_type": "Cylinder", "name": "Pillar1", "radius": 0.4, "height": 3,
+                       "position": [5, 1.5, 5]}
+    }},
+])
+
+# 3. Edit geometry (always get_mesh_info first!)
+info = manage_probuilder(action="get_mesh_info", target="Wall1",
+    properties={"include": "faces"})
+# Find direction="front" face, subdivide it, delete center for a window
+
+# 4. Apply materials per face
+manage_probuilder(action="set_face_material", target="Floor",
+    properties={"faceIndices": [0], "materialPath": "Assets/Materials/Stone.mat"})
+
+# 5. Smooth organic shapes
+manage_probuilder(action="auto_smooth", target="Pillar1",
+    properties={"angleThreshold": 45})
+
+# 6. Screenshot to verify
+manage_camera(action="screenshot", include_image=True, max_resolution=512)
+```
+
+### Edit-Verify Loop Pattern
+
+Face indices change after every edit. Always re-query:
+
+```python
+# WRONG: Assume face indices are stable
+manage_probuilder(action="subdivide", target="Obj", properties={"faceIndices": [2]})
+manage_probuilder(action="delete_faces", target="Obj", properties={"faceIndices": [5]})  # Index may be wrong!
+
+# RIGHT: Re-query after each edit
+manage_probuilder(action="subdivide", target="Obj", properties={"faceIndices": [2]})
+info = manage_probuilder(action="get_mesh_info", target="Obj", properties={"include": "faces"})
+# Find the correct face by direction/center, then delete
+manage_probuilder(action="delete_faces", target="Obj", properties={"faceIndices": [correct_index]})
+```
+
+### Known Limitations
+
+- **`set_pivot`**: Broken -- vertex positions don't persist through mesh rebuild. Use `center_pivot` or Transform positioning.
+- **`convert_to_probuilder`**: Broken -- MeshImporter throws. Create shapes natively with `create_shape`/`create_poly_shape`.
+- **`subdivide`**: Uses `ConnectElements.Connect` (not traditional quad subdivision). Connects face midpoints.
+
+---
+
+## Graphics & Rendering Workflows
+
+### Setting Up Post-Processing
+
+Add post-processing effects to a URP/HDRP scene using Volumes.
+
+```python
+# 1. Check pipeline status and available effects
+manage_graphics(action="ping")
+
+# 2. List available volume effects for the active pipeline
+manage_graphics(action="volume_list_effects")
+
+# 3. Create a global post-processing volume with common effects
+manage_graphics(action="volume_create", name="GlobalPostProcess", is_global=True,
+    effects=[
+        {"type": "Bloom", "parameters": {"intensity": 1.0, "threshold": 0.9, "scatter": 0.7}},
+        {"type": "Vignette", "parameters": {"intensity": 0.35}},
+        {"type": "Tonemapping", "parameters": {"mode": 1}},
+        {"type": "ColorAdjustments", "parameters": {"postExposure": 0.2, "contrast": 10}}
+    ])
+
+# 4. Verify the volume was created
+# Read mcpforunity://scene/volumes
+
+# 5. Fine-tune an effect parameter
+manage_graphics(action="volume_set_effect", target="GlobalPostProcess",
+    effect="Bloom", parameters={"intensity": 1.5})
+
+# 6. Screenshot to verify visual result
+manage_camera(action="screenshot", include_image=True, max_resolution=512)
+```
+
+**Tips:**
+- Always `ping` first to confirm URP/HDRP is active. Volumes do nothing on Built-in RP.
+- Use `volume_list_effects` to discover available effect types for the active pipeline (URP and HDRP have different sets).
+- Use `volume_get_info` to inspect current effect parameters before modifying.
+- Create a reusable VolumeProfile asset with `volume_create_profile` and reference it via `profile_path` on multiple volumes.
+
+### Adding a Full-Screen Effect via Renderer Features (URP)
+
+Add a custom full-screen shader pass using URP Renderer Features.
+
+```python
+# 1. Check pipeline and confirm URP
+manage_graphics(action="ping")
+
+# 2. Create a material for the full-screen effect
+manage_material(action="create",
+    material_path="Assets/Materials/GrayscaleEffect.mat",
+    shader="Shader Graphs/GrayscaleFullScreen")
+
+# 3. List current renderer features
+manage_graphics(action="feature_list")
+
+# 4. Add a FullScreenPassRendererFeature with the material
+manage_graphics(action="feature_add",
+    feature_type="FullScreenPassRendererFeature",
+    name="GrayscalePass",
+    material="Assets/Materials/GrayscaleEffect.mat")
+
+# 5. Verify it was added
+manage_graphics(action="feature_list")
+
+# 6. Toggle it on/off to compare
+manage_graphics(action="feature_toggle", index=0, active=False)  # disable
+manage_camera(action="screenshot", include_image=True, max_resolution=512)
+
+manage_graphics(action="feature_toggle", index=0, active=True)   # re-enable
+manage_camera(action="screenshot", include_image=True, max_resolution=512)
+
+# 7. Reorder features if needed (execution order matters)
+manage_graphics(action="feature_reorder", order=[1, 0, 2])
+```
+
+**Tips:**
+- Renderer Features are URP-only. `feature_*` actions return an error on HDRP or Built-in RP.
+- Read `mcpforunity://pipeline/renderer-features` to inspect features without modifying.
+- Feature execution order affects the final image. Use `feature_reorder` to control pass ordering.
+
+### Configuring Light Baking
+
+Set up lightmaps, light probes, and reflection probes for baked GI.
+
+```python
+# 1. Set lights to Baked or Mixed mode
+manage_components(action="set_property", target="Directional Light",
+    component_type="Light", properties={"lightmapBakeType": 1})  # 1 = Mixed
+
+# 2. Mark static objects for lightmapping
+manage_gameobject(action="modify", target="Environment",
+    component_properties={"StaticFlags": "ContributeGI"})
+
+# 3. Configure lightmap settings
+manage_graphics(action="bake_get_settings")
+manage_graphics(action="bake_set_settings", settings={
+    "lightmapper": 1,           # 1 = Progressive GPU
+    "directSamples": 32,
+    "indirectSamples": 128,
+    "maxBounces": 4,
+    "lightmapResolution": 40
+})
+
+# 4. Place light probes for dynamic objects
+manage_graphics(action="bake_create_light_probe_group", name="MainProbeGrid",
+    position=[0, 1.5, 0], grid_size=[5, 3, 5], spacing=3.0)
+
+# 5. Place a reflection probe for an interior room
+manage_graphics(action="bake_create_reflection_probe", name="RoomReflection",
+    position=[0, 2, 0], size=[8, 4, 8], resolution=256,
+    hdr=True, box_projection=True)
+
+# 6. Start async bake
+manage_graphics(action="bake_start", async_bake=True)
+
+# 7. Poll bake status
+manage_graphics(action="bake_status")
+# Repeat until complete
+
+# 8. Bake the reflection probe separately if needed
+manage_graphics(action="bake_reflection_probe", target="RoomReflection")
+
+# 9. Check rendering stats after bake
+manage_graphics(action="stats_get")
+```
+
+**Tips:**
+- Baking only works in Edit mode. If the editor is in Play mode, `bake_start` will fail.
+- Use `bake_cancel` to abort a long bake.
+- `bake_clear` removes all baked data (lightmaps, probes). Use before re-baking from scratch.
+- For large scenes, use `async_bake=True` (default) and poll `bake_status` periodically.
+
+---
+
+## Package Management Workflows
+
+### Install a Package and Verify
+
+```python
+# 1. Check what's installed
+manage_packages(action="ping")
+manage_packages(action="list_packages")
+# Poll status until complete
+manage_packages(action="status", job_id="<job_id>")
+
+# 2. Install the package
+manage_packages(action="add_package", package="com.unity.inputsystem")
+# Poll until domain reload completes
+manage_packages(action="status", job_id="<job_id>")
+
+# 3. Verify no compilation errors
+read_console(types=["error"], count=10)
+
+# 4. Confirm it's installed
+manage_packages(action="get_package_info", package="com.unity.inputsystem")
+```
+
+### Add OpenUPM Registry and Install Package
+
+```python
+# 1. Add the OpenUPM scoped registry
+manage_packages(
+    action="add_registry",
+    name="OpenUPM",
+    url="https://package.openupm.com",
+    scopes=["com.cysharp"]
+)
+
+# 2. Force resolution to pick up the new registry
+manage_packages(action="resolve_packages")
+
+# 3. Install a package from OpenUPM
+manage_packages(action="add_package", package="com.cysharp.unitask")
+manage_packages(action="status", job_id="<job_id>")
+```
+
+### Safe Package Removal
+
+```python
+# 1. Check dependencies before removing
+manage_packages(action="remove_package", package="com.unity.modules.ui")
+# If blocked: "Cannot remove: 3 package(s) depend on it"
+
+# 2. Force removal if you're sure
+manage_packages(action="remove_package", package="com.unity.modules.ui", force=True)
+manage_packages(action="status", job_id="<job_id>")
+```
+
+### Install from Git URL (e.g., NuGetForUnity)
+
+```python
+# Git URLs trigger a security warning — ensure the source is trusted
+manage_packages(
+    action="add_package",
+    package="https://github.com/GlitchEnzo/NuGetForUnity.git?path=/src/NuGetForUnity"
+)
+manage_packages(action="status", job_id="<job_id>")
+```
+
+---
+
+## Package Deployment Workflows
+
+### Iterative Development Loop (Edit → Deploy → Test)
+
+Use `deploy_package` to copy your local MCPForUnity source into the project's installed package location. This bypasses the UI dialog and triggers recompilation automatically.
+
+```python
+# Prerequisites: Set the MCPForUnity source path in Advanced Settings first.
+
+# 1. Make code changes (e.g., edit C# tools)
+# script_apply_edits or create_script as needed
+
+# 2. Deploy the updated package (copies source → installed package, creates backup)
+manage_editor(action="deploy_package")
+
+# 3. Wait for recompilation to finish
+refresh_unity(mode="force", compile="request", wait_for_ready=True)
+
+# 4. Check for compilation errors
+read_console(types=["error"], count=10, include_stacktrace=True)
+
+# 5. Test the changes
+run_tests(mode="EditMode")
+```
+
+### Rollback After Failed Deploy
+
+```python
+# Restore from the automatic pre-deployment backup
+manage_editor(action="restore_package")
+
+# Wait for recompilation
+refresh_unity(mode="force", compile="request", wait_for_ready=True)
+```
+
+---
+
 ## Batch Operations
+
+### Batch Discovery (Multi-Search)
+
+Use `batch_execute` to search for multiple things in a single call instead of calling `find_gameobjects` repeatedly:
+
+```python
+# Instead of 4 separate find_gameobjects calls, batch them:
+batch_execute(commands=[
+    {"tool": "find_gameobjects", "params": {"search_term": "Camera", "search_method": "by_component"}},
+    {"tool": "find_gameobjects", "params": {"search_term": "Rigidbody", "search_method": "by_component"}},
+    {"tool": "find_gameobjects", "params": {"search_term": "Player", "search_method": "by_tag"}},
+    {"tool": "find_gameobjects", "params": {"search_term": "GameManager", "search_method": "by_name"}}
+])
+# Returns array of results, one per command
+```
 
 ### Mass Property Update
 

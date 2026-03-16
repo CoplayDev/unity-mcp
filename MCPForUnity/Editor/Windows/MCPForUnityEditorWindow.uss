@@ -40,12 +40,17 @@
 /* Update Notification */
 .update-notification {
     display: none;
-    padding: 8px 16px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 12px;
     margin: 0px 12px;
     background-color: rgba(100, 200, 100, 0.15);
     border-radius: 4px;
     border-width: 1px;
     border-color: rgba(100, 200, 100, 0.3);
+    flex-shrink: 0;
 }
 
 .update-notification.visible {
@@ -56,6 +61,9 @@
     font-size: 11px;
     color: rgba(100, 200, 100, 1);
     white-space: normal;
+    flex-shrink: 1;
+    overflow: hidden;
+    -unity-text-align: middle-center;
 }
 
 /* Tabs */
