@@ -63,6 +63,12 @@ namespace MCPForUnity.Editor.Services.Transport
         }
 
         private static readonly Dictionary<string, PendingCommand> Pending = new();
+        /// <summary>
+        /// Maps command JSON content hash → pending ID for deduplication.
+        /// When a duplicate command arrives while an identical one is still pending,
+        /// the duplicate shares the original's TaskCompletionSource instead of queueing again.
+        /// </summary>
+        private static readonly Dictionary<string, string> ContentHashToPendingId = new();
         private static readonly object PendingLock = new();
         private static bool updateHooked;
         private static bool initialised;
@@ -96,6 +102,22 @@ namespace MCPForUnity.Editor.Services.Transport
 
             EnsureInitialised();
 
+            // --- Deduplication: if an identical command is already pending, share its result ---
+            var contentHash = ComputeContentHash(commandJson);
+
+            lock (PendingLock)
+            {
+                if (contentHash != null
+                    && ContentHashToPendingId.TryGetValue(contentHash, out var existingId)
+                    && Pending.TryGetValue(existingId, out var existingPending)
+                    && !existingPending.CancellationToken.IsCancellationRequested)
+                {
+                    McpLog.Info($"[Dispatcher] Dedup: identical command already pending (id={existingId}). Sharing result.");
+                    // Return the existing task — caller gets the same result when the original completes.
+                    return existingPending.CompletionSource.Task;
+                }
+            }
+
             var id = Guid.NewGuid().ToString("N");
             var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -108,6 +130,8 @@ namespace MCPForUnity.Editor.Services.Transport
             lock (PendingLock)
             {
                 Pending[id] = pending;
+                if (contentHash != null)
+                    ContentHashToPendingId[contentHash] = id;
             }
 
             // Proactively wake up the main thread execution loop. This improves responsiveness
@@ -378,12 +402,12 @@ namespace MCPForUnity.Editor.Services.Transport
                             var gatewayResult = await CommandGatewayState.AwaitJob(job);
                             if (gatewayResult is IMcpResponse mcpResp && !mcpResp.Success)
                             {
-                                var errResponse = new { status = "error", result = gatewayResult };
+                                var errResponse = new { status = "error", result = gatewayResult, _queue = new { ticket = job.Ticket, tier = job.Tier.ToString().ToLowerInvariant(), queued = true } };
                                 pending.TrySetResult(JsonConvert.SerializeObject(errResponse));
                             }
                             else
                             {
-                                var okResponse = new { status = "success", result = gatewayResult };
+                                var okResponse = new { status = "success", result = gatewayResult, _queue = new { ticket = job.Ticket, tier = job.Tier.ToString().ToLowerInvariant(), queued = true } };
                                 pending.TrySetResult(JsonConvert.SerializeObject(okResponse));
                             }
                         }
@@ -433,6 +457,7 @@ namespace MCPForUnity.Editor.Services.Transport
             {
                 if (Pending.Remove(id, out pending))
                 {
+                    CleanContentHash(id);
                     UnhookUpdateIfIdle();
                 }
             }
@@ -446,10 +471,46 @@ namespace MCPForUnity.Editor.Services.Transport
             lock (PendingLock)
             {
                 Pending.Remove(id);
+                CleanContentHash(id);
                 UnhookUpdateIfIdle();
             }
 
             pending.Dispose();
+        }
+
+        /// <summary>
+        /// Remove the content hash entry that points to the given pending ID.
+        /// Must be called under PendingLock.
+        /// </summary>
+        private static void CleanContentHash(string pendingId)
+        {
+            string hashToRemove = null;
+            foreach (var kvp in ContentHashToPendingId)
+            {
+                if (kvp.Value == pendingId)
+                {
+                    hashToRemove = kvp.Key;
+                    break;
+                }
+            }
+            if (hashToRemove != null)
+                ContentHashToPendingId.Remove(hashToRemove);
+        }
+
+        /// <summary>
+        /// Compute a stable content hash for command deduplication.
+        /// Returns null for non-JSON commands (e.g., "ping") which are cheap enough to not need dedup.
+        /// </summary>
+        private static string ComputeContentHash(string commandJson)
+        {
+            if (string.IsNullOrWhiteSpace(commandJson)) return null;
+            var trimmed = commandJson.Trim();
+            if (!trimmed.StartsWith("{")) return null; // Skip non-JSON (ping, etc.)
+
+            // Use the raw JSON string as the hash key. Retries from the same client produce
+            // byte-identical JSON, so this is both fast and correct for the dedup use case.
+            // For very large payloads, a proper hash could be used, but MCP commands are small.
+            return trimmed;
         }
 
         private static string SerializeError(string message, string commandType = null, string stackTrace = null)

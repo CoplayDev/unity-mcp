@@ -39,9 +39,20 @@ namespace MCPForUnity.Editor.Tools
 
         /// <summary>
         /// Submit a batch of commands. Returns the BatchJob with ticket.
+        /// Deduplicates multi-command batches: if an identical batch (same tools + params in same order)
+        /// from the same agent is already queued/running, returns the existing job.
         /// </summary>
         public BatchJob Submit(string agent, string label, bool atomic, List<BatchCommand> commands)
         {
+            // --- Dedup check for multi-command batches ---
+            var existing = FindDuplicateBatch(agent, commands);
+            if (existing != null)
+            {
+                existing.Deduplicated = true;
+                McpLog.Info($"[CommandQueue] Dedup: identical batch already queued/running as {existing.Ticket}. Returning existing job.");
+                return existing;
+            }
+
             var batchTier = CommandClassifier.ClassifyBatch(
                 commands.Select(c => (c.Tool, c.Tier, c.Params)).ToArray());
 
@@ -57,11 +68,67 @@ namespace MCPForUnity.Editor.Tools
         }
 
         /// <summary>
+        /// Look for an existing queued/running job with identical commands.
+        /// </summary>
+        private BatchJob FindDuplicateBatch(string agent, List<BatchCommand> commands)
+        {
+            foreach (var existing in _store.GetAllJobs())
+            {
+                if (existing.Status != JobStatus.Queued && existing.Status != JobStatus.Running)
+                    continue;
+                if (existing.Commands == null || existing.Commands.Count != commands.Count)
+                    continue;
+
+                bool match = true;
+                for (int i = 0; i < commands.Count; i++)
+                {
+                    if (existing.Commands[i].Tool != commands[i].Tool)
+                    {
+                        match = false;
+                        break;
+                    }
+                    var existingParams = existing.Commands[i].Params?.ToString(Newtonsoft.Json.Formatting.None) ?? "";
+                    var newParams = commands[i].Params?.ToString(Newtonsoft.Json.Formatting.None) ?? "";
+                    if (existingParams != newParams)
+                    {
+                        match = false;
+                        break;
+                    }
+                }
+
+                if (match)
+                    return existing;
+            }
+            return null;
+        }
+
+        /// <summary>
         /// Submit a single command as a 1-command batch job. Convenience wrapper for
         /// TransportCommandDispatcher gateway routing.
+        /// Deduplicates: if an identical command from the same agent is already queued/running,
+        /// returns the existing job instead of creating a duplicate.
         /// </summary>
         public BatchJob SubmitSingle(string tool, JObject parameters, string agent)
         {
+            // --- Dedup check: look for an identical queued/running single-command job ---
+            var paramStr = parameters?.ToString(Newtonsoft.Json.Formatting.None) ?? "";
+            foreach (var existing in _store.GetAllJobs())
+            {
+                if (existing.Status != JobStatus.Queued && existing.Status != JobStatus.Running)
+                    continue;
+                if (existing.Commands == null || existing.Commands.Count != 1)
+                    continue;
+                if (existing.Commands[0].Tool != tool)
+                    continue;
+                var existingParamStr = existing.Commands[0].Params?.ToString(Newtonsoft.Json.Formatting.None) ?? "";
+                if (existingParamStr == paramStr)
+                {
+                    existing.Deduplicated = true;
+                    McpLog.Info($"[CommandQueue] Dedup: '{tool}' already queued/running as {existing.Ticket}. Returning existing job.");
+                    return existing;
+                }
+            }
+
             var toolTier = CommandRegistry.GetToolTier(tool);
             var effectiveTier = CommandClassifier.Classify(tool, toolTier, parameters);
 

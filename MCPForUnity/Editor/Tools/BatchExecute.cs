@@ -316,8 +316,11 @@ namespace MCPForUnity.Editor.Tools
             }
 
             // Non-instant: return ticket for polling
+            var isDedup = job.Deduplicated;
             return new PendingResponse(
-                $"Batch queued as {job.Ticket}. Poll with poll_job.",
+                isDedup
+                    ? $"Duplicate batch — already queued as {job.Ticket}. Poll with poll_job."
+                    : $"Batch queued as {job.Ticket}. Poll with poll_job.",
                 pollIntervalSeconds: 2.0,
                 data: new
                 {
@@ -327,7 +330,8 @@ namespace MCPForUnity.Editor.Tools
                     tier = job.Tier.ToString().ToLowerInvariant(),
                     agent,
                     label,
-                    atomic
+                    atomic,
+                    deduplicated = isDedup
                 });
         }
     }

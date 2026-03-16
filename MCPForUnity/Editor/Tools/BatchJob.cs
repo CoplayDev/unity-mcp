@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using Newtonsoft.Json.Linq;
 
 namespace MCPForUnity.Editor.Tools
@@ -28,6 +29,19 @@ namespace MCPForUnity.Editor.Tools
         public DateTime? CompletedAt { get; set; }
 
         public int UndoGroup { get; set; } = -1;
+
+        /// <summary>
+        /// CancellationTokenSource for this job. Created when the job starts running.
+        /// Call Cancel() to abort the job mid-execution.
+        /// </summary>
+        [Newtonsoft.Json.JsonIgnore]
+        public CancellationTokenSource Cts { get; set; }
+
+        /// <summary>
+        /// True if this job was returned as a dedup match instead of being newly created.
+        /// The caller submitted an identical command that was already queued/running.
+        /// </summary>
+        public bool Deduplicated { get; set; }
     }
 
     public class BatchCommand
