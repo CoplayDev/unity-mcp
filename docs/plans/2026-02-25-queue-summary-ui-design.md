@@ -33,7 +33,7 @@ A new `McpQueueSection` component following the existing section pattern (UXML +
 
 ### Status bar
 - Active heavy ticket with agent + label (or "No active heavy job")
-- Three counters: Queued / Running / Done+Failed
+- Four counters: Queued / Running / Done / Failed
 - Uses existing `.section` and `.setting-row` styles
 
 ### Job list
