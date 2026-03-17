@@ -25,8 +25,12 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "get_system_stats (per-DOTS-system CPU breakdown sorted by cost — "
         "shows which systems consume the most frame budget. Param: top_n=number of systems), "
         "get_session_report (full Play session report from start to stop — "
-        "includes Markdown summary, JSON timeline, CSV. Params: include_timeline=bool, include_csv=bool). "
-        "Aggregated/system/session actions require Play mode; session_report works after stopping too."
+        "includes Markdown summary, JSON timeline, CSV. Params: include_timeline=bool, include_csv=bool), "
+        "list_sessions (list saved session files from Logs/PerfSessions/ — works anytime), "
+        "load_session (load a saved session JSON by filename), "
+        "analyze_session (analyze a saved session: bottleneck detection, system ranking, issues. "
+        "Param: filename=session JSON file). "
+        "Aggregated/system/session actions require Play mode; list/load/analyze work anytime."
     ),
     annotations=ToolAnnotations(
         title="Rendering Stats",
@@ -37,15 +41,18 @@ async def rendering_stats(
     action: Annotated[
         Literal[
             "get_stats", "get_memory", "get_profiler",
-            "get_stats_aggregated", "get_system_stats", "get_session_report"
+            "get_stats_aggregated", "get_system_stats", "get_session_report",
+            "list_sessions", "load_session", "analyze_session"
         ],
         "Action to perform. get_stats=single snapshot, get_stats_aggregated=N-frame percentiles, "
-        "get_system_stats=per-system CPU breakdown, get_session_report=full session timeline+summary."
+        "get_system_stats=per-system CPU breakdown, get_session_report=full session timeline+summary, "
+        "list_sessions=list saved sessions, load_session=load session JSON, analyze_session=bottleneck analysis."
     ],
     frames: Annotated[int | None, "For get_stats_aggregated: number of recent frames (0=all)."] = None,
     top_n: Annotated[int | None, "For get_system_stats: number of top systems to return."] = None,
     include_timeline: Annotated[bool | None, "For get_session_report: include JSON timeline."] = True,
     include_csv: Annotated[bool | None, "For get_session_report: include CSV data."] = True,
+    filename: Annotated[str | None, "For load_session/analyze_session: session JSON filename."] = None,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
 
@@ -58,6 +65,8 @@ async def rendering_stats(
         params["include_timeline"] = include_timeline
     if include_csv is not None:
         params["include_csv"] = include_csv
+    if filename is not None:
+        params["filename"] = filename
 
     try:
         response = await send_with_unity_instance(

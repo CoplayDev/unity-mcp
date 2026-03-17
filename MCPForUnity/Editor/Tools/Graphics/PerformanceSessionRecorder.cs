@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Unity.Profiling;
 using Unity.Profiling.LowLevel.Unsafe;
@@ -23,6 +25,9 @@ namespace MCPForUnity.Editor.Tools.Graphics
         private const int BufferCapacity = 72000; // ~20 min @ 60fps
         private const int TopSystemCount = 10;
         private const int RecorderRingCapacity = 512; // ProfilerRecorder internal buffer
+        private const string SessionDirectory = "Logs/PerfSessions";
+        private const int ExportTimelineMaxPoints = 500; // full-res sample cap for disk export
+        private const int ExportSystemTopN = 30; // more systems saved to disk than MCP returns
 
         // --- Per-frame data structure ---
         internal struct FrameRecord
@@ -53,6 +58,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
         private static bool _recording;
         private static float _sessionStartTime;
         private static bool _gpuAvailable;
+        private static string _lastExportPath;
 
         // --- Static ProfilerRecorders (long-lived, warmed up) ---
         private static ProfilerRecorder _drawCallsRecorder;
@@ -108,6 +114,10 @@ namespace MCPForUnity.Editor.Tools.Graphics
         {
             _recording = false;
             EditorApplication.update -= RecordFrame;
+
+            // Auto-export session to disk before disposing recorders
+            if (_frameCount > 0)
+                ExportSessionToDisk();
 
             _drawCallsRecorder.Dispose();
             _batchesRecorder.Dispose();
@@ -418,6 +428,277 @@ namespace MCPForUnity.Editor.Tools.Graphics
                     gpu_available = _gpuAvailable
                 }
             };
+        }
+
+        // --- Persistent Session Export ---
+
+        private static void ExportSessionToDisk()
+        {
+            try
+            {
+                int available = Math.Min(_frameCount, BufferCapacity);
+                int startIdx = (_writeIndex - available + BufferCapacity) % BufferCapacity;
+                float duration = _buffer[(_writeIndex - 1 + BufferCapacity) % BufferCapacity].TimeSec;
+
+                // Compute summary stats
+                var fpsList = new float[available];
+                var cpuList = new float[available];
+                int peakEntities = 0;
+                for (int i = 0; i < available; i++)
+                {
+                    var r = _buffer[(startIdx + i) % BufferCapacity];
+                    fpsList[i] = r.Fps;
+                    cpuList[i] = r.CpuMainMs;
+                    if (r.EntityCount > peakEntities) peakEntities = r.EntityCount;
+                }
+
+                // System stats (capture before recorders are disposed)
+                var systemStats = new List<object>();
+                if (_systemRecorders != null)
+                {
+                    systemStats = _systemRecorders
+                        .Where(kv => kv.Value.Valid)
+                        .Select(kv =>
+                        {
+                            var samples = new List<ProfilerRecorderSample>(kv.Value.Count);
+                            kv.Value.CopyTo(samples);
+                            var msValues = samples.Select(s => (float)(s.Value * 1e-6)).ToArray();
+                            float avg = msValues.Length > 0 ? msValues.Average() : 0;
+                            float max = msValues.Length > 0 ? msValues.Max() : 0;
+                            float p95 = Percentile(msValues.OrderBy(v => v).ToArray(), 95);
+                            return (object)new { name = kv.Key, avg_ms = Math.Round(avg, 3),
+                                max_ms = Math.Round(max, 3), p95_ms = Math.Round(p95, 3) };
+                        })
+                        .OrderByDescending(s => ((dynamic)s).avg_ms)
+                        .Take(ExportSystemTopN)
+                        .ToList();
+                }
+
+                // Timeline (higher resolution for disk — up to ExportTimelineMaxPoints)
+                int step = Math.Max(1, available / ExportTimelineMaxPoints);
+                var timeline = new List<object>();
+                for (int i = 0; i < available; i += step)
+                {
+                    var r = _buffer[(startIdx + i) % BufferCapacity];
+                    timeline.Add(new
+                    {
+                        frame = r.Frame, time = Math.Round(r.TimeSec, 2),
+                        fps = Math.Round(r.Fps, 1), cpu_ms = Math.Round(r.CpuMainMs, 2),
+                        render_ms = Math.Round(r.RenderThreadMs, 2), gpu_ms = Math.Round(r.GpuMs, 2),
+                        draw_calls = r.DrawCalls, batches = r.Batches,
+                        triangles = r.Triangles, entities = r.EntityCount,
+                        top_system = r.TopSystems != null && r.TopSystems.Length > 0
+                            ? r.TopSystems[0].Name : null
+                    });
+                }
+
+                Array.Sort(fpsList);
+                Array.Sort(cpuList);
+
+                var session = new
+                {
+                    version = 1,
+                    exported_at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                    project = Application.productName,
+                    scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name,
+                    duration_sec = Math.Round(duration, 2),
+                    frames_recorded = available,
+                    peak_entities = peakEntities,
+                    gpu_available = _gpuAvailable,
+                    summary = new
+                    {
+                        fps = new { avg = Math.Round(fpsList.Average(), 1),
+                            min = Math.Round(fpsList[0], 1),
+                            max = Math.Round(fpsList[fpsList.Length - 1], 1),
+                            p95 = Math.Round(Percentile(fpsList, 95), 1) },
+                        cpu_ms = new { avg = Math.Round(cpuList.Average(), 2),
+                            min = Math.Round(cpuList[0], 2),
+                            max = Math.Round(cpuList[cpuList.Length - 1], 2),
+                            p95 = Math.Round(Percentile(cpuList, 95), 2) }
+                    },
+                    systems = systemStats,
+                    timeline
+                };
+
+                // Write to disk
+                string dir = Path.Combine(Application.dataPath, "..", SessionDirectory);
+                Directory.CreateDirectory(dir);
+
+                string filename = $"perf-{DateTime.Now:yyyyMMdd-HHmmss}.json";
+                string path = Path.Combine(dir, filename);
+
+                File.WriteAllText(path, JsonConvert.SerializeObject(session, Formatting.Indented));
+                _lastExportPath = path;
+
+                Debug.Log($"[PerfRecorder] Session exported: {path} ({available} frames, {duration:F1}s)");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[PerfRecorder] Failed to export session: {e.Message}");
+            }
+        }
+
+        /// <summary>Returns the path of the last exported session file, or null.</summary>
+        internal static string GetLastExportPath() => _lastExportPath;
+
+        /// <summary>Lists all saved session files in the PerfSessions directory.</summary>
+        internal static object ListSessions()
+        {
+            string dir = Path.Combine(Application.dataPath, "..", SessionDirectory);
+            if (!Directory.Exists(dir))
+                return new { success = true, message = "No sessions found.", data = new object[0] };
+
+            var files = Directory.GetFiles(dir, "perf-*.json")
+                .OrderByDescending(f => f)
+                .Select(f =>
+                {
+                    var fi = new FileInfo(f);
+                    // Read just the summary from the file header
+                    try
+                    {
+                        var json = JObject.Parse(File.ReadAllText(f));
+                        return (object)new
+                        {
+                            filename = fi.Name,
+                            path = f,
+                            size_kb = Math.Round(fi.Length / 1024.0, 1),
+                            exported_at = json["exported_at"]?.ToString(),
+                            scene = json["scene"]?.ToString(),
+                            duration_sec = json["duration_sec"]?.Value<double>() ?? 0,
+                            frames = json["frames_recorded"]?.Value<int>() ?? 0,
+                            peak_entities = json["peak_entities"]?.Value<int>() ?? 0,
+                            avg_fps = json["summary"]?["fps"]?["avg"]?.Value<double>() ?? 0
+                        };
+                    }
+                    catch
+                    {
+                        return (object)new { filename = fi.Name, path = f,
+                            size_kb = Math.Round(fi.Length / 1024.0, 1),
+                            error = "Failed to parse" };
+                    }
+                })
+                .ToArray();
+
+            return new { success = true, message = $"Found {files.Length} session(s).", data = files };
+        }
+
+        /// <summary>Loads a session file and returns its full JSON content.</summary>
+        internal static object LoadSession(string filename)
+        {
+            string dir = Path.Combine(Application.dataPath, "..", SessionDirectory);
+            string path = Path.Combine(dir, filename);
+            if (!File.Exists(path))
+                return new { success = false, message = $"Session file not found: {filename}" };
+
+            try
+            {
+                var json = JObject.Parse(File.ReadAllText(path));
+                return new { success = true, message = $"Loaded session: {filename}", data = json };
+            }
+            catch (Exception e)
+            {
+                return new { success = false, message = $"Failed to parse: {e.Message}" };
+            }
+        }
+
+        /// <summary>Analyzes a session file for bottlenecks and returns a report.</summary>
+        internal static object AnalyzeSession(string filename)
+        {
+            string dir = Path.Combine(Application.dataPath, "..", SessionDirectory);
+            string path = Path.Combine(dir, filename);
+            if (!File.Exists(path))
+                return new { success = false, message = $"Session file not found: {filename}" };
+
+            try
+            {
+                var json = JObject.Parse(File.ReadAllText(path));
+                var summary = json["summary"];
+                var systems = json["systems"] as JArray;
+                var timeline = json["timeline"] as JArray;
+
+                double avgFps = summary?["fps"]?["avg"]?.Value<double>() ?? 0;
+                double avgCpu = summary?["cpu_ms"]?["avg"]?.Value<double>() ?? 0;
+                double p95Cpu = summary?["cpu_ms"]?["p95"]?.Value<double>() ?? 0;
+
+                // Bottleneck detection
+                var issues = new List<object>();
+
+                if (avgFps < 30)
+                    issues.Add(new { severity = "HIGH", issue = $"Low FPS: avg {avgFps:F1} (target: 60)" });
+                else if (avgFps < 60)
+                    issues.Add(new { severity = "MEDIUM", issue = $"Below target FPS: avg {avgFps:F1}" });
+
+                if (p95Cpu > 33.3)
+                    issues.Add(new { severity = "HIGH",
+                        issue = $"CPU P95 spikes: {p95Cpu:F1}ms (>33.3ms = <30fps)" });
+
+                // Identify heaviest systems
+                var heavySystems = new List<object>();
+                if (systems != null)
+                {
+                    double totalSystemMs = systems.Sum(s => s["avg_ms"]?.Value<double>() ?? 0);
+                    foreach (var sys in systems.Take(5))
+                    {
+                        double sysMs = sys["avg_ms"]?.Value<double>() ?? 0;
+                        double pct = totalSystemMs > 0 ? sysMs / totalSystemMs * 100 : 0;
+                        heavySystems.Add(new
+                        {
+                            name = sys["name"]?.ToString(),
+                            avg_ms = sysMs,
+                            p95_ms = sys["p95_ms"]?.Value<double>() ?? 0,
+                            pct_of_tracked = Math.Round(pct, 1)
+                        });
+
+                        if (sysMs > 5.0)
+                            issues.Add(new { severity = "HIGH",
+                                issue = $"Heavy system: {sys["name"]} avg {sysMs:F1}ms" });
+                        else if (sysMs > 2.0)
+                            issues.Add(new { severity = "MEDIUM",
+                                issue = $"Notable system: {sys["name"]} avg {sysMs:F1}ms" });
+                    }
+                }
+
+                // Timeline anomalies — detect FPS drops
+                if (timeline != null && timeline.Count > 10)
+                {
+                    int spikeCount = 0;
+                    foreach (var point in timeline)
+                    {
+                        double cpuMs = point["cpu_ms"]?.Value<double>() ?? 0;
+                        if (cpuMs > avgCpu * 3) spikeCount++;
+                    }
+                    if (spikeCount > timeline.Count * 0.1)
+                        issues.Add(new { severity = "MEDIUM",
+                            issue = $"Frequent CPU spikes: {spikeCount}/{timeline.Count} frames >3x avg" });
+                }
+
+                return new
+                {
+                    success = true,
+                    message = $"Analysis of {filename}: {issues.Count} issue(s) found.",
+                    data = new
+                    {
+                        session = new
+                        {
+                            scene = json["scene"]?.ToString(),
+                            duration_sec = json["duration_sec"]?.Value<double>() ?? 0,
+                            frames = json["frames_recorded"]?.Value<int>() ?? 0,
+                            peak_entities = json["peak_entities"]?.Value<int>() ?? 0,
+                        },
+                        performance = new { avg_fps = avgFps, avg_cpu_ms = avgCpu, p95_cpu_ms = p95Cpu },
+                        top_systems = heavySystems,
+                        issues,
+                        recommendation = issues.Any(i => ((dynamic)i).severity == "HIGH")
+                            ? "HIGH priority optimization needed. Focus on the heaviest systems listed above."
+                            : issues.Any() ? "Minor issues detected. Consider optimizing noted systems."
+                            : "Performance looks healthy."
+                    }
+                };
+            }
+            catch (Exception e)
+            {
+                return new { success = false, message = $"Analysis failed: {e.Message}" };
+            }
         }
 
         // --- Statistics helpers ---

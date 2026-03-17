@@ -41,9 +41,14 @@ namespace MCPForUnity.Editor.Tools
                     "get_session_report"   => PerformanceSessionRecorder.GetSessionReport(
                         p.GetBool("include_timeline", true),
                         p.GetBool("include_csv", true)),
+                    // Post-session analysis (works after Play mode exit)
+                    "list_sessions"        => PerformanceSessionRecorder.ListSessions(),
+                    "load_session"         => PerformanceSessionRecorder.LoadSession(p.Get("filename") ?? ""),
+                    "analyze_session"      => PerformanceSessionRecorder.AnalyzeSession(p.Get("filename") ?? ""),
                     _ => new ErrorResponse(
                         $"Unknown action: '{action}'. Valid: get_stats, get_memory, get_profiler, " +
-                        "get_stats_aggregated, get_system_stats, get_session_report.")
+                        "get_stats_aggregated, get_system_stats, get_session_report, " +
+                        "list_sessions, load_session, analyze_session.")
                 };
             }
             catch (System.Exception ex)
