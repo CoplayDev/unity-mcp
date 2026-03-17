@@ -14,7 +14,7 @@ namespace MCPForUnity.Editor.Tools
     /// Handles reading and clearing Unity Editor console log entries.
     /// Uses reflection to access internal LogEntry methods/properties.
     /// </summary>
-    [McpForUnityTool("read_console", AutoRegister = false)]
+    [McpForUnityTool("read_console", AutoRegister = false, Tier = ExecutionTier.Instant)]
     public static class ReadConsole
     {
         // (Calibration removed)
