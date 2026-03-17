@@ -1,4 +1,5 @@
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Tools.Graphics;
 using Newtonsoft.Json.Linq;
 using Unity.Profiling;
 using UnityEditor;
@@ -32,10 +33,17 @@ namespace MCPForUnity.Editor.Tools
             {
                 return action switch
                 {
-                    "get_stats"    => GetRenderingStats(p),
-                    "get_memory"   => GetMemoryStats(p),
-                    "get_profiler" => GetProfilerStats(p),
-                    _              => new ErrorResponse($"Unknown action: '{action}'. Valid: get_stats, get_memory, get_profiler.")
+                    "get_stats"            => GetRenderingStats(p),
+                    "get_memory"           => GetMemoryStats(p),
+                    "get_profiler"         => GetProfilerStats(p),
+                    "get_stats_aggregated" => PerformanceSessionRecorder.GetAggregatedStats(p.GetInt("frames") ?? 0),
+                    "get_system_stats"     => PerformanceSessionRecorder.GetSystemStats(p.GetInt("top_n") ?? 10),
+                    "get_session_report"   => PerformanceSessionRecorder.GetSessionReport(
+                        p.GetBool("include_timeline", true),
+                        p.GetBool("include_csv", true)),
+                    _ => new ErrorResponse(
+                        $"Unknown action: '{action}'. Valid: get_stats, get_memory, get_profiler, " +
+                        "get_stats_aggregated, get_system_stats, get_session_report.")
                 };
             }
             catch (System.Exception ex)

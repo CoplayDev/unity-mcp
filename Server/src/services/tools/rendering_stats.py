@@ -16,12 +16,17 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 @mcp_for_unity_tool(
     description=(
         "Read Unity rendering and performance statistics. "
-        "Actions: get_stats (draw calls, batches, triangles, vertices, FPS, "
-        "setPassCalls, shadowCasters, texture memory, batching breakdown, "
-        "cpuMainMs and renderThreadMs from FrameTimingManager — previous-frame CPU/render-thread timings), "
-        "get_memory (total allocated/reserved, mono heap, graphics driver memory), "
-        "get_profiler (frame timing, time scale, system info incl. GPU/CPU). "
-        "Most stats require Play mode with Game view visible."
+        "Actions: get_stats (single-frame snapshot: draw calls, batches, FPS, cpuMainMs), "
+        "get_memory (allocated/reserved/mono/graphics memory), "
+        "get_profiler (frame timing, time scale, system info), "
+        "get_stats_aggregated (N-frame aggregated: min/max/avg/p50/p95 for FPS, CPU, draw calls — "
+        "uses long-lived ProfilerRecorders, much more reliable than single snapshots. "
+        "Param: frames=number of recent frames to aggregate, 0=all available), "
+        "get_system_stats (per-DOTS-system CPU breakdown sorted by cost — "
+        "shows which systems consume the most frame budget. Param: top_n=number of systems), "
+        "get_session_report (full Play session report from start to stop — "
+        "includes Markdown summary, JSON timeline, CSV. Params: include_timeline=bool, include_csv=bool). "
+        "Aggregated/system/session actions require Play mode; session_report works after stopping too."
     ),
     annotations=ToolAnnotations(
         title="Rendering Stats",
@@ -30,13 +35,29 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 async def rendering_stats(
     ctx: Context,
     action: Annotated[
-        Literal["get_stats", "get_memory", "get_profiler"],
-        "Action to perform. get_stats=rendering counters, get_memory=memory usage, get_profiler=frame timing and system info."
+        Literal[
+            "get_stats", "get_memory", "get_profiler",
+            "get_stats_aggregated", "get_system_stats", "get_session_report"
+        ],
+        "Action to perform. get_stats=single snapshot, get_stats_aggregated=N-frame percentiles, "
+        "get_system_stats=per-system CPU breakdown, get_session_report=full session timeline+summary."
     ],
+    frames: Annotated[int | None, "For get_stats_aggregated: number of recent frames (0=all)."] = None,
+    top_n: Annotated[int | None, "For get_system_stats: number of top systems to return."] = None,
+    include_timeline: Annotated[bool | None, "For get_session_report: include JSON timeline."] = True,
+    include_csv: Annotated[bool | None, "For get_session_report: include CSV data."] = True,
 ) -> dict[str, Any]:
     unity_instance = get_unity_instance_from_context(ctx)
 
-    params = {"action": action}
+    params: dict[str, Any] = {"action": action}
+    if frames is not None:
+        params["frames"] = frames
+    if top_n is not None:
+        params["top_n"] = top_n
+    if include_timeline is not None:
+        params["include_timeline"] = include_timeline
+    if include_csv is not None:
+        params["include_csv"] = include_csv
 
     try:
         response = await send_with_unity_instance(
