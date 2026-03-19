@@ -162,55 +162,52 @@ openupm add com.coplaydev.unity-mcp
 
 If auto-setup doesn't work, add this to your MCP client's config file:
 
-**HTTP (default — works with Claude Desktop, Cursor, Windsurf):**
+**Stdio (recommended — Claude Code, Claude Desktop, Cursor, Windsurf):**
+
+Stdio transport is preferred because:
+- No port conflicts (no port needed for AI client ↔ server)
+- Accurate connection status (process alive = connected)
+- Multiple Unity projects work simultaneously
+
 ```json
 {
   "mcpServers": {
     "unityMCP": {
-      "url": "http://localhost:8080/mcp"
+      "command": "uvx",
+      "args": ["mcp-for-unity"]
     }
   }
 }
 ```
+
+> **Tip:** Add this to your global `~/.claude/mcp.json` (Claude Code) so it's available in all Unity projects automatically.
 
 **VS Code:**
 ```json
 {
   "servers": {
     "unityMCP": {
-      "type": "http",
-      "url": "http://localhost:8080/mcp"
+      "command": "uvx",
+      "args": ["mcp-for-unity"]
     }
   }
 }
 ```
 
 <details>
-<summary>Stdio configuration (uvx)</summary>
+<summary>HTTP configuration (for remote/cloud deployments)</summary>
 
-**macOS/Linux:**
 ```json
 {
   "mcpServers": {
     "unityMCP": {
-      "command": "uvx",
-      "args": ["--from", "mcpforunityserver", "mcp-for-unity", "--transport", "stdio"]
+      "url": "http://localhost:8080/mcp"
     }
   }
 }
 ```
 
-**Windows:**
-```json
-{
-  "mcpServers": {
-    "unityMCP": {
-      "command": "C:/Users/YOUR_USERNAME/AppData/Local/Microsoft/WinGet/Links/uvx.exe",
-      "args": ["--from", "mcpforunityserver", "mcp-for-unity", "--transport", "stdio"]
-    }
-  }
-}
-```
+Use HTTP when you need remote access or cloud-hosted deployments. For local development, stdio is recommended.
 </details>
 </details>
 
@@ -259,7 +256,7 @@ For **Strict** validation that catches undefined namespaces, types, and methods:
 
 * **Unity Bridge Not Connecting:** Check `Window > MCP for Unity` status, restart Unity
 * **Server Not Starting:** Verify `uv --version` works, check the terminal for errors
-* **Client Not Connecting:** Ensure the HTTP server is running and the URL matches your config
+* **Client Not Connecting:** If using stdio, ensure `uvx mcp-for-unity` runs successfully from terminal. If using HTTP, ensure the server is running and URL matches your config
 
 **Detailed setup guides:**
 * [Fix Unity MCP and Cursor, VSCode & Windsurf](https://github.com/CoplayDev/unity-mcp/wiki/1.-Fix-Unity-MCP-and-Cursor,-VSCode-&-Windsurf) — uv/Python installation, PATH issues
