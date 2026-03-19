@@ -14,6 +14,7 @@ namespace MCPForUnity.Editor.Services
     /// </summary>
     public class PackageUpdateService : IPackageUpdateService
     {
+        private const int DefaultRequestTimeoutMs = 3000;
         private const string LastCheckDateKey = EditorPrefKeys.LastUpdateCheck;
         private const string CachedVersionKey = EditorPrefKeys.LatestKnownVersion;
         private const string LastBetaCheckDateKey = EditorPrefKeys.LastUpdateCheck + ".beta";
@@ -265,7 +266,7 @@ namespace MCPForUnity.Editor.Services
                 // - More reliable - doesn't require releases to be published
                 // - Direct source of truth from the main branch
 
-                using (var client = new WebClient())
+                using (var client = CreateWebClient())
                 {
                     client.Headers.Add("User-Agent", "Unity-MCPForUnity-UpdateChecker");
                     string packageJsonUrl = string.Equals(branch, "beta", StringComparison.OrdinalIgnoreCase)
@@ -304,7 +305,7 @@ namespace MCPForUnity.Editor.Services
         {
             try
             {
-                using (var client = new WebClient())
+                using (var client = CreateWebClient())
                 {
                     client.Headers.Add("User-Agent", "Unity-MCPForUnity-AssetStoreUpdateChecker");
                     string jsonContent = client.DownloadString(AssetStoreVersionUrl);
@@ -320,6 +321,42 @@ namespace MCPForUnity.Editor.Services
                 // Silent fail - don't interrupt the user if network is unavailable
                 McpLog.Info($"Asset Store update check failed (this is normal if offline): {ex.Message}");
                 return null;
+            }
+        }
+
+        protected virtual WebClient CreateWebClient()
+        {
+            return new TimeoutWebClient(GetRequestTimeoutMs());
+        }
+
+        protected virtual int GetRequestTimeoutMs()
+        {
+            return DefaultRequestTimeoutMs;
+        }
+
+        private sealed class TimeoutWebClient : WebClient
+        {
+            private readonly int _timeoutMs;
+
+            public TimeoutWebClient(int timeoutMs)
+            {
+                _timeoutMs = timeoutMs;
+            }
+
+            protected override WebRequest GetWebRequest(Uri address)
+            {
+                var request = base.GetWebRequest(address);
+                if (request != null)
+                {
+                    request.Timeout = _timeoutMs;
+
+                    if (request is HttpWebRequest httpRequest)
+                    {
+                        httpRequest.ReadWriteTimeout = _timeoutMs;
+                    }
+                }
+
+                return request;
             }
         }
     }

@@ -52,6 +52,7 @@ namespace MCPForUnity.Editor.Windows
         private double lastRefreshTime = 0;
         private const double RefreshDebounceSeconds = 0.5;
         private bool updateCheckQueued = false;
+        private bool updateCheckInFlight = false;
 
         private enum ActivePanel
         {
@@ -352,7 +353,7 @@ namespace MCPForUnity.Editor.Windows
 
         private void QueueUpdateCheck()
         {
-            if (updateCheckQueued)
+            if (updateCheckQueued || updateCheckInFlight)
             {
                 return;
             }
@@ -377,25 +378,42 @@ namespace MCPForUnity.Editor.Windows
                 return;
             }
 
-            try
+            updateCheckInFlight = true;
+            Task.Run(() =>
             {
-                var result = MCPServiceLocator.Updates.CheckForUpdate(currentVersion);
-                if (result.CheckSucceeded && result.UpdateAvailable && !string.IsNullOrEmpty(result.LatestVersion))
+                try
                 {
-                    updateNotificationText.text = $"Update available: v{result.LatestVersion}  (current: v{currentVersion})";
-                    updateNotificationText.tooltip = $"Latest version: v{result.LatestVersion}\nCurrent version: v{currentVersion}";
-                    updateNotification.AddToClassList("visible");
+                    return MCPServiceLocator.Updates.CheckForUpdate(currentVersion);
                 }
-                else
+                catch (Exception ex)
                 {
-                    updateNotification.RemoveFromClassList("visible");
+                    McpLog.Info($"Package update check skipped: {ex.Message}");
+                    return null;
                 }
-            }
-            catch (Exception ex)
+            }).ContinueWith(t =>
             {
-                McpLog.Info($"Package update check skipped: {ex.Message}");
-                updateNotification.RemoveFromClassList("visible");
-            }
+                EditorApplication.delayCall += () =>
+                {
+                    updateCheckInFlight = false;
+
+                    if (this == null || updateNotification == null || updateNotificationText == null)
+                    {
+                        return;
+                    }
+
+                    var result = t.Status == TaskStatus.RanToCompletion ? t.Result : null;
+                    if (result != null && result.CheckSucceeded && result.UpdateAvailable && !string.IsNullOrEmpty(result.LatestVersion))
+                    {
+                        updateNotificationText.text = $"Update available: v{result.LatestVersion}  (current: v{currentVersion})";
+                        updateNotificationText.tooltip = $"Latest version: v{result.LatestVersion}\nCurrent version: v{currentVersion}";
+                        updateNotification.AddToClassList("visible");
+                    }
+                    else
+                    {
+                        updateNotification.RemoveFromClassList("visible");
+                    }
+                };
+            }, TaskScheduler.Default);
         }
 
         private void EnsureToolsLoaded()
