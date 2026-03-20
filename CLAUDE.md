@@ -55,7 +55,7 @@ from services.registry import mcp_for_unity_tool
 
 @mcp_for_unity_tool(
     description="Does something in Unity.",
-    group="core",  # core (default), vfx, animation, ui, scripting_ext, testing, probuilder
+    group="core",  # core (default), vfx, animation, ui, scripting_ext, testing, probuilder, docs
 )
 async def manage_something(
     ctx: Context,
@@ -135,6 +135,9 @@ cd Server && uv run pytest tests/test_manage_material.py -v
 
 # Python (single test by name)
 cd Server && uv run pytest tests/ -k "test_create_material" -v
+
+# Python (with coverage)
+cd Server && uv run pytest tests/ --cov --cov-report=html
 
 # Unity - open TestProjects/UnityMCPTests in Unity, use Test Runner window
 ```

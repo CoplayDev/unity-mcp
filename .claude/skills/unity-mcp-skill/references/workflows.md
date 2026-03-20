@@ -1905,6 +1905,8 @@ refresh_unity(mode="force", compile="request", wait_for_ready=True)
 
 ## API Verification Workflows
 
+> These tools live in the opt-in `docs` group. Activate it first: `manage_tools(action="activate", group="docs")`
+
 ### Full API Verification Before Writing Code
 
 Use `unity_reflect` and `unity_docs` to verify Unity APIs before writing C# code. This prevents hallucinated or outdated API references.

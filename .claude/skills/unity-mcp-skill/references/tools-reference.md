@@ -102,7 +102,8 @@ refresh_unity(
 
 ### manage_scene
 
-Scene CRUD operations, hierarchy queries, screenshots, and scene view control.
+Scene CRUD operations, hierarchy queries, and scene view control.
+For screenshots, use `manage_camera` (screenshot, screenshot_multiview actions).
 
 ```python
 # Get hierarchy (paginated)
@@ -114,54 +115,8 @@ manage_scene(
     include_transform=False      # bool - include local transforms
 )
 
-# Screenshot (file only — saves to Assets/Screenshots/)
-manage_camera(action="screenshot")
-
-# Screenshot with inline image (base64 PNG returned to AI)
-manage_scene(
-    action="screenshot",
-    camera="MainCamera",         # str, optional - camera name, path, or instance ID
-    include_image=True,          # bool, default False - return base64 PNG inline
-    max_resolution=512           # int, optional - downscale cap (default 640)
-)
-
-# Batch surround — contact sheet of 6 fixed angles (front/back/left/right/top/bird_eye)
-manage_scene(
-    action="screenshot",
-    batch="surround",            # str - "surround" for 6-angle contact sheet
-    max_resolution=256           # int - per-tile resolution cap
-)
-# Returns: single composite contact sheet image with labeled tiles
-
-# Batch surround centered on a specific target
-manage_scene(
-    action="screenshot",
-    batch="surround",
-    view_target="Player",        # str|int|list[float] - center surround on this target
-    max_resolution=256
-)
-
-# Batch orbit — configurable multi-angle grid around a target
-manage_scene(
-    action="screenshot",
-    batch="orbit",               # str - "orbit" for configurable angle grid
-    view_target="Player",        # str|int|list[float] - target to orbit around
-    orbit_angles=8,              # int, default 8 - number of azimuth steps
-    orbit_elevations=[0, 30],    # list[float], default [0, 30, -15] - vertical angles in degrees
-    orbit_distance=10,           # float, optional - camera distance (auto-fit if omitted)
-    orbit_fov=60,                # float, default 60 - camera FOV in degrees
-    max_resolution=256           # int - per-tile resolution cap
-)
-# Returns: single composite contact sheet (angles × elevations tiles in a grid)
-
-# Positioned screenshot (temp camera at viewpoint, no file saved)
-manage_scene(
-    action="screenshot",
-    view_target="Enemy",         # str|int|list[float] - target to aim at
-    view_position=[0, 10, -10],  # list[float], optional - camera position
-    view_rotation=[45, 0, 0],    # list[float], optional - euler angles (overrides view_target aim)
-    max_resolution=512
-)
+# NOTE: All screenshot actions use manage_camera, not manage_scene.
+# See Camera Tools section below for screenshot examples.
 
 # Frame scene view on target
 manage_scene(
