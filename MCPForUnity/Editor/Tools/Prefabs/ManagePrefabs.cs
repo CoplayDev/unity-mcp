@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
@@ -125,7 +126,10 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 }
             }
 
-            // 7. Create the prefab
+            // 7. Persist any runtime-only materials so they survive prefab serialization
+            var persistResult = PersistRuntimeMaterials(sourceObject, finalPath);
+
+            // 8. Create the prefab
             try
             {
                 GameObject result = CreatePrefabAsset(sourceObject, finalPath, replaceExisting);
@@ -135,7 +139,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                     return new ErrorResponse($"Failed to create prefab asset at '{finalPath}'.");
                 }
 
-                // 8. Select the newly created instance
+                // 9. Select the newly created instance
                 Selection.activeGameObject = result;
 
                 return new SuccessResponse(
@@ -148,7 +152,8 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                         wasUnlinked = unlinkIfInstance && objectValidation.shouldUnlink,
                         wasReplaced = replaceExisting && fileExistedAtPath,
                         componentCount = result.GetComponents<Component>().Length,
-                        childCount = result.transform.childCount
+                        childCount = result.transform.childCount,
+                        materialsPersisted = persistResult.count
                     }
                 );
             }
@@ -261,6 +266,148 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Scans all Renderers in the hierarchy and persists any runtime-only materials
+        /// (MaterialPropertyBlock overrides or in-memory instances from renderer.material)
+        /// as .mat assets so they survive prefab serialization.
+        /// </summary>
+        private static (int count, List<string> paths) PersistRuntimeMaterials(GameObject root, string prefabPath)
+        {
+            var renderers = root.GetComponentsInChildren<Renderer>(true);
+            var persistedPaths = new List<string>();
+            string prefabDir = Path.GetDirectoryName(prefabPath).Replace("\\", "/");
+            string materialsFolder = $"{prefabDir}/Materials";
+
+            foreach (var renderer in renderers)
+            {
+                Material[] sharedMats = renderer.sharedMaterials;
+                bool changed = false;
+
+                for (int slot = 0; slot < sharedMats.Length; slot++)
+                {
+                    Material mat = sharedMats[slot];
+
+                    // Case 1: Material is null but a property block has color data —
+                    // this happens after instance mode severs the asset link.
+                    // Case 2: Material exists but is not a persistent asset (runtime instance).
+                    bool isRuntimeInstance = mat != null && !EditorUtility.IsPersistent(mat);
+                    bool isNullWithPropertyBlock = mat == null && HasPropertyBlockColors(renderer, slot);
+                    bool isNullMaterial = mat == null && !isNullWithPropertyBlock;
+
+                    if (!isRuntimeInstance && !isNullWithPropertyBlock)
+                        continue;
+
+                    // Derive a unique asset path from the GameObject name and slot
+                    string goName = renderer.gameObject.name.Replace(" ", "_");
+                    string suffix = slot > 0 ? $"_slot{slot}" : "";
+                    string matPath = $"{materialsFolder}/{goName}{suffix}_mat.mat";
+                    matPath = AssetPathUtility.SanitizeAssetPath(matPath);
+                    if (matPath == null)
+                    {
+                        McpLog.Warn($"[ManagePrefabs] Could not build safe material path for '{renderer.gameObject.name}', skipping.");
+                        continue;
+                    }
+
+                    // Ensure the Materials directory exists (recursive)
+                    EnsureAssetFolderExists(materialsFolder);
+
+                    Material persisted = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+                    if (persisted == null)
+                    {
+                        // Create a new material with the correct shader for the active pipeline
+                        Shader shader = isRuntimeInstance && mat.shader != null
+                            ? mat.shader
+                            : RenderPipelineUtility.ResolveShader("Standard");
+                        persisted = new Material(shader);
+                        AssetDatabase.CreateAsset(persisted, matPath);
+                    }
+
+                    // Copy properties from the runtime instance if available
+                    if (isRuntimeInstance)
+                    {
+                        persisted.CopyPropertiesFromMaterial(mat);
+                        EditorUtility.SetDirty(persisted);
+                    }
+                    else if (isNullWithPropertyBlock)
+                    {
+                        // Extract color from the property block and apply to the new material
+                        ApplyPropertyBlockToMaterial(renderer, slot, persisted);
+                        EditorUtility.SetDirty(persisted);
+                    }
+
+                    sharedMats[slot] = persisted;
+                    changed = true;
+                    persistedPaths.Add(matPath);
+                    McpLog.Info($"[ManagePrefabs] Persisted runtime material for '{renderer.gameObject.name}' slot {slot} → {matPath}");
+                }
+
+                if (changed)
+                {
+                    Undo.RecordObject(renderer, "Persist runtime materials for prefab");
+                    renderer.sharedMaterials = sharedMats;
+                    // Clear any property blocks now that the material is persisted
+                    for (int slot = 0; slot < sharedMats.Length; slot++)
+                    {
+                        renderer.SetPropertyBlock(null, slot);
+                    }
+                    EditorUtility.SetDirty(renderer);
+                }
+            }
+
+            if (persistedPaths.Count > 0)
+            {
+                AssetDatabase.SaveAssets();
+                McpLog.Info($"[ManagePrefabs] Persisted {persistedPaths.Count} runtime material(s) before prefab save.");
+            }
+
+            return (persistedPaths.Count, persistedPaths);
+        }
+
+        /// <summary>
+        /// Recursively creates the folder hierarchy for the given asset path if it doesn't exist.
+        /// </summary>
+        private static void EnsureAssetFolderExists(string assetFolderPath)
+        {
+            if (AssetDatabase.IsValidFolder(assetFolderPath))
+                return;
+
+            string[] parts = assetFolderPath.Replace('\\', '/').Split('/');
+            string current = parts[0]; // "Assets"
+            for (int i = 1; i < parts.Length; i++)
+            {
+                string next = current + "/" + parts[i];
+                if (!AssetDatabase.IsValidFolder(next))
+                    AssetDatabase.CreateFolder(current, parts[i]);
+                current = next;
+            }
+        }
+
+        private static bool HasPropertyBlockColors(Renderer renderer, int slot)
+        {
+            MaterialPropertyBlock block = new MaterialPropertyBlock();
+            renderer.GetPropertyBlock(block, slot);
+            return !block.isEmpty;
+        }
+
+        /// <summary>
+        /// Extracts color properties from a MaterialPropertyBlock and applies them to a material.
+        /// </summary>
+        private static void ApplyPropertyBlockToMaterial(Renderer renderer, int slot, Material mat)
+        {
+            MaterialPropertyBlock block = new MaterialPropertyBlock();
+            renderer.GetPropertyBlock(block, slot);
+
+            // Try the standard color property names
+            string[] colorProps = { "_BaseColor", "_Color" };
+            foreach (string prop in colorProps)
+            {
+                if (mat.HasProperty(prop) && block.HasColor(prop))
+                {
+                    mat.SetColor(prop, block.GetColor(prop));
+                }
+            }
         }
 
         #endregion

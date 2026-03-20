@@ -590,28 +590,44 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             var actions = new VisualElement();
             actions.AddToClassList("tool-item-actions");
 
-            var screenshotButton = new Button(OnManageSceneScreenshotClicked)
+            var gameViewButton = new Button(OnManageSceneScreenshotClicked)
             {
-                text = "Capture Screenshot"
+                text = "Game View"
             };
-            screenshotButton.AddToClassList("tool-action-button");
-            screenshotButton.style.marginTop = 4;
-            screenshotButton.tooltip = "Capture a screenshot to Assets/Screenshots via manage_camera.";
+            gameViewButton.AddToClassList("tool-action-button");
+            gameViewButton.style.marginTop = 4;
+            gameViewButton.tooltip = "Capture a game camera screenshot to Assets/Screenshots.";
+
+            var sceneViewButton = new Button(OnSceneViewScreenshotClicked)
+            {
+                text = "Scene View"
+            };
+            sceneViewButton.AddToClassList("tool-action-button");
+            sceneViewButton.style.marginTop = 4;
+            sceneViewButton.style.marginLeft = 4;
+            sceneViewButton.tooltip = "Capture the active Scene View viewport to Assets/Screenshots.";
 
             var multiviewButton = new Button(OnManageSceneMultiviewClicked)
             {
-                text = "Capture Multiview"
+                text = "Multiview"
             };
             multiviewButton.AddToClassList("tool-action-button");
             multiviewButton.style.marginTop = 4;
             multiviewButton.style.marginLeft = 4;
             multiviewButton.tooltip = "Capture a 6-angle contact sheet around the scene centre and save to Assets/Screenshots.";
 
+            var captureLabel = new Label("Capture:");
+            captureLabel.style.marginTop = 6;
+            captureLabel.style.unityFontStyleAndWeight = UnityEngine.FontStyle.Normal;
+
             var row = new VisualElement();
             row.style.flexDirection = FlexDirection.Row;
-            row.Add(screenshotButton);
+            row.style.flexWrap = Wrap.Wrap;
+            row.Add(gameViewButton);
+            row.Add(sceneViewButton);
             row.Add(multiviewButton);
 
+            actions.Add(captureLabel);
             actions.Add(row);
             return actions;
         }
@@ -683,6 +699,30 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             catch (Exception ex)
             {
                 McpLog.Error($"Failed to capture screenshot: {ex.Message}");
+            }
+        }
+
+        private void OnSceneViewScreenshotClicked()
+        {
+            try
+            {
+                var response = ManageScene.ExecuteSceneViewScreenshot();
+                if (response is SuccessResponse success && !string.IsNullOrWhiteSpace(success.Message))
+                {
+                    McpLog.Info(success.Message);
+                }
+                else if (response is ErrorResponse error && !string.IsNullOrWhiteSpace(error.Error))
+                {
+                    McpLog.Error(error.Error);
+                }
+                else
+                {
+                    McpLog.Info("Scene View screenshot capture requested.");
+                }
+            }
+            catch (Exception ex)
+            {
+                McpLog.Error($"Failed to capture Scene View screenshot: {ex.Message}");
             }
         }
 

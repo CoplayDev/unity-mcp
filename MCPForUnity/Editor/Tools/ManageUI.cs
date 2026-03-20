@@ -181,6 +181,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     return new ErrorResponse($"UXML validation failed — file was NOT written. {xmlError}");
                 }
+                contents = EnsureEditorExtensionMode(contents);
             }
 
             File.WriteAllText(fullPath, contents, Utf8NoBom);
@@ -272,6 +273,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     return new ErrorResponse($"UXML validation failed — file was NOT updated. {xmlError}");
                 }
+                contents = EnsureEditorExtensionMode(contents);
             }
 
             File.WriteAllText(fullPath, contents, Utf8NoBom);
@@ -957,8 +959,8 @@ namespace MCPForUnity.Editor.Tools
                 if (s_pendingCaptureStarted)
                 {
                     return new ErrorResponse(
-                        "A play-mode screen capture is already in progress. "
-                        + "Call render_ui again after the current capture completes.");
+                        "Cannot capture: another capture is already in progress.",
+                        new { retry_after_ms = 100, reason = "capture_in_progress" });
                 }
 
                 s_pendingCaptureDone = false;
@@ -1846,6 +1848,34 @@ namespace MCPForUnity.Editor.Tools
         /// Uses XmlParserContext to pre-declare common UXML namespace prefixes
         /// (ui, uie, engine, editor) since Unity's parser is more lenient than System.Xml.
         /// </summary>
+
+        /// <summary>
+        /// Ensures the root UXML element has editor-extension-mode attribute.
+        /// UI Builder requires this to open the file. Injects "False" if missing.
+        /// </summary>
+        private static string EnsureEditorExtensionMode(string contents)
+        {
+            if (contents.Contains("editor-extension-mode"))
+                return contents;
+
+            int idx = contents.IndexOf("<ui:UXML", StringComparison.Ordinal);
+            if (idx < 0)
+                idx = contents.IndexOf("<UXML", StringComparison.Ordinal);
+            if (idx < 0)
+                return contents;
+
+            int closeTag = contents.IndexOf('>', idx);
+            if (closeTag < 0)
+                return contents;
+
+            bool selfClosing = contents[closeTag - 1] == '/';
+            int insertPos = selfClosing ? closeTag - 1 : closeTag;
+
+            return contents.Substring(0, insertPos)
+                 + " editor-extension-mode=\"False\""
+                 + contents.Substring(insertPos);
+        }
+
         private static string ValidateUxmlContent(string contents, List<string> warnings)
         {
             if (string.IsNullOrWhiteSpace(contents))

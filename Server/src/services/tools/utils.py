@@ -464,8 +464,9 @@ def build_screenshot_params(
     camera: str | None = None,
     include_image: bool | str | None = None,
     max_resolution: int | str | None = None,
+    capture_source: str | None = None,
     batch: str | None = None,
-    look_at: str | int | list[float] | None = None,
+    view_target: str | int | list[float] | None = None,
     orbit_angles: int | str | None = None,
     orbit_elevations: list[float] | str | None = None,
     orbit_distance: float | str | None = None,
@@ -493,10 +494,18 @@ def build_screenshot_params(
         if coerced_max_resolution <= 0:
             return {"success": False, "message": "max_resolution must be a positive integer."}
         params["maxResolution"] = coerced_max_resolution
+    if capture_source is not None:
+        normalized_capture_source = str(capture_source).strip().lower()
+        if normalized_capture_source not in {"game_view", "scene_view"}:
+            return {
+                "success": False,
+                "message": "capture_source must be either 'game_view' or 'scene_view'.",
+            }
+        params["captureSource"] = normalized_capture_source
     if batch:
         params["batch"] = batch
-    if look_at is not None:
-        params["lookAt"] = look_at
+    if view_target is not None:
+        params["viewTarget"] = view_target
 
     # Orbit params
     coerced_orbit_angles = coerce_int(orbit_angles, default=None)
@@ -533,5 +542,26 @@ def build_screenshot_params(
         if err:
             return {"success": False, "message": err}
         params["viewRotation"] = vec
+    if params.get("captureSource") == "scene_view":
+        if coerced_super_size is not None and coerced_super_size > 1:
+            return {
+                "success": False,
+                "message": "capture_source='scene_view' does not support super_size above 1.",
+            }
+        if batch:
+            return {
+                "success": False,
+                "message": "capture_source='scene_view' does not support batch modes.",
+            }
+        if view_position is not None or view_rotation is not None:
+            return {
+                "success": False,
+                "message": "capture_source='scene_view' does not support view_position/view_rotation.",
+            }
+        if camera:
+            return {
+                "success": False,
+                "message": "capture_source='scene_view' does not support camera selection.",
+            }
 
     return None

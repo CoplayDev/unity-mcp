@@ -19,6 +19,7 @@ Complete reference for all MCP tools. Each tool includes parameters, types, and 
 - [Graphics Tools](#graphics-tools)
 - [Package Tools](#package-tools)
 - [ProBuilder Tools](#probuilder-tools)
+- [Docs Tools](#docs-tools)
 
 ---
 
@@ -136,7 +137,7 @@ manage_scene(
 manage_scene(
     action="screenshot",
     batch="surround",
-    look_at="Player",            # str|int|list[float] - center surround on this target
+    view_target="Player",        # str|int|list[float] - center surround on this target
     max_resolution=256
 )
 
@@ -144,7 +145,7 @@ manage_scene(
 manage_scene(
     action="screenshot",
     batch="orbit",               # str - "orbit" for configurable angle grid
-    look_at="Player",            # str|int|list[float] - target to orbit around
+    view_target="Player",        # str|int|list[float] - target to orbit around
     orbit_angles=8,              # int, default 8 - number of azimuth steps
     orbit_elevations=[0, 30],    # list[float], default [0, 30, -15] - vertical angles in degrees
     orbit_distance=10,           # float, optional - camera distance (auto-fit if omitted)
@@ -156,9 +157,9 @@ manage_scene(
 # Positioned screenshot (temp camera at viewpoint, no file saved)
 manage_scene(
     action="screenshot",
-    look_at="Enemy",             # str|int|list[float] - target to aim at
+    view_target="Enemy",         # str|int|list[float] - target to aim at
     view_position=[0, 10, -10],  # list[float], optional - camera position
-    view_rotation=[45, 0, 0],    # list[float], optional - euler angles (overrides look_at aim)
+    view_rotation=[45, 0, 0],    # list[float], optional - euler angles (overrides view_target aim)
     max_resolution=512
 )
 
@@ -212,6 +213,17 @@ manage_gameobject(
     save_as_prefab=False,
     prefab_path="Assets/Prefabs/MyCube.prefab"
 )
+
+# Prefab instantiation — place a prefab instance in the scene
+manage_gameobject(
+    action="create",
+    name="Enemy_1",
+    prefab_path="Assets/Prefabs/Enemy.prefab",
+    position=[5, 0, 3],
+    parent="Enemies"                # optional parent GameObject
+)
+# Smart lookup — just the prefab name works too:
+manage_gameobject(action="create", name="Enemy_2", prefab_path="Enemy", position=[10, 0, 3])
 
 # Modify
 manage_gameobject(
@@ -694,6 +706,8 @@ manage_editor(action="remove_tag", tag_name="OldTag")
 manage_editor(action="add_layer", layer_name="Projectiles")
 manage_editor(action="remove_layer", layer_name="OldLayer")
 
+manage_editor(action="close_prefab_stage")  # Exit prefab editing mode back to main scene
+
 # Package deployment (no confirmation dialog — designed for LLM-driven iteration)
 manage_editor(action="deploy_package")     # Copy configured MCPForUnity source into installed package
 manage_editor(action="restore_package")    # Revert to pre-deployment backup
@@ -823,13 +837,14 @@ Unified camera management (Unity Camera + Cinemachine). Works without Cinemachin
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `camera` | string | Camera to capture from (defaults to Camera.main) |
+| `capture_source` | string | `"game_view"` (default) or `"scene_view"` (editor viewport) |
+| `view_target` | string\|int\|list | Target to focus on (GO name/path/ID or [x,y,z]). game_view: aims camera; scene_view: frames viewport |
+| `camera` | string | Camera to capture from (defaults to Camera.main). game_view only |
 | `include_image` | bool | Return base64 PNG inline (default false) |
 | `max_resolution` | int | Downscale cap in px (default 640) |
-| `batch` | string | `"surround"` (6 angles) or `"orbit"` (configurable grid) |
-| `look_at` | string\|int\|list | Target to aim at (GO name/path/ID or [x,y,z]) |
-| `view_position` | list[float] | World position [x,y,z] to place camera |
-| `view_rotation` | list[float] | Euler rotation [x,y,z] (overrides look_at) |
+| `batch` | string | `"surround"` (6 angles) or `"orbit"` (configurable grid). game_view only |
+| `view_position` | list[float] | World position [x,y,z] to place camera. game_view only |
+| `view_rotation` | list[float] | Euler rotation [x,y,z] (overrides view_target). game_view only |
 
 **Actions by category:**
 
@@ -860,7 +875,7 @@ Unified camera management (Unity Camera + Cinemachine). Works without Cinemachin
 - `release_override` — Release camera override
 
 **Capture:**
-- `screenshot` — Capture from a camera. Supports inline base64, batch surround/orbit, positioned capture.
+- `screenshot` — Capture screenshot. Supports `capture_source="game_view"` (default, camera-based) or `"scene_view"` (editor viewport). game_view supports inline base64, batch surround/orbit, positioned capture. scene_view supports `view_target` for framing.
 - `screenshot_multiview` — Shorthand for screenshot with batch='surround' and include_image=true.
 
 **Examples:**
@@ -911,8 +926,14 @@ manage_camera(action="add_extension", target="FollowCam", properties={
     "extensionType": "CinemachineDeoccluder"
 })
 
-# Screenshot from a specific camera
+# Screenshot from a specific camera (game_view, default)
 manage_camera(action="screenshot", camera="FollowCam", include_image=True, max_resolution=512)
+
+# Scene View screenshot (captures editor viewport — gizmos, wireframes, grid)
+manage_camera(action="screenshot", capture_source="scene_view", include_image=True)
+
+# Scene View screenshot framed on a specific object
+manage_camera(action="screenshot", capture_source="scene_view", view_target="Canvas", include_image=True)
 
 # Multi-view screenshot (6-angle contact sheet)
 manage_camera(action="screenshot_multiview", max_resolution=480)
@@ -1259,3 +1280,93 @@ manage_probuilder(action="validate_mesh", target="MyCube")
 ```
 
 See also: [ProBuilder Workflow Guide](probuilder-guide.md) for detailed patterns and complex object examples.
+
+---
+
+## Docs Tools
+
+Tools for verifying Unity C# APIs and fetching official documentation. Group: `docs`.
+
+### `unity_reflect`
+
+Inspect Unity's live C# API via reflection. **Always use this before writing C# code that references Unity APIs** — LLM training data frequently contains incorrect, outdated, or hallucinated APIs.
+
+Requires Unity connection.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `action` | string | Yes | `search`, `get_type`, or `get_member` |
+| `class_name` | string | For get_type, get_member | Fully qualified or simple C# class name |
+| `member_name` | string | For get_member | Method, property, or field name to inspect |
+| `query` | string | For search | Search query for type name search |
+| `scope` | string | No | Assembly scope for search: `unity`, `packages`, `project`, `all` (default: `unity`) |
+
+**Actions:**
+
+- **`search`**: Search for types by name across loaded assemblies. Returns matching type names.
+- **`get_type`**: Get a member summary (names only) for a class. Returns list of methods, properties, fields.
+- **`get_member`**: Get full signature detail for one member. Returns parameter types, return type, overloads.
+
+```python
+# Search for types matching a name
+unity_reflect(action="search", query="NavMesh")
+unity_reflect(action="search", query="Camera", scope="all")
+
+# Get all members of a type
+unity_reflect(action="get_type", class_name="UnityEngine.AI.NavMeshAgent")
+
+# Get detailed signature for a specific member
+unity_reflect(action="get_member", class_name="Physics", member_name="Raycast")
+unity_reflect(action="get_member", class_name="NavMeshAgent", member_name="SetDestination")
+```
+
+### `unity_docs`
+
+Fetch official Unity documentation from docs.unity3d.com. Returns descriptions, parameter details, code examples, and caveats. Use after `unity_reflect` confirms a type exists.
+
+No Unity connection needed for doc fetching. The `lookup` action with asset-related queries will also search project assets (requires Unity connection).
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `action` | string | Yes | `get_doc`, `get_manual`, `get_package_doc`, or `lookup` |
+| `class_name` | string | For get_doc | Unity class name (e.g., `Physics`, `Transform`) |
+| `member_name` | string | No | Method or property name for get_doc |
+| `version` | string | No | Unity version (e.g., `6000.0.38f1`). Auto-extracts major.minor. |
+| `slug` | string | For get_manual | Manual page slug (e.g., `execution-order`) |
+| `package` | string | For get_package_doc, optional for lookup | Package name (e.g., `com.unity.render-pipelines.universal`) |
+| `page` | string | For get_package_doc | Package doc page (e.g., `index`, `2d-index`) |
+| `pkg_version` | string | For get_package_doc, optional for lookup | Package version major.minor (e.g., `17.0`) |
+| `query` | string | For lookup (single) | Single search query |
+| `queries` | string | For lookup (batch) | Comma-separated queries (e.g., `Physics.Raycast,NavMeshAgent,Light2D`) |
+
+**Actions:**
+
+- **`get_doc`**: Fetch ScriptReference docs for a class or member. Parses HTML to extract description, signatures, parameters, return type, and code examples.
+- **`get_manual`**: Fetch a Unity Manual page by slug. Returns title, sections, and code examples.
+- **`get_package_doc`**: Fetch package documentation. Requires package name, page slug, and package version.
+- **`lookup`**: Search doc sources in parallel (ScriptReference + Manual; also package docs if `package` + `pkg_version` provided). Supports batch queries. For asset-related queries (shader, material, texture, etc.), also searches project assets via `manage_asset`.
+
+```python
+# Fetch ScriptReference for a class
+unity_docs(action="get_doc", class_name="Physics")
+unity_docs(action="get_doc", class_name="Physics", member_name="Raycast")
+unity_docs(action="get_doc", class_name="Transform", version="6000.0.38f1")
+
+# Fetch a Manual page
+unity_docs(action="get_manual", slug="execution-order")
+unity_docs(action="get_manual", slug="urp/urp-introduction")
+
+# Fetch package documentation
+unity_docs(action="get_package_doc", package="com.unity.render-pipelines.universal",
+           page="2d-index", pkg_version="17.0")
+
+# Parallel lookup across all sources (single query)
+unity_docs(action="lookup", query="Physics.Raycast")
+
+# Batch lookup (multiple queries in one call)
+unity_docs(action="lookup", queries="Physics.Raycast,NavMeshAgent,Light2D")
+
+# Lookup with package docs included
+unity_docs(action="lookup", query="VolumeProfile",
+           package="com.unity.render-pipelines.universal", pkg_version="17.0")
+```

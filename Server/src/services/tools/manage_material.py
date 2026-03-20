@@ -59,7 +59,7 @@ async def manage_material(
                                      "by_layer", "by_component"], "Search method for target"] | None = None,
     slot: Annotated[int, "Material slot index (0-based)"] | None = None,
     mode: Annotated[Literal["shared", "instance", "property_block", "create_unique"],
-                    "Assignment/modification mode (default: create_unique — creates a persistent per-object material)"] | None = None,
+                    "Assignment/modification mode; behavior when omitted is action-specific on the Unity side."] | None = None,
 
 ) -> dict[str, Any]:
     unity_instance = await get_unity_instance_from_context(ctx)

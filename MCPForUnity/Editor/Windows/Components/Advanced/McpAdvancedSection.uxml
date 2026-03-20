@@ -42,7 +42,7 @@
             </ui:VisualElement>
 
             <ui:VisualElement class="setting-row">
-                <ui:Label text="Auto-Start on Editor Load:" class="setting-label" />
+                <ui:Label text="Auto-Start Server on Editor Load:" class="setting-label" />
                 <ui:Toggle name="auto-start-on-load-toggle" class="setting-toggle" />
             </ui:VisualElement>
 

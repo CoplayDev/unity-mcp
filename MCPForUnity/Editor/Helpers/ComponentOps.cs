@@ -466,6 +466,25 @@ namespace MCPForUnity.Editor.Helpers
                 return false;
 
             so.ApplyModifiedProperties();
+
+            // Readback verification for ObjectReference — these can silently fail
+            if (prop.propertyType == SerializedPropertyType.ObjectReference
+                && value != null
+                && !(value is JValue jv && jv.Type == JTokenType.Null))
+            {
+                so.Update();
+                var verifyProp = so.FindProperty(propertyName)
+                              ?? so.FindProperty(normalizedName);
+                if (verifyProp != null
+                    && verifyProp.propertyType == SerializedPropertyType.ObjectReference
+                    && verifyProp.objectReferenceValue == null)
+                {
+                    error = $"Property '{propertyName}' was set but the object reference did not persist. " +
+                            "Check that the referenced object exists and is the correct type.";
+                    return false;
+                }
+            }
+
             return true;
         }
 
@@ -522,17 +541,17 @@ namespace MCPForUnity.Editor.Helpers
                 switch (prop.propertyType)
                 {
                     case SerializedPropertyType.Integer:
-                        int intVal = ParamCoercion.CoerceInt(value, int.MinValue);
-                        if (intVal == int.MinValue && value?.Type != JTokenType.Integer)
+                        if (value == null || value.Type == JTokenType.Null
+                            || (value.Type != JTokenType.Integer && value.Type != JTokenType.Float
+                                && !long.TryParse(value.ToString(), out _)))
                         {
-                            if (value == null || value.Type == JTokenType.Null ||
-                                (value.Type == JTokenType.String && !int.TryParse(value.ToString(), out _)))
-                            {
-                                error = "Expected integer value.";
-                                return false;
-                            }
+                            error = "Expected integer value.";
+                            return false;
                         }
-                        prop.intValue = intVal;
+                        if (prop.type == "long")
+                            prop.longValue = ParamCoercion.CoerceLong(value, 0);
+                        else
+                            prop.intValue = ParamCoercion.CoerceInt(value, 0);
                         return true;
 
                     case SerializedPropertyType.Boolean:

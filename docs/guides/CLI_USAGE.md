@@ -73,8 +73,9 @@ unity-mcp camera screenshot
 unity-mcp camera screenshot --file-name "level_preview"
 unity-mcp camera screenshot --camera-ref "SecondCamera" --include-image
 unity-mcp camera screenshot --batch surround --max-resolution 256
-unity-mcp camera screenshot --batch orbit --look-at "Player"
-unity-mcp camera screenshot-multiview --look-at "Player" --max-resolution 480
+unity-mcp camera screenshot --batch orbit --view-target "Player"
+unity-mcp camera screenshot --capture-source scene_view --view-target "Canvas" --include-image
+unity-mcp camera screenshot-multiview --view-target "Player" --max-resolution 480
 ```
 
 ### GameObject Operations
@@ -189,9 +190,10 @@ unity-mcp custom_tool list
 | `--include-image` | flag | Return base64 PNG inline in the response |
 | `--max-resolution, -r` | int | Max longest-edge pixels (default 640) |
 | `--batch, -b` | string | `surround` (6 angles) or `orbit` (configurable grid) |
-| `--look-at` | string | Target: GameObject name/path/ID, or `x,y,z` world position |
-| `--view-position` | string | Camera position as `x,y,z` (positioned screenshot) |
-| `--view-rotation` | string | Camera euler rotation as `x,y,z` (positioned screenshot) |
+| `--capture-source` | string | `game_view` (default) or `scene_view` (editor viewport) |
+| `--view-target` | string | Target to focus on: GO name/path/ID, or `x,y,z`. Aims camera (game_view) or frames viewport (scene_view) |
+| `--view-position` | string | Camera position as `x,y,z` (positioned screenshot, game_view only) |
+| `--view-rotation` | string | Camera euler rotation as `x,y,z` (positioned screenshot, game_view only) |
 | `--orbit-angles` | int | Number of azimuth steps around target (default 8) |
 | `--orbit-elevations` | string | Vertical angles as JSON array, e.g. `[0,30,-15]` (default `[0, 30, -15]`) |
 | `--orbit-distance` | float | Camera distance from target in world units (auto-fit if omitted) |
@@ -380,8 +382,9 @@ unity-mcp camera brain-status
 unity-mcp camera force "Cam"                                # Force Brain to use camera
 unity-mcp camera release                                    # Release override
 unity-mcp camera screenshot --file-name "capture" --super-size 2
-unity-mcp camera screenshot --batch orbit --look-at "Player" --max-resolution 256
-unity-mcp camera screenshot-multiview --look-at "Player" --max-resolution 480
+unity-mcp camera screenshot --batch orbit --view-target "Player" --max-resolution 256
+unity-mcp camera screenshot --capture-source scene_view --view-target "Canvas" --include-image
+unity-mcp camera screenshot-multiview --view-target "Player" --max-resolution 480
 ```
 
 ### Graphics Operations

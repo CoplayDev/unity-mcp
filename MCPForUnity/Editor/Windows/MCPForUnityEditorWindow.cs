@@ -382,7 +382,8 @@ namespace MCPForUnity.Editor.Windows
                 var result = MCPServiceLocator.Updates.CheckForUpdate(currentVersion);
                 if (result.CheckSucceeded && result.UpdateAvailable && !string.IsNullOrEmpty(result.LatestVersion))
                 {
-                    updateNotificationText.text = $"Newer version available: v{result.LatestVersion} (current v{currentVersion})";
+                    updateNotificationText.text = $"Update available: v{result.LatestVersion}  (current: v{currentVersion})";
+                    updateNotificationText.tooltip = $"Latest version: v{result.LatestVersion}\nCurrent version: v{currentVersion}";
                     updateNotification.AddToClassList("visible");
                 }
                 else

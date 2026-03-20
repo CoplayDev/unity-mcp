@@ -146,7 +146,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
             return prop.propertyType switch
             {
                 SerializedPropertyType.Boolean => prop.boolValue,
-                SerializedPropertyType.Integer => prop.intValue,
+                SerializedPropertyType.Integer => prop.type == "long" ? prop.longValue : (object)prop.intValue,
                 SerializedPropertyType.Float => prop.floatValue,
                 SerializedPropertyType.String => prop.stringValue,
                 SerializedPropertyType.Enum => prop.enumValueIndex < prop.enumNames.Length
@@ -177,7 +177,10 @@ namespace MCPForUnity.Editor.Tools.Graphics
                         prop.boolValue = ParamCoercion.CoerceBool(value, false);
                         return true;
                     case SerializedPropertyType.Integer:
-                        prop.intValue = ParamCoercion.CoerceInt(value, 0);
+                        if (prop.type == "long")
+                            prop.longValue = ParamCoercion.CoerceLong(value, 0);
+                        else
+                            prop.intValue = ParamCoercion.CoerceInt(value, 0);
                         return true;
                     case SerializedPropertyType.Float:
                         prop.floatValue = ParamCoercion.CoerceFloat(value, 0f);

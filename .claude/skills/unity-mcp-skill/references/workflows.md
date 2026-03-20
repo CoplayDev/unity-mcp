@@ -13,6 +13,10 @@ Common workflows and patterns for effective Unity-MCP usage.
 - [UI Creation Workflows](#ui-creation-workflows)
 - [Camera & Cinemachine Workflows](#camera--cinemachine-workflows)
 - [ProBuilder Workflows](#probuilder-workflows)
+- [Graphics & Rendering Workflows](#graphics--rendering-workflows)
+- [Package Management Workflows](#package-management-workflows)
+- [Package Deployment Workflows](#package-deployment-workflows)
+- [API Verification Workflows](#api-verification-workflows)
 - [Batch Operations](#batch-operations)
 
 ---
@@ -113,8 +117,8 @@ manage_script(
     path="Assets/Scripts/MyScript.cs",
     contents="using UnityEngine;\n\npublic class MyScript : MonoBehaviour { ... }"
 )
-# Then refresh and check console
-refresh_unity(mode="force", scope="scripts", compile="request", wait_for_ready=True)
+# manage_script update auto-triggers import + compile — just wait and check console
+# Read mcpforunity://editor/state → wait until is_compiling == false
 read_console(types=["error"], count=10)
 ```
 
@@ -156,7 +160,7 @@ manage_gameobject(action="modify", target="Main Camera", position=[0, 5, -10],
     rotation=[30, 0, 0])
 
 # 5. Verify with screenshot
-manage_scene(action="screenshot")
+manage_camera(action="screenshot")
 
 # 6. Save scene
 manage_scene(action="save")
@@ -207,7 +211,7 @@ for i in range(10):
 ### Create New Script and Attach
 
 ```python
-# 1. Create script
+# 1. Create script (automatically triggers import + compilation)
 create_script(
     path="Assets/Scripts/EnemyAI.cs",
     contents='''using UnityEngine;
@@ -216,7 +220,7 @@ public class EnemyAI : MonoBehaviour
 {
     public float speed = 5f;
     public Transform target;
-    
+
     void Update()
     {
         if (target != null)
@@ -228,8 +232,8 @@ public class EnemyAI : MonoBehaviour
 }'''
 )
 
-# 2. CRITICAL: Refresh and compile
-refresh_unity(mode="force", scope="scripts", compile="request", wait_for_ready=True)
+# 2. Wait for compilation to finish
+# Read mcpforunity://editor/state → wait until is_compiling == false
 
 # 3. Check for errors
 console = read_console(types=["error"], count=10)
@@ -239,7 +243,7 @@ if console["messages"]:
 else:
     # 4. Attach to GameObject
     manage_gameobject(action="modify", target="Enemy", components_to_add=["EnemyAI"])
-    
+
     # 5. Set component properties
     manage_components(
         action="set_property",
@@ -285,8 +289,8 @@ validate_script(
     level="standard"
 )
 
-# 5. Refresh
-refresh_unity(mode="force", scope="scripts", compile="request", wait_for_ready=True)
+# 5. Wait for compilation (script_apply_edits auto-triggers import + compile)
+# Read mcpforunity://editor/state → wait until is_compiling == false
 
 # 6. Check console
 read_console(types=["error"], count=10)
@@ -346,7 +350,7 @@ manage_material(
 )
 
 # 3. Verify visually
-manage_scene(action="screenshot")
+manage_camera(action="screenshot")
 ```
 
 ### Create Procedural Texture
@@ -415,6 +419,35 @@ for asset in result["assets"]:
     info = manage_prefabs(action="get_info", prefab_path=prefab_path)
     print(f"Prefab: {prefab_path}, Children: {info['childCount']}")
 ```
+
+### Instantiate Prefab in Scene
+
+Use `manage_gameobject` (not `manage_prefabs`) to place prefab instances in the scene.
+
+```python
+# Full path
+manage_gameobject(
+    action="create",
+    name="Enemy_1",
+    prefab_path="Assets/Prefabs/Enemy.prefab",
+    position=[5, 0, 3],
+    parent="Enemies"
+)
+
+# Smart lookup — just the prefab name works too
+manage_gameobject(action="create", name="Enemy_2", prefab_path="Enemy", position=[10, 0, 3])
+
+# Batch-spawn multiple instances
+batch_execute(commands=[
+    {"tool": "manage_gameobject", "params": {
+        "action": "create", "name": f"Enemy_{i}",
+        "prefab_path": "Enemy", "position": [i * 3, 0, 0], "parent": "Enemies"
+    }}
+    for i in range(5)
+])
+```
+
+> **Note:** `manage_prefabs` is for headless prefab editing (inspect, modify contents, create from GameObject). To *instantiate* a prefab into the scene, always use `manage_gameobject(action="create", prefab_path="...")`.
 
 ---
 
@@ -485,8 +518,8 @@ public class PlayerTests
 }'''
 )
 
-# 2. Refresh
-refresh_unity(mode="force", scope="scripts", compile="request", wait_for_ready=True)
+# 2. Wait for compilation (create_script auto-triggers import + compile)
+# Read mcpforunity://editor/state → wait until is_compiling == false
 
 # 3. Run test (expect pass for this simple test)
 result = run_tests(mode="EditMode", test_names=["PlayerTests.TestPlayerStartsAtOrigin"])
@@ -556,7 +589,7 @@ for item in hierarchy["data"]["items"]:
         print(f"Object {item['name']} fell through floor!")
 
 # 3. Visual verification
-manage_scene(action="screenshot")
+manage_camera(action="screenshot")
 ```
 
 ---
@@ -1528,6 +1561,26 @@ manage_camera(action="list_cameras")
 manage_camera(action="screenshot_multiview", max_resolution=480)
 ```
 
+### Scene View Screenshot Workflow
+
+Use `capture_source="scene_view"` to capture the editor's Scene View viewport — useful for seeing gizmos, wireframes, grid, debug overlays, and objects without cameras.
+
+```python
+# 1. Capture the Scene View as-is
+manage_camera(action="screenshot", capture_source="scene_view", include_image=True)
+
+# 2. Frame on a specific object first, then capture
+manage_camera(action="screenshot", capture_source="scene_view",
+    view_target="Player", include_image=True, max_resolution=512)
+
+# 3. Frame on UI Canvas (RectTransform bounds are supported)
+manage_camera(action="screenshot", capture_source="scene_view",
+    view_target="Canvas", include_image=True)
+
+# Limitations: scene_view does not support batch, view_position, view_rotation, or camera selection.
+# Use capture_source="game_view" (default) for those features.
+```
+
 ---
 
 ## ProBuilder Workflows
@@ -1585,7 +1638,7 @@ manage_probuilder(action="auto_smooth", target="Pillar1",
     properties={"angleThreshold": 45})
 
 # 6. Screenshot to verify
-manage_scene(action="screenshot", include_image=True, max_resolution=512)
+manage_camera(action="screenshot", include_image=True, max_resolution=512)
 ```
 
 ### Edit-Verify Loop Pattern
@@ -1612,7 +1665,333 @@ manage_probuilder(action="delete_faces", target="Obj", properties={"faceIndices"
 
 ---
 
+## Graphics & Rendering Workflows
+
+### Setting Up Post-Processing
+
+Add post-processing effects to a URP/HDRP scene using Volumes.
+
+```python
+# 1. Check pipeline status and available effects
+manage_graphics(action="ping")
+
+# 2. List available volume effects for the active pipeline
+manage_graphics(action="volume_list_effects")
+
+# 3. Create a global post-processing volume with common effects
+manage_graphics(action="volume_create", name="GlobalPostProcess", is_global=True,
+    effects=[
+        {"type": "Bloom", "parameters": {"intensity": 1.0, "threshold": 0.9, "scatter": 0.7}},
+        {"type": "Vignette", "parameters": {"intensity": 0.35}},
+        {"type": "Tonemapping", "parameters": {"mode": 1}},
+        {"type": "ColorAdjustments", "parameters": {"postExposure": 0.2, "contrast": 10}}
+    ])
+
+# 4. Verify the volume was created
+# Read mcpforunity://scene/volumes
+
+# 5. Fine-tune an effect parameter
+manage_graphics(action="volume_set_effect", target="GlobalPostProcess",
+    effect="Bloom", parameters={"intensity": 1.5})
+
+# 6. Screenshot to verify visual result
+manage_camera(action="screenshot", include_image=True, max_resolution=512)
+```
+
+**Tips:**
+- Always `ping` first to confirm URP/HDRP is active. Volumes do nothing on Built-in RP.
+- Use `volume_list_effects` to discover available effect types for the active pipeline (URP and HDRP have different sets).
+- Use `volume_get_info` to inspect current effect parameters before modifying.
+- Create a reusable VolumeProfile asset with `volume_create_profile` and reference it via `profile_path` on multiple volumes.
+
+### Adding a Full-Screen Effect via Renderer Features (URP)
+
+Add a custom full-screen shader pass using URP Renderer Features.
+
+```python
+# 1. Check pipeline and confirm URP
+manage_graphics(action="ping")
+
+# 2. Create a material for the full-screen effect
+manage_material(action="create",
+    material_path="Assets/Materials/GrayscaleEffect.mat",
+    shader="Shader Graphs/GrayscaleFullScreen")
+
+# 3. List current renderer features
+manage_graphics(action="feature_list")
+
+# 4. Add a FullScreenPassRendererFeature with the material
+manage_graphics(action="feature_add",
+    feature_type="FullScreenPassRendererFeature",
+    name="GrayscalePass",
+    material="Assets/Materials/GrayscaleEffect.mat")
+
+# 5. Verify it was added
+manage_graphics(action="feature_list")
+
+# 6. Toggle it on/off to compare
+manage_graphics(action="feature_toggle", index=0, active=False)  # disable
+manage_camera(action="screenshot", include_image=True, max_resolution=512)
+
+manage_graphics(action="feature_toggle", index=0, active=True)   # re-enable
+manage_camera(action="screenshot", include_image=True, max_resolution=512)
+
+# 7. Reorder features if needed (execution order matters)
+manage_graphics(action="feature_reorder", order=[1, 0, 2])
+```
+
+**Tips:**
+- Renderer Features are URP-only. `feature_*` actions return an error on HDRP or Built-in RP.
+- Read `mcpforunity://pipeline/renderer-features` to inspect features without modifying.
+- Feature execution order affects the final image. Use `feature_reorder` to control pass ordering.
+
+### Configuring Light Baking
+
+Set up lightmaps, light probes, and reflection probes for baked GI.
+
+```python
+# 1. Set lights to Baked or Mixed mode
+manage_components(action="set_property", target="Directional Light",
+    component_type="Light", properties={"lightmapBakeType": 1})  # 1 = Mixed
+
+# 2. Mark static objects for lightmapping
+manage_gameobject(action="modify", target="Environment",
+    component_properties={"StaticFlags": "ContributeGI"})
+
+# 3. Configure lightmap settings
+manage_graphics(action="bake_get_settings")
+manage_graphics(action="bake_set_settings", settings={
+    "lightmapper": 1,           # 1 = Progressive GPU
+    "directSamples": 32,
+    "indirectSamples": 128,
+    "maxBounces": 4,
+    "lightmapResolution": 40
+})
+
+# 4. Place light probes for dynamic objects
+manage_graphics(action="bake_create_light_probe_group", name="MainProbeGrid",
+    position=[0, 1.5, 0], grid_size=[5, 3, 5], spacing=3.0)
+
+# 5. Place a reflection probe for an interior room
+manage_graphics(action="bake_create_reflection_probe", name="RoomReflection",
+    position=[0, 2, 0], size=[8, 4, 8], resolution=256,
+    hdr=True, box_projection=True)
+
+# 6. Start async bake
+manage_graphics(action="bake_start", async_bake=True)
+
+# 7. Poll bake status
+manage_graphics(action="bake_status")
+# Repeat until complete
+
+# 8. Bake the reflection probe separately if needed
+manage_graphics(action="bake_reflection_probe", target="RoomReflection")
+
+# 9. Check rendering stats after bake
+manage_graphics(action="stats_get")
+```
+
+**Tips:**
+- Baking only works in Edit mode. If the editor is in Play mode, `bake_start` will fail.
+- Use `bake_cancel` to abort a long bake.
+- `bake_clear` removes all baked data (lightmaps, probes). Use before re-baking from scratch.
+- For large scenes, use `async_bake=True` (default) and poll `bake_status` periodically.
+
+---
+
+## Package Management Workflows
+
+### Install a Package and Verify
+
+```python
+# 1. Check what's installed
+manage_packages(action="ping")
+manage_packages(action="list_packages")
+# Poll status until complete
+manage_packages(action="status", job_id="<job_id>")
+
+# 2. Install the package
+manage_packages(action="add_package", package="com.unity.inputsystem")
+# Poll until domain reload completes
+manage_packages(action="status", job_id="<job_id>")
+
+# 3. Verify no compilation errors
+read_console(types=["error"], count=10)
+
+# 4. Confirm it's installed
+manage_packages(action="get_package_info", package="com.unity.inputsystem")
+```
+
+### Add OpenUPM Registry and Install Package
+
+```python
+# 1. Add the OpenUPM scoped registry
+manage_packages(
+    action="add_registry",
+    name="OpenUPM",
+    url="https://package.openupm.com",
+    scopes=["com.cysharp"]
+)
+
+# 2. Force resolution to pick up the new registry
+manage_packages(action="resolve_packages")
+
+# 3. Install a package from OpenUPM
+manage_packages(action="add_package", package="com.cysharp.unitask")
+manage_packages(action="status", job_id="<job_id>")
+```
+
+### Safe Package Removal
+
+```python
+# 1. Check dependencies before removing
+manage_packages(action="remove_package", package="com.unity.modules.ui")
+# If blocked: "Cannot remove: 3 package(s) depend on it"
+
+# 2. Force removal if you're sure
+manage_packages(action="remove_package", package="com.unity.modules.ui", force=True)
+manage_packages(action="status", job_id="<job_id>")
+```
+
+### Install from Git URL (e.g., NuGetForUnity)
+
+```python
+# Git URLs trigger a security warning — ensure the source is trusted
+manage_packages(
+    action="add_package",
+    package="https://github.com/GlitchEnzo/NuGetForUnity.git?path=/src/NuGetForUnity"
+)
+manage_packages(action="status", job_id="<job_id>")
+```
+
+---
+
+## Package Deployment Workflows
+
+### Iterative Development Loop (Edit → Deploy → Test)
+
+Use `deploy_package` to copy your local MCPForUnity source into the project's installed package location. This bypasses the UI dialog and triggers recompilation automatically.
+
+```python
+# Prerequisites: Set the MCPForUnity source path in Advanced Settings first.
+
+# 1. Make code changes (e.g., edit C# tools)
+# script_apply_edits or create_script as needed
+
+# 2. Deploy the updated package (copies source → installed package, creates backup)
+manage_editor(action="deploy_package")
+
+# 3. Wait for recompilation to finish
+refresh_unity(mode="force", compile="request", wait_for_ready=True)
+
+# 4. Check for compilation errors
+read_console(types=["error"], count=10, include_stacktrace=True)
+
+# 5. Test the changes
+run_tests(mode="EditMode")
+```
+
+### Rollback After Failed Deploy
+
+```python
+# Restore from the automatic pre-deployment backup
+manage_editor(action="restore_package")
+
+# Wait for recompilation
+refresh_unity(mode="force", compile="request", wait_for_ready=True)
+```
+
+---
+
+## API Verification Workflows
+
+### Full API Verification Before Writing Code
+
+Use `unity_reflect` and `unity_docs` to verify Unity APIs before writing C# code. This prevents hallucinated or outdated API references.
+
+**Trust hierarchy:** reflection (live runtime) > project assets > official docs.
+
+```python
+# Step 1: Search for the type you need
+unity_reflect(action="search", query="NavMesh")
+# → Returns matching types: NavMeshAgent, NavMeshPath, NavMeshHit, etc.
+
+# Step 2: Get member summary for the type
+unity_reflect(action="get_type", class_name="UnityEngine.AI.NavMeshAgent")
+# → Returns all methods, properties, fields (names only)
+
+# Step 3: Get full signature for specific members you plan to use
+unity_reflect(action="get_member", class_name="NavMeshAgent", member_name="SetDestination")
+# → Returns parameter types, return type, all overloads
+
+# Step 4: Get official docs for usage patterns and examples
+unity_docs(action="get_doc", class_name="NavMeshAgent", member_name="SetDestination")
+# → Returns description, signatures, parameters, code examples
+```
+
+### Batch API Lookup
+
+Use `unity_docs` `lookup` action to search multiple APIs in a single call:
+
+```python
+# Search ScriptReference + Manual + package docs in parallel
+unity_docs(action="lookup", queries="Physics.Raycast,NavMeshAgent,Light2D")
+
+# Include package docs in the search
+unity_docs(action="lookup", query="VolumeProfile",
+           package="com.unity.render-pipelines.universal", pkg_version="17.0")
+```
+
+### Finding Shaders and Materials in Project
+
+The `lookup` action automatically searches project assets for asset-related queries:
+
+```python
+# This searches both docs AND project assets for shader-related content
+unity_docs(action="lookup", query="Lit shader")
+# → Returns doc hits + matching project assets (shaders, materials, etc.)
+```
+
+### Manual and Package Documentation
+
+```python
+# Fetch Unity Manual pages (execution order, scripting concepts, etc.)
+unity_docs(action="get_manual", slug="execution-order")
+
+# Fetch package-specific documentation
+unity_docs(action="get_package_doc",
+           package="com.unity.render-pipelines.universal",
+           page="2d-index", pkg_version="17.0")
+```
+
+### Verifying APIs Across Unity Versions
+
+```python
+# Specify Unity version for version-specific docs
+unity_docs(action="get_doc", class_name="Camera", member_name="main", version="6000.0.38f1")
+
+# Use reflection to check what's actually available in the running editor
+unity_reflect(action="search", query="InputAction", scope="packages")
+```
+
+---
+
 ## Batch Operations
+
+### Batch Discovery (Multi-Search)
+
+Use `batch_execute` to search for multiple things in a single call instead of calling `find_gameobjects` repeatedly:
+
+```python
+# Instead of 4 separate find_gameobjects calls, batch them:
+batch_execute(commands=[
+    {"tool": "find_gameobjects", "params": {"search_term": "Camera", "search_method": "by_component"}},
+    {"tool": "find_gameobjects", "params": {"search_term": "Rigidbody", "search_method": "by_component"}},
+    {"tool": "find_gameobjects", "params": {"search_term": "Player", "search_method": "by_tag"}},
+    {"tool": "find_gameobjects", "params": {"search_term": "GameManager", "search_method": "by_name"}}
+])
+# Returns array of results, one per command
+```
 
 ### Mass Property Update
 

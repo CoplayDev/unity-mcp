@@ -16,6 +16,7 @@ Common workflows and patterns for effective Unity-MCP usage.
 - [Graphics & Rendering Workflows](#graphics--rendering-workflows)
 - [Package Management Workflows](#package-management-workflows)
 - [Package Deployment Workflows](#package-deployment-workflows)
+- [API Verification Workflows](#api-verification-workflows)
 - [Batch Operations](#batch-operations)
 
 ---
@@ -116,8 +117,8 @@ manage_script(
     path="Assets/Scripts/MyScript.cs",
     contents="using UnityEngine;\n\npublic class MyScript : MonoBehaviour { ... }"
 )
-# Then refresh and check console
-refresh_unity(mode="force", scope="scripts", compile="request", wait_for_ready=True)
+# manage_script update auto-triggers import + compile — just wait and check console
+# Read mcpforunity://editor/state → wait until is_compiling == false
 read_console(types=["error"], count=10)
 ```
 
@@ -210,7 +211,7 @@ for i in range(10):
 ### Create New Script and Attach
 
 ```python
-# 1. Create script
+# 1. Create script (automatically triggers import + compilation)
 create_script(
     path="Assets/Scripts/EnemyAI.cs",
     contents='''using UnityEngine;
@@ -219,7 +220,7 @@ public class EnemyAI : MonoBehaviour
 {
     public float speed = 5f;
     public Transform target;
-    
+
     void Update()
     {
         if (target != null)
@@ -231,8 +232,8 @@ public class EnemyAI : MonoBehaviour
 }'''
 )
 
-# 2. CRITICAL: Refresh and compile
-refresh_unity(mode="force", scope="scripts", compile="request", wait_for_ready=True)
+# 2. Wait for compilation to finish
+# Read mcpforunity://editor/state → wait until is_compiling == false
 
 # 3. Check for errors
 console = read_console(types=["error"], count=10)
@@ -242,7 +243,7 @@ if console["messages"]:
 else:
     # 4. Attach to GameObject
     manage_gameobject(action="modify", target="Enemy", components_to_add=["EnemyAI"])
-    
+
     # 5. Set component properties
     manage_components(
         action="set_property",
@@ -288,8 +289,8 @@ validate_script(
     level="standard"
 )
 
-# 5. Refresh
-refresh_unity(mode="force", scope="scripts", compile="request", wait_for_ready=True)
+# 5. Wait for compilation (script_apply_edits auto-triggers import + compile)
+# Read mcpforunity://editor/state → wait until is_compiling == false
 
 # 6. Check console
 read_console(types=["error"], count=10)
@@ -419,6 +420,35 @@ for asset in result["assets"]:
     print(f"Prefab: {prefab_path}, Children: {info['childCount']}")
 ```
 
+### Instantiate Prefab in Scene
+
+Use `manage_gameobject` (not `manage_prefabs`) to place prefab instances in the scene.
+
+```python
+# Full path
+manage_gameobject(
+    action="create",
+    name="Enemy_1",
+    prefab_path="Assets/Prefabs/Enemy.prefab",
+    position=[5, 0, 3],
+    parent="Enemies"
+)
+
+# Smart lookup — just the prefab name works too
+manage_gameobject(action="create", name="Enemy_2", prefab_path="Enemy", position=[10, 0, 3])
+
+# Batch-spawn multiple instances
+batch_execute(commands=[
+    {"tool": "manage_gameobject", "params": {
+        "action": "create", "name": f"Enemy_{i}",
+        "prefab_path": "Enemy", "position": [i * 3, 0, 0], "parent": "Enemies"
+    }}
+    for i in range(5)
+])
+```
+
+> **Note:** `manage_prefabs` is for headless prefab editing (inspect, modify contents, create from GameObject). To *instantiate* a prefab into the scene, always use `manage_gameobject(action="create", prefab_path="...")`.
+
 ---
 
 ## Testing Workflows
@@ -488,8 +518,8 @@ public class PlayerTests
 }'''
 )
 
-# 2. Refresh
-refresh_unity(mode="force", scope="scripts", compile="request", wait_for_ready=True)
+# 2. Wait for compilation (create_script auto-triggers import + compile)
+# Read mcpforunity://editor/state → wait until is_compiling == false
 
 # 3. Run test (expect pass for this simple test)
 result = run_tests(mode="EditMode", test_names=["PlayerTests.TestPlayerStartsAtOrigin"])
@@ -1531,6 +1561,26 @@ manage_camera(action="list_cameras")
 manage_camera(action="screenshot_multiview", max_resolution=480)
 ```
 
+### Scene View Screenshot Workflow
+
+Use `capture_source="scene_view"` to capture the editor's Scene View viewport — useful for seeing gizmos, wireframes, grid, debug overlays, and objects without cameras.
+
+```python
+# 1. Capture the Scene View as-is
+manage_camera(action="screenshot", capture_source="scene_view", include_image=True)
+
+# 2. Frame on a specific object first, then capture
+manage_camera(action="screenshot", capture_source="scene_view",
+    view_target="Player", include_image=True, max_resolution=512)
+
+# 3. Frame on UI Canvas (RectTransform bounds are supported)
+manage_camera(action="screenshot", capture_source="scene_view",
+    view_target="Canvas", include_image=True)
+
+# Limitations: scene_view does not support batch, view_position, view_rotation, or camera selection.
+# Use capture_source="game_view" (default) for those features.
+```
+
 ---
 
 ## ProBuilder Workflows
@@ -1853,7 +1903,97 @@ refresh_unity(mode="force", compile="request", wait_for_ready=True)
 
 ---
 
+## API Verification Workflows
+
+> These tools live in the opt-in `docs` group. Activate it first: `manage_tools(action="activate", group="docs")`
+
+### Full API Verification Before Writing Code
+
+Use `unity_reflect` and `unity_docs` to verify Unity APIs before writing C# code. This prevents hallucinated or outdated API references.
+
+**Trust hierarchy:** reflection (live runtime) > project assets > official docs.
+
+```python
+# Step 1: Search for the type you need
+unity_reflect(action="search", query="NavMesh")
+# → Returns matching types: NavMeshAgent, NavMeshPath, NavMeshHit, etc.
+
+# Step 2: Get member summary for the type
+unity_reflect(action="get_type", class_name="UnityEngine.AI.NavMeshAgent")
+# → Returns all methods, properties, fields (names only)
+
+# Step 3: Get full signature for specific members you plan to use
+unity_reflect(action="get_member", class_name="NavMeshAgent", member_name="SetDestination")
+# → Returns parameter types, return type, all overloads
+
+# Step 4: Get official docs for usage patterns and examples
+unity_docs(action="get_doc", class_name="NavMeshAgent", member_name="SetDestination")
+# → Returns description, signatures, parameters, code examples
+```
+
+### Batch API Lookup
+
+Use `unity_docs` `lookup` action to search multiple APIs in a single call:
+
+```python
+# Search ScriptReference + Manual in parallel (+ package docs if package/pkg_version provided)
+unity_docs(action="lookup", queries="Physics.Raycast,NavMeshAgent,Light2D")
+
+# Include package docs in the search
+unity_docs(action="lookup", query="VolumeProfile",
+           package="com.unity.render-pipelines.universal", pkg_version="17.0")
+```
+
+### Finding Shaders and Materials in Project
+
+The `lookup` action automatically searches project assets for asset-related queries:
+
+```python
+# This searches both docs AND project assets for shader-related content
+unity_docs(action="lookup", query="Lit shader")
+# → Returns doc hits + matching project assets (shaders, materials, etc.)
+```
+
+### Manual and Package Documentation
+
+```python
+# Fetch Unity Manual pages (execution order, scripting concepts, etc.)
+unity_docs(action="get_manual", slug="execution-order")
+
+# Fetch package-specific documentation
+unity_docs(action="get_package_doc",
+           package="com.unity.render-pipelines.universal",
+           page="2d-index", pkg_version="17.0")
+```
+
+### Verifying APIs Across Unity Versions
+
+```python
+# Specify Unity version for version-specific docs
+unity_docs(action="get_doc", class_name="Camera", member_name="main", version="6000.0.38f1")
+
+# Use reflection to check what's actually available in the running editor
+unity_reflect(action="search", query="InputAction", scope="packages")
+```
+
+---
+
 ## Batch Operations
+
+### Batch Discovery (Multi-Search)
+
+Use `batch_execute` to search for multiple things in a single call instead of calling `find_gameobjects` repeatedly:
+
+```python
+# Instead of 4 separate find_gameobjects calls, batch them:
+batch_execute(commands=[
+    {"tool": "find_gameobjects", "params": {"search_term": "Camera", "search_method": "by_component"}},
+    {"tool": "find_gameobjects", "params": {"search_term": "Rigidbody", "search_method": "by_component"}},
+    {"tool": "find_gameobjects", "params": {"search_term": "Player", "search_method": "by_tag"}},
+    {"tool": "find_gameobjects", "params": {"search_term": "GameManager", "search_method": "by_name"}}
+])
+# Returns array of results, one per command
+```
 
 ### Mass Property Update
 

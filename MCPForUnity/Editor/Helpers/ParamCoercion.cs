@@ -45,6 +45,37 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
+        /// Coerces a JToken to a long value, handling strings and floats.
+        /// </summary>
+        public static long CoerceLong(JToken token, long defaultValue)
+        {
+            if (token == null || token.Type == JTokenType.Null)
+                return defaultValue;
+
+            try
+            {
+                if (token.Type == JTokenType.Integer)
+                    return token.Value<long>();
+
+                var s = token.ToString().Trim();
+                if (s.Length == 0)
+                    return defaultValue;
+
+                if (long.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var l))
+                    return l;
+
+                if (double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var d))
+                    return (long)d;
+            }
+            catch
+            {
+                // Swallow and return default
+            }
+
+            return defaultValue;
+        }
+
+        /// <summary>
         /// Coerces a JToken to a nullable integer value.
         /// Returns null if token is null, empty, or cannot be parsed.
         /// </summary>

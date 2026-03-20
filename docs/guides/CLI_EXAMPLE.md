@@ -77,8 +77,9 @@ unity-mcp --format json scene hierarchy
 unity-mcp camera screenshot --file-name "capture"
 unity-mcp camera screenshot --camera-ref "MainCam" --include-image --max-resolution 512
 unity-mcp camera screenshot --batch surround --max-resolution 256
-unity-mcp camera screenshot --batch orbit --look-at "Player"
-unity-mcp camera screenshot-multiview --look-at "Player" --max-resolution 480
+unity-mcp camera screenshot --batch orbit --view-target "Player"
+unity-mcp camera screenshot --capture-source scene_view --view-target "Canvas" --include-image
+unity-mcp camera screenshot-multiview --view-target "Player" --max-resolution 480
 ```
 
 **GameObject Operations**

@@ -335,10 +335,14 @@
 
 .tool-action-button {
     flex-grow: 1;
+    flex-shrink: 1;
     flex-basis: 0;
     min-width: 0;
     height: 26px;
     margin-bottom: 4px;
+    overflow: hidden;
+    -unity-text-overflow-position: end;
+    text-overflow: ellipsis;
 }
 
 .tool-category-container {

@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.3",
   "name": "Unity MCP",
-  "version": "9.5.3",
+  "version": "9.6.0",
   "description": "AI-powered Unity Editor automation via MCP - manage GameObjects, scripts, materials, scenes, prefabs, VFX, and run tests",
   "author": {
     "name": "Coplay",
@@ -172,6 +172,14 @@
     {
       "name": "set_active_instance",
       "description": "Set the active Unity Editor instance for multi-instance workflows"
+    },
+    {
+      "name": "unity_docs",
+      "description": "Fetch Unity documentation (ScriptReference, Manual, package docs)"
+    },
+    {
+      "name": "unity_reflect",
+      "description": "Inspect Unity C# APIs via live reflection"
     },
     {
       "name": "validate_script",

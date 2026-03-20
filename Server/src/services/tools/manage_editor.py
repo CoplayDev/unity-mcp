@@ -8,20 +8,16 @@ from core.telemetry import is_telemetry_enabled, record_tool_usage
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
-from services.tools.utils import coerce_bool
-
 
 @mcp_for_unity_tool(
-    description="Controls and queries the Unity editor's state and settings. Tip: pass booleans as true/false; if your client only sends strings, 'true'/'false' are accepted. Read-only actions: telemetry_status, telemetry_ping. Modifying actions: play, pause, stop, set_active_tool, add_tag, remove_tag, add_layer, remove_layer, deploy_package, restore_package. deploy_package copies the configured MCPForUnity source folder into the project's installed package location (triggers recompile, no confirmation dialog). restore_package reverts to the pre-deployment backup.",
+    description="Controls and queries the Unity editor's state and settings. Read-only actions: telemetry_status, telemetry_ping. Modifying actions: play, pause, stop, set_active_tool, add_tag, remove_tag, add_layer, remove_layer, close_prefab_stage, deploy_package, restore_package. deploy_package copies the configured MCPForUnity source folder into the project's installed package location (triggers recompile, no confirmation dialog). restore_package reverts to the pre-deployment backup.",
     annotations=ToolAnnotations(
         title="Manage Editor",
     ),
 )
 async def manage_editor(
     ctx: Context,
-    action: Annotated[Literal["telemetry_status", "telemetry_ping", "play", "pause", "stop", "set_active_tool", "add_tag", "remove_tag", "add_layer", "remove_layer", "deploy_package", "restore_package"], "Get and update the Unity Editor state. deploy_package copies the configured MCPForUnity source into the project's package location (triggers recompile). restore_package reverts the last deployment from backup."],
-    wait_for_completion: Annotated[bool | str,
-                                   "Optional. If True, waits for certain actions (accepts true/false or 'true'/'false')"] | None = None,
+    action: Annotated[Literal["telemetry_status", "telemetry_ping", "play", "pause", "stop", "set_active_tool", "add_tag", "remove_tag", "add_layer", "remove_layer", "close_prefab_stage", "deploy_package", "restore_package"], "Get and update the Unity Editor state. close_prefab_stage exits prefab editing mode and returns to the main scene stage. deploy_package copies the configured MCPForUnity source into the project's package location (triggers recompile). restore_package reverts the last deployment from backup."],
     tool_name: Annotated[str,
                          "Tool name when setting active tool"] | None = None,
     tag_name: Annotated[str,
@@ -31,8 +27,6 @@ async def manage_editor(
 ) -> dict[str, Any]:
     # Get active instance from request state (injected by middleware)
     unity_instance = await get_unity_instance_from_context(ctx)
-
-    wait_for_completion = coerce_bool(wait_for_completion)
 
     try:
         # Diagnostics: quick telemetry checks
@@ -45,7 +39,6 @@ async def manage_editor(
         # Prepare parameters, removing None values
         params = {
             "action": action,
-            "waitForCompletion": wait_for_completion,
             "toolName": tool_name,
             "tagName": tag_name,
             "layerName": layer_name,
