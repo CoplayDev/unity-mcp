@@ -302,9 +302,9 @@ namespace MCPForUnity.Editor.Tools
         private static Dictionary<string, object> CollectEntityCounts(EntityManager em)
         {
             // Total with Health
-            var healthType = ResolveComponentType("DOTSRPG.Combat.Health");
-            var deadTagType = ResolveComponentType("DOTSRPG.Core.DeadTag");
-            var teamIdType = ResolveComponentType("DOTSRPG.Core.TeamId");
+            var healthType = ResolveComponentType("DOTSCombat.Health");
+            var deadTagType = ResolveComponentType("DOTSCore.DeadTag");
+            var teamIdType = ResolveComponentType("DOTSCore.TeamId");
 
             int totalWithHealth = 0;
             int aliveCount = 0;
@@ -366,8 +366,8 @@ namespace MCPForUnity.Editor.Tools
 
         private static Dictionary<string, object> CollectHealthStats(EntityManager em)
         {
-            var healthType = ResolveComponentType("DOTSRPG.Combat.Health");
-            var deadTagType = ResolveComponentType("DOTSRPG.Core.DeadTag");
+            var healthType = ResolveComponentType("DOTSCombat.Health");
+            var deadTagType = ResolveComponentType("DOTSCore.DeadTag");
 
             if (healthType == null)
                 return new Dictionary<string, object> { ["error"] = "Health component not found." };
@@ -415,7 +415,7 @@ namespace MCPForUnity.Editor.Tools
 
         private static Dictionary<string, object> CollectPositionSamples(EntityManager em, int sampleSize)
         {
-            var healthType = ResolveComponentType("DOTSRPG.Combat.Health");
+            var healthType = ResolveComponentType("DOTSCombat.Health");
             var transformType = ResolveComponentType("Unity.Transforms.LocalTransform");
 
             if (healthType == null || transformType == null)
@@ -545,7 +545,7 @@ namespace MCPForUnity.Editor.Tools
 
         private static Dictionary<string, object> CollectBattleState(EntityManager em)
         {
-            var battleStateType = ResolveComponentType("DOTSRPG.Combat.BattleState");
+            var battleStateType = ResolveComponentType("DOTSCombat.BattleState");
             if (battleStateType == null)
                 return new Dictionary<string, object> { ["found"] = false };
 
