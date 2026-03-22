@@ -10,6 +10,35 @@
 | `manage_dots_physics` | Unity DOTS Physics debugging — raycasts, overlap queries, body inspection. Requires `com.unity.physics`. | `get_physics_world`, `raycast`, `overlap_aabb`, `list_colliders`, `get_body` |
 | `manage_dots_graphics` | Unity DOTS Entities Graphics — render stats, materials, meshes, entity rendering. Requires `com.unity.entities.graphics`. | `get_render_stats`, `list_rendered_entities`, `get_entity_rendering`, `list_registered_materials`, `list_registered_meshes` |
 | `manage_dots_subscene` | Unity DOTS SubScene management — load, unload, streaming status, sections. Requires `com.unity.entities`. | `list_subscenes`, `load_subscene`, `unload_subscene`, `get_subscene_status`, `list_sections` |
+| `reimport_assets` | Targeted asset reimport — reimport specific files/folders without "Reimport All" dialog. Fast, granular, AI-friendly. | N/A (paths array) |
+
+## Studio Configuration
+
+### Auto-Start on Editor Load
+
+MCP sessions can start automatically when Unity opens, removing the need to manually click "Start Session" each time.
+
+**Enable via UI:** MCP for Unity window → Advanced tab → **Auto-start session on load** checkbox.
+
+**Enable via script (one-time):**
+```csharp
+EditorPrefs.SetBool("MCPForUnity.AutoStartOnLoad", true);
+```
+
+**Behavior:**
+- Only applies to HTTP transport (stdio always auto-starts via `StdioBridgeReloadHandler`)
+- `HttpAutoStartHandler` (`[InitializeOnLoad]`) launches the local HTTP server and connects the bridge
+- Sessions persist across domain reloads via `HttpBridgeReloadHandler`
+- Skipped in batch mode unless `UNITY_MCP_ALLOW_BATCH` env var is set
+
+### Multi-Instance Port Management
+
+When running multiple Unity editors simultaneously, each instance gets its own port automatically:
+
+- **Default port:** 6400
+- **Conflict resolution:** Scans 6401–6499 if the default is busy
+- **Persistence:** Port saved to `~/.unity-mcp/unity-mcp-port.json` (per-project, keyed by `Application.dataPath` hash)
+- **No manual config needed** — `PortManager.DiscoverNewPort()` handles everything
 
 **CLI usage:**
 ```bash
