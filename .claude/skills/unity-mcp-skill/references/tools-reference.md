@@ -749,7 +749,7 @@ manage_editor(action="remove_tag", tag_name="OldTag")
 manage_editor(action="add_layer", layer_name="Projectiles")
 manage_editor(action="remove_layer", layer_name="OldLayer")
 
-manage_editor(action="wait_for_compilation", timeout=30)  # Wait for scripts to compile
+manage_editor(action="wait_for_compilation", timeout=30)  # Wait for scripts to compile (timeout clamps to 1-120s)
 
 manage_editor(action="close_prefab_stage")  # Exit prefab editing mode back to main scene
 

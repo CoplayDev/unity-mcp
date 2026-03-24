@@ -156,7 +156,7 @@ unity-mcp editor play
 unity-mcp editor pause
 unity-mcp editor stop
 
-# Wait for compilation
+# Wait for compilation (timeout clamps to 1-120 seconds)
 unity-mcp editor wait-compile [--timeout 30]
 
 # Refresh assets

@@ -1,8 +1,10 @@
 """Editor CLI commands."""
 
+import math
 import sys
+from typing import Any, Optional
+
 import click
-from typing import Optional, Any
 
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success, print_info
@@ -22,7 +24,7 @@ def editor():
     "--timeout", "-t",
     type=float,
     default=30.0,
-    help="Max seconds to wait (default: 30)."
+    help="Max seconds to wait (default: 30, clamped to 1-120)."
 )
 @handle_unity_errors
 def wait_compile(timeout: float):
@@ -30,7 +32,8 @@ def wait_compile(timeout: float):
 
     Polls editor state until compilation and domain reload are complete.
     Useful after modifying scripts to ensure changes are compiled before
-    entering play mode or performing other actions.
+    entering play mode or performing other actions. Timeout values are
+    clamped to the inclusive range 1-120 seconds.
 
     \b
     Examples:
@@ -39,7 +42,7 @@ def wait_compile(timeout: float):
     """
     config = get_config()
     # Ensure the transport timeout outlasts the compilation wait (add a small buffer).
-    transport_timeout = int(timeout) + 10
+    transport_timeout = math.ceil(timeout) + 10
     result = run_command("manage_editor", {"action": "wait_for_compilation", "timeout": timeout}, config, timeout=transport_timeout)
     click.echo(format_output(result, config.format))
     if result.get("success"):
