@@ -1079,6 +1079,39 @@ class TestBatchCommands:
 class TestEditorEnhancedCommands:
     """Tests for new editor subcommands."""
 
+    def test_editor_wait_compile_clamps_timeout_for_request_and_transport(self, runner, mock_config):
+        """Test wait-compile clamps timeout before calling the server."""
+        wait_response = {
+            "success": True,
+            "data": {"waited_seconds": 120.0},
+        }
+        with patch("cli.commands.editor.get_config", return_value=mock_config):
+            with patch("cli.commands.editor.run_command", return_value=wait_response) as mock_run:
+                result = runner.invoke(cli, ["editor", "wait-compile", "--timeout", "500"])
+
+        assert result.exit_code == 0
+        mock_run.assert_called_once()
+        args = mock_run.call_args
+        assert args[0][0] == "manage_editor"
+        assert args[0][1] == {
+            "action": "wait_for_compilation",
+            "timeout": 120.0,
+        }
+        assert args[1]["timeout"] == 130
+
+    def test_editor_wait_compile_returns_nonzero_on_failure(self, runner, mock_config):
+        """Test wait-compile exits with code 1 when the wait fails."""
+        wait_response = {
+            "success": False,
+            "message": "Timed out after 120s waiting for compilation to finish.",
+        }
+        with patch("cli.commands.editor.get_config", return_value=mock_config):
+            with patch("cli.commands.editor.run_command", return_value=wait_response):
+                result = runner.invoke(cli, ["editor", "wait-compile", "--timeout", "-5"])
+
+        assert result.exit_code == 1
+        assert "Timed out after 120s waiting for compilation to finish." in result.output
+
     def test_editor_refresh(self, runner, mock_unity_response):
         """Test editor refresh."""
         with patch("cli.commands.editor.run_command", return_value=mock_unity_response):
