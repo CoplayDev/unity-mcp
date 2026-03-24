@@ -905,6 +905,21 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 }
             }
 
+            // Delete child GameObjects (supports single string or array of paths/names)
+            JToken deleteChildToken = @params["deleteChild"] ?? @params["delete_child"];
+            if (deleteChildToken != null)
+            {
+                var deleteResult = RemoveChildren(deleteChildToken, targetGo, prefabRoot);
+                if (deleteResult.error != null)
+                {
+                    return (false, deleteResult.error);
+                }
+                if (deleteResult.removedCount > 0)
+                {
+                    modified = true;
+                }
+            }
+
             // Set properties on existing components
             JObject componentProperties = @params["componentProperties"] as JObject ?? @params["component_properties"] as JObject;
             if (componentProperties != null && componentProperties.Count > 0)
@@ -1130,6 +1145,47 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
             McpLog.Info($"[ManagePrefabs] Created child '{childName}' under '{parentTransform.name}' in prefab.");
             return (true, null);
+        }
+
+        /// <summary>
+        /// Removes child GameObjects from a prefab.
+        /// </summary>
+        private static (int removedCount, ErrorResponse error) RemoveChildren(JToken deleteChildToken, GameObject targetGo, GameObject prefabRoot)
+        {
+            int removedCount = 0;
+
+            // Normalize to array
+            JArray childrenToDelete;
+            if (deleteChildToken is JArray arr)
+            {
+                childrenToDelete = arr;
+            }
+            else
+            {
+                childrenToDelete = new JArray { deleteChildToken };
+            }
+
+            foreach (var childToken in childrenToDelete)
+            {
+                string childPath = childToken.Type == JTokenType.String ? childToken.ToString() : childToken["name"]?.ToString();
+                if (string.IsNullOrEmpty(childPath))
+                {
+                    return (removedCount, new ErrorResponse("'delete_child' must be a string or object with 'name' field."));
+                }
+
+                // Find the child to remove
+                Transform childToRemove = targetGo.transform.Find(childPath);
+                if (childToRemove == null)
+                {
+                    return (removedCount, new ErrorResponse($"Child '{childPath}' not found under '{targetGo.name}'."));
+                }
+
+                UnityEngine.Object.DestroyImmediate(childToRemove.gameObject);
+                removedCount++;
+                McpLog.Info($"[ManagePrefabs] Removed child '{childPath}' under '{targetGo.name}' in prefab.");
+            }
+
+            return (removedCount, null);
         }
 
         #endregion
