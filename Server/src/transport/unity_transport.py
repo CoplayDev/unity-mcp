@@ -26,7 +26,10 @@ async def _resolve_user_id_from_request() -> str | None:
     if not ApiKeyService.is_initialized():
         return None
     try:
-        from fastmcp.server.dependencies import get_http_headers
+        try:
+            from fastmcp.dependencies import get_http_headers
+        except ImportError:  # pragma: no cover - compatibility with older FastMCP layouts
+            from fastmcp.server.dependencies import get_http_headers
         headers = get_http_headers(include_all=True)
         api_key = headers.get(API_KEY_HEADER.lower())
         if not api_key:
