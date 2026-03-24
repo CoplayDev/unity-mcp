@@ -1106,11 +1106,14 @@ class TestEditorEnhancedCommands:
             "message": "Timed out after 120s waiting for compilation to finish.",
         }
         with patch("cli.commands.editor.get_config", return_value=mock_config):
-            with patch("cli.commands.editor.run_command", return_value=wait_response):
+            with patch("cli.commands.editor.run_command", return_value=wait_response) as mock_run:
                 result = runner.invoke(cli, ["editor", "wait-compile", "--timeout", "-5"])
 
         assert result.exit_code == 1
         assert "Timed out after 120s waiting for compilation to finish." in result.output
+        mock_run.assert_called_once()
+        args = mock_run.call_args
+        assert args[0][1]["timeout"] == 1.0
 
     def test_editor_refresh(self, runner, mock_unity_response):
         """Test editor refresh."""
