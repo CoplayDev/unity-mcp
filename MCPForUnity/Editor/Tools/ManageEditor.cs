@@ -136,6 +136,15 @@ namespace MCPForUnity.Editor.Tools
                 //     return SetQualityLevel(@params["qualityLevel"]);
 
                 // Prefab Stage
+                case "open_prefab_stage":
+                {
+                    string prefabPath = @params["path"]?.ToString();
+                    if (string.IsNullOrEmpty(prefabPath))
+                        return new ErrorResponse("'path' parameter required (e.g. 'Assets/Prefabs/MyPrefab.prefab').");
+                    return OpenPrefabStage(prefabPath);
+                }
+                case "save_prefab_stage":
+                    return SavePrefabStage();
                 case "close_prefab_stage":
                     return ClosePrefabStage();
 
@@ -176,7 +185,7 @@ namespace MCPForUnity.Editor.Tools
 
                 default:
                     return new ErrorResponse(
-                        $"Unknown action: '{action}'. Supported actions: play, pause, stop, set_active_tool, add_tag, remove_tag, add_layer, remove_layer, close_prefab_stage, deploy_package, restore_package, undo, redo. Use MCP resources for reading editor state, project info, tags, layers, selection, windows, prefab stage, and active tool."
+                        $"Unknown action: '{action}'. Supported actions: play, pause, stop, set_active_tool, add_tag, remove_tag, add_layer, remove_layer, open_prefab_stage, save_prefab_stage, close_prefab_stage, deploy_package, restore_package, undo, redo. Use MCP resources for reading editor state, project info, tags, layers, selection, windows, prefab stage, and active tool."
                     );
             }
         }
@@ -397,6 +406,61 @@ namespace MCPForUnity.Editor.Tools
         }
 
         // --- Prefab Stage Methods ---
+
+        private static object OpenPrefabStage(string prefabPath)
+        {
+            try
+            {
+                var asset = AssetDatabase.LoadMainAssetAtPath(prefabPath);
+                if (asset == null)
+                {
+                    return new ErrorResponse($"Prefab not found at path: '{prefabPath}'.");
+                }
+
+                if (PrefabUtility.GetPrefabAssetType(asset) == PrefabAssetType.NotAPrefab)
+                {
+                    return new ErrorResponse($"Asset at '{prefabPath}' is not a prefab.");
+                }
+
+                var stage = PrefabStageUtility.OpenPrefab(prefabPath);
+                if (stage == null)
+                {
+                    return new ErrorResponse($"Failed to open prefab stage for '{prefabPath}'.");
+                }
+
+                return new SuccessResponse(
+                    $"Opened prefab stage for '{prefabPath}'. Use manage_gameobject/manage_components to edit objects inside, then save_prefab_stage to persist changes.",
+                    new { prefabPath, rootName = stage.prefabContentsRoot.name });
+            }
+            catch (Exception e)
+            {
+                return new ErrorResponse($"Error opening prefab stage: {e.Message}");
+            }
+        }
+
+        private static object SavePrefabStage()
+        {
+            try
+            {
+                var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                if (prefabStage == null)
+                {
+                    return new SuccessResponse("Not currently in prefab editing mode. Nothing to save.");
+                }
+
+                string prefabPath = prefabStage.assetPath;
+
+                // Mark the prefab stage scene as dirty then save
+                EditorSceneManager.MarkSceneDirty(prefabStage.scene);
+                EditorSceneManager.SaveScene(prefabStage.scene);
+
+                return new SuccessResponse($"Saved prefab stage changes for '{prefabPath}'.", new { prefabPath });
+            }
+            catch (Exception e)
+            {
+                return new ErrorResponse($"Error saving prefab stage: {e.Message}");
+            }
+        }
 
         private static object ClosePrefabStage()
         {
