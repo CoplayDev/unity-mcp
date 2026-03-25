@@ -111,11 +111,7 @@ namespace MCPForUnity.Editor.Tools.Build
                 else
                 {
                     job.State = BuildJobState.Failed;
-#if UNITY_2022_3_OR_NEWER
-                    job.ErrorMessage = report.SummarizeErrors();
-#else
-                    job.ErrorMessage = $"Build failed with result: {summary.result}";
-#endif
+                    job.ErrorMessage = GetBuildErrorMessage(report);
                 }
             }
             catch (Exception ex)
@@ -206,6 +202,22 @@ namespace MCPForUnity.Editor.Tools.Build
                 action();
             }
             EditorApplication.update += RunOnce;
+        }
+
+        private static string GetBuildErrorMessage(BuildReport report)
+        {
+            var summary = report.summary;
+
+#if UNITY_2023_1_OR_NEWER
+            var msg = report.SummarizeErrors();
+            if (!string.IsNullOrEmpty(msg))
+                return msg;
+#endif
+
+            if (summary.totalErrors > 0)
+                return $"{summary.totalErrors} build error(s)";
+
+            return $"Build failed with result: {summary.result}";
         }
 
         private static string[] GetDefaultScenes()
