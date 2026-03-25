@@ -60,4 +60,6 @@ scripts/local-test/
 .claude/settings.local.json
 
 # Ignore the .claude directory, since it might contain local/project-level setting such as deny and allowlist.
-/.claude
+/.claude/*
+!/.claude/skills/
+!/.claude/mcp.json
