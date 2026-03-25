@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.3",
   "name": "Unity MCP",
-  "version": "9.6.0",
+  "version": "9.6.2",
   "description": "AI-powered Unity Editor automation via MCP - manage GameObjects, scripts, materials, scenes, prefabs, VFX, and run tests",
   "author": {
     "name": "Coplay",
@@ -82,12 +82,16 @@
       "description": "Create, modify, search, and organize Unity assets"
     },
     {
+      "name": "manage_build",
+      "description": "Manage player builds: trigger builds, switch platforms, configure settings, batch builds"
+    },
+    {
       "name": "manage_components",
       "description": "Add, remove, and configure GameObject components"
     },
     {
       "name": "manage_editor",
-      "description": "Control Unity Editor state, play mode, and preferences"
+      "description": "Control Unity Editor state, play mode, preferences, undo/redo"
     },
     {
       "name": "manage_gameobject",
@@ -119,7 +123,7 @@
     },
     {
       "name": "manage_scene",
-      "description": "Load, save, query hierarchy, and manage Unity scenes"
+      "description": "Load, save, query hierarchy, multi-scene editing, templates, validation, and manage Unity scenes"
     },
     {
       "name": "manage_script",

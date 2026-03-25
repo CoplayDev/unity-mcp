@@ -13,6 +13,23 @@ namespace MCPForUnity.Editor.Services
         UpdateCheckResult CheckForUpdate(string currentVersion);
 
         /// <summary>
+        /// Returns a cached update result if one exists for today, or null if a network fetch is needed.
+        /// Main-thread only (reads EditorPrefs).
+        /// </summary>
+        UpdateCheckResult TryGetCachedResult(string currentVersion);
+
+        /// <summary>
+        /// Performs only the network fetch and version comparison (no EditorPrefs access).
+        /// Safe to call from a background thread.
+        /// </summary>
+        UpdateCheckResult FetchAndCompare(string currentVersion);
+
+        /// <summary>
+        /// Caches a successful fetch result in EditorPrefs. Must be called from the main thread.
+        /// </summary>
+        void CacheFetchResult(string currentVersion, string fetchedVersion);
+
+        /// <summary>
         /// Compares two version strings to determine if the first is newer than the second
         /// </summary>
         /// <param name="version1">First version string</param>

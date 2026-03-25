@@ -614,7 +614,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 }
 
                 // Apply modifications
-                var modifyResult = ApplyModificationsToPrefabObject(targetGo, @params, prefabContents);
+                var modifyResult = ApplyModificationsToPrefabObject(targetGo, @params, prefabContents, sanitizedPath);
                 if (modifyResult.error != null)
                 {
                     return modifyResult.error;
@@ -725,7 +725,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
         /// Applies modifications to a GameObject within loaded prefab contents.
         /// Returns (modified: bool, error: ErrorResponse or null).
         /// </summary>
-        private static (bool modified, ErrorResponse error) ApplyModificationsToPrefabObject(GameObject targetGo, JObject @params, GameObject prefabRoot)
+        private static (bool modified, ErrorResponse error) ApplyModificationsToPrefabObject(GameObject targetGo, JObject @params, GameObject prefabRoot, string editingPrefabPath)
         {
             bool modified = false;
 
@@ -879,7 +879,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 {
                     foreach (var childToken in childArray)
                     {
-                        var childResult = CreateSingleChildInPrefab(childToken, targetGo, prefabRoot);
+                        var childResult = CreateSingleChildInPrefab(childToken, targetGo, prefabRoot, editingPrefabPath);
                         if (childResult.error != null)
                         {
                             return (false, childResult.error);
@@ -893,7 +893,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 else
                 {
                     // Handle single child object
-                    var childResult = CreateSingleChildInPrefab(createChildToken, targetGo, prefabRoot);
+                    var childResult = CreateSingleChildInPrefab(createChildToken, targetGo, prefabRoot, editingPrefabPath);
                     if (childResult.error != null)
                     {
                         return (false, childResult.error);
@@ -957,7 +957,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
         /// <summary>
         /// Creates a single child GameObject within the prefab contents.
         /// </summary>
-        private static (bool created, ErrorResponse error) CreateSingleChildInPrefab(JToken createChildToken, GameObject defaultParent, GameObject prefabRoot)
+        private static (bool created, ErrorResponse error) CreateSingleChildInPrefab(JToken createChildToken, GameObject defaultParent, GameObject prefabRoot, string editingPrefabPath)
         {
             JObject childParams;
             if (createChildToken is JObject obj)
@@ -991,8 +991,42 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
             // Create the GameObject
             GameObject newChild;
+            string sourcePrefabPath = childParams["sourcePrefabPath"]?.ToString() ?? childParams["source_prefab_path"]?.ToString();
             string primitiveType = childParams["primitiveType"]?.ToString() ?? childParams["primitive_type"]?.ToString();
-            if (!string.IsNullOrEmpty(primitiveType))
+
+            if (!string.IsNullOrEmpty(sourcePrefabPath) && !string.IsNullOrEmpty(primitiveType))
+            {
+                return (false, new ErrorResponse("'source_prefab_path' and 'primitive_type' are mutually exclusive in create_child."));
+            }
+
+            if (!string.IsNullOrEmpty(sourcePrefabPath))
+            {
+                string sanitizedSourcePath = AssetPathUtility.SanitizeAssetPath(sourcePrefabPath);
+                if (string.IsNullOrEmpty(sanitizedSourcePath))
+                {
+                    return (false, new ErrorResponse($"Invalid source_prefab_path '{sourcePrefabPath}'. Path traversal sequences are not allowed."));
+                }
+
+                if (!string.IsNullOrEmpty(editingPrefabPath) &&
+                    sanitizedSourcePath.Equals(editingPrefabPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    return (false, new ErrorResponse($"Cannot nest prefab '{sanitizedSourcePath}' inside itself. This would create a circular reference."));
+                }
+
+                GameObject sourcePrefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(sanitizedSourcePath);
+                if (sourcePrefabAsset == null)
+                {
+                    return (false, new ErrorResponse($"Source prefab not found at path: '{sanitizedSourcePath}'."));
+                }
+
+                newChild = PrefabUtility.InstantiatePrefab(sourcePrefabAsset, parentTransform) as GameObject;
+                if (newChild == null)
+                {
+                    return (false, new ErrorResponse($"Failed to instantiate prefab from '{sanitizedSourcePath}' as nested child."));
+                }
+                newChild.name = childName;
+            }
+            else if (!string.IsNullOrEmpty(primitiveType))
             {
                 try
                 {
@@ -1010,7 +1044,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 newChild = new GameObject(childName);
             }
 
-            // Set parent
+            // Ensure local-space transform (worldPositionStays=false) for all creation modes
             newChild.transform.SetParent(parentTransform, false);
 
             // Apply transform properties

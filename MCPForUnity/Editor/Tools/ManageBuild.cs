@@ -1,22 +1,22 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
-using UnityEngine;
+using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Tools.Build;
 
 namespace MCPForUnity.Editor.Tools
 {
-    /// <summary>
-    /// MCP tool for Unity build pipeline control.
-    /// Actions: get_player_settings, set_player_settings, get_quality_settings, set_quality_level,
-    ///          get_build_settings, set_build_scenes, build, get_scripting_defines, set_scripting_defines.
-    /// </summary>
-    [McpForUnityTool("manage_build", AutoRegister = true)]
+    [McpForUnityTool("manage_build", AutoRegister = false, Group = "core",
+        RequiresPolling = true, PollAction = "status", MaxPollSeconds = 1800)]
     public static class ManageBuild
     {
+        private static readonly string[] ValidActions =
+            { "build", "status", "platform", "settings", "scenes", "profiles", "batch", "cancel" };
+
         public static object HandleCommand(JObject @params)
         {
             if (@params == null)
@@ -29,279 +29,532 @@ namespace MCPForUnity.Editor.Tools
 
             string action = actionResult.Value.ToLowerInvariant();
 
+            if (!ValidActions.Contains(action))
+                return new ErrorResponse(
+                    $"Unknown action '{action}'. Valid actions: {string.Join(", ", ValidActions)}");
+
             try
             {
-                return action switch
+                switch (action)
                 {
-                    "get_player_settings"   => GetPlayerSettings(p),
-                    "set_player_settings"   => SetPlayerSettings(p),
-                    "get_quality_settings"  => GetQualitySettings(),
-                    "set_quality_level"     => SetQualityLevel(p),
-                    "get_build_settings"    => GetBuildSettings(),
-                    "set_build_scenes"      => SetBuildScenes(p),
-                    "build"                 => Build(p),
-                    "get_scripting_defines" => GetScriptingDefines(p),
-                    "set_scripting_defines" => SetScriptingDefines(p),
-                    _ => new ErrorResponse(
-                        $"Unknown action: '{action}'. Supported: get_player_settings, set_player_settings, " +
-                        "get_quality_settings, set_quality_level, get_build_settings, set_build_scenes, " +
-                        "build, get_scripting_defines, set_scripting_defines")
-                };
-            }
-            catch (Exception e)
-            {
-                McpLog.Error($"[ManageBuild] Action '{action}' failed: {e}");
-                return new ErrorResponse($"Internal error: {e.Message}");
-            }
-        }
-
-        #region Player Settings
-
-        private static object GetPlayerSettings(ToolParams p)
-        {
-            return new SuccessResponse("Player settings.", new Dictionary<string, object>
-            {
-                ["company_name"] = PlayerSettings.companyName,
-                ["product_name"] = PlayerSettings.productName,
-                ["application_identifier"] = PlayerSettings.applicationIdentifier,
-                ["bundle_version"] = PlayerSettings.bundleVersion,
-                ["default_icon"] = PlayerSettings.GetIcons(UnityEditor.Build.NamedBuildTarget.Unknown, IconKind.Any)?.Length > 0,
-                ["color_space"] = PlayerSettings.colorSpace.ToString(),
-                ["scripting_backend"] = PlayerSettings.GetScriptingBackend(UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(EditorUserBuildSettings.selectedBuildTargetGroup)).ToString(),
-                ["api_compatibility_level"] = PlayerSettings.GetApiCompatibilityLevel(UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(EditorUserBuildSettings.selectedBuildTargetGroup)).ToString(),
-            });
-        }
-
-        private static object SetPlayerSettings(ToolParams p)
-        {
-            var props = ParseProps(p);
-            if (props == null) return new ErrorResponse("'properties' parameter is required (valid JSON).");
-
-            if (props["company_name"] != null) PlayerSettings.companyName = props["company_name"].ToString();
-            if (props["product_name"] != null) PlayerSettings.productName = props["product_name"].ToString();
-            if (props["application_identifier"] != null) PlayerSettings.applicationIdentifier = props["application_identifier"].ToString();
-            if (props["bundle_version"] != null) PlayerSettings.bundleVersion = props["bundle_version"].ToString();
-
-            return new SuccessResponse("Player settings updated.");
-        }
-
-        #endregion
-
-        #region Quality Settings
-
-        private static object GetQualitySettings()
-        {
-            var names = QualitySettings.names;
-            var levels = new List<Dictionary<string, object>>();
-            for (int i = 0; i < names.Length; i++)
-            {
-                levels.Add(new Dictionary<string, object>
-                {
-                    ["index"] = i,
-                    ["name"] = names[i],
-                    ["is_current"] = i == QualitySettings.GetQualityLevel(),
-                });
-            }
-
-            return new SuccessResponse("Quality settings.", new Dictionary<string, object>
-            {
-                ["current_level"] = QualitySettings.GetQualityLevel(),
-                ["current_name"] = names[QualitySettings.GetQualityLevel()],
-                ["levels"] = levels,
-            });
-        }
-
-        private static object SetQualityLevel(ToolParams p)
-        {
-            var levelResult = p.GetRequired("level");
-            if (!levelResult.IsSuccess)
-                return new ErrorResponse(levelResult.ErrorMessage);
-
-            string levelStr = levelResult.Value;
-            var names = QualitySettings.names;
-
-            // Try as index first
-            if (int.TryParse(levelStr, out int idx) && idx >= 0 && idx < names.Length)
-            {
-                QualitySettings.SetQualityLevel(idx, true);
-                return new SuccessResponse($"Quality level set to {idx} ('{names[idx]}').");
-            }
-
-            // Try as name
-            for (int i = 0; i < names.Length; i++)
-            {
-                if (string.Equals(names[i], levelStr, StringComparison.OrdinalIgnoreCase))
-                {
-                    QualitySettings.SetQualityLevel(i, true);
-                    return new SuccessResponse($"Quality level set to {i} ('{names[i]}').");
+                    case "build": return HandleBuild(p);
+                    case "status": return HandleStatus(p);
+                    case "platform": return HandlePlatform(p);
+                    case "settings": return HandleSettings(p);
+                    case "scenes": return HandleScenes(p);
+                    case "profiles": return HandleProfiles(p);
+                    case "batch": return HandleBatch(p);
+                    case "cancel": return HandleCancel(p);
+                    default:
+                        return new ErrorResponse($"Unknown action: '{action}'");
                 }
             }
-
-            return new ErrorResponse($"Quality level '{levelStr}' not found. Available: {string.Join(", ", names)}");
+            catch (Exception ex)
+            {
+                return new ErrorResponse(ex.Message, new { stackTrace = ex.StackTrace });
+            }
         }
 
-        #endregion
+        // ── build ──────────────────────────────────────────────────────
 
-        #region Build Settings
-
-        private static object GetBuildSettings()
+        private static object HandleBuild(ToolParams p)
         {
-            var scenes = EditorBuildSettings.scenes;
-            var sceneList = new List<Dictionary<string, object>>();
-            foreach (var scene in scenes)
+            if (BuildPipeline.isBuildingPlayer)
+                return new ErrorResponse("A build is already in progress.");
+
+            string targetName = p.Get("target");
+            if (!BuildTargetMapping.TryResolveBuildTarget(targetName, out var target))
+                return new ErrorResponse($"Unknown target '{targetName}'.");
+
+            var group = BuildTargetMapping.GetTargetGroup(target);
+            if (!BuildPipeline.IsBuildTargetSupported(group, target))
+                return new ErrorResponse(
+                    $"Platform '{target}' is not installed. Install it via Unity Hub.");
+
+            string outputPath = p.Get("output_path")
+                ?? BuildTargetMapping.GetDefaultOutputPath(target, PlayerSettings.productName);
+            string[] scenes = p.GetStringArray("scenes");
+            bool development = p.GetBool("development");
+            string[] optionNames = p.GetStringArray("options");
+            string subtargetStr = p.Get("subtarget");
+            string scriptingBackend = p.Get("scripting_backend");
+
+            // Apply scripting backend if specified (persistent change)
+            if (!string.IsNullOrEmpty(scriptingBackend))
             {
-                sceneList.Add(new Dictionary<string, object>
+                string backendLower = scriptingBackend.ToLowerInvariant();
+                if (backendLower != "il2cpp" && backendLower != "mono")
+                    return new ErrorResponse(
+                        $"Unknown scripting_backend '{scriptingBackend}'. Valid: mono, il2cpp");
+                var namedTarget = BuildTargetMapping.GetNamedBuildTarget(target);
+                var impl = backendLower == "il2cpp"
+                    ? ScriptingImplementation.IL2CPP
+                    : ScriptingImplementation.Mono2x;
+                PlayerSettings.SetScriptingBackend(namedTarget, impl);
+            }
+
+#if UNITY_6000_0_OR_NEWER
+            string profilePath = p.Get("profile");
+            if (!string.IsNullOrEmpty(profilePath))
+                return HandleProfileBuild(p, profilePath, outputPath, development, optionNames);
+#else
+            string profilePath = p.Get("profile");
+            if (!string.IsNullOrEmpty(profilePath))
+                McpLog.Warn($"Build Profile param ignored — requires Unity 6+. Current: {UnityEngine.Application.unityVersion}");
+#endif
+
+            var buildOptions = BuildRunner.ParseBuildOptions(optionNames, development);
+            int subtarget = BuildTargetMapping.ResolveSubtarget(subtargetStr);
+            var options = BuildRunner.CreateBuildOptions(target, outputPath, scenes, buildOptions, subtarget);
+
+            string jobId = BuildJobStore.CreateJobId();
+            var job = new BuildJob(jobId, target, outputPath);
+            return BuildRunner.ScheduleBuild(job, options);
+        }
+
+#if UNITY_6000_0_OR_NEWER
+        private static object HandleProfileBuild(ToolParams p, string profilePath, string outputPath,
+            bool development, string[] optionNames)
+        {
+            var profile = UnityEditor.AssetDatabase.LoadAssetAtPath<
+                UnityEditor.Build.Profile.BuildProfile>(profilePath);
+            if (profile == null)
+                return new ErrorResponse($"Build profile not found at: {profilePath}");
+
+            var buildOptions = BuildRunner.ParseBuildOptions(optionNames, development);
+            var options = new BuildPlayerWithProfileOptions
+            {
+                buildProfile = profile,
+                locationPathName = outputPath,
+                options = buildOptions
+            };
+
+            // BuildPlayerWithProfileOptions derives the actual target from the profile,
+            // but we use activeBuildTarget for job metadata/status display
+            var target = EditorUserBuildSettings.activeBuildTarget;
+            string jobId = BuildJobStore.CreateJobId();
+            var job = new BuildJob(jobId, target, outputPath);
+            return BuildRunner.ScheduleProfileBuild(job, options);
+        }
+#endif
+
+        // ── status ─────────────────────────────────────────────────────
+
+        private static object HandleStatus(ToolParams p)
+        {
+            string jobId = p.Get("job_id");
+
+            if (string.IsNullOrEmpty(jobId))
+            {
+                // Prefer active (pending/building) job — needed for polling middleware
+                var last = BuildJobStore.LastCompletedJob;
+                if (last != null && (last.State == BuildJobState.Building || last.State == BuildJobState.Pending))
                 {
-                    ["path"] = scene.path,
-                    ["enabled"] = scene.enabled,
-                    ["guid"] = scene.guid.ToString(),
+                    return new PendingResponse(
+                        $"Build {last.State.ToString().ToLowerInvariant()}...",
+                        pollIntervalSeconds: 5.0,
+                        data: last.ToStatusResponse()
+                    );
+                }
+
+                if (last != null)
+                    return new SuccessResponse("Last completed build.", last.ToStatusResponse());
+
+#if UNITY_6000_0_OR_NEWER
+                var latestReport = BuildReport.GetLatestReport();
+                if (latestReport != null)
+                {
+                    var s = latestReport.summary;
+                    return new SuccessResponse("Last build report from Unity.", new
+                    {
+                        result = s.result.ToString().ToLowerInvariant(),
+                        platform = s.platform.ToString(),
+                        output_path = s.outputPath,
+                        total_size_mb = Math.Round(s.totalSize / (1024.0 * 1024.0), 2),
+                        duration_seconds = s.totalTime.TotalSeconds,
+                        errors = s.totalErrors,
+                        warnings = s.totalWarnings
+                    });
+                }
+#endif
+                return new ErrorResponse("No build jobs found.");
+            }
+
+            // Check batch jobs first
+            var batchJob = BuildJobStore.GetBatchJob(jobId);
+            if (batchJob != null)
+                return new SuccessResponse($"Batch {batchJob.State}.", batchJob.ToStatusResponse());
+
+            var buildJob = BuildJobStore.GetBuildJob(jobId);
+            if (buildJob == null)
+                return new ErrorResponse($"No job found with ID: {jobId}");
+
+            if (buildJob.State == BuildJobState.Building || buildJob.State == BuildJobState.Pending)
+            {
+                return new PendingResponse(
+                    $"Build {buildJob.State.ToString().ToLowerInvariant()}...",
+                    pollIntervalSeconds: 5.0,
+                    data: buildJob.ToStatusResponse()
+                );
+            }
+
+            return new SuccessResponse($"Build {buildJob.State}.", buildJob.ToStatusResponse());
+        }
+
+        // ── platform ───────────────────────────────────────────────────
+
+        private static object HandlePlatform(ToolParams p)
+        {
+            string targetName = p.Get("target");
+
+            if (string.IsNullOrEmpty(targetName))
+            {
+                // Read current platform
+                return new SuccessResponse("Current platform.", new
+                {
+                    target = EditorUserBuildSettings.activeBuildTarget.ToString(),
+                    target_group = BuildTargetMapping.GetTargetGroup(
+                        EditorUserBuildSettings.activeBuildTarget).ToString(),
+                    subtarget = EditorUserBuildSettings.standaloneBuildSubtarget.ToString()
                 });
             }
 
-            return new SuccessResponse("Build settings.", new Dictionary<string, object>
+            // Switch platform
+            if (!BuildTargetMapping.TryResolveBuildTarget(targetName, out var target))
+                return new ErrorResponse($"Unknown target '{targetName}'.");
+
+            var group = BuildTargetMapping.GetTargetGroup(target);
+            if (!BuildPipeline.IsBuildTargetSupported(group, target))
+                return new ErrorResponse(
+                    $"Platform '{target}' is not installed. Install it via Unity Hub.");
+
+            if (EditorUserBuildSettings.activeBuildTarget == target)
+                return new SuccessResponse("Already on this platform.", new
+                {
+                    target = target.ToString()
+                });
+
+            // Capture previous target before switching
+            string previousTarget = EditorUserBuildSettings.activeBuildTarget.ToString();
+
+            string subtargetStr = p.Get("subtarget");
+            if (!string.IsNullOrEmpty(subtargetStr))
             {
-                ["active_build_target"] = EditorUserBuildSettings.activeBuildTarget.ToString(),
-                ["build_target_group"] = EditorUserBuildSettings.selectedBuildTargetGroup.ToString(),
-                ["development_build"] = EditorUserBuildSettings.development,
-                ["scenes"] = sceneList,
-            });
+                string subtargetLower = subtargetStr.ToLowerInvariant();
+                if (subtargetLower == "server")
+                    EditorUserBuildSettings.standaloneBuildSubtarget = StandaloneBuildSubtarget.Server;
+                else if (subtargetLower == "player")
+                    EditorUserBuildSettings.standaloneBuildSubtarget = StandaloneBuildSubtarget.Player;
+            }
+
+            // SwitchActiveBuildTarget is synchronous — blocks until reimport completes
+            EditorUserBuildSettings.SwitchActiveBuildTarget(group, target);
+
+            return new SuccessResponse(
+                $"Switched to {target}. Assets reimported for new platform.",
+                new { target = target.ToString(), previous = previousTarget }
+            );
         }
 
-        private static object SetBuildScenes(ToolParams p)
-        {
-            var scenesToken = p.GetRaw("scenes");
-            if (scenesToken == null)
-                return new ErrorResponse("'scenes' parameter is required (JSON array of scene paths).");
+        // ── settings ───────────────────────────────────────────────────
 
-            JArray scenesArray;
-            if (scenesToken.Type == JTokenType.String)
+        private static object HandleSettings(ToolParams p)
+        {
+            var propertyResult = p.GetRequired("property");
+            if (!propertyResult.IsSuccess)
+                return new ErrorResponse(propertyResult.ErrorMessage);
+
+            string property = propertyResult.Value.ToLowerInvariant();
+            string targetName = p.Get("target");
+            string value = p.Get("value");
+
+            // Resolve target
+            string err = BuildTargetMapping.TryResolveNamedBuildTarget(targetName, out var namedTarget);
+            if (err != null)
+                return new ErrorResponse(err);
+
+            if (string.IsNullOrEmpty(value))
             {
-                try { scenesArray = JArray.Parse(scenesToken.ToString()); }
-                catch { return new ErrorResponse("'scenes' must be a valid JSON array."); }
+                // Read
+                var result = BuildSettingsHelper.ReadProperty(property, namedTarget);
+                if (result == null)
+                    return new ErrorResponse(
+                        $"Unknown property '{property}'. Valid: {string.Join(", ", BuildSettingsHelper.ValidProperties)}");
+                return new SuccessResponse($"Read {property}.", result);
             }
-            else
+
+            // Write
+            string writeErr = BuildSettingsHelper.WriteProperty(property, value, namedTarget);
+            if (writeErr != null)
+                return new ErrorResponse(writeErr);
+            return new SuccessResponse($"Set {property} = {value}.",
+                BuildSettingsHelper.ReadProperty(property, namedTarget));
+        }
+
+        // ── scenes ─────────────────────────────────────────────────────
+
+        private static object HandleScenes(ToolParams p)
+        {
+            var scenesRaw = p.GetRaw("scenes");
+
+            if (scenesRaw == null || scenesRaw.Type == JTokenType.Null)
             {
-                scenesArray = scenesToken as JArray;
-                if (scenesArray == null) return new ErrorResponse("'scenes' must be a JSON array.");
+                // Read current scene list
+                var scenes = EditorBuildSettings.scenes.Select(s => new
+                {
+                    path = s.path,
+                    enabled = s.enabled,
+                    guid = s.guid.ToString()
+                }).ToArray();
+
+                return new SuccessResponse($"Build scenes ({scenes.Length}).", new { scenes });
             }
+
+            // Write scene list
+            var sceneArray = scenesRaw as JArray;
+            if (sceneArray == null)
+                return new ErrorResponse("'scenes' must be an array of {path, enabled} objects.");
 
             var newScenes = new List<EditorBuildSettingsScene>();
-            foreach (var item in scenesArray)
+            foreach (var item in sceneArray)
             {
-                newScenes.Add(new EditorBuildSettingsScene(item.ToString(), true));
+                string path = item["path"]?.ToString();
+                if (string.IsNullOrEmpty(path))
+                    return new ErrorResponse("Each scene must have a 'path' field.");
+                bool enabled = item["enabled"]?.Value<bool>() ?? true;
+                newScenes.Add(new EditorBuildSettingsScene(path, enabled));
             }
 
             EditorBuildSettings.scenes = newScenes.ToArray();
-            return new SuccessResponse($"Build scenes updated ({newScenes.Count} scene(s)).");
-        }
-
-        #endregion
-
-        #region Build
-
-        private static object Build(ToolParams p)
-        {
-            string target = p.Get("target", EditorUserBuildSettings.activeBuildTarget.ToString());
-            var outputResult = p.GetRequired("output_path");
-            if (!outputResult.IsSuccess)
-                return new ErrorResponse(outputResult.ErrorMessage);
-
-            if (!Enum.TryParse<BuildTarget>(target, true, out var buildTarget))
-                return new ErrorResponse($"Unknown build target: '{target}'.");
-
-            var enabledScenes = EditorBuildSettings.scenes
-                .Where(s => s.enabled)
-                .Select(s => s.path)
-                .ToArray();
-
-            if (enabledScenes.Length == 0)
-                return new ErrorResponse("No enabled scenes in build settings.");
-
-            var buildOptions = new BuildPlayerOptions
+            return new SuccessResponse($"Updated build scenes ({newScenes.Count}).", new
             {
-                scenes = enabledScenes,
-                locationPathName = outputResult.Value,
-                target = buildTarget,
-                options = BuildOptions.None,
-            };
-
-            var report = BuildPipeline.BuildPlayer(buildOptions);
-            var summary = report.summary;
-
-            return new SuccessResponse($"Build {summary.result}.", new Dictionary<string, object>
-            {
-                ["result"] = summary.result.ToString(),
-                ["total_time"] = summary.totalTime.TotalSeconds,
-                ["total_size"] = summary.totalSize,
-                ["total_errors"] = summary.totalErrors,
-                ["total_warnings"] = summary.totalWarnings,
-                ["output_path"] = summary.outputPath,
-                ["platform"] = summary.platform.ToString(),
+                scenes = newScenes.Select(s => new { path = s.path, enabled = s.enabled }).ToArray()
             });
         }
 
-        #endregion
+        // ── profiles ───────────────────────────────────────────────────
 
-        #region Scripting Defines
-
-        private static object GetScriptingDefines(ToolParams p)
+        private static object HandleProfiles(ToolParams p)
         {
-            var namedTarget = GetNamedBuildTarget(p.Get("platform"));
+#if UNITY_6000_0_OR_NEWER
+            string profilePath = p.Get("profile");
+            bool activate = p.GetBool("activate");
 
-            PlayerSettings.GetScriptingDefineSymbols(namedTarget, out var definesArr);
-            var definesStr = string.Join(";", definesArr);
-
-            var defines = string.IsNullOrEmpty(definesStr)
-                ? Array.Empty<string>()
-                : definesStr.Split(';').Select(d => d.Trim()).Where(d => d.Length > 0).ToArray();
-
-            return new SuccessResponse("Scripting defines.", new Dictionary<string, object>
+            if (string.IsNullOrEmpty(profilePath))
             {
-                ["platform"] = namedTarget.TargetName,
-                ["defines"] = defines,
-                ["defines_string"] = definesStr,
-            });
-        }
+                // List all profiles
+                var guids = AssetDatabase.FindAssets("t:BuildProfile");
+                var profiles = guids.Select(guid =>
+                {
+                    string path = AssetDatabase.GUIDToAssetPath(guid);
+                    return new { path, name = System.IO.Path.GetFileNameWithoutExtension(path) };
+                }).ToArray();
 
-        private static object SetScriptingDefines(ToolParams p)
-        {
-            var definesResult = p.GetRequired("defines");
-            if (!definesResult.IsSuccess)
-                return new ErrorResponse(definesResult.ErrorMessage);
-
-            var namedTarget = GetNamedBuildTarget(p.Get("platform"));
-
-            PlayerSettings.SetScriptingDefineSymbols(namedTarget, definesResult.Value);
-            return new SuccessResponse($"Scripting defines updated for {namedTarget.TargetName}.");
-        }
-
-        private static UnityEditor.Build.NamedBuildTarget GetNamedBuildTarget(string platform)
-        {
-            if (string.IsNullOrEmpty(platform))
-                return UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(EditorUserBuildSettings.selectedBuildTargetGroup);
-
-            if (Enum.TryParse<BuildTargetGroup>(platform, true, out var group))
-                return UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(group);
-
-            return UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(EditorUserBuildSettings.selectedBuildTargetGroup);
-        }
-
-        #endregion
-
-        #region Helpers
-
-        private static JObject ParseProps(ToolParams p)
-        {
-            var propsToken = p.GetRaw("properties");
-            if (propsToken == null) return null;
-            if (propsToken.Type == JTokenType.String)
-            {
-                try { return JObject.Parse(propsToken.ToString()); }
-                catch { return null; }
+                var active = UnityEditor.Build.Profile.BuildProfile.GetActiveBuildProfile();
+                return new SuccessResponse($"Found {profiles.Length} build profiles.", new
+                {
+                    profiles,
+                    active_profile = active != null ? AssetDatabase.GetAssetPath(active) : null
+                });
             }
-            return propsToken as JObject;
+
+            var loadedProfile = AssetDatabase.LoadAssetAtPath<
+                UnityEditor.Build.Profile.BuildProfile>(profilePath);
+            if (loadedProfile == null)
+                return new ErrorResponse($"Build profile not found at: {profilePath}");
+
+            if (activate)
+            {
+                UnityEditor.Build.Profile.BuildProfile.SetActiveBuildProfile(loadedProfile);
+                return new SuccessResponse($"Activated build profile: {profilePath}", new
+                {
+                    profile = profilePath,
+                    activated = true
+                });
+            }
+
+            // Get profile details
+            var profileScenes = loadedProfile.GetScenesForBuild()
+                .Select(s => s.path).ToArray();
+            return new SuccessResponse($"Profile: {profilePath}", new
+            {
+                profile = profilePath,
+                scenes = profileScenes
+            });
+#else
+            string version = UnityEngine.Application.unityVersion;
+            return new ErrorResponse(
+                $"Build Profiles require Unity 6 (6000.0+). Current version: {version}");
+#endif
         }
 
-        #endregion
+        // ── batch ──────────────────────────────────────────────────────
+
+        private static object HandleBatch(ToolParams p)
+        {
+            if (BuildPipeline.isBuildingPlayer)
+                return new ErrorResponse("A build is already in progress.");
+
+            string[] targets = p.GetStringArray("targets");
+            string[] profiles = p.GetStringArray("profiles");
+            string outputDir = p.Get("output_dir") ?? "Builds";
+            bool development = p.GetBool("development");
+            string[] optionNames = p.GetStringArray("options");
+
+            if ((targets == null || targets.Length == 0) && (profiles == null || profiles.Length == 0))
+                return new ErrorResponse("'targets' or 'profiles' is required for batch builds.");
+            if (targets != null && targets.Length > 0 && profiles != null && profiles.Length > 0)
+                return new ErrorResponse("Provide 'targets' or 'profiles', not both.");
+
+            // Validate all targets/profiles upfront before creating store entries
+            if (targets != null && targets.Length > 0)
+            {
+                var resolvedTargets = new List<(BuildTarget bt, string path)>();
+                foreach (var t in targets)
+                {
+                    if (!BuildTargetMapping.TryResolveBuildTarget(t, out var bt))
+                        return new ErrorResponse($"Unknown target '{t}' in batch.");
+                    var btGroup = BuildTargetMapping.GetTargetGroup(bt);
+                    if (!BuildPipeline.IsBuildTargetSupported(btGroup, bt))
+                        return new ErrorResponse(
+                            $"Platform '{bt}' is not installed. Install it via Unity Hub.");
+                    string defaultPath = BuildTargetMapping.GetDefaultOutputPath(bt, PlayerSettings.productName);
+                    string path = defaultPath.StartsWith("Builds/")
+                        ? $"{outputDir}/{defaultPath.Substring(7)}"
+                        : $"{outputDir}/{defaultPath}";
+                    resolvedTargets.Add((bt, path));
+                }
+
+                string batchId = BuildJobStore.CreateBatchId();
+                var batch = new BatchJob(batchId);
+                batch.State = BuildJobState.Building;
+                BuildJobStore.AddBatchJob(batch);
+
+                foreach (var (bt, path) in resolvedTargets)
+                {
+                    var child = new BuildJob(BuildJobStore.CreateJobId(), bt, path);
+                    batch.Children.Add(child);
+                }
+
+                var buildOpts = BuildRunner.ParseBuildOptions(optionNames, development);
+
+                BuildRunner.ScheduleNextBatchBuild(batch, index =>
+                {
+                    var child = batch.Children[index];
+                    var group = BuildTargetMapping.GetTargetGroup(child.Target);
+
+                    // Platform switch is required — ensures correct shader variants,
+                    // asset import settings, and scripting defines for the target
+                    if (EditorUserBuildSettings.activeBuildTarget != child.Target)
+                        EditorUserBuildSettings.SwitchActiveBuildTarget(group, child.Target);
+
+                    int subtarget = (int)StandaloneBuildSubtarget.Player;
+                    var options = BuildRunner.CreateBuildOptions(
+                        child.Target, child.OutputPath, null, buildOpts, subtarget);
+                    BuildRunner.ScheduleBuild(child, options);
+                    return child;
+                });
+
+                return new PendingResponse(
+                    $"Batch build started ({batch.Children.Count} builds).",
+                    pollIntervalSeconds: 10.0,
+                    data: new { job_id = batchId, total = batch.Children.Count }
+                );
+            }
+#if UNITY_6000_0_OR_NEWER
+            if (profiles != null && profiles.Length > 0)
+            {
+                // Validate all profiles exist before creating any store entries
+                var loadedProfiles = new List<UnityEditor.Build.Profile.BuildProfile>();
+                foreach (var profilePath in profiles)
+                {
+                    var profile = AssetDatabase.LoadAssetAtPath<
+                        UnityEditor.Build.Profile.BuildProfile>(profilePath);
+                    if (profile == null)
+                        return new ErrorResponse($"Profile not found: {profilePath}");
+                    loadedProfiles.Add(profile);
+                }
+
+                string batchId = BuildJobStore.CreateBatchId();
+                var batch = new BatchJob(batchId);
+                batch.State = BuildJobState.Building;
+                BuildJobStore.AddBatchJob(batch);
+
+                for (int i = 0; i < profiles.Length; i++)
+                {
+                    var target = EditorUserBuildSettings.activeBuildTarget;
+                    string name = System.IO.Path.GetFileNameWithoutExtension(profiles[i]);
+                    string path = $"{outputDir}/{name}/{PlayerSettings.productName}";
+                    var child = new BuildJob(BuildJobStore.CreateJobId(), target, path);
+                    batch.Children.Add(child);
+                }
+
+                var buildOpts = BuildRunner.ParseBuildOptions(optionNames, development);
+
+                BuildRunner.ScheduleNextBatchBuild(batch, index =>
+                {
+                    var child = batch.Children[index];
+                    var opts = new BuildPlayerWithProfileOptions
+                    {
+                        buildProfile = loadedProfiles[index],
+                        locationPathName = child.OutputPath,
+                        options = buildOpts
+                    };
+                    BuildRunner.ScheduleProfileBuild(child, opts);
+                    return child;
+                });
+
+                return new PendingResponse(
+                    $"Batch build started ({batch.Children.Count} builds).",
+                    pollIntervalSeconds: 10.0,
+                    data: new { job_id = batchId, total = batch.Children.Count }
+                );
+            }
+#else
+            if (profiles != null && profiles.Length > 0)
+            {
+                return new ErrorResponse(
+                    $"Profile-based batch requires Unity 6+. Current: {UnityEngine.Application.unityVersion}");
+            }
+#endif
+
+            return new ErrorResponse("'targets' or 'profiles' is required for batch builds.");
+        }
+
+        // ── cancel ─────────────────────────────────────────────────────
+
+        private static object HandleCancel(ToolParams p)
+        {
+            var jobIdResult = p.GetRequired("job_id");
+            if (!jobIdResult.IsSuccess)
+                return new ErrorResponse(jobIdResult.ErrorMessage);
+
+            string jobId = jobIdResult.Value;
+
+            var batchJob = BuildJobStore.GetBatchJob(jobId);
+            if (batchJob != null)
+            {
+                if (batchJob.State == BuildJobState.Building)
+                {
+                    batchJob.State = BuildJobState.Cancelled;
+                    return new SuccessResponse(
+                        "Batch cancelled. The current build will finish but no more builds will start.",
+                        new { job_id = jobId, state = "cancelled" });
+                }
+                return new ErrorResponse($"Batch is already {batchJob.State}.");
+            }
+
+            var buildJob = BuildJobStore.GetBuildJob(jobId);
+            if (buildJob != null)
+            {
+                if (buildJob.State == BuildJobState.Building)
+                    return new ErrorResponse(
+                        "Cannot cancel a single build in progress. BuildPipeline.BuildPlayer is " +
+                        "synchronous and blocks the editor until completion.");
+                return new ErrorResponse($"Build is already {buildJob.State}.");
+            }
+
+            return new ErrorResponse($"No job found with ID: {jobId}");
+        }
     }
 }

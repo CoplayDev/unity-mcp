@@ -47,7 +47,10 @@ async def manage_scriptable_object(
                       "Target asset reference {guid|path} (for modify)."] = None,
     # --- shared ---
     patches: Annotated[list[dict[str, Any]] | str | None,
-                       "Patch list (or JSON string) to apply."] = None,
+                       "Patch list (or JSON string) to apply. "
+                       "For object references: use {\"ref\": {\"guid\": \"...\"}} or {\"value\": {\"guid\": \"...\"}}. "
+                       "For Sprite sub-assets: include \"spriteName\" in the ref/value object. "
+                       "Single-sprite textures auto-resolve from guid/path alone."] = None,
     # --- validation ---
     dry_run: Annotated[bool | str | None,
                        "If true, validate patches without applying (modify only)."] = None,

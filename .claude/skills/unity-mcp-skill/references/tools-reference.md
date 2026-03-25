@@ -130,6 +130,26 @@ manage_scene(action="get_build_settings") # Build settings
 manage_scene(action="create", name="NewScene", path="Assets/Scenes/")
 manage_scene(action="load", path="Assets/Scenes/Main.unity")
 manage_scene(action="save")
+
+# Scene templates — create with preset objects
+manage_scene(action="create", name="Level1", template="3d_basic")   # Camera + Light + Ground
+manage_scene(action="create", name="Level2", template="2d_basic")   # Camera (ortho) + Light
+manage_scene(action="create", name="Empty", template="empty")       # No default objects
+manage_scene(action="create", name="Default", template="default")   # Camera + Light (Unity default)
+
+# Multi-scene editing
+manage_scene(action="load", path="Assets/Scenes/Level2.unity", additive=True)  # Keep current scene
+manage_scene(action="get_loaded_scenes")                            # List all loaded scenes
+manage_scene(action="set_active_scene", scene_name="Level2")        # Set active scene
+manage_scene(action="close_scene", scene_name="Level2")             # Unload scene
+manage_scene(action="close_scene", scene_name="Level2", remove_scene=True)  # Fully remove
+manage_scene(action="move_to_scene", target="Player", scene_name="Level2")  # Move root GO
+
+# Build settings — use manage_build(action="scenes") instead
+
+# Scene validation
+manage_scene(action="validate")                    # Detect missing scripts, broken prefabs
+manage_scene(action="validate", auto_repair=True)  # Also auto-fix missing scripts (undoable)
 ```
 
 ### find_gameobjects
@@ -287,6 +307,11 @@ manage_components(
 # - "Assets/Prefabs/My.prefab" → String shorthand for asset paths
 # - "ObjectName"               → String shorthand for scene name lookup
 # - 12345                      → Integer shorthand for instanceID
+#
+# Sprite sub-asset references (for SpriteRenderer.sprite, Image.sprite, etc.):
+# - {"guid": "...", "spriteName": "SubSprite"}  → Sprite sub-asset from atlas
+# - {"guid": "...", "fileID": 12345}             → Sub-asset by fileID
+# Single-sprite textures auto-resolve from guid/path alone.
 ```
 
 ---
@@ -478,6 +503,24 @@ manage_prefabs(
     position=[0, 1, 0],
     components_to_add=["AudioSource"]
 )
+
+# Add child GameObjects to a prefab (single or batch)
+manage_prefabs(
+    action="modify_contents",
+    prefab_path="Assets/Prefabs/Player.prefab",
+    create_child=[
+        {"name": "Child1", "primitive_type": "Sphere", "position": [1, 0, 0]},
+        {"name": "Child2", "primitive_type": "Cube", "parent": "Child1"}
+    ]
+)
+
+# Add a nested prefab instance inside a prefab
+manage_prefabs(
+    action="modify_contents",
+    prefab_path="Assets/Prefabs/Player.prefab",
+    create_child={"name": "Bullet", "source_prefab_path": "Assets/Prefabs/Bullet.prefab", "position": [0, 2, 0]}
+)
+# source_prefab_path and primitive_type are mutually exclusive
 ```
 
 ---
@@ -646,7 +689,7 @@ manage_ui(
 
 ### manage_editor
 
-Control Unity Editor state.
+Control Unity Editor state, undo/redo.
 
 ```python
 manage_editor(action="play")               # Enter play mode
@@ -662,6 +705,10 @@ manage_editor(action="add_layer", layer_name="Projectiles")
 manage_editor(action="remove_layer", layer_name="OldLayer")
 
 manage_editor(action="close_prefab_stage")  # Exit prefab editing mode back to main scene
+
+# Undo/Redo — returns the affected undo group name
+manage_editor(action="undo")               # Undo last action
+manage_editor(action="redo")               # Redo last undone action
 
 # Package deployment (no confirmation dialog — designed for LLM-driven iteration)
 manage_editor(action="deploy_package")     # Copy configured MCPForUnity source into installed package

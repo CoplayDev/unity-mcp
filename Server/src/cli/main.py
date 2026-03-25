@@ -271,6 +271,7 @@ def register_commands():
         ("cli.commands.dots_graphics", "dots-graphics"),
         ("cli.commands.dots_subscene", "dots-subscene"),
         ("cli.commands.probuilder", "probuilder"),
+        ("cli.commands.build", "build"),
         ("cli.commands.camera", "camera"),
         ("cli.commands.graphics", "graphics"),
         ("cli.commands.packages", "packages"),

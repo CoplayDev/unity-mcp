@@ -737,64 +737,27 @@ namespace MCPForUnity.Editor.Tools
 
             if (prop.propertyType == SerializedPropertyType.ObjectReference)
             {
-                var refObj = patchObj["ref"] as JObject;
+                // Legacy "ref" key takes precedence for backward compatibility.
+                // Use TryGetValue to preserve non-JObject ref tokens (e.g. string GUID).
+                patchObj.TryGetValue("ref", out JToken refToken);
                 var objRefValue = patchObj["value"];
-                UnityEngine.Object newRef = null;
-                string refGuid = refObj?["guid"]?.ToString();
-                string refPath = refObj?["path"]?.ToString();
-                string resolveMethod = "explicit";
+                JToken resolveToken = refToken ?? objRefValue;
 
-                if (refObj == null && objRefValue?.Type == JTokenType.Null)
+                if (resolveToken == null)
                 {
-                    // Explicit null - clear the reference
-                    newRef = null;
-                    resolveMethod = "cleared";
-                }
-                else if (!string.IsNullOrEmpty(refGuid) || !string.IsNullOrEmpty(refPath))
-                {
-                    // Traditional ref object with guid or path
-                    string resolvedPath = !string.IsNullOrEmpty(refGuid)
-                        ? AssetDatabase.GUIDToAssetPath(refGuid)
-                        : AssetPathUtility.SanitizeAssetPath(refPath);
-
-                    if (!string.IsNullOrEmpty(resolvedPath))
-                    {
-                        newRef = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(resolvedPath);
-                    }
-                    resolveMethod = !string.IsNullOrEmpty(refGuid) ? "ref.guid" : "ref.path";
-                }
-                else if (objRefValue?.Type == JTokenType.String)
-                {
-                    // Phase 4: GUID shorthand - allow plain string value
-                    string strVal = objRefValue.ToString();
-                    
-                    // Check if it's a GUID (32 hex characters, no dashes)
-                    if (Regex.IsMatch(strVal, @"^[0-9a-fA-F]{32}$"))
-                    {
-                        string guidPath = AssetDatabase.GUIDToAssetPath(strVal);
-                        if (!string.IsNullOrEmpty(guidPath))
-                        {
-                            newRef = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(guidPath);
-                            resolveMethod = "guid-shorthand";
-                        }
-                    }
-                    // Check if it looks like an asset path
-                    else if (strVal.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || 
-                             strVal.Contains("/"))
-                    {
-                        string sanitizedPath = AssetPathUtility.SanitizeAssetPath(strVal);
-                        newRef = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(sanitizedPath);
-                        resolveMethod = "path-shorthand";
-                    }
+                    return new { propertyPath, op = "set", ok = false, resolvedPropertyType = prop.propertyType.ToString(),
+                        message = "ObjectReference patch requires a 'ref' or 'value' key." };
                 }
 
-                if (prop.objectReferenceValue != newRef)
+                if (!ComponentOps.SetObjectReference(prop, resolveToken, out string refError))
                 {
-                    prop.objectReferenceValue = newRef;
-                    changed = true;
+                    return new { propertyPath, op = "set", ok = false, resolvedPropertyType = prop.propertyType.ToString(), message = refError };
                 }
 
-                string refMessage = newRef == null ? "Cleared reference." : $"Set reference ({resolveMethod}).";
+                changed = true;
+                string refMessage = prop.objectReferenceValue == null
+                    ? "Cleared reference."
+                    : $"Set reference to '{prop.objectReferenceValue.name}'.";
                 return new { propertyPath, op = "set", ok = true, resolvedPropertyType = prop.propertyType.ToString(), message = refMessage };
             }
 
@@ -916,6 +879,20 @@ namespace MCPForUnity.Editor.Tools
                     }
 
                     message = $"Set struct/class with {jObj.Count} fields.";
+                    return true;
+                }
+
+                // ObjectReference - delegate to shared handler
+                if (prop.propertyType == SerializedPropertyType.ObjectReference)
+                {
+                    if (!ComponentOps.SetObjectReference(prop, valueToken, out string refError))
+                    {
+                        message = refError;
+                        return false;
+                    }
+                    message = prop.objectReferenceValue == null
+                        ? "Cleared reference."
+                        : $"Set reference to '{prop.objectReferenceValue.name}'.";
                     return true;
                 }
 

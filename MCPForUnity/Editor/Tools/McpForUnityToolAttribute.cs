@@ -52,6 +52,12 @@ namespace MCPForUnity.Editor.Tools
         public string PollAction { get; set; } = "status";
 
         /// <summary>
+        /// Maximum seconds to poll before timing out. 0 means use the server default.
+        /// Useful for long-running operations like builds.
+        /// </summary>
+        public int MaxPollSeconds { get; set; } = 0;
+
+        /// <summary>
         /// The command name used to route requests to this tool.
         /// If not specified, defaults to the PascalCase class name converted to snake_case.
         /// Kept for backward compatibility.

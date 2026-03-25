@@ -14,8 +14,10 @@ from services.tools.preflight import preflight
 @mcp_for_unity_tool(
     description=(
         "Performs CRUD operations on Unity scenes. "
-        "Read-only actions: get_hierarchy, get_active, get_build_settings, scene_view_frame. "
-        "Modifying actions: create, load, save. "
+        "Read-only actions: get_hierarchy, get_active, get_build_settings, get_loaded_scenes, scene_view_frame. "
+        "Modifying actions: create (with optional template), load (with optional additive flag), save, "
+        "close_scene, set_active_scene, move_to_scene, validate (with optional auto_repair). "
+        "For build settings management (add/remove/enable scenes), use manage_build(action='scenes'). "
         "For screenshots, use manage_camera (screenshot, screenshot_multiview actions)."
     ),
     annotations=ToolAnnotations(
@@ -33,6 +35,11 @@ async def manage_scene(
         "get_active",
         "get_build_settings",
         "scene_view_frame",
+        "close_scene",
+        "set_active_scene",
+        "get_loaded_scenes",
+        "move_to_scene",
+        "validate",
     ], "Perform CRUD operations on Unity scenes and control the Scene View camera."],
     name: Annotated[str, "Scene name."] | None = None,
     path: Annotated[str, "Scene path."] | None = None,
@@ -56,6 +63,23 @@ async def manage_scene(
                                      "Child paging hint (safety)."] | None = None,
     include_transform: Annotated[bool | str,
                                  "If true, include local transform in node summaries."] | None = None,
+    # --- Multi-scene editing params ---
+    scene_name: Annotated[str,
+                          "Scene name for multi-scene operations."] | None = None,
+    scene_path: Annotated[str,
+                          "Full scene path (e.g. 'Assets/Scenes/Level2.unity')."] | None = None,
+    target: Annotated[str | int,
+                      "GameObject reference (name, path, or instanceID) for move_to_scene."] | None = None,
+    remove_scene: Annotated[bool | str,
+                            "For close_scene: true to fully remove, false to just unload."] | None = None,
+    additive: Annotated[bool | str,
+                        "For load: true to open scene additively (keeps current scene)."] | None = None,
+    # --- Scene template ---
+    template: Annotated[str,
+                        "For create: scene template ('empty', 'default', '3d_basic', '2d_basic'). Omit for empty scene."] | None = None,
+    # --- Scene validation ---
+    auto_repair: Annotated[bool | str,
+                           "For validate: true to auto-fix missing scripts (undoable)."] | None = None,
 ) -> dict[str, Any]:
     unity_instance = await get_unity_instance_from_context(ctx)
     gate = await preflight(ctx, wait_for_no_compile=True, refresh_if_dirty=True)
@@ -99,6 +123,28 @@ async def manage_scene(
             params["maxChildrenPerNode"] = coerced_max_children_per_node
         if coerced_include_transform is not None:
             params["includeTransform"] = coerced_include_transform
+
+        # Multi-scene editing params
+        if scene_name is not None:
+            params["sceneName"] = scene_name
+        if scene_path is not None:
+            params["scenePath"] = scene_path
+        if target is not None:
+            params["target"] = target
+        coerced_remove_scene = coerce_bool(remove_scene, default=None)
+        if coerced_remove_scene is not None:
+            params["removeScene"] = coerced_remove_scene
+        coerced_additive = coerce_bool(additive, default=None)
+        if coerced_additive is not None:
+            params["additive"] = coerced_additive
+        # Scene template
+        if template is not None:
+            params["template"] = template
+
+        # Scene validation
+        coerced_auto_repair = coerce_bool(auto_repair, default=None)
+        if coerced_auto_repair is not None:
+            params["autoRepair"] = coerced_auto_repair
 
         # Use centralized retry helper with instance routing
         response = await send_with_unity_instance(async_send_command_with_retry, unity_instance, "manage_scene", params)
