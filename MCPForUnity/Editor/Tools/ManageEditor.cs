@@ -417,7 +417,8 @@ namespace MCPForUnity.Editor.Tools
                     return new ErrorResponse($"Prefab not found at path: '{prefabPath}'.");
                 }
 
-                if (PrefabUtility.GetPrefabAssetType(asset) == PrefabAssetType.NotAPrefab)
+                var prefabType = PrefabUtility.GetPrefabAssetType(asset);
+                if (prefabType == PrefabAssetType.NotAPrefab)
                 {
                     return new ErrorResponse($"Asset at '{prefabPath}' is not a prefab.");
                 }
@@ -430,7 +431,7 @@ namespace MCPForUnity.Editor.Tools
 
                 return new SuccessResponse(
                     $"Opened prefab stage for '{prefabPath}'. Use manage_gameobject/manage_components to edit objects inside, then save_prefab_stage to persist changes.",
-                    new { prefabPath, rootName = stage.prefabContentsRoot.name });
+                    new { prefabPath, rootName = stage.prefabContentsRoot.name, prefabType = prefabType.ToString() });
             }
             catch (Exception e)
             {
@@ -445,16 +446,19 @@ namespace MCPForUnity.Editor.Tools
                 var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
                 if (prefabStage == null)
                 {
-                    return new SuccessResponse("Not currently in prefab editing mode. Nothing to save.");
+                    return new ErrorResponse("Not currently in prefab editing mode. Open a prefab stage first with open_prefab_stage.");
                 }
 
                 string prefabPath = prefabStage.assetPath;
 
-                // Mark the prefab stage scene as dirty then save
                 EditorSceneManager.MarkSceneDirty(prefabStage.scene);
-                EditorSceneManager.SaveScene(prefabStage.scene);
+                bool saved = EditorSceneManager.SaveScene(prefabStage.scene);
+                if (!saved)
+                {
+                    return new ErrorResponse($"Failed to save prefab stage for '{prefabPath}'. The file may be read-only or the disk may be full.");
+                }
 
-                return new SuccessResponse($"Saved prefab stage changes for '{prefabPath}'.", new { prefabPath });
+                return new SuccessResponse($"Saved prefab stage changes for '{prefabPath}'.", new { prefabPath, saved });
             }
             catch (Exception e)
             {
