@@ -8,9 +8,9 @@ namespace MCPForUnity.Editor.Tools.Profiler
     {
         private static readonly (string counterName, string jsonKey)[] COUNTER_MAP = new[]
         {
-            ("Update.ScriptRunBehaviourUpdate", "update_ms"),
+            ("BehaviourUpdate", "update_ms"),
             ("FixedBehaviourUpdate", "fixed_update_ms"),
-            ("PreLateUpdate.ScriptRunBehaviourLateUpdate", "late_update_ms"),
+            ("LateBehaviourUpdate", "late_update_ms"),
         };
 
         internal static object GetScriptTiming(JObject @params)
