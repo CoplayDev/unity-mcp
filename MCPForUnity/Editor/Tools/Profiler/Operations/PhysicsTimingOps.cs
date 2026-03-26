@@ -8,8 +8,8 @@ namespace MCPForUnity.Editor.Tools.Profiler
     {
         private static readonly (string counterName, string jsonKey)[] COUNTER_MAP = new[]
         {
-            ("Physics.Processing", "processing_ms"),
-            ("Physics.FetchResults", "fetch_results_ms"),
+            ("Physics.Simulate", "simulate_ms"),
+            ("Physics2D.Simulate", "simulate_2d_ms"),
         };
 
         internal static object GetPhysicsTiming(JObject @params)
