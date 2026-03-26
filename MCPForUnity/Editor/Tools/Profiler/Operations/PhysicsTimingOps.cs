@@ -6,21 +6,21 @@ namespace MCPForUnity.Editor.Tools.Profiler
 {
     internal static class PhysicsTimingOps
     {
-        private static readonly (string counterName, string jsonKey)[] COUNTER_MAP = new[]
+        private static readonly (string counterName, string valueKey, string validKey)[] COUNTER_MAP = new[]
         {
-            ("Physics.Simulate", "simulate_ms"),
-            ("Physics2D.Simulate", "simulate_2d_ms"),
+            ("Physics.Simulate", "simulate_ms", "simulate_valid"),
+            ("Physics2D.Simulate", "simulate_2d_ms", "simulate_2d_valid"),
         };
 
         internal static object GetPhysicsTiming(JObject @params)
         {
             var data = new Dictionary<string, object>();
 
-            foreach (var (counterName, jsonKey) in COUNTER_MAP)
+            foreach (var (counterName, valueKey, validKey) in COUNTER_MAP)
             {
                 using var recorder = ProfilerRecorder.StartNew(ProfilerCategory.Physics, counterName);
-                data[jsonKey] = recorder.Valid ? recorder.CurrentValue / 1e6 : 0.0;
-                data[jsonKey.Replace("_ms", "_valid")] = recorder.Valid;
+                data[valueKey] = recorder.Valid ? recorder.CurrentValue / 1e6 : 0.0;
+                data[validKey] = recorder.Valid;
             }
 
             return new
