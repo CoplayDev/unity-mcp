@@ -6,23 +6,23 @@ namespace MCPForUnity.Editor.Tools.Profiler
 {
     internal static class FrameTimingOps
     {
-        private static readonly (string counterName, string jsonKey)[] COUNTER_MAP = new[]
+        private static readonly (string counterName, string valueKey, string validKey)[] COUNTER_MAP = new[]
         {
-            ("Main Thread", "main_thread_ms"),
-            ("Render Thread", "render_thread_ms"),
-            ("CPU Frame Time", "cpu_frame_ms"),
-            ("GPU Frame Time", "gpu_frame_ms"),
+            ("Main Thread", "main_thread_ms", "main_thread_valid"),
+            ("Render Thread", "render_thread_ms", "render_thread_valid"),
+            ("CPU Frame Time", "cpu_frame_ms", "cpu_frame_valid"),
+            ("GPU Frame Time", "gpu_frame_ms", "gpu_frame_valid"),
         };
 
         internal static object GetFrameTiming(JObject @params)
         {
             var data = new Dictionary<string, object>();
 
-            foreach (var (counterName, jsonKey) in COUNTER_MAP)
+            foreach (var (counterName, valueKey, validKey) in COUNTER_MAP)
             {
                 using var recorder = ProfilerRecorder.StartNew(ProfilerCategory.Internal, counterName);
-                data[jsonKey] = recorder.Valid ? recorder.CurrentValue / 1e6 : 0.0;
-                data[jsonKey.Replace("_ms", "_valid")] = recorder.Valid;
+                data[valueKey] = recorder.Valid ? recorder.CurrentValue / 1e6 : 0.0;
+                data[validKey] = recorder.Valid;
             }
 
             return new
