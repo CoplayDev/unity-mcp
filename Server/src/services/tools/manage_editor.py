@@ -10,14 +10,14 @@ from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
 
 @mcp_for_unity_tool(
-    description="Controls and queries the Unity editor's state and settings. Read-only actions: telemetry_status, telemetry_ping. Modifying actions: play, pause, stop, set_active_tool, add_tag, remove_tag, add_layer, remove_layer, open_prefab_stage, close_prefab_stage, deploy_package, restore_package, undo, redo. open_prefab_stage opens a prefab asset in Unity's prefab editing mode. deploy_package copies the configured MCPForUnity source folder into the project's installed package location (triggers recompile, no confirmation dialog). restore_package reverts to the pre-deployment backup. undo/redo perform Unity editor undo/redo and return the affected group name.",
+    description="Controls and queries the Unity editor's state and settings. Read-only actions: telemetry_status, telemetry_ping. Modifying actions: play, pause, stop, set_active_tool, add_tag, remove_tag, add_layer, remove_layer, open_prefab_stage, save_prefab_stage, close_prefab_stage, deploy_package, restore_package, undo, redo. open_prefab_stage opens a prefab asset in Unity's prefab editing mode. save_prefab_stage saves changes in the currently open prefab stage back to the prefab asset. deploy_package copies the configured MCPForUnity source folder into the project's installed package location (triggers recompile, no confirmation dialog). restore_package reverts to the pre-deployment backup. undo/redo perform Unity editor undo/redo and return the affected group name.",
     annotations=ToolAnnotations(
         title="Manage Editor",
     ),
 )
 async def manage_editor(
     ctx: Context,
-    action: Annotated[Literal["telemetry_status", "telemetry_ping", "play", "pause", "stop", "set_active_tool", "add_tag", "remove_tag", "add_layer", "remove_layer", "open_prefab_stage", "close_prefab_stage", "deploy_package", "restore_package", "undo", "redo"], "Get and update the Unity Editor state. open_prefab_stage opens a prefab asset in prefab editing mode; close_prefab_stage exits prefab editing mode and returns to the main scene stage. deploy_package copies the configured MCPForUnity source into the project's package location (triggers recompile). restore_package reverts the last deployment from backup. undo/redo perform editor undo/redo."],
+    action: Annotated[Literal["telemetry_status", "telemetry_ping", "play", "pause", "stop", "set_active_tool", "add_tag", "remove_tag", "add_layer", "remove_layer", "open_prefab_stage", "save_prefab_stage", "close_prefab_stage", "deploy_package", "restore_package", "undo", "redo"], "Get and update the Unity Editor state. open_prefab_stage opens a prefab asset in prefab editing mode; save_prefab_stage saves changes in the open prefab stage back to the asset; close_prefab_stage exits prefab editing mode and returns to the main scene stage. deploy_package copies the configured MCPForUnity source into the project's package location (triggers recompile). restore_package reverts the last deployment from backup. undo/redo perform editor undo/redo."],
     tool_name: Annotated[str,
                          "Tool name when setting active tool"] | None = None,
     tag_name: Annotated[str,
