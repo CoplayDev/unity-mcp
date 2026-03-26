@@ -30,7 +30,7 @@ def script_timing():
 @profiler.command("physics-timing")
 @handle_unity_errors
 def physics_timing():
-    """Get Physics.Processing and Physics.FetchResults time (ms)."""
+    """Get Physics.Simulate and Physics2D.Simulate time (ms)."""
     config = get_config()
     result = run_command("manage_profiler", {"action": "get_physics_timing"}, config)
     click.echo(format_output(result, config.format))

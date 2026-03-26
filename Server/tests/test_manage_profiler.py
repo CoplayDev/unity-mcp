@@ -79,6 +79,8 @@ def test_empty_action_returns_error(mock_unity):
         manage_profiler(SimpleNamespace(), action="")
     )
     assert result["success"] is False
+    assert "Unknown action" in result["message"]
+    assert "tool_name" not in mock_unity
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +96,14 @@ def test_every_action_forwards_to_unity(mock_unity, action_name):
     assert result["success"] is True
     assert mock_unity["tool_name"] == "manage_profiler"
     assert mock_unity["params"]["action"] == action_name
+
+
+def test_uses_unity_instance_from_context(mock_unity):
+    """manage_profiler should forward the context-derived Unity instance."""
+    asyncio.run(
+        manage_profiler(SimpleNamespace(), action="get_frame_timing")
+    )
+    assert mock_unity["unity_instance"] == "unity-instance-1"
 
 
 def test_get_frame_timing_sends_correct_params(mock_unity):

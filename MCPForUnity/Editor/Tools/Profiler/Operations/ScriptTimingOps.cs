@@ -10,7 +10,7 @@ namespace MCPForUnity.Editor.Tools.Profiler
         {
             ("BehaviourUpdate", "update_ms"),
             ("FixedBehaviourUpdate", "fixed_update_ms"),
-            ("LateBehaviourUpdate", "late_update_ms"),
+            ("PreLateUpdate.ScriptRunBehaviourLateUpdate", "late_update_ms"),
         };
 
         internal static object GetScriptTiming(JObject @params)
