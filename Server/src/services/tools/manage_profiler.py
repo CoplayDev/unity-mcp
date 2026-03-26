@@ -26,7 +26,7 @@ PROFILER_ACTIONS = [
         "SCRIPT TIMING:\n"
         "- get_script_timing: Update, FixedUpdate, LateUpdate script execution time (ms)\n\n"
         "PHYSICS TIMING:\n"
-        "- get_physics_timing: Physics.Processing, Physics.FetchResults time (ms)\n\n"
+        "- get_physics_timing: Physics.Simulate, Physics2D.Simulate time (ms)\n\n"
         "GC ALLOCATION:\n"
         "- get_gc_alloc: GC allocation bytes and count per frame\n\n"
         "ANIMATION TIMING:\n"
