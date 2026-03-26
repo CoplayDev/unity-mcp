@@ -8,9 +8,9 @@ namespace MCPForUnity.Editor.Tools.Profiler
     {
         private static readonly (string counterName, string valueKey, string validKey)[] COUNTER_MAP = new[]
         {
-            ("Main Thread", "main_thread_ms", "main_thread_valid"),
-            ("Render Thread", "render_thread_ms", "render_thread_valid"),
-            ("CPU Frame Time", "cpu_frame_ms", "cpu_frame_valid"),
+            ("CPU Main Thread Frame Time", "main_thread_ms", "main_thread_valid"),
+            ("CPU Render Thread Frame Time", "render_thread_ms", "render_thread_valid"),
+            ("CPU Total Frame Time", "cpu_frame_ms", "cpu_frame_valid"),
             ("GPU Frame Time", "gpu_frame_ms", "gpu_frame_valid"),
         };
 
