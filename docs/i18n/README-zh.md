@@ -20,7 +20,8 @@
 <details>
 <summary><strong>最近更新</strong></summary>
 
-* **v9.6.1 (beta)** — QoL 扩展：`manage_editor` 新增撤销/重做操作。`manage_scene` 新增多场景编辑（叠加加载、关闭、设置活动场景、跨场景移动物体）、场景模板（3d_basic、2d_basic 等）、场景验证与自动修复。新增 `manage_build` 工具：触发玩家构建、切换平台、配置玩家设置、管理构建场景和配置文件（Unity 6+）、跨多平台批量构建、异步任务跟踪与轮询。新增 `MaxPollSeconds` 基础设施，支持长时间运行的工具操作。
+* **v9.6.2 (beta)** — 新增 `manage_physics` 工具（21个操作）：物理设置、层碰撞矩阵、物理材质、关节（5种3D + 9种2D类型）、查询（raycast、raycast_all、linecast、shapecast、overlap）、力施加（AddForce/AddTorque/AddExplosionForce）、刚体配置、场景物理验证与编辑器模式模拟。全面支持3D和2D物理。
+* **v9.6.1** — QoL 扩展：`manage_editor` 新增撤销/重做操作。`manage_scene` 新增多场景编辑（叠加加载、关闭、设置活动场景、跨场景移动物体）、场景模板（3d_basic、2d_basic 等）、场景验证与自动修复。新增 `manage_build` 工具：触发玩家构建、切换平台、配置玩家设置、管理构建场景和配置文件（Unity 6+）、跨多平台批量构建、异步任务跟踪与轮询。新增 `MaxPollSeconds` 基础设施，支持长时间运行的工具操作。
 * **v9.5.4** — 新增 `unity_reflect` 和 `unity_docs` 工具用于 API 验证：通过反射检查实时 C# API，获取官方 Unity 文档（ScriptReference、Manual、包文档）。新增 `manage_packages` 工具：安装、移除、搜索和管理 Unity 包及作用域注册表。包含输入验证、移除时依赖检查和 git URL 警告。
 * **v9.5.3** — 新增 `manage_graphics` 工具（33个操作）：体积/后处理、光照烘焙、渲染统计、管线设置、URP渲染器特性。3个新资源：`volumes`、`rendering_stats`、`renderer_features`。
 * **v9.5.2** — 新增 `manage_camera` 工具，支持 Cinemachine（预设、优先级、噪声、混合、扩展）、`cameras` 资源、通过 SerializedProperty 修复优先级持久化问题。
@@ -95,7 +96,7 @@ openupm add com.coplaydev.unity-mcp
 * **可扩展** — 可与多种 MCP Client 配合使用
 
 ### 可用工具
-`apply_text_edits` • `batch_execute` • `create_script` • `debug_request_context` • `delete_script` • `execute_custom_tool` • `execute_menu_item` • `find_gameobjects` • `find_in_file` • `get_sha` • `get_test_job` • `manage_animation` • `manage_asset` • `manage_build` • `manage_camera` • `manage_components` • `manage_editor` • `manage_gameobject` • `manage_graphics` • `manage_material` • `manage_packages` • `manage_prefabs` • `manage_probuilder` • `manage_scene` • `manage_script` • `manage_script_capabilities` • `manage_scriptable_object` • `manage_shader` • `manage_texture` • `manage_tools` • `manage_ui` • `manage_vfx` • `read_console` • `refresh_unity` • `run_tests` • `script_apply_edits` • `set_active_instance` • `unity_docs` • `unity_reflect` • `validate_script`
+`apply_text_edits` • `batch_execute` • `create_script` • `debug_request_context` • `delete_script` • `execute_custom_tool` • `execute_menu_item` • `find_gameobjects` • `find_in_file` • `get_sha` • `get_test_job` • `manage_animation` • `manage_asset` • `manage_build` • `manage_camera` • `manage_components` • `manage_editor` • `manage_gameobject` • `manage_graphics` • `manage_material` • `manage_packages` • `manage_physics` • `manage_prefabs` • `manage_probuilder` • `manage_scene` • `manage_script` • `manage_script_capabilities` • `manage_scriptable_object` • `manage_shader` • `manage_texture` • `manage_tools` • `manage_ui` • `manage_vfx` • `read_console` • `refresh_unity` • `run_tests` • `script_apply_edits` • `set_active_instance` • `unity_docs` • `unity_reflect` • `validate_script`
 
 ### 可用资源
 `cameras` • `custom_tools` • `renderer_features` • `rendering_stats` • `volumes` • `editor_active_tool` • `editor_prefab_stage` • `editor_selection` • `editor_state` • `editor_windows` • `gameobject` • `gameobject_api` • `gameobject_component` • `gameobject_components` • `get_tests` • `get_tests_for_mode` • `menu_items` • `prefab_api` • `prefab_hierarchy` • `prefab_info` • `project_info` • `project_layers` • `project_tags` • `tool_groups` • `unity_instances`

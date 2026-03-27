@@ -114,6 +114,10 @@
       "description": "Modify Unity packages: install, remove, embed, and configure registries"
     },
     {
+      "name": "manage_physics",
+      "description": "Manage 3D and 2D physics: settings, collision matrix, materials, joints, queries (raycast, shapecast, linecast, overlap), forces, rigidbody configuration, validation, and simulation"
+    },
+    {
       "name": "manage_prefabs",
       "description": "Create, instantiate, unpack, and modify prefabs"
     },
