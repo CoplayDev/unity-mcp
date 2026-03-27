@@ -29,6 +29,9 @@ REQUIRED_PARAMS = {
         "(single object or array for batch creation in one save). "
         "Example: create_child=[{\"name\": \"Child1\", \"primitive_type\": \"Sphere\", \"position\": [1,0,0]}, "
         "{\"name\": \"Nested\", \"source_prefab_path\": \"Assets/Prefabs/Bullet.prefab\", \"position\": [0,2,0]}]. "
+        "Use delete_child parameter to remove child GameObjects from the prefab "
+        "(single name/path or array of paths for batch deletion. "
+        "Example: delete_child=[\"Child1\", \"Child2/Grandchild\"]). "
         "Use component_properties with modify_contents to set serialized fields on existing components "
         "(e.g. component_properties={\"Rigidbody\": {\"mass\": 5.0}, \"MyScript\": {\"health\": 100}}). "
         "Supports object references via {\"guid\": \"...\"}, {\"path\": \"Assets/...\"}, or {\"instanceID\": 123}. "
@@ -67,6 +70,7 @@ async def manage_prefabs(
     components_to_add: Annotated[list[str], "Component types to add in modify_contents."] | None = None,
     components_to_remove: Annotated[list[str], "Component types to remove in modify_contents."] | None = None,
     create_child: Annotated[dict[str, Any] | list[dict[str, Any]], "Create child GameObject(s) in the prefab. Single object or array of objects, each with: name (required), parent (optional, defaults to target), source_prefab_path (optional: asset path to instantiate as nested prefab, e.g. 'Assets/Prefabs/Bullet.prefab'), primitive_type (optional: Cube, Sphere, Capsule, Cylinder, Plane, Quad), position, rotation, scale, components_to_add, tag, layer, set_active. source_prefab_path and primitive_type are mutually exclusive."] | None = None,
+    delete_child: Annotated[str | list[str], "Child name(s) or path(s) to remove from the prefab. Supports single string or array for batch deletion (e.g. 'Child1' or ['Child1', 'Child1/Grandchild'])."] | None = None,
     component_properties: Annotated[dict[str, dict[str, Any]], "Set properties on existing components in modify_contents. Keys are component type names, values are dicts of property name to value. Example: {\"Rigidbody\": {\"mass\": 5.0}, \"MyScript\": {\"health\": 100}}. Supports object references via {\"guid\": \"...\"}, {\"path\": \"Assets/...\"}, or {\"instanceID\": 123}. For Sprite sub-assets: {\"guid\": \"...\", \"spriteName\": \"<name>\"}. Single-sprite textures auto-resolve."] | None = None,
 ) -> dict[str, Any]:
     # Back-compat: map 'name' → 'target' for create_from_gameobject (Unity accepts both)
@@ -184,6 +188,9 @@ async def manage_prefabs(
                 if err:
                     return {"success": False, "message": err}
                 params["createChild"] = child_params
+
+        if delete_child is not None:
+            params["deleteChild"] = delete_child
 
         # Send command to Unity
         response = await send_with_unity_instance(
