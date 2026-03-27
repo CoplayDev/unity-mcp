@@ -1170,7 +1170,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                 string childPath = childToken.Type == JTokenType.String ? childToken.ToString() : childToken["name"]?.ToString();
                 if (string.IsNullOrEmpty(childPath))
                 {
-                    return (removedCount, new ErrorResponse("'delete_child' must be a string or object with 'name' field."));
+                    return (removedCount, new ErrorResponse("'deleteChild'/'delete_child' entries must be a string or object with 'name' field."));
                 }
 
                 // Find the child to remove

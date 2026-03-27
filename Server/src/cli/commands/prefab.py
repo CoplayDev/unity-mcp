@@ -256,8 +256,8 @@ def _parse_vector3(value: str) -> list[float]:
         raise click.BadParameter("Must be 'x,y,z' format")
     try:
         return [float(p.strip()) for p in parts]
-    except ValueError:
-        raise click.BadParameter(f"All components must be numeric, got: '{value}'")
+    except ValueError as e:
+        raise click.BadParameter(f"All components must be numeric, got: '{value}'") from e
 
 
 def _parse_property(prop_str: str) -> tuple[str, str, Any]:
@@ -268,7 +268,9 @@ def _parse_property(prop_str: str) -> tuple[str, str, Any]:
     if "." not in comp_prop:
         raise click.BadParameter("Must be 'Component.prop=value' format")
     component, prop = comp_prop.rsplit(".", 1)
-    
+    if not component.strip() or not prop.strip():
+        raise click.BadParameter(f"Component and property must be non-empty in '{comp_prop}', expected 'Component.prop=value'")
+
     val_str = val_str.strip()
     
     # Parse booleans
@@ -363,9 +365,12 @@ def modify(path: str, target: Optional[str], position: Optional[str], rotation: 
         params["deleteChild"] = list(delete_child)
     if create_child:
         try:
-            params["createChild"] = json.loads(create_child)
+            parsed = json.loads(create_child)
         except json.JSONDecodeError as e:
             raise click.BadParameter(f"Invalid JSON for --create-child: {e}") from e
+        if not isinstance(parsed, dict):
+            raise click.BadParameter(f"--create-child must be a JSON object, got {type(parsed).__name__}")
+        params["createChild"] = parsed
 
     result = run_command("manage_prefabs", params, config)
     click.echo(format_output(result, config.format))

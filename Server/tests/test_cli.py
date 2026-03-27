@@ -732,6 +732,16 @@ class TestPrefabCommands:
             "--create-child", "not valid json"
         ])
         assert result.exit_code != 0
+        assert "Invalid JSON" in result.output
+
+    def test_prefab_modify_create_child_non_object_json(self, runner, mock_unity_response):
+        """Test prefab modify rejects non-object JSON for create-child."""
+        result = runner.invoke(cli, [
+            "prefab", "modify", "Assets/Prefabs/Player.prefab",
+            "--create-child", '"just a string"'
+        ])
+        assert result.exit_code != 0
+        assert "must be a JSON object" in result.output
 
     def test_prefab_modify_active_state(self, runner, mock_unity_response):
         """Test prefab modify active/inactive flag."""
@@ -804,6 +814,24 @@ class TestPrefabCommands:
             call_args = mock_run.call_args[0]
             params = call_args[1]
             assert params["componentProperties"]["MyScript"]["label"] == "hello world"
+
+    def test_prefab_modify_set_property_empty_component(self, runner, mock_unity_response):
+        """Test prefab modify rejects empty component name in set-property."""
+        result = runner.invoke(cli, [
+            "prefab", "modify", "Assets/Prefabs/Player.prefab",
+            "--set-property", ".mass=5"
+        ])
+        assert result.exit_code != 0
+        assert "non-empty" in result.output
+
+    def test_prefab_modify_set_property_empty_prop(self, runner, mock_unity_response):
+        """Test prefab modify rejects empty property name in set-property."""
+        result = runner.invoke(cli, [
+            "prefab", "modify", "Assets/Prefabs/Player.prefab",
+            "--set-property", "Rigidbody.=5"
+        ])
+        assert result.exit_code != 0
+        assert "non-empty" in result.output
 
     def test_prefab_modify_no_options_sends_minimal_params(self, runner, mock_unity_response):
         """Test prefab modify with no options sends only action and prefabPath."""
