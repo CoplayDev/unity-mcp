@@ -523,6 +523,28 @@ manage_prefabs(
     position=[0, 1, 0],
     components_to_add=["AudioSource"]
 )
+
+# Delete child GameObjects from prefab
+manage_prefabs(
+    action="modify_contents",
+    prefab_path="Assets/Prefabs/Player.prefab",
+    delete_child=["OldChild", "Turret/Barrel"]  # single string or list
+)
+
+# Create child GameObject in prefab
+manage_prefabs(
+    action="modify_contents",
+    prefab_path="Assets/Prefabs/Player.prefab",
+    create_child={"name": "SpawnPoint", "primitive_type": "Sphere", "position": [0, 2, 0]}
+)
+
+# Set component properties on prefab contents
+manage_prefabs(
+    action="modify_contents",
+    prefab_path="Assets/Prefabs/Player.prefab",
+    target="ChildObject",
+    component_properties={"Rigidbody": {"mass": 5.0}, "MyScript": {"health": 100}}
+)
 ```
 
 ---

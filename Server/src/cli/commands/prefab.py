@@ -254,7 +254,10 @@ def _parse_vector3(value: str) -> list[float]:
     parts = value.split(",")
     if len(parts) != 3:
         raise click.BadParameter("Must be 'x,y,z' format")
-    return [float(p.strip()) for p in parts]
+    try:
+        return [float(p.strip()) for p in parts]
+    except ValueError:
+        raise click.BadParameter(f"All components must be numeric, got: '{value}'")
 
 
 def _parse_property(prop_str: str) -> tuple[str, str, Any]:
@@ -362,7 +365,7 @@ def modify(path: str, target: Optional[str], position: Optional[str], rotation: 
         try:
             params["createChild"] = json.loads(create_child)
         except json.JSONDecodeError as e:
-            raise click.BadParameter(f"Invalid JSON for --create-child: {e}")
+            raise click.BadParameter(f"Invalid JSON for --create-child: {e}") from e
 
     result = run_command("manage_prefabs", params, config)
     click.echo(format_output(result, config.format))
