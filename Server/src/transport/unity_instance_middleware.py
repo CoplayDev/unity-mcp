@@ -7,6 +7,7 @@ into the request-scoped state, allowing tools to access it via ctx.get_state("un
 from threading import RLock
 import logging
 import time
+from urllib.parse import parse_qs, urlparse
 
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 
@@ -45,6 +46,19 @@ def set_unity_instance_middleware(middleware: 'UnityInstanceMiddleware') -> None
     """
     global _unity_instance_middleware
     _unity_instance_middleware = middleware
+
+
+def _get_http_request_for_binding():
+    """Resolve the current HTTP request using whichever FastMCP layout is installed."""
+    try:
+        from fastmcp.dependencies import get_http_request
+    except Exception:
+        try:
+            from fastmcp.server.dependencies import get_http_request
+        except Exception as exc:  # pragma: no cover - import-layout compatibility
+            raise RuntimeError("FastMCP HTTP request dependency is unavailable") from exc
+
+    return get_http_request()
 
 
 class UnityInstanceMiddleware(Middleware):
@@ -333,10 +347,8 @@ class UnityInstanceMiddleware(Middleware):
         from transport.unity_transport import _resolve_user_id_from_request
         return await _resolve_user_id_from_request()
 
-    async def _inject_unity_instance(self, context: MiddlewareContext) -> None:
-        """Inject active Unity instance and user_id into context if available."""
-        ctx = context.fastmcp_context
-
+    async def _inject_user_id(self, ctx) -> str | None:
+        """Inject request-scoped user_id when the HTTP transport requires it."""
         # Resolve user_id from the HTTP request's API key header
         user_id = await self._resolve_user_id()
         if config.http_remote_hosted and user_id is None:
@@ -345,25 +357,86 @@ class UnityInstanceMiddleware(Middleware):
             )
         if user_id:
             await ctx.set_state("user_id", user_id)
+        return user_id
+
+    @staticmethod
+    def _normalize_requested_instance(raw_value: object) -> str | None:
+        if raw_value is None:
+            return None
+        value = str(raw_value).strip()
+        return value or None
+
+    def _extract_requested_instance(self, context: MiddlewareContext) -> str | None:
+        """Read an inline unity_instance override from tool args or resource query."""
+        message = getattr(context, "message", None)
+
+        message_arguments = getattr(message, "arguments", None)
+        if isinstance(message_arguments, dict) and "unity_instance" in message_arguments:
+            return self._normalize_requested_instance(message_arguments.pop("unity_instance"))
+
+        message_uri = getattr(message, "uri", None)
+        if isinstance(message_uri, str) and message_uri:
+            query_values = parse_qs(urlparse(message_uri).query).get("unity_instance")
+            if query_values:
+                return self._normalize_requested_instance(query_values[-1])
+
+        return None
+
+    def _extract_bound_instance(self) -> str | None:
+        """Read the fixed Unity target from an instance-bound HTTP endpoint."""
+        try:
+            request = _get_http_request_for_binding()
+        except RuntimeError:
+            return None
+
+        path_params = getattr(request, "path_params", None)
+        if isinstance(path_params, dict):
+            return self._normalize_requested_instance(path_params.get("instance"))
+        return None
+
+    async def _inject_bound_unity_instance(self, ctx) -> str | None:
+        """Resolve and store a bound HTTP endpoint target for the current request."""
+        bound_token = self._extract_bound_instance()
+        if not bound_token:
+            return None
+
+        bound_instance = await self._resolve_instance_value(bound_token, ctx)
+        await ctx.set_state("bound_unity_instance", bound_instance)
+        return bound_instance
+
+    async def _inject_unity_instance(
+        self,
+        context: MiddlewareContext,
+        *,
+        include_legacy_default: bool = True,
+        allow_autoselect: bool = True,
+    ) -> None:
+        """Inject active Unity instance and user_id into context if available."""
+        ctx = context.fastmcp_context
+
+        user_id = await self._inject_user_id(ctx)
+        bound_instance = await self._inject_bound_unity_instance(ctx)
 
         # Per-call routing: check if this tool call explicitly specifies unity_instance.
         # context.message.arguments is a mutable dict on CallToolRequestParams; resource
-        # reads use ReadResourceRequestParams which has no .arguments, so this is a no-op for them.
-        # We pop the key here so Pydantic's type_adapter.validate_python() never sees it.
+        # reads use ReadResourceRequestParams, so resource overrides come from the URI query.
         active_instance: str | None = None
-        msg_args = getattr(getattr(context, "message", None), "arguments", None)
-        if isinstance(msg_args, dict) and "unity_instance" in msg_args:
-            raw = msg_args.pop("unity_instance")
-            if raw is not None:
-                raw_str = str(raw).strip()
-                if raw_str:
-                    # Raises ValueError with a user-friendly message on invalid input.
-                    active_instance = await self._resolve_instance_value(raw_str, ctx)
-                    logger.debug("Per-call unity_instance resolved to: %s", active_instance)
+        requested_instance = self._extract_requested_instance(context)
+        if bound_instance and requested_instance:
+            raise ValueError(
+                "Bound MCP endpoints do not accept unity_instance overrides. "
+                "Use the bound endpoint target or switch back to the unbound /mcp endpoint."
+            )
+        if requested_instance:
+            # Raises ValueError with a user-friendly message on invalid input.
+            active_instance = await self._resolve_instance_value(requested_instance, ctx)
+            logger.debug("Per-call unity_instance resolved to: %s", active_instance)
 
         if not active_instance:
+            active_instance = bound_instance
+        if not active_instance and include_legacy_default:
             active_instance = await self.get_active_instance(ctx)
-        if not active_instance:
+        if not active_instance and allow_autoselect:
             active_instance = await self._maybe_autoselect_instance(ctx)
         if active_instance:
             # If using HTTP transport (PluginHub configured), validate session
@@ -422,15 +495,19 @@ class UnityInstanceMiddleware(Middleware):
     async def on_list_tools(self, context: MiddlewareContext, call_next):
         """Filter MCP tool listing to the Unity-enabled set when session data is available."""
         try:
-            await self._inject_unity_instance(context)
+            await self._inject_user_id(context.fastmcp_context)
+            bound_instance = await self._inject_bound_unity_instance(
+                context.fastmcp_context,
+            )
         except Exception as exc:
             # Re-raise authentication errors so callers get a proper auth failure
             if isinstance(exc, RuntimeError) and "authentication" in str(exc).lower():
                 raise
             _diag.warning(
-                "on_list_tools: _inject_unity_instance failed (%s: %s), continuing without instance",
+                "on_list_tools: user_id injection failed (%s: %s), continuing without instance",
                 type(exc).__name__, exc,
             )
+            bound_instance = None
 
         tools = await call_next(context)
 
@@ -445,7 +522,10 @@ class UnityInstanceMiddleware(Middleware):
             return tools
 
         self._refresh_tool_visibility_metadata_from_registry()
-        enabled_tool_names = await self._resolve_enabled_tool_names_for_context(context)
+        enabled_tool_names = await self._resolve_enabled_tool_names_for_context(
+            context,
+            active_instance=bound_instance,
+        )
         if enabled_tool_names is None:
             _diag.debug("on_list_tools: no Unity session data, returning %d tools from FastMCP as-is", len(tools))
             return tools
@@ -470,10 +550,10 @@ class UnityInstanceMiddleware(Middleware):
     async def _resolve_enabled_tool_names_for_context(
         self,
         context: MiddlewareContext,
+        active_instance: str | None,
     ) -> set[str] | None:
         ctx = context.fastmcp_context
         user_id = (await ctx.get_state("user_id")) if config.http_remote_hosted else None
-        active_instance = await ctx.get_state("unity_instance")
         project_hashes = self._resolve_candidate_project_hashes(active_instance)
         try:
             sessions_data = await PluginHub.get_sessions(user_id=user_id)
