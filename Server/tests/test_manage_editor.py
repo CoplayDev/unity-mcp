@@ -55,7 +55,7 @@ def test_redo_forwards_to_unity(mock_unity):
 UNITY_FORWARDED_ACTIONS = [
     "play", "pause", "stop", "set_active_tool",
     "add_tag", "remove_tag", "add_layer", "remove_layer",
-    "open_prefab_stage", "close_prefab_stage", "deploy_package", "restore_package",
+    "open_prefab_stage", "save_prefab_stage", "close_prefab_stage", "deploy_package", "restore_package",
     "undo", "redo",
 ]
 
@@ -159,3 +159,35 @@ def test_open_prefab_stage_rejects_conflicting_path_inputs(mock_unity):
     )
     assert result["success"] is False
     assert "Provide only one of prefab_path or path" in result.get("message", "")
+
+
+# ── save_prefab_stage ────────────────────────────────────────────────
+
+
+def test_manage_editor_description_mentions_save_prefab_stage():
+    """The tool description should advertise the save_prefab_stage action."""
+    editor_tool = next(
+        (t for t in get_registered_tools() if t["name"] == "manage_editor"), None
+    )
+    assert editor_tool is not None
+    desc = editor_tool.get("description") or editor_tool.get("kwargs", {}).get("description", "")
+    assert "save_prefab_stage" in desc
+
+
+def test_save_prefab_stage_forwards_to_unity(mock_unity):
+    """save_prefab_stage should forward to Unity without extra parameters."""
+    result = asyncio.run(manage_editor(SimpleNamespace(), action="save_prefab_stage"))
+    assert result["success"] is True
+    assert mock_unity["params"]["action"] == "save_prefab_stage"
+    assert mock_unity["tool_name"] == "manage_editor"
+
+
+def test_save_prefab_stage_omits_none_params(mock_unity):
+    """save_prefab_stage should not include toolName, tagName, layerName, or path params."""
+    asyncio.run(manage_editor(SimpleNamespace(), action="save_prefab_stage"))
+    params = mock_unity["params"]
+    assert "toolName" not in params
+    assert "tagName" not in params
+    assert "layerName" not in params
+    assert "prefabPath" not in params
+    assert "path" not in params

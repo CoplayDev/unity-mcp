@@ -730,6 +730,7 @@ manage_editor(action="add_layer", layer_name="Projectiles")
 manage_editor(action="remove_layer", layer_name="OldLayer")
 
 manage_editor(action="open_prefab_stage", prefab_path="Assets/Prefabs/Enemy.prefab")
+manage_editor(action="save_prefab_stage")   # Save changes in the open prefab stage
 manage_editor(action="close_prefab_stage")  # Exit prefab editing mode back to main scene
 
 # Package deployment (no confirmation dialog — designed for LLM-driven iteration)
