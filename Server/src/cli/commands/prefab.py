@@ -68,32 +68,24 @@ def close_stage(save: bool):
 
 
 @prefab.command("save")
-@click.option(
-    "--force", "-f",
-    is_flag=True,
-    help="Force save even if no changes detected. Useful for automated workflows."
-)
 @handle_unity_errors
-def save_stage(force: bool):
+def save_stage():
     """Save the currently open prefab stage.
 
     \b
     Examples:
         unity-mcp prefab save
-        unity-mcp prefab save --force
     """
     config = get_config()
 
     params: dict[str, Any] = {
-        "action": "save_open_stage",
+        "action": "save_prefab_stage",
     }
-    if force:
-        params["force"] = True
 
-    result = run_command("manage_prefabs", params, config)
+    result = run_command("manage_editor", params, config)
     click.echo(format_output(result, config.format))
     if result.get("success"):
-        print_success("Saved prefab")
+        print_success("Saved prefab stage")
 
 
 @prefab.command("info")
