@@ -24,6 +24,27 @@ ABSOLUTE_MAX_COMMANDS_PER_BATCH = 100
 _cached_max_commands: int | None = None
 
 
+def strip_mcp_prefix(tool_name: str) -> str:
+    """Strip MCP server namespace prefix from a tool name.
+
+    Clients may send prefixed tool names like:
+      - "UnityMCP:manage_gameobject"  (colon-separated)
+      - "mcp__UnityMCP__manage_gameobject"  (double-underscore, Claude Code style)
+    This normalizes them to the short form ("manage_gameobject").
+    """
+    # Double-underscore format: "mcp__ServerName__tool_name"
+    if tool_name.startswith("mcp__") and "__" in tool_name[5:]:
+        suffix = tool_name.split("__", 2)[-1]
+        if suffix:
+            return suffix
+    # Colon format: "ServerName:tool_name"
+    if ":" in tool_name:
+        suffix = tool_name.rsplit(":", 1)[-1]
+        if suffix:
+            return suffix
+    return tool_name
+
+
 async def _get_max_commands_from_editor_state(ctx: Context) -> int:
     """
     Attempt to read the configured batch limit from the Unity editor state.
@@ -109,6 +130,8 @@ async def batch_execute(
         if not tool_name or not isinstance(tool_name, str):
             raise ValueError(
                 f"Command at index {index} is missing a valid 'tool' name")
+
+        tool_name = strip_mcp_prefix(tool_name)
 
         if params is None:
             params = {}
