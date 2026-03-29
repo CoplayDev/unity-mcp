@@ -27,6 +27,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "replay (re-run a history entry), clear_history. "
         "NOTE: safety_checks blocks known dangerous patterns but is not a full sandbox."
     ),
+    group="scripting_ext",
     annotations=ToolAnnotations(
         title="Execute Code",
         destructiveHint=True,

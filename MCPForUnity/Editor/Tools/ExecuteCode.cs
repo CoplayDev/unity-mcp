@@ -17,7 +17,7 @@ namespace MCPForUnity.Editor.Tools
         private const int MaxCodeLength = 50000;
         private const int MaxHistoryEntries = 50;
         private const int MaxHistoryCodePreview = 500;
-        private const int WrapperLineOffset = 9;
+        private const int WrapperLineOffset = 10;
         private const string WrapperClassName = "MCPDynamicCode";
         private const string WrapperMethodName = "Execute";
 
@@ -27,6 +27,7 @@ namespace MCPForUnity.Editor.Tools
         private const string ActionReplay = "replay";
 
         private static readonly List<HistoryEntry> _history = new List<HistoryEntry>();
+        private static string[] _cachedAssemblyPaths;
 
         private static readonly HashSet<string> _blockedPatterns = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -249,7 +250,16 @@ namespace MCPForUnity.Editor.Tools
 
         private static void AddReferences(CompilerParameters parameters)
         {
-            var referencedAssemblies = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (_cachedAssemblyPaths == null)
+                _cachedAssemblyPaths = ResolveAssemblyPaths();
+
+            foreach (var path in _cachedAssemblyPaths)
+                parameters.ReferencedAssemblies.Add(path);
+        }
+
+        private static string[] ResolveAssemblyPaths()
+        {
+            var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
@@ -259,14 +269,17 @@ namespace MCPForUnity.Editor.Tools
                     var location = assembly.Location;
                     if (string.IsNullOrEmpty(location)) continue;
                     if (!System.IO.File.Exists(location)) continue;
-                    if (referencedAssemblies.Add(location))
-                        parameters.ReferencedAssemblies.Add(location);
+                    paths.Add(location);
                 }
                 catch (NotSupportedException)
                 {
                     // Some assemblies don't support Location property
                 }
             }
+
+            var result = new string[paths.Count];
+            paths.CopyTo(result);
+            return result;
         }
 
         private static string CheckBlockedPatterns(string code)

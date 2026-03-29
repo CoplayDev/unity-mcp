@@ -36,7 +36,7 @@ def execute(source: Optional[str], file: Optional[str], no_safety_checks: bool):
     config = get_config()
 
     if file:
-        with open(file, "r") as f:
+        with open(file, "r", encoding="utf-8") as f:
             source = f.read()
     elif not source:
         print_error("Provide code as an argument or use --file.")
