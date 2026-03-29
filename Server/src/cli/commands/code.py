@@ -50,10 +50,7 @@ def execute(source: Optional[str], file: Optional[str], no_safety_checks: bool):
 
     result = run_command("execute_code", params, config)
     click.echo(format_output(result, config.format))
-    if result.get("success"):
-        data = result.get("data", {})
-        if data and data.get("result") is not None:
-            print_success(f"Result: {data['result']}")
+    _print_execution_result(result)
 
 
 @code.command("history")
@@ -86,6 +83,10 @@ def replay(index: int):
     config = get_config()
     result = run_command("execute_code", {"action": "replay", "index": index}, config)
     click.echo(format_output(result, config.format))
+    _print_execution_result(result)
+
+
+def _print_execution_result(result: dict[str, Any]) -> None:
     if result.get("success"):
         data = result.get("data", {})
         if data and data.get("result") is not None:
