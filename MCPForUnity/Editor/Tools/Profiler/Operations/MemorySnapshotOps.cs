@@ -35,7 +35,7 @@ namespace MCPForUnity.Editor.Tools.Profiler
             try
             {
                 var takeMethod = MemoryProfilerType.GetMethod("TakeSnapshot",
-                    new[] { typeof(string), typeof(Action<string, bool>), typeof(Action<string, bool, UnityEditor.DebugScreenCapture>), typeof(uint) });
+                    new[] { typeof(string), typeof(Action<string, bool>), typeof(Action<string, bool, DebugScreenCapture>), typeof(uint) });
 
                 if (takeMethod == null)
                 {

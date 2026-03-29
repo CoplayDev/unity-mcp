@@ -41,19 +41,26 @@ namespace MCPForUnity.Editor.Tools.Profiler
                 recorders.Add(ProfilerRecorder.StartNew(category, name));
             }
 
-            // Wait 1 frame for recorders to accumulate data
-            await WaitOneFrameAsync();
-
-            // Read values and dispose
             var data = new Dictionary<string, object>();
-            for (int i = 0; i < recorders.Count; i++)
+            try
             {
-                var recorder = recorders[i];
-                string name = counterNames[i];
-                data[name] = recorder.Valid ? recorder.CurrentValueAsDouble : 0.0;
-                data[name + "_valid"] = recorder.Valid;
-                data[name + "_unit"] = recorder.Valid ? recorder.UnitType.ToString() : "Unknown";
-                recorder.Dispose();
+                // Wait 1 frame for recorders to accumulate data
+                await WaitOneFrameAsync();
+
+                // Read values
+                for (int i = 0; i < recorders.Count; i++)
+                {
+                    var recorder = recorders[i];
+                    string name = counterNames[i];
+                    data[name] = recorder.Valid ? recorder.CurrentValueAsDouble : 0.0;
+                    data[name + "_valid"] = recorder.Valid;
+                    data[name + "_unit"] = recorder.Valid ? recorder.UnitType.ToString() : "Unknown";
+                }
+            }
+            finally
+            {
+                foreach (var recorder in recorders)
+                    recorder.Dispose();
             }
 
             return new SuccessResponse($"Captured {counterNames.Count} counter(s) from '{categoryName}'.", new

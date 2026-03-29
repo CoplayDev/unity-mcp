@@ -32,9 +32,9 @@ namespace MCPForUnity.Editor.Tools.Profiler
             return new SuccessResponse("Profiler started.", new
             {
                 enabled = Profiler.enabled,
-                recording,
-                log_file = recording ? Profiler.logFile : null,
-                allocation_callstacks = enableCallstacks,
+                recording = Profiler.enableBinaryLog,
+                log_file = Profiler.enableBinaryLog ? Profiler.logFile : null,
+                allocation_callstacks = Profiler.enableAllocationCallstacks,
             });
         }
 
@@ -84,6 +84,8 @@ namespace MCPForUnity.Editor.Tools.Profiler
                 if (!Enum.TryParse<ProfilerArea>(prop.Name, true, out var area))
                     return new ErrorResponse($"Unknown area '{prop.Name}'. Valid: {string.Join(", ", AreaNames)}");
 
+                if (prop.Value.Type != JTokenType.Boolean)
+                    return new ErrorResponse($"Area '{prop.Name}' value must be a boolean (true/false), got: {prop.Value}");
                 bool enabled = prop.Value.ToObject<bool>();
                 Profiler.SetAreaEnabled(area, enabled);
                 updated[prop.Name] = enabled;

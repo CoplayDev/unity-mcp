@@ -30,7 +30,7 @@ namespace MCPForUnity.Editor.Tools.Profiler
                                              null, new[] { typeof(int) }, null)
                                          ?? UtilType.GetMethod("GetFrameEventData", BindingFlags.Public | BindingFlags.Static);
                 }
-                ReflectionAvailable = UtilType != null && EventCountProp != null;
+                ReflectionAvailable = UtilType != null && EventCountProp != null && EnableMethod != null;
             }
             catch
             {
@@ -50,7 +50,7 @@ namespace MCPForUnity.Editor.Tools.Profiler
             {
                 if (EnableMethod != null)
                 {
-                    EnableMethod.Invoke(null, new object[] { true, 0 });
+                    InvokeSetEnabled(true);
                 }
             }
             catch (Exception ex)
@@ -92,7 +92,7 @@ namespace MCPForUnity.Editor.Tools.Profiler
             {
                 if (EnableMethod != null)
                 {
-                    EnableMethod.Invoke(null, new object[] { false, 0 });
+                    InvokeSetEnabled(false);
                 }
             }
             catch (Exception ex)
@@ -191,6 +191,17 @@ namespace MCPForUnity.Editor.Tools.Profiler
                 result["next_cursor"] = end;
 
             return new SuccessResponse($"Frame Debugger events {cursor}-{end - 1} of {totalEvents}.", result);
+        }
+
+        private static void InvokeSetEnabled(bool value)
+        {
+            int paramCount = EnableMethod.GetParameters().Length;
+            if (paramCount == 2)
+                EnableMethod.Invoke(null, new object[] { value, 0 });
+            else if (paramCount == 1)
+                EnableMethod.Invoke(null, new object[] { value });
+            else
+                throw new InvalidOperationException($"SetEnabled has unexpected {paramCount} parameters.");
         }
 
         private static void TryAddField(Type type, object obj, string fieldName, Dictionary<string, object> dict)
