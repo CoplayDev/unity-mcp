@@ -38,7 +38,11 @@ namespace MCPForUnity.Editor.Tools.Profiler
                     new[] { typeof(string), typeof(Action<string, bool>), typeof(Action<string, bool, UnityEditor.DebugScreenCapture>), typeof(uint) });
 
                 if (takeMethod == null)
-                    takeMethod = MemoryProfilerType.GetMethod("TakeSnapshot");
+                {
+                    // Try 2-param overload: TakeSnapshot(string, Action<string, bool>)
+                    takeMethod = MemoryProfilerType.GetMethod("TakeSnapshot",
+                        new[] { typeof(string), typeof(Action<string, bool>) });
+                }
 
                 if (takeMethod == null)
                     return new ErrorResponse("Could not find TakeSnapshot method on MemoryProfiler. API may have changed.");
@@ -61,7 +65,13 @@ namespace MCPForUnity.Editor.Tools.Profiler
                     }
                 };
 
-                takeMethod.Invoke(null, new object[] { snapshotPath, callback, null, 0u });
+                int paramCount = takeMethod.GetParameters().Length;
+                if (paramCount == 4)
+                    takeMethod.Invoke(null, new object[] { snapshotPath, callback, null, 0u });
+                else if (paramCount == 2)
+                    takeMethod.Invoke(null, new object[] { snapshotPath, callback });
+                else
+                    return new ErrorResponse($"TakeSnapshot has unexpected {paramCount} parameters. API may have changed.");
             }
             catch (Exception ex)
             {

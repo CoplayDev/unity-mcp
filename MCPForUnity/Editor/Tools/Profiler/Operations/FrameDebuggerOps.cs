@@ -11,7 +11,6 @@ namespace MCPForUnity.Editor.Tools.Profiler
         private static readonly Type UtilType;
         private static readonly PropertyInfo EventCountProp;
         private static readonly MethodInfo EnableMethod;
-        private static readonly MethodInfo DisableMethod;
         private static readonly MethodInfo GetEventDataMethod;
         private static readonly bool ReflectionAvailable;
 
@@ -24,9 +23,12 @@ namespace MCPForUnity.Editor.Tools.Profiler
                 {
                     EventCountProp = UtilType.GetProperty("eventsCount", BindingFlags.Public | BindingFlags.Static)
                                   ?? UtilType.GetProperty("count", BindingFlags.Public | BindingFlags.Static);
-                    EnableMethod = UtilType.GetMethod("SetEnabled", BindingFlags.Public | BindingFlags.Static);
-                    DisableMethod = EnableMethod; // Same method, different arg
-                    GetEventDataMethod = UtilType.GetMethod("GetFrameEventData", BindingFlags.Public | BindingFlags.Static);
+                    EnableMethod = UtilType.GetMethod("SetEnabled", BindingFlags.Public | BindingFlags.Static,
+                                      null, new[] { typeof(bool), typeof(int) }, null)
+                                  ?? UtilType.GetMethod("SetEnabled", BindingFlags.Public | BindingFlags.Static);
+                    GetEventDataMethod = UtilType.GetMethod("GetFrameEventData", BindingFlags.Public | BindingFlags.Static,
+                                             null, new[] { typeof(int) }, null)
+                                         ?? UtilType.GetMethod("GetFrameEventData", BindingFlags.Public | BindingFlags.Static);
                 }
                 ReflectionAvailable = UtilType != null && EventCountProp != null;
             }

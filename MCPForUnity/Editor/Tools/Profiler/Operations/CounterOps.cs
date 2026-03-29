@@ -20,7 +20,10 @@ namespace MCPForUnity.Editor.Tools.Profiler
                 return new ErrorResponse(categoryResult.ErrorMessage);
 
             string categoryName = categoryResult.Value;
-            ProfilerCategory category = ResolveCategory(categoryName);
+            var resolved = ResolveCategory(categoryName, out string categoryError);
+            if (resolved == null)
+                return new ErrorResponse(categoryError);
+            ProfilerCategory category = resolved.Value;
 
             // Get counter names: explicit list or discover all in category
             var counterNames = GetRequestedCounters(p, category);
@@ -91,8 +94,16 @@ namespace MCPForUnity.Editor.Tools.Profiler
             return tcs.Task;
         }
 
-        private static ProfilerCategory ResolveCategory(string name)
+        private static readonly string[] ValidCategories = new[]
         {
+            "Render", "Scripts", "Memory", "Physics", "Physics2D", "Animation",
+            "Audio", "Lighting", "Network", "Gui", "UI", "Ai", "Video",
+            "Loading", "Input", "Vr", "Internal", "Particles", "FileIO", "VirtualTexturing"
+        };
+
+        internal static ProfilerCategory? ResolveCategory(string name, out string error)
+        {
+            error = null;
             switch (name.ToLowerInvariant())
             {
                 case "render": return ProfilerCategory.Render;
@@ -114,7 +125,9 @@ namespace MCPForUnity.Editor.Tools.Profiler
                 case "particles": return ProfilerCategory.Particles;
                 case "fileio": return ProfilerCategory.FileIO;
                 case "virtualtexturing": return ProfilerCategory.VirtualTexturing;
-                default: return ProfilerCategory.Render;
+                default:
+                    error = $"Unknown category '{name}'. Valid: {string.Join(", ", ValidCategories)}";
+                    return null;
             }
         }
     }
