@@ -54,6 +54,10 @@
       "description": "Execute custom Unity Editor tools registered by the project"
     },
     {
+      "name": "execute_code",
+      "description": "Execute arbitrary C# code inside the Unity Editor with access to all Unity APIs"
+    },
+    {
       "name": "execute_menu_item",
       "description": "Execute Unity Editor menu items"
     },
