@@ -1,36 +1,50 @@
-using System.Collections.Generic;
+using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
-using Unity.Profiling;
+using UnityEngine;
 
 namespace MCPForUnity.Editor.Tools.Profiler
 {
     internal static class FrameTimingOps
     {
-        private static readonly (string counterName, string valueKey, string validKey)[] COUNTER_MAP = new[]
-        {
-            ("CPU Main Thread Frame Time", "main_thread_ms", "main_thread_valid"),
-            ("CPU Render Thread Frame Time", "render_thread_ms", "render_thread_valid"),
-            ("CPU Total Frame Time", "cpu_frame_ms", "cpu_frame_valid"),
-            ("GPU Frame Time", "gpu_frame_ms", "gpu_frame_valid"),
-        };
-
         internal static object GetFrameTiming(JObject @params)
         {
-            var data = new Dictionary<string, object>();
-
-            foreach (var (counterName, valueKey, validKey) in COUNTER_MAP)
+            if (!FrameTimingManager.IsFeatureEnabled())
             {
-                using var recorder = ProfilerRecorder.StartNew(ProfilerCategory.Internal, counterName);
-                data[valueKey] = recorder.Valid ? recorder.CurrentValue / 1e6 : 0.0;
-                data[validKey] = recorder.Valid;
+                return new ErrorResponse(
+                    "Frame Timing Stats is not enabled. "
+                    + "Enable it in Project Settings > Player > Other Settings > 'Frame Timing Stats', "
+                    + "or use a Development Build (always enabled).");
             }
 
-            return new
+            FrameTimingManager.CaptureFrameTimings();
+            var timings = new FrameTiming[1];
+            uint count = FrameTimingManager.GetLatestTimings(1, timings);
+
+            if (count == 0)
             {
-                success = true,
-                message = "Frame timing captured.",
-                data
-            };
+                return new SuccessResponse("No frame timing data available yet (need a few frames).", new
+                {
+                    available = false,
+                });
+            }
+
+            var t = timings[0];
+            return new SuccessResponse("Frame timing captured.", new
+            {
+                available = true,
+                cpu_frame_time_ms = t.cpuFrameTime,
+                cpu_main_thread_frame_time_ms = t.cpuMainThreadFrameTime,
+                cpu_main_thread_present_wait_time_ms = t.cpuMainThreadPresentWaitTime,
+                cpu_render_thread_frame_time_ms = t.cpuRenderThreadFrameTime,
+                gpu_frame_time_ms = t.gpuFrameTime,
+                frame_start_timestamp = t.frameStartTimestamp,
+                first_submit_timestamp = t.firstSubmitTimestamp,
+                cpu_time_present_called = t.cpuTimePresentCalled,
+                cpu_time_frame_complete = t.cpuTimeFrameComplete,
+                height_scale = t.heightScale,
+                width_scale = t.widthScale,
+                sync_interval = t.syncInterval,
+            });
         }
     }
 }
