@@ -85,6 +85,32 @@ async def test_manage_gameobject_is_static_string_coercion(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_manage_gameobject_is_static_string_false_coercion(monkeypatch):
+    """Test that string 'false' is coerced to bool for is_static."""
+    captured = {}
+
+    async def fake_send(cmd, params, **kwargs):
+        captured["params"] = params
+        return {"success": True, "data": {}}
+
+    monkeypatch.setattr(
+        manage_go_mod,
+        "async_send_command_with_retry",
+        fake_send,
+    )
+
+    resp = await manage_go_mod.manage_gameobject(
+        ctx=DummyContext(),
+        action="modify",
+        target="Ground",
+        is_static="false",
+    )
+
+    assert resp.get("success") is True
+    assert captured["params"]["isStatic"] is False
+
+
+@pytest.mark.asyncio
 async def test_manage_gameobject_is_static_omitted(monkeypatch):
     """Test that omitting is_static does not include isStatic in params."""
     captured = {}
