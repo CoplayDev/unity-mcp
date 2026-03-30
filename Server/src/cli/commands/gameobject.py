@@ -247,6 +247,11 @@ def create(
     help="Set active state."
 )
 @click.option(
+    "--static/--no-static",
+    default=None,
+    help="Set static flag (all StaticEditorFlags on/off)."
+)
+@click.option(
     "--add-components",
     default=None,
     help="Comma-separated list of components to add."
@@ -273,6 +278,7 @@ def modify(
     tag: Optional[str],
     layer: Optional[str],
     active: Optional[bool],
+    static: Optional[bool],
     add_components: Optional[str],
     remove_components: Optional[str],
     search_method: Optional[str],
@@ -288,6 +294,7 @@ def modify(
         unity-mcp gameobject modify "-81840" --search-method by_id --active
         unity-mcp gameobject modify "/Canvas/Panel" --search-method by_path --inactive
         unity-mcp gameobject modify "Cube" --add-components "Rigidbody,BoxCollider"
+        unity-mcp gameobject modify "Ground" --static
     """
     config = get_config()
 
@@ -312,6 +319,8 @@ def modify(
         params["layer"] = layer
     if active is not None:
         params["setActive"] = active
+    if static is not None:
+        params["isStatic"] = static
     if add_components:
         params["componentsToAdd"] = [c.strip() for c in add_components.split(",")]
     if remove_components:
