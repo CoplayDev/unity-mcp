@@ -589,26 +589,84 @@ namespace MCPForUnity.Editor.Tools
                     }
                 }
 
-                // When a specific camera is requested or include_image is true, always use camera-based capture
-                // (synchronous, gives us bytes in memory for base64).
-                if (targetCamera != null || includeImage)
+                // When include_image is requested but no specific camera, use composited capture
+                // (ScreenCapture.CaptureScreenshotAsTexture) which captures UI Toolkit overlays.
+                // When a specific camera IS requested, use camera-based capture.
+                if (targetCamera != null)
                 {
+                    if (!Application.isBatchMode) EnsureGameView();
+
+                    ScreenshotCaptureResult result = ScreenshotUtility.CaptureFromCameraToAssetsFolder(
+                        targetCamera, fileName, resolvedSuperSize, ensureUniqueFileName: true,
+                        includeImage: includeImage, maxResolution: maxResolution);
+
+                    AssetDatabase.ImportAsset(result.AssetsRelativePath, ImportAssetOptions.ForceSynchronousImport);
+                    string message = $"Screenshot captured to '{result.AssetsRelativePath}' (camera: {targetCamera.name}).";
+
+                    var data = new Dictionary<string, object>
+                    {
+                        { "path", result.AssetsRelativePath },
+                        { "fullPath", result.FullPath },
+                        { "superSize", result.SuperSize },
+                        { "isAsync", false },
+                        { "camera", targetCamera.name },
+                        { "captureSource", "game_view" },
+                    };
+                    if (includeImage && result.ImageBase64 != null)
+                    {
+                        data["imageBase64"] = result.ImageBase64;
+                        data["imageWidth"] = result.ImageWidth;
+                        data["imageHeight"] = result.ImageHeight;
+                    }
+                    return new SuccessResponse(message, data);
+                }
+
+                if (includeImage && Application.isPlaying)
+                {
+                    if (!Application.isBatchMode) EnsureGameView();
+
+                    ScreenshotCaptureResult result = ScreenshotUtility.CaptureComposited(
+                        fileName, resolvedSuperSize, ensureUniqueFileName: true,
+                        includeImage: true, maxResolution: maxResolution);
+
+                    AssetDatabase.ImportAsset(result.AssetsRelativePath, ImportAssetOptions.ForceSynchronousImport);
+                    string cameraName = Camera.main != null ? Camera.main.name : "composited";
+                    string message = $"Screenshot captured to '{result.AssetsRelativePath}' (camera: {cameraName}).";
+
+                    var data = new Dictionary<string, object>
+                    {
+                        { "path", result.AssetsRelativePath },
+                        { "fullPath", result.FullPath },
+                        { "superSize", result.SuperSize },
+                        { "isAsync", false },
+                        { "camera", cameraName },
+                        { "captureSource", "game_view" },
+                    };
+                    if (result.ImageBase64 != null)
+                    {
+                        data["imageBase64"] = result.ImageBase64;
+                        data["imageWidth"] = result.ImageWidth;
+                        data["imageHeight"] = result.ImageHeight;
+                    }
+                    return new SuccessResponse(message, data);
+                }
+
+                if (includeImage)
+                {
+                    // Not in play mode — fall back to camera-based capture
+                    targetCamera = Camera.main;
                     if (targetCamera == null)
                     {
-                        targetCamera = Camera.main;
-                        if (targetCamera == null)
-                        {
 #if UNITY_2022_2_OR_NEWER
-                            var allCams = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None);
+                        var allCams = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None);
 #else
-                            var allCams = UnityEngine.Object.FindObjectsOfType<Camera>();
+                        var allCams = UnityEngine.Object.FindObjectsOfType<Camera>();
 #endif
-                            targetCamera = allCams.Length > 0 ? allCams[0] : null;
-                        }
+                        targetCamera = allCams.Length > 0 ? allCams[0] : null;
                     }
                     if (targetCamera == null)
                     {
-                        return new ErrorResponse("No camera found in the scene. Add a Camera to use screenshot with camera or include_image.");
+                        return new ErrorResponse("No camera found in the scene. Add a Camera to use screenshot with include_image outside of Play mode.");
                     }
 
                     if (!Application.isBatchMode) EnsureGameView();
