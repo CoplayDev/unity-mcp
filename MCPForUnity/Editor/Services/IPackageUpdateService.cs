@@ -13,6 +13,29 @@ namespace MCPForUnity.Editor.Services
         UpdateCheckResult CheckForUpdate(string currentVersion);
 
         /// <summary>
+        /// Returns a cached update result if one exists for today, or null if a network fetch is needed.
+        /// Main-thread only (reads EditorPrefs).
+        /// </summary>
+        UpdateCheckResult TryGetCachedResult(string currentVersion);
+
+        /// <summary>
+        /// Performs only the network fetch and version comparison (no EditorPrefs access).
+        /// Safe to call from a background thread.
+        /// </summary>
+        UpdateCheckResult FetchAndCompare(string currentVersion);
+
+        /// <summary>
+        /// Performs only the network fetch and version comparison using pre-computed installation info.
+        /// Use this overload when calling from a background thread to avoid main-thread-only API calls.
+        /// </summary>
+        UpdateCheckResult FetchAndCompare(string currentVersion, bool isGitInstallation, string gitBranch);
+
+        /// <summary>
+        /// Caches a successful fetch result in EditorPrefs. Must be called from the main thread.
+        /// </summary>
+        void CacheFetchResult(string currentVersion, string fetchedVersion);
+
+        /// <summary>
         /// Compares two version strings to determine if the first is newer than the second
         /// </summary>
         /// <param name="version1">First version string</param>
@@ -25,6 +48,12 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         /// <returns>True if installed via Git, false if Asset Store or unknown</returns>
         bool IsGitInstallation();
+
+        /// <summary>
+        /// Determines the Git branch to check for updates (e.g. "main" or "beta").
+        /// Must be called from the main thread (uses Unity PackageManager APIs).
+        /// </summary>
+        string GetGitUpdateBranch(string currentVersion);
 
         /// <summary>
         /// Clears the cached update check data, forcing a fresh check on next request

@@ -127,7 +127,7 @@ namespace MCPForUnity.Editor.Helpers
 
                 // Script is at: {packageRoot}/Editor/Helpers/AssetPathUtility.cs
                 // Extract {packageRoot}
-                int editorIndex = scriptPath.IndexOf("/Editor/", StringComparison.Ordinal);
+                int editorIndex = scriptPath.LastIndexOf("/Editor/", StringComparison.Ordinal);
 
                 if (editorIndex >= 0)
                 {

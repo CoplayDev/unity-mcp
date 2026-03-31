@@ -1713,8 +1713,7 @@ namespace MCPForUnity.Editor.Tools
                     }
 
                     var prefabStatus = PrefabUtility.GetPrefabInstanceStatus(go);
-                    if (prefabStatus == PrefabInstanceStatus.MissingAsset ||
-                        prefabStatus == PrefabInstanceStatus.Disconnected)
+                    if (prefabStatus == PrefabInstanceStatus.MissingAsset)
                     {
                         brokenPrefabs++;
                         if (issues.Count < maxIssues)

@@ -45,6 +45,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             { "scripting_ext", "Scripting Extensions" },
             { "testing", "Testing" },
             { "probuilder", "ProBuilder — Experimental" },
+            { "profiling", "Profiling & Frame Debugger" },
         };
 
         public VisualElement Root { get; }

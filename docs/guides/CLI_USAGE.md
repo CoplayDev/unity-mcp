@@ -298,6 +298,13 @@ unity-mcp prefab close
 
 # Create from GameObject
 unity-mcp prefab create "Player" --path "Assets/Prefabs"
+
+# Modify prefab contents (headless, no UI)
+unity-mcp prefab modify "Assets/Prefabs/Player.prefab" --target Weapon --position "0,1,2"
+unity-mcp prefab modify "Assets/Prefabs/Player.prefab" --delete-child Child1 --delete-child "Turret/Barrel"
+unity-mcp prefab modify "Assets/Prefabs/Player.prefab" --set-property "Rigidbody.mass=5"
+unity-mcp prefab modify "Assets/Prefabs/Player.prefab" --add-component BoxCollider
+unity-mcp prefab modify "Assets/Prefabs/Player.prefab" --create-child '{"name":"Spawn","primitive_type":"Sphere"}'
 ```
 
 ### Asset Operations
@@ -487,7 +494,7 @@ unity-mcp raw manage_packages '{"action": "list_packages"}'
 | `shader` | `create`, `read`, `update`, `delete` |
 | `editor` | `play`, `pause`, `stop`, `refresh`, `console`, `menu`, `tool`, `add-tag`, `remove-tag`, `add-layer`, `remove-layer`, `tests`, `poll-test`, `custom-tool` |
 | `asset` | `search`, `info`, `create`, `delete`, `duplicate`, `move`, `rename`, `import`, `mkdir` |
-| `prefab` | `open`, `close`, `save`, `create` |
+| `prefab` | `open`, `close`, `save`, `create`, `modify` |
 | `material` | `info`, `create`, `set-color`, `set-property`, `assign`, `set-renderer-color` |
 | `camera` | `ping`, `list`, `create`, `set-target`, `set-lens`, `set-priority`, `set-body`, `set-aim`, `set-noise`, `add-extension`, `remove-extension`, `ensure-brain`, `brain-status`, `set-blend`, `force`, `release`, `screenshot`, `screenshot-multiview` |
 | `graphics` | `ping`, `volume-create`, `volume-add-effect`, `volume-set-effect`, `volume-remove-effect`, `volume-info`, `volume-set-properties`, `volume-list-effects`, `volume-create-profile`, `pipeline-info`, `pipeline-settings`, `pipeline-set-quality`, `pipeline-set-settings`, `bake-start`, `bake-cancel`, `bake-status`, `bake-clear`, `bake-settings`, `bake-set-settings`, `bake-reflection-probe`, `bake-create-probes`, `bake-create-reflection`, `stats`, `stats-memory`, `stats-debug-mode`, `feature-list`, `feature-add`, `feature-remove`, `feature-configure`, `feature-reorder`, `feature-toggle`, `skybox-info`, `skybox-set-material`, `skybox-set-properties`, `skybox-set-ambient`, `skybox-set-fog`, `skybox-set-reflection`, `skybox-set-sun` |

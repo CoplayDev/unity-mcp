@@ -52,6 +52,7 @@ namespace MCPForUnity.Editor.Windows
         private double lastRefreshTime = 0;
         private const double RefreshDebounceSeconds = 0.5;
         private bool updateCheckQueued = false;
+        private bool updateCheckInFlight = false;
 
         private enum ActivePanel
         {
@@ -352,7 +353,7 @@ namespace MCPForUnity.Editor.Windows
 
         private void QueueUpdateCheck()
         {
-            if (updateCheckQueued)
+            if (updateCheckQueued || updateCheckInFlight)
             {
                 return;
             }
@@ -377,23 +378,65 @@ namespace MCPForUnity.Editor.Windows
                 return;
             }
 
-            try
+            // Main thread: resolve service + read EditorPrefs cache (both require main thread)
+            var updateService = MCPServiceLocator.Updates;
+            var cachedResult = updateService.TryGetCachedResult(currentVersion);
+            if (cachedResult != null)
             {
-                var result = MCPServiceLocator.Updates.CheckForUpdate(currentVersion);
-                if (result.CheckSucceeded && result.UpdateAvailable && !string.IsNullOrEmpty(result.LatestVersion))
-                {
-                    updateNotificationText.text = $"Update available: v{result.LatestVersion}  (current: v{currentVersion})";
-                    updateNotificationText.tooltip = $"Latest version: v{result.LatestVersion}\nCurrent version: v{currentVersion}";
-                    updateNotification.AddToClassList("visible");
-                }
-                else
-                {
-                    updateNotification.RemoveFromClassList("visible");
-                }
+                ApplyUpdateCheckResult(cachedResult, currentVersion);
+                return;
             }
-            catch (Exception ex)
+
+            // Main thread: pre-compute installation info (uses main-thread-only Unity APIs)
+            bool isGitInstallation = updateService.IsGitInstallation();
+            string gitBranch = isGitInstallation ? updateService.GetGitUpdateBranch(currentVersion) : "main";
+
+            // Background thread: network I/O only (no EditorPrefs or Unity API access)
+            updateCheckInFlight = true;
+            Task.Run(() =>
             {
-                McpLog.Info($"Package update check skipped: {ex.Message}");
+                try
+                {
+                    return updateService.FetchAndCompare(currentVersion, isGitInstallation, gitBranch);
+                }
+                catch (Exception ex)
+                {
+                    McpLog.Info($"Package update check skipped: {ex.Message}");
+                    return null;
+                }
+            }).ContinueWith(t =>
+            {
+                EditorApplication.delayCall += () =>
+                {
+                    updateCheckInFlight = false;
+
+                    // Main thread: cache the result in EditorPrefs
+                    var result = t.Status == TaskStatus.RanToCompletion ? t.Result : null;
+                    if (result != null && result.CheckSucceeded && !string.IsNullOrEmpty(result.LatestVersion))
+                    {
+                        updateService.CacheFetchResult(currentVersion, result.LatestVersion);
+                    }
+
+                    if (this == null || updateNotification == null || updateNotificationText == null)
+                    {
+                        return;
+                    }
+
+                    ApplyUpdateCheckResult(result, currentVersion);
+                };
+            }, TaskScheduler.Default);
+        }
+
+        private void ApplyUpdateCheckResult(UpdateCheckResult result, string currentVersion)
+        {
+            if (result != null && result.CheckSucceeded && result.UpdateAvailable && !string.IsNullOrEmpty(result.LatestVersion))
+            {
+                updateNotificationText.text = $"Update available: v{result.LatestVersion}  (current: v{currentVersion})";
+                updateNotificationText.tooltip = $"Latest version: v{result.LatestVersion}\nCurrent version: v{currentVersion}";
+                updateNotification.AddToClassList("visible");
+            }
+            else
+            {
                 updateNotification.RemoveFromClassList("visible");
             }
         }
