@@ -126,6 +126,10 @@
       "description": "Create and edit ProBuilder meshes, shapes, and geometry operations"
     },
     {
+      "name": "manage_profiler",
+      "description": "Unity Profiler session control, counter reads, memory snapshots, and Frame Debugger (group: profiling)"
+    },
+    {
       "name": "manage_scene",
       "description": "Load, save, query hierarchy, multi-scene editing, templates, validation, and manage Unity scenes"
     },

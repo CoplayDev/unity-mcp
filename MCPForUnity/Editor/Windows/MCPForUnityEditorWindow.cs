@@ -387,13 +387,17 @@ namespace MCPForUnity.Editor.Windows
                 return;
             }
 
-            // Background thread: network I/O only (no EditorPrefs access)
+            // Main thread: pre-compute installation info (uses main-thread-only Unity APIs)
+            bool isGitInstallation = updateService.IsGitInstallation();
+            string gitBranch = isGitInstallation ? updateService.GetGitUpdateBranch(currentVersion) : "main";
+
+            // Background thread: network I/O only (no EditorPrefs or Unity API access)
             updateCheckInFlight = true;
             Task.Run(() =>
             {
                 try
                 {
-                    return updateService.FetchAndCompare(currentVersion);
+                    return updateService.FetchAndCompare(currentVersion, isGitInstallation, gitBranch);
                 }
                 catch (Exception ex)
                 {

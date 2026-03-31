@@ -118,7 +118,12 @@ namespace MCPForUnity.Editor.Services
         {
             bool isGitInstallation = IsGitInstallation();
             string gitBranch = isGitInstallation ? GetGitUpdateBranch(currentVersion) : "main";
+            return FetchAndCompare(currentVersion, isGitInstallation, gitBranch);
+        }
 
+        /// <inheritdoc/>
+        public UpdateCheckResult FetchAndCompare(string currentVersion, bool isGitInstallation, string gitBranch)
+        {
             string latestVersion = isGitInstallation
                 ? FetchLatestVersionFromGitHub(gitBranch)
                 : FetchLatestVersionFromAssetStoreJson();
@@ -279,7 +284,8 @@ namespace MCPForUnity.Editor.Services
             return version.IndexOf('-', StringComparison.Ordinal) >= 0;
         }
 
-        private static string GetGitUpdateBranch(string currentVersion)
+        /// <inheritdoc/>
+        public string GetGitUpdateBranch(string currentVersion)
         {
             try
             {
