@@ -178,6 +178,14 @@ namespace MCPForUnity.Editor.Tools
                 {
                     relativeDir = relativeDir.Substring("Assets/".Length).TrimStart('/');
                 }
+                // If path ends with .unity, it's a full scene path — extract just the directory
+                if (relativeDir.EndsWith(".unity", StringComparison.OrdinalIgnoreCase))
+                {
+                    string dirPart = Path.GetDirectoryName(relativeDir);
+                    relativeDir = string.IsNullOrEmpty(dirPart)
+                        ? string.Empty
+                        : AssetPathUtility.NormalizeSeparators(dirPart);
+                }
             }
 
             // Apply default *after* sanitizing, using the original path variable for the check
