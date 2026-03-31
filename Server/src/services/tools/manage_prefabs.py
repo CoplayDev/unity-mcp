@@ -17,14 +17,17 @@ REQUIRED_PARAMS = {
     "get_hierarchy": ["prefab_path"],
     "create_from_gameobject": ["target", "prefab_path"],
     "modify_contents": ["prefab_path"],
+    "open_prefab_stage": ["prefab_path"],
 }
 
 
 @mcp_for_unity_tool(
     description=(
-        "Manages Unity Prefab assets via headless operations (no UI, no prefab stages). "
-        "Actions: get_info, get_hierarchy, create_from_gameobject, modify_contents. "
-        "Use modify_contents for headless prefab editing - ideal for automated workflows. "
+        "Manages Unity Prefab assets. "
+        "Actions: get_info, get_hierarchy, create_from_gameobject, modify_contents, open_prefab_stage, save_prefab_stage, close_prefab_stage. "
+        "Two approaches to prefab editing: "
+        "(1) Headless: use modify_contents for automated/scripted edits without opening the prefab in the editor. "
+        "(2) Interactive: use open_prefab_stage to open a prefab, then manage_gameobject/manage_components to edit objects inside the prefab stage, then save_prefab_stage to save and close_prefab_stage to return to the main scene. "
         "Use create_child parameter with modify_contents to add child GameObjects or nested prefab instances to a prefab "
         "(single object or array for batch creation in one save). "
         "Example: create_child=[{\"name\": \"Child1\", \"primitive_type\": \"Sphere\", \"position\": [1,0,0]}, "
@@ -50,6 +53,9 @@ async def manage_prefabs(
             "get_info",
             "get_hierarchy",
             "modify_contents",
+            "open_prefab_stage",
+            "save_prefab_stage",
+            "close_prefab_stage",
         ],
         "Prefab operation to perform.",
     ],

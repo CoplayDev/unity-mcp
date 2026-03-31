@@ -57,7 +57,7 @@ async def get_prefab_api_docs(_ctx: Context) -> MCPResponse:
         "workflow": [
             "1. Use manage_asset action=search filterType=Prefab to find prefabs",
             "2. Use the asset path to access detailed data via resources below",
-            "3. Use manage_editor action=open_prefab_stage / save_prefab_stage / close_prefab_stage for prefab editing UI transitions"
+            "3. Use manage_prefabs action=open_prefab_stage / save_prefab_stage / close_prefab_stage for prefab editing UI transitions"
         ],
         "path_encoding": {
             "note": "Prefab paths must be URL-encoded when used in resource URIs",

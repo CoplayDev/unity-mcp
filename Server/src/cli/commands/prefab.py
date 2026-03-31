@@ -29,7 +29,7 @@ def open_stage(path: str):
     config = get_config()
 
     params: dict[str, Any] = {
-        "action": "open_stage",
+        "action": "open_prefab_stage",
         "prefabPath": path,
     }
 
@@ -57,7 +57,7 @@ def close_stage(save: bool):
     config = get_config()
 
     params: dict[str, Any] = {
-        "action": "close_stage",
+        "action": "close_prefab_stage",
     }
     if save:
         params["saveBeforeClose"] = True
@@ -83,7 +83,7 @@ def save_stage():
         "action": "save_prefab_stage",
     }
 
-    result = run_command("manage_editor", params, config)
+    result = run_command("manage_prefabs", params, config)
     click.echo(format_output(result, config.format))
     if result.get("success"):
         print_success("Saved prefab stage")
