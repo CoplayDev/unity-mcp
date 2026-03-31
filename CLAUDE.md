@@ -70,7 +70,7 @@ from services.registry import mcp_for_unity_tool
 
 @mcp_for_unity_tool(
     description="Does something in Unity.",
-    group="core",  # core (default), vfx, animation, ui, scripting_ext, testing, probuilder
+    group="core",  # core (default), vfx, animation, ui, scripting_ext, testing, probuilder, profiling, docs
 )
 async def manage_something(
     ctx: Context,
