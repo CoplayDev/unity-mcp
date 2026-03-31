@@ -47,12 +47,18 @@ namespace MCPForUnity.Editor.Tools.Profiler
                 // Wait 1 frame for recorders to accumulate data
                 await WaitOneFrameAsync();
 
-                // Read values
+                // Read values — use GetSample(0) for last completed frame data;
+                // CurrentValue is always 0 for per-frame render counters.
                 for (int i = 0; i < recorders.Count; i++)
                 {
                     var recorder = recorders[i];
                     string name = counterNames[i];
-                    data[name] = recorder.Valid ? recorder.CurrentValueAsDouble : 0.0;
+                    long value = 0;
+                    if (recorder.Valid && recorder.Count > 0)
+                        value = recorder.GetSample(0).Value;
+                    else if (recorder.Valid)
+                        value = recorder.CurrentValue;
+                    data[name] = value;
                     data[name + "_valid"] = recorder.Valid;
                     data[name + "_unit"] = recorder.Valid ? recorder.UnitType.ToString() : "Unknown";
                 }
@@ -89,9 +95,11 @@ namespace MCPForUnity.Editor.Tools.Profiler
         private static Task WaitOneFrameAsync()
         {
             var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            int remaining = 2;
 
             void Tick()
             {
+                if (--remaining > 0) return;
                 EditorApplication.update -= Tick;
                 tcs.TrySetResult(true);
             }

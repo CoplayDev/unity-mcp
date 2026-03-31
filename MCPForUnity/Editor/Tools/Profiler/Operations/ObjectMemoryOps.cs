@@ -4,6 +4,7 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Profiling;
+using UProfiler = UnityEngine.Profiling.Profiler;
 
 namespace MCPForUnity.Editor.Tools.Profiler
 {
@@ -22,7 +23,7 @@ namespace MCPForUnity.Editor.Tools.Profiler
             var go = GameObject.Find(objectPath);
             if (go != null)
             {
-                long bytes = Profiler.GetRuntimeMemorySizeLong(go);
+                long bytes = UProfiler.GetRuntimeMemorySizeLong(go);
                 return new SuccessResponse($"Memory for '{objectPath}'.", new
                 {
                     object_name = go.name,
@@ -37,7 +38,7 @@ namespace MCPForUnity.Editor.Tools.Profiler
             var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(objectPath);
             if (asset != null)
             {
-                long bytes = Profiler.GetRuntimeMemorySizeLong(asset);
+                long bytes = UProfiler.GetRuntimeMemorySizeLong(asset);
                 return new SuccessResponse($"Memory for '{objectPath}'.", new
                 {
                     object_name = asset.name,

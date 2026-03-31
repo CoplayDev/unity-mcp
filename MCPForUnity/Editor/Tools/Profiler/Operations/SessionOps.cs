@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
+using UnityEngine;
 using UnityEngine.Profiling;
+using UProfiler = UnityEngine.Profiling.Profiler;
 
 namespace MCPForUnity.Editor.Tools.Profiler
 {
@@ -16,35 +19,39 @@ namespace MCPForUnity.Editor.Tools.Profiler
             string logFile = p.Get("log_file");
             bool enableCallstacks = p.GetBool("enable_callstacks");
 
-            Profiler.enabled = true;
+            UProfiler.enabled = true;
 
             bool recording = false;
             if (!string.IsNullOrEmpty(logFile))
             {
-                Profiler.logFile = logFile;
-                Profiler.enableBinaryLog = true;
+                string dir = Path.GetDirectoryName(logFile);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                    return new ErrorResponse($"Log file directory does not exist: {dir}");
+
+                UProfiler.logFile = logFile;
+                UProfiler.enableBinaryLog = true;
                 recording = true;
             }
 
             if (enableCallstacks)
-                Profiler.enableAllocationCallstacks = true;
+                UProfiler.enableAllocationCallstacks = true;
 
             return new SuccessResponse("Profiler started.", new
             {
-                enabled = Profiler.enabled,
-                recording = Profiler.enableBinaryLog,
-                log_file = Profiler.enableBinaryLog ? Profiler.logFile : null,
-                allocation_callstacks = Profiler.enableAllocationCallstacks,
+                enabled = UProfiler.enabled,
+                recording = UProfiler.enableBinaryLog,
+                log_file = UProfiler.enableBinaryLog ? UProfiler.logFile : null,
+                allocation_callstacks = UProfiler.enableAllocationCallstacks,
             });
         }
 
         internal static object Stop(JObject @params)
         {
-            string previousLogFile = Profiler.enableBinaryLog ? Profiler.logFile : null;
+            string previousLogFile = UProfiler.enableBinaryLog ? UProfiler.logFile : null;
 
-            Profiler.enableBinaryLog = false;
-            Profiler.enableAllocationCallstacks = false;
-            Profiler.enabled = false;
+            UProfiler.enableBinaryLog = false;
+            UProfiler.enableAllocationCallstacks = false;
+            UProfiler.enabled = false;
 
             return new SuccessResponse("Profiler stopped.", new
             {
@@ -59,15 +66,15 @@ namespace MCPForUnity.Editor.Tools.Profiler
             foreach (string name in AreaNames)
             {
                 if (Enum.TryParse<ProfilerArea>(name, out var area))
-                    areas[name] = Profiler.GetAreaEnabled(area);
+                    areas[name] = UProfiler.GetAreaEnabled(area);
             }
 
             return new SuccessResponse("Profiler status.", new
             {
-                enabled = Profiler.enabled,
-                recording = Profiler.enableBinaryLog,
-                log_file = Profiler.enableBinaryLog ? Profiler.logFile : null,
-                allocation_callstacks = Profiler.enableAllocationCallstacks,
+                enabled = UProfiler.enabled,
+                recording = UProfiler.enableBinaryLog,
+                log_file = UProfiler.enableBinaryLog ? UProfiler.logFile : null,
+                allocation_callstacks = UProfiler.enableAllocationCallstacks,
                 areas,
             });
         }
@@ -87,7 +94,7 @@ namespace MCPForUnity.Editor.Tools.Profiler
                 if (prop.Value.Type != JTokenType.Boolean)
                     return new ErrorResponse($"Area '{prop.Name}' value must be a boolean (true/false), got: {prop.Value}");
                 bool enabled = prop.Value.ToObject<bool>();
-                Profiler.SetAreaEnabled(area, enabled);
+                UProfiler.SetAreaEnabled(area, enabled);
                 updated[prop.Name] = enabled;
             }
 
