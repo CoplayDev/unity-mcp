@@ -738,30 +738,34 @@ namespace MCPForUnity.Editor.Windows
             bulkRow.style.flexDirection = FlexDirection.Row;
             bulkRow.style.marginBottom = 8;
 
-            var installAllButton = new Button(() =>
+            var upmPackages = new[] { "com.unity.probuilder", "com.unity.cinemachine", "com.unity.visualeffectgraph" };
+
+            Button installAllButton = null;
+            installAllButton = new Button(() =>
             {
                 if (!EditorUtility.DisplayDialog("Install All Dependencies",
                     "This will install Roslyn DLLs, ProBuilder, Cinemachine, and VFX Graph. Continue?",
                     "Install All", "Cancel")) return;
+                installAllButton.SetEnabled(false);
+                installAllButton.text = "Installing...";
                 if (!RoslynInstaller.IsInstalled()) RoslynInstaller.Install(interactive: false);
-                InstallUpmPackage("com.unity.probuilder");
-                InstallUpmPackage("com.unity.cinemachine");
-                InstallUpmPackage("com.unity.visualeffectgraph");
+                BatchUpmAdd(upmPackages);
             });
             installAllButton.text = "Install All";
             installAllButton.AddToClassList("action-button");
             installAllButton.style.marginRight = 4;
             bulkRow.Add(installAllButton);
 
-            var uninstallAllButton = new Button(() =>
+            Button uninstallAllButton = null;
+            uninstallAllButton = new Button(() =>
             {
                 if (!EditorUtility.DisplayDialog("Uninstall All Dependencies",
                     "This will remove Roslyn DLLs, ProBuilder, Cinemachine, and VFX Graph. Continue?",
                     "Uninstall All", "Cancel")) return;
+                uninstallAllButton.SetEnabled(false);
+                uninstallAllButton.text = "Removing...";
                 UninstallRoslyn();
-                RemoveUpmPackage("com.unity.probuilder");
-                RemoveUpmPackage("com.unity.cinemachine");
-                RemoveUpmPackage("com.unity.visualeffectgraph");
+                BatchUpmRemove(upmPackages);
             });
             uninstallAllButton.text = "Uninstall All";
             uninstallAllButton.AddToClassList("action-button");
@@ -868,13 +872,9 @@ namespace MCPForUnity.Editor.Windows
                 Button installButton = null;
                 installButton = new Button(() =>
                 {
-                    installAction();
-                    statusIcon.text = "\u2713";
-                    statusIcon.style.color = new Color(0.4f, 0.8f, 0.4f);
-                    statusText.text = installedText;
-                    statusText.style.color = new Color(0.6f, 0.8f, 0.6f);
                     installButton.SetEnabled(false);
                     installButton.text = "Installing...";
+                    installAction();
                 });
                 installButton.text = "Install";
                 installButton.AddToClassList("action-button");
@@ -883,17 +883,14 @@ namespace MCPForUnity.Editor.Windows
 
             if (isInstalled && uninstallAction != null)
             {
-                var uninstallButton = new Button(() =>
+                Button uninstallButton = null;
+                uninstallButton = new Button(() =>
                 {
-                    if (EditorUtility.DisplayDialog("Remove " + name,
-                        $"Are you sure you want to remove {name}?", "Remove", "Cancel"))
-                    {
-                        uninstallAction();
-                        statusIcon.text = "\u2717";
-                        statusIcon.style.color = new Color(0.8f, 0.4f, 0.4f);
-                        statusText.text = missingText;
-                        statusText.style.color = new Color(0.8f, 0.7f, 0.5f);
-                    }
+                    if (!EditorUtility.DisplayDialog("Remove " + name,
+                        $"Are you sure you want to remove {name}?", "Remove", "Cancel")) return;
+                    uninstallButton.SetEnabled(false);
+                    uninstallButton.text = "Removing...";
+                    uninstallAction();
                 });
                 uninstallButton.text = "Uninstall";
                 uninstallButton.AddToClassList("action-button");
@@ -908,27 +905,30 @@ namespace MCPForUnity.Editor.Windows
 
         private static void InstallUpmPackage(string packageId)
         {
-            var request = UnityEditor.PackageManager.Client.Add(packageId);
-            EditorUtility.DisplayProgressBar("Installing Package", $"Installing {packageId}...", 0.5f);
-            // Poll until complete (UPM operations are async)
-            EditorApplication.CallbackFunction pollCallback = null;
-            pollCallback = () =>
-            {
-                if (!request.IsCompleted) return;
-                EditorApplication.update -= pollCallback;
-                EditorUtility.ClearProgressBar();
-                if (request.Status == UnityEditor.PackageManager.StatusCode.Success)
-                    Debug.Log($"[MCP] Installed {packageId}");
-                else
-                    Debug.LogError($"[MCP] Failed to install {packageId}: {request.Error?.message}");
-            };
-            EditorApplication.update += pollCallback;
+            BatchUpmAdd(new[] { packageId });
         }
 
         private static void RemoveUpmPackage(string packageId)
         {
-            var request = UnityEditor.PackageManager.Client.Remove(packageId);
-            EditorUtility.DisplayProgressBar("Removing Package", $"Removing {packageId}...", 0.5f);
+            BatchUpmRemove(new[] { packageId });
+        }
+
+        private static void BatchUpmAdd(string[] packageIds)
+        {
+            var request = UnityEditor.PackageManager.Client.AddAndRemove(packageIds, null);
+            EditorUtility.DisplayProgressBar("Installing Packages", $"Installing {packageIds.Length} package(s)...", 0.5f);
+            PollUpmRequest(request, "install");
+        }
+
+        private static void BatchUpmRemove(string[] packageIds)
+        {
+            var request = UnityEditor.PackageManager.Client.AddAndRemove(null, packageIds);
+            EditorUtility.DisplayProgressBar("Removing Packages", $"Removing {packageIds.Length} package(s)...", 0.5f);
+            PollUpmRequest(request, "remove");
+        }
+
+        private static void PollUpmRequest(UnityEditor.PackageManager.Requests.AddAndRemoveRequest request, string verb)
+        {
             EditorApplication.CallbackFunction pollCallback = null;
             pollCallback = () =>
             {
@@ -936,9 +936,9 @@ namespace MCPForUnity.Editor.Windows
                 EditorApplication.update -= pollCallback;
                 EditorUtility.ClearProgressBar();
                 if (request.Status == UnityEditor.PackageManager.StatusCode.Success)
-                    Debug.Log($"[MCP] Removed {packageId}");
+                    Debug.Log($"[MCP] Package {verb} succeeded.");
                 else
-                    Debug.LogError($"[MCP] Failed to remove {packageId}: {request.Error?.message}");
+                    Debug.LogError($"[MCP] Package {verb} failed: {request.Error?.message}");
             };
             EditorApplication.update += pollCallback;
         }

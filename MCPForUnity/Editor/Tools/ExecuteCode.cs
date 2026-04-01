@@ -106,14 +106,14 @@ namespace MCPForUnity.Editor.Tools
                 var result = CompileAndExecute(code, compiler);
                 var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
 
-                AddToHistory(code, result, elapsed, safetyChecks);
+                AddToHistory(code, result, elapsed, safetyChecks, compiler);
                 return result;
             }
             catch (Exception e)
             {
                 McpLog.Error($"[ExecuteCode] Execution failed: {e}");
                 var errorResult = new ErrorResponse($"Execution failed: {e.Message}");
-                AddToHistory(code, errorResult, 0, safetyChecks);
+                AddToHistory(code, errorResult, 0, safetyChecks, compiler);
                 return errorResult;
             }
         }
@@ -167,6 +167,7 @@ namespace MCPForUnity.Editor.Tools
                 action = ActionExecute,
                 code = entry.code,
                 safety_checks = entry.safetyChecksEnabled,
+                compiler = entry.compiler ?? "auto",
             });
             return HandleExecute(replayParams);
         }
@@ -389,7 +390,7 @@ namespace MCPForUnity.Editor.Tools
             return null;
         }
 
-        private static void AddToHistory(string code, object result, double elapsedMs, bool safetyChecks)
+        private static void AddToHistory(string code, object result, double elapsedMs, bool safetyChecks, string compiler = "auto")
         {
             string preview;
             if (result is SuccessResponse sr)
@@ -410,6 +411,7 @@ namespace MCPForUnity.Editor.Tools
                 elapsedMs = Math.Round(elapsedMs, 1),
                 timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
                 safetyChecksEnabled = safetyChecks,
+                compiler = compiler,
             });
 
             while (_history.Count > MaxHistoryEntries)
@@ -442,6 +444,7 @@ namespace MCPForUnity.Editor.Tools
             public double elapsedMs;
             public string timestamp;
             public bool safetyChecksEnabled;
+            public string compiler;
         }
     }
 
