@@ -26,26 +26,26 @@ async def search_missing_references(
         ),
     ] = "scene",
     include_missing_scripts: Annotated[
-        bool | str | None,
+        bool | str,
         Field(
-            default=None,
-            description="Check for MonoBehaviours with missing scripts."
+            default=True,
+            description="Check for MonoBehaviours with missing scripts (default: True)."
         ),
-    ] = None,
+    ] = True,
     include_broken_references: Annotated[
-        bool | str | None,
+        bool | str,
         Field(
-            default=None,
-            description="Check for broken object references in serialized properties."
+            default=True,
+            description="Check for broken object references in serialized properties (default: True)."
         ),
-    ] = None,
+    ] = True,
     include_broken_prefabs: Annotated[
-        bool | str | None,
+        bool | str,
         Field(
-            default=None,
-            description="Check for prefab instances with missing prefab assets."
+            default=True,
+            description="Check for prefab instances with missing prefab assets (default: True)."
         ),
-    ] = None,
+    ] = True,
     path_filter: Annotated[
         str | None,
         Field(

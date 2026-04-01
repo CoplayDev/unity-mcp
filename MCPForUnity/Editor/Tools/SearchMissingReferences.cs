@@ -105,7 +105,7 @@ namespace MCPForUnity.Editor.Tools
                             {
                                 ScanGameObject(
                                     transform.gameObject,
-                                    assetPath,
+                                    assetPath + ":" + GetGameObjectPath(transform.gameObject),
                                     includeMissingScripts,
                                     includeBrokenReferences,
                                     includeBrokenPrefabs,
@@ -221,7 +221,7 @@ namespace MCPForUnity.Editor.Tools
 
             bool hasComponentFilter = !string.IsNullOrWhiteSpace(componentFilter);
 
-            if (includeMissingScripts && !hasComponentFilter)
+            if (includeMissingScripts)
             {
                 int missing = GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(go);
                 if (missing > 0)
@@ -261,7 +261,7 @@ namespace MCPForUnity.Editor.Tools
                 }
             }
 
-            if (includeBrokenPrefabs && !hasComponentFilter)
+            if (includeBrokenPrefabs)
             {
                 var prefabStatus = PrefabUtility.GetPrefabInstanceStatus(go);
                 if (prefabStatus == PrefabInstanceStatus.MissingAsset)
