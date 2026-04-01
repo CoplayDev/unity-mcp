@@ -749,7 +749,11 @@ namespace MCPForUnity.Editor.Windows
                 installAllButton.SetEnabled(false);
                 installAllButton.text = "Installing...";
                 if (!RoslynInstaller.IsInstalled()) RoslynInstaller.Install(interactive: false);
-                BatchUpmAdd(upmPackages);
+                BatchUpmAdd(upmPackages, () =>
+                {
+                    installAllButton.SetEnabled(true);
+                    installAllButton.text = "Install All";
+                });
             });
             installAllButton.text = "Install All";
             installAllButton.AddToClassList("action-button");
@@ -765,7 +769,11 @@ namespace MCPForUnity.Editor.Windows
                 uninstallAllButton.SetEnabled(false);
                 uninstallAllButton.text = "Removing...";
                 UninstallRoslyn();
-                BatchUpmRemove(upmPackages);
+                BatchUpmRemove(upmPackages, () =>
+                {
+                    uninstallAllButton.SetEnabled(true);
+                    uninstallAllButton.text = "Uninstall All";
+                });
             });
             uninstallAllButton.text = "Uninstall All";
             uninstallAllButton.AddToClassList("action-button");
@@ -869,32 +877,44 @@ namespace MCPForUnity.Editor.Windows
 
             if (!isInstalled && installAction != null)
             {
-                Button installButton = null;
-                installButton = new Button(() =>
+                Button btn = null;
+                btn = new Button(() =>
                 {
-                    installButton.SetEnabled(false);
-                    installButton.text = "Installing...";
-                    installAction();
+                    btn.SetEnabled(false);
+                    btn.text = "Installing...";
+                    try { installAction(); }
+                    catch (Exception e)
+                    {
+                        Debug.LogError($"[MCP] Install failed: {e.Message}");
+                        btn.SetEnabled(true);
+                        btn.text = "Install";
+                    }
                 });
-                installButton.text = "Install";
-                installButton.AddToClassList("action-button");
-                buttonRow.Add(installButton);
+                btn.text = "Install";
+                btn.AddToClassList("action-button");
+                buttonRow.Add(btn);
             }
 
             if (isInstalled && uninstallAction != null)
             {
-                Button uninstallButton = null;
-                uninstallButton = new Button(() =>
+                Button btn = null;
+                btn = new Button(() =>
                 {
                     if (!EditorUtility.DisplayDialog("Remove " + name,
                         $"Are you sure you want to remove {name}?", "Remove", "Cancel")) return;
-                    uninstallButton.SetEnabled(false);
-                    uninstallButton.text = "Removing...";
-                    uninstallAction();
+                    btn.SetEnabled(false);
+                    btn.text = "Removing...";
+                    try { uninstallAction(); }
+                    catch (Exception e)
+                    {
+                        Debug.LogError($"[MCP] Uninstall failed: {e.Message}");
+                        btn.SetEnabled(true);
+                        btn.text = "Uninstall";
+                    }
                 });
-                uninstallButton.text = "Uninstall";
-                uninstallButton.AddToClassList("action-button");
-                buttonRow.Add(uninstallButton);
+                btn.text = "Uninstall";
+                btn.AddToClassList("action-button");
+                buttonRow.Add(btn);
             }
 
             if (buttonRow.childCount > 0)
@@ -903,31 +923,31 @@ namespace MCPForUnity.Editor.Windows
             parent.Add(row);
         }
 
-        private static void InstallUpmPackage(string packageId)
+        private static void InstallUpmPackage(string packageId, Action onComplete = null)
         {
-            BatchUpmAdd(new[] { packageId });
+            BatchUpmAdd(new[] { packageId }, onComplete);
         }
 
-        private static void RemoveUpmPackage(string packageId)
+        private static void RemoveUpmPackage(string packageId, Action onComplete = null)
         {
-            BatchUpmRemove(new[] { packageId });
+            BatchUpmRemove(new[] { packageId }, onComplete);
         }
 
-        private static void BatchUpmAdd(string[] packageIds)
+        private static void BatchUpmAdd(string[] packageIds, Action onComplete = null)
         {
             var request = UnityEditor.PackageManager.Client.AddAndRemove(packageIds, null);
             EditorUtility.DisplayProgressBar("Installing Packages", $"Installing {packageIds.Length} package(s)...", 0.5f);
-            PollUpmRequest(request, "install");
+            PollUpmRequest(request, "install", onComplete);
         }
 
-        private static void BatchUpmRemove(string[] packageIds)
+        private static void BatchUpmRemove(string[] packageIds, Action onComplete = null)
         {
             var request = UnityEditor.PackageManager.Client.AddAndRemove(null, packageIds);
             EditorUtility.DisplayProgressBar("Removing Packages", $"Removing {packageIds.Length} package(s)...", 0.5f);
-            PollUpmRequest(request, "remove");
+            PollUpmRequest(request, "remove", onComplete);
         }
 
-        private static void PollUpmRequest(UnityEditor.PackageManager.Requests.AddAndRemoveRequest request, string verb)
+        private static void PollUpmRequest(UnityEditor.PackageManager.Requests.AddAndRemoveRequest request, string verb, Action onComplete)
         {
             EditorApplication.CallbackFunction pollCallback = null;
             pollCallback = () =>
@@ -939,6 +959,7 @@ namespace MCPForUnity.Editor.Windows
                     Debug.Log($"[MCP] Package {verb} succeeded.");
                 else
                     Debug.LogError($"[MCP] Package {verb} failed: {request.Error?.message}");
+                onComplete?.Invoke();
             };
             EditorApplication.update += pollCallback;
         }

@@ -18,7 +18,7 @@ namespace MCPForUnity.Editor.Tools
         private const int MaxCodeLength = 50000;
         private const int MaxHistoryEntries = 50;
         private const int MaxHistoryCodePreview = 500;
-        private const int WrapperLineOffset = 10;
+        internal const int WrapperLineOffset = 10;
         private const string WrapperClassName = "MCPDynamicCode";
         private const string WrapperMethodName = "Execute";
 
@@ -141,6 +141,7 @@ namespace MCPForUnity.Editor.Tools
                     e.elapsedMs,
                     e.timestamp,
                     e.safetyChecksEnabled,
+                    e.compiler,
                 }).ToList(),
             });
         }
@@ -658,7 +659,7 @@ namespace MCPForUnity.Editor.Tools
                             var msgProp = diag.GetType().GetMethod("GetMessage", new[] { typeof(System.Globalization.CultureInfo) });
                             string msg = (string)msgProp.Invoke(diag, new object[] { null });
 
-                            int userLine = Math.Max(1, line + 1 - 10); // WrapperLineOffset
+                            int userLine = Math.Max(1, line + 1 - ExecuteCode.WrapperLineOffset);
                             errors.Add($"Line {userLine}: {msg}");
                         }
                         return null;
