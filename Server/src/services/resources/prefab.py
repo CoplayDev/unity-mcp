@@ -80,8 +80,8 @@ async def get_prefab_api_docs(_ctx: Context) -> MCPResponse:
             }
         },
         "related_tools": {
-            "manage_editor": "Open/save/close prefab stages in the Unity Editor UI",
-            "manage_prefabs": "Headless prefab inspection and modification without opening prefab stages",
+            "manage_editor": "Editor controls (play/pause/stop, active tool, tags/layers, package deploy/restore)",
+            "manage_prefabs": "Prefab stage lifecycle (open/save/close) and headless prefab inspection/modification",
             "manage_asset": "Search for prefab assets, get asset info",
             "manage_gameobject": "Modify GameObjects in open prefab stage",
             "manage_components": "Add/remove/modify components on prefab GameObjects"

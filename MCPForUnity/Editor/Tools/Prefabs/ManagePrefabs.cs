@@ -1283,7 +1283,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
         {
             if (string.IsNullOrWhiteSpace(requestedPath))
             {
-                return new ErrorResponse("'prefabPath' parameter is required for open_prefab_stage.");
+                return new ErrorResponse("Either 'prefabPath' or 'path' parameter is required for open_prefab_stage.");
             }
 
             string sanitizedPath = AssetPathUtility.SanitizeAssetPath(requestedPath);
