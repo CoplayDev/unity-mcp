@@ -1,5 +1,5 @@
 using System.IO;
-using MCPForUnity.Editor.Tools;
+using MCPForUnity.Editor.Tools.Prefabs;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEditor;
@@ -9,9 +9,9 @@ using static MCPForUnityTests.Editor.TestUtilities;
 
 namespace MCPForUnityTests.Editor.Tools
 {
-    public class ManageEditorPrefabStageTests
+    public class ManagePrefabsStageTests
     {
-        private const string TempDirectory = "Assets/Temp/ManageEditorPrefabStageTests";
+        private const string TempDirectory = "Assets/Temp/ManagePrefabsStageTests";
 
         [SetUp]
         public void SetUp()
@@ -36,7 +36,7 @@ namespace MCPForUnityTests.Editor.Tools
         [Test]
         public void OpenPrefabStage_RequiresPrefabPath()
         {
-            var result = ToJObject(ManageEditor.HandleCommand(new JObject
+            var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
             {
                 ["action"] = "open_prefab_stage"
             }));
@@ -48,7 +48,7 @@ namespace MCPForUnityTests.Editor.Tools
         [Test]
         public void OpenPrefabStage_RejectsNonPrefabPath()
         {
-            var result = ToJObject(ManageEditor.HandleCommand(new JObject
+            var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
             {
                 ["action"] = "open_prefab_stage",
                 ["prefabPath"] = "Assets/Temp/NotPrefab.txt"
@@ -65,7 +65,7 @@ namespace MCPForUnityTests.Editor.Tools
 
             try
             {
-                var result = ToJObject(ManageEditor.HandleCommand(new JObject
+                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
                 {
                     ["action"] = "open_prefab_stage",
                     ["prefabPath"] = prefabPath
@@ -80,7 +80,7 @@ namespace MCPForUnityTests.Editor.Tools
                 Assert.IsNotNull(stage);
                 Assert.AreEqual(prefabPath, stage.assetPath);
 
-                var closeResult = ToJObject(ManageEditor.HandleCommand(new JObject
+                var closeResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
                 {
                     ["action"] = "close_prefab_stage"
                 }));
@@ -101,7 +101,7 @@ namespace MCPForUnityTests.Editor.Tools
 
             try
             {
-                var result = ToJObject(ManageEditor.HandleCommand(new JObject
+                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
                 {
                     ["action"] = "open_prefab_stage",
                     ["path"] = prefabPath
@@ -126,7 +126,7 @@ namespace MCPForUnityTests.Editor.Tools
 
             try
             {
-                var result = ToJObject(ManageEditor.HandleCommand(new JObject
+                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
                 {
                     ["action"] = "open_prefab_stage",
                     ["prefabPath"] = prefabPath,
