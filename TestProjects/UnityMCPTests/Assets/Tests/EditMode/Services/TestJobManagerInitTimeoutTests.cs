@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEditor;
 using MCPForUnity.Editor.Services;
 
 namespace MCPForUnityTests.Editor.Services
@@ -20,7 +21,6 @@ namespace MCPForUnityTests.Editor.Services
         private Type _testJobType;
 
         private string _originalJobId;
-        private object _originalJobs;
 
         [SetUp]
         public void SetUp()
@@ -97,6 +97,11 @@ namespace MCPForUnityTests.Editor.Services
         [Test]
         public void GetJob_WithDefaultTimeout_AutoFailsAfter15Seconds()
         {
+            // Guard: GetJob skips the auto-fail path while compiling/updating, which would
+            // make this test pass for the wrong reason (job stays Running due to compile guard).
+            Assume.That(EditorApplication.isCompiling, Is.False, "Skipping: editor is compiling");
+            Assume.That(EditorApplication.isUpdating, Is.False, "Skipping: editor is updating");
+
             // Arrange: insert a job with InitTimeoutMs=0 (use default) and start time 20s ago
             var jobs = _jobsField.GetValue(null) as System.Collections.IDictionary;
             long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
