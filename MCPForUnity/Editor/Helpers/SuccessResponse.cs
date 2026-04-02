@@ -13,6 +13,9 @@ namespace MCPForUnity.Editor.Helpers
         [JsonProperty("message")]
         public string Message { get; }
 
+        [JsonIgnore]
+        public string message => Message; // Backward-compatible casing for reflection-based callers
+
         [JsonProperty("data", NullValueHandling = NullValueHandling.Ignore)]
         public object Data { get; }
 
