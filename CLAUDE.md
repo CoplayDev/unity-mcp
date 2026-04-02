@@ -22,6 +22,29 @@ Scene, Assets, Scripts
 - `Server/` - Python MCP server using FastMCP
 - `MCPForUnity/` - Unity C# Editor package
 
+## Visual UI Intelligence
+
+### 1. Automated Detection Triggers
+When a user provides an Image attachment (PNG/JPG) alongside a message containing any of these keywords, automatically switch to the **Vision-to-UI Workflow**:
+- **Keywords**: "UI", "screen", "panel", "layout", "make this", "recreate", "build this".
+- **Action**: Proactively analyze the image and generate an implementation plan before writing any code.
+
+### 2. Asset-First Policy
+Never build generic UI components if a themed alternative exists in the project.
+- **Search First**: Use `manage_asset` or `find_ui_sprites` to look for existing buttons, panels, and frames.
+- **Deeper Context**: If the user mentioned "Royal Mandates" or similar themes, prioritize assets under those paths (`Assets/UI/RoyalMandates/...`).
+- **Slicing**: Prefer sprites with 9-slicing (borders) for scalable panels.
+
+### 3. Non-Interference Rules
+Avoid triggering UI recreation if the primary intent is different:
+- **Error Screenshots**: If an image shows a Console or Inspector error, prioritize a bug fix over a layout recreation.
+- **Explicit Redirects**: If the user asks for logic only ("How does this script work?"), ignore the visual recreation.
+
+### 4. Implementation Efficiency
+- Use `manage_ugui` with the extended property set (`sprite`, `color`, `text`, `fontSize`) to minimize tool calls.
+- Prefer `batch_execute` for creating complex tree hierarchies in one frame.
+- Use `ensure_canvas` at the start to guarantee a 16:9 responsive layout.
+
 ### Three Layers on the Python Side
 
 The Python server has three distinct layers. These are **not** auto-generated from each other:
