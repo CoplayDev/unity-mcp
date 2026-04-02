@@ -20,43 +20,34 @@ namespace MCPForUnity.Editor.Tools
             if (s_StandardResources.standard == null)
             {
                 s_StandardResources = new DefaultControls.Resources();
-                // DefaultControls.Resources are essentially sprites/fonts. 
-                // Passing null-initialized struct usually triggers Unity's internal defaults.
             }
             return s_StandardResources;
         }
 
         public static object HandleCommand(JObject @params)
         {
-            string action = @params["action"]?.ToString();
-            if (string.IsNullOrEmpty(action))
-            {
-                return new ErrorResponse("Action parameter is required for 'manage_ugui' tool.");
-            }
+            var p = new ToolParams(@params);
+            string action = p.RequireString("action");
 
             switch (action.ToLowerInvariant())
             {
                 case "create_element":
-                    return CreateElement(@params);
+                    return CreateElement(p);
                 case "set_layout":
-                    return SetLayout(@params);
+                case "modify_element":
+                    return ModifyElement(p);
                 case "ensure_canvas":
-                    return EnsureCanvas(@params);
+                    return EnsureCanvas(p);
                 default:
                     return new ErrorResponse($"Unknown action '{action}' for 'manage_ugui' tool.");
             }
         }
 
-        private static object CreateElement(JObject @params)
+        private static object CreateElement(ToolParams p)
         {
-            string type = @params["type"]?.ToString();
-            string name = @params["name"]?.ToString();
-            JToken parentToken = @params["parent"];
-
-            if (string.IsNullOrEmpty(type))
-            {
-                return new ErrorResponse("'type' is required (e.g., Button, Image, ScrollView).");
-            }
+            string type = p.RequireString("type");
+            string name = p.GetString("name");
+            JToken parentToken = p.GetToken("parent");
 
             // 1. Find Parent
             GameObject parentGo = null;
@@ -66,7 +57,7 @@ namespace MCPForUnity.Editor.Tools
             }
 
             // 2. Ensure Canvas if no parent or parent is not UI
-            if (parentGo == null || parentGo.GetComponentInParent<Canvas>() == null)
+            if (parentGo == null || (parentGo.GetComponentInParent<Canvas>() == null && parentGo.GetComponent<Canvas>() == null))
             {
                 McpLog.Info("[ManageUGUI] No Canvas found in parent hierarchy. Ensuring Canvas exists.");
                 parentGo = EnsureCanvasInternal(parentGo);
@@ -90,8 +81,11 @@ namespace MCPForUnity.Editor.Tools
                     case "inputfield": case "input_field": uiGo = DefaultControls.CreateInputField(resources); break;
                     case "scrollbar": uiGo = DefaultControls.CreateScrollbar(resources); break;
                     case "rawimage": case "raw_image": uiGo = DefaultControls.CreateRawImage(resources); break;
+                    case "empty":
+                        uiGo = new GameObject(name ?? "UI Element", typeof(RectTransform));
+                        break;
                     default:
-                        return new ErrorResponse($"Unsupported UI type '{type}'. Valid types: Button, Image, Text, ScrollView, Slider, Toggle, Panel, Dropdown, InputField, Scrollbar, RawImage.");
+                        return new ErrorResponse($"Unsupported UI type '{type}'. Valid types: Button, Image, Text, ScrollView, Slider, Toggle, Panel, Dropdown, InputField, Scrollbar, RawImage, Empty.");
                 }
             } catch (Exception e) {
                 return new ErrorResponse($"Internal error creating {type}: {e.Message}");
@@ -112,15 +106,18 @@ namespace MCPForUnity.Editor.Tools
             uiGo.transform.localScale = Vector3.one;
             uiGo.transform.localPosition = Vector3.zero;
 
+            // 5. Apply Visual Properties if provided
+            ApplyVisualProperties(uiGo, p);
+
             Undo.RegisterCreatedObjectUndo(uiGo, $"Create UI {type}");
             Selection.activeGameObject = uiGo;
 
             return new SuccessResponse($"Created UI {type} '{uiGo.name}' successfully.", GameObjectSerializer.GetGameObjectData(uiGo));
         }
 
-        private static object SetLayout(JObject @params)
+        private static object ModifyElement(ToolParams p)
         {
-            JToken targetToken = @params["target"];
+            JToken targetToken = p.GetToken("target");
             GameObject targetGo = MCPForUnity.Editor.Tools.GameObjects.ManageGameObjectCommon.FindObjectInternal(targetToken, "by_id_or_name_or_path");
             
             if (targetGo == null) return new ErrorResponse("Target UI element not found.");
@@ -128,32 +125,109 @@ namespace MCPForUnity.Editor.Tools
             RectTransform rt = targetGo.GetComponent<RectTransform>();
             if (rt == null) return new ErrorResponse("Target element does not have a RectTransform.");
 
-            Undo.RecordObject(rt, "Set UI Layout");
+            Undo.RecordObject(targetGo, "Modify UGUI Element");
+            Undo.RecordObject(rt, "Modify UI Layout");
 
-            string preset = @params["anchorPreset"]?.ToString()?.ToLowerInvariant();
+            // Apply Layout
+            string preset = p.GetString("anchor_preset", "anchorPreset")?.ToLowerInvariant();
             if (!string.IsNullOrEmpty(preset))
             {
                 ApplyAnchorPreset(rt, preset);
             }
 
-            Vector2? sizeDelta = VectorParsing.ParseVector2(@params["sizeDelta"]);
+            Vector2? sizeDelta = VectorParsing.ParseVector2(p.GetToken("size_delta", "sizeDelta"));
             if (sizeDelta.HasValue) rt.sizeDelta = sizeDelta.Value;
 
-            Vector2? pos = VectorParsing.ParseVector2(@params["anchoredPosition"]);
+            Vector2? pos = VectorParsing.ParseVector2(p.GetToken("anchored_position", "anchoredPosition"));
             if (pos.HasValue) rt.anchoredPosition = pos.Value;
 
-            float? pivotX = @params["pivotX"]?.ToObject<float>();
-            float? pivotY = @params["pivotY"]?.ToObject<float>();
+            float? pivotX = p.GetFloat("pivot_x", "pivotX");
+            float? pivotY = p.GetFloat("pivot_y", "pivotY");
             if (pivotX.HasValue || pivotY.HasValue)
             {
                 rt.pivot = new Vector2(pivotX ?? rt.pivot.x, pivotY ?? rt.pivot.y);
             }
 
+            // Apply Visuals
+            ApplyVisualProperties(targetGo, p);
+
+            EditorUtility.SetDirty(targetGo);
             EditorUtility.SetDirty(rt);
-            return new SuccessResponse($"Layout updated for '{targetGo.name}'.", GameObjectSerializer.GetGameObjectData(targetGo));
+            return new SuccessResponse($"Element '{targetGo.name}' updated successfully.", GameObjectSerializer.GetGameObjectData(targetGo));
         }
 
-        private static object EnsureCanvas(JObject @params)
+        private static void ApplyVisualProperties(GameObject go, ToolParams p)
+        {
+            // Image / RawImage / Panel properties
+            Image img = go.GetComponent<Image>();
+            RawImage rawImg = go.GetComponent<RawImage>();
+            
+            if (img != null)
+            {
+                string spritePath = p.GetString("sprite");
+                if (!string.IsNullOrEmpty(spritePath))
+                {
+                    img.sprite = AssetDatabase.LoadAssetAtPath<Sprite>(AssetPathUtility.SanitizeAssetPath(spritePath));
+                }
+                
+                Color? color = ParseColor(p.GetString("color"));
+                if (color.HasValue) img.color = color.Value;
+                
+                bool? raycast = p.GetBool("raycast_target", "raycastTarget");
+                if (raycast.HasValue) img.raycastTarget = raycast.Value;
+                
+                bool? preserve = p.GetBool("preserve_aspect", "preserveAspect");
+                if (preserve.HasValue) img.preserveAspect = preserve.Value;
+            }
+            else if (rawImg != null)
+            {
+                string texPath = p.GetString("texture");
+                if (!string.IsNullOrEmpty(texPath))
+                {
+                    rawImg.texture = AssetDatabase.LoadAssetAtPath<Texture>(AssetPathUtility.SanitizeAssetPath(texPath));
+                }
+                
+                Color? color = ParseColor(p.GetString("color"));
+                if (color.HasValue) rawImg.color = color.Value;
+            }
+
+            // Text properties (Legacy Text)
+            Text txt = go.GetComponent<Text>();
+            if (txt != null)
+            {
+                string text = p.GetString("text");
+                if (text != null) txt.text = text;
+
+                int? fontSize = p.GetInt("font_size", "fontSize");
+                if (fontSize.HasValue) txt.fontSize = fontSize.Value;
+
+                string fontPath = p.GetString("font");
+                if (!string.IsNullOrEmpty(fontPath))
+                {
+                    txt.font = AssetDatabase.LoadAssetAtPath<Font>(AssetPathUtility.SanitizeAssetPath(fontPath));
+                }
+
+                string align = p.GetString("alignment");
+                if (!string.IsNullOrEmpty(align))
+                {
+                    if (Enum.TryParse<TextAnchor>(align, true, out var result))
+                        txt.alignment = result;
+                }
+
+                Color? color = ParseColor(p.GetString("color"));
+                if (color.HasValue) txt.color = color.Value;
+            }
+        }
+
+        private static Color? ParseColor(string hex)
+        {
+            if (string.IsNullOrEmpty(hex)) return null;
+            if (ColorUtility.TryParseHtmlString(hex, out Color color)) return color;
+            if (ColorUtility.TryParseHtmlString("#" + hex, out color)) return color;
+            return null;
+        }
+
+        private static object EnsureCanvas(ToolParams p)
         {
             GameObject canvasGo = EnsureCanvasInternal(null);
             return new SuccessResponse("Canvas and EventSystem ensured.", GameObjectSerializer.GetGameObjectData(canvasGo));
@@ -173,7 +247,13 @@ namespace MCPForUnity.Editor.Tools
             canvasGo.layer = LayerMask.NameToLayer("UI");
             Canvas canvas = canvasGo.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvasGo.AddComponent<CanvasScaler>();
+            
+            CanvasScaler scaler = canvasGo.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920, 1080);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = 0.5f;
+
             canvasGo.AddComponent<GraphicRaycaster>();
             Undo.RegisterCreatedObjectUndo(canvasGo, "Create Canvas");
 
