@@ -20,7 +20,6 @@ namespace MCPForUnityTests.Editor.Services
         private Type _testJobType;
 
         private string _originalJobId;
-        private object _originalJobs;
 
         [SetUp]
         public void SetUp()
