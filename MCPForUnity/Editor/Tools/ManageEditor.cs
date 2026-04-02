@@ -168,6 +168,39 @@ namespace MCPForUnity.Editor.Tools
                         current_group = string.IsNullOrEmpty(nextGroup) ? (string)null : nextGroup
                     });
                 }
+                case "capture_screenshot":
+                {
+                    string fileName = p.Get("fileName") ?? p.Get("file_name");
+                    bool includeImage = p.GetBool("includeImage") || p.GetBool("include_image");
+                    int maxResolution = p.GetInt("maxResolution") ?? p.GetInt("max_resolution") ?? 640;
+
+                    try
+                    {
+                        int w, h;
+                        var result = EditorWindowScreenshotUtility.CaptureGameViewToAssets(
+                            fileName,
+                            true,
+                            includeImage,
+                            maxResolution,
+                            out w,
+                            out h);
+
+                        return new SuccessResponse($"Screenshot captured: {result.AssetsRelativePath}", new
+                        {
+                            path = result.AssetsRelativePath,
+                            fullPath = result.FullPath,
+                            width = w,
+                            height = h,
+                            imageBase64 = result.ImageBase64,
+                            imageWidth = result.ImageWidth,
+                            imageHeight = result.ImageHeight
+                        });
+                    }
+                    catch (Exception e)
+                    {
+                        return new ErrorResponse($"Screenshot failed: {e.Message}");
+                    }
+                }
 
                 default:
                     return new ErrorResponse(

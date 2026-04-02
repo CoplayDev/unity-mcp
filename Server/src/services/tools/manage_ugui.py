@@ -16,12 +16,14 @@ from services.tools.refresh_unity import send_mutation
     group="core",
     description=(
         "Manages Unity UGUI (Canvas-based) elements. Preferred over manage_gameobject for UI.\n"
-        "Actions: create_element, set_layout, ensure_canvas.\n\n"
+        "Actions: create_element, set_layout, modify_element, ensure_canvas.\n\n"
         "Key Benefits:\n"
         "- Guarantees RectTransform creation for all elements.\n"
         "- Automatically builds complex hierarchies for ScrollViews, Sliders, and Dropdowns.\n"
         "- Enforces scale (1,1,1) safety for all UI elements.\n"
-        "- Provides semantic anchor presets (e.g., stretch_stretch, top_center)."
+        "- Intelligent Canvas Discovery: Automatically finds 'MainCanvas' or 'UI' roots, or the densest active Canvas if none specified.\n"
+        "- Semantic anchor presets: 'stretch_stretch', 'horiz_stretch_top', etc. (automatically zeros offsets for perfect stretching).\n"
+        "- Logical Construction: Panels default to stretch_stretch; Buttons automatically anchor their child text appropriately."
     ),
     annotations=ToolAnnotations(
         title="Manage UGUI",

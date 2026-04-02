@@ -50,25 +50,60 @@ namespace MCPForUnity.Editor.Helpers
             out int viewportWidth,
             out int viewportHeight)
         {
-            if (sceneView == null)
-                throw new ArgumentNullException(nameof(sceneView));
+            return CaptureWindowViewportToAssets(sceneView, fileName, superSize, ensureUniqueFileName, includeImage, maxResolution, out viewportWidth, out viewportHeight);
+        }
 
-            int effectiveSuperSize = NormalizeSceneViewSuperSize(superSize);
+        public static ScreenshotCaptureResult CaptureGameViewToAssets(
+            string fileName,
+            bool ensureUniqueFileName,
+            bool includeImage,
+            int maxResolution,
+            out int viewportWidth,
+            out int viewportHeight)
+        {
+            System.Reflection.Assembly assembly = typeof(UnityEditor.EditorWindow).Assembly;
+            System.Type type = assembly.GetType("UnityEditor.GameView");
+            EditorWindow gameView = EditorWindow.GetWindow(type);
 
-            FocusAndRepaint(sceneView);
+            if (gameView == null)
+            {
+                viewportWidth = 0;
+                viewportHeight = 0;
+                throw new InvalidOperationException("Could not find Game View window.");
+            }
 
-            Rect viewportRectPixels = GetSceneViewViewportPixelRect(sceneView);
+            return CaptureWindowViewportToAssets(gameView, fileName, 1, ensureUniqueFileName, includeImage, maxResolution, out viewportWidth, out viewportHeight);
+        }
+
+        private static ScreenshotCaptureResult CaptureWindowViewportToAssets(
+            EditorWindow window,
+            string fileName,
+            int superSize,
+            bool ensureUniqueFileName,
+            bool includeImage,
+            int maxResolution,
+            out int viewportWidth,
+            out int viewportHeight)
+        {
+            if (window == null)
+                throw new ArgumentNullException(nameof(window));
+
+            int effectiveSuperSize = (window is SceneView) ? NormalizeSceneViewSuperSize(superSize) : 1;
+
+            FocusAndRepaint(window);
+
+            Rect viewportRectPixels = GetWindowViewportPixelRect(window);
             viewportWidth = Mathf.RoundToInt(viewportRectPixels.width);
             viewportHeight = Mathf.RoundToInt(viewportRectPixels.height);
 
             if (viewportWidth <= 0 || viewportHeight <= 0)
-                throw new InvalidOperationException("Captured Scene view viewport is empty.");
+                throw new InvalidOperationException($"Captured {window.GetType().Name} viewport is empty.");
 
             Texture2D captured = null;
             Texture2D downscaled = null;
             try
             {
-                captured = CaptureViewRect(sceneView, viewportRectPixels);
+                captured = CaptureViewRect(window, viewportRectPixels);
 
                 var result = PrepareCaptureResult(fileName, effectiveSuperSize, ensureUniqueFileName);
                 byte[] png = captured.EncodeToPNG();
@@ -114,38 +149,38 @@ namespace MCPForUnity.Editor.Helpers
             }
         }
 
-        private static void FocusAndRepaint(SceneView sceneView)
+        private static void FocusAndRepaint(EditorWindow window)
         {
             try
             {
-                sceneView.Focus();
+                window.Focus();
             }
             catch (Exception ex)
             {
-                McpLog.Debug($"[EditorWindowScreenshotUtility] SceneView focus failed: {ex.Message}");
+                McpLog.Debug($"[EditorWindowScreenshotUtility] Window focus failed: {ex.Message}");
             }
 
             try
             {
-                sceneView.Repaint();
-                InvokeMethodIfExists(sceneView, "RepaintImmediately");
-                SceneView.RepaintAll();
+                window.Repaint();
+                InvokeMethodIfExists(window, "RepaintImmediately");
+                if (window is SceneView) SceneView.RepaintAll();
                 UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
                 EditorApplication.QueuePlayerLoopUpdate();
                 Thread.Sleep(RepaintSettlingDelayMs);
             }
             catch (Exception ex)
             {
-                McpLog.Debug($"[EditorWindowScreenshotUtility] SceneView repaint failed: {ex.Message}");
+                McpLog.Debug($"[EditorWindowScreenshotUtility] Window repaint failed: {ex.Message}");
             }
         }
 
-        private static Rect GetSceneViewViewportPixelRect(SceneView sceneView)
+        private static Rect GetWindowViewportPixelRect(EditorWindow window)
         {
             float pixelsPerPoint = EditorGUIUtility.pixelsPerPoint;
-            Rect viewportLocalPoints = GetViewportLocalRectPoints(sceneView, pixelsPerPoint);
+            Rect viewportLocalPoints = GetViewportLocalRectPoints(window, pixelsPerPoint);
             if (viewportLocalPoints.width <= 0f || viewportLocalPoints.height <= 0f)
-                throw new InvalidOperationException("Failed to resolve Scene view viewport rect.");
+                throw new InvalidOperationException($"Failed to resolve {window.GetType().Name} viewport rect.");
 
             return new Rect(
                 Mathf.Round(viewportLocalPoints.x * pixelsPerPoint),
@@ -154,32 +189,38 @@ namespace MCPForUnity.Editor.Helpers
                 Mathf.Round(viewportLocalPoints.height * pixelsPerPoint));
         }
 
-        private static Rect GetViewportLocalRectPoints(SceneView sceneView, float pixelsPerPoint)
+        private static Rect GetViewportLocalRectPoints(EditorWindow window, float pixelsPerPoint)
         {
-            Rect? cameraViewport = GetRectProperty(sceneView, "cameraViewport");
+            Rect? cameraViewport = GetRectProperty(window, "cameraViewport");
             if (cameraViewport.HasValue && cameraViewport.Value.width > 0f && cameraViewport.Value.height > 0f)
             {
                 return cameraViewport.Value;
             }
 
-            Camera camera = sceneView.camera;
-            if (camera == null)
-                throw new InvalidOperationException("Active Scene View has no camera to derive viewport size from.");
+            if (window is SceneView sceneView)
+            {
+                Camera camera = sceneView.camera;
+                if (camera != null)
+                {
+                    float viewportWidth = camera.pixelWidth / Mathf.Max(0.0001f, pixelsPerPoint);
+                    float viewportHeight = camera.pixelHeight / Mathf.Max(0.0001f, pixelsPerPoint);
+                    Rect windowRect = sceneView.position;
 
-            float viewportWidth = camera.pixelWidth / Mathf.Max(0.0001f, pixelsPerPoint);
-            float viewportHeight = camera.pixelHeight / Mathf.Max(0.0001f, pixelsPerPoint);
-            Rect windowRect = sceneView.position;
+                    return new Rect(
+                        0f,
+                        Mathf.Max(0f, windowRect.height - viewportHeight),
+                        Mathf.Min(windowRect.width, viewportWidth),
+                        Mathf.Min(windowRect.height, viewportHeight));
+                }
+            }
 
-            return new Rect(
-                0f,
-                Mathf.Max(0f, windowRect.height - viewportHeight),
-                Mathf.Min(windowRect.width, viewportWidth),
-                Mathf.Min(windowRect.height, viewportHeight));
+            // Generic fallback for other windows
+            return new Rect(0, 0, window.position.width, window.position.height);
         }
 
-        private static Texture2D CaptureViewRect(SceneView sceneView, Rect viewportRectPixels)
+        private static Texture2D CaptureViewRect(EditorWindow window, Rect viewportRectPixels)
         {
-            object hostView = GetHostView(sceneView);
+            object hostView = GetHostView(window);
             if (hostView == null)
                 throw new InvalidOperationException("Failed to resolve Scene view host view.");
 

@@ -106,8 +106,38 @@ namespace MCPForUnity.Editor.Tools
             uiGo.transform.localScale = Vector3.one;
             uiGo.transform.localPosition = Vector3.zero;
 
-            // 5. Apply Visual Properties if provided
+            // 5. Apply Anchor Preset if provided or default for Panel
+            string preset = p.GetString("anchor_preset", "anchorPreset")?.ToLowerInvariant();
+            if (string.IsNullOrEmpty(preset) && type.ToLowerInvariant() == "panel")
+            {
+                preset = "stretch_stretch";
+            }
+            
+            if (!string.IsNullOrEmpty(preset))
+            {
+                ApplyAnchorPreset(uiGo.GetComponent<RectTransform>(), preset);
+            }
+
+            // 6. Apply Visual Properties if provided
             ApplyVisualProperties(uiGo, p);
+
+            // 7. Special case: Button stretching child text
+            if (type.ToLowerInvariant() == "button")
+            {
+                // Find any text component (legacy or TMPro)
+                var rtChildText = uiGo.GetComponentInChildren<Text>()?.rectTransform;
+                if (rtChildText == null) {
+                    var tmproType = Type.GetType("TMPro.TMP_Text, Unity.TextMeshPro") ?? Type.GetType("TMPro.TextMeshProUGUI, Unity.TextMeshPro");
+                    if (tmproType != null) {
+                        var tmpro = uiGo.GetComponentInChildren(tmproType);
+                        if (tmpro != null) rtChildText = tmpro.GetComponent<RectTransform>();
+                    }
+                }
+
+                if (rtChildText != null) {
+                    ApplyAnchorPreset(rtChildText, "stretch_stretch");
+                }
+            }
 
             Undo.RegisterCreatedObjectUndo(uiGo, $"Create UI {type}");
             Selection.activeGameObject = uiGo;
@@ -191,31 +221,56 @@ namespace MCPForUnity.Editor.Tools
                 if (color.HasValue) rawImg.color = color.Value;
             }
 
-            // Text properties (Legacy Text)
+            // Text properties
+            string text = p.GetString("text");
+            int? fontSize = p.GetInt("font_size", "fontSize");
+            string fontPath = p.GetString("font");
+            string align = p.GetString("alignment");
+            Color? textColor = ParseColor(p.GetString("color"));
+
+            // Legacy Text
             Text txt = go.GetComponent<Text>();
             if (txt != null)
             {
-                string text = p.GetString("text");
                 if (text != null) txt.text = text;
-
-                int? fontSize = p.GetInt("font_size", "fontSize");
                 if (fontSize.HasValue) txt.fontSize = fontSize.Value;
-
-                string fontPath = p.GetString("font");
                 if (!string.IsNullOrEmpty(fontPath))
                 {
                     txt.font = AssetDatabase.LoadAssetAtPath<Font>(AssetPathUtility.SanitizeAssetPath(fontPath));
                 }
-
-                string align = p.GetString("alignment");
                 if (!string.IsNullOrEmpty(align))
                 {
                     if (Enum.TryParse<TextAnchor>(align, true, out var result))
                         txt.alignment = result;
                 }
+                if (textColor.HasValue) txt.color = textColor.Value;
+            }
 
-                Color? color = ParseColor(p.GetString("color"));
-                if (color.HasValue) txt.color = color.Value;
+            // TextMeshPro support via reflection
+            var tmproType = Type.GetType("TMPro.TextMeshProUGUI, Unity.TextMeshPro");
+            if (tmproType != null)
+            {
+                var tmpro = go.GetComponent(tmproType);
+                if (tmpro != null)
+                {
+                    if (text != null) SetPropertyValue(tmpro, "text", text);
+                    if (fontSize.HasValue) SetPropertyValue(tmpro, "fontSize", (float)fontSize.Value);
+                    if (textColor.HasValue) SetPropertyValue(tmpro, "color", textColor.Value);
+                    if (!string.IsNullOrEmpty(align))
+                    {
+                        // Alignment in TMPro is a different enum (TMP_TextAlignmentOptions)
+                        // For simplicity, we'll try to map common ones or just skip for now
+                    }
+                }
+            }
+        }
+
+        private static void SetPropertyValue(object obj, string propertyName, object value)
+        {
+            var prop = obj.GetType().GetProperty(propertyName);
+            if (prop != null && prop.CanWrite)
+            {
+                prop.SetValue(obj, value);
             }
         }
 
@@ -238,7 +293,31 @@ namespace MCPForUnity.Editor.Tools
             Canvas existing = null;
             if (parent != null) existing = parent.GetComponentInParent<Canvas>();
             
-            if (existing == null) existing = UnityEngine.Object.FindAnyObjectByType<Canvas>();
+            if (existing == null) 
+            {
+                // Intelligent Search: Prioritize "Main" or active Canvases
+                var allCanvases = UnityEngine.Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+                
+                Canvas bestMatch = null;
+                int bestScore = -1;
+
+                foreach (var c in allCanvases)
+                {
+                    if (!c.gameObject.activeInHierarchy) continue;
+
+                    int score = 0;
+                    if (c.name.Contains("Main", StringComparison.OrdinalIgnoreCase)) score += 100;
+                    if (c.name.Contains("UI", StringComparison.OrdinalIgnoreCase)) score += 50;
+                    score += c.transform.childCount;
+
+                    if (score > bestScore)
+                    {
+                        bestScore = score;
+                        bestMatch = c;
+                    }
+                }
+                existing = bestMatch;
+            }
 
             if (existing != null) return existing.gameObject;
 
@@ -273,7 +352,10 @@ namespace MCPForUnity.Editor.Tools
         {
             switch (preset)
             {
-                case "stretch_stretch": rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero; break;
+                case "stretch_stretch": 
+                    rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; 
+                    rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero; 
+                    break;
                 case "top_left": rt.anchorMin = new Vector2(0, 1); rt.anchorMax = new Vector2(0, 1); rt.pivot = new Vector2(0, 1); break;
                 case "top_center": rt.anchorMin = new Vector2(0.5f, 1); rt.anchorMax = new Vector2(0.5f, 1); rt.pivot = new Vector2(0.5f, 1); break;
                 case "top_right": rt.anchorMin = new Vector2(1, 1); rt.anchorMax = new Vector2(1, 1); rt.pivot = new Vector2(1, 1); break;
@@ -283,12 +365,31 @@ namespace MCPForUnity.Editor.Tools
                 case "bottom_left": rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.zero; rt.pivot = Vector2.zero; break;
                 case "bottom_center": rt.anchorMin = new Vector2(0.5f, 0); rt.anchorMax = new Vector2(0.5f, 0); rt.pivot = new Vector2(0.5f, 0); break;
                 case "bottom_right": rt.anchorMin = new Vector2(1, 0); rt.anchorMax = new Vector2(1, 0); rt.pivot = new Vector2(1, 0); break;
-                case "horiz_stretch_top": rt.anchorMin = new Vector2(0, 1); rt.anchorMax = Vector2.one; rt.pivot = new Vector2(0.5f, 1); break;
-                case "horiz_stretch_middle": rt.anchorMin = new Vector2(0, 0.5f); rt.anchorMax = new Vector2(1, 0.5f); rt.pivot = new Vector2(0.5f, 0.5f); break;
-                case "horiz_stretch_bottom": rt.anchorMin = Vector2.zero; rt.anchorMax = new Vector2(1, 0); rt.pivot = new Vector2(0.5f, 0); break;
-                case "vert_stretch_left": rt.anchorMin = Vector2.zero; rt.anchorMax = new Vector2(0, 1); rt.pivot = new Vector2(0, 0.5f); break;
-                case "vert_stretch_center": rt.anchorMin = new Vector2(0.5f, 0); rt.anchorMax = new Vector2(0.5f, 1); rt.pivot = new Vector2(0.5f, 0.5f); break;
-                case "vert_stretch_right": rt.anchorMin = new Vector2(1, 0); rt.anchorMax = Vector2.one; rt.pivot = new Vector2(1, 0.5f); break;
+                
+                case "horiz_stretch_top": 
+                    rt.anchorMin = new Vector2(0, 1); rt.anchorMax = Vector2.one; rt.pivot = new Vector2(0.5f, 1); 
+                    rt.offsetMin = new Vector2(0, 0); rt.offsetMax = new Vector2(0, 0); // Logic: Full horiz stretch should have 0 horiz offsets
+                    break;
+                case "horiz_stretch_middle": 
+                    rt.anchorMin = new Vector2(0, 0.5f); rt.anchorMax = new Vector2(1, 0.5f); rt.pivot = new Vector2(0.5f, 0.5f); 
+                    rt.offsetMin = new Vector2(0, 0); rt.offsetMax = new Vector2(0, 0);
+                    break;
+                case "horiz_stretch_bottom": 
+                    rt.anchorMin = Vector2.zero; rt.anchorMax = new Vector2(1, 0); rt.pivot = new Vector2(0.5f, 0); 
+                    rt.offsetMin = new Vector2(0, 0); rt.offsetMax = new Vector2(0, 0);
+                    break;
+                case "vert_stretch_left": 
+                    rt.anchorMin = Vector2.zero; rt.anchorMax = new Vector2(0, 1); rt.pivot = new Vector2(0, 0.5f); 
+                    rt.offsetMin = new Vector2(0, 0); rt.offsetMax = new Vector2(0, 0);
+                    break;
+                case "vert_stretch_center": 
+                    rt.anchorMin = new Vector2(0.5f, 0); rt.anchorMax = new Vector2(0.5f, 1); rt.pivot = new Vector2(0.5f, 0.5f); 
+                    rt.offsetMin = new Vector2(0, 0); rt.offsetMax = new Vector2(0, 0);
+                    break;
+                case "vert_stretch_right": 
+                    rt.anchorMin = new Vector2(1, 0); rt.anchorMax = Vector2.one; rt.pivot = new Vector2(1, 0.5f); 
+                    rt.offsetMin = new Vector2(0, 0); rt.offsetMax = new Vector2(0, 0);
+                    break;
             }
         }
     }
