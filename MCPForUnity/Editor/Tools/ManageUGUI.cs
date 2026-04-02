@@ -391,6 +391,11 @@ namespace MCPForUnity.Editor.Tools
                     rt.offsetMin = new Vector2(0, 0); rt.offsetMax = new Vector2(0, 0);
                     break;
             }
+            
+            // --- Robustness Fix ---
+            // Nudge Unity to recognize the change and update the Editor UI
+            EditorUtility.SetDirty(rt);
+            UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(rt);
         }
     }
 }

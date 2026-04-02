@@ -27,6 +27,7 @@ async def manage_editor(
     file_name: Annotated[str, "Optional file name for screenshot (default: timestamped)."] | None = None,
     include_image: Annotated[bool, "Whether to include base64 image data in response (default: false)."] | None = None,
     max_resolution: Annotated[int, "Max edge resolution for base64 image (default: 640)."] | None = None,
+    refresh: Annotated[bool, "Whether to perform an AssetDatabase.Refresh before and after (default: false). Recommended for UI verification."] | None = None,
 ) -> dict[str, Any]:
     # Get active instance from request state (injected by middleware)
     unity_instance = await get_unity_instance_from_context(ctx)
@@ -49,6 +50,7 @@ async def manage_editor(
             "fileName": file_name,
             "includeImage": include_image,
             "maxResolution": max_resolution,
+            "refresh": refresh,
         }
         params = {k: v for k, v in params.items() if v is not None}
 

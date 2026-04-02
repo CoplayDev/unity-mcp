@@ -173,9 +173,16 @@ namespace MCPForUnity.Editor.Tools
                     string fileName = p.Get("fileName") ?? p.Get("file_name");
                     bool includeImage = p.GetBool("includeImage") || p.GetBool("include_image");
                     int maxResolution = p.GetInt("maxResolution") ?? p.GetInt("max_resolution") ?? 640;
+                    bool refresh = p.GetBool("refresh");
 
                     try
                     {
+                        if (refresh)
+                        {
+                            AssetDatabase.SaveAssets();
+                            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+                        }
+
                         int w, h;
                         var result = EditorWindowScreenshotUtility.CaptureGameViewToAssets(
                             fileName,
@@ -184,6 +191,11 @@ namespace MCPForUnity.Editor.Tools
                             maxResolution,
                             out w,
                             out h);
+
+                        if (refresh)
+                        {
+                            AssetDatabase.Refresh();
+                        }
 
                         return new SuccessResponse($"Screenshot captured: {result.AssetsRelativePath}", new
                         {

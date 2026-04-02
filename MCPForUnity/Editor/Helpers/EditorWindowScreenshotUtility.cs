@@ -164,6 +164,12 @@ namespace MCPForUnity.Editor.Helpers
             {
                 window.Repaint();
                 InvokeMethodIfExists(window, "RepaintImmediately");
+                
+                // --- UI Settling ---
+                // Ensure all Canvases are up to date before screenshot
+                Canvas.ForceUpdateCanvases();
+                
+                // Best-effort repaint of all views
                 if (window is SceneView) SceneView.RepaintAll();
                 UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
                 EditorApplication.QueuePlayerLoopUpdate();
