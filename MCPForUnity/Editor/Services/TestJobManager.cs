@@ -52,6 +52,7 @@ namespace MCPForUnity.Editor.Services
         private const int FailureCap = 25;
         private const long StuckThresholdMs = 60_000;
         private const long DefaultInitializationTimeoutMs = 15_000; // 15 seconds default; override per-job via run_tests init_timeout param
+        private const long MaxInitializationTimeoutMs = 600_000; // 10 minutes hard cap
         private const int MaxJobsToKeep = 10;
         private const long MinPersistIntervalMs = 1000; // Throttle persistence to reduce overhead
 
@@ -300,6 +301,10 @@ namespace MCPForUnity.Editor.Services
 
         public static string StartJob(TestMode mode, TestFilterOptions filterOptions = null, long initTimeoutMs = 0)
         {
+            // Clamp to valid range: non-positive values mean "use default", cap at 10 minutes
+            if (initTimeoutMs < 0) initTimeoutMs = 0;
+            if (initTimeoutMs > MaxInitializationTimeoutMs) initTimeoutMs = MaxInitializationTimeoutMs;
+
             string jobId = Guid.NewGuid().ToString("N");
             long started = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             string modeStr = mode.ToString();
