@@ -135,3 +135,77 @@ class TestManagePrefabsDeleteChild:
             )
         )
         assert "deleteChild" not in mock_unity["params"]
+
+
+# ── Prefab Stage Actions ────────────────────────────────────────────
+
+
+class TestManagePrefabsStageActions:
+    """Tests for open/save/close prefab stage actions on manage_prefabs."""
+
+    def test_description_mentions_open_prefab_stage(self):
+        """The tool description should mention open_prefab_stage."""
+        prefab_tool = next(
+            (t for t in get_registered_tools() if t["name"] == "manage_prefabs"), None
+        )
+        assert prefab_tool is not None
+        desc = prefab_tool.get("description") or prefab_tool.get("kwargs", {}).get("description", "")
+        assert "open_prefab_stage" in desc
+
+    def test_description_mentions_save_prefab_stage(self):
+        """The tool description should mention save_prefab_stage."""
+        prefab_tool = next(
+            (t for t in get_registered_tools() if t["name"] == "manage_prefabs"), None
+        )
+        assert prefab_tool is not None
+        desc = prefab_tool.get("description") or prefab_tool.get("kwargs", {}).get("description", "")
+        assert "save_prefab_stage" in desc
+
+    def test_open_prefab_stage_forwards_prefab_path(self, mock_unity):
+        """open_prefab_stage should forward prefab_path as prefabPath."""
+        result = asyncio.run(
+            manage_prefabs(
+                SimpleNamespace(),
+                action="open_prefab_stage",
+                prefab_path="Assets/Prefabs/Test.prefab",
+            )
+        )
+        assert result["success"] is True
+        assert mock_unity["params"]["action"] == "open_prefab_stage"
+        assert mock_unity["params"]["prefabPath"] == "Assets/Prefabs/Test.prefab"
+        assert mock_unity["tool_name"] == "manage_prefabs"
+
+    def test_open_prefab_stage_requires_prefab_path(self, mock_unity):
+        """open_prefab_stage should fail without prefab_path."""
+        result = asyncio.run(
+            manage_prefabs(
+                SimpleNamespace(),
+                action="open_prefab_stage",
+            )
+        )
+        assert result["success"] is False
+        assert "prefab_path" in result["message"]
+
+    def test_save_prefab_stage_forwards_to_unity(self, mock_unity):
+        """save_prefab_stage should forward to Unity."""
+        result = asyncio.run(
+            manage_prefabs(
+                SimpleNamespace(),
+                action="save_prefab_stage",
+            )
+        )
+        assert result["success"] is True
+        assert mock_unity["params"]["action"] == "save_prefab_stage"
+        assert mock_unity["tool_name"] == "manage_prefabs"
+
+    def test_close_prefab_stage_forwards_to_unity(self, mock_unity):
+        """close_prefab_stage should forward to Unity."""
+        result = asyncio.run(
+            manage_prefabs(
+                SimpleNamespace(),
+                action="close_prefab_stage",
+            )
+        )
+        assert result["success"] is True
+        assert mock_unity["params"]["action"] == "close_prefab_stage"
+        assert mock_unity["tool_name"] == "manage_prefabs"

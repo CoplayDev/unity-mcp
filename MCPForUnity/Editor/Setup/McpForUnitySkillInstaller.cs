@@ -28,7 +28,6 @@ namespace MCPForUnity.Editor.Setup
         private readonly ConcurrentQueue<string> _pendingLogs = new();
         private readonly StringBuilder _logBuilder = new(4096);
 
-        [MenuItem("Window/MCP For Unity/Install(Sync) MCP Skill")]
         public static void OpenWindow()
         {
             GetWindow<McpForUnitySkillInstaller>("Unity MCP Skill Install(Sync)");

@@ -11,14 +11,14 @@
             <uie:ToolbarToggle name="clients-tab" text="Connect" value="true" />
             <uie:ToolbarToggle name="tools-tab" text="Tools" />
             <uie:ToolbarToggle name="resources-tab" text="Resources" />
-            <uie:ToolbarToggle name="validation-tab" text="Scripts" />
+            <uie:ToolbarToggle name="deps-tab" text="Deps" />
             <uie:ToolbarToggle name="advanced-tab" text="Advanced" />
         </uie:Toolbar>
         <ui:ScrollView name="clients-panel" class="panel-scroll" style="flex-grow: 1;">
             <ui:VisualElement name="clients-container" class="section-stack" />
         </ui:ScrollView>
-        <ui:ScrollView name="validation-panel" class="panel-scroll hidden" style="flex-grow: 1;">
-            <ui:VisualElement name="validation-container" class="section-stack" />
+        <ui:ScrollView name="deps-panel" class="panel-scroll hidden" style="flex-grow: 1;">
+            <ui:VisualElement name="deps-container" class="section-stack" />
         </ui:ScrollView>
         <ui:ScrollView name="advanced-panel" class="panel-scroll hidden" style="flex-grow: 1;">
             <ui:VisualElement name="advanced-container" class="section-stack" />

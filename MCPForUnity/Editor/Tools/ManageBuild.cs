@@ -310,14 +310,42 @@ namespace MCPForUnity.Editor.Tools
                 return new SuccessResponse($"Build scenes ({scenes.Length}).", new { scenes });
             }
 
-            // Write scene list
+            // Handle string input: try JSON parse, then comma-separated
+            if (scenesRaw.Type == JTokenType.String)
+            {
+                string scenesStr = scenesRaw.ToString();
+                try { scenesRaw = JArray.Parse(scenesStr); }
+                catch
+                {
+                    // Treat as comma-separated paths
+                    var paths = scenesStr.Split(',')
+                        .Select(s => s.Trim())
+                        .Where(s => !string.IsNullOrEmpty(s))
+                        .ToArray();
+                    if (paths.Length == 0)
+                        return new ErrorResponse("'scenes' string contained no valid paths.");
+                    var fromStr = paths.Select(sp => new EditorBuildSettingsScene(sp, true)).ToArray();
+                    EditorBuildSettings.scenes = fromStr;
+                    return new SuccessResponse($"Updated build scenes ({fromStr.Length}).", new
+                    {
+                        scenes = fromStr.Select(s => new { path = s.path, enabled = s.enabled }).ToArray()
+                    });
+                }
+            }
+
+            // Write scene list — accepts array of strings or array of {path, enabled} objects
             var sceneArray = scenesRaw as JArray;
             if (sceneArray == null)
-                return new ErrorResponse("'scenes' must be an array of {path, enabled} objects.");
+                return new ErrorResponse("'scenes' must be an array of scene paths or {path, enabled} objects.");
 
             var newScenes = new List<EditorBuildSettingsScene>();
             foreach (var item in sceneArray)
             {
+                if (item.Type == JTokenType.String)
+                {
+                    newScenes.Add(new EditorBuildSettingsScene(item.ToString(), true));
+                    continue;
+                }
                 string path = item["path"]?.ToString();
                 if (string.IsNullOrEmpty(path))
                     return new ErrorResponse("Each scene must have a 'path' field.");
@@ -373,8 +401,9 @@ namespace MCPForUnity.Editor.Tools
                 });
             }
 
-            // Get profile details
-            var profileScenes = loadedProfile.GetScenesForBuild()
+            // Get profile details — use .scenes (available since Unity 6000.0.0)
+            // instead of .GetScenesForBuild() which was added in 6000.0.36
+            var profileScenes = loadedProfile.scenes
                 .Select(s => s.path).ToArray();
             return new SuccessResponse($"Profile: {profilePath}", new
             {

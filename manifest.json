@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.3",
   "name": "Unity MCP",
-  "version": "9.6.4",
+  "version": "9.6.5",
   "description": "AI-powered Unity Editor automation via MCP - manage GameObjects, scripts, materials, scenes, prefabs, VFX, and run tests",
   "author": {
     "name": "Coplay",
@@ -52,6 +52,10 @@
     {
       "name": "execute_custom_tool",
       "description": "Execute custom Unity Editor tools registered by the project"
+    },
+    {
+      "name": "execute_code",
+      "description": "Execute arbitrary C# code inside the Unity Editor with access to all Unity APIs"
     },
     {
       "name": "execute_menu_item",
