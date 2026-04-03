@@ -23,11 +23,35 @@ namespace MCPForUnity.Editor.Resources.Editor
                 var toolsArray = new JArray();
                 foreach (var tool in allTools)
                 {
+                    var paramsArray = new JArray();
+                    if (tool.Parameters != null)
+                    {
+                        foreach (var p in tool.Parameters)
+                        {
+                            paramsArray.Add(new JObject
+                            {
+                                ["name"] = p.Name,
+                                ["description"] = p.Description,
+                                ["type"] = p.Type,
+                                ["required"] = p.Required,
+                                ["default_value"] = p.DefaultValue
+                            });
+                        }
+                    }
+
                     toolsArray.Add(new JObject
                     {
                         ["name"] = tool.Name,
                         ["group"] = tool.Group ?? "core",
-                        ["enabled"] = discovery.IsToolEnabled(tool.Name)
+                        ["enabled"] = discovery.IsToolEnabled(tool.Name),
+                        ["description"] = tool.Description,
+                        ["auto_register"] = tool.AutoRegister,
+                        ["is_built_in"] = tool.IsBuiltIn,
+                        ["structured_output"] = tool.StructuredOutput,
+                        ["requires_polling"] = tool.RequiresPolling,
+                        ["poll_action"] = tool.PollAction ?? "status",
+                        ["max_poll_seconds"] = tool.MaxPollSeconds,
+                        ["parameters"] = paramsArray
                     });
                 }
 
