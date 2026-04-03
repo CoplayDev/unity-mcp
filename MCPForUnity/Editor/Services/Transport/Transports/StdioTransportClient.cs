@@ -48,8 +48,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
         public Task ReregisterToolsAsync()
         {
-            // Stdio transport doesn't support dynamic tool reregistration
-            // Tools are registered at server startup
+            // In stdio mode, Python re-syncs tools automatically on reconnection
+            // after domain reload. No proactive push mechanism exists over TCP.
             return Task.CompletedTask;
         }
 

@@ -42,6 +42,7 @@ class UnityConnection:
             self.port = stdio_port_registry.get_port(self.instance_id)
         self._io_lock = threading.Lock()
         self._conn_lock = threading.Lock()
+        self._needs_tool_resync = False  # Set True after reconnection
 
     def _prepare_socket(self, sock: socket.socket) -> None:
         try:
@@ -65,6 +66,7 @@ class UnityConnection:
                 self.sock = socket.create_connection(
                     (self.host, self.port), connect_timeout)
                 self._prepare_socket(self.sock)
+                self._needs_tool_resync = True
                 logger.debug(f"Connected to Unity at {self.host}:{self.port}")
 
                 # Strict handshake: require FRAMING=1
@@ -933,11 +935,54 @@ async def async_send_command_with_retry(
         import asyncio  # local import to avoid mandatory asyncio dependency for sync callers
         if loop is None:
             loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
+        result = await loop.run_in_executor(
             None,
             lambda: send_command_with_retry(
                 command_type, params, instance_id=instance_id, max_retries=max_retries,
                 retry_ms=retry_ms, retry_on_reload=retry_on_reload),
         )
+
+        # After a successful command, check if the connection was freshly
+        # established (reconnection after domain reload).  If so, re-sync
+        # tool visibility and custom tool registration from Unity.
+        # Skip if *this* call is the sync itself to avoid recursion.
+        if command_type != "get_tool_states":
+            try:
+                pool = get_unity_connection_pool()
+                conn = pool.get_connection(instance_id)
+                if getattr(conn, "_needs_tool_resync", False):
+                    conn._needs_tool_resync = False
+                    logger.info(
+                        "Detected reconnection to Unity; scheduling tool re-sync"
+                    )
+                    asyncio.ensure_future(_resync_tools_after_reconnect(instance_id))
+            except Exception:
+                pass  # Best-effort; don't fail the actual command
+
+        return result
     except Exception as e:
         return MCPResponse(success=False, error=str(e))
+
+
+async def _resync_tools_after_reconnect(instance_id: str | None) -> None:
+    """Background task: re-sync tool visibility and custom tools after reconnection."""
+    try:
+        from services.tools import sync_tool_visibility_from_unity
+        result = await sync_tool_visibility_from_unity(
+            instance_id=instance_id, notify=True,
+        )
+        if result.get("synced"):
+            logger.info(
+                "Post-reconnection tool re-sync complete: "
+                "enabled=[%s], disabled=[%s], custom_tools=%d",
+                ", ".join(result.get("enabled_groups", [])),
+                ", ".join(result.get("disabled_groups", [])),
+                result.get("custom_tool_count", 0),
+            )
+        else:
+            logger.debug(
+                "Post-reconnection tool re-sync skipped: %s",
+                result.get("error", "unknown"),
+            )
+    except Exception as exc:
+        logger.debug("Post-reconnection tool re-sync failed: %s", exc)

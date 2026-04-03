@@ -120,6 +120,9 @@ class CustomToolService:
         tool = self._project_tools.get(project_id, {}).get(tool_name)
         if tool:
             return tool
+        tool = self._global_tools.get(tool_name)
+        if tool:
+            return tool
         return await PluginHub.get_tool_definition(project_id, tool_name, user_id=user_id)
 
     async def execute_tool(
