@@ -540,7 +540,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     ["description"] = tool.Description,
                     ["structured_output"] = tool.StructuredOutput,
                     ["requires_polling"] = tool.RequiresPolling,
-                    ["poll_action"] = tool.PollAction,
+                    ["poll_action"] = tool.PollAction ?? "status",
                     ["max_poll_seconds"] = tool.MaxPollSeconds,
                     ["group"] = string.IsNullOrWhiteSpace(tool.Group) ? "core" : tool.Group
                 };

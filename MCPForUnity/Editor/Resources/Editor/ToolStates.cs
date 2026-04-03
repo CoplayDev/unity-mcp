@@ -49,7 +49,7 @@ namespace MCPForUnity.Editor.Resources.Editor
                         ["is_built_in"] = tool.IsBuiltIn,
                         ["structured_output"] = tool.StructuredOutput,
                         ["requires_polling"] = tool.RequiresPolling,
-                        ["poll_action"] = tool.PollAction,
+                        ["poll_action"] = tool.PollAction ?? "status",
                         ["max_poll_seconds"] = tool.MaxPollSeconds,
                         ["parameters"] = paramsArray
                     });

@@ -945,19 +945,23 @@ async def async_send_command_with_retry(
         # After a successful command, check if the connection was freshly
         # established (reconnection after domain reload).  If so, re-sync
         # tool visibility and custom tool registration from Unity.
-        # Skip if *this* call is the sync itself to avoid recursion.
-        if command_type != "get_tool_states":
-            try:
-                pool = get_unity_connection_pool()
-                conn = pool.get_connection(instance_id)
-                if getattr(conn, "_needs_tool_resync", False):
-                    conn._needs_tool_resync = False
+        # Always clear the flag, but only schedule the background resync
+        # when this call is not itself get_tool_states (to avoid recursion).
+        try:
+            pool = get_unity_connection_pool()
+            conn = pool.get_connection(instance_id)
+            if getattr(conn, "_needs_tool_resync", False):
+                conn._needs_tool_resync = False
+                if command_type != "get_tool_states":
                     logger.info(
                         "Detected reconnection to Unity; scheduling tool re-sync"
                     )
                     asyncio.ensure_future(_resync_tools_after_reconnect(instance_id))
-            except Exception:
-                pass  # Best-effort; don't fail the actual command
+        except Exception as exc:
+            logger.debug(
+                "Failed to schedule post-reconnection tool re-sync: %s",
+                exc,
+            )
 
         return result
     except Exception as e:

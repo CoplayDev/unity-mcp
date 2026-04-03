@@ -193,7 +193,7 @@ async def sync_tool_visibility_from_unity(
                                 name=p.get("name", ""),
                                 description=p.get("description", ""),
                                 type=p.get("type", "string"),
-                                required=p.get("required", False),
+                                required=p.get("required", True),
                                 default_value=p.get("default_value"),
                             )
                             for p in td.get("parameters", [])
@@ -204,7 +204,7 @@ async def sync_tool_visibility_from_unity(
                                 description=td.get("description", ""),
                                 structured_output=td.get("structured_output", True),
                                 requires_polling=td.get("requires_polling", False),
-                                poll_action=td.get("poll_action", "status"),
+                                poll_action=td.get("poll_action") or "status",
                                 max_poll_seconds=td.get("max_poll_seconds", 0),
                                 parameters=params,
                             )

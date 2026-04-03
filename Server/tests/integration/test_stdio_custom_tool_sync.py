@@ -240,8 +240,8 @@ async def test_no_resync_for_get_tool_states():
         from transport.legacy.unity_connection import async_send_command_with_retry
         await async_send_command_with_retry("get_tool_states", {})
 
-    # Flag should NOT be cleared — get_tool_states is excluded
-    assert mock_conn._needs_tool_resync is True
+    # Flag should be cleared, but no re-sync task should be scheduled
+    assert mock_conn._needs_tool_resync is False
     mock_resync.assert_not_awaited()
 
 
