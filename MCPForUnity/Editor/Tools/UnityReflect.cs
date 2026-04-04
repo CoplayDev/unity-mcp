@@ -170,6 +170,26 @@ namespace MCPForUnity.Editor.Tools
                 });
             }
 
+            // Open generic type definitions (e.g. List<T>, Dictionary<TKey,TValue>) crash
+            // Mono on Unity 2021.3 when member reflection triggers mono_metadata_class_equal.
+            // Return basic type info without member enumeration for these types.
+            if (type.IsGenericTypeDefinition)
+            {
+                // Mono on Unity 2021.3 segfaults in mono_metadata_generic_param_equal_internal
+                // when calling GetGenericArguments() or any member reflection on open generic types.
+                // Return minimal info using only safe property accesses.
+                return new SuccessResponse($"Type info for '{type.Name}'.", new
+                {
+                    found = true,
+                    name = type.Name,
+                    full_name = type.FullName,
+                    @namespace = type.Namespace,
+                    assembly = type.Assembly.GetName().Name,
+                    is_generic_type_definition = true,
+                    hint = "Open generic type — consult docs for member details."
+                });
+            }
+
             var flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
 
             var methods = type.GetMethods(flags)
