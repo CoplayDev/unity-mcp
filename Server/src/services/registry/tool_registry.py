@@ -11,6 +11,8 @@ cannot be disabled by the group system (used for server meta-tools like
 """
 from typing import Callable, Any
 
+from .unity_targeting import add_optional_unity_instance_parameter
+
 # Global registry to collect decorated tools
 _tool_registry: list[dict[str, Any]] = []
 
@@ -95,8 +97,12 @@ def mcp_for_unity_tool(
                 "Expected None or a non-empty string."
             )
 
+        registered_func = func
+        if normalized_unity_target is not None:
+            registered_func = add_optional_unity_instance_parameter(func)
+
         _tool_registry.append({
-            'func': func,
+            'func': registered_func,
             'name': tool_name,
             'description': description,
             'unity_target': normalized_unity_target,
@@ -104,7 +110,7 @@ def mcp_for_unity_tool(
             'kwargs': tool_kwargs,
         })
 
-        return func
+        return registered_func
 
     return decorator
 
