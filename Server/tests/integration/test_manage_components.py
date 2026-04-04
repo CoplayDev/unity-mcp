@@ -157,6 +157,110 @@ async def test_manage_components_set_property_json_string(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_manage_components_set_property_single_json_value(monkeypatch):
+    """Test Color-style object payloads are parsed from JSON strings."""
+    captured = {}
+
+    async def fake_send(cmd, params, **kwargs):
+        captured["params"] = params
+        return {"success": True, "data": {"instanceID": 12345}}
+
+    monkeypatch.setattr(
+        manage_comp_mod,
+        "async_send_command_with_retry",
+        fake_send,
+    )
+
+    resp = await manage_comp_mod.manage_components(
+        ctx=DummyContext(),
+        action="set_property",
+        target="Light",
+        component_type="Light",
+        property="color",
+        value='{"r": 1.0, "g": 1.0, "b": 0.0, "a": 1.0}',
+    )
+
+    assert resp.get("success") is True
+    assert captured["params"]["property"] == "color"
+    assert captured["params"]["value"] == {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 0.0,
+        "a": 1.0,
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("property_name", "raw_value", "expected_value"),
+    [
+        (
+            "position",
+            "[1.0, 2.0, 3.0]",
+            [1.0, 2.0, 3.0],
+        ),
+        (
+            "localScale",
+            '{"x": 2.0, "y": 3.0, "z": 4.0}',
+            {"x": 2.0, "y": 3.0, "z": 4.0},
+        ),
+        (
+            "rotation",
+            '{"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}',
+            {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+        ),
+        (
+            "color",
+            '{"r": 1.0, "g": 1.0, "b": 0.0, "a": 1.0}',
+            {"r": 1.0, "g": 1.0, "b": 0.0, "a": 1.0},
+        ),
+        (
+            "pixelRect",
+            '{"x": 10.0, "y": 20.0, "width": 1920.0, "height": 1080.0}',
+            {"x": 10.0, "y": 20.0, "width": 1920.0, "height": 1080.0},
+        ),
+    ],
+)
+async def test_manage_components_set_property_single_json_value_for_unity_structs(
+    monkeypatch,
+    property_name,
+    raw_value,
+    expected_value,
+):
+    """Test JSON-string single values preserve the intended Unity struct shape.
+
+    These cases document the payload forms we rely on:
+    - Vector3 accepts array or object JSON
+    - Quaternion accepts object JSON
+    - Color and Rect should use object JSON matching Unity field names
+    """
+    captured = {}
+
+    async def fake_send(cmd, params, **kwargs):
+        captured["params"] = params
+        return {"success": True, "data": {"instanceID": 12345}}
+
+    monkeypatch.setattr(
+        manage_comp_mod,
+        "async_send_command_with_retry",
+        fake_send,
+    )
+
+    resp = await manage_comp_mod.manage_components(
+        ctx=DummyContext(),
+        action="set_property",
+        target="TestObject",
+        component_type="Transform",
+        property=property_name,
+        value=raw_value,
+    )
+
+    assert resp.get("success") is True
+    assert captured["params"]["property"] == property_name
+    assert captured["params"]["value"] == expected_value
+
+
+@pytest.mark.asyncio
 async def test_manage_components_add_with_properties(monkeypatch):
     """Test adding a component with initial properties."""
     captured = {}
