@@ -179,14 +179,21 @@ def set_property(target: str, component_type: str, property_name: str, value: st
     default=None,
     help="How to find the target GameObject."
 )
+@click.option(
+    "--component-index", "-i",
+    type=int,
+    default=None,
+    help="Zero-based index when multiple components of the same type exist."
+)
 @handle_unity_errors
-def modify(target: str, component_type: str, properties: str, search_method: Optional[str]):
+def modify(target: str, component_type: str, properties: str, search_method: Optional[str], component_index: Optional[int]):
     """Set multiple properties on a component at once.
 
     \b
     Examples:
         unity-mcp component modify "Player" Rigidbody --properties '{"mass": 5.0, "useGravity": false}'
         unity-mcp component modify "Light" Light --properties '{"intensity": 2.0, "color": [1, 0, 0, 1]}'
+        unity-mcp component modify "Player" BoxCollider --properties '{"size": [2,2,2]}' --component-index 1
     """
     config = get_config()
 
@@ -201,6 +208,8 @@ def modify(target: str, component_type: str, properties: str, search_method: Opt
 
     if search_method:
         params["searchMethod"] = search_method
+    if component_index is not None:
+        params["componentIndex"] = component_index
 
     result = run_command("manage_components", params, config)
     click.echo(format_output(result, config.format))

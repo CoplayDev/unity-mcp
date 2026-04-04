@@ -120,8 +120,11 @@ namespace MCPForUnity.Editor.Tools.Physics
                 if (componentIndex.HasValue)
                 {
                     var type3D = !string.IsNullOrEmpty(colliderType) ? UnityTypeResolver.ResolveComponent(colliderType) : typeof(Collider);
-                    int count3D = type3D != null ? go.GetComponents(type3D).Length : 0;
-                    return new ErrorResponse($"component_index {componentIndex.Value} out of range. Found {count3D} '{(type3D ?? typeof(Collider)).Name}' collider(s) on '{go.name}'.");
+                    if (type3D != null)
+                    {
+                        int count3D = go.GetComponents(type3D).Length;
+                        return new ErrorResponse($"component_index {componentIndex.Value} out of range. Found {count3D} '{type3D.Name}' collider(s) on '{go.name}'.");
+                    }
                 }
             }
 
@@ -149,8 +152,11 @@ namespace MCPForUnity.Editor.Tools.Physics
                 if (componentIndex.HasValue)
                 {
                     var type2D = !string.IsNullOrEmpty(colliderType) ? UnityTypeResolver.ResolveComponent(colliderType) : typeof(Collider2D);
-                    int count2D = type2D != null ? go.GetComponents(type2D).Length : 0;
-                    return new ErrorResponse($"component_index {componentIndex.Value} out of range. Found {count2D} '{(type2D ?? typeof(Collider2D)).Name}' collider(s) on '{go.name}'.");
+                    if (type2D != null)
+                    {
+                        int count2D = go.GetComponents(type2D).Length;
+                        return new ErrorResponse($"component_index {componentIndex.Value} out of range. Found {count2D} '{type2D.Name}' collider(s) on '{go.name}'.");
+                    }
                 }
             }
 

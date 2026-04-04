@@ -95,7 +95,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
             var main = ps.main;
             var emission = ps.emission;
             var shape = ps.shape;
-            var renderer = ParticleCommon.FindParticleSystemRenderer(@params);
+            var renderer = ParticleCommon.FindParticleSystemRenderer(ps);
 
             return new
             {

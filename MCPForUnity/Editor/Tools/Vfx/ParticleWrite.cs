@@ -21,7 +21,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
             if (ps == null) return new { success = false, message = ParticleCommon.FindParticleSystemError(@params) };
 
             // Ensure material is assigned before any configuration.
-            EnsureParticleRendererMaterial(ParticleCommon.FindParticleSystemRenderer(@params));
+            EnsureParticleRendererMaterial(ParticleCommon.FindParticleSystemRenderer(ps));
 
             // Stop particle system if it's playing and duration needs to be changed
             bool wasPlaying = ps.isPlaying;
@@ -68,7 +68,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
             if (ps == null) return new { success = false, message = ParticleCommon.FindParticleSystemError(@params) };
 
             // Ensure material is assigned.
-            EnsureParticleRendererMaterial(ParticleCommon.FindParticleSystemRenderer(@params));
+            EnsureParticleRendererMaterial(ParticleCommon.FindParticleSystemRenderer(ps));
 
             Undo.RecordObject(ps, "Set ParticleSystem Emission");
             var emission = ps.emission;
@@ -88,7 +88,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
             if (ps == null) return new { success = false, message = ParticleCommon.FindParticleSystemError(@params) };
 
             // Ensure material is assigned.
-            EnsureParticleRendererMaterial(ParticleCommon.FindParticleSystemRenderer(@params));
+            EnsureParticleRendererMaterial(ParticleCommon.FindParticleSystemRenderer(ps));
 
             Undo.RecordObject(ps, "Set ParticleSystem Shape");
             var shape = ps.shape;
@@ -114,7 +114,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
             if (ps == null) return new { success = false, message = ParticleCommon.FindParticleSystemError(@params) };
 
             // Ensure material is assigned.
-            EnsureParticleRendererMaterial(ParticleCommon.FindParticleSystemRenderer(@params));
+            EnsureParticleRendererMaterial(ParticleCommon.FindParticleSystemRenderer(ps));
 
             Undo.RecordObject(ps, "Set ParticleSystem Color Over Lifetime");
             var col = ps.colorOverLifetime;
@@ -133,7 +133,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
             if (ps == null) return new { success = false, message = ParticleCommon.FindParticleSystemError(@params) };
 
             // Ensure material is assigned.
-            EnsureParticleRendererMaterial(ParticleCommon.FindParticleSystemRenderer(@params));
+            EnsureParticleRendererMaterial(ParticleCommon.FindParticleSystemRenderer(ps));
 
             Undo.RecordObject(ps, "Set ParticleSystem Size Over Lifetime");
             var sol = ps.sizeOverLifetime;
@@ -168,7 +168,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
             if (ps == null) return new { success = false, message = ParticleCommon.FindParticleSystemError(@params) };
 
             // Ensure material is assigned.
-            EnsureParticleRendererMaterial(ParticleCommon.FindParticleSystemRenderer(@params));
+            EnsureParticleRendererMaterial(ParticleCommon.FindParticleSystemRenderer(ps));
 
             Undo.RecordObject(ps, "Set ParticleSystem Velocity Over Lifetime");
             var vol = ps.velocityOverLifetime;
@@ -191,7 +191,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
             if (ps == null) return new { success = false, message = ParticleCommon.FindParticleSystemError(@params) };
 
             // Ensure material is assigned.
-            EnsureParticleRendererMaterial(ParticleCommon.FindParticleSystemRenderer(@params));
+            EnsureParticleRendererMaterial(ParticleCommon.FindParticleSystemRenderer(ps));
 
             Undo.RecordObject(ps, "Set ParticleSystem Noise");
             var noise = ps.noise;
@@ -214,8 +214,8 @@ namespace MCPForUnity.Editor.Tools.Vfx
             ParticleSystem ps = ParticleCommon.FindParticleSystem(@params);
             if (ps == null) return new { success = false, message = ParticleCommon.FindParticleSystemError(@params) };
 
-            var renderer = ParticleCommon.FindParticleSystemRenderer(@params);
-            if (renderer == null) return new { success = false, message = "ParticleSystemRenderer not found" };
+            var renderer = ParticleCommon.FindParticleSystemRenderer(ps);
+            if (renderer == null) return new { success = false, message = $"ParticleSystemRenderer not found on '{ps.gameObject.name}'" };
 
             // Ensure material is set before any other operations
             RendererHelpers.EnsureMaterialResult ensureResult = RendererHelpers.EnsureMaterial(renderer);

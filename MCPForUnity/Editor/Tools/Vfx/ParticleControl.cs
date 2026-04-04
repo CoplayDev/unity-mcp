@@ -138,7 +138,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
             // Ensure material is assigned before playing
             if (action == "play" || action == "restart")
             {
-                var renderer = ParticleCommon.FindParticleSystemRenderer(@params);
+                var renderer = ParticleCommon.FindParticleSystemRenderer(ps);
                 if (renderer != null)
                 {
                     ensureResult = RendererHelpers.EnsureMaterial(renderer);
@@ -173,7 +173,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
             if (ps == null) return new { success = false, message = ParticleCommon.FindParticleSystemError(@params) };
 
             // Ensure material is assigned
-            var renderer = ParticleCommon.FindParticleSystemRenderer(@params);
+            var renderer = ParticleCommon.FindParticleSystemRenderer(ps);
             RendererHelpers.EnsureMaterialResult ensureResult = default;
             bool materialChecked = false;
             if (renderer != null)

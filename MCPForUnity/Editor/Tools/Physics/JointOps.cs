@@ -162,6 +162,10 @@ namespace MCPForUnity.Editor.Tools.Physics
 
             string jointTypeStr = p.Get("joint_type");
             int? componentIndex = ParamCoercion.CoerceIntNullable(@params["componentIndex"] ?? @params["component_index"]);
+
+            if (componentIndex.HasValue && string.IsNullOrEmpty(jointTypeStr))
+                return new ErrorResponse("component_index requires joint_type to be specified.");
+
             Component joint = ResolveJoint(go, jointTypeStr, componentIndex, out int foundCount);
             if (joint == null)
             {
@@ -329,6 +333,9 @@ namespace MCPForUnity.Editor.Tools.Physics
 
             string jointTypeStr = p.Get("joint_type");
             int? componentIndex = ParamCoercion.CoerceIntNullable(@params["componentIndex"] ?? @params["component_index"]);
+
+            if (componentIndex.HasValue && string.IsNullOrEmpty(jointTypeStr))
+                return new ErrorResponse("component_index requires joint_type to be specified.");
 
             var jointsToRemove = new List<Component>();
 
