@@ -172,16 +172,16 @@ The server now parses those JSON strings before forwarding them to Unity, but th
 Examples:
 ```python
 manage_components(action="set_property", target="Cube", component_type="Transform",
-                  property="position", value="[1, 2, 3]")  # Vector3 array is OK
+                property="position", value="[1, 2, 3]")  # Vector3 array is OK
 
 manage_components(action="set_property", target="Cube", component_type="Transform",
-                  property="localScale", value='{"x": 2, "y": 2, "z": 2}')  # Vector3 object is OK
+                property="localScale", value='{"x": 2, "y": 2, "z": 2}')  # Vector3 object is OK
 
 manage_components(action="set_property", target="Light", component_type="Light",
-                  property="color", value='{"r": 1, "g": 0, "b": 0, "a": 1}')  # Prefer object for Color
+                property="color", value='{"r": 1, "g": 0, "b": 0, "a": 1}')  # Prefer object for Color
 
 manage_components(action="set_property", target="Main Camera", component_type="Camera",
-                  property="pixelRect", value='{"x": 0, "y": 0, "width": 1920, "height": 1080}')  # Prefer object for Rect
+                property="pixelRect", value='{"x": 0, "y": 0, "width": 1920, "height": 1080}')  # Prefer object for Rect
 ```
 
 ### Paths
