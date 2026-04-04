@@ -469,9 +469,17 @@ namespace MCPForUnity.Editor.Tools
 
                 await WaitForDownloadAsync(productId, TimeSpan.FromMinutes(5));
 
+                // Verify download actually completed
+                var (_, _, completed, downloadError) = GetDownloadState(productId);
                 string packagePath = GetCachedPackagePath(productId);
 
                 DestroyHiddenWindow();
+
+                if (!string.IsNullOrEmpty(downloadError))
+                    return new ErrorResponse($"Download failed for product {productId}: {downloadError}");
+
+                if (!completed && string.IsNullOrEmpty(packagePath))
+                    return new ErrorResponse($"Download timed out for product {productId}. The package may still be downloading — try again later.");
 
                 return new SuccessResponse(
                     $"Download completed for product {productId}.",
@@ -808,8 +816,8 @@ namespace MCPForUnity.Editor.Tools
                 if (managerInstance != null && _getDownloadOpMethod != null)
                 {
                     var paramType = _getDownloadOpMethod.GetParameters().FirstOrDefault()?.ParameterType;
-                    var op = _getDownloadOpMethod.Invoke(managerInstance,
-                        new object[] { paramType == typeof(long) ? (object)productId : productId });
+                    object arg = paramType == typeof(string) ? (object)productId.ToString() : productId;
+                    var op = _getDownloadOpMethod.Invoke(managerInstance, new[] { arg });
 
                     if (op != null)
                     {
@@ -975,43 +983,25 @@ namespace MCPForUnity.Editor.Tools
 
         private static Task WaitForOperationAsync(object listOp, TimeSpan timeout)
         {
+            if (listOp == null || _listOperationType == null)
+                return Task.CompletedTask;
+
+            var prop = _listOperationType.GetProperties(
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                .FirstOrDefault(p => p.Name == "isInProgress");
+            if (prop == null)
+                return Task.CompletedTask;
+
             var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             var start = DateTime.UtcNow;
+            int frameCount = 0;
 
             void Tick()
             {
-                if (tcs.Task.IsCompleted)
-                {
-                    EditorApplication.update -= Tick;
-                    return;
-                }
+                if (tcs.Task.IsCompleted) { EditorApplication.update -= Tick; return; }
+                if (frameCount++ % 30 != 0) return;
 
-                if ((DateTime.UtcNow - start) > timeout)
-                {
-                    EditorApplication.update -= Tick;
-                    tcs.TrySetResult(true); // Timeout — return what we have
-                    return;
-                }
-
-                try
-                {
-                    bool isInProgress = false;
-                    if (listOp != null && _listOperationType != null)
-                    {
-                        var prop = _listOperationType.GetProperties(
-                                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                            .FirstOrDefault(p => p.Name == "isInProgress");
-                        if (prop != null)
-                            isInProgress = (bool)(prop.GetValue(listOp) ?? false);
-                    }
-
-                    if (!isInProgress)
-                    {
-                        EditorApplication.update -= Tick;
-                        tcs.TrySetResult(true);
-                    }
-                }
-                catch
+                if ((DateTime.UtcNow - start) > timeout || !(bool)(prop.GetValue(listOp) ?? false))
                 {
                     EditorApplication.update -= Tick;
                     tcs.TrySetResult(true);
@@ -1026,14 +1016,12 @@ namespace MCPForUnity.Editor.Tools
         {
             var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             var start = DateTime.UtcNow;
+            int frameCount = 0;
 
             void Tick()
             {
-                if (tcs.Task.IsCompleted)
-                {
-                    EditorApplication.update -= Tick;
-                    return;
-                }
+                if (tcs.Task.IsCompleted) { EditorApplication.update -= Tick; return; }
+                if (frameCount++ % 30 != 0) return;
 
                 if ((DateTime.UtcNow - start) > timeout)
                 {
@@ -1042,16 +1030,8 @@ namespace MCPForUnity.Editor.Tools
                     return;
                 }
 
-                try
-                {
-                    var (_, _, completed, error) = GetDownloadState(productId);
-                    if (completed || !string.IsNullOrEmpty(error))
-                    {
-                        EditorApplication.update -= Tick;
-                        tcs.TrySetResult(true);
-                    }
-                }
-                catch
+                var (_, _, completed, error) = GetDownloadState(productId);
+                if (completed || !string.IsNullOrEmpty(error))
                 {
                     EditorApplication.update -= Tick;
                     tcs.TrySetResult(true);
