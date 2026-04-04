@@ -86,7 +86,7 @@ namespace MCPForUnity.Editor.Tools
 
                 string toolName = commandObj["tool"]?.ToString();
                 var rawParams = commandObj["params"] as JObject ?? new JObject();
-                var commandParams = NormalizeParameterKeys(rawParams);
+                var commandParams = NormalizeCommandParams(rawParams);
 
                 if (string.IsNullOrWhiteSpace(toolName))
                 {
@@ -214,7 +214,7 @@ namespace MCPForUnity.Editor.Tools
             return true;
         }
 
-        private static JObject NormalizeParameterKeys(JObject source)
+        private static JObject NormalizeCommandParams(JObject source)
         {
             if (source == null)
             {
@@ -225,9 +225,71 @@ namespace MCPForUnity.Editor.Tools
             foreach (var property in source.Properties())
             {
                 string normalizedName = ToCamelCase(property.Name);
-                normalized[normalizedName] = property.Value;
+                normalized[normalizedName] = NormalizeStructuredJsonStrings(property.Value);
             }
             return normalized;
+        }
+
+        private static JToken NormalizeStructuredJsonStrings(JToken token)
+        {
+            if (token == null)
+            {
+                return JValue.CreateNull();
+            }
+
+            return token.Type switch
+            {
+                JTokenType.Object => NormalizeObject((JObject)token),
+                JTokenType.Array => NormalizeArray((JArray)token),
+                JTokenType.String => TryParseStructuredJsonString(token.Value<string>()),
+                _ => token.DeepClone()
+            };
+        }
+
+        private static JObject NormalizeObject(JObject source)
+        {
+            var normalized = new JObject();
+            foreach (var property in source.Properties())
+            {
+                normalized[property.Name] = NormalizeStructuredJsonStrings(property.Value);
+            }
+            return normalized;
+        }
+
+        private static JArray NormalizeArray(JArray source)
+        {
+            var normalized = new JArray();
+            foreach (var item in source)
+            {
+                normalized.Add(NormalizeStructuredJsonStrings(item));
+            }
+            return normalized;
+        }
+
+        private static JToken TryParseStructuredJsonString(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return new JValue(value);
+            }
+
+            string trimmed = value.Trim();
+            bool looksLikeObject = trimmed.StartsWith("{", StringComparison.Ordinal) && trimmed.EndsWith("}", StringComparison.Ordinal);
+            bool looksLikeArray = trimmed.StartsWith("[", StringComparison.Ordinal) && trimmed.EndsWith("]", StringComparison.Ordinal);
+
+            if (!looksLikeObject && !looksLikeArray)
+            {
+                return new JValue(value);
+            }
+
+            try
+            {
+                return NormalizeStructuredJsonStrings(JToken.Parse(trimmed));
+            }
+            catch
+            {
+                return new JValue(value);
+            }
         }
 
         private static string ToCamelCase(string key) => StringCaseUtility.ToCamelCase(key);

@@ -113,12 +113,21 @@ namespace MCPForUnity.Runtime.Serialization
 
         public override Color ReadJson(JsonReader reader, Type objectType, Color existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
-            JObject jo = JObject.Load(reader);
+            JToken token = JToken.Load(reader);
+            if (token is JArray arr && arr.Count >= 3)
+            {
+                float alpha = arr.Count >= 4 ? (float)arr[3] : 1f;
+                return new Color((float)arr[0], (float)arr[1], (float)arr[2], alpha);
+            }
+
+            if (token is not JObject jo)
+                throw new JsonSerializationException($"Cannot deserialize Color from {token.Type}: '{token}'");
+
             return new Color(
                 (float)jo["r"],
                 (float)jo["g"],
                 (float)jo["b"],
-                (float)jo["a"]
+                jo["a"] != null ? (float)jo["a"] : 1f
             );
         }
     }
@@ -141,7 +150,13 @@ namespace MCPForUnity.Runtime.Serialization
 
         public override Rect ReadJson(JsonReader reader, Type objectType, Rect existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
-            JObject jo = JObject.Load(reader);
+            JToken token = JToken.Load(reader);
+            if (token is JArray arr && arr.Count >= 4)
+                return new Rect((float)arr[0], (float)arr[1], (float)arr[2], (float)arr[3]);
+
+            if (token is not JObject jo)
+                throw new JsonSerializationException($"Cannot deserialize Rect from {token.Type}: '{token}'");
+
             return new Rect(
                 (float)jo["x"],
                 (float)jo["y"],
