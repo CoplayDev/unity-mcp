@@ -170,14 +170,11 @@ namespace MCPForUnity.Editor.Tools
                 });
             }
 
-            // Open generic type definitions (e.g. List<T>, Dictionary<TKey,TValue>) crash
-            // Mono on Unity 2021.3 when member reflection triggers mono_metadata_class_equal.
-            // Return basic type info without member enumeration for these types.
+            // Open generic type definitions (e.g. List<T>) segfault Mono on Unity 2021.3
+            // in mono_metadata_generic_param_equal_internal when any member reflection is
+            // performed. Return minimal info using only safe property accesses.
             if (type.IsGenericTypeDefinition)
             {
-                // Mono on Unity 2021.3 segfaults in mono_metadata_generic_param_equal_internal
-                // when calling GetGenericArguments() or any member reflection on open generic types.
-                // Return minimal info using only safe property accesses.
                 return new SuccessResponse($"Type info for '{type.Name}'.", new
                 {
                     found = true,
@@ -290,6 +287,19 @@ namespace MCPForUnity.Editor.Tools
                     found = false,
                     query = className
                 });
+            }
+
+            if (type.IsGenericTypeDefinition)
+            {
+                return new SuccessResponse(
+                    $"Open generic type '{type.Name}' — consult docs for member details.", new
+                    {
+                        found = false,
+                        type_name = type.FullName,
+                        member_name = memberName,
+                        is_generic_type_definition = true,
+                        hint = "Open generic type — consult docs for member details."
+                    });
             }
 
             // Use flags without DeclaredOnly to find inherited members

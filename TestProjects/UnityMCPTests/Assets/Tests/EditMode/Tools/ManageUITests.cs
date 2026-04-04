@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEditor;
@@ -685,22 +684,26 @@ namespace MCPForUnityTests.Editor.Tools
 
             // Unity's UXML importer logs an error for undeclared 'ui' prefix
             LogAssert.ignoreFailingMessages = true;
-
-            var result = ToJObject(ManageUI.HandleCommand(new JObject
+            try
             {
-                ["action"] = "create",
-                ["path"] = path,
-                ["contents"] = content,
-            }));
+                var result = ToJObject(ManageUI.HandleCommand(new JObject
+                {
+                    ["action"] = "create",
+                    ["path"] = path,
+                    ["contents"] = content,
+                }));
 
-            LogAssert.ignoreFailingMessages = false;
-
-            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
-            var data = result["data"] as JObject;
-            Assert.IsNotNull(data);
-            var warnings = data["validationWarnings"] as JArray;
-            Assert.IsNotNull(warnings, "Should have validationWarnings");
-            Assert.That(warnings.ToString(), Does.Contain("Missing namespace"));
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+                var data = result["data"] as JObject;
+                Assert.IsNotNull(data);
+                var warnings = data["validationWarnings"] as JArray;
+                Assert.IsNotNull(warnings, "Should have validationWarnings");
+                Assert.That(warnings.ToString(), Does.Contain("Missing namespace"));
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = false;
+            }
         }
 
         [Test]
@@ -730,21 +733,25 @@ namespace MCPForUnityTests.Editor.Tools
 
             // Unity's UXML importer logs an error about expected root element
             LogAssert.ignoreFailingMessages = true;
-
-            var result = ToJObject(ManageUI.HandleCommand(new JObject
+            try
             {
-                ["action"] = "create",
-                ["path"] = path,
-                ["contents"] = content,
-            }));
+                var result = ToJObject(ManageUI.HandleCommand(new JObject
+                {
+                    ["action"] = "create",
+                    ["path"] = path,
+                    ["contents"] = content,
+                }));
 
-            LogAssert.ignoreFailingMessages = false;
-
-            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
-            var data = result["data"] as JObject;
-            var warnings = data["validationWarnings"] as JArray;
-            Assert.IsNotNull(warnings, "Should have validationWarnings");
-            Assert.That(warnings.ToString(), Does.Contain("Root element"));
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+                var data = result["data"] as JObject;
+                var warnings = data["validationWarnings"] as JArray;
+                Assert.IsNotNull(warnings, "Should have validationWarnings");
+                Assert.That(warnings.ToString(), Does.Contain("Root element"));
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = false;
+            }
         }
 
         [Test]
