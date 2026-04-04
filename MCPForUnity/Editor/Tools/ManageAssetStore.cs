@@ -259,7 +259,7 @@ namespace MCPForUnity.Editor.Tools
             if (_hiddenWindowInstance != null)
             {
                 try { UnityEngine.Object.DestroyImmediate(_hiddenWindowInstance); }
-                catch { }
+                catch (Exception e) { McpLog.Warn($"[ManageAssetStore] DestroyHiddenWindow: {e.Message}"); }
                 _hiddenWindowInstance = null;
                 _cachedRoot = null;
                 _serviceCache.Clear();
@@ -778,7 +778,9 @@ namespace MCPForUnity.Editor.Tools
                         {
                             if (ps.Length == 1)
                             {
-                                dm.Invoke(managerInstance, new object[] { productId });
+                                object arg = ps[0].ParameterType == typeof(string)
+                                    ? (object)productId.ToString() : productId;
+                                dm.Invoke(managerInstance, new object[] { arg });
                                 invoked = true;
                                 invokedOverload = ps[0].ParameterType.Name;
                                 break;
@@ -964,7 +966,10 @@ namespace MCPForUnity.Editor.Tools
                     _hiddenWindowInstance = ScriptableObject.CreateInstance(windowType);
                     windows = new[] { _hiddenWindowInstance };
                 }
-                catch { }
+                catch (Exception e)
+                {
+                    McpLog.Warn($"[ManageAssetStore] Failed to create hidden PM window: {e.Message}");
+                }
 
                 if (windows == null || windows.Length == 0)
                     return null;
