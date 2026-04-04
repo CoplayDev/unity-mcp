@@ -167,7 +167,7 @@ color=[1.0, 0.0, 0.0, 1.0]    # 0.0-1.0 normalized (auto-converted)
 For `manage_components`, complex property values may arrive as JSON strings from some MCP clients.
 The server now parses those JSON strings before forwarding them to Unity, but the Unity-side converter still matters:
 - `Vector2` / `Vector3` / `Vector4` / `Quaternion`: array or object forms are both fine
-- `Color` / `Rect`: prefer object form matching Unity field names
+- `Color` / `Rect`: use object form matching Unity field names on the `manage_components` path
 
 Examples:
 ```python
@@ -178,10 +178,10 @@ manage_components(action="set_property", target="Cube", component_type="Transfor
                 property="localScale", value='{"x": 2, "y": 2, "z": 2}')  # Vector3 object is OK
 
 manage_components(action="set_property", target="Light", component_type="Light",
-                property="color", value='{"r": 1, "g": 0, "b": 0, "a": 1}')  # Prefer object for Color
+                property="color", value='{"r": 1, "g": 0, "b": 0, "a": 1}')  # Use object form for Color
 
 manage_components(action="set_property", target="Main Camera", component_type="Camera",
-                property="pixelRect", value='{"x": 0, "y": 0, "width": 1920, "height": 1080}')  # Prefer object for Rect
+                property="pixelRect", value='{"x": 0, "y": 0, "width": 1920, "height": 1080}')  # Use object form for Rect
 ```
 
 ### Paths
