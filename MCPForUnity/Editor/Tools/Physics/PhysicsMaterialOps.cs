@@ -120,10 +120,14 @@ namespace MCPForUnity.Editor.Tools.Physics
                 if (componentIndex.HasValue)
                 {
                     var type3D = !string.IsNullOrEmpty(colliderType) ? UnityTypeResolver.ResolveComponent(colliderType) : typeof(Collider);
-                    if (type3D != null)
+                    if (type3D != null && typeof(Collider).IsAssignableFrom(type3D))
                     {
                         int count3D = go.GetComponents(type3D).Length;
                         return new ErrorResponse($"component_index {componentIndex.Value} out of range. Found {count3D} '{type3D.Name}' collider(s) on '{go.name}'.");
+                    }
+                    else if (!string.IsNullOrEmpty(colliderType))
+                    {
+                        return new ErrorResponse($"Unknown or invalid 3D collider type: '{colliderType}'.");
                     }
                 }
             }
@@ -152,10 +156,14 @@ namespace MCPForUnity.Editor.Tools.Physics
                 if (componentIndex.HasValue)
                 {
                     var type2D = !string.IsNullOrEmpty(colliderType) ? UnityTypeResolver.ResolveComponent(colliderType) : typeof(Collider2D);
-                    if (type2D != null)
+                    if (type2D != null && typeof(Collider2D).IsAssignableFrom(type2D))
                     {
                         int count2D = go.GetComponents(type2D).Length;
                         return new ErrorResponse($"component_index {componentIndex.Value} out of range. Found {count2D} '{type2D.Name}' collider(s) on '{go.name}'.");
+                    }
+                    else if (!string.IsNullOrEmpty(colliderType))
+                    {
+                        return new ErrorResponse($"Unknown or invalid 2D collider type: '{colliderType}'.");
                     }
                 }
             }

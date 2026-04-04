@@ -161,7 +161,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     success = true,
                     message = $"Component '{componentTypeName}' (index {componentIndex.Value}) removed from '{targetGo.name}'.",
-                    data = new { instanceID = targetGo.GetInstanceID() }
+                    data = new { instanceID = targetGo.GetInstanceID(), componentIndex = componentIndex.Value }
                 };
             }
 
