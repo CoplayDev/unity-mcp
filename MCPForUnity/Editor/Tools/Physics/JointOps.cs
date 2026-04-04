@@ -161,9 +161,13 @@ namespace MCPForUnity.Editor.Tools.Physics
                 return new ErrorResponse($"Target GameObject '{targetStr}' not found.");
 
             string jointTypeStr = p.Get("joint_type");
-            Component joint = ResolveJoint(go, jointTypeStr);
+            int? componentIndex = ParamCoercion.CoerceIntNullable(@params["componentIndex"] ?? @params["component_index"]);
+            Component joint = ResolveJoint(go, jointTypeStr, componentIndex, out int foundCount);
             if (joint == null)
             {
+                if (componentIndex.HasValue && foundCount >= 0)
+                    return new ErrorResponse($"component_index {componentIndex.Value} out of range. Found {foundCount} joint(s) on '{go.name}'.");
+
                 if (!string.IsNullOrEmpty(jointTypeStr))
                     return new ErrorResponse($"No joint of type '{jointTypeStr}' found on '{go.name}'.");
 
@@ -324,6 +328,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                 return new ErrorResponse($"Target GameObject '{targetStr}' not found.");
 
             string jointTypeStr = p.Get("joint_type");
+            int? componentIndex = ParamCoercion.CoerceIntNullable(@params["componentIndex"] ?? @params["component_index"]);
 
             var jointsToRemove = new List<Component>();
 
@@ -342,7 +347,17 @@ namespace MCPForUnity.Editor.Tools.Physics
                 }
 
                 var components = go.GetComponents(jointComponentType);
-                jointsToRemove.AddRange(components);
+
+                if (componentIndex.HasValue)
+                {
+                    if (componentIndex.Value < 0 || componentIndex.Value >= components.Length)
+                        return new ErrorResponse($"component_index {componentIndex.Value} out of range. Found {components.Length} '{jointComponentType.Name}' joint(s) on '{go.name}'.");
+                    jointsToRemove.Add(components[componentIndex.Value]);
+                }
+                else
+                {
+                    jointsToRemove.AddRange(components);
+                }
             }
             else
             {
@@ -403,8 +418,9 @@ namespace MCPForUnity.Editor.Tools.Physics
             return GameObjectLookup.FindByTarget(targetToken, searchMethod ?? "by_name", true);
         }
 
-        private static Component ResolveJoint(GameObject go, string jointTypeStr)
+        private static Component ResolveJoint(GameObject go, string jointTypeStr, int? index, out int foundCount)
         {
+            foundCount = -1;
             if (!string.IsNullOrEmpty(jointTypeStr))
             {
                 bool is2D = go.GetComponent<Rigidbody2D>() != null;
@@ -412,7 +428,17 @@ namespace MCPForUnity.Editor.Tools.Physics
                 string key = jointTypeStr.ToLowerInvariant();
 
                 if (typeMap.TryGetValue(key, out Type jointType))
+                {
+                    if (index.HasValue)
+                    {
+                        var components = go.GetComponents(jointType);
+                        foundCount = components.Length;
+                        if (index.Value < 0 || index.Value >= components.Length)
+                            return null;
+                        return components[index.Value];
+                    }
                     return go.GetComponent(jointType);
+                }
 
                 return null;
             }

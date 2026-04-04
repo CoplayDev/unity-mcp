@@ -12,7 +12,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
         public static object SetTime(JObject @params)
         {
             TrailRenderer tr = TrailRead.FindTrailRenderer(@params);
-            if (tr == null) return new { success = false, message = "TrailRenderer not found" };
+            if (tr == null) return new { success = false, message = TrailRead.FindTrailRendererError(@params) };
 
             RendererHelpers.EnsureMaterial(tr);
 
@@ -28,7 +28,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
         public static object SetWidth(JObject @params)
         {
             TrailRenderer tr = TrailRead.FindTrailRenderer(@params);
-            if (tr == null) return new { success = false, message = "TrailRenderer not found" };
+            if (tr == null) return new { success = false, message = TrailRead.FindTrailRendererError(@params) };
 
             RendererHelpers.EnsureMaterial(tr);
 
@@ -47,7 +47,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
         public static object SetColor(JObject @params)
         {
             TrailRenderer tr = TrailRead.FindTrailRenderer(@params);
-            if (tr == null) return new { success = false, message = "TrailRenderer not found" };
+            if (tr == null) return new { success = false, message = TrailRead.FindTrailRendererError(@params) };
 
             RendererHelpers.EnsureMaterial(tr);
 
@@ -72,7 +72,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
         public static object SetProperties(JObject @params)
         {
             TrailRenderer tr = TrailRead.FindTrailRenderer(@params);
-            if (tr == null) return new { success = false, message = "TrailRenderer not found" };
+            if (tr == null) return new { success = false, message = TrailRead.FindTrailRendererError(@params) };
 
             RendererHelpers.EnsureMaterial(tr);
 

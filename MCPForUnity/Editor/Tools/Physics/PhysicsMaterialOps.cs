@@ -79,6 +79,7 @@ namespace MCPForUnity.Editor.Tools.Physics
 
             string searchMethod = p.Get("search_method") ?? "by_name";
             string colliderType = p.Get("collider_type");
+            int? componentIndex = ParamCoercion.CoerceIntNullable(p.GetRaw("componentIndex") ?? p.GetRaw("component_index"));
 
             var go = GameObjectLookup.FindByTarget(targetToken, searchMethod);
             if (go == null)
@@ -98,7 +99,7 @@ namespace MCPForUnity.Editor.Tools.Physics
             // Try 3D colliders first
             if (mat3D != null)
             {
-                var collider3D = FindCollider3D(go, colliderType);
+                var collider3D = FindCollider3D(go, colliderType, componentIndex);
                 if (collider3D != null)
                 {
                     Undo.RecordObject(collider3D, "Assign Physics Material");
@@ -116,12 +117,18 @@ namespace MCPForUnity.Editor.Tools.Physics
                         }
                     };
                 }
+                if (componentIndex.HasValue)
+                {
+                    var type3D = !string.IsNullOrEmpty(colliderType) ? UnityTypeResolver.ResolveComponent(colliderType) : typeof(Collider);
+                    int count3D = type3D != null ? go.GetComponents(type3D).Length : 0;
+                    return new ErrorResponse($"component_index {componentIndex.Value} out of range. Found {count3D} '{(type3D ?? typeof(Collider)).Name}' collider(s) on '{go.name}'.");
+                }
             }
 
             // Try 2D colliders
             if (mat2D != null)
             {
-                var collider2D = FindCollider2D(go, colliderType);
+                var collider2D = FindCollider2D(go, colliderType, componentIndex);
                 if (collider2D != null)
                 {
                     Undo.RecordObject(collider2D, "Assign Physics Material 2D");
@@ -138,6 +145,12 @@ namespace MCPForUnity.Editor.Tools.Physics
                             materialPath
                         }
                     };
+                }
+                if (componentIndex.HasValue)
+                {
+                    var type2D = !string.IsNullOrEmpty(colliderType) ? UnityTypeResolver.ResolveComponent(colliderType) : typeof(Collider2D);
+                    int count2D = type2D != null ? go.GetComponents(type2D).Length : 0;
+                    return new ErrorResponse($"component_index {componentIndex.Value} out of range. Found {count2D} '{(type2D ?? typeof(Collider2D)).Name}' collider(s) on '{go.name}'.");
                 }
             }
 
@@ -398,27 +411,61 @@ namespace MCPForUnity.Editor.Tools.Physics
         // Assign helpers
         // =====================================================================
 
-        private static Collider FindCollider3D(GameObject go, string colliderType)
+        private static Collider FindCollider3D(GameObject go, string colliderType, int? index = null)
         {
             if (!string.IsNullOrEmpty(colliderType))
             {
                 var type = UnityTypeResolver.ResolveComponent(colliderType);
                 if (type != null && typeof(Collider).IsAssignableFrom(type))
+                {
+                    if (index.HasValue)
+                    {
+                        var components = go.GetComponents(type);
+                        if (index.Value < 0 || index.Value >= components.Length)
+                            return null;
+                        return components[index.Value] as Collider;
+                    }
                     return go.GetComponent(type) as Collider;
+                }
                 return null;
+            }
+
+            if (index.HasValue)
+            {
+                var colliders = go.GetComponents<Collider>();
+                if (index.Value < 0 || index.Value >= colliders.Length)
+                    return null;
+                return colliders[index.Value];
             }
 
             return go.GetComponent<Collider>();
         }
 
-        private static Collider2D FindCollider2D(GameObject go, string colliderType)
+        private static Collider2D FindCollider2D(GameObject go, string colliderType, int? index = null)
         {
             if (!string.IsNullOrEmpty(colliderType))
             {
                 var type = UnityTypeResolver.ResolveComponent(colliderType);
                 if (type != null && typeof(Collider2D).IsAssignableFrom(type))
+                {
+                    if (index.HasValue)
+                    {
+                        var components = go.GetComponents(type);
+                        if (index.Value < 0 || index.Value >= components.Length)
+                            return null;
+                        return components[index.Value] as Collider2D;
+                    }
                     return go.GetComponent(type) as Collider2D;
+                }
                 return null;
+            }
+
+            if (index.HasValue)
+            {
+                var colliders = go.GetComponents<Collider2D>();
+                if (index.Value < 0 || index.Value >= colliders.Length)
+                    return null;
+                return colliders[index.Value];
             }
 
             return go.GetComponent<Collider2D>();

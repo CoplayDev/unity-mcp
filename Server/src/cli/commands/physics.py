@@ -197,8 +197,14 @@ def configure_material(path, dimension, properties):
 @click.option("--target", "-t", required=True, help="Target GameObject name or instance ID.")
 @click.option("--material-path", "-m", required=True, help="Path to physics material asset.")
 @click.option("--collider-type", default=None, help="Specific collider type.")
+@click.option(
+    "--component-index", "-i",
+    type=int,
+    default=None,
+    help="Zero-based index when multiple colliders of the same type exist."
+)
 @handle_unity_errors
-def assign_material(target, material_path, collider_type):
+def assign_material(target, material_path, collider_type, component_index):
     """Assign a physics material to a GameObject's collider."""
     config = get_config()
     params = {
@@ -208,6 +214,8 @@ def assign_material(target, material_path, collider_type):
     }
     if collider_type:
         params["collider_type"] = collider_type
+    if component_index is not None:
+        params["componentIndex"] = component_index
     result = run_command("manage_physics", params, config)
     click.echo(format_output(result, config.format))
 
@@ -233,15 +241,23 @@ def add_joint(target, joint_type, connected_body, dimension):
 @physics.command("configure-joint")
 @click.option("--target", "-t", required=True, help="Target GameObject.")
 @click.option("--joint-type", "-j", default=None, help="Joint type to target.")
+@click.option(
+    "--component-index", "-i",
+    type=int,
+    default=None,
+    help="Zero-based index when multiple joints of the same type exist."
+)
 @click.argument("properties", nargs=-1)  # key=value pairs
 @handle_unity_errors
-def configure_joint(target, joint_type, properties):
+def configure_joint(target, joint_type, component_index, properties):
     """Configure a joint on a GameObject (key=value ...)."""
     config = get_config()
     props = {k: _coerce_cli_value(v) for kv in properties if "=" in kv for k, v in [kv.split("=", 1)]}
     params = {"action": "configure_joint", "target": target, "properties": props}
     if joint_type:
         params["joint_type"] = joint_type
+    if component_index is not None:
+        params["componentIndex"] = component_index
     result = run_command("manage_physics", params, config)
     click.echo(format_output(result, config.format))
 
@@ -249,13 +265,21 @@ def configure_joint(target, joint_type, properties):
 @physics.command("remove-joint")
 @click.option("--target", "-t", required=True, help="Target GameObject.")
 @click.option("--joint-type", "-j", default=None, help="Joint type to remove (omit to remove all).")
+@click.option(
+    "--component-index", "-i",
+    type=int,
+    default=None,
+    help="Zero-based index when multiple joints of the same type exist."
+)
 @handle_unity_errors
-def remove_joint(target, joint_type):
+def remove_joint(target, joint_type, component_index):
     """Remove joint(s) from a GameObject."""
     config = get_config()
     params = {"action": "remove_joint", "target": target}
     if joint_type:
         params["joint_type"] = joint_type
+    if component_index is not None:
+        params["componentIndex"] = component_index
     result = run_command("manage_physics", params, config)
     click.echo(format_output(result, config.format))
 
