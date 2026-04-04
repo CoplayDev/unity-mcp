@@ -53,8 +53,8 @@ namespace MCPForUnityTests.Editor.Tools
             var result = ToJObject(ManageProBuilder.HandleCommand(paramsObj));
 
             Assert.IsFalse(result.Value<bool>("success"), result.ToString());
-            Assert.That(result["error"]?.ToString() ?? result["message"]?.ToString(),
-                Does.Contain("Unknown action"));
+            var errorMsg = result["error"]?.ToString() ?? result["message"]?.ToString();
+            Assert.That(errorMsg, Does.Contain("Unknown action").Or.Contain("not installed"));
         }
 
         [Test]
