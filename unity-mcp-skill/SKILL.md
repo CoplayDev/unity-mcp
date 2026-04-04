@@ -164,11 +164,6 @@ color=[255, 0, 0, 255]         # 0-255 range
 color=[1.0, 0.0, 0.0, 1.0]    # 0.0-1.0 normalized (auto-converted)
 ```
 
-For `manage_components`, complex property values may arrive as JSON strings from some MCP clients.
-The server now parses those JSON strings before forwarding them to Unity, but the Unity-side converter still matters:
-- `Vector2` / `Vector3` / `Vector4` / `Quaternion`: array or object forms are both fine
-- `Color` / `Rect`: use object form matching Unity field names on the `manage_components` path
-
 ### Paths
 ```python
 # Assets-relative (default):
