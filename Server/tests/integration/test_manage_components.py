@@ -191,6 +191,36 @@ async def test_manage_components_set_property_single_json_value(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_manage_components_set_property_single_plain_string_value_stays_string(monkeypatch):
+    """Test ordinary string values are forwarded unchanged."""
+    captured = {}
+
+    async def fake_send(cmd, params, **kwargs):
+        captured["params"] = params
+        return {"success": True, "data": {"instanceID": 12345}}
+
+    monkeypatch.setattr(
+        manage_comp_mod,
+        "async_send_command_with_retry",
+        fake_send,
+    )
+
+    resp = await manage_comp_mod.manage_components(
+        ctx=DummyContext(),
+        action="set_property",
+        target="GameManager",
+        component_type="ExampleComponent",
+        property="displayName",
+        value="Player One",
+    )
+
+    assert resp.get("success") is True
+    assert captured["params"]["property"] == "displayName"
+    assert captured["params"]["value"] == "Player One"
+    assert isinstance(captured["params"]["value"], str)
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("property_name", "raw_value", "expected_value"),
     [
