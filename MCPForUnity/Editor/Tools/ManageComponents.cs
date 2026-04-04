@@ -146,7 +146,26 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse($"Component type '{componentTypeName}' not found.");
             }
 
-            // Use ComponentOps for the actual operation
+            int? componentIndex = ParamCoercion.CoerceIntNullable(@params["componentIndex"] ?? @params["component_index"]);
+            if (componentIndex.HasValue)
+            {
+                var components = targetGo.GetComponents(type);
+                if (componentIndex.Value < 0 || componentIndex.Value >= components.Length)
+                    return new ErrorResponse($"component_index {componentIndex.Value} out of range. Found {components.Length} '{componentTypeName}' component(s).");
+                if (type == typeof(Transform) || type == typeof(RectTransform))
+                    return new ErrorResponse("Cannot remove Transform or RectTransform components.");
+                Undo.DestroyObjectImmediate(components[componentIndex.Value]);
+                EditorUtility.SetDirty(targetGo);
+                MarkOwningSceneDirty(targetGo);
+                return new
+                {
+                    success = true,
+                    message = $"Component '{componentTypeName}' (index {componentIndex.Value}) removed from '{targetGo.name}'.",
+                    data = new { instanceID = targetGo.GetInstanceID(), componentIndex = componentIndex.Value }
+                };
+            }
+
+            // Use ComponentOps for the actual operation (removes first instance)
             bool removed = ComponentOps.RemoveComponent(targetGo, type, out string error);
             if (!removed)
             {
@@ -188,7 +207,19 @@ namespace MCPForUnity.Editor.Tools
                 return new ErrorResponse($"Component type '{componentType}' not found.");
             }
 
-            Component component = targetGo.GetComponent(type);
+            int? componentIndex = ParamCoercion.CoerceIntNullable(@params["componentIndex"] ?? @params["component_index"]);
+            Component component;
+            if (componentIndex.HasValue)
+            {
+                var components = targetGo.GetComponents(type);
+                if (componentIndex.Value < 0 || componentIndex.Value >= components.Length)
+                    return new ErrorResponse($"component_index {componentIndex.Value} out of range. Found {components.Length} '{componentType}' component(s).");
+                component = components[componentIndex.Value];
+            }
+            else
+            {
+                component = targetGo.GetComponent(type);
+            }
             if (component == null)
             {
                 return new ErrorResponse($"Component '{componentType}' not found on '{targetGo.name}'.");

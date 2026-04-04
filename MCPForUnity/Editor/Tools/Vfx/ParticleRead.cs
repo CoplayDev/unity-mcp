@@ -89,13 +89,13 @@ namespace MCPForUnity.Editor.Tools.Vfx
             ParticleSystem ps = ParticleCommon.FindParticleSystem(@params);
             if (ps == null)
             {
-                return new { success = false, message = "ParticleSystem not found" };
+                return new { success = false, message = ParticleCommon.FindParticleSystemError(@params) };
             }
 
             var main = ps.main;
             var emission = ps.emission;
             var shape = ps.shape;
-            var renderer = ps.GetComponent<ParticleSystemRenderer>();
+            var renderer = ParticleCommon.FindParticleSystemRenderer(ps);
 
             return new
             {

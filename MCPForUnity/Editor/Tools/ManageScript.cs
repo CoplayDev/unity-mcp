@@ -1910,6 +1910,10 @@ namespace MCPForUnity.Editor.Tools
             int probe = lineStart - 1;
             while (probe > searchStart)
             {
+                // Skip past line-ending chars so LastIndexOf finds the *previous* newline
+                while (probe > searchStart && (source[probe] == '\n' || source[probe] == '\r'))
+                    probe--;
+                if (probe <= searchStart) break;
                 int prevNl = source.LastIndexOf('\n', probe);
                 if (prevNl < 0 || prevNl < searchStart) break;
                 string prev = source.Substring(prevNl + 1, attrStart - (prevNl + 1));

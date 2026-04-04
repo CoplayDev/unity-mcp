@@ -6,15 +6,15 @@ namespace MCPForUnity.Editor.Tools.Vfx
     internal static class TrailRead
     {
         public static TrailRenderer FindTrailRenderer(JObject @params)
-        {
-            GameObject go = ManageVfxCommon.FindTargetGameObject(@params);
-            return go?.GetComponent<TrailRenderer>();
-        }
+            => ManageVfxCommon.FindComponent<TrailRenderer>(@params);
+
+        public static string FindTrailRendererError(JObject @params)
+            => ManageVfxCommon.FindComponentError<TrailRenderer>(@params);
 
         public static object GetInfo(JObject @params)
         {
             TrailRenderer tr = FindTrailRenderer(@params);
-            if (tr == null) return new { success = false, message = "TrailRenderer not found" };
+            if (tr == null) return new { success = false, message = FindTrailRendererError(@params) };
 
             return new
             {

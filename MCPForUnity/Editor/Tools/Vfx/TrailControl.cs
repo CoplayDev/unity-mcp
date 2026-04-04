@@ -10,7 +10,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
         public static object Clear(JObject @params)
         {
             TrailRenderer tr = TrailRead.FindTrailRenderer(@params);
-            if (tr == null) return new { success = false, message = "TrailRenderer not found" };
+            if (tr == null) return new { success = false, message = TrailRead.FindTrailRendererError(@params) };
 
             Undo.RecordObject(tr, "Clear Trail");
             tr.Clear();
@@ -20,7 +20,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
         public static object Emit(JObject @params)
         {
             TrailRenderer tr = TrailRead.FindTrailRenderer(@params);
-            if (tr == null) return new { success = false, message = "TrailRenderer not found" };
+            if (tr == null) return new { success = false, message = TrailRead.FindTrailRendererError(@params) };
 
             RendererHelpers.EnsureMaterial(tr);
 

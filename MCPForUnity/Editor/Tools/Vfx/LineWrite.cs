@@ -11,7 +11,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
         public static object SetPositions(JObject @params)
         {
             LineRenderer lr = LineRead.FindLineRenderer(@params);
-            if (lr == null) return new { success = false, message = "LineRenderer not found" };
+            if (lr == null) return new { success = false, message = LineRead.FindLineRendererError(@params) };
 
             RendererHelpers.EnsureMaterial(lr);
 
@@ -35,7 +35,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
         public static object AddPosition(JObject @params)
         {
             LineRenderer lr = LineRead.FindLineRenderer(@params);
-            if (lr == null) return new { success = false, message = "LineRenderer not found" };
+            if (lr == null) return new { success = false, message = LineRead.FindLineRendererError(@params) };
 
             RendererHelpers.EnsureMaterial(lr);
 
@@ -53,7 +53,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
         public static object SetPosition(JObject @params)
         {
             LineRenderer lr = LineRead.FindLineRenderer(@params);
-            if (lr == null) return new { success = false, message = "LineRenderer not found" };
+            if (lr == null) return new { success = false, message = LineRead.FindLineRendererError(@params) };
 
             RendererHelpers.EnsureMaterial(lr);
 
@@ -72,7 +72,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
         public static object SetWidth(JObject @params)
         {
             LineRenderer lr = LineRead.FindLineRenderer(@params);
-            if (lr == null) return new { success = false, message = "LineRenderer not found" };
+            if (lr == null) return new { success = false, message = LineRead.FindLineRendererError(@params) };
 
             RendererHelpers.EnsureMaterial(lr);
 
@@ -91,7 +91,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
         public static object SetColor(JObject @params)
         {
             LineRenderer lr = LineRead.FindLineRenderer(@params);
-            if (lr == null) return new { success = false, message = "LineRenderer not found" };
+            if (lr == null) return new { success = false, message = LineRead.FindLineRendererError(@params) };
 
             RendererHelpers.EnsureMaterial(lr);
 
@@ -116,7 +116,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
         public static object SetProperties(JObject @params)
         {
             LineRenderer lr = LineRead.FindLineRenderer(@params);
-            if (lr == null) return new { success = false, message = "LineRenderer not found" };
+            if (lr == null) return new { success = false, message = LineRead.FindLineRendererError(@params) };
 
             RendererHelpers.EnsureMaterial(lr);
 
@@ -176,7 +176,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
         public static object Clear(JObject @params)
         {
             LineRenderer lr = LineRead.FindLineRenderer(@params);
-            if (lr == null) return new { success = false, message = "LineRenderer not found" };
+            if (lr == null) return new { success = false, message = LineRead.FindLineRendererError(@params) };
 
             int count = lr.positionCount;
             Undo.RecordObject(lr, "Clear Line");

@@ -10,7 +10,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
         public static object CreateLine(JObject @params)
         {
             LineRenderer lr = LineRead.FindLineRenderer(@params);
-            if (lr == null) return new { success = false, message = "LineRenderer not found" };
+            if (lr == null) return new { success = false, message = LineRead.FindLineRendererError(@params) };
 
             Vector3 start = ManageVfxCommon.ParseVector3(@params["start"]);
             Vector3 end = ManageVfxCommon.ParseVector3(@params["end"]);
@@ -50,7 +50,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
         public static object CreateCircle(JObject @params)
         {
             LineRenderer lr = LineRead.FindLineRenderer(@params);
-            if (lr == null) return new { success = false, message = "LineRenderer not found" };
+            if (lr == null) return new { success = false, message = LineRead.FindLineRendererError(@params) };
 
             Vector3 center = ManageVfxCommon.ParseVector3(@params["center"]);
             float radius = @params["radius"]?.ToObject<float>() ?? 1f;
@@ -102,7 +102,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
         public static object CreateArc(JObject @params)
         {
             LineRenderer lr = LineRead.FindLineRenderer(@params);
-            if (lr == null) return new { success = false, message = "LineRenderer not found" };
+            if (lr == null) return new { success = false, message = LineRead.FindLineRendererError(@params) };
 
             Vector3 center = ManageVfxCommon.ParseVector3(@params["center"]);
             float radius = @params["radius"]?.ToObject<float>() ?? 1f;
@@ -157,7 +157,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
         public static object CreateBezier(JObject @params)
         {
             LineRenderer lr = LineRead.FindLineRenderer(@params);
-            if (lr == null) return new { success = false, message = "LineRenderer not found" };
+            if (lr == null) return new { success = false, message = LineRead.FindLineRendererError(@params) };
 
             Vector3 start = ManageVfxCommon.ParseVector3(@params["start"]);
             Vector3 end = ManageVfxCommon.ParseVector3(@params["end"]);

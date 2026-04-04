@@ -7,15 +7,15 @@ namespace MCPForUnity.Editor.Tools.Vfx
     internal static class LineRead
     {
         public static LineRenderer FindLineRenderer(JObject @params)
-        {
-            GameObject go = ManageVfxCommon.FindTargetGameObject(@params);
-            return go?.GetComponent<LineRenderer>();
-        }
+            => ManageVfxCommon.FindComponent<LineRenderer>(@params);
+
+        public static string FindLineRendererError(JObject @params)
+            => ManageVfxCommon.FindComponentError<LineRenderer>(@params);
 
         public static object GetInfo(JObject @params)
         {
             LineRenderer lr = FindLineRenderer(@params);
-            if (lr == null) return new { success = false, message = "LineRenderer not found" };
+            if (lr == null) return new { success = false, message = FindLineRendererError(@params) };
 
             var positions = new Vector3[lr.positionCount];
             lr.GetPositions(positions);
