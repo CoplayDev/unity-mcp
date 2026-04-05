@@ -126,17 +126,17 @@ namespace MCPForUnity.Editor.Tools
 
             int page = p.GetInt("page") ?? 1;
             int pageSize = p.GetInt("page_size") ?? p.GetInt("pageSize") ?? 50;
+            if (page < 1) return new ErrorResponse("'page' must be >= 1.");
+            if (pageSize < 1) return new ErrorResponse("'page_size' must be >= 1.");
 
             try
             {
-                // Ensure My Assets page is active and initial load is complete
                 await EnsureMyAssetsPageActiveAsync();
 
                 var (myAssetsPage, vsl, realTotal) = GetMyAssetsPageInfo();
                 int loadedCount = GetVisualStateLoaded(vsl);
                 int needed = Math.Min(page * pageSize, realTotal > 0 ? realTotal : int.MaxValue);
 
-                // If we need more packages than currently loaded, trigger LoadMore and wait
                 if (needed > loadedCount && loadedCount < realTotal && myAssetsPage != null)
                 {
                     long toLoad = needed - loadedCount;
@@ -156,33 +156,26 @@ namespace MCPForUnity.Editor.Tools
                         object listOp = GetListOperation(myAssetsPage);
                         await WaitForOperationAsync(listOp, TimeSpan.FromSeconds(30));
 
-                        // Re-read and verify enough items were loaded
                         (_, vsl, realTotal) = GetMyAssetsPageInfo();
                         loadedCount = GetVisualStateLoaded(vsl);
                         if (loadedCount < needed && loadedCount < realTotal)
-                        {
-                            DestroyHiddenWindow();
                             return new ErrorResponse(
                                 $"Timed out loading Asset Store purchases. Only {loadedCount}/{realTotal} loaded.");
-                        }
                     }
                 }
 
                 var result = ReadPackagesFromVisualStateList(vsl, page, pageSize, realTotal);
-
-                // Close the PM window if we auto-opened it
-                DestroyHiddenWindow();
-
-                if (result != null)
-                    return result;
-
-                return new ErrorResponse(
+                return result ?? new ErrorResponse(
                     "Asset Store purchase listing is not available in this Unity version. " +
                     $"Unity {Application.unityVersion} may not expose the required internal APIs.");
             }
             catch (Exception e)
             {
                 return new ErrorResponse($"Failed to list purchases: {e.Message}");
+            }
+            finally
+            {
+                DestroyHiddenWindow();
             }
         }
 
@@ -268,9 +261,10 @@ namespace MCPForUnity.Editor.Tools
                 try { UnityEngine.Object.DestroyImmediate(_hiddenWindowInstance); }
                 catch (Exception e) { McpLog.Warn($"[ManageAssetStore] DestroyHiddenWindow: {e.Message}"); }
                 _hiddenWindowInstance = null;
-                _cachedRoot = null;
-                _serviceCache.Clear();
             }
+
+            _cachedRoot = null;
+            _serviceCache.Clear();
         }
 
         private static (object myAssetsPage, object visualStateList, int total) GetMyAssetsPageInfo()
@@ -476,11 +470,8 @@ namespace MCPForUnity.Editor.Tools
 
                 await WaitForDownloadAsync(productId, TimeSpan.FromMinutes(5));
 
-                // Verify download actually completed
                 var (_, _, completed, downloadError) = GetDownloadState(productId);
                 string packagePath = GetCachedPackagePath(productId);
-
-                DestroyHiddenWindow();
 
                 if (!string.IsNullOrEmpty(downloadError))
                     return new ErrorResponse($"Download failed for product {productId}: {downloadError}");
@@ -496,6 +487,10 @@ namespace MCPForUnity.Editor.Tools
             catch (Exception e)
             {
                 return new ErrorResponse($"Failed to start download: {e.Message}");
+            }
+            finally
+            {
+                DestroyHiddenWindow();
             }
         }
 
@@ -520,8 +515,6 @@ namespace MCPForUnity.Editor.Tools
                 if (!System.IO.File.Exists(packagePath))
                     return new ErrorResponse($"Package file not found at '{packagePath}'. The cached download may be corrupt. Re-download with 'download' action.");
 
-                DestroyHiddenWindow();
-
                 AssetDatabase.ImportPackage(packagePath, false);
 
                 return new SuccessResponse(
@@ -532,6 +525,10 @@ namespace MCPForUnity.Editor.Tools
             catch (Exception e)
             {
                 return new ErrorResponse($"Failed to import package: {e.Message}");
+            }
+            finally
+            {
+                DestroyHiddenWindow();
             }
         }
 
