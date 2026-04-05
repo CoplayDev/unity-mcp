@@ -156,8 +156,15 @@ namespace MCPForUnity.Editor.Tools
                         object listOp = GetListOperation(myAssetsPage);
                         await WaitForOperationAsync(listOp, TimeSpan.FromSeconds(30));
 
-                        // Re-read the visual state list after loading
+                        // Re-read and verify enough items were loaded
                         (_, vsl, realTotal) = GetMyAssetsPageInfo();
+                        loadedCount = GetVisualStateLoaded(vsl);
+                        if (loadedCount < needed && loadedCount < realTotal)
+                        {
+                            DestroyHiddenWindow();
+                            return new ErrorResponse(
+                                $"Timed out loading Asset Store purchases. Only {loadedCount}/{realTotal} loaded.");
+                        }
                     }
                 }
 
@@ -545,8 +552,6 @@ namespace MCPForUnity.Editor.Tools
                 return _reflectionAvailable;
             }
 
-            _reflectionInitialized = true;
-
             try
             {
                 // Find UnityConnect for auth check
@@ -611,6 +616,9 @@ namespace MCPForUnity.Editor.Tools
                         "Try opening Window > Package Manager first, then retry.");
                 }
 
+                // Only memoize on success — allow retry if types weren't found
+                _reflectionInitialized = _reflectionAvailable;
+
                 McpLog.Info($"[ManageAssetStore] Reflection init: available={_reflectionAvailable}, " +
                     $"downloadMgr={_downloadManagerType != null}, " +
                     $"cache={_assetStoreCacheType != null}, " +
@@ -635,13 +643,15 @@ namespace MCPForUnity.Editor.Tools
             if (_downloadManagerType != null)
             {
                 _getDownloadOpMethod = _downloadManagerType.GetMethods(all)
-                    .FirstOrDefault(m => m.Name == "GetDownloadOperation");
+                    .FirstOrDefault(m => m.Name == "GetDownloadOperation"
+                        && m.GetParameters().Length == 1);
             }
 
             if (_assetStoreCacheType != null)
             {
                 _cacheGetLocalInfo = _assetStoreCacheType.GetMethods(all)
-                    .FirstOrDefault(m => m.Name == "GetLocalInfo");
+                    .FirstOrDefault(m => m.Name == "GetLocalInfo"
+                        && m.GetParameters().Length == 1);
             }
 
             if (_assetStoreLocalInfoType != null)
