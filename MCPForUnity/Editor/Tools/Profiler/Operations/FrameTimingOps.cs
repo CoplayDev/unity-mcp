@@ -8,6 +8,7 @@ namespace MCPForUnity.Editor.Tools.Profiler
     {
         internal static object GetFrameTiming(JObject @params)
         {
+#if UNITY_2022_2_OR_NEWER
             if (!FrameTimingManager.IsFeatureEnabled())
             {
                 return new ErrorResponse(
@@ -15,6 +16,7 @@ namespace MCPForUnity.Editor.Tools.Profiler
                     + "Enable it in Project Settings > Player > Other Settings > 'Frame Timing Stats', "
                     + "or use a Development Build (always enabled).");
             }
+#endif
 
             FrameTimingManager.CaptureFrameTimings();
             var timings = new FrameTiming[1];
@@ -33,12 +35,16 @@ namespace MCPForUnity.Editor.Tools.Profiler
             {
                 available = true,
                 cpu_frame_time_ms = t.cpuFrameTime,
+#if UNITY_2022_2_OR_NEWER
                 cpu_main_thread_frame_time_ms = t.cpuMainThreadFrameTime,
                 cpu_main_thread_present_wait_time_ms = t.cpuMainThreadPresentWaitTime,
                 cpu_render_thread_frame_time_ms = t.cpuRenderThreadFrameTime,
+#endif
                 gpu_frame_time_ms = t.gpuFrameTime,
+#if UNITY_2022_2_OR_NEWER
                 frame_start_timestamp = t.frameStartTimestamp,
                 first_submit_timestamp = t.firstSubmitTimestamp,
+#endif
                 cpu_time_present_called = t.cpuTimePresentCalled,
                 cpu_time_frame_complete = t.cpuTimeFrameComplete,
                 height_scale = t.heightScale,

@@ -115,7 +115,7 @@ namespace MCPForUnityTests.Editor.Tools
             var response = raw as JObject ?? JObject.FromObject(raw);
 
             Assert.IsFalse(response.Value<bool>("success"), response.ToString());
-            StringAssert.Contains("does not support super_size above 1", response.Value<string>("message"));
+            StringAssert.Contains("does not support super_size above 1", response.Value<string>("error"));
         }
 
         [Test]
@@ -182,7 +182,7 @@ namespace MCPForUnityTests.Editor.Tools
 
             // Should attempt positioned capture and fail to resolve the GO — not reject the param
             Assert.IsFalse(response.Value<bool>("success"), response.ToString());
-            StringAssert.Contains("not found", response.Value<string>("message"));
+            StringAssert.Contains("not found", response.Value<string>("error"));
         }
 
         [Test]
