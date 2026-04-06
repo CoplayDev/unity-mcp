@@ -71,6 +71,9 @@ async def test_wait_for_compilation_timeout(monkeypatch):
     assert result["success"] is False
     assert result["data"]["ready"] is False
     assert result["data"]["timeout_seconds"] == 1.0
+    assert result["message"] == (
+        f"Timed out after {result['data']['timeout_seconds']}s waiting for compilation to finish."
+    )
 
 
 @pytest.mark.asyncio

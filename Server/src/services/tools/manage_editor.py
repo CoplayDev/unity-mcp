@@ -87,7 +87,7 @@ async def _wait_for_compilation(ctx: Context, timeout: int | float | None) -> di
 
     return {
         "success": False,
-        "message": f"Timed out after {timeout_s:.0f}s waiting for compilation to finish.",
+        "message": f"Timed out after {timeout_s}s waiting for compilation to finish.",
         "data": {
             "waited_seconds": round(elapsed, 2),
             "ready": False,
