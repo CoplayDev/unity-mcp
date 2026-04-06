@@ -636,6 +636,214 @@ class TestPrefabCommands:
             ])
             assert result.exit_code == 0
 
+    def test_prefab_modify_delete_child(self, runner, mock_unity_response):
+        """Test prefab modify delete-child command."""
+        with patch("cli.commands.prefab.run_command", return_value=mock_unity_response) as mock_run:
+            result = runner.invoke(cli, [
+                "prefab", "modify", "Assets/Prefabs/Player.prefab",
+                "--delete-child", "Child1",
+                "--delete-child", "Turret/Barrel"
+            ])
+            assert result.exit_code == 0
+            # Verify the correct params were sent
+            call_args = mock_run.call_args[0]
+            assert call_args[0] == "manage_prefabs"
+            params = call_args[1]
+            assert params["action"] == "modify_contents"
+            assert params["deleteChild"] == ["Child1", "Turret/Barrel"]
+
+    def test_prefab_modify_transform(self, runner, mock_unity_response):
+        """Test prefab modify with transform options."""
+        with patch("cli.commands.prefab.run_command", return_value=mock_unity_response) as mock_run:
+            result = runner.invoke(cli, [
+                "prefab", "modify", "Assets/Prefabs/Player.prefab",
+                "--target", "Weapon",
+                "--position", "1,2,3",
+                "--rotation", "45,0,90",
+                "--scale", "2,2,2"
+            ])
+            assert result.exit_code == 0
+            call_args = mock_run.call_args[0]
+            params = call_args[1]
+            assert params["target"] == "Weapon"
+            assert params["position"] == [1.0, 2.0, 3.0]
+            assert params["rotation"] == [45.0, 0.0, 90.0]
+            assert params["scale"] == [2.0, 2.0, 2.0]
+
+    def test_prefab_modify_set_property(self, runner, mock_unity_response):
+        """Test prefab modify set-property command."""
+        with patch("cli.commands.prefab.run_command", return_value=mock_unity_response) as mock_run:
+            result = runner.invoke(cli, [
+                "prefab", "modify", "Assets/Prefabs/Player.prefab",
+                "--set-property", "Rigidbody.mass=5",
+                "--set-property", "Rigidbody.useGravity=false"
+            ])
+            assert result.exit_code == 0
+            call_args = mock_run.call_args[0]
+            params = call_args[1]
+            assert "componentProperties" in params
+            assert params["componentProperties"]["Rigidbody"]["mass"] == 5
+            assert params["componentProperties"]["Rigidbody"]["useGravity"] is False
+
+    def test_prefab_modify_set_property_float(self, runner, mock_unity_response):
+        """Test prefab modify set-property with float values."""
+        with patch("cli.commands.prefab.run_command", return_value=mock_unity_response) as mock_run:
+            result = runner.invoke(cli, [
+                "prefab", "modify", "Assets/Prefabs/Player.prefab",
+                "--set-property", "Rigidbody.mass=5.5"
+            ])
+            assert result.exit_code == 0
+            call_args = mock_run.call_args[0]
+            params = call_args[1]
+            assert params["componentProperties"]["Rigidbody"]["mass"] == 5.5
+
+    def test_prefab_modify_components(self, runner, mock_unity_response):
+        """Test prefab modify add/remove components."""
+        with patch("cli.commands.prefab.run_command", return_value=mock_unity_response) as mock_run:
+            result = runner.invoke(cli, [
+                "prefab", "modify", "Assets/Prefabs/Player.prefab",
+                "--add-component", "Rigidbody",
+                "--add-component", "BoxCollider",
+                "--remove-component", "SphereCollider"
+            ])
+            assert result.exit_code == 0
+            call_args = mock_run.call_args[0]
+            params = call_args[1]
+            assert params["componentsToAdd"] == ["Rigidbody", "BoxCollider"]
+            assert params["componentsToRemove"] == ["SphereCollider"]
+
+    def test_prefab_modify_create_child(self, runner, mock_unity_response):
+        """Test prefab modify create-child command."""
+        with patch("cli.commands.prefab.run_command", return_value=mock_unity_response) as mock_run:
+            result = runner.invoke(cli, [
+                "prefab", "modify", "Assets/Prefabs/Player.prefab",
+                "--create-child", '{"name":"Spawn","primitive_type":"Sphere"}'
+            ])
+            assert result.exit_code == 0
+            call_args = mock_run.call_args[0]
+            params = call_args[1]
+            assert params["createChild"]["name"] == "Spawn"
+            assert params["createChild"]["primitive_type"] == "Sphere"
+
+    def test_prefab_modify_invalid_create_child_json(self, runner, mock_unity_response):
+        """Test prefab modify with invalid JSON for create-child."""
+        result = runner.invoke(cli, [
+            "prefab", "modify", "Assets/Prefabs/Player.prefab",
+            "--create-child", "not valid json"
+        ])
+        assert result.exit_code != 0
+        assert "Invalid JSON" in result.output
+
+    def test_prefab_modify_create_child_non_object_json(self, runner, mock_unity_response):
+        """Test prefab modify rejects non-object JSON for create-child."""
+        result = runner.invoke(cli, [
+            "prefab", "modify", "Assets/Prefabs/Player.prefab",
+            "--create-child", '"just a string"'
+        ])
+        assert result.exit_code != 0
+        assert "must be a JSON object" in result.output
+
+    def test_prefab_modify_active_state(self, runner, mock_unity_response):
+        """Test prefab modify active/inactive flag."""
+        with patch("cli.commands.prefab.run_command", return_value=mock_unity_response) as mock_run:
+            result = runner.invoke(cli, [
+                "prefab", "modify", "Assets/Prefabs/Player.prefab",
+                "--inactive"
+            ])
+            assert result.exit_code == 0
+            call_args = mock_run.call_args[0]
+            params = call_args[1]
+            assert params["setActive"] is False
+
+    def test_prefab_modify_active_flag(self, runner, mock_unity_response):
+        """Test prefab modify --active flag."""
+        with patch("cli.commands.prefab.run_command", return_value=mock_unity_response) as mock_run:
+            result = runner.invoke(cli, [
+                "prefab", "modify", "Assets/Prefabs/Player.prefab",
+                "--active"
+            ])
+            assert result.exit_code == 0
+            call_args = mock_run.call_args[0]
+            params = call_args[1]
+            assert params["setActive"] is True
+
+    def test_prefab_modify_name_tag_layer_parent(self, runner, mock_unity_response):
+        """Test prefab modify with name, tag, layer, and parent options."""
+        with patch("cli.commands.prefab.run_command", return_value=mock_unity_response) as mock_run:
+            result = runner.invoke(cli, [
+                "prefab", "modify", "Assets/Prefabs/Player.prefab",
+                "--target", "Child1",
+                "--name", "RenamedChild",
+                "--tag", "Player",
+                "--layer", "UI",
+                "--parent", "NewParent"
+            ])
+            assert result.exit_code == 0
+            call_args = mock_run.call_args[0]
+            params = call_args[1]
+            assert params["target"] == "Child1"
+            assert params["name"] == "RenamedChild"
+            assert params["tag"] == "Player"
+            assert params["layer"] == "UI"
+            assert params["parent"] == "NewParent"
+
+    def test_prefab_modify_invalid_vector_non_numeric(self, runner, mock_unity_response):
+        """Test prefab modify rejects non-numeric vector components."""
+        result = runner.invoke(cli, [
+            "prefab", "modify", "Assets/Prefabs/Player.prefab",
+            "--position", "1,foo,3"
+        ])
+        assert result.exit_code != 0
+
+    def test_prefab_modify_invalid_vector_wrong_count(self, runner, mock_unity_response):
+        """Test prefab modify rejects vectors with wrong component count."""
+        result = runner.invoke(cli, [
+            "prefab", "modify", "Assets/Prefabs/Player.prefab",
+            "--position", "1,2"
+        ])
+        assert result.exit_code != 0
+
+    def test_prefab_modify_set_property_string_value(self, runner, mock_unity_response):
+        """Test prefab modify set-property with string values."""
+        with patch("cli.commands.prefab.run_command", return_value=mock_unity_response) as mock_run:
+            result = runner.invoke(cli, [
+                "prefab", "modify", "Assets/Prefabs/Player.prefab",
+                "--set-property", "MyScript.label=hello world"
+            ])
+            assert result.exit_code == 0
+            call_args = mock_run.call_args[0]
+            params = call_args[1]
+            assert params["componentProperties"]["MyScript"]["label"] == "hello world"
+
+    def test_prefab_modify_set_property_empty_component(self, runner, mock_unity_response):
+        """Test prefab modify rejects empty component name in set-property."""
+        result = runner.invoke(cli, [
+            "prefab", "modify", "Assets/Prefabs/Player.prefab",
+            "--set-property", ".mass=5"
+        ])
+        assert result.exit_code != 0
+        assert "non-empty" in result.output
+
+    def test_prefab_modify_set_property_empty_prop(self, runner, mock_unity_response):
+        """Test prefab modify rejects empty property name in set-property."""
+        result = runner.invoke(cli, [
+            "prefab", "modify", "Assets/Prefabs/Player.prefab",
+            "--set-property", "Rigidbody.=5"
+        ])
+        assert result.exit_code != 0
+        assert "non-empty" in result.output
+
+    def test_prefab_modify_no_options_sends_minimal_params(self, runner, mock_unity_response):
+        """Test prefab modify with no options sends only action and prefabPath."""
+        with patch("cli.commands.prefab.run_command", return_value=mock_unity_response) as mock_run:
+            result = runner.invoke(cli, [
+                "prefab", "modify", "Assets/Prefabs/Player.prefab"
+            ])
+            assert result.exit_code == 0
+            call_args = mock_run.call_args[0]
+            params = call_args[1]
+            assert params == {"action": "modify_contents", "prefabPath": "Assets/Prefabs/Player.prefab"}
+
 
 # =============================================================================
 # Material Command Tests

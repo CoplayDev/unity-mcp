@@ -70,14 +70,13 @@ namespace MCPForUnity.Editor.Services.Server
                 CreateNoWindow = true
             };
 #else
-            // Linux: Try common terminal emulators
-            // We use bash -c to execute the command, so we must properly quote/escape for bash
-            // Escape single quotes for the inner bash string
-            string escapedCommandLinux = command.Replace("'", "'\\''");
-            // Wrap the command in single quotes for bash -c
-            string script = $"'{escapedCommandLinux}; exec bash'";
-            // Escape double quotes for the outer Process argument string
-            string escapedScriptForArg = script.Replace("\"", "\\\"");
+            // Linux: Try common terminal emulators.
+            // ProcessStartInfo passes the argument string directly to the terminal, so we only
+            // need to escape for the double-quoted bash -c payload — no inner single quotes.
+            string script = $"{command}; exec bash";
+            string escapedScriptForArg = script
+                .Replace("\\", "\\\\")
+                .Replace("\"", "\\\"");
             string bashCmdArgs = $"bash -c \"{escapedScriptForArg}\"";
 
             string[] terminals = { "gnome-terminal", "xterm", "konsole", "xfce4-terminal" };

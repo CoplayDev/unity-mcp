@@ -563,6 +563,15 @@ unity-mcp prefab save
 
 # Close prefab stage
 unity-mcp prefab close
+
+# Modify prefab contents (headless)
+unity-mcp prefab modify "Assets/Prefabs/Player.prefab" --target Weapon --position "0,1,2"
+unity-mcp prefab modify "Assets/Prefabs/Player.prefab" --delete-child Child1 --delete-child "Turret/Barrel"
+unity-mcp prefab modify "Assets/Prefabs/Player.prefab" --set-property "Rigidbody.mass=5"
+unity-mcp prefab modify "Assets/Prefabs/Player.prefab" --add-component BoxCollider --remove-component SphereCollider
+unity-mcp prefab modify "Assets/Prefabs/Player.prefab" --create-child '{"name":"Spawn","primitive_type":"Sphere"}'
+unity-mcp prefab modify "Assets/Prefabs/Player.prefab" --name NewName --tag Player --layer UI
+unity-mcp prefab modify "Assets/Prefabs/Player.prefab" --inactive
 ```
 
 ### UI Commands

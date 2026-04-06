@@ -169,6 +169,72 @@ async def sync_tool_visibility_from_unity(
 
         PluginHub._sync_server_tool_visibility(enabled_tools)
 
+        # Register custom (non-built-in) tools via CustomToolService.
+        # The extended get_tool_states response includes is_built_in,
+        # description, parameters, etc.  If those fields are missing
+        # (older Unity package), we skip custom tool registration.
+        custom_tool_count = 0
+        has_extended_metadata = any(
+            "is_built_in" in t for t in enabled_tools
+        )
+        if has_extended_metadata:
+            custom_tool_dicts = [
+                t for t in enabled_tools if not t.get("is_built_in", True)
+            ]
+            if custom_tool_dicts:
+                try:
+                    from models.models import ToolDefinitionModel, ToolParameterModel
+                    from services.custom_tool_service import CustomToolService
+
+                    custom_tool_models = []
+                    for td in custom_tool_dicts:
+                        params = [
+                            ToolParameterModel(
+                                name=p.get("name", ""),
+                                description=p.get("description", ""),
+                                type=p.get("type", "string"),
+                                required=p.get("required", True),
+                                default_value=p.get("default_value"),
+                            )
+                            for p in td.get("parameters", [])
+                        ]
+                        custom_tool_models.append(
+                            ToolDefinitionModel(
+                                name=td["name"],
+                                description=td.get("description", ""),
+                                structured_output=td.get("structured_output", True),
+                                requires_polling=td.get("requires_polling", False),
+                                poll_action=td.get("poll_action") or "status",
+                                max_poll_seconds=td.get("max_poll_seconds", 0),
+                                parameters=params,
+                            )
+                        )
+
+                    service = CustomToolService.get_instance()
+                    service.register_global_tools(custom_tool_models)
+                    custom_tool_count = len(custom_tool_models)
+                    logger.info(
+                        "Registered %d custom tool(s) from Unity via stdio sync",
+                        custom_tool_count,
+                    )
+                except RuntimeError as exc:
+                    logger.debug(
+                        "Skipping custom tool registration: "
+                        "CustomToolService not initialized yet (%s)",
+                        exc,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to register custom tools from Unity: %s",
+                        exc,
+                    )
+        else:
+            logger.debug(
+                "Unity response does not include extended tool metadata "
+                "(is_built_in); skipping custom tool registration. "
+                "Update MCPForUnity to enable custom tool sync in stdio mode."
+            )
+
         if notify:
             await PluginHub._notify_mcp_tool_list_changed()
 
@@ -191,6 +257,7 @@ async def sync_tool_visibility_from_unity(
             "disabled_groups": disabled_groups,
             "enabled_tool_count": len(enabled_tools),
             "total_tool_count": len(tools),
+            "custom_tool_count": custom_tool_count,
         }
 
     except Exception as exc:

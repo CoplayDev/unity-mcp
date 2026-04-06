@@ -25,6 +25,12 @@ namespace MCPForUnity.Editor.Services
         UpdateCheckResult FetchAndCompare(string currentVersion);
 
         /// <summary>
+        /// Performs only the network fetch and version comparison using pre-computed installation info.
+        /// Use this overload when calling from a background thread to avoid main-thread-only API calls.
+        /// </summary>
+        UpdateCheckResult FetchAndCompare(string currentVersion, bool isGitInstallation, string gitBranch);
+
+        /// <summary>
         /// Caches a successful fetch result in EditorPrefs. Must be called from the main thread.
         /// </summary>
         void CacheFetchResult(string currentVersion, string fetchedVersion);
@@ -42,6 +48,12 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         /// <returns>True if installed via Git, false if Asset Store or unknown</returns>
         bool IsGitInstallation();
+
+        /// <summary>
+        /// Determines the Git branch to check for updates (e.g. "main" or "beta").
+        /// Must be called from the main thread (uses Unity PackageManager APIs).
+        /// </summary>
+        string GetGitUpdateBranch(string currentVersion);
 
         /// <summary>
         /// Clears the cached update check data, forcing a fresh check on next request

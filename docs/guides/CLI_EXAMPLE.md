@@ -121,6 +121,9 @@ unity-mcp prefab open "Assets/Prefabs/File.prefab"
 unity-mcp prefab save
 unity-mcp prefab close
 unity-mcp prefab create "GameObject" --path "Assets/Prefabs"
+unity-mcp prefab modify "Assets/Prefabs/File.prefab" --delete-child Child1
+unity-mcp prefab modify "Assets/Prefabs/File.prefab" --target Weapon --position "0,1,2"
+unity-mcp prefab modify "Assets/Prefabs/File.prefab" --set-property "Rigidbody.mass=5"
 ```
 
 **Material Operations**

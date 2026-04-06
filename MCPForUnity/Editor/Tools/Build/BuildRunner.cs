@@ -111,7 +111,7 @@ namespace MCPForUnity.Editor.Tools.Build
                 else
                 {
                     job.State = BuildJobState.Failed;
-#if UNITY_2022_3_OR_NEWER
+#if UNITY_2023_1_OR_NEWER
                     job.ErrorMessage = report.SummarizeErrors();
 #else
                     job.ErrorMessage = $"Build failed with result: {summary.result}";

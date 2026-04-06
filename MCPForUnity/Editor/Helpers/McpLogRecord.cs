@@ -10,8 +10,9 @@ namespace MCPForUnity.Editor.Helpers
 {
     internal static class McpLogRecord
     {
-        private static readonly string LogPath = Path.Combine(Application.dataPath, "mcp.log");
-        private static readonly string ErrorLogPath = Path.Combine(Application.dataPath, "mcpError.log");
+        private static readonly string LogDir = Path.Combine(Application.dataPath, "UnityMCP", "Log");
+        private static readonly string LogPath = Path.Combine(LogDir, "mcp.log");
+        private static readonly string ErrorLogPath = Path.Combine(LogDir, "mcpError.log");
         private const long MaxLogSizeBytes = 1024 * 1024; // 1 MB
         private static bool _sessionStarted;
         private static readonly object _logLock = new();
@@ -79,6 +80,7 @@ namespace MCPForUnity.Editor.Helpers
 
         private static void RotateAndAppend(string path, string line)
         {
+            Directory.CreateDirectory(LogDir);
             RotateIfNeeded(path);
             File.AppendAllText(path, line + Environment.NewLine);
         }
