@@ -70,6 +70,13 @@ namespace MCPForUnity.Editor.Services.Transport
         /// </summary>
         private static readonly Dictionary<string, string> ContentHashToPendingId = new();
         private static readonly object PendingLock = new();
+        /// <summary>
+        /// Maximum age of a pending command that is still eligible for dedup matching.
+        /// If the original command hangs (stuck gateway job, lost transport, etc.) waiters
+        /// must not pile up indefinitely on a dead TaskCompletionSource — after this
+        /// window, new identical commands create a fresh pending entry instead.
+        /// </summary>
+        private static readonly TimeSpan DedupTtl = TimeSpan.FromSeconds(60);
         private static bool updateHooked;
         private static bool initialised;
 
@@ -110,11 +117,39 @@ namespace MCPForUnity.Editor.Services.Transport
                 if (contentHash != null
                     && ContentHashToPendingId.TryGetValue(contentHash, out var existingId)
                     && Pending.TryGetValue(existingId, out var existingPending)
-                    && !existingPending.CancellationToken.IsCancellationRequested)
+                    && !existingPending.CancellationToken.IsCancellationRequested
+                    && (DateTime.UtcNow - existingPending.QueuedAt) < DedupTtl)
                 {
                     McpLog.Info($"[Dispatcher] Dedup: identical command already pending (id={existingId}). Sharing result.");
-                    // Return the existing task — caller gets the same result when the original completes.
+                    // Propagate the NEW caller's cancellation into a linked waiter so each dedup
+                    // waiter can bail independently. Without this, a cancelled caller still blocks
+                    // on the original command's TCS — which is the root cause of stall-under-load.
+                    if (cancellationToken.CanBeCanceled)
+                    {
+                        var waiterTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+                        var waiterReg = cancellationToken.Register(() => waiterTcs.TrySetCanceled(cancellationToken));
+                        existingPending.CompletionSource.Task.ContinueWith(t =>
+                        {
+                            waiterReg.Dispose();
+                            if (t.IsCanceled) waiterTcs.TrySetCanceled();
+                            else if (t.IsFaulted) waiterTcs.TrySetException(t.Exception!.InnerExceptions);
+                            else waiterTcs.TrySetResult(t.Result);
+                        }, TaskScheduler.Default);
+                        return waiterTcs.Task;
+                    }
                     return existingPending.CompletionSource.Task;
+                }
+                // Stale dedup entry (TTL exceeded or cancelled original): drop the mapping
+                // so the code below creates a fresh PendingCommand instead of piling onto
+                // a dead TCS.
+                if (contentHash != null
+                    && ContentHashToPendingId.TryGetValue(contentHash, out var staleId)
+                    && Pending.TryGetValue(staleId, out var stalePending)
+                    && (stalePending.CancellationToken.IsCancellationRequested
+                        || (DateTime.UtcNow - stalePending.QueuedAt) >= DedupTtl))
+                {
+                    McpLog.Warn($"[Dispatcher] Dedup entry stale for id={staleId} (age={(DateTime.UtcNow - stalePending.QueuedAt).TotalSeconds:F0}s). Releasing hash for fresh dispatch.");
+                    ContentHashToPendingId.Remove(contentHash);
                 }
             }
 

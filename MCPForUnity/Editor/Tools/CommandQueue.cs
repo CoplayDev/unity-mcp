@@ -74,7 +74,10 @@ namespace MCPForUnity.Editor.Tools
         {
             foreach (var existing in _store.GetAllJobs())
             {
-                if (existing.Status != JobStatus.Queued && existing.Status != JobStatus.Running)
+                // Only dedup against jobs that are actually Running (Cts initialised, ExecuteJob
+                // entered). Queued jobs have not been dispatched yet and a waiter that dedups
+                // onto them can hang forever if dispatch never happens.
+                if (existing.Status != JobStatus.Running)
                     continue;
                 if (existing.Commands == null || existing.Commands.Count != commands.Count)
                     continue;
@@ -114,7 +117,10 @@ namespace MCPForUnity.Editor.Tools
             var paramStr = parameters?.ToString(Newtonsoft.Json.Formatting.None) ?? "";
             foreach (var existing in _store.GetAllJobs())
             {
-                if (existing.Status != JobStatus.Queued && existing.Status != JobStatus.Running)
+                // Only dedup against jobs that are actually Running (Cts initialised, ExecuteJob
+                // entered). Queued jobs have not been dispatched yet and a waiter that dedups
+                // onto them can hang forever if dispatch never happens.
+                if (existing.Status != JobStatus.Running)
                     continue;
                 if (existing.Commands == null || existing.Commands.Count != 1)
                     continue;
