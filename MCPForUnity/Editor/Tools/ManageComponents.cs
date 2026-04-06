@@ -352,9 +352,7 @@ namespace MCPForUnity.Editor.Tools
 
             var previousValue = DescribeObjectReference(property.objectReferenceValue);
 
-            Undo.RecordObject(component, $"Set reference {property.propertyPath}");
-            property.objectReferenceValue = validation.ResolvedObject;
-            serializedObject.ApplyModifiedProperties();
+            ApplyReferenceToProperty(component, serializedObject, property, validation.ResolvedObject);
             EditorUtility.SetDirty(component);
             MarkOwningSceneDirty(targetGo);
 
@@ -474,6 +472,7 @@ namespace MCPForUnity.Editor.Tools
             Undo.SetCurrentGroupName($"Batch wire references on {component.GetType().Name}");
             int succeeded = 0;
             int failed = 0;
+            var serializedObject = new SerializedObject(component);
 
             try
             {
@@ -485,7 +484,7 @@ namespace MCPForUnity.Editor.Tools
                         continue;
                     }
 
-                    var serializedObject = new SerializedObject(component);
+                    serializedObject.Update();
                     var property = serializedObject.FindProperty(validation.PropertyName);
                     if (property == null || property.propertyType != SerializedPropertyType.ObjectReference)
                     {
@@ -500,9 +499,7 @@ namespace MCPForUnity.Editor.Tools
                         continue;
                     }
 
-                    Undo.RecordObject(component, $"Set reference {validation.PropertyName}");
-                    property.objectReferenceValue = validation.ResolvedObject;
-                    serializedObject.ApplyModifiedProperties();
+                    ApplyReferenceToProperty(component, serializedObject, property, validation.ResolvedObject);
                     var successResult = results.FirstOrDefault(r => r.Property == validation.PropertyName);
                     if (successResult != null)
                     {
@@ -732,6 +729,17 @@ namespace MCPForUnity.Editor.Tools
             return true;
         }
 
+        /// <summary>
+        /// Applies a resolved object reference to a SerializedProperty with Undo support.
+        /// Shared by SetReference and BatchWire to avoid duplication.
+        /// </summary>
+        private static void ApplyReferenceToProperty(Component component, SerializedObject serializedObject, SerializedProperty property, UnityEngine.Object resolvedObject)
+        {
+            Undo.RecordObject(component, $"Set reference {property.propertyPath}");
+            property.objectReferenceValue = resolvedObject;
+            serializedObject.ApplyModifiedProperties();
+        }
+
         private static Type GetFieldType(Component component, string propertyName)
         {
             var so = new SerializedObject(component);
@@ -740,23 +748,48 @@ namespace MCPForUnity.Editor.Tools
                 return null;
 
             BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.IgnoreCase;
-            string normalizedName = ParamCoercion.NormalizePropertyName(propertyName);
-            var field = component.GetType().GetField(propertyName, flags)
+
+            // Handle array element paths like "targets.Array.data[0]"
+            string fieldName = propertyName;
+            bool isArrayElement = propertyName.Contains(".Array.data[");
+            if (isArrayElement)
+            {
+                // Extract the root field name before .Array.data[
+                fieldName = propertyName.Substring(0, propertyName.IndexOf(".Array.data["));
+            }
+
+            string normalizedName = ParamCoercion.NormalizePropertyName(fieldName);
+            var field = component.GetType().GetField(fieldName, flags)
                         ?? component.GetType().GetField(normalizedName, flags);
-            return field?.FieldType;
+
+            if (field == null)
+                return null;
+
+            Type fieldType = field.FieldType;
+
+            // For array/list elements, extract the element type
+            if (isArrayElement)
+            {
+                if (fieldType.IsArray)
+                    return fieldType.GetElementType();
+                if (fieldType.IsGenericType && fieldType.GetGenericTypeDefinition() == typeof(List<>))
+                    return fieldType.GetGenericArguments()[0];
+            }
+
+            return fieldType;
         }
 
         private static UnityEngine.Object ResolveReference(JObject refParams)
         {
-            var instanceId = refParams["reference_instance_id"]?.Value<int>();
-            if (instanceId.HasValue)
-                return GameObjectLookup.ResolveInstanceID(instanceId.Value);
+            int instanceId = ParamCoercion.CoerceInt(refParams["reference_instance_id"], 0);
+            if (instanceId != 0)
+                return GameObjectLookup.ResolveInstanceID(instanceId);
 
-            var assetPath = refParams["reference_asset_path"]?.Value<string>();
+            string assetPath = ParamCoercion.CoerceString(refParams["reference_asset_path"], null);
             if (!string.IsNullOrEmpty(assetPath))
                 return AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(assetPath);
 
-            var refPath = refParams["reference_path"]?.Value<string>();
+            string refPath = ParamCoercion.CoerceString(refParams["reference_path"], null);
             if (!string.IsNullOrEmpty(refPath))
                 return GameObjectLookup.FindByTarget(new JValue(refPath), "by_path", true) ?? GameObject.Find(refPath);
 
