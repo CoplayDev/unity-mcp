@@ -586,13 +586,15 @@ namespace MCPForUnityTests.Editor.Tools
         [Test]
         public void StatsSetSceneDebug_ValidMode_Succeeds()
         {
-            Assume.That(_hasSceneView, "No SceneView in batch mode — skipping.");
             var result = ToJObject(ManageGraphics.HandleCommand(new JObject
             {
                 ["action"] = "stats_set_scene_debug",
                 ["mode"] = "Wireframe"
             }));
-            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            if (_hasSceneView)
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            else
+                Assert.IsFalse(result.Value<bool>("success"));
         }
 
         [Test]
