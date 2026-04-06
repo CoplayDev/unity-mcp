@@ -16,6 +16,7 @@ namespace MCPForUnityTests.Editor.Tools
         private bool _hasVolumeSystem;
         private bool _hasURP;
         private bool _hasHDRP;
+        private bool _hasSceneView;
 
         [SetUp]
         public void SetUp()
@@ -31,6 +32,8 @@ namespace MCPForUnityTests.Editor.Tools
                 _hasURP = data?.Value<bool>("hasURP") ?? false;
                 _hasHDRP = data?.Value<bool>("hasHDRP") ?? false;
             }
+
+            _hasSceneView = UnityEditor.SceneView.lastActiveSceneView != null;
         }
 
         [TearDown]
@@ -583,6 +586,7 @@ namespace MCPForUnityTests.Editor.Tools
         [Test]
         public void StatsSetSceneDebug_ValidMode_Succeeds()
         {
+            Assume.That(_hasSceneView, "No SceneView in batch mode — skipping.");
             var result = ToJObject(ManageGraphics.HandleCommand(new JObject
             {
                 ["action"] = "stats_set_scene_debug",
