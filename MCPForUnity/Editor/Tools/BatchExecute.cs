@@ -96,6 +96,7 @@ namespace MCPForUnity.Editor.Tools
                 string toolName = commandObj["tool"]?.ToString();
                 var rawParams = commandObj["params"] as JObject ?? new JObject();
                 var commandParams = NormalizeParameterKeys(rawParams);
+                UnwrapExecuteCustomTool(ref toolName, ref commandParams);
 
                 if (string.IsNullOrWhiteSpace(toolName))
                 {
@@ -242,6 +243,40 @@ namespace MCPForUnity.Editor.Tools
         private static string ToCamelCase(string key) => StringCaseUtility.ToCamelCase(key);
 
         /// <summary>
+        /// Unwrap the Python-side <c>execute_custom_tool</c> façade so custom tools can be
+        /// batched. The façade expects <c>{ tool_name, parameters }</c> — after
+        /// <see cref="NormalizeParameterKeys"/> those become <c>toolName</c> and
+        /// <c>parameters</c>. We rewrite the entry to target the inner tool name directly,
+        /// so <see cref="CommandRegistry"/> can dispatch it like any other registered tool.
+        ///
+        /// Note: this bypasses the Python-side project_id / user_id resolution that the
+        /// façade adds. Custom tools that rely on per-project scoping should still be
+        /// invoked through <c>execute_custom_tool</c> outside of a batch.
+        /// </summary>
+        private static void UnwrapExecuteCustomTool(ref string toolName, ref JObject commandParams)
+        {
+            if (toolName != "execute_custom_tool") return;
+            if (commandParams == null) return;
+
+            string innerTool = commandParams.Value<string>("toolName")
+                ?? commandParams.Value<string>("tool_name");
+            if (string.IsNullOrWhiteSpace(innerTool))
+            {
+                // Leave as-is; the caller will surface a "missing tool_name" error via the
+                // normal Unknown-command path, which is clearer than silently dropping.
+                return;
+            }
+
+            var innerParamsToken = commandParams["parameters"];
+            JObject innerParams = innerParamsToken is JObject obj
+                ? NormalizeParameterKeys(obj)
+                : new JObject();
+
+            toolName = innerTool;
+            commandParams = innerParams;
+        }
+
+        /// <summary>
         /// Handle async batch submission. Queues commands via CommandGateway and returns
         /// a ticket (for non-instant batches) or results inline (for instant batches).
         /// </summary>
@@ -261,6 +296,8 @@ namespace MCPForUnity.Editor.Tools
 
                 var rawParams = cmdObj["params"] as JObject ?? new JObject();
                 var cmdParams = NormalizeParameterKeys(rawParams);
+                UnwrapExecuteCustomTool(ref toolName, ref cmdParams);
+                if (string.IsNullOrWhiteSpace(toolName)) continue;
 
                 var toolTier = CommandRegistry.GetToolTier(toolName);
                 var effectiveTier = CommandClassifier.Classify(toolName, toolTier, cmdParams);
