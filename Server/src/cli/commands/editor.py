@@ -246,6 +246,38 @@ def restore():
         print_success("Package restored from backup")
 
 
+@editor.command("undo")
+@handle_unity_errors
+def undo():
+    """Undo the last editor action.
+
+    \b
+    Examples:
+        unity-mcp editor undo
+    """
+    config = get_config()
+    result = run_command("manage_editor", {"action": "undo"}, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success("Undo performed")
+
+
+@editor.command("redo")
+@handle_unity_errors
+def redo():
+    """Redo the last undone action.
+
+    \b
+    Examples:
+        unity-mcp editor redo
+    """
+    config = get_config()
+    result = run_command("manage_editor", {"action": "redo"}, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success("Redo performed")
+
+
 @editor.command("menu")
 @click.argument("menu_path")
 @handle_unity_errors

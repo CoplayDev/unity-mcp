@@ -43,8 +43,12 @@ async def manage_components(
     # For set_property action - single property
     property: Annotated[str,
                         "Property name to set (for set_property action)"] | None = None,
-    value: Annotated[str | int | float | bool | dict | list ,
-                     "Value to set (for set_property action)"] | None = None,
+    value: Annotated[str | int | float | bool | dict | list,
+                     "Value to set (for set_property action). "
+                     "For object references: instance ID (int), asset path (string), "
+                     "or {\"guid\": \"...\"} / {\"path\": \"...\"}. "
+                     "For Sprite sub-assets: {\"guid\": \"...\", \"spriteName\": \"<name>\"} or "
+                     "{\"guid\": \"...\", \"fileID\": <id>}. Single-sprite textures auto-resolve."] | None = None,
     # For add/set_property - multiple properties
     properties: Annotated[
         dict[str, Any] | str,

@@ -336,6 +336,13 @@ Menu Items:
 - Use `execute_menu_item` when you have read the menu items resource
 - This lets you interact with Unity's menu system and third-party tools
 
+Unity API Verification (requires 'docs' tool group):
+- When the 'docs' tool group is active, use `unity_reflect` and `unity_docs` to verify Unity API details before answering questions or writing C# code. LLM training data frequently contains incorrect, outdated, or hallucinated Unity APIs.
+- BEFORE answering Unity API questions: search the project's assets (`manage_asset`) and reflect the API (`unity_reflect`) to verify. Do NOT rely on training data alone.
+- Common hallucination areas: shaders and materials (always search assets for actual shader names), package-specific APIs (Input System, Cinemachine, ProBuilder, NavMesh, URP/HDRP), and APIs that changed between Unity versions.
+- Workflow: `unity_reflect search` → `unity_reflect get_type` → `unity_reflect get_member` → `unity_docs get_doc` (if you need examples/caveats).
+- For shader/material questions: use `manage_asset(action="search", filter_type="Shader")` to find actual shaders in the project before recommending one.
+
 Payload sizing & paging (important):
 - Many Unity queries can return very large JSON. Prefer **paged + summary-first** calls.
 - `manage_scene(action="get_hierarchy")`:

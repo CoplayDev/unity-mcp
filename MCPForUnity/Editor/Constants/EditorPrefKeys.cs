@@ -71,5 +71,7 @@ namespace MCPForUnity.Editor.Constants
         internal const string GatewayJobLogging = "MCPForUnity.Gateway.JobLogging";
         internal const string GatewayJobLogPath = "MCPForUnity.Gateway.JobLogPath";
         internal const string LogRecordEnabled = "MCPForUnity.LogRecordEnabled";
+
+        internal const string ExecuteCodeCompiler = "MCPForUnity.ExecuteCode.Compiler";
     }
 }

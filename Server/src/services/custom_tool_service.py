@@ -120,6 +120,9 @@ class CustomToolService:
         tool = self._project_tools.get(project_id, {}).get(tool_name)
         if tool:
             return tool
+        tool = self._global_tools.get(tool_name)
+        if tool:
+            return tool
         return await PluginHub.get_tool_definition(project_id, tool_name, user_id=user_id)
 
     async def execute_tool(
@@ -162,6 +165,7 @@ class CustomToolService:
             response,
             definition.poll_action or "status",
             user_id=user_id,
+            max_poll_seconds=definition.max_poll_seconds or 0,
         )
         logger.info(f"Tool '{tool_name}' polled response: {result}")
         return result
@@ -187,11 +191,13 @@ class CustomToolService:
         initial_response,
         poll_action: str,
         user_id: str | None = None,
+        max_poll_seconds: int = 0,
     ) -> MCPResponse:
         poll_params = dict(initial_params)
         poll_params["action"] = poll_action or "status"
 
-        deadline = time.time() + _MAX_POLL_SECONDS
+        timeout = max_poll_seconds if max_poll_seconds > 0 else _MAX_POLL_SECONDS
+        deadline = time.time() + timeout
         response = initial_response
 
         while True:

@@ -17,18 +17,24 @@ REQUIRED_PARAMS = {
     "get_hierarchy": ["prefab_path"],
     "create_from_gameobject": ["target", "prefab_path"],
     "modify_contents": ["prefab_path"],
+    "open_prefab_stage": ["prefab_path"],
 }
 
 
 @mcp_for_unity_tool(
     description=(
-        "Manages Unity Prefab assets via headless operations (no UI, no prefab stages). "
-        "Actions: get_info, get_hierarchy, create_from_gameobject, modify_contents. "
-        "Use modify_contents for headless prefab editing - ideal for automated workflows. "
-        "Use create_child parameter with modify_contents to add child GameObjects to a prefab "
+        "Manages Unity Prefab assets. "
+        "Actions: get_info, get_hierarchy, create_from_gameobject, modify_contents, open_prefab_stage, save_prefab_stage, close_prefab_stage. "
+        "Two approaches to prefab editing: "
+        "(1) Headless: use modify_contents for automated/scripted edits without opening the prefab in the editor. "
+        "(2) Interactive: use open_prefab_stage to open a prefab, then manage_gameobject/manage_components to edit objects inside the prefab stage, then save_prefab_stage to save and close_prefab_stage to return to the main scene. "
+        "Use create_child parameter with modify_contents to add child GameObjects or nested prefab instances to a prefab "
         "(single object or array for batch creation in one save). "
         "Example: create_child=[{\"name\": \"Child1\", \"primitive_type\": \"Sphere\", \"position\": [1,0,0]}, "
-        "{\"name\": \"Child2\", \"primitive_type\": \"Cube\", \"parent\": \"Child1\"}]. "
+        "{\"name\": \"Nested\", \"source_prefab_path\": \"Assets/Prefabs/Bullet.prefab\", \"position\": [0,2,0]}]. "
+        "Use delete_child parameter to remove child GameObjects from the prefab "
+        "(single name/path or array of paths for batch deletion. "
+        "Example: delete_child=[\"Child1\", \"Child2/Grandchild\"]). "
         "Use component_properties with modify_contents to set serialized fields on existing components "
         "(e.g. component_properties={\"Rigidbody\": {\"mass\": 5.0}, \"MyScript\": {\"health\": 100}}). "
         "Supports object references via {\"guid\": \"...\"}, {\"path\": \"Assets/...\"}, or {\"instanceID\": 123}. "
@@ -47,6 +53,9 @@ async def manage_prefabs(
             "get_info",
             "get_hierarchy",
             "modify_contents",
+            "open_prefab_stage",
+            "save_prefab_stage",
+            "close_prefab_stage",
         ],
         "Prefab operation to perform.",
     ],
@@ -66,8 +75,9 @@ async def manage_prefabs(
     parent: Annotated[str, "New parent object name/path within prefab for modify_contents."] | None = None,
     components_to_add: Annotated[list[str], "Component types to add in modify_contents."] | None = None,
     components_to_remove: Annotated[list[str], "Component types to remove in modify_contents."] | None = None,
-    create_child: Annotated[dict[str, Any] | list[dict[str, Any]], "Create child GameObject(s) in the prefab. Single object or array of objects, each with: name (required), parent (optional, defaults to target), primitive_type (optional: Cube, Sphere, Capsule, Cylinder, Plane, Quad), position, rotation, scale, components_to_add, tag, layer, set_active."] | None = None,
-    component_properties: Annotated[dict[str, dict[str, Any]], "Set properties on existing components in modify_contents. Keys are component type names, values are dicts of property name to value. Example: {\"Rigidbody\": {\"mass\": 5.0}, \"MyScript\": {\"health\": 100}}. Supports object references via {\"guid\": \"...\"}, {\"path\": \"Assets/...\"}, or {\"instanceID\": 123}."] | None = None,
+    create_child: Annotated[dict[str, Any] | list[dict[str, Any]], "Create child GameObject(s) in the prefab. Single object or array of objects, each with: name (required), parent (optional, defaults to target), source_prefab_path (optional: asset path to instantiate as nested prefab, e.g. 'Assets/Prefabs/Bullet.prefab'), primitive_type (optional: Cube, Sphere, Capsule, Cylinder, Plane, Quad), position, rotation, scale, components_to_add, tag, layer, set_active. source_prefab_path and primitive_type are mutually exclusive."] | None = None,
+    delete_child: Annotated[str | list[str], "Child name(s) or path(s) to remove from the prefab. Supports single string or array for batch deletion (e.g. 'Child1' or ['Child1', 'Child1/Grandchild'])."] | None = None,
+    component_properties: Annotated[dict[str, dict[str, Any]], "Set properties on existing components in modify_contents. Keys are component type names, values are dicts of property name to value. Example: {\"Rigidbody\": {\"mass\": 5.0}, \"MyScript\": {\"health\": 100}}. Supports object references via {\"guid\": \"...\"}, {\"path\": \"Assets/...\"}, or {\"instanceID\": 123}. For Sprite sub-assets: {\"guid\": \"...\", \"spriteName\": \"<name>\"}. Single-sprite textures auto-resolve."] | None = None,
 ) -> dict[str, Any]:
     # Back-compat: map 'name' → 'target' for create_from_gameobject (Unity accepts both)
     if action == "create_from_gameobject" and target is None and name is not None:
@@ -184,6 +194,9 @@ async def manage_prefabs(
                 if err:
                     return {"success": False, "message": err}
                 params["createChild"] = child_params
+
+        if delete_child is not None:
+            params["deleteChild"] = delete_child
 
         # Send command to Unity
         response = await send_with_unity_instance(

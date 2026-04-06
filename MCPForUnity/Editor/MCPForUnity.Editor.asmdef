@@ -2,8 +2,7 @@
     "name": "MCPForUnity.Editor",
     "rootNamespace": "MCPForUnity.Editor",
     "references": [
-        "MCPForUnity.Runtime",
-        "Newtonsoft.Json"
+        "MCPForUnity.Runtime"
     ],
     "includePlatforms": [
         "Editor"

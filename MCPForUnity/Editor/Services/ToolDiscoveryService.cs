@@ -133,6 +133,7 @@ namespace MCPForUnity.Editor.Services
                     AutoRegister = toolAttr.AutoRegister,
                     RequiresPolling = toolAttr.RequiresPolling,
                     PollAction = string.IsNullOrEmpty(toolAttr.PollAction) ? "status" : toolAttr.PollAction,
+                    MaxPollSeconds = toolAttr.MaxPollSeconds,
                     Group = toolAttr.Group ?? "core"
                 };
 

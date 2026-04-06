@@ -87,6 +87,8 @@ async def manage_gameobject(
     set_active: Annotated[bool | str,
                           "If True, sets the GameObject active (accepts true/false or 'true'/'false')"] | None = None,
     layer: Annotated[str, "Layer name"] | None = None,
+    is_static: Annotated[bool | str,
+                         "Set the GameObject's static flag. true = all StaticEditorFlags, false = none (accepts true/false or 'true'/'false')"] | None = None,
     components_to_remove: Annotated[list[str] | str,
                                     "List of component names to remove"] | None = None,
     component_properties: Annotated[dict[str, dict[str, Any]] | str,
@@ -146,6 +148,7 @@ async def manage_gameobject(
     # --- Normalize boolean parameters ---
     save_as_prefab = coerce_bool(save_as_prefab)
     set_active = coerce_bool(set_active)
+    is_static = coerce_bool(is_static)
     world_space = coerce_bool(world_space, default=True)
 
     # --- Normalize component_properties with detailed error handling ---
@@ -182,6 +185,7 @@ async def manage_gameobject(
             "prefabFolder": prefab_folder,
             "setActive": set_active,
             "layer": layer,
+            "isStatic": is_static,
             "componentsToRemove": components_to_remove,
             "componentProperties": component_properties,
             # Parameters for 'duplicate'

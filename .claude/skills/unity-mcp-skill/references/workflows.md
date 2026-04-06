@@ -16,6 +16,7 @@ Common workflows and patterns for effective Unity-MCP usage.
 - [Graphics & Rendering Workflows](#graphics--rendering-workflows)
 - [Package Management Workflows](#package-management-workflows)
 - [Package Deployment Workflows](#package-deployment-workflows)
+- [API Verification Workflows](#api-verification-workflows)
 - [Batch Operations](#batch-operations)
 
 ---
@@ -1898,6 +1899,79 @@ manage_editor(action="restore_package")
 
 # Wait for recompilation
 refresh_unity(mode="force", compile="request", wait_for_ready=True)
+```
+
+---
+
+## API Verification Workflows
+
+### Full API Verification Before Writing Code
+
+Use `unity_reflect` and `unity_docs` to verify Unity APIs before writing C# code. This prevents hallucinated or outdated API references.
+
+**Trust hierarchy:** reflection (live runtime) > project assets > official docs.
+
+```python
+# Step 1: Search for the type you need
+unity_reflect(action="search", query="NavMesh")
+# → Returns matching types: NavMeshAgent, NavMeshPath, NavMeshHit, etc.
+
+# Step 2: Get member summary for the type
+unity_reflect(action="get_type", class_name="UnityEngine.AI.NavMeshAgent")
+# → Returns all methods, properties, fields (names only)
+
+# Step 3: Get full signature for specific members you plan to use
+unity_reflect(action="get_member", class_name="NavMeshAgent", member_name="SetDestination")
+# → Returns parameter types, return type, all overloads
+
+# Step 4: Get official docs for usage patterns and examples
+unity_docs(action="get_doc", class_name="NavMeshAgent", member_name="SetDestination")
+# → Returns description, signatures, parameters, code examples
+```
+
+### Batch API Lookup
+
+Use `unity_docs` `lookup` action to search multiple APIs in a single call:
+
+```python
+# Search ScriptReference + Manual + package docs in parallel
+unity_docs(action="lookup", queries="Physics.Raycast,NavMeshAgent,Light2D")
+
+# Include package docs in the search
+unity_docs(action="lookup", query="VolumeProfile",
+           package="com.unity.render-pipelines.universal", pkg_version="17.0")
+```
+
+### Finding Shaders and Materials in Project
+
+The `lookup` action automatically searches project assets for asset-related queries:
+
+```python
+# This searches both docs AND project assets for shader-related content
+unity_docs(action="lookup", query="Lit shader")
+# → Returns doc hits + matching project assets (shaders, materials, etc.)
+```
+
+### Manual and Package Documentation
+
+```python
+# Fetch Unity Manual pages (execution order, scripting concepts, etc.)
+unity_docs(action="get_manual", slug="execution-order")
+
+# Fetch package-specific documentation
+unity_docs(action="get_package_doc",
+           package="com.unity.render-pipelines.universal",
+           page="2d-index", pkg_version="17.0")
+```
+
+### Verifying APIs Across Unity Versions
+
+```python
+# Specify Unity version for version-specific docs
+unity_docs(action="get_doc", class_name="Camera", member_name="main", version="6000.0.38f1")
+
+# Use reflection to check what's actually available in the running editor
+unity_reflect(action="search", query="InputAction", scope="packages")
 ```
 
 ---

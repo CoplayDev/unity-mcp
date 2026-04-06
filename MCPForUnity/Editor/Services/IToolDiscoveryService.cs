@@ -17,6 +17,7 @@ namespace MCPForUnity.Editor.Services
         public bool AutoRegister { get; set; } = true;
         public bool RequiresPolling { get; set; } = false;
         public string PollAction { get; set; } = "status";
+        public int MaxPollSeconds { get; set; } = 0;
         public bool IsBuiltIn { get; set; }
         public string Group { get; set; } = "core";
     }

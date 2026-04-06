@@ -6,13 +6,13 @@ import click
 from typing import Optional, Any
 
 from cli.utils.config import get_config
-from cli.utils.output import format_output, print_error, print_success
+from cli.utils.output import format_output, print_error, print_success, print_warning
 from cli.utils.connection import run_command, handle_unity_errors
 
 
 @click.group()
 def scene():
-    """Scene operations - hierarchy, load, save, create scenes."""
+    """Scene operations - hierarchy, load, save, create, multi-scene, validation."""
     pass
 
 
@@ -163,14 +163,28 @@ def save(path: Optional[str]):
     default=None,
     help="Path to create the scene at."
 )
+@click.option(
+    "--template", "-t",
+    default=None,
+    type=click.Choice(["empty", "default", "3d_basic", "2d_basic"]),
+    help="Scene template (omit for empty scene)."
+)
 @handle_unity_errors
-def create(name: str, path: Optional[str]):
-    """Create a new scene.
+def create(name: str, path: Optional[str], template: Optional[str]):
+    """Create a new scene, optionally from a template.
+
+    \b
+    Templates:
+        empty     - Empty scene, no default objects
+        default   - Camera + Directional Light (Unity default)
+        3d_basic  - Default + ground plane
+        2d_basic  - Default + orthographic camera
 
     \b
     Examples:
         unity-mcp scene create "NewLevel"
-        unity-mcp scene create "TestScene" --path "Assets/Scenes/Test"
+        unity-mcp scene create "Level1" --template 3d_basic
+        unity-mcp scene create "Level1" --template 2d_basic --path "Assets/Scenes"
     """
     config = get_config()
 
@@ -180,11 +194,14 @@ def create(name: str, path: Optional[str]):
     }
     if path:
         params["path"] = path
+    if template:
+        params["template"] = template
 
     result = run_command("manage_scene", params, config)
     click.echo(format_output(result, config.format))
     if result.get("success"):
-        print_success(f"Created scene: {name}")
+        label = f" from template '{template}'" if template else ""
+        print_success(f"Created scene{label}: {name}")
 
 
 @scene.command("build-settings")
@@ -194,5 +211,142 @@ def build_settings():
     config = get_config()
     result = run_command("manage_scene", {"action": "get_build_settings"}, config)
     click.echo(format_output(result, config.format))
+
+
+# ── Multi-scene editing ──────────────────────────────────────────────
+
+
+@scene.command("loaded")
+@handle_unity_errors
+def loaded():
+    """List all currently loaded scenes.
+
+    \b
+    Examples:
+        unity-mcp scene loaded
+    """
+    config = get_config()
+    result = run_command("manage_scene", {"action": "get_loaded_scenes"}, config)
+    click.echo(format_output(result, config.format))
+
+
+@scene.command("open-additive")
+@click.argument("scene_path")
+@handle_unity_errors
+def open_additive(scene_path: str):
+    """Open a scene additively (keeps current scene loaded).
+
+    \b
+    Examples:
+        unity-mcp scene open-additive "Assets/Scenes/Level2.unity"
+    """
+    config = get_config()
+    result = run_command("manage_scene", {
+        "action": "load",
+        "path": scene_path,
+        "additive": True,
+    }, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Opened additively: {scene_path}")
+
+
+@scene.command("close")
+@click.argument("scene_name")
+@click.option("--remove", is_flag=True, help="Fully remove scene instead of just unloading.")
+@handle_unity_errors
+def close(scene_name: str, remove: bool):
+    """Close/unload a loaded scene.
+
+    \b
+    Examples:
+        unity-mcp scene close "Level2"
+        unity-mcp scene close "Level2" --remove
+    """
+    config = get_config()
+    params: dict[str, Any] = {
+        "action": "close_scene",
+        "sceneName": scene_name,
+    }
+    if remove:
+        params["removeScene"] = True
+    result = run_command("manage_scene", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Closed scene: {scene_name}")
+
+
+@scene.command("set-active")
+@click.argument("scene_name")
+@handle_unity_errors
+def set_active(scene_name: str):
+    """Set a loaded scene as the active scene.
+
+    \b
+    Examples:
+        unity-mcp scene set-active "Level2"
+    """
+    config = get_config()
+    result = run_command("manage_scene", {
+        "action": "set_active_scene",
+        "sceneName": scene_name,
+    }, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Set active: {scene_name}")
+
+
+@scene.command("move-to")
+@click.argument("target")
+@click.argument("scene_name")
+@handle_unity_errors
+def move_to(target: str, scene_name: str):
+    """Move a root GameObject to another loaded scene.
+
+    \b
+    Examples:
+        unity-mcp scene move-to "Player" "Level2"
+    """
+    config = get_config()
+    result = run_command("manage_scene", {
+        "action": "move_to_scene",
+        "target": target,
+        "sceneName": scene_name,
+    }, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        print_success(f"Moved '{target}' to scene '{scene_name}'")
+
+
+# ── Scene validation ─────────────────────────────────────────────────
+
+
+@scene.command("validate")
+@click.option("--repair", is_flag=True, help="Auto-fix missing scripts (undoable).")
+@handle_unity_errors
+def validate(repair: bool):
+    """Validate the active scene for issues (missing scripts, broken prefabs).
+
+    \b
+    Examples:
+        unity-mcp scene validate
+        unity-mcp scene validate --repair
+    """
+    config = get_config()
+    params: dict[str, Any] = {"action": "validate"}
+    if repair:
+        params["autoRepair"] = True
+    result = run_command("manage_scene", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        data = result.get("data", {})
+        total = data.get("totalIssues", 0)
+        repaired = data.get("repaired", 0)
+        if total == 0:
+            print_success("Scene is clean")
+        elif repaired > 0:
+            print_success(f"Found {total} issue(s), repaired {repaired}")
+        else:
+            print_warning(f"Found {total} issue(s), none repaired")
 
 

@@ -151,6 +151,19 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                 }
             }
 
+            bool? isStatic = @params["isStatic"]?.ToObject<bool?>();
+            if (isStatic.HasValue)
+            {
+                var desiredFlags = isStatic.Value ? (StaticEditorFlags)~0 : 0;
+                var currentFlags = GameObjectUtility.GetStaticEditorFlags(targetGo);
+
+                if (currentFlags != desiredFlags)
+                {
+                    GameObjectUtility.SetStaticEditorFlags(targetGo, desiredFlags);
+                    modified = true;
+                }
+            }
+
             Vector3? position = VectorParsing.ParseVector3(@params["position"]);
             Vector3? rotation = VectorParsing.ParseVector3(@params["rotation"]);
             Vector3? scale = VectorParsing.ParseVector3(@params["scale"]);

@@ -1,4 +1,4 @@
-"""Code CLI commands - read source code. search might be implemented later (but can be totally achievable with AI)."""
+"""Code CLI commands - read, search, and execute source code."""
 
 import sys
 import os
@@ -6,14 +6,100 @@ import click
 from typing import Optional, Any
 
 from cli.utils.config import get_config
-from cli.utils.output import format_output, print_error, print_info
+from cli.utils.output import format_output, print_error, print_info, print_success
 from cli.utils.connection import run_command, handle_unity_errors
 
 
 @click.group()
 def code():
-    """Code operations - read source files."""
+    """Code operations - read, search, and execute."""
     pass
+
+
+@code.command("execute")
+@click.argument("source", required=False)
+@click.option("--file", "-f", default=None, type=click.Path(exists=True), help="Read code from a file instead of argument.")
+@click.option("--no-safety-checks", is_flag=True, help="Disable blocked-pattern checks (allows File.Delete, Process.Start, etc).")
+@handle_unity_errors
+def execute(source: Optional[str], file: Optional[str], no_safety_checks: bool):
+    """Execute C# code in Unity Editor.
+
+    Code runs as a method body with access to UnityEngine and UnityEditor.
+    Use 'return' to send data back.
+
+    \b
+    Examples:
+        unity-mcp code execute "return Application.unityVersion;"
+        unity-mcp code execute "Debug.Log(Camera.main.name);"
+        unity-mcp code execute -f my_script.cs
+    """
+    config = get_config()
+
+    if file:
+        with open(file, "r", encoding="utf-8") as f:
+            source = f.read()
+    elif not source:
+        print_error("Provide code as an argument or use --file.")
+        sys.exit(1)
+
+    params: dict[str, Any] = {
+        "action": "execute",
+        "code": source,
+        "safety_checks": not no_safety_checks,
+    }
+
+    result = run_command("execute_code", params, config)
+    click.echo(format_output(result, config.format))
+    _print_execution_result(result)
+
+
+@code.command("history")
+@click.option("--limit", "-n", default=10, type=int, help="Number of entries to show (default: 10).")
+@handle_unity_errors
+def history(limit: int):
+    """Show execution history.
+
+    \b
+    Examples:
+        unity-mcp code history
+        unity-mcp code history --limit 5
+    """
+    config = get_config()
+    result = run_command("execute_code", {"action": "get_history", "limit": limit}, config)
+    click.echo(format_output(result, config.format))
+
+
+@code.command("replay")
+@click.argument("index", type=int)
+@handle_unity_errors
+def replay(index: int):
+    """Replay a history entry by index.
+
+    \b
+    Examples:
+        unity-mcp code replay 0
+        unity-mcp code replay 3
+    """
+    config = get_config()
+    result = run_command("execute_code", {"action": "replay", "index": index}, config)
+    click.echo(format_output(result, config.format))
+    _print_execution_result(result)
+
+
+def _print_execution_result(result: dict[str, Any]) -> None:
+    if result.get("success"):
+        data = result.get("data", {})
+        if data and data.get("result") is not None:
+            print_success(f"Result: {data['result']}")
+
+
+@code.command("clear-history")
+@handle_unity_errors
+def clear_history():
+    """Clear execution history."""
+    config = get_config()
+    result = run_command("execute_code", {"action": "clear_history"}, config)
+    click.echo(format_output(result, config.format))
 
 
 @code.command("read")

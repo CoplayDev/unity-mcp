@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.3",
   "name": "Unity MCP",
-  "version": "9.5.3",
+  "version": "9.6.5",
   "description": "AI-powered Unity Editor automation via MCP - manage GameObjects, scripts, materials, scenes, prefabs, VFX, and run tests",
   "author": {
     "name": "Coplay",
@@ -54,6 +54,10 @@
       "description": "Execute custom Unity Editor tools registered by the project"
     },
     {
+      "name": "execute_code",
+      "description": "Execute arbitrary C# code inside the Unity Editor with access to all Unity APIs"
+    },
+    {
       "name": "execute_menu_item",
       "description": "Execute Unity Editor menu items"
     },
@@ -82,12 +86,16 @@
       "description": "Create, modify, search, and organize Unity assets"
     },
     {
+      "name": "manage_build",
+      "description": "Manage player builds: trigger builds, switch platforms, configure settings, batch builds"
+    },
+    {
       "name": "manage_components",
       "description": "Add, remove, and configure GameObject components"
     },
     {
       "name": "manage_editor",
-      "description": "Control Unity Editor state, play mode, and preferences"
+      "description": "Control Unity Editor state, play mode, preferences, undo/redo"
     },
     {
       "name": "manage_gameobject",
@@ -110,6 +118,10 @@
       "description": "Modify Unity packages: install, remove, embed, and configure registries"
     },
     {
+      "name": "manage_physics",
+      "description": "Manage 3D and 2D physics: settings, collision matrix, materials, joints, queries (raycast, shapecast, linecast, overlap), forces, rigidbody configuration, validation, and simulation"
+    },
+    {
       "name": "manage_prefabs",
       "description": "Create, instantiate, unpack, and modify prefabs"
     },
@@ -118,8 +130,12 @@
       "description": "Create and edit ProBuilder meshes, shapes, and geometry operations"
     },
     {
+      "name": "manage_profiler",
+      "description": "Unity Profiler session control, counter reads, memory snapshots, and Frame Debugger (group: profiling)"
+    },
+    {
       "name": "manage_scene",
-      "description": "Load, save, query hierarchy, and manage Unity scenes"
+      "description": "Load, save, query hierarchy, multi-scene editing, templates, validation, and manage Unity scenes"
     },
     {
       "name": "manage_script",
@@ -172,6 +188,14 @@
     {
       "name": "set_active_instance",
       "description": "Set the active Unity Editor instance for multi-instance workflows"
+    },
+    {
+      "name": "unity_docs",
+      "description": "Fetch Unity documentation (ScriptReference, Manual, package docs)"
+    },
+    {
+      "name": "unity_reflect",
+      "description": "Inspect Unity C# APIs via live reflection"
     },
     {
       "name": "validate_script",

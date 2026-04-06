@@ -722,6 +722,115 @@ namespace MCPForUnityTests.Editor.Tools
 
         #endregion
 
+        #region Delete Child Tests
+
+        [Test]
+        public void ModifyContents_DeleteChild_DeletesSingleChild()
+        {
+            string prefabPath = CreateNestedTestPrefab("DeleteSingleChild");
+
+            try
+            {
+                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["deleteChild"] = "Child1"
+                }));
+
+                Assert.IsTrue(result.Value<bool>("success"), $"Expected success but got: {result}");
+
+                GameObject reloaded = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                Assert.IsNull(reloaded.transform.Find("Child1"), "Child1 should be deleted");
+                Assert.IsNotNull(reloaded.transform.Find("Child2"), "Child2 should still exist");
+            }
+            finally
+            {
+                SafeDeleteAsset(prefabPath);
+            }
+        }
+
+        [Test]
+        public void ModifyContents_DeleteChild_DeletesNestedChild()
+        {
+            string prefabPath = CreateNestedTestPrefab("DeleteNestedChild");
+
+            try
+            {
+                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["target"] = "Child1",
+                    ["deleteChild"] = "Grandchild"
+                }));
+
+                Assert.IsTrue(result.Value<bool>("success"), $"Expected success but got: {result}");
+
+                GameObject reloaded = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                Assert.IsNull(reloaded.transform.Find("Child1/Grandchild"), "Grandchild should be deleted");
+                Assert.IsNotNull(reloaded.transform.Find("Child1"), "Child1 should still exist");
+            }
+            finally
+            {
+                SafeDeleteAsset(prefabPath);
+            }
+        }
+
+        [Test]
+        public void ModifyContents_DeleteChild_DeletesMultipleChildrenFromArray()
+        {
+            string prefabPath = CreateNestedTestPrefab("DeleteMultipleChildren");
+
+            try
+            {
+                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["deleteChild"] = new JArray { "Child1", "Child2" }
+                }));
+
+                Assert.IsTrue(result.Value<bool>("success"), $"Expected success but got: {result}");
+
+                GameObject reloaded = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                Assert.IsNull(reloaded.transform.Find("Child1"), "Child1 should be deleted");
+                Assert.IsNull(reloaded.transform.Find("Child2"), "Child2 should be deleted");
+                // Only the root should remain
+                Assert.AreEqual(0, reloaded.transform.childCount, "Root should have no children");
+            }
+            finally
+            {
+                SafeDeleteAsset(prefabPath);
+            }
+        }
+
+        [Test]
+        public void ModifyContents_DeleteChild_ReturnsErrorForNonexistentChild()
+        {
+            string prefabPath = CreateNestedTestPrefab("DeleteNonexistentChild");
+
+            try
+            {
+                var result = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "modify_contents",
+                    ["prefabPath"] = prefabPath,
+                    ["deleteChild"] = "DeleteNonexistentChild" // This also tests whether it searches itself
+                }));
+
+                Assert.IsFalse(result.Value<bool>("success"));
+                Assert.IsTrue(result.Value<string>("error").Contains("not found"),
+                    $"Expected 'not found' error but got: {result.Value<string>("error")}");
+            }
+            finally
+            {
+                SafeDeleteAsset(prefabPath);
+            }
+        }
+
+        #endregion
+
         #region Component Properties Tests
 
         [Test]

@@ -1,9 +1,7 @@
 {
     "name": "MCPForUnity.Runtime",
     "rootNamespace": "MCPForUnity.Runtime",
-    "references": [
-        "Newtonsoft.Json"
-    ],
+    "references": [],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
