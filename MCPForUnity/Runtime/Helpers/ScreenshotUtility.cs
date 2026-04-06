@@ -240,6 +240,15 @@ namespace MCPForUnity.Runtime.Helpers
             bool includeImage = false,
             int maxResolution = 0)
         {
+            if (!IsScreenCaptureModuleAvailable)
+            {
+                var fallbackCamera = FindAvailableCamera();
+                if (fallbackCamera != null)
+                    return CaptureFromCameraToAssetsFolder(fallbackCamera, fileName, superSize, ensureUniqueFileName, includeImage, maxResolution);
+
+                throw new InvalidOperationException("ScreenCapture module is unavailable and no fallback camera found.");
+            }
+
             ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, isAsync: false);
             Texture2D tex = null;
             Texture2D downscaled = null;
@@ -251,7 +260,7 @@ namespace MCPForUnity.Runtime.Helpers
                 if (tex == null)
                 {
                     // Fallback to camera-based if ScreenCapture fails
-                    var cam = Camera.main;
+                    var cam = FindAvailableCamera();
                     if (cam != null)
                         return CaptureFromCameraToAssetsFolder(cam, fileName, superSize, ensureUniqueFileName, includeImage, maxResolution);
                     throw new InvalidOperationException("ScreenCapture.CaptureScreenshotAsTexture returned null and no fallback camera available.");

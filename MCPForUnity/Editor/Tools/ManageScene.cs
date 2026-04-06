@@ -602,23 +602,7 @@ namespace MCPForUnity.Editor.Tools
 
                     AssetDatabase.ImportAsset(result.AssetsRelativePath, ImportAssetOptions.ForceSynchronousImport);
                     string message = $"Screenshot captured to '{result.AssetsRelativePath}' (camera: {targetCamera.name}).";
-
-                    var data = new Dictionary<string, object>
-                    {
-                        { "path", result.AssetsRelativePath },
-                        { "fullPath", result.FullPath },
-                        { "superSize", result.SuperSize },
-                        { "isAsync", false },
-                        { "camera", targetCamera.name },
-                        { "captureSource", "game_view" },
-                    };
-                    if (includeImage && result.ImageBase64 != null)
-                    {
-                        data["imageBase64"] = result.ImageBase64;
-                        data["imageWidth"] = result.ImageWidth;
-                        data["imageHeight"] = result.ImageHeight;
-                    }
-                    return new SuccessResponse(message, data);
+                    return new SuccessResponse(message, BuildScreenshotResponseData(result, targetCamera.name, includeImage));
                 }
 
                 if (includeImage && Application.isPlaying)
@@ -632,23 +616,7 @@ namespace MCPForUnity.Editor.Tools
                     AssetDatabase.ImportAsset(result.AssetsRelativePath, ImportAssetOptions.ForceSynchronousImport);
                     string cameraName = Camera.main != null ? Camera.main.name : "composited";
                     string message = $"Screenshot captured to '{result.AssetsRelativePath}' (camera: {cameraName}).";
-
-                    var data = new Dictionary<string, object>
-                    {
-                        { "path", result.AssetsRelativePath },
-                        { "fullPath", result.FullPath },
-                        { "superSize", result.SuperSize },
-                        { "isAsync", false },
-                        { "camera", cameraName },
-                        { "captureSource", "game_view" },
-                    };
-                    if (result.ImageBase64 != null)
-                    {
-                        data["imageBase64"] = result.ImageBase64;
-                        data["imageWidth"] = result.ImageWidth;
-                        data["imageHeight"] = result.ImageHeight;
-                    }
-                    return new SuccessResponse(message, data);
+                    return new SuccessResponse(message, BuildScreenshotResponseData(result, cameraName, includeImage: true));
                 }
 
                 if (includeImage)
@@ -677,23 +645,7 @@ namespace MCPForUnity.Editor.Tools
 
                     AssetDatabase.ImportAsset(result.AssetsRelativePath, ImportAssetOptions.ForceSynchronousImport);
                     string message = $"Screenshot captured to '{result.AssetsRelativePath}' (camera: {targetCamera.name}).";
-
-                    var data = new Dictionary<string, object>
-                    {
-                        { "path", result.AssetsRelativePath },
-                        { "fullPath", result.FullPath },
-                        { "superSize", result.SuperSize },
-                        { "isAsync", false },
-                        { "camera", targetCamera.name },
-                        { "captureSource", "game_view" },
-                    };
-                    if (includeImage && result.ImageBase64 != null)
-                    {
-                        data["imageBase64"] = result.ImageBase64;
-                        data["imageWidth"] = result.ImageWidth;
-                        data["imageHeight"] = result.ImageHeight;
-                    }
-                    return new SuccessResponse(message, data);
+                    return new SuccessResponse(message, BuildScreenshotResponseData(result, targetCamera.name, includeImage));
                 }
 
                 // Default path: use ScreenCapture API if available, camera fallback otherwise
@@ -752,6 +704,31 @@ namespace MCPForUnity.Editor.Tools
             {
                 return new ErrorResponse($"Error capturing screenshot: {e.Message}");
             }
+        }
+
+        private static Dictionary<string, object> BuildScreenshotResponseData(
+            ScreenshotCaptureResult result,
+            string cameraName,
+            bool includeImage)
+        {
+            var data = new Dictionary<string, object>
+            {
+                { "path", result.AssetsRelativePath },
+                { "fullPath", result.FullPath },
+                { "superSize", result.SuperSize },
+                { "isAsync", false },
+                { "camera", cameraName },
+                { "captureSource", "game_view" },
+            };
+
+            if (includeImage && result.ImageBase64 != null)
+            {
+                data["imageBase64"] = result.ImageBase64;
+                data["imageWidth"] = result.ImageWidth;
+                data["imageHeight"] = result.ImageHeight;
+            }
+
+            return data;
         }
 
         private static object CaptureSceneViewScreenshot(
