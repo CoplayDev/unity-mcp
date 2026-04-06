@@ -18,6 +18,7 @@ _HUB_PATHS = {
 
 _DEFAULT_TIMEOUT = 30
 _INSTALL_TIMEOUT = 600
+_SPAWN_TIMEOUT = 15
 
 
 def detect_hub_path() -> Optional[str]:
@@ -61,13 +62,14 @@ async def run_hub_command(
     cmd = [hub, "--", "--headless", *args]
 
     try:
+        spawn_timeout = min(_SPAWN_TIMEOUT, timeout)
         proc = await asyncio.wait_for(
             asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             ),
-            timeout=5,
+            timeout=spawn_timeout,
         )
         stdout_bytes, stderr_bytes = await asyncio.wait_for(
             proc.communicate(),

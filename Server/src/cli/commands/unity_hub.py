@@ -7,6 +7,7 @@ import click
 
 from cli.utils.output import print_info, print_success
 from services.unity_hub import (
+    _INSTALL_TIMEOUT,
     detect_hub_path,
     parse_available_releases,
     parse_installed_editors,
@@ -103,7 +104,7 @@ def install_path(new_path: str | None) -> None:
 def install(version: str) -> None:
     """Download and install a Unity Editor version via Unity Hub."""
     click.confirm(f"Install Unity Editor {version}?", abort=True)
-    result = _run_async(run_hub_command(["install", "--version", version], timeout=600))
+    result = _run_async(run_hub_command(["install", "--version", version], timeout=_INSTALL_TIMEOUT))
     if result["success"]:
         print_success(f"Unity Editor {version} installation started.")
         print_info("Unity Hub may continue the install in the background.")
@@ -121,7 +122,7 @@ def install_modules(version: str, modules: tuple[str, ...]) -> None:
     args = ["install-modules", "--version", version]
     for mod in module_list:
         args.extend(["--module", mod])
-    result = _run_async(run_hub_command(args, timeout=600))
+    result = _run_async(run_hub_command(args, timeout=_INSTALL_TIMEOUT))
     if result["success"]:
         print_success(f"Module installation started for Unity {version}.")
         print_info("Unity Hub may continue the module install in the background.")
