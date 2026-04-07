@@ -78,7 +78,7 @@ namespace MCPForUnity.Tests.EditMode.Tools
             var result = ManageScene.HandleCommand(p);
             var r = result as JObject ?? JObject.FromObject(result);
             Assert.IsFalse(r.Value<bool>("success"));
-            Assert.IsTrue(r.Value<string>("message").Contains("manage_build"));
+            Assert.IsTrue(r.Value<string>("error").Contains("manage_build"));
         }
 
         [Test]

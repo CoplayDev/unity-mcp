@@ -1910,6 +1910,10 @@ namespace MCPForUnity.Editor.Tools
             int probe = lineStart - 1;
             while (probe > searchStart)
             {
+                // Skip past line-ending chars so LastIndexOf finds the *previous* newline
+                while (probe > searchStart && (source[probe] == '\n' || source[probe] == '\r'))
+                    probe--;
+                if (probe <= searchStart) break;
                 int prevNl = source.LastIndexOf('\n', probe);
                 if (prevNl < 0 || prevNl < searchStart) break;
                 string prev = source.Substring(prevNl + 1, attrStart - (prevNl + 1));
@@ -2740,16 +2744,18 @@ namespace MCPForUnity.Editor.Tools
 
             // Step 3: Match method signatures on code-only text (includes => for expression-bodied)
             var methodSigPattern = new Regex(
-                @"(?:(?:public|private|protected|internal)\s+)?(?:(?:static|virtual|override|abstract|sealed|async|new)\s+)*\S+\s+(\w+)\s*\(([^)]*)\)\s*(?:where\s+\S+\s*:\s*\S+\s*)?(?:[{;]|=>)",
+                @"(?:(?:public|private|protected|internal)\s+)?(?:(?:static|virtual|override|abstract|sealed|async|new)\s+)*(\S+)\s+(\w+)\s*\(([^)]*)\)\s*(?:where\s+\S+\s*:\s*\S+\s*)?(?:[{;]|=>)",
                 RegexOptions.Multiline | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2));
             var sigMatches = methodSigPattern.Matches(codeOnly);
             var seen = new System.Collections.Generic.Dictionary<string, int>(System.StringComparer.Ordinal);
             foreach (Match sm in sigMatches)
             {
-                string methodName = sm.Groups[1].Value;
+                string returnType = sm.Groups[1].Value;
+                string methodName = sm.Groups[2].Value;
+                if (string.Equals(returnType, "new", StringComparison.Ordinal)) continue; // constructor invocation, not a method declaration
                 if (IsCSharpKeyword(methodName)) continue;
-                int paramCount = CountTopLevelParams(sm.Groups[2].Value);
-                string paramTypes = ExtractParamTypes(sm.Groups[2].Value);
+                int paramCount = CountTopLevelParams(sm.Groups[3].Value);
+                string paramTypes = ExtractParamTypes(sm.Groups[3].Value);
                 string containingType = containingTypeArr[sm.Index];
                 string key = $"{containingType}/{methodName}/{paramCount}/{paramTypes}";
                 if (seen.TryGetValue(key, out _))

@@ -15,6 +15,8 @@ namespace MCPForUnityTests.Editor.Tools
         private const string TempRoot = "Assets/Temp/ManageGraphicsTests";
         private bool _hasVolumeSystem;
         private bool _hasURP;
+        private bool _hasHDRP;
+        private bool _hasSceneView;
 
         [SetUp]
         public void SetUp()
@@ -28,7 +30,10 @@ namespace MCPForUnityTests.Editor.Tools
                 var data = pingResult["data"];
                 _hasVolumeSystem = data?.Value<bool>("hasVolumeSystem") ?? false;
                 _hasURP = data?.Value<bool>("hasURP") ?? false;
+                _hasHDRP = data?.Value<bool>("hasHDRP") ?? false;
             }
+
+            _hasSceneView = UnityEditor.SceneView.lastActiveSceneView != null;
         }
 
         [TearDown]
@@ -72,7 +77,7 @@ namespace MCPForUnityTests.Editor.Tools
         {
             var result = ToJObject(ManageGraphics.HandleCommand(new JObject()));
             Assert.IsFalse(result.Value<bool>("success"));
-            Assert.That(result["message"].ToString(), Does.Contain("action"));
+            Assert.That(result["error"].ToString(), Does.Contain("action"));
         }
 
         [Test]
@@ -81,7 +86,7 @@ namespace MCPForUnityTests.Editor.Tools
             var result = ToJObject(ManageGraphics.HandleCommand(
                 new JObject { ["action"] = "bogus_action" }));
             Assert.IsFalse(result.Value<bool>("success"));
-            Assert.That(result["message"].ToString(), Does.Contain("Unknown action"));
+            Assert.That(result["error"].ToString(), Does.Contain("Unknown action"));
         }
 
         [Test]
@@ -539,7 +544,7 @@ namespace MCPForUnityTests.Editor.Tools
                 ["positions"] = new JArray { new JArray(0, 0, 0) }
             }));
             Assert.IsFalse(result.Value<bool>("success"));
-            Assert.That(result["message"].ToString(), Does.Contain("LightProbeGroup"));
+            Assert.That(result["error"].ToString(), Does.Contain("LightProbeGroup"));
         }
 
         // =====================================================================
@@ -586,7 +591,10 @@ namespace MCPForUnityTests.Editor.Tools
                 ["action"] = "stats_set_scene_debug",
                 ["mode"] = "Wireframe"
             }));
-            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            if (_hasSceneView)
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            else
+                Assert.IsFalse(result.Value<bool>("success"));
         }
 
         [Test]
@@ -598,7 +606,7 @@ namespace MCPForUnityTests.Editor.Tools
                 ["mode"] = "InvalidMode"
             }));
             Assert.IsFalse(result.Value<bool>("success"));
-            Assert.That(result["message"].ToString(), Does.Contain("Valid:"));
+            Assert.That(result["error"].ToString(), Does.Contain("Valid:"));
         }
 
         // =====================================================================
@@ -618,6 +626,7 @@ namespace MCPForUnityTests.Editor.Tools
         [Test]
         public void PipelineGetSettings_ReturnsSettings()
         {
+            Assume.That(_hasURP || _hasHDRP, "Built-in pipeline has no settings asset — skipping.");
             var result = ToJObject(ManageGraphics.HandleCommand(
                 new JObject { ["action"] = "pipeline_get_settings" }));
             Assert.IsTrue(result.Value<bool>("success"), result.ToString());
@@ -635,7 +644,7 @@ namespace MCPForUnityTests.Editor.Tools
                 ["level"] = "NonExistentLevel"
             }));
             Assert.IsFalse(result.Value<bool>("success"));
-            Assert.That(result["message"].ToString(), Does.Contain("Available:"));
+            Assert.That(result["error"].ToString(), Does.Contain("Available:"));
         }
 
         // =====================================================================

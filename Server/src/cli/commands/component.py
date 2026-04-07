@@ -76,14 +76,21 @@ def add(target: str, component_type: str, search_method: Optional[str], properti
     is_flag=True,
     help="Skip confirmation prompt."
 )
+@click.option(
+    "--component-index", "-i",
+    type=int,
+    default=None,
+    help="Zero-based index when multiple components of the same type exist."
+)
 @handle_unity_errors
-def remove(target: str, component_type: str, search_method: Optional[str], force: bool):
+def remove(target: str, component_type: str, search_method: Optional[str], force: bool, component_index: Optional[int]):
     """Remove a component from a GameObject.
 
     \b
     Examples:
         unity-mcp component remove "Player" Rigidbody
         unity-mcp component remove "-81840" BoxCollider --search-method by_id --force
+        unity-mcp component remove "Player" BoxCollider --component-index 1
     """
     config = get_config()
 
@@ -97,6 +104,8 @@ def remove(target: str, component_type: str, search_method: Optional[str], force
 
     if search_method:
         params["searchMethod"] = search_method
+    if component_index is not None:
+        params["componentIndex"] = component_index
 
     result = run_command("manage_components", params, config)
     click.echo(format_output(result, config.format))
@@ -115,8 +124,14 @@ def remove(target: str, component_type: str, search_method: Optional[str], force
     default=None,
     help="How to find the target GameObject."
 )
+@click.option(
+    "--component-index", "-i",
+    type=int,
+    default=None,
+    help="Zero-based index when multiple components of the same type exist."
+)
 @handle_unity_errors
-def set_property(target: str, component_type: str, property_name: str, value: str, search_method: Optional[str]):
+def set_property(target: str, component_type: str, property_name: str, value: str, search_method: Optional[str], component_index: Optional[int]):
     """Set a single property on a component.
 
     \b
@@ -124,6 +139,7 @@ def set_property(target: str, component_type: str, property_name: str, value: st
         unity-mcp component set "Player" Rigidbody mass 5.0
         unity-mcp component set "Enemy" Transform position "[0, 5, 0]"
         unity-mcp component set "-81840" Light intensity 2.5 --search-method by_id
+        unity-mcp component set "Player" BoxCollider size "[2,2,2]" --component-index 1
     """
     config = get_config()
 
@@ -140,6 +156,8 @@ def set_property(target: str, component_type: str, property_name: str, value: st
 
     if search_method:
         params["searchMethod"] = search_method
+    if component_index is not None:
+        params["componentIndex"] = component_index
 
     result = run_command("manage_components", params, config)
     click.echo(format_output(result, config.format))
@@ -161,14 +179,21 @@ def set_property(target: str, component_type: str, property_name: str, value: st
     default=None,
     help="How to find the target GameObject."
 )
+@click.option(
+    "--component-index", "-i",
+    type=int,
+    default=None,
+    help="Zero-based index when multiple components of the same type exist."
+)
 @handle_unity_errors
-def modify(target: str, component_type: str, properties: str, search_method: Optional[str]):
+def modify(target: str, component_type: str, properties: str, search_method: Optional[str], component_index: Optional[int]):
     """Set multiple properties on a component at once.
 
     \b
     Examples:
         unity-mcp component modify "Player" Rigidbody --properties '{"mass": 5.0, "useGravity": false}'
         unity-mcp component modify "Light" Light --properties '{"intensity": 2.0, "color": [1, 0, 0, 1]}'
+        unity-mcp component modify "Player" BoxCollider --properties '{"size": [2,2,2]}' --component-index 1
     """
     config = get_config()
 
@@ -183,6 +208,8 @@ def modify(target: str, component_type: str, properties: str, search_method: Opt
 
     if search_method:
         params["searchMethod"] = search_method
+    if component_index is not None:
+        params["componentIndex"] = component_index
 
     result = run_command("manage_components", params, config)
     click.echo(format_output(result, config.format))

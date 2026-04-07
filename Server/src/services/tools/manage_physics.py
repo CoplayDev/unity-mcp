@@ -178,6 +178,11 @@ async def manage_physics(
     step_size: Annotated[Optional[float], "Step size in seconds."] = None,
     page_size: Annotated[Optional[int], "Page size for validate results (default 50)."] = None,
     cursor: Annotated[Optional[int], "Cursor offset for validate pagination."] = None,
+    component_index: Annotated[
+        Optional[int],
+        "Zero-based index to select which component when multiple of the same type exist (e.g., multiple HingeJoints or BoxColliders). "
+        "If omitted, targets the first instance."
+    ] = None,
 ) -> dict[str, Any]:
     """Manage 3D and 2D physics: settings, collision matrix, materials, joints, queries, validation, simulation."""
 
@@ -245,6 +250,8 @@ async def manage_physics(
         "page_size": page_size,
         "cursor": cursor,
     }
+    if component_index is not None:
+        params_dict["componentIndex"] = component_index
     for key, val in param_map.items():
         if val is not None:
             params_dict[key] = val

@@ -1,4 +1,4 @@
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Optional
 
 from fastmcp import Context
 from mcp.types import ToolAnnotations
@@ -66,6 +66,11 @@ async def manage_vfx(
         dict[str, Any] | str | None,
         "Action-specific parameters (dict or JSON string).",
     ] = None,
+    component_index: Annotated[
+        Optional[int],
+        "Zero-based index to select which component when multiple of the same type exist (e.g., multiple ParticleSystems). "
+        "If omitted, targets the first instance."
+    ] = None,
 ) -> dict[str, Any]:
     """Unified VFX management tool."""
 
@@ -107,6 +112,8 @@ async def manage_vfx(
         params_dict["target"] = target
     if search_method is not None:
         params_dict["searchMethod"] = search_method
+    if component_index is not None:
+        params_dict["componentIndex"] = component_index
 
     params_dict = {k: v for k, v in params_dict.items() if v is not None}
 
