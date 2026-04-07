@@ -2752,7 +2752,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 string returnType = sm.Groups[1].Value;
                 string methodName = sm.Groups[2].Value;
-                if (returnType == "new") continue; // constructor invocation, not a method declaration
+                if (string.Equals(returnType, "new", StringComparison.Ordinal)) continue; // constructor invocation, not a method declaration
                 if (IsCSharpKeyword(methodName)) continue;
                 int paramCount = CountTopLevelParams(sm.Groups[3].Value);
                 string paramTypes = ExtractParamTypes(sm.Groups[3].Value);

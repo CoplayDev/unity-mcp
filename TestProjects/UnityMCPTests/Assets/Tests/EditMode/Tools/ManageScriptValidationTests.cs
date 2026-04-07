@@ -357,6 +357,28 @@ public class Test : MonoBehaviour
         }
 
         [Test]
+        public void DuplicateMethodCheck_NewModifierWithConstructors_CorrectBehavior()
+        {
+            string code = @"using UnityEngine;
+public class Base : MonoBehaviour
+{
+    public virtual void Init() { }
+}
+public class Derived : Base
+{
+    public new void Init() { }
+    void Start()
+    {
+        var a = new GameObject(""A"");
+        var b = new GameObject(""B"");
+    }
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsFalse(HasDuplicateMethodError(errors),
+                "new modifier on method should not interfere with constructor invocation filtering");
+        }
+
+        [Test]
         public void HandleCommand_PathWithCsExtension_StripsFilename()
         {
             // When path ends with .cs (full file path instead of directory),
