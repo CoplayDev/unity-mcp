@@ -321,6 +321,42 @@ public class Foo : MonoBehaviour
         }
 
         [Test]
+        public void DuplicateMethodCheck_ConstructorInvocations_NotFlagged()
+        {
+            string code = @"using UnityEngine;
+public class Test : MonoBehaviour
+{
+    void Start()
+    {
+        GameObject a = new GameObject(""A"");
+        GameObject b = new GameObject(""B"");
+    }
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsFalse(HasDuplicateMethodError(errors),
+                "Constructor invocations (new Type(...)) should not be flagged as duplicate methods");
+        }
+
+        [Test]
+        public void DuplicateMethodCheck_MultipleDistinctConstructors_NotFlagged()
+        {
+            string code = @"using UnityEngine;
+public class Test : MonoBehaviour
+{
+    void Start()
+    {
+        var mpb1 = new MaterialPropertyBlock();
+        var mpb2 = new MaterialPropertyBlock();
+        var go1 = new GameObject(""A"");
+        var go2 = new GameObject(""B"");
+    }
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsFalse(HasDuplicateMethodError(errors),
+                "Multiple constructor invocations of different types should not be flagged");
+        }
+
+        [Test]
         public void HandleCommand_PathWithCsExtension_StripsFilename()
         {
             // When path ends with .cs (full file path instead of directory),
