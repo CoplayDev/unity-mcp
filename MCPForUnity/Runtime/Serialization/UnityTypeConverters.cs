@@ -295,7 +295,7 @@ namespace MCPForUnity.Runtime.Serialization
                     writer.WritePropertyName("name");
                     writer.WriteValue(value.name);
                     writer.WritePropertyName("instanceID");
-                    writer.WriteValue(value.GetInstanceID());
+                    writer.WriteValue(GetObjectId(value));
                     writer.WritePropertyName("isAssetWithoutPath");
                     writer.WriteValue(true);
                     writer.WriteEndObject();
@@ -308,7 +308,7 @@ namespace MCPForUnity.Runtime.Serialization
                 writer.WritePropertyName("name");
                 writer.WriteValue(value.name);
                 writer.WritePropertyName("instanceID");
-                writer.WriteValue(value.GetInstanceID());
+                writer.WriteValue(GetObjectId(value));
                 writer.WriteEndObject();
             }
 #else
@@ -317,7 +317,7 @@ namespace MCPForUnity.Runtime.Serialization
             writer.WritePropertyName("name");
             writer.WriteValue(value.name);
             writer.WritePropertyName("instanceID");
-            writer.WriteValue(value.GetInstanceID());
+            writer.WriteValue(GetObjectId(value));
              writer.WritePropertyName("warning");
             writer.WriteValue("UnityEngineObjectConverter running in non-Editor mode, asset path unavailable.");
             writer.WriteEndObject();
@@ -466,6 +466,15 @@ namespace MCPForUnity.Runtime.Serialization
                     return false;
             }
             return true;
+        }
+
+        private static int GetObjectId(UnityEngine.Object value)
+        {
+#if UNITY_6000_5_OR_NEWER
+            return value.GetEntityId();
+#else
+            return value.GetInstanceID();
+#endif
         }
     }
 }
