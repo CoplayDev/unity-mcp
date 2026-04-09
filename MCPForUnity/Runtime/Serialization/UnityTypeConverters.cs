@@ -1,4 +1,3 @@
-#pragma warning disable 0619
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
@@ -402,7 +401,6 @@ namespace MCPForUnity.Runtime.Serialization
                     }
 
                     UnityEngine.Debug.LogWarning($"[UnityEngineObjectConverter] Could not resolve entityID '{serializedEntityId}' to a valid {objectType.Name}.");
-                    return null;
                 }
 
                 // Try to resolve by instanceID
@@ -499,12 +497,11 @@ namespace MCPForUnity.Runtime.Serialization
 
         private static void WriteSerializedObjectId(JsonWriter writer, UnityEngine.Object value)
         {
+            writer.WritePropertyName("instanceID");
+            writer.WriteValue(value.GetInstanceIDCompat());
 #if UNITY_6000_5_OR_NEWER
             writer.WritePropertyName("entityID");
             writer.WriteValue(value.GetEntityId().ToString());
-#else
-            writer.WritePropertyName("instanceID");
-            writer.WriteValue(value.GetInstanceIDCompat());
 #endif
         }
 
@@ -547,7 +544,14 @@ namespace MCPForUnity.Runtime.Serialization
                     MethodInfo parseMethod = paramType.GetMethod("Parse", BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(string) }, null);
                     if (parseMethod != null)
                     {
-                        arg = parseMethod.Invoke(null, new object[] { serializedEntityId });
+                        try
+                        {
+                            arg = parseMethod.Invoke(null, new object[] { serializedEntityId });
+                        }
+                        catch
+                        {
+                            continue;
+                        }
                     }
                 }
 
@@ -556,7 +560,15 @@ namespace MCPForUnity.Runtime.Serialization
                     continue;
                 }
 
-                object result = method.Invoke(null, new[] { arg });
+                object result = null;
+                try
+                {
+                    result = method.Invoke(null, new[] { arg });
+                }
+                catch
+                {
+                    continue;
+                }
                 if (result is UnityEngine.Object resolved)
                 {
                     obj = resolved;
