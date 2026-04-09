@@ -1,3 +1,4 @@
+#pragma warning disable 0619
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -2008,7 +2009,7 @@ namespace MCPForUnity.Editor.Tools
             var d = new Dictionary<string, object>
             {
                 { "name", go.name },
-                { "instanceID", go.GetInstanceID() },
+                { "instanceID", go.GetInstanceIDCompat() },
                 { "activeSelf", go.activeSelf },
                 { "activeInHierarchy", go.activeInHierarchy },
                 { "tag", go.tag },

@@ -1,3 +1,4 @@
+#pragma warning disable 0619
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -162,7 +163,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
                 {
                     name = displayName,
                     type = featureType.Name,
-                    instanceId = feature.GetInstanceID()
+                    instanceId = feature.GetInstanceIDCompat()
                 }
             };
         }

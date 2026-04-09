@@ -1,3 +1,4 @@
+#pragma warning disable 0619
 using System;
 using System.Collections.Generic;
 using MCPForUnity.Editor.Helpers;
@@ -417,7 +418,7 @@ namespace MCPForUnity.Editor.Tools
                 materialFolder = $"{sceneDir}/Materials";
             }
 
-            string matPath = $"{materialFolder}/{safeName}_{go.GetInstanceID()}_mat.mat";
+            string matPath = $"{materialFolder}/{safeName}_{go.GetInstanceIDCompat()}_mat.mat";
             matPath = AssetPathUtility.SanitizeAssetPath(matPath);
             if (matPath == null)
             {

@@ -1,3 +1,4 @@
+#pragma warning disable 0619
 using System.Collections.Generic;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
@@ -97,7 +98,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                     results.Add(new
                     {
                         name = go.name,
-                        instanceID = go.GetInstanceID(),
+                        instanceID = go.GetInstanceIDCompat(),
                         position = new[] { rb2d.position.x, rb2d.position.y },
 #if UNITY_6000_0_OR_NEWER
                         velocity = new[] { rb2d.linearVelocity.x, rb2d.linearVelocity.y },
@@ -116,7 +117,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                     results.Add(new
                     {
                         name = go.name,
-                        instanceID = go.GetInstanceID(),
+                        instanceID = go.GetInstanceIDCompat(),
                         position = new[] { rb.position.x, rb.position.y, rb.position.z },
 #if UNITY_6000_0_OR_NEWER
                         velocity = new[] { rb.linearVelocity.x, rb.linearVelocity.y, rb.linearVelocity.z },
@@ -152,7 +153,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                     results.Add(new
                     {
                         name = rb2d.gameObject.name,
-                        instanceID = rb2d.gameObject.GetInstanceID(),
+                        instanceID = rb2d.gameObject.GetInstanceIDCompat(),
                         position = new[] { rb2d.position.x, rb2d.position.y },
 #if UNITY_6000_0_OR_NEWER
                         velocity = new[] { rb2d.linearVelocity.x, rb2d.linearVelocity.y },
@@ -179,7 +180,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                     results.Add(new
                     {
                         name = rb.gameObject.name,
-                        instanceID = rb.gameObject.GetInstanceID(),
+                        instanceID = rb.gameObject.GetInstanceIDCompat(),
                         position = new[] { rb.position.x, rb.position.y, rb.position.z },
 #if UNITY_6000_0_OR_NEWER
                         velocity = new[] { rb.linearVelocity.x, rb.linearVelocity.y, rb.linearVelocity.z },

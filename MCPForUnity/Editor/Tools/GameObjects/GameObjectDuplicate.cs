@@ -1,3 +1,4 @@
+#pragma warning disable 0619
 #nullable disable
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
@@ -77,7 +78,7 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                 new
                 {
                     originalName = sourceGo.name,
-                    originalId = sourceGo.GetInstanceID(),
+                    originalId = sourceGo.GetInstanceIDCompat(),
                     duplicatedObject = Helpers.GameObjectSerializer.GetGameObjectData(duplicatedGo)
                 }
             );

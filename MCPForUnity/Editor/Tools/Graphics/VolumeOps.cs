@@ -1,3 +1,4 @@
+#pragma warning disable 0619
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -124,7 +125,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
                          (addedEffects.Count > 0 ? $" with effects: {string.Join(", ", addedEffects)}" : ""),
                 data = new
                 {
-                    instanceID = go.GetInstanceID(),
+                    instanceID = go.GetInstanceIDCompat(),
                     isGlobal,
                     weight,
                     priority,
@@ -189,7 +190,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
             {
                 success = true,
                 message = $"Added '{effectName}' to Volume '{(volume as Component)?.gameObject.name}'.",
-                data = new { effect = effectName, volumeInstanceID = (volume as Component)?.gameObject.GetInstanceID() }
+                data = new { effect = effectName, volumeInstanceID = (volume as Component)?.gameObject.GetInstanceIDCompat() }
             };
         }
 
@@ -529,7 +530,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
             return new
             {
                 name = comp.gameObject.name,
-                instance_id = comp.gameObject.GetInstanceID(),
+                instance_id = comp.gameObject.GetInstanceIDCompat(),
                 is_global = isGlobal,
                 weight,
                 priority,

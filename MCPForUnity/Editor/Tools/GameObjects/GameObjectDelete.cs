@@ -1,3 +1,4 @@
+#pragma warning disable 0619
 #nullable disable
 using System.Collections.Generic;
 using MCPForUnity.Editor.Helpers;
@@ -24,7 +25,7 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                 if (targetGo != null)
                 {
                     string goName = targetGo.name;
-                    int goId = targetGo.GetInstanceID();
+                    int goId = targetGo.GetInstanceIDCompat();
                     // Note: Undo.DestroyObjectImmediate doesn't work reliably in test context,
                     // so we use Object.DestroyImmediate. This means delete isn't undoable.
                     // TODO: Investigate Undo.DestroyObjectImmediate behavior in Unity 2022+

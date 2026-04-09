@@ -1,3 +1,4 @@
+#pragma warning disable 0619
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
@@ -91,7 +92,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
                             : null
                     },
                     sun = sun != null
-                        ? (object)new { name = sun.gameObject.name, instanceID = sun.gameObject.GetInstanceID() }
+                        ? (object)new { name = sun.gameObject.name, instanceID = sun.gameObject.GetInstanceIDCompat() }
                         : null,
                     subtractiveShadowColor = ColorToArray(RenderSettings.subtractiveShadowColor)
                 }
@@ -373,7 +374,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
                 data = new
                 {
                     name = go.name,
-                    instanceID = go.GetInstanceID(),
+                    instanceID = go.GetInstanceIDCompat(),
                     lightType = light.type.ToString()
                 }
             };

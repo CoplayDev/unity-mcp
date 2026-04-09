@@ -1,3 +1,4 @@
+#pragma warning disable 0619
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -62,7 +63,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
                 message = $"Created basic Camera '{name}' (Cinemachine not installed — using Unity Camera).",
                 data = new
                 {
-                    instanceID = go.GetInstanceID(),
+                    instanceID = go.GetInstanceIDCompat(),
                     cinemachine = false,
                     hint = "Install com.unity.cinemachine for presets, blending, and virtual camera features."
                 }
@@ -149,7 +150,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
                 message = $"Created CinemachineCamera '{name}' with preset '{preset}'.",
                 data = new
                 {
-                    instanceID = go.GetInstanceID(),
+                    instanceID = go.GetInstanceIDCompat(),
                     cinemachine = true,
                     preset,
                     priority,
@@ -173,7 +174,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
                     message = $"CinemachineBrain already exists on '{existingBrain.gameObject.name}'.",
                     data = new
                     {
-                        instanceID = existingBrain.gameObject.GetInstanceID(),
+                        instanceID = existingBrain.gameObject.GetInstanceIDCompat(),
                         alreadyExisted = true
                     }
                 };
@@ -241,7 +242,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
                 message = $"CinemachineBrain added to '{cam.gameObject.name}'.",
                 data = new
                 {
-                    instanceID = cam.gameObject.GetInstanceID(),
+                    instanceID = cam.gameObject.GetInstanceIDCompat(),
                     alreadyExisted = false
                 }
             };

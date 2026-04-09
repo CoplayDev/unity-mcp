@@ -1,3 +1,4 @@
+#pragma warning disable 0619
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
@@ -79,7 +80,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                     normal = new[] { hitInfo.normal.x, hitInfo.normal.y, hitInfo.normal.z },
                     distance = hitInfo.distance,
                     gameObject = hitInfo.collider.gameObject.name,
-                    instanceID = hitInfo.collider.gameObject.GetInstanceID(),
+                    instanceID = hitInfo.collider.gameObject.GetInstanceIDCompat(),
                     collider_type = hitInfo.collider.GetType().Name
                 }
             };
@@ -122,7 +123,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                     normal = new[] { hit.normal.x, hit.normal.y },
                     distance = hit.distance,
                     gameObject = hit.collider.gameObject.name,
-                    instanceID = hit.collider.gameObject.GetInstanceID(),
+                    instanceID = hit.collider.gameObject.GetInstanceIDCompat(),
                     collider_type = hit.collider.GetType().Name
                 }
             };
@@ -289,7 +290,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                 colliders.Add(new
                 {
                     gameObject = col.gameObject.name,
-                    instanceID = col.gameObject.GetInstanceID(),
+                    instanceID = col.gameObject.GetInstanceIDCompat(),
                     collider_type = col.GetType().Name
                 });
             }
@@ -310,7 +311,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                 colliders.Add(new
                 {
                     gameObject = col.gameObject.name,
-                    instanceID = col.gameObject.GetInstanceID(),
+                    instanceID = col.gameObject.GetInstanceIDCompat(),
                     collider_type = col.GetType().Name
                 });
             }
@@ -464,7 +465,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                     normal = new[] { hitInfo.normal.x, hitInfo.normal.y, hitInfo.normal.z },
                     distance = hitInfo.distance,
                     gameObject = hitInfo.collider.gameObject.name,
-                    instanceID = hitInfo.collider.gameObject.GetInstanceID(),
+                    instanceID = hitInfo.collider.gameObject.GetInstanceIDCompat(),
                     collider_type = hitInfo.collider.GetType().Name
                 }
             };
@@ -553,7 +554,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                     normal = new[] { hit.normal.x, hit.normal.y },
                     distance = hit.distance,
                     gameObject = hit.collider.gameObject.name,
-                    instanceID = hit.collider.gameObject.GetInstanceID(),
+                    instanceID = hit.collider.gameObject.GetInstanceIDCompat(),
                     collider_type = hit.collider.GetType().Name
                 }
             };
@@ -619,7 +620,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                     normal = new[] { h.normal.x, h.normal.y, h.normal.z },
                     distance = h.distance,
                     gameObject = h.collider.gameObject.name,
-                    instanceID = h.collider.gameObject.GetInstanceID(),
+                    instanceID = h.collider.gameObject.GetInstanceIDCompat(),
                     collider_type = h.collider.GetType().Name
                 });
             }
@@ -657,7 +658,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                     normal = new[] { h.normal.x, h.normal.y },
                     distance = h.distance,
                     gameObject = h.collider.gameObject.name,
-                    instanceID = h.collider.gameObject.GetInstanceID(),
+                    instanceID = h.collider.gameObject.GetInstanceIDCompat(),
                     collider_type = h.collider.GetType().Name
                 });
             }
@@ -739,7 +740,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                     normal = new[] { hitInfo.normal.x, hitInfo.normal.y, hitInfo.normal.z },
                     distance = hitInfo.distance,
                     gameObject = hitInfo.collider.gameObject.name,
-                    instanceID = hitInfo.collider.gameObject.GetInstanceID(),
+                    instanceID = hitInfo.collider.gameObject.GetInstanceIDCompat(),
                     collider_type = hitInfo.collider.GetType().Name
                 }
             };
@@ -782,7 +783,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                     normal = new[] { hit.normal.x, hit.normal.y },
                     distance = hit.distance,
                     gameObject = hit.collider.gameObject.name,
-                    instanceID = hit.collider.gameObject.GetInstanceID(),
+                    instanceID = hit.collider.gameObject.GetInstanceIDCompat(),
                     collider_type = hit.collider.GetType().Name
                 }
             };

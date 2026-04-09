@@ -1,3 +1,4 @@
+#pragma warning disable 0619
 using System;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
@@ -90,7 +91,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 success = true,
                 message = $"ParticleSystem ready on '{go.name}'",
                 target = go.name,
-                targetId = go.GetInstanceID(),
+                targetId = go.GetInstanceIDCompat(),
                 createdGameObject,
                 addedParticleSystem,
                 assignedMaterial = renderer?.sharedMaterial?.name

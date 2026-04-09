@@ -1,3 +1,4 @@
+#pragma warning disable 0619
 using System;
 using System.Collections.Generic;
 using MCPForUnity.Editor.Helpers;
@@ -39,7 +40,7 @@ namespace MCPForUnity.Editor.Resources.Editor
                                 width = window.position.width,
                                 height = window.position.height
                             },
-                            instanceID = window.GetInstanceID()
+                            instanceID = window.GetInstanceIDCompat()
                         });
                     }
                     catch (Exception ex)

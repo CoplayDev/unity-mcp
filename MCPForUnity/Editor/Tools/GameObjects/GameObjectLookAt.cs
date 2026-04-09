@@ -1,3 +1,4 @@
+#pragma warning disable 0619
 #nullable disable
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
@@ -53,7 +54,7 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                 new
                 {
                     name = targetGo.name,
-                    instanceID = targetGo.GetInstanceID(),
+                    instanceID = targetGo.GetInstanceIDCompat(),
                     rotation = new[] { euler.x, euler.y, euler.z },
                     lookAtPosition = new[] { lookAtPos.Value.x, lookAtPos.Value.y, lookAtPos.Value.z },
                 }

@@ -1,3 +1,4 @@
+#pragma warning disable 0619
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -977,7 +978,7 @@ namespace MCPForUnity.Editor.Helpers
             }
             catch (Exception ex)
             {
-                McpLog.Warn($"Failed to get fileID for sprite '{sprite.name}' (instanceID={sprite.GetInstanceID()}): {ex.Message}");
+                McpLog.Warn($"Failed to get fileID for sprite '{sprite.name}' (instanceID={sprite.GetInstanceIDCompat()}): {ex.Message}");
                 return 0;
             }
         }

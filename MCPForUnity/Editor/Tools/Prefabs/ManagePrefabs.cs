@@ -1,3 +1,4 @@
+#pragma warning disable 0619
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -162,7 +163,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                     new
                     {
                         prefabPath = finalPath,
-                        instanceId = result.GetInstanceID(),
+                        instanceId = result.GetInstanceIDCompat(),
                         instanceName = result.name,
                         wasUnlinked = unlinkIfInstance && objectValidation.shouldUnlink,
                         wasReplaced = replaceExisting && fileExistedAtPath,
@@ -1234,7 +1235,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
             string name = transform.gameObject.name;
             string path = string.IsNullOrEmpty(parentPath) ? name : $"{parentPath}/{name}";
-            int instanceId = transform.gameObject.GetInstanceID();
+            int instanceId = transform.gameObject.GetInstanceIDCompat();
             bool activeSelf = transform.gameObject.activeSelf;
             int childCount = transform.childCount;
             var componentTypes = PrefabUtilityHelper.GetComponentTypeNames(transform.gameObject);

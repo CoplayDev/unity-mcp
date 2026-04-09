@@ -1,3 +1,4 @@
+#pragma warning disable 0619
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
@@ -65,7 +66,7 @@ namespace MCPForUnity.Editor.Tools.Physics
             var data = new Dictionary<string, object>
             {
                 ["target"] = go.name,
-                ["instanceID"] = go.GetInstanceID(),
+                ["instanceID"] = go.GetInstanceIDCompat(),
                 ["dimension"] = "3d",
                 ["mass"] = rb.mass,
 #if UNITY_6000_0_OR_NEWER
@@ -113,7 +114,7 @@ namespace MCPForUnity.Editor.Tools.Physics
             var data = new Dictionary<string, object>
             {
                 ["target"] = go.name,
-                ["instanceID"] = go.GetInstanceID(),
+                ["instanceID"] = go.GetInstanceIDCompat(),
                 ["dimension"] = "2d",
                 ["mass"] = rb2d.mass,
                 ["gravityScale"] = rb2d.gravityScale,

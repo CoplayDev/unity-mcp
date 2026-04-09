@@ -1,6 +1,8 @@
+#pragma warning disable 0619
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
+using System.Reflection;
 using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor; // Required for AssetDatabase and EditorUtility
@@ -294,8 +296,7 @@ namespace MCPForUnity.Runtime.Serialization
                     writer.WriteStartObject();
                     writer.WritePropertyName("name");
                     writer.WriteValue(value.name);
-                    writer.WritePropertyName("instanceID");
-                    writer.WriteValue(GetObjectId(value));
+                    WriteSerializedObjectId(writer, value);
                     writer.WritePropertyName("isAssetWithoutPath");
                     writer.WriteValue(true);
                     writer.WriteEndObject();
@@ -307,8 +308,7 @@ namespace MCPForUnity.Runtime.Serialization
                 writer.WriteStartObject();
                 writer.WritePropertyName("name");
                 writer.WriteValue(value.name);
-                writer.WritePropertyName("instanceID");
-                writer.WriteValue(GetObjectId(value));
+                WriteSerializedObjectId(writer, value);
                 writer.WriteEndObject();
             }
 #else
@@ -316,8 +316,7 @@ namespace MCPForUnity.Runtime.Serialization
             writer.WriteStartObject();
             writer.WritePropertyName("name");
             writer.WriteValue(value.name);
-            writer.WritePropertyName("instanceID");
-            writer.WriteValue(GetObjectId(value));
+            WriteSerializedObjectId(writer, value);
              writer.WritePropertyName("warning");
             writer.WriteValue("UnityEngineObjectConverter running in non-Editor mode, asset path unavailable.");
             writer.WriteEndObject();
@@ -373,6 +372,36 @@ namespace MCPForUnity.Runtime.Serialization
                         if (asset != null) return asset;
                     }
                     UnityEngine.Debug.LogWarning($"[UnityEngineObjectConverter] Could not load asset with GUID '{guidToken}' as type '{objectType.Name}'.");
+                    return null;
+                }
+
+                // Try to resolve by entityID (Unity 6.5+)
+                if (jo.TryGetValue("entityID", out JToken entityIdToken) && entityIdToken.Type == JTokenType.String)
+                {
+                    string serializedEntityId = entityIdToken.ToString();
+                    if (TryResolveEntityIdToObject(serializedEntityId, out UnityEngine.Object entityObj) && entityObj != null)
+                    {
+                        if (objectType.IsAssignableFrom(entityObj.GetType()))
+                        {
+                            return entityObj;
+                        }
+
+                        if (objectType == typeof(Transform) && entityObj is GameObject entityGo)
+                        {
+                            return entityGo.transform;
+                        }
+
+                        if (typeof(Component).IsAssignableFrom(objectType) && entityObj is GameObject entityGameObj)
+                        {
+                            var component = entityGameObj.GetComponent(objectType);
+                            if (component != null)
+                            {
+                                return component;
+                            }
+                        }
+                    }
+
+                    UnityEngine.Debug.LogWarning($"[UnityEngineObjectConverter] Could not resolve entityID '{serializedEntityId}' to a valid {objectType.Name}.");
                     return null;
                 }
 
@@ -435,7 +464,7 @@ namespace MCPForUnity.Runtime.Serialization
                 }
 
                 // Object format not recognized
-                UnityEngine.Debug.LogWarning($"[UnityEngineObjectConverter] JSON object missing 'instanceID', 'guid', or 'path' field for {objectType.Name} deserialization. Object: {jo.ToString(Formatting.None)}");
+                UnityEngine.Debug.LogWarning($"[UnityEngineObjectConverter] JSON object missing 'instanceID', 'entityID', 'guid', or 'path' field for {objectType.Name} deserialization. Object: {jo.ToString(Formatting.None)}");
                 return null;
             }
 
@@ -468,18 +497,74 @@ namespace MCPForUnity.Runtime.Serialization
             return true;
         }
 
-        private static int GetObjectId(UnityEngine.Object value)
+        private static void WriteSerializedObjectId(JsonWriter writer, UnityEngine.Object value)
         {
 #if UNITY_6000_5_OR_NEWER
-            // Unity 6.5 deprecates GetInstanceID in favor of GetEntityId, but this package
-            // still serializes the identifier as "instanceID" (int) for backward compatibility.
-            // Suppress the transitional obsolete cast warning until upstream migrates schema.
-#pragma warning disable 0619
-            return value.GetEntityId();
-#pragma warning restore 0619
+            writer.WritePropertyName("entityID");
+            writer.WriteValue(value.GetEntityId().ToString());
 #else
-            return value.GetInstanceID();
+            writer.WritePropertyName("instanceID");
+            writer.WriteValue(value.GetInstanceIDCompat());
 #endif
+        }
+
+        private static bool TryResolveEntityIdToObject(string serializedEntityId, out UnityEngine.Object obj)
+        {
+            obj = null;
+#if UNITY_EDITOR && UNITY_6000_5_OR_NEWER
+            if (string.IsNullOrWhiteSpace(serializedEntityId))
+            {
+                return false;
+            }
+
+            MethodInfo[] methods = typeof(UnityEditor.EditorUtility).GetMethods(BindingFlags.Public | BindingFlags.Static);
+            foreach (MethodInfo method in methods)
+            {
+                if (method.Name != "EntityIdToObject")
+                {
+                    continue;
+                }
+
+                ParameterInfo[] parameters = method.GetParameters();
+                if (parameters.Length != 1)
+                {
+                    continue;
+                }
+
+                Type paramType = parameters[0].ParameterType;
+                object arg = null;
+
+                if (paramType == typeof(int))
+                {
+                    if (!int.TryParse(serializedEntityId, out int parsedInt))
+                    {
+                        continue;
+                    }
+                    arg = parsedInt;
+                }
+                else
+                {
+                    MethodInfo parseMethod = paramType.GetMethod("Parse", BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(string) }, null);
+                    if (parseMethod != null)
+                    {
+                        arg = parseMethod.Invoke(null, new object[] { serializedEntityId });
+                    }
+                }
+
+                if (arg == null)
+                {
+                    continue;
+                }
+
+                object result = method.Invoke(null, new[] { arg });
+                if (result is UnityEngine.Object resolved)
+                {
+                    obj = resolved;
+                    return true;
+                }
+            }
+#endif
+            return false;
         }
     }
 }

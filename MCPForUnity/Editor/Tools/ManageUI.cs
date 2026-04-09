@@ -1,3 +1,4 @@
+#pragma warning disable 0619
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -1033,7 +1034,7 @@ namespace MCPForUnity.Editor.Tools
                     return new ErrorResponse("UIDocument has no PanelSettings assigned.");
 
                 var panelSettings = uiDoc.panelSettings;
-                int psId = panelSettings.GetInstanceID();
+                int psId = panelSettings.GetInstanceIDCompat();
 
                 // Check if we already have a persistent RT assigned to this PanelSettings.
                 // If the RT exists and its size matches, the panel has been rendering into it.

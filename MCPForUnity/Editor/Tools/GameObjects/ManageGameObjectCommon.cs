@@ -1,3 +1,4 @@
+#pragma warning disable 0619
 #nullable disable
 using System;
 using System.Collections.Generic;
@@ -68,7 +69,7 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                     if (int.TryParse(searchTerm, out int instanceId))
                     {
                         var allObjects = GetAllSceneObjects(searchInactive);
-                        GameObject obj = allObjects.FirstOrDefault(go => go.GetInstanceID() == instanceId);
+                        GameObject obj = allObjects.FirstOrDefault(go => go.GetInstanceIDCompat() == instanceId);
                         if (obj != null)
                             results.Add(obj);
                     }
@@ -177,7 +178,7 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                     if (int.TryParse(searchTerm, out int id))
                     {
                         var allObjectsId = GetAllSceneObjects(true);
-                        GameObject objById = allObjectsId.FirstOrDefault(go => go.GetInstanceID() == id);
+                        GameObject objById = allObjectsId.FirstOrDefault(go => go.GetInstanceIDCompat() == id);
                         if (objById != null)
                         {
                             results.Add(objById);
