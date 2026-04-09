@@ -30,6 +30,7 @@ public static class UnityObjectIdCompatExtensions
                 {
                     return parsed;
                 }
+
                 return entity.GetHashCode();
             }
         }
