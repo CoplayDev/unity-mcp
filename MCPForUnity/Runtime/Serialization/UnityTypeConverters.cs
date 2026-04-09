@@ -471,7 +471,12 @@ namespace MCPForUnity.Runtime.Serialization
         private static int GetObjectId(UnityEngine.Object value)
         {
 #if UNITY_6000_5_OR_NEWER
+            // Unity 6.5 deprecates GetInstanceID in favor of GetEntityId, but this package
+            // still serializes the identifier as "instanceID" (int) for backward compatibility.
+            // Suppress the transitional obsolete cast warning until upstream migrates schema.
+#pragma warning disable 0619
             return value.GetEntityId();
+#pragma warning restore 0619
 #else
             return value.GetInstanceID();
 #endif
