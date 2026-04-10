@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -27,11 +28,10 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
             try
             {
-                // 1. Try 'which' command with augmented PATH (prioritizing Homebrew)
-                if (TryFindInPath("python3", out string pathResult) ||
-                    TryFindInPath("python", out pathResult))
+                foreach (var pythonCandidate in GetPythonCandidates())
                 {
-                    if (TryValidatePython(pathResult, out string version, out string fullPath))
+                    if (TryFindInPath(pythonCandidate, out string pathResult) &&
+                        TryValidatePython(pathResult, out string version, out string fullPath))
                     {
                         status.IsAvailable = true;
                         status.Version = version;
@@ -39,21 +39,19 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
                         status.Details = $"Found Python {version} at {fullPath}";
                         return status;
                     }
-                }
 
-                // 2. Fallback: Try running python directly from PATH
-                if (TryValidatePython("python3", out string v, out string p) ||
-                    TryValidatePython("python", out v, out p))
-                {
-                    status.IsAvailable = true;
-                    status.Version = v;
-                    status.Path = p;
-                    status.Details = $"Found Python {v} in PATH";
-                    return status;
+                    if (TryValidatePython(pythonCandidate, out string v, out string p))
+                    {
+                        status.IsAvailable = true;
+                        status.Version = v;
+                        status.Path = p;
+                        status.Details = $"Found Python {v} at {p}";
+                        return status;
+                    }
                 }
 
                 status.ErrorMessage = "Python not found in PATH or standard locations";
-                status.Details = "Install Python 3.10+ via Homebrew ('brew install python3') and ensure it's in your PATH.";
+                status.Details = "Install Python 3.10+ via Homebrew and ensure its bin directory is accessible to Unity.";
             }
             catch (Exception ex)
             {
@@ -78,7 +76,8 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             return @"macOS Installation Recommendations:
 
 1. Python: Install via Homebrew (recommended) or python.org
-   - Homebrew: brew install python3
+   - Homebrew: brew install python@3.10
+   - Common Homebrew path: /opt/homebrew/opt/python@3.10/bin/python3.10
    - Direct download: https://python.org/downloads/macos/
 
 2. uv Package Manager: Install via curl or Homebrew
@@ -189,12 +188,60 @@ Note: If using Homebrew, make sure /opt/homebrew/bin is in your PATH.";
             return new[]
             {
                 Path.Combine(homeDir, ".pyenv", "shims"), // pyenv: Python/uv when Unity is launched from Dock/Spotlight
+                "/opt/homebrew/opt/python@3.10/bin",
+                "/opt/homebrew/Cellar/python@3.10/bin",
                 "/opt/homebrew/bin",
                 "/usr/local/bin",
                 "/usr/bin",
                 "/bin",
                 Path.Combine(homeDir, ".local", "bin")
             };
+        }
+
+        private IEnumerable<string> GetPythonCandidates()
+        {
+            yield return "python3.10";
+            yield return "/opt/homebrew/opt/python@3.10/bin/python3.10";
+
+            foreach (var candidatePath in EnumerateHomebrewPythonCellarExecutables())
+            {
+                yield return candidatePath;
+            }
+
+            yield return "python3";
+            yield return "python";
+        }
+
+        private IEnumerable<string> EnumerateHomebrewPythonCellarExecutables()
+        {
+            const string cellarRoot = "/opt/homebrew/Cellar/python@3.10";
+
+            if (!Directory.Exists(cellarRoot))
+            {
+                yield break;
+            }
+
+            string[] versionDirectories;
+            try
+            {
+                versionDirectories = Directory.GetDirectories(cellarRoot);
+            }
+            catch
+            {
+                yield break;
+            }
+
+            Array.Sort(versionDirectories, StringComparer.OrdinalIgnoreCase);
+            Array.Reverse(versionDirectories);
+
+            foreach (var versionDirectory in versionDirectories)
+            {
+                var pythonPath = Path.Combine(versionDirectory, "bin", "python3.10");
+                if (File.Exists(pythonPath))
+                {
+                    yield return pythonPath;
+                }
+            }
         }
 
         protected override bool TryFindInPath(string executable, out string fullPath)

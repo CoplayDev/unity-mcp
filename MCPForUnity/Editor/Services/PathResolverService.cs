@@ -165,13 +165,28 @@ namespace MCPForUnity.Editor.Services
 
         public bool IsPythonDetected()
         {
-            return ExecPath.TryRun(
-                RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "python.exe" : "python3",
-                "--version",
-                null,
-                out _,
-                out _,
-                2000);
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                return ExecPath.TryRun("python.exe", "--version", null, out _, out _, 2000);
+            }
+
+            string[] candidates =
+            {
+                "python3.10",
+                "/opt/homebrew/opt/python@3.10/bin/python3.10",
+                "python3",
+                "python"
+            };
+
+            foreach (var candidate in candidates)
+            {
+                if (ExecPath.TryRun(candidate, "--version", null, out _, out _, 2000))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         public bool IsClaudeCliDetected()
