@@ -17,6 +17,7 @@ from services.custom_tool_service import (
 from core.config import config
 from starlette.routing import WebSocketRoute
 from starlette.responses import JSONResponse
+from core.token_usage import get_token_usage_store
 import argparse
 import asyncio
 
@@ -384,6 +385,16 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
             "timestamp": time.time(),
             "version": _server_version or "unknown",
             "message": "MCP for Unity server is running"
+        })
+
+    @mcp.custom_route("/token", methods=["GET"])
+    async def token_usage_report(_: Request) -> JSONResponse:
+        store = get_token_usage_store()
+        return JSONResponse({
+            "success": True,
+            "report_type": "estimated_token_usage",
+            "estimation_method": "Approximate tokens from serialized MCP tool/resource inputs and outputs using a chars-to-tokens heuristic.",
+            "report": store.build_report(),
         })
 
     @mcp.custom_route("/api/auth/login-url", methods=["GET"])
