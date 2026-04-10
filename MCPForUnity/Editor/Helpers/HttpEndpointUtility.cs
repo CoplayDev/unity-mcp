@@ -19,7 +19,7 @@ namespace MCPForUnity.Editor.Helpers
     {
         private const string LocalPrefKey = EditorPrefKeys.HttpBaseUrl;
         private const string RemotePrefKey = EditorPrefKeys.HttpRemoteBaseUrl;
-        private const string DefaultLocalBaseUrl = "http://127.0.0.1:8080";
+        private const string DefaultLocalBaseUrl = "http://127.0.0.1:18080";
         private const string DefaultRemoteBaseUrl = "";
 
         /// <summary>
