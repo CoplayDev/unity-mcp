@@ -141,23 +141,15 @@ class TelemetryConfig:
             except Exception:
                 continue
 
-        # Determine enabled flag: config -> env DISABLE_* opt-out
-        cfg_enabled = True if server_config is None else bool(
-            getattr(server_config, "telemetry_enabled", True))
-        self.enabled = cfg_enabled and not self._is_disabled()
+        # Telemetry is hard-disabled in this fork, regardless of config or env.
+        self.enabled = False
 
-        # Telemetry endpoint (Cloud Run default; override via env)
+        # Keep endpoint empty while telemetry is disabled to avoid any accidental sends.
         cfg_default = None if server_config is None else getattr(
             server_config, "telemetry_endpoint", None)
-        default_ep = cfg_default or "https://api-prod.coplay.dev/telemetry/events"
+        default_ep = cfg_default or ""
         self.default_endpoint = default_ep
-        # Prefer config default; allow explicit env override only when set
-        env_ep = os.environ.get("UNITY_MCP_TELEMETRY_ENDPOINT")
-        if env_ep is not None and env_ep != "":
-            self.endpoint = self._validated_endpoint(env_ep, default_ep)
-        else:
-            # Validate config-provided default as well to enforce scheme/host rules
-            self.endpoint = self._validated_endpoint(default_ep, default_ep)
+        self.endpoint = ""
         try:
             logger.info(
                 f"Telemetry configured: endpoint={self.endpoint} (default={default_ep}), timeout_env={os.environ.get('UNITY_MCP_TELEMETRY_TIMEOUT') or '<unset>'}")
@@ -462,11 +454,15 @@ def record_telemetry(record_type: RecordType,
                      data: dict[str, Any],
                      milestone: MilestoneType | None = None):
     """Convenience function to record telemetry"""
+    if not is_telemetry_enabled():
+        return
     get_telemetry().record(record_type, data, milestone)
 
 
 def record_milestone(milestone: MilestoneType, data: dict[str, Any] | None = None) -> bool:
     """Convenience function to record a milestone"""
+    if not is_telemetry_enabled():
+        return False
     return get_telemetry().record_milestone(milestone, data)
 
 

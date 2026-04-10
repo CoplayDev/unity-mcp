@@ -24,31 +24,8 @@ namespace MCPForUnity.Editor.Helpers
         {
             get
             {
-                // Check environment variables first
-                var envDisable = Environment.GetEnvironmentVariable("DISABLE_TELEMETRY");
-                if (!string.IsNullOrEmpty(envDisable) &&
-                    (envDisable.ToLower() == "true" || envDisable == "1"))
-                {
-                    return false;
-                }
-
-                var unityMcpDisable = Environment.GetEnvironmentVariable("UNITY_MCP_DISABLE_TELEMETRY");
-                if (!string.IsNullOrEmpty(unityMcpDisable) &&
-                    (unityMcpDisable.ToLower() == "true" || unityMcpDisable == "1"))
-                {
-                    return false;
-                }
-
-                // Honor protocol-wide opt-out as well
-                var mcpDisable = Environment.GetEnvironmentVariable("MCP_DISABLE_TELEMETRY");
-                if (!string.IsNullOrEmpty(mcpDisable) &&
-                    (mcpDisable.Equals("true", StringComparison.OrdinalIgnoreCase) || mcpDisable == "1"))
-                {
-                    return false;
-                }
-
-                // Check EditorPrefs
-                return !UnityEditor.EditorPrefs.GetBool(TELEMETRY_DISABLED_KEY, false);
+                // Telemetry is hard-disabled in this fork.
+                return false;
             }
         }
 
@@ -79,7 +56,7 @@ namespace MCPForUnity.Editor.Helpers
         /// </summary>
         public static void EnableTelemetry()
         {
-            UnityEditor.EditorPrefs.SetBool(TELEMETRY_DISABLED_KEY, false);
+            UnityEditor.EditorPrefs.SetBool(TELEMETRY_DISABLED_KEY, true);
         }
 
         /// <summary>
