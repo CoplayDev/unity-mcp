@@ -1,4 +1,3 @@
-#pragma warning disable 0619
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -6,6 +5,7 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Events;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnity.Editor.Helpers
 {

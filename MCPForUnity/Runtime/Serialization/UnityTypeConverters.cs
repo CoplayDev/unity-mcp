@@ -1,8 +1,8 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
-using System.Reflection;
 using UnityEngine;
+using MCPForUnity.Runtime.Helpers;
 #if UNITY_EDITOR
 using UnityEditor; // Required for AssetDatabase and EditorUtility
 #endif
@@ -374,34 +374,41 @@ namespace MCPForUnity.Runtime.Serialization
                     return null;
                 }
 
-                // Try to resolve by entityID (Unity 6.5+)
+#if UNITY_6000_5_OR_NEWER
+                // Try to resolve by entityID (Unity 6.5+). Falls through to instanceID/guid/path on failure.
                 if (jo.TryGetValue("entityID", out JToken entityIdToken) && entityIdToken.Type == JTokenType.String)
                 {
                     string serializedEntityId = entityIdToken.ToString();
-                    if (TryResolveEntityIdToObject(serializedEntityId, out UnityEngine.Object entityObj) && entityObj != null)
+                    if (ulong.TryParse(serializedEntityId, out ulong rawEntityId))
                     {
-                        if (objectType.IsAssignableFrom(entityObj.GetType()))
+                        EntityId eid = EntityId.FromULong(rawEntityId);
+                        UnityEngine.Object entityObj = UnityEditor.EditorUtility.EntityIdToObject(eid);
+                        if (entityObj != null)
                         {
-                            return entityObj;
-                        }
-
-                        if (objectType == typeof(Transform) && entityObj is GameObject entityGo)
-                        {
-                            return entityGo.transform;
-                        }
-
-                        if (typeof(Component).IsAssignableFrom(objectType) && entityObj is GameObject entityGameObj)
-                        {
-                            var component = entityGameObj.GetComponent(objectType);
-                            if (component != null)
+                            if (objectType.IsAssignableFrom(entityObj.GetType()))
                             {
-                                return component;
+                                return entityObj;
+                            }
+
+                            if (objectType == typeof(Transform) && entityObj is GameObject entityGo)
+                            {
+                                return entityGo.transform;
+                            }
+
+                            if (typeof(Component).IsAssignableFrom(objectType) && entityObj is GameObject entityGameObj)
+                            {
+                                var component = entityGameObj.GetComponent(objectType);
+                                if (component != null)
+                                {
+                                    return component;
+                                }
                             }
                         }
                     }
 
-                    UnityEngine.Debug.LogWarning($"[UnityEngineObjectConverter] Could not resolve entityID '{serializedEntityId}' to a valid {objectType.Name}.");
+                    UnityEngine.Debug.LogWarning($"[UnityEngineObjectConverter] Could not resolve entityID '{serializedEntityId}' to a valid {objectType.Name}. Falling back to instanceID/guid/path.");
                 }
+#endif
 
                 // Try to resolve by instanceID
                 if (jo.TryGetValue("instanceID", out JToken idToken) && idToken.Type == JTokenType.Integer)
@@ -497,86 +504,15 @@ namespace MCPForUnity.Runtime.Serialization
 
         private static void WriteSerializedObjectId(JsonWriter writer, UnityEngine.Object value)
         {
+            // Always emit instanceID so older consumers keep working.
             writer.WritePropertyName("instanceID");
             writer.WriteValue(value.GetInstanceIDCompat());
 #if UNITY_6000_5_OR_NEWER
+            // Additionally emit entityID on Unity 6.5+ as the stable ulong form
+            // (per Unity docs, EntityId.ToString() is NOT a stable serialization format).
             writer.WritePropertyName("entityID");
-            writer.WriteValue(value.GetEntityId().ToString());
+            writer.WriteValue(EntityId.ToULong(value.GetEntityId()).ToString());
 #endif
-        }
-
-        private static bool TryResolveEntityIdToObject(string serializedEntityId, out UnityEngine.Object obj)
-        {
-            obj = null;
-#if UNITY_EDITOR && UNITY_6000_5_OR_NEWER
-            if (string.IsNullOrWhiteSpace(serializedEntityId))
-            {
-                return false;
-            }
-
-            MethodInfo[] methods = typeof(UnityEditor.EditorUtility).GetMethods(BindingFlags.Public | BindingFlags.Static);
-            foreach (MethodInfo method in methods)
-            {
-                if (method.Name != "EntityIdToObject")
-                {
-                    continue;
-                }
-
-                ParameterInfo[] parameters = method.GetParameters();
-                if (parameters.Length != 1)
-                {
-                    continue;
-                }
-
-                Type paramType = parameters[0].ParameterType;
-                object arg = null;
-
-                if (paramType == typeof(int))
-                {
-                    if (!int.TryParse(serializedEntityId, out int parsedInt))
-                    {
-                        continue;
-                    }
-                    arg = parsedInt;
-                }
-                else
-                {
-                    MethodInfo parseMethod = paramType.GetMethod("Parse", BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(string) }, null);
-                    if (parseMethod != null)
-                    {
-                        try
-                        {
-                            arg = parseMethod.Invoke(null, new object[] { serializedEntityId });
-                        }
-                        catch
-                        {
-                            continue;
-                        }
-                    }
-                }
-
-                if (arg == null)
-                {
-                    continue;
-                }
-
-                object result = null;
-                try
-                {
-                    result = method.Invoke(null, new[] { arg });
-                }
-                catch
-                {
-                    continue;
-                }
-                if (result is UnityEngine.Object resolved)
-                {
-                    obj = resolved;
-                    return true;
-                }
-            }
-#endif
-            return false;
         }
     }
 }

@@ -1,4 +1,3 @@
-#pragma warning disable 0619
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -9,6 +8,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnity.Editor.Tools.Prefabs
 {

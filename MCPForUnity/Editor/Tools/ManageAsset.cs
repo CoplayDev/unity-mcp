@@ -1,4 +1,3 @@
-#pragma warning disable 0619
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -16,6 +15,7 @@ using PhysicsMaterialCombine = UnityEngine.PhysicsMaterialCombine;
 #else
 using PhysicsMaterialType = UnityEngine.PhysicMaterial;
 using PhysicsMaterialCombine = UnityEngine.PhysicMaterialCombine;
+using MCPForUnity.Runtime.Helpers;
 #endif
 
 namespace MCPForUnity.Editor.Tools

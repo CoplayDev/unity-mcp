@@ -7,6 +7,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnity.Editor.Helpers
 {
