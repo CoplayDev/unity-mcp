@@ -20,7 +20,7 @@ namespace MCPForUnityTests.Editor.Tools
         [Test]
         public void GetType_Transform_ReturnsFound()
         {
-            var jo = Invoke("get_type", new JObject { ["class_name"] = "Transform" });
+            var jo = Invoke("get_type", new JObject { ["class_name"] = "UnityEngine.Transform" });
 
             Assert.IsTrue((bool)jo["success"]);
             var data = jo["data"];
@@ -120,7 +120,7 @@ namespace MCPForUnityTests.Editor.Tools
         {
             var jo = Invoke("get_member", new JObject
             {
-                ["class_name"] = "Transform",
+                ["class_name"] = "UnityEngine.Transform",
                 ["member_name"] = "position"
             });
 

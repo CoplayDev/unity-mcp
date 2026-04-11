@@ -768,8 +768,9 @@ namespace MCPForUnityTests.Editor.Tools
         [Test]
         public void Raycast_HitsCollider()
         {
+            // Use an offset origin/direction to avoid hitting unrelated scene objects
             var go = new GameObject("PhysTest_RayTarget");
-            go.transform.position = new Vector3(0, 0, 5);
+            go.transform.position = new Vector3(500, 500, 5);
             var col = go.AddComponent<BoxCollider>();
             col.size = new Vector3(10, 10, 1);
             UnityEngine.Physics.SyncTransforms();
@@ -777,7 +778,7 @@ namespace MCPForUnityTests.Editor.Tools
             var result = ToJObject(ManagePhysics.HandleCommand(new JObject
             {
                 ["action"] = "raycast",
-                ["origin"] = new JArray(0, 0, 0),
+                ["origin"] = new JArray(500, 500, 0),
                 ["direction"] = new JArray(0, 0, 1),
                 ["max_distance"] = 100
             }));

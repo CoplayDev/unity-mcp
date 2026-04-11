@@ -807,7 +807,7 @@ class TestMultiStepCommandFlows:
                 assert result.exit_code == 0
 
                 # Save
-                result = runner.invoke(prefab, ["save", "--force"])
+                result = runner.invoke(prefab, ["save"])
                 assert result.exit_code == 0
 
                 # Close

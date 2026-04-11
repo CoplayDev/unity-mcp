@@ -76,6 +76,7 @@ jobs:
         if: steps.detect.outputs.unity_ok == 'true'
         uses: game-ci/unity-test-runner@v4
         id: tests
+        continue-on-error: true
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
@@ -85,6 +86,25 @@ jobs:
           projectPath: ${{ matrix.projectPath }}
           unityVersion: ${{ matrix.unityVersion }}
           testMode: ${{ matrix.testMode }}
+
+      - name: Check test results
+        if: steps.detect.outputs.unity_ok == 'true'
+        run: |
+          RESULTS_XML=$(find ${{ steps.tests.outputs.artifactsPath }} -name '*.xml' 2>/dev/null | head -1)
+          if [ -z "$RESULTS_XML" ]; then
+            echo "::error::No test results XML found — Unity may have crashed"
+            exit 1
+          fi
+          FAILED=$(grep -oP 'failed="\K[0-9]+' "$RESULTS_XML" | head -1)
+          PASSED=$(grep -oP 'passed="\K[0-9]+' "$RESULTS_XML" | head -1)
+          TOTAL=$(grep -oP 'total="\K[0-9]+' "$RESULTS_XML" | head -1)
+          INCONCLUSIVE=$(grep -oP 'inconclusive="\K[0-9]+' "$RESULTS_XML" | head -1)
+          SKIPPED=$(grep -oP 'skipped="\K[0-9]+' "$RESULTS_XML" | head -1)
+          echo "Results: $PASSED passed, $FAILED failed, $INCONCLUSIVE inconclusive, $SKIPPED skipped (total: $TOTAL)"
+          if [ "$FAILED" != "0" ]; then
+            echo "::error::$FAILED test(s) failed"
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@v4
         if: always() && steps.detect.outputs.unity_ok == 'true'

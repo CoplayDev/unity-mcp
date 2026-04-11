@@ -111,7 +111,11 @@ namespace MCPForUnity.Editor.Tools.Profiler
 
         private static readonly string[] ValidCategories = new[]
         {
-            "Render", "Scripts", "Memory", "Physics", "Physics2D", "Animation",
+            "Render", "Scripts", "Memory", "Physics",
+#if UNITY_2022_2_OR_NEWER
+            "Physics2D",
+#endif
+            "Animation",
             "Audio", "Lighting", "Network", "Gui", "UI", "Ai", "Video",
             "Loading", "Input", "Vr", "Internal", "Particles", "FileIO", "VirtualTexturing"
         };
@@ -125,7 +129,9 @@ namespace MCPForUnity.Editor.Tools.Profiler
                 case "scripts": return ProfilerCategory.Scripts;
                 case "memory": return ProfilerCategory.Memory;
                 case "physics": return ProfilerCategory.Physics;
+#if UNITY_2022_2_OR_NEWER
                 case "physics2d": return ProfilerCategory.Physics2D;
+#endif
                 case "animation": return ProfilerCategory.Animation;
                 case "audio": return ProfilerCategory.Audio;
                 case "lighting": return ProfilerCategory.Lighting;
