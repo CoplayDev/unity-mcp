@@ -5,6 +5,7 @@ using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnity.Editor.Resources.Scene
 {
@@ -84,12 +85,12 @@ namespace MCPForUnity.Editor.Resources.Scene
             var childrenIds = new List<int>();
             foreach (Transform child in transform)
             {
-                childrenIds.Add(child.gameObject.GetInstanceID());
+                childrenIds.Add(child.gameObject.GetInstanceIDCompat());
             }
 
             return new
             {
-                instanceID = go.GetInstanceID(),
+                instanceID = go.GetInstanceIDCompat(),
                 name = go.name,
                 tag = go.tag,
                 layer = go.layer,
@@ -106,7 +107,7 @@ namespace MCPForUnity.Editor.Resources.Scene
                     scale = SerializeVector3(transform.localScale),
                     lossyScale = SerializeVector3(transform.lossyScale)
                 },
-                parent = transform.parent != null ? transform.parent.gameObject.GetInstanceID() : (int?)null,
+                parent = transform.parent != null ? transform.parent.gameObject.GetInstanceIDCompat() : (int?)null,
                 children = childrenIds,
                 componentTypes = componentTypes,
                 path = GameObjectLookup.GetGameObjectPath(go)
@@ -173,7 +174,7 @@ namespace MCPForUnity.Editor.Resources.Scene
                         componentData.Add(new
                         {
                             typeName = component.GetType().FullName,
-                            instanceID = component.GetInstanceID()
+                            instanceID = component.GetInstanceIDCompat()
                         });
                     }
                 }
