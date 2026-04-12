@@ -178,10 +178,14 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
                 BuildCategory(GetGroupDisplayName(kvp.Key), $"group-{kvp.Key}", kvp.Value);
             }
 
-            // Custom tools at the bottom
-            if (customTools.Count > 0)
+            // External/custom tools grouped by assembly at the bottom
+            foreach (var customGroup in customTools
+                .GroupBy(tool => string.IsNullOrEmpty(tool.AssemblyName) ? "custom" : tool.AssemblyName)
+                .OrderBy(group => GetExternalAssemblyDisplayName(group.Key), StringComparer.OrdinalIgnoreCase))
             {
-                BuildCategory("Custom Tools", "custom", customTools);
+                string displayName = GetExternalAssemblyDisplayName(customGroup.Key);
+                string prefsSuffix = $"custom-{SanitizePrefsToken(customGroup.Key)}";
+                BuildCategory($"{displayName} — Extension", prefsSuffix, customGroup.ToList());
             }
 
             UpdateSummary();
@@ -195,6 +199,34 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             return string.IsNullOrEmpty(group)
                 ? "Other"
                 : char.ToUpper(group[0]) + group.Substring(1);
+        }
+
+        private static string GetExternalAssemblyDisplayName(string assemblyName)
+        {
+            if (string.IsNullOrWhiteSpace(assemblyName))
+            {
+                return "Custom Tools";
+            }
+
+            if (assemblyName.Equals("MCPForET.Editor", StringComparison.Ordinal))
+            {
+                return "MCP For ET";
+            }
+
+            return assemblyName;
+        }
+
+        private static string SanitizePrefsToken(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return "custom";
+            }
+
+            var chars = value
+                .Select(ch => char.IsLetterOrDigit(ch) ? ch : '_')
+                .ToArray();
+            return new string(chars);
         }
 
         private void BuildCategory(string title, string prefsSuffix, IEnumerable<ToolMetadata> tools)
@@ -474,9 +506,12 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             foreach (var kvp in groupToggleMap)
             {
                 List<ToolMetadata> groupTools;
-                if (kvp.Key == "custom")
+                if (kvp.Key.StartsWith("custom-", StringComparison.Ordinal))
                 {
-                    groupTools = customTools;
+                    string assemblyName = kvp.Key.Substring("custom-".Length).Replace('_', '.');
+                    groupTools = customTools
+                        .Where(t => string.Equals(t.AssemblyName, assemblyName, StringComparison.Ordinal))
+                        .ToList();
                 }
                 else
                 {
