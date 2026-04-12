@@ -1,4 +1,3 @@
-#pragma warning disable 0619
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -456,11 +455,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
             if (!GraphicsHelpers.HasVolumeSystem)
                 return new { success = true, message = "Volume system not available.", data = new { volumes = new List<object>() } };
 
-#if UNITY_2022_2_OR_NEWER
-            var allVolumes = UnityEngine.Object.FindObjectsByType(GraphicsHelpers.VolumeType, FindObjectsSortMode.None);
-#else
-            var allVolumes = UnityEngine.Object.FindObjectsOfType(GraphicsHelpers.VolumeType);
-#endif
+            var allVolumes = UnityFindObjectsCompat.FindAll(GraphicsHelpers.VolumeType);
             var volumeList = new List<object>();
 
             foreach (Component vol in allVolumes)

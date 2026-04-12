@@ -1,4 +1,3 @@
-#pragma warning disable 0619
 #nullable disable
 using System;
 using System.Collections.Generic;
@@ -156,16 +155,9 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                         }
                         else
                         {
-#if UNITY_2023_1_OR_NEWER
-                            var inactive = searchInactive ? FindObjectsInactive.Include : FindObjectsInactive.Exclude;
-                            searchPoolComp = UnityEngine.Object.FindObjectsByType(componentType, inactive, FindObjectsSortMode.None)
+                            searchPoolComp = UnityFindObjectsCompat.FindAll(componentType, searchInactive)
                                 .Cast<Component>()
                                 .Select(c => c.gameObject);
-#else
-                            searchPoolComp = UnityEngine.Object.FindObjectsOfType(componentType, searchInactive)
-                                .Cast<Component>()
-                                .Select(c => c.gameObject);
-#endif
                         }
                         results.AddRange(searchPoolComp.Where(go => go != null));
                     }

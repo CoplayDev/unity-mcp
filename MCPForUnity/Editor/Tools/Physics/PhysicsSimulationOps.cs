@@ -1,4 +1,3 @@
-#pragma warning disable 0619
 using System.Collections.Generic;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
@@ -140,11 +139,7 @@ namespace MCPForUnity.Editor.Tools.Physics
 
             if (dimension == "2d")
             {
-#if UNITY_2022_2_OR_NEWER
-                var allRb2d = Object.FindObjectsByType<Rigidbody2D>(FindObjectsSortMode.None);
-#else
-                var allRb2d = Object.FindObjectsOfType<Rigidbody2D>();
-#endif
+                var allRb2d = UnityFindObjectsCompat.FindAll<Rigidbody2D>();
                 foreach (var rb2d in allRb2d)
                 {
                     if (results.Count >= maxResults) break;
@@ -167,11 +162,7 @@ namespace MCPForUnity.Editor.Tools.Physics
             }
             else
             {
-#if UNITY_2022_2_OR_NEWER
-                var allRb = Object.FindObjectsByType<Rigidbody>(FindObjectsSortMode.None);
-#else
-                var allRb = Object.FindObjectsOfType<Rigidbody>();
-#endif
+                var allRb = UnityFindObjectsCompat.FindAll<Rigidbody>();
                 foreach (var rb in allRb)
                 {
                     if (results.Count >= maxResults) break;

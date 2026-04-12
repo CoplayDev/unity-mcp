@@ -8,14 +8,14 @@ using UnityEditor;
 using UnityEngine;
 using MCPForUnity.Editor.Helpers; // For Response class
 using MCPForUnity.Editor.Tools;
+using MCPForUnity.Runtime.Helpers;
 
 #if UNITY_6000_0_OR_NEWER
 using PhysicsMaterialType = UnityEngine.PhysicsMaterial;
-using PhysicsMaterialCombine = UnityEngine.PhysicsMaterialCombine;  
+using PhysicsMaterialCombine = UnityEngine.PhysicsMaterialCombine;
 #else
 using PhysicsMaterialType = UnityEngine.PhysicMaterial;
 using PhysicsMaterialCombine = UnityEngine.PhysicMaterialCombine;
-using MCPForUnity.Runtime.Helpers;
 #endif
 
 namespace MCPForUnity.Editor.Tools
