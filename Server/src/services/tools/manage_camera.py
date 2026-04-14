@@ -61,7 +61,11 @@ ALL_ACTIONS = SETUP_ACTIONS + CREATION_ACTIONS + CONFIGURATION_ACTIONS + EXTENSI
         "- release_override: Release camera override\n"
         "- list_cameras: List all cameras with status\n\n"
         "CAPTURE:\n"
-        "- screenshot: Capture from a camera. Supports include_image=true for inline base64 PNG, "
+        "- screenshot: Capture a screenshot. By default (no camera specified) uses ScreenCapture API, "
+        "which captures all render layers including Screen Space - Overlay UI canvases. "
+        "Specifying a camera uses direct camera rendering, which EXCLUDES Screen Space - Overlay canvases "
+        "(use only when you need a specific viewpoint without UI). "
+        "Supports include_image=true for inline base64 PNG, "
         "batch='surround' for 6-angle contact sheet, batch='orbit' for configurable grid, "
         "view_target/view_position for positioned capture, and capture_source='scene_view' to capture "
         "the active Unity Scene View viewport.\n"
@@ -90,7 +94,10 @@ async def manage_camera(
     screenshot_super_size: Annotated[int | str | None,
         "Screenshot supersize multiplier (integer >= 1)."] = None,
     camera: Annotated[str | None,
-        "Camera to capture from (name, path, or instance ID). Defaults to Camera.main."] = None,
+        "Camera to capture from (name, path, or instance ID). "
+        "Omit to use ScreenCapture API (captures all layers including Screen Space Overlay UI). "
+        "Specify only when you need a particular camera viewpoint; note that Screen Space - Overlay "
+        "canvases will NOT appear in camera-rendered captures."] = None,
     include_image: Annotated[bool | str | None,
         "If true, return screenshot as inline base64 PNG. Default false."] = None,
     max_resolution: Annotated[int | str | None,
