@@ -36,7 +36,7 @@ namespace MCPForUnity.Editor.Helpers
             if (useHttpTransport)
             {
                 // HTTP mode: Use url field
-                string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
+                string httpUrl = GetCodexHttpUrl();
                 unityMCP["url"] = new TomlString { Value = httpUrl };
 
                 // Enable Codex's Rust MCP client for HTTP/SSE transport
@@ -191,7 +191,7 @@ namespace MCPForUnity.Editor.Helpers
             if (useHttpTransport)
             {
                 // HTTP mode: Use url field
-                string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
+                string httpUrl = GetCodexHttpUrl();
                 unityMCP["url"] = new TomlString { Value = httpUrl };
             }
             else
@@ -227,6 +227,12 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             return unityMCP;
+        }
+
+        private static string GetCodexHttpUrl()
+        {
+            return HttpEndpointUtility.GetMcpRpcUrl()
+                .Replace("http://localhost:", "http://127.0.0.1:");
         }
 
         /// <summary>
