@@ -271,6 +271,7 @@ def register_commands():
         ("cli.commands.camera", "camera"),
         ("cli.commands.graphics", "graphics"),
         ("cli.commands.packages", "packages"),
+        ("cli.commands.asset_store", "asset_store"),
         ("cli.commands.reflect", "reflect"),
         ("cli.commands.docs", "docs"),
         ("cli.commands.physics", "physics"),
