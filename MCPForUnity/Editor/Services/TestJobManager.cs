@@ -502,6 +502,7 @@ namespace MCPForUnity.Editor.Services
                         {
                             _currentJobId = null;
                         }
+                        TestRunStatus.MarkFinished();
                         shouldPersist = true;
                     }
                 }
