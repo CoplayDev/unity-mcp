@@ -501,8 +501,11 @@ namespace MCPForUnity.Editor.Services
                         if (_currentJobId == jobId)
                         {
                             _currentJobId = null;
+                            // Keep TestRunStatus in sync: when initialization times out, neither
+                            // RunStarted nor RunFinished fires, so the running flag would otherwise leak.
+                            // Only clear it if this job is still the active one — a newer job may have taken over.
+                            TestRunStatus.MarkFinished();
                         }
-                        TestRunStatus.MarkFinished();
                         shouldPersist = true;
                     }
                 }
