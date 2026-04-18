@@ -104,9 +104,11 @@ async def manage_components(
     if props_error:
         return {"success": False, "message": props_error}
 
-    # --- Validate value parameter for serialization issues ---
+    # --- Validate/normalize value parameter for serialization issues ---
     if value is not None and isinstance(value, str) and value in ("[object Object]", "undefined"):
         return {"success": False, "message": f"value received invalid input: '{value}'. Expected an actual value."}
+
+    value = parse_json_payload(value)
 
     try:
         params = {
