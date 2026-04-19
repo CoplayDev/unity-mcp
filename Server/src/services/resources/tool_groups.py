@@ -18,6 +18,7 @@ from services.registry import (
 @mcp_for_unity_resource(
     uri="mcpforunity://tool-groups",
     name="tool_groups",
+    unity_target=False,
     description=(
         "Available tool groups and their tools. "
         "Use manage_tools to activate/deactivate groups per session.\n\n"

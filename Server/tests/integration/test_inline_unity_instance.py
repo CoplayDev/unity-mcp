@@ -355,6 +355,80 @@ async def test_resource_read_unaffected(monkeypatch):
     assert await ctx.get_state("unity_instance") == "Proj@abc123"
 
 
+@pytest.mark.asyncio
+async def test_resource_query_unity_instance_overrides_session(monkeypatch):
+    """Resource URI query targeting should override the legacy session selection for that read only."""
+    instances = [
+        SimpleNamespace(id="ProjA@aaa111", hash="aaa111"),
+        SimpleNamespace(id="ProjB@bbb222", hash="bbb222"),
+    ]
+    mw = _make_middleware(monkeypatch, pool_instances=instances)
+
+    ctx = DummyContext()
+    ctx.client_id = "client-1"
+    await mw.set_active_instance(ctx, "ProjA@aaa111")
+
+    resource_ctx = SimpleNamespace(
+        fastmcp_context=ctx,
+        message=SimpleNamespace(
+            uri="mcpforunity://scene/gameobject/-1?unity_instance=bbb222",
+        ),
+    )
+
+    await mw._inject_unity_instance(resource_ctx)
+
+    assert await ctx.get_state("unity_instance") == "ProjB@bbb222"
+    assert await mw.get_active_instance(ctx) == "ProjA@aaa111"
+
+
+@pytest.mark.asyncio
+async def test_bound_endpoint_routes_to_bound_instance(monkeypatch):
+    """A bound endpoint should force the request onto its path-selected Unity instance."""
+    instances = [
+        SimpleNamespace(id="ProjA@aaa111", hash="aaa111"),
+        SimpleNamespace(id="ProjB@bbb222", hash="bbb222"),
+    ]
+    mw = _make_middleware(monkeypatch, pool_instances=instances)
+
+    monkeypatch.setattr(
+        "transport.unity_instance_middleware._get_http_request_for_binding",
+        lambda: SimpleNamespace(path_params={"instance": "bbb222"}),
+    )
+
+    ctx = DummyContext()
+    ctx.client_id = "client-1"
+    await mw.set_active_instance(ctx, "ProjA@aaa111")
+
+    tool_ctx = DummyMiddlewareContext(ctx, arguments={})
+    await mw._inject_unity_instance(tool_ctx)
+
+    assert await ctx.get_state("bound_unity_instance") == "ProjB@bbb222"
+    assert await ctx.get_state("unity_instance") == "ProjB@bbb222"
+    assert await mw.get_active_instance(ctx) == "ProjA@aaa111"
+
+
+@pytest.mark.asyncio
+async def test_bound_endpoint_rejects_inline_unity_instance_override(monkeypatch):
+    """Bound endpoints should reject per-call unity_instance overrides."""
+    instances = [
+        SimpleNamespace(id="ProjA@aaa111", hash="aaa111"),
+        SimpleNamespace(id="ProjB@bbb222", hash="bbb222"),
+    ]
+    mw = _make_middleware(monkeypatch, pool_instances=instances)
+
+    monkeypatch.setattr(
+        "transport.unity_instance_middleware._get_http_request_for_binding",
+        lambda: SimpleNamespace(path_params={"instance": "aaa111"}),
+    )
+
+    ctx = DummyContext()
+    ctx.client_id = "client-1"
+    tool_ctx = DummyMiddlewareContext(ctx, arguments={"unity_instance": "bbb222"})
+
+    with pytest.raises(ValueError, match="Bound MCP endpoints do not accept unity_instance overrides"):
+        await mw._inject_unity_instance(tool_ctx)
+
+
 # ---------------------------------------------------------------------------
 # set_active_instance tool: port number support
 # ---------------------------------------------------------------------------
@@ -405,6 +479,24 @@ async def test_set_active_instance_port_http_errors(monkeypatch):
 
     assert result["success"] is False
     assert "not supported in HTTP transport mode" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_set_active_instance_rejects_bound_endpoint(monkeypatch):
+    """set_active_instance should not mutate routing on a bound endpoint."""
+    monkeypatch.setattr(config, "transport_mode", "http")
+    monkeypatch.setattr(config, "http_remote_hosted", False)
+
+    from services.tools.set_active_instance import set_active_instance
+
+    ctx = DummyContext()
+    ctx.client_id = "client-1"
+    await ctx.set_state("bound_unity_instance", "Proj@abc123")
+
+    result = await set_active_instance(ctx, instance="Proj@abc123")
+
+    assert result["success"] is False
+    assert "instance-bound MCP endpoint" in result["error"]
 
 
 # ---------------------------------------------------------------------------
