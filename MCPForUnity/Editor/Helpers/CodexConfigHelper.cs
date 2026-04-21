@@ -231,6 +231,11 @@ namespace MCPForUnity.Editor.Helpers
 
         private static string GetCodexHttpUrl()
         {
+            // Codex has intermittently failed the MCP handshake when configured with hostname-based
+            // loopback URLs such as localhost/::1, even though Unity MCP itself is reachable.
+            // Keep normalizing loopback hosts to 127.0.0.1 for Codex until the client routes them
+            // reliably again. If Codex fixes that behavior in the future, this is the workaround
+            // to revisit or remove before changing shared endpoint generation.
             return HttpEndpointUtility.GetMcpRpcUrl()
                 .Replace("http://localhost:", "http://127.0.0.1:");
         }
