@@ -36,7 +36,7 @@ namespace MCPForUnity.Editor.Helpers
             if (useHttpTransport)
             {
                 // HTTP mode: Use url field
-                string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
+                string httpUrl = GetCodexHttpUrl();
                 unityMCP["url"] = new TomlString { Value = httpUrl };
 
                 // Enable Codex's Rust MCP client for HTTP/SSE transport
@@ -191,7 +191,7 @@ namespace MCPForUnity.Editor.Helpers
             if (useHttpTransport)
             {
                 // HTTP mode: Use url field
-                string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
+                string httpUrl = GetCodexHttpUrl();
                 unityMCP["url"] = new TomlString { Value = httpUrl };
             }
             else
@@ -227,6 +227,17 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             return unityMCP;
+        }
+
+        private static string GetCodexHttpUrl()
+        {
+            // Codex has intermittently failed the MCP handshake when configured with hostname-based
+            // loopback URLs such as localhost/::1, even though Unity MCP itself is reachable.
+            // Keep normalizing loopback hosts to 127.0.0.1 for Codex until the client routes them
+            // reliably again. If Codex fixes that behavior in the future, this is the workaround
+            // to revisit or remove before changing shared endpoint generation.
+            return HttpEndpointUtility.GetMcpRpcUrl()
+                .Replace("http://localhost:", "http://127.0.0.1:");
         }
 
         /// <summary>
