@@ -73,8 +73,12 @@ namespace MCPForUnity.Editor.Services
                 {
                     // For HTTP Local: launch the server process first, then connect the bridge.
                     // This mirrors what the UI "Start Server" button does.
-                    if (!HttpEndpointUtility.IsHttpLocalUrlAllowedForLaunch(
-                            HttpEndpointUtility.GetLocalBaseUrl(), out string policyError))
+                    string launchBaseUrl = HttpEndpointUtility.GetLocalServerLaunchBaseUrl();
+                    string policyError;
+                    bool launchAllowed = HttpEndpointUtility.IsLanScope()
+                        ? HttpEndpointUtility.IsHttpLanUrlAllowedForLaunch(launchBaseUrl, out policyError)
+                        : HttpEndpointUtility.IsHttpLocalUrlAllowedForLaunch(launchBaseUrl, out policyError);
+                    if (!launchAllowed)
                     {
                         McpLog.Debug($"[HTTP Auto-Start] Local URL blocked by security policy: {policyError}");
                         return;

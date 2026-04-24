@@ -203,9 +203,14 @@ namespace MCPForUnity.Editor.Clients
                     // Distinguish HTTP Local from HTTP Remote by matching against both URLs
                     string localRpcUrl = HttpEndpointUtility.GetLocalMcpRpcUrl();
                     string remoteRpcUrl = HttpEndpointUtility.GetRemoteMcpRpcUrl();
+                    string lanRpcUrl = HttpEndpointUtility.GetLanMcpRpcUrl();
                     if (!string.IsNullOrEmpty(remoteRpcUrl) && UrlsEqual(configuredUrl, remoteRpcUrl))
                     {
                         client.configuredTransport = Models.ConfiguredTransport.HttpRemote;
+                    }
+                    else if (!string.IsNullOrEmpty(lanRpcUrl) && UrlsEqual(configuredUrl, lanRpcUrl))
+                    {
+                        client.configuredTransport = Models.ConfiguredTransport.HttpLan;
                     }
                     else
                     {
@@ -377,9 +382,14 @@ namespace MCPForUnity.Editor.Clients
                     {
                         // Distinguish HTTP Local from HTTP Remote
                         string remoteRpcUrl = HttpEndpointUtility.GetRemoteMcpRpcUrl();
+                        string lanRpcUrl = HttpEndpointUtility.GetLanMcpRpcUrl();
                         if (!string.IsNullOrEmpty(remoteRpcUrl) && UrlsEqual(url, remoteRpcUrl))
                         {
                             client.configuredTransport = Models.ConfiguredTransport.HttpRemote;
+                        }
+                        else if (!string.IsNullOrEmpty(lanRpcUrl) && UrlsEqual(url, lanRpcUrl))
+                        {
+                            client.configuredTransport = Models.ConfiguredTransport.HttpLan;
                         }
                         else
                         {
@@ -581,15 +591,16 @@ namespace MCPForUnity.Editor.Clients
             string claudePath = MCPServiceLocator.Paths.GetClaudeCliPath();
             RuntimePlatform platform = Application.platform;
             bool isRemoteScope = HttpEndpointUtility.IsRemoteScope();
+            bool isLanScope = HttpEndpointUtility.IsLanScope();
             // Get expected package source for the installed package version (matches what Register() would use)
             string expectedPackageSource = GetExpectedPackageSourceForValidation();
-            return CheckStatusWithProjectDir(projectDir, useHttpTransport, claudePath, platform, isRemoteScope, expectedPackageSource, attemptAutoRewrite, HasClientProjectDirOverride);
+            return CheckStatusWithProjectDir(projectDir, useHttpTransport, claudePath, platform, isRemoteScope, isLanScope, expectedPackageSource, attemptAutoRewrite, HasClientProjectDirOverride);
         }
 
         /// <summary>
         /// Internal thread-safe version of CheckStatus.
         /// Can be called from background threads because all main-thread-only values are passed as parameters.
-        /// projectDir, useHttpTransport, claudePath, platform, isRemoteScope, and expectedPackageSource are REQUIRED
+        /// projectDir, useHttpTransport, claudePath, platform, isRemoteScope, isLanScope, and expectedPackageSource are REQUIRED
         /// (non-nullable where applicable) to enforce thread safety at compile time.
         /// NOTE: attemptAutoRewrite is NOT fully thread-safe because Configure() requires the main thread.
         /// When called from a background thread, pass attemptAutoRewrite=false and handle re-registration
@@ -597,7 +608,7 @@ namespace MCPForUnity.Editor.Clients
         /// </summary>
         internal McpStatus CheckStatusWithProjectDir(
             string projectDir, bool useHttpTransport, string claudePath, RuntimePlatform platform,
-            bool isRemoteScope, string expectedPackageSource,
+            bool isRemoteScope, bool isLanScope, string expectedPackageSource,
             bool attemptAutoRewrite = false, bool hasProjectDirOverride = false)
         {
             try
@@ -647,7 +658,7 @@ namespace MCPForUnity.Editor.Clients
                 {
                     client.configuredTransport = isRemoteScope
                         ? Models.ConfiguredTransport.HttpRemote
-                        : Models.ConfiguredTransport.Http;
+                        : (isLanScope ? Models.ConfiguredTransport.HttpLan : Models.ConfiguredTransport.Http);
                 }
                 else if (registeredWithStdio)
                 {

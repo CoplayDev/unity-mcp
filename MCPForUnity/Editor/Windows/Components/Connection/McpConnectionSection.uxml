@@ -17,6 +17,9 @@
                 <ui:Label text="HTTP URL:" class="setting-label" />
                 <ui:TextField name="http-url" class="url-field" />
             </ui:VisualElement>
+            <ui:VisualElement name="lan-http-warning" class="warning-banner">
+                <ui:Label text="LAN HTTP exposes Unity MCP to your local network. Use only on trusted private networks." class="warning-banner-text" />
+            </ui:VisualElement>
             <ui:VisualElement name="api-key-row" style="margin-bottom: 4px;">
                 <ui:VisualElement class="setting-row">
                     <ui:Label text="API Key:" class="setting-label" />
