@@ -7,7 +7,7 @@ namespace MCPForUnity.Editor.Constants
     internal static class EditorPrefKeys
     {
         internal const string UseHttpTransport = "MCPForUnity.UseHttpTransport";
-        internal const string HttpTransportScope = "MCPForUnity.HttpTransportScope"; // "local" | "remote"
+        internal const string HttpTransportScope = "MCPForUnity.HttpTransportScope"; // "local" | "remote" | "lan"
         internal const string LastLocalHttpServerPid = "MCPForUnity.LocalHttpServer.LastPid";
         internal const string LastLocalHttpServerPort = "MCPForUnity.LocalHttpServer.LastPort";
         internal const string LastLocalHttpServerStartedUtc = "MCPForUnity.LocalHttpServer.LastStartedUtc";
@@ -26,6 +26,8 @@ namespace MCPForUnity.Editor.Constants
 
         internal const string HttpBaseUrl = "MCPForUnity.HttpUrl";
         internal const string HttpRemoteBaseUrl = "MCPForUnity.HttpRemoteUrl";
+        internal const string HttpLanPublicBaseUrl = "MCPForUnity.HttpLanPublicUrl";
+        internal const string HttpLanBindBaseUrl = "MCPForUnity.HttpLanBindUrl";
         internal const string SessionId = "MCPForUnity.SessionId";
         internal const string WebSocketUrlOverride = "MCPForUnity.WebSocketUrl";
         internal const string GitUrlOverride = "MCPForUnity.GitUrlOverride";

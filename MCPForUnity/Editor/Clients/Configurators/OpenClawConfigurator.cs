@@ -387,6 +387,11 @@ namespace MCPForUnity.Editor.Clients.Configurators
                 return ConfiguredTransport.HttpRemote;
             }
 
+            if (UrlsEqual(configuredUrl, HttpEndpointUtility.GetLanMcpRpcUrl()))
+            {
+                return ConfiguredTransport.HttpLan;
+            }
+
             if (UrlsEqual(configuredUrl, HttpEndpointUtility.GetLocalMcpRpcUrl()))
             {
                 return ConfiguredTransport.Http;
