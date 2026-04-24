@@ -620,6 +620,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                 string claudePath = MCPServiceLocator.Paths.GetClaudeCliPath();
                 RuntimePlatform platform = Application.platform;
                 bool isRemoteScope = HttpEndpointUtility.IsRemoteScope();
+                bool isLanScope = HttpEndpointUtility.IsLanScope();
                 // Get expected package source based on installed package version and overrides.
                 string expectedPackageSource = GetExpectedPackageSourceForCurrentPackage();
                 bool hasProjectDirOverride = ClaudeCliMcpConfigurator.HasClientProjectDirOverride;
@@ -631,7 +632,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                     if (client is ClaudeCliMcpConfigurator claudeConfigurator)
                     {
                         // Use thread-safe version with captured main-thread values
-                        claudeConfigurator.CheckStatusWithProjectDir(projectDir, useHttpTransport, claudePath, platform, isRemoteScope, expectedPackageSource, attemptAutoRewrite: false, hasProjectDirOverride: hasProjectDirOverride);
+                        claudeConfigurator.CheckStatusWithProjectDir(projectDir, useHttpTransport, claudePath, platform, isRemoteScope, isLanScope, expectedPackageSource, attemptAutoRewrite: false, hasProjectDirOverride: hasProjectDirOverride);
                     }
                 }).ContinueWith(t =>
                 {
