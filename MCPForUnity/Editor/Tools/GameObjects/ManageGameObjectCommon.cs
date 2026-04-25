@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Tools;
+using MCPForUnity.Runtime.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -154,16 +155,9 @@ namespace MCPForUnity.Editor.Tools.GameObjects
                         }
                         else
                         {
-#if UNITY_2023_1_OR_NEWER
-                            var inactive = searchInactive ? FindObjectsInactive.Include : FindObjectsInactive.Exclude;
-                            searchPoolComp = UnityEngine.Object.FindObjectsByType(componentType, inactive, FindObjectsSortMode.None)
+                            searchPoolComp = UnityFindObjectsCompat.FindAll(componentType, searchInactive)
                                 .Cast<Component>()
                                 .Select(c => c.gameObject);
-#else
-                            searchPoolComp = UnityEngine.Object.FindObjectsOfType(componentType, searchInactive)
-                                .Cast<Component>()
-                                .Select(c => c.gameObject);
-#endif
                         }
                         results.AddRange(searchPoolComp.Where(go => go != null));
                     }
