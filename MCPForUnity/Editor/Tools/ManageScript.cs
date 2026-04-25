@@ -2714,12 +2714,18 @@ namespace MCPForUnity.Editor.Tools
             }
             // Second pass: build per-position containing type array
             var containingTypeArr = new string[codeOnly.Length];
+            var braceDepthArr = new int[codeOnly.Length];
+            var typeMemberDepthArr = new int[codeOnly.Length];
             {
                 var stack = new System.Collections.Generic.List<(string name, int openDepth)>();
                 int bd2 = 0;
                 string current = "";
                 for (int i = 0; i < codeOnly.Length; i++)
                 {
+                    containingTypeArr[i] = current;
+                    braceDepthArr[i] = bd2;
+                    typeMemberDepthArr[i] = stack.Count > 0 ? stack[stack.Count - 1].openDepth + 1 : -1;
+
                     if (codeOnly[i] == '{')
                     {
                         if (typeBraceMap.TryGetValue(i, out string tn))
@@ -2738,7 +2744,6 @@ namespace MCPForUnity.Editor.Tools
                             current = stack.Count > 0 ? stack[stack.Count - 1].name : "";
                         }
                     }
-                    containingTypeArr[i] = current;
                 }
             }
 
@@ -2757,6 +2762,8 @@ namespace MCPForUnity.Editor.Tools
                 int paramCount = CountTopLevelParams(sm.Groups[3].Value);
                 string paramTypes = ExtractParamTypes(sm.Groups[3].Value);
                 string containingType = containingTypeArr[sm.Index];
+                if (string.IsNullOrEmpty(containingType)) continue;
+                if (braceDepthArr[sm.Index] != typeMemberDepthArr[sm.Index]) continue;
                 string key = $"{containingType}/{methodName}/{paramCount}/{paramTypes}";
                 if (seen.TryGetValue(key, out _))
                     errors.Add($"ERROR: Duplicate method signature detected: '{methodName}' with {paramCount} parameter(s). This may indicate a corrupted edit.");
