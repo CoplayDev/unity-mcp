@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Runtime.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -454,11 +455,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
             if (!GraphicsHelpers.HasVolumeSystem)
                 return new { success = true, message = "Volume system not available.", data = new { volumes = new List<object>() } };
 
-#if UNITY_2022_2_OR_NEWER
-            var allVolumes = UnityEngine.Object.FindObjectsByType(GraphicsHelpers.VolumeType, FindObjectsSortMode.None);
-#else
-            var allVolumes = UnityEngine.Object.FindObjectsOfType(GraphicsHelpers.VolumeType);
-#endif
+            var allVolumes = UnityFindObjectsCompat.FindAll(GraphicsHelpers.VolumeType);
             var volumeList = new List<object>();
 
             foreach (Component vol in allVolumes)
