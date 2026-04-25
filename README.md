@@ -4,6 +4,7 @@
 |----------------------|---------------------------------|
 
 #### Proudly sponsored and maintained by [Coplay](https://www.coplay.dev/?ref=unity-mcp) -- the best AI assistant for Unity.
+##### And don't miss [Godot A](https://github.com/hi-godot/godot-ai)I 🤖, the new free MCP/AI project from the makers of MCP for Unity!
 
 [![Discord](https://img.shields.io/badge/discord-join-red.svg?logo=discord&logoColor=white)](https://discord.gg/y4p8KfzrN4)
 [![](https://img.shields.io/badge/Website-Visit-purple)](https://www.coplay.dev/?ref=unity-mcp)
