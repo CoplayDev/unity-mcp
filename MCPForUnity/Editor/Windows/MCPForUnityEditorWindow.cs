@@ -73,8 +73,42 @@ namespace MCPForUnity.Editor.Windows
 
         public static void ShowWindow()
         {
-            var window = GetWindow<MCPForUnityEditorWindow>("MCP For Unity");
+            var existingWindows = UnityEngine.Resources.FindObjectsOfTypeAll<MCPForUnityEditorWindow>();
+            MCPForUnityEditorWindow window = null;
+
+            if (existingWindows.Length > 0)
+            {
+                window = existingWindows[0];
+
+                // If multiple instances exist, keep one and close the extras to avoid stale hidden tabs.
+                for (int i = 1; i < existingWindows.Length; i++)
+                {
+                    try
+                    {
+                        existingWindows[i].Close();
+                    }
+                    catch (Exception ex)
+                    {
+                        McpLog.Warn($"Error closing duplicate MCP window: {ex.Message}");
+                    }
+                }
+            }
+            else
+            {
+                window = GetWindow<MCPForUnityEditorWindow>("MCP For Unity");
+            }
+
+            window.titleContent = new GUIContent("MCP For Unity");
             window.minSize = new Vector2(500, 340);
+
+            if (window.position.width < 100 || window.position.height < 100)
+            {
+                window.position = new Rect(120, 120, 900, 700);
+            }
+
+            window.Show();
+            window.ShowTab();
+            window.Focus();
         }
 
         // Helper to check and manage open windows from other classes
@@ -125,6 +159,7 @@ namespace MCPForUnity.Editor.Windows
                 return;
             }
 
+            rootVisualElement.Clear();
             visualTree.CloneTree(rootVisualElement);
 
             // Load main window USS
