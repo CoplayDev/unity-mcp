@@ -8,7 +8,7 @@
         "Editor"
     ],
     "excludePlatforms": [],
-    "overrideReferences": false,
+    "overrideReferences": true,
     "precompiledReferences": [
         "Newtonsoft.Json.dll"
     ],

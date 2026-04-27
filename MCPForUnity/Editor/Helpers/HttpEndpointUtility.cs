@@ -336,6 +336,17 @@ namespace MCPForUnity.Editor.Helpers
                 trimmed = trimmed[..^4];
             }
 
+            // For local scope, force 127.0.0.1 over "localhost". Windows getaddrinfo returns ::1
+            // first; clients without Happy Eyeballs (e.g., Codex/reqwest) hit the v6 socket while
+            // our server binds v4-only, breaking the handshake. The default server bind is
+            // 127.0.0.1, so emitting the literal v4 keeps every client unambiguous.
+            if (!remoteScope && Uri.TryCreate(trimmed, UriKind.Absolute, out Uri parsed)
+                && string.Equals(parsed.Host, "localhost", StringComparison.OrdinalIgnoreCase))
+            {
+                var builder = new UriBuilder(parsed) { Host = "127.0.0.1" };
+                trimmed = builder.Uri.GetLeftPart(UriPartial.Authority);
+            }
+
             return trimmed;
         }
 
