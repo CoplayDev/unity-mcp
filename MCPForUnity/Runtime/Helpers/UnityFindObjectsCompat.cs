@@ -4,11 +4,9 @@ using UObject = UnityEngine.Object;
 namespace MCPForUnity.Runtime.Helpers
 {
     /// <summary>
-    /// Version-compatible wrappers for the Object.FindObjectsOfType / FindObjectsByType family,
-    /// which changed across Unity 2022 → 6.0 → 6.5:
-    ///   Pre-2022.2  : FindObjectsOfType / FindObjectOfType
-    ///   2022.2–6.4  : FindObjectsByType(sortMode) / FindFirstObjectByType
-    ///   6.5+        : FindObjectsByType() (no sort param) / FindAnyObjectByType
+    /// Version-compatible wrappers for the Object.FindObjectsOfType / FindObjectsByType family.
+    /// Unity 2022.2 editor versions do not reliably expose the newer APIs, so we only
+    /// switch to them once 2022.3+ symbols are available.
     /// </summary>
     public static class UnityFindObjectsCompat
     {
@@ -17,10 +15,12 @@ namespace MCPForUnity.Runtime.Helpers
         {
 #if UNITY_6000_5_OR_NEWER
             return UObject.FindObjectsByType<T>();
-#elif UNITY_2022_2_OR_NEWER
+#elif UNITY_2022_3_OR_NEWER
             return UObject.FindObjectsByType<T>(UnityEngine.FindObjectsSortMode.None);
 #else
+#pragma warning disable 618
             return UObject.FindObjectsOfType<T>();
+#pragma warning restore 618
 #endif
         }
 
@@ -29,10 +29,12 @@ namespace MCPForUnity.Runtime.Helpers
         {
 #if UNITY_6000_5_OR_NEWER
             return UObject.FindObjectsByType(type, UnityEngine.FindObjectsInactive.Exclude);
-#elif UNITY_2022_2_OR_NEWER
+#elif UNITY_2022_3_OR_NEWER
             return UObject.FindObjectsByType(type, UnityEngine.FindObjectsSortMode.None);
 #else
+#pragma warning disable 618
             return UObject.FindObjectsOfType(type);
+#pragma warning restore 618
 #endif
         }
 
@@ -47,17 +49,21 @@ namespace MCPForUnity.Runtime.Helpers
                 includeInactive ? UnityEngine.FindObjectsInactive.Include : UnityEngine.FindObjectsInactive.Exclude,
                 UnityEngine.FindObjectsSortMode.None);
 #else
+#pragma warning disable 618
             return UObject.FindObjectsOfType(type, includeInactive);
+#pragma warning restore 618
 #endif
         }
 
         /// <summary>Find any single object of the given runtime type (no ordering guarantee).</summary>
         public static UObject FindAny(Type type)
         {
-#if UNITY_2022_2_OR_NEWER
+#if UNITY_2022_3_OR_NEWER
             return UObject.FindAnyObjectByType(type);
 #else
+#pragma warning disable 618
             return UObject.FindObjectOfType(type);
+#pragma warning restore 618
 #endif
         }
     }
