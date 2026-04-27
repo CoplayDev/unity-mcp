@@ -151,6 +151,86 @@ namespace MCPForUnityTests.Editor.Tools
             }
         }
 
+        [Test]
+        public void SavePrefabStage_PersistsPrefabContentChanges()
+        {
+            string prefabPath = CreateTestPrefab("SaveStageRoot");
+
+            try
+            {
+                AssertOpenPrefabStage(prefabPath);
+
+                var stage = PrefabStageUtility.GetCurrentPrefabStage();
+                Assert.IsNotNull(stage, "Expected prefab stage to be open.");
+
+                var child = new GameObject("SavedChild");
+                child.transform.SetParent(stage.prefabContentsRoot.transform, false);
+
+                var saveResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "save_prefab_stage"
+                }));
+
+                Assert.IsTrue(saveResult.Value<bool>("success"), $"Expected save to succeed but got: {saveResult}");
+                Assert.AreEqual(prefabPath, saveResult["data"].Value<string>("prefabPath"));
+
+                StageUtility.GoToMainStage();
+
+                GameObject reloaded = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                Assert.IsNotNull(reloaded.transform.Find("SavedChild"), "Saved prefab should contain the new child after save_prefab_stage.");
+            }
+            finally
+            {
+                StageUtility.GoToMainStage();
+                SafeDeleteAsset(prefabPath);
+            }
+        }
+
+        [Test]
+        public void ClosePrefabStage_SaveBeforeClose_PersistsChanges()
+        {
+            string prefabPath = CreateTestPrefab("CloseSaveRoot");
+
+            try
+            {
+                AssertOpenPrefabStage(prefabPath);
+
+                var stage = PrefabStageUtility.GetCurrentPrefabStage();
+                Assert.IsNotNull(stage, "Expected prefab stage to be open.");
+
+                var child = new GameObject("CloseSavedChild");
+                child.transform.SetParent(stage.prefabContentsRoot.transform, false);
+
+                var closeResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
+                {
+                    ["action"] = "close_prefab_stage",
+                    ["saveBeforeClose"] = true
+                }));
+
+                Assert.IsTrue(closeResult.Value<bool>("success"), $"Expected close with save to succeed but got: {closeResult}");
+                Assert.IsNull(PrefabStageUtility.GetCurrentPrefabStage(), "Prefab stage should be closed after close_prefab_stage.");
+
+                GameObject reloaded = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                Assert.IsNotNull(reloaded.transform.Find("CloseSavedChild"), "Saved prefab should contain the new child after close_prefab_stage(saveBeforeClose: true).");
+            }
+            finally
+            {
+                StageUtility.GoToMainStage();
+                SafeDeleteAsset(prefabPath);
+            }
+        }
+
+        private static void AssertOpenPrefabStage(string prefabPath)
+        {
+            var openResult = ToJObject(ManagePrefabs.HandleCommand(new JObject
+            {
+                ["action"] = "open_prefab_stage",
+                ["prefabPath"] = prefabPath
+            }));
+
+            Assert.IsTrue(openResult.Value<bool>("success"), $"Expected open to succeed but got: {openResult}");
+        }
+
         private static string CreateTestPrefab(string rootName)
         {
             string prefabPath = Path.Combine(TempDirectory, $"{rootName}.prefab").Replace('\\', '/');
