@@ -70,11 +70,7 @@ namespace MCPForUnity.Editor.Helpers
         /// </summary>
         public static UnityEngine.Object ResolveInstanceID(int instanceId)
         {
-#if UNITY_6000_3_OR_NEWER
-            return EditorUtility.EntityIdToObject(instanceId);
-#else
-            return EditorUtility.InstanceIDToObject(instanceId);
-#endif
+            return UnityObjectIdCompat.InstanceIDToObjectCompat(instanceId);
         }
 
         /// <summary>
