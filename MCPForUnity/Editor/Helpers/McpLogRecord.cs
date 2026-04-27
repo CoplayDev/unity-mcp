@@ -16,11 +16,22 @@ namespace MCPForUnity.Editor.Helpers
         private const long MaxLogSizeBytes = 1024 * 1024; // 1 MB
         private static bool _sessionStarted;
         private static readonly object _logLock = new();
+        private static volatile bool _isEnabledCached;
+
+        [InitializeOnLoadMethod]
+        private static void RefreshFromPrefs()
+        {
+            _isEnabledCached = EditorPrefs.GetBool(EditorPrefKeys.LogRecordEnabled, false);
+        }
 
         internal static bool IsEnabled
         {
-            get => EditorPrefs.GetBool(EditorPrefKeys.LogRecordEnabled, false);
-            set => EditorPrefs.SetBool(EditorPrefKeys.LogRecordEnabled, value);
+            get => _isEnabledCached;
+            set
+            {
+                EditorPrefs.SetBool(EditorPrefKeys.LogRecordEnabled, value);
+                _isEnabledCached = value;
+            }
         }
 
         internal static void Log(string commandType, JObject parameters, string type, string status, long durationMs, string error = null)
