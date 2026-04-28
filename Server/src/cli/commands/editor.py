@@ -1,8 +1,10 @@
 """Editor CLI commands."""
 
+import math
 import sys
+from typing import Any, Optional
+
 import click
-from typing import Optional, Any
 
 from cli.utils.config import get_config
 from cli.utils.output import format_output, print_error, print_success, print_info
@@ -15,6 +17,46 @@ from cli.utils.parsers import parse_json_dict_or_exit
 def editor():
     """Editor operations - play mode, console, tags, layers."""
     pass
+
+
+@editor.command("wait-compile")
+@click.option(
+    "--timeout", "-t",
+    type=float,
+    default=30.0,
+    help="Max seconds to wait (default: 30, clamped to 1-120)."
+)
+@handle_unity_errors
+def wait_compile(timeout: float):
+    """Wait for Unity script compilation to finish.
+
+    Polls editor state until compilation and domain reload are complete.
+    Useful after modifying scripts to ensure changes are compiled before
+    entering play mode or performing other actions. Timeout values are
+    clamped to the inclusive range 1-120 seconds.
+
+    \b
+    Examples:
+        unity-mcp editor wait-compile
+        unity-mcp editor wait-compile --timeout 60
+    """
+    config = get_config()
+    effective_timeout = max(1.0, min(timeout, 120.0))
+    # Ensure the transport timeout outlasts the compilation wait (add a small buffer).
+    transport_timeout = math.ceil(effective_timeout) + 10
+    result = run_command(
+        "manage_editor",
+        {"action": "wait_for_compilation", "timeout": effective_timeout},
+        config,
+        timeout=transport_timeout,
+    )
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        waited = result.get("data", {}).get("waited_seconds", 0)
+        print_success(f"Compilation complete (waited {waited}s)")
+    else:
+        print_error(result.get("message", "Compilation wait timed out"))
+        sys.exit(1)
 
 
 @editor.command("play")

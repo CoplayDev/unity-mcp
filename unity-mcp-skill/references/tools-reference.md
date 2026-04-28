@@ -730,6 +730,8 @@ manage_editor(action="remove_tag", tag_name="OldTag")
 manage_editor(action="add_layer", layer_name="Projectiles")
 manage_editor(action="remove_layer", layer_name="OldLayer")
 
+manage_editor(action="wait_for_compilation", timeout=30)  # Wait for scripts to compile (timeout clamps to 1-120s)
+
 manage_prefabs(action="open_prefab_stage", prefab_path="Assets/Prefabs/Enemy.prefab")
 manage_prefabs(action="save_prefab_stage")   # Save changes in the open prefab stage
 manage_prefabs(action="close_prefab_stage")  # Exit prefab editing mode back to main scene

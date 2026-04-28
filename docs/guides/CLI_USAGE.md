@@ -156,6 +156,9 @@ unity-mcp editor play
 unity-mcp editor pause
 unity-mcp editor stop
 
+# Wait for compilation (timeout clamps to 1-120 seconds)
+unity-mcp editor wait-compile [--timeout 30]
+
 # Refresh assets
 unity-mcp editor refresh
 unity-mcp editor refresh --compile
@@ -492,7 +495,7 @@ unity-mcp raw manage_packages '{"action": "list_packages"}'
 | `component` | `add`, `remove`, `set`, `modify` |
 | `script` | `create`, `read`, `delete`, `edit`, `validate` |
 | `shader` | `create`, `read`, `update`, `delete` |
-| `editor` | `play`, `pause`, `stop`, `refresh`, `console`, `menu`, `tool`, `add-tag`, `remove-tag`, `add-layer`, `remove-layer`, `tests`, `poll-test`, `custom-tool` |
+| `editor` | `play`, `pause`, `stop`, `wait-compile`, `refresh`, `console`, `menu`, `tool`, `add-tag`, `remove-tag`, `add-layer`, `remove-layer`, `tests`, `poll-test`, `custom-tool` |
 | `asset` | `search`, `info`, `create`, `delete`, `duplicate`, `move`, `rename`, `import`, `mkdir` |
 | `prefab` | `open`, `close`, `save`, `create`, `modify` |
 | `material` | `info`, `create`, `set-color`, `set-property`, `assign`, `set-renderer-color` |
