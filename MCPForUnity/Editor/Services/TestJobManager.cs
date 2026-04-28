@@ -220,7 +220,7 @@ namespace MCPForUnity.Editor.Services
                         if (currentJob.Status == TestJobStatus.Running)
                         {
                             long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                            long staleCutoffMs = 5 * 60 * 1000; // 5 minutes
+                            long staleCutoffMs = 60 * 1000; // 60 seconds
                             if (now - currentJob.LastUpdateUnixMs > staleCutoffMs)
                             {
                                 McpLog.Warn($"[TestJobManager] Clearing stale job {_currentJobId} (last update {(now - currentJob.LastUpdateUnixMs) / 1000}s ago)");

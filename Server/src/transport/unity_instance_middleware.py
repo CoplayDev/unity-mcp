@@ -58,6 +58,11 @@ class UnityInstanceMiddleware(Middleware):
     def __init__(self):
         super().__init__()
         self._active_by_key: dict[str, str] = {}
+        # Per-key monotonic timestamp of the last liveness check, used to throttle
+        # discovery calls on `get_active_instance`. Without throttling, every tool
+        # call would trigger a fresh instance discovery.
+        self._liveness_checked_at: dict[str, float] = {}
+        self._liveness_ttl_seconds = 5.0
         self._lock = RLock()
         self._metadata_lock = RLock()
         self._unity_managed_tool_names: set[str] = set()
@@ -72,9 +77,15 @@ class UnityInstanceMiddleware(Middleware):
         """
         Derive a stable key for the calling session.
 
-        Prioritizes client_id for stability.
-        In remote-hosted mode, falls back to user_id for session isolation.
-        Otherwise falls back to 'global' (assuming single-user local mode).
+        Resolution order (first wins):
+          1. ``ctx.client_id`` — populated by MCP initialize handshake
+          2. ``user_id`` state — remote-hosted HTTP multi-tenant mode
+          3. ``ctx.session_id`` — per-HTTP-connection token from FastMCP; required
+             to avoid cross-process collisions when multiple Claude Code instances
+             share the same HTTP server on port 8080
+          4. ``"global"`` — last-resort fallback; all sessions that reach here
+             will collide and overwrite each other's active instance selection.
+             Only safe in a single-client local stdio setup.
         """
         client_id = getattr(ctx, "client_id", None)
         if isinstance(client_id, str) and client_id:
@@ -85,7 +96,20 @@ class UnityInstanceMiddleware(Middleware):
         if isinstance(user_id, str) and user_id:
             return f"user:{user_id}"
 
-        # Fallback to global for local dev stability
+        # FastMCP exposes a per-connection session_id on HTTP transport. Using it
+        # prevents multiple Claude Code processes from colliding on a shared
+        # "global" key and overwriting each other's active_instance selection —
+        # which is the root cause of "wrong Unity instance gets focused".
+        session_id = getattr(ctx, "session_id", None)
+        if isinstance(session_id, str) and session_id:
+            return f"session:{session_id}"
+
+        # Last-resort fallback. Only safe for single-client local stdio mode.
+        logger.warning(
+            "UnityInstanceMiddleware falling back to 'global' session key: "
+            "client_id/user_id/session_id all unavailable. "
+            "Concurrent clients will collide on active instance selection."
+        )
         return "global"
 
     async def set_active_instance(self, ctx, instance_id: str) -> None:
@@ -93,18 +117,71 @@ class UnityInstanceMiddleware(Middleware):
         key = await self.get_session_key(ctx)
         with self._lock:
             self._active_by_key[key] = instance_id
+            # Freshly set — treat as liveness-validated so the first read inside
+            # the TTL window does not trigger a redundant discovery call.
+            self._liveness_checked_at[key] = time.monotonic()
 
     async def get_active_instance(self, ctx) -> str | None:
-        """Retrieve the active instance for this session."""
+        """
+        Retrieve the active instance for this session, evicting stale entries.
+
+        If the cached instance ID is no longer in the discovered instance list
+        (e.g., that Unity editor disconnected), the cache entry is evicted and
+        None is returned so the caller can fall back to auto-select or error.
+        Discovery failures are tolerated — we return the cached value on error
+        to avoid breaking routing on transient connectivity issues.
+        """
         key = await self.get_session_key(ctx)
+        now = time.monotonic()
         with self._lock:
-            return self._active_by_key.get(key)
+            cached = self._active_by_key.get(key)
+            last_check = self._liveness_checked_at.get(key, 0.0)
+        if cached is None:
+            return None
+        # Throttle liveness checks: if we validated this key recently, trust the
+        # cache. This keeps `_inject_unity_instance` cheap on the hot path while
+        # still catching stale entries after a Unity instance disconnects.
+        if (now - last_check) < self._liveness_ttl_seconds:
+            return cached
+        try:
+            instances = await self._discover_instances(ctx)
+            live_ids = {
+                getattr(inst, "id", None)
+                for inst in instances
+                if getattr(inst, "id", None)
+            }
+            if cached not in live_ids:
+                with self._lock:
+                    # Only evict if the slot still holds our stale value (avoid
+                    # racing a concurrent set_active_instance).
+                    if self._active_by_key.get(key) == cached:
+                        self._active_by_key.pop(key, None)
+                    self._liveness_checked_at.pop(key, None)
+                logger.info(
+                    "Evicted stale active instance '%s' for session key '%s' "
+                    "(no longer in live instance list)",
+                    cached, key,
+                )
+                return None
+            with self._lock:
+                self._liveness_checked_at[key] = now
+        except Exception as exc:
+            if isinstance(exc, (SystemExit, KeyboardInterrupt)):
+                raise
+            logger.debug(
+                "Liveness check for cached instance '%s' failed (%s); "
+                "returning cached value",
+                cached, type(exc).__name__,
+                exc_info=True,
+            )
+        return cached
 
     async def clear_active_instance(self, ctx) -> None:
         """Clear the stored instance for this session."""
         key = await self.get_session_key(ctx)
         with self._lock:
             self._active_by_key.pop(key, None)
+            self._liveness_checked_at.pop(key, None)
 
     async def _discover_instances(self, ctx) -> list:
         """

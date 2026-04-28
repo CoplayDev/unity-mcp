@@ -136,16 +136,35 @@ class TestUnityInstanceMiddlewareSessionManagement:
         assert key == "stable-client-id"
 
     @pytest.mark.asyncio
-    async def test_middleware_falls_back_to_global_key(self):
+    async def test_middleware_uses_session_id_when_client_id_missing(self):
         """
-        Current behavior: When client_id is None/missing, use 'global' key.
-        This allows single-user local mode to work without session tracking.
+        When client_id and user_id are unavailable, fall back to session_id
+        (per-HTTP-connection token) to avoid cross-process collisions on the
+        shared "global" key. "global" is only used as a last-resort fallback
+        when session_id is also missing.
         """
         middleware = UnityInstanceMiddleware()
 
         ctx = Mock()
         ctx.client_id = None
         ctx.session_id = "session-id"
+        ctx.get_state = AsyncMock(return_value=None)
+
+        key = await middleware.get_session_key(ctx)
+        assert key == "session:session-id"
+
+    @pytest.mark.asyncio
+    async def test_middleware_falls_back_to_global_key_as_last_resort(self):
+        """
+        When client_id, user_id, and session_id are ALL unavailable, the
+        middleware logs a warning and falls back to the "global" key. This
+        path is only safe in single-client local stdio mode.
+        """
+        middleware = UnityInstanceMiddleware()
+
+        ctx = Mock()
+        ctx.client_id = None
+        ctx.session_id = None
         ctx.get_state = AsyncMock(return_value=None)
 
         key = await middleware.get_session_key(ctx)
@@ -1463,17 +1482,19 @@ class TestTransportEdgeCases:
     async def test_middleware_handles_client_id_false_but_not_none(self):
         """
         Current behavior: get_session_key checks isinstance(client_id, str) AND len,
-        so falsy non-string values fall through to 'global'.
+        so falsy string client_id falls through. With the session-key robustness
+        fix, the next fallback is session_id (per-HTTP-connection token) before
+        the last-resort "global" key.
         """
         middleware = UnityInstanceMiddleware()
 
         ctx = Mock()
-        ctx.client_id = ""  # Empty string
+        ctx.client_id = ""  # Empty string — falls through
         ctx.session_id = "session-id"
         ctx.get_state = AsyncMock(return_value=None)
 
         key = await middleware.get_session_key(ctx)
-        assert key == "global"  # Empty string doesn't pass isinstance+truthy check
+        assert key == "session:session-id"
 
     def test_plugin_hub_encoding_is_json(self):
         """

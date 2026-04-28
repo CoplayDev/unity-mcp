@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
@@ -51,6 +52,14 @@ namespace MCPForUnity.Editor.Tools
                     $"A maximum of {maxCommands} commands are allowed per batch (configurable in MCP Tools window, hard max {AbsoluteMaxCommandsPerBatch}).");
             }
 
+            // --- Async gateway path ---
+            bool isAsync = @params.Value<bool?>("async") ?? false;
+            if (isAsync)
+            {
+                return HandleAsyncSubmit(@params, commandsToken);
+            }
+
+            // --- Legacy synchronous path (unchanged) ---
             bool failFast = @params.Value<bool?>("failFast") ?? false;
             bool parallelRequested = @params.Value<bool?>("parallel") ?? false;
             int? maxParallel = @params.Value<int?>("maxParallelism");
@@ -87,6 +96,7 @@ namespace MCPForUnity.Editor.Tools
                 string toolName = commandObj["tool"]?.ToString();
                 var rawParams = commandObj["params"] as JObject ?? new JObject();
                 var commandParams = NormalizeParameterKeys(rawParams);
+                UnwrapExecuteCustomTool(ref toolName, ref commandParams);
 
                 if (string.IsNullOrWhiteSpace(toolName))
                 {
@@ -231,5 +241,135 @@ namespace MCPForUnity.Editor.Tools
         }
 
         private static string ToCamelCase(string key) => StringCaseUtility.ToCamelCase(key);
+
+        /// <summary>
+        /// Unwrap the Python-side <c>execute_custom_tool</c> façade so custom tools can be
+        /// batched. The façade expects <c>{ tool_name, parameters }</c> — after
+        /// <see cref="NormalizeParameterKeys"/> those become <c>toolName</c> and
+        /// <c>parameters</c>. We rewrite the entry to target the inner tool name directly,
+        /// so <see cref="CommandRegistry"/> can dispatch it like any other registered tool.
+        ///
+        /// Note: this bypasses the Python-side project_id / user_id resolution that the
+        /// façade adds. Custom tools that rely on per-project scoping should still be
+        /// invoked through <c>execute_custom_tool</c> outside of a batch.
+        /// </summary>
+        private static void UnwrapExecuteCustomTool(ref string toolName, ref JObject commandParams)
+        {
+            if (toolName != "execute_custom_tool") return;
+            if (commandParams == null) return;
+
+            string innerTool = commandParams.Value<string>("toolName")
+                ?? commandParams.Value<string>("tool_name");
+            if (string.IsNullOrWhiteSpace(innerTool))
+            {
+                // Leave as-is; the caller will surface a "missing tool_name" error via the
+                // normal Unknown-command path, which is clearer than silently dropping.
+                return;
+            }
+
+            var innerParamsToken = commandParams["parameters"];
+            JObject innerParams = innerParamsToken is JObject obj
+                ? NormalizeParameterKeys(obj)
+                : new JObject();
+
+            toolName = innerTool;
+            commandParams = innerParams;
+        }
+
+        /// <summary>
+        /// Handle async batch submission. Queues commands via CommandGateway and returns
+        /// a ticket (for non-instant batches) or results inline (for instant batches).
+        /// </summary>
+        private static object HandleAsyncSubmit(JObject @params, JArray commandsToken)
+        {
+            bool atomic = @params.Value<bool?>("atomic") ?? false;
+            bool failFast = @params.Value<bool?>("fail_fast") ?? @params.Value<bool?>("failFast") ?? false;
+            string agent = @params.Value<string>("agent") ?? "anonymous";
+            string label = @params.Value<string>("label") ?? "";
+
+            var commands = new List<BatchCommand>();
+            foreach (var token in commandsToken)
+            {
+                if (token is not JObject cmdObj) continue;
+                string toolName = cmdObj["tool"]?.ToString();
+                if (string.IsNullOrWhiteSpace(toolName)) continue;
+
+                var rawParams = cmdObj["params"] as JObject ?? new JObject();
+                var cmdParams = NormalizeParameterKeys(rawParams);
+                UnwrapExecuteCustomTool(ref toolName, ref cmdParams);
+                if (string.IsNullOrWhiteSpace(toolName)) continue;
+
+                var toolTier = CommandRegistry.GetToolTier(toolName);
+                var effectiveTier = CommandClassifier.Classify(toolName, toolTier, cmdParams);
+
+                commands.Add(new BatchCommand { Tool = toolName, Params = cmdParams, Tier = effectiveTier, CausesDomainReload = CommandClassifier.CausesDomainReload(toolName, cmdParams) });
+            }
+
+            if (commands.Count == 0)
+            {
+                return new ErrorResponse("No valid commands in async batch.");
+            }
+
+            var job = CommandGatewayState.Queue.Submit(agent, label, atomic, commands);
+
+            if (job.Tier == ExecutionTier.Instant)
+            {
+                // Execute inline, return results directly
+                foreach (var cmd in commands)
+                {
+                    try
+                    {
+                        var result = CommandRegistry.InvokeCommandAsync(cmd.Tool, cmd.Params)
+                            .ConfigureAwait(true).GetAwaiter().GetResult();
+                        job.Results.Add(result);
+
+                        // fail_fast: stop on first failure result
+                        if (failFast && result is IMcpResponse resp && !resp.Success)
+                        {
+                            job.Status = JobStatus.Failed;
+                            job.Error = $"Command '{cmd.Tool}' failed (fail_fast).";
+                            job.CompletedAt = DateTime.UtcNow;
+                            return new ErrorResponse(job.Error,
+                                new { ticket = job.Ticket, results = job.Results });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        job.Results.Add(new ErrorResponse(ex.Message));
+                        if (atomic || failFast)
+                        {
+                            job.Status = JobStatus.Failed;
+                            job.Error = ex.Message;
+                            job.CompletedAt = DateTime.UtcNow;
+                            return new ErrorResponse($"Instant batch failed at command '{cmd.Tool}': {ex.Message}",
+                                new { ticket = job.Ticket, results = job.Results });
+                        }
+                    }
+                }
+                job.Status = JobStatus.Done;
+                job.CompletedAt = DateTime.UtcNow;
+                return new SuccessResponse("Batch completed (instant).",
+                    new { ticket = job.Ticket, results = job.Results });
+            }
+
+            // Non-instant: return ticket for polling
+            var isDedup = job.Deduplicated;
+            return new PendingResponse(
+                isDedup
+                    ? $"Duplicate batch — already queued as {job.Ticket}. Poll with poll_job."
+                    : $"Batch queued as {job.Ticket}. Poll with poll_job.",
+                pollIntervalSeconds: 2.0,
+                data: new
+                {
+                    ticket = job.Ticket,
+                    status = job.Status.ToString().ToLowerInvariant(),
+                    position = CommandGatewayState.Queue.GetAheadOf(job.Ticket).Count,
+                    tier = job.Tier.ToString().ToLowerInvariant(),
+                    agent,
+                    label,
+                    atomic,
+                    deduplicated = isDedup
+                });
+        }
     }
 }
