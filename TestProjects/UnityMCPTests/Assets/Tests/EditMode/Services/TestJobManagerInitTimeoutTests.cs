@@ -61,6 +61,10 @@ namespace MCPForUnityTests.Editor.Services
             jobs?.Remove("test-init-timeout-job");
             jobs?.Remove("test-init-timeout-default");
             jobs?.Remove("test-init-timeout-persist");
+            // Flush cleaned state to SessionState so synthetic jobs don't survive domain reloads.
+            // The persist test writes to SessionState; without this, the stub job would be
+            // restored on the next [InitializeOnLoadMethod] and pollute later test runs.
+            _persistMethod.Invoke(null, new object[] { true });
         }
 
         [Test]
