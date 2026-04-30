@@ -6,6 +6,7 @@ using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnity.Editor.Tools.Cameras
 {
@@ -13,11 +14,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
     {
         internal static object ListCameras(JObject @params)
         {
-#if UNITY_2022_2_OR_NEWER
-            var unityCameras = UnityEngine.Object.FindObjectsByType<UnityEngine.Camera>(FindObjectsSortMode.None);
-#else
-            var unityCameras = UnityEngine.Object.FindObjectsOfType<UnityEngine.Camera>();
-#endif
+            var unityCameras = UnityFindObjectsCompat.FindAll<UnityEngine.Camera>();
             var cameraList = new List<object>();
             var unityCamList = new List<object>();
 
@@ -25,11 +22,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
             if (CameraHelpers.HasCinemachine)
             {
                 var cmType = CameraHelpers.CinemachineCameraType;
-#if UNITY_2022_2_OR_NEWER
-                var allCm = UnityEngine.Object.FindObjectsByType(cmType, FindObjectsSortMode.None);
-#else
-                var allCm = UnityEngine.Object.FindObjectsOfType(cmType);
-#endif
+                var allCm = UnityFindObjectsCompat.FindAll(cmType);
                 foreach (Component cm in allCm)
                 {
                     var follow = CameraHelpers.GetReflectionProperty(cm, "Follow") as Transform;
@@ -55,12 +48,12 @@ namespace MCPForUnity.Editor.Tools.Cameras
 
                     cameraList.Add(new
                     {
-                        instanceID = cm.gameObject.GetInstanceID(),
+                        instanceID = cm.gameObject.GetInstanceIDCompat(),
                         name = cm.gameObject.name,
                         isLive = isLive is bool b && b,
                         priority,
-                        follow = follow != null ? new { name = follow.gameObject.name, instanceID = follow.gameObject.GetInstanceID() } : null,
-                        lookAt = lookAt != null ? new { name = lookAt.gameObject.name, instanceID = lookAt.gameObject.GetInstanceID() } : null,
+                        follow = follow != null ? new { name = follow.gameObject.name, instanceID = follow.gameObject.GetInstanceIDCompat() } : null,
+                        lookAt = lookAt != null ? new { name = lookAt.gameObject.name, instanceID = lookAt.gameObject.GetInstanceIDCompat() } : null,
                         body = body?.GetType().Name,
                         aim = aim?.GetType().Name,
                         noise = noise?.GetType().Name,
@@ -76,7 +69,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
                     cam.gameObject.GetComponent(CameraHelpers.CinemachineBrainType) != null;
                 unityCamList.Add(new
                 {
-                    instanceID = cam.gameObject.GetInstanceID(),
+                    instanceID = cam.gameObject.GetInstanceIDCompat(),
                     name = cam.gameObject.name,
                     depth = cam.depth,
                     fieldOfView = cam.fieldOfView,
@@ -102,14 +95,14 @@ namespace MCPForUnity.Editor.Tools.Cameras
                         activeName = nameProp?.GetValue(activeCam) as string;
 
                         if (activeCam is Component activeComp)
-                            activeID = activeComp.gameObject.GetInstanceID();
+                            activeID = activeComp.gameObject.GetInstanceIDCompat();
                     }
 
                     brainInfo = new
                     {
                         exists = true,
                         gameObject = brain.gameObject.name,
-                        instanceID = brain.gameObject.GetInstanceID(),
+                        instanceID = brain.gameObject.GetInstanceIDCompat(),
                         activeCameraName = activeName,
                         activeCameraID = activeID,
                         isBlending = isBlending is bool bl && bl
@@ -147,7 +140,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
                 var nameProp = activeCam.GetType().GetProperty("Name");
                 activeName = nameProp?.GetValue(activeCam) as string;
                 if (activeCam is Component comp)
-                    activeID = comp.gameObject.GetInstanceID();
+                    activeID = comp.gameObject.GetInstanceIDCompat();
             }
 
             string blendDesc = null;
@@ -163,7 +156,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
                 data = new
                 {
                     gameObject = brain.gameObject.name,
-                    instanceID = brain.gameObject.GetInstanceID(),
+                    instanceID = brain.gameObject.GetInstanceIDCompat(),
                     activeCameraName = activeName,
                     activeCameraID = activeID,
                     isBlending = isBlending is bool b && b,
@@ -217,7 +210,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
             {
                 success = true,
                 message = "Default blend configured on CinemachineBrain.",
-                data = new { instanceID = brain.gameObject.GetInstanceID() }
+                data = new { instanceID = brain.gameObject.GetInstanceIDCompat() }
             };
         }
 
@@ -246,7 +239,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
                 {
                     success = true,
                     message = $"Set high priority on '{cmCamera.gameObject.name}' (SetCameraOverride not available).",
-                    data = new { instanceID = cmCamera.gameObject.GetInstanceID(), method = "priority" }
+                    data = new { instanceID = cmCamera.gameObject.GetInstanceIDCompat(), method = "priority" }
                 };
             }
 
@@ -273,7 +266,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
                 {
                     success = true,
                     message = $"Forced via priority (override failed: {ex.Message}).",
-                    data = new { instanceID = cmCamera.gameObject.GetInstanceID(), method = "priority" }
+                    data = new { instanceID = cmCamera.gameObject.GetInstanceIDCompat(), method = "priority" }
                 };
             }
 
@@ -283,7 +276,7 @@ namespace MCPForUnity.Editor.Tools.Cameras
                 message = $"Camera overridden to '{cmCamera.gameObject.name}'.",
                 data = new
                 {
-                    instanceID = cmCamera.gameObject.GetInstanceID(),
+                    instanceID = cmCamera.gameObject.GetInstanceIDCompat(),
                     overrideId = _overrideId,
                     method = "override"
                 }

@@ -3,6 +3,7 @@ using System.Linq;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnity.Editor.Resources.Editor
 {
@@ -21,21 +22,21 @@ namespace MCPForUnity.Editor.Resources.Editor
                     activeObject = UnityEditor.Selection.activeObject?.name,
                     activeGameObject = UnityEditor.Selection.activeGameObject?.name,
                     activeTransform = UnityEditor.Selection.activeTransform?.name,
-                    activeInstanceID = UnityEditor.Selection.activeObject?.GetInstanceID() ?? 0,
+                    activeInstanceID = UnityEditor.Selection.activeObject?.GetInstanceIDCompat() ?? 0,
                     count = UnityEditor.Selection.count,
                     objects = UnityEditor.Selection.objects
                         .Select(obj => new
                         {
                             name = obj?.name,
                             type = obj?.GetType().FullName,
-                            instanceID = obj?.GetInstanceID()
+                            instanceID = obj?.GetInstanceIDCompat()
                         })
                         .ToList(),
                     gameObjects = UnityEditor.Selection.gameObjects
                         .Select(go => new
                         {
                             name = go?.name,
-                            instanceID = go?.GetInstanceID()
+                            instanceID = go?.GetInstanceIDCompat()
                         })
                         .ToList(),
                     assetGUIDs = UnityEditor.Selection.assetGUIDs

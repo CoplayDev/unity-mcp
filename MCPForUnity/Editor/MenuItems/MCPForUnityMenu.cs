@@ -10,14 +10,7 @@ namespace MCPForUnity.Editor.MenuItems
         [MenuItem("Window/MCP For Unity/Toggle MCP Window %#m", priority = 1)]
         public static void ToggleMCPWindow()
         {
-            if (MCPForUnityEditorWindow.HasAnyOpenWindow())
-            {
-                MCPForUnityEditorWindow.CloseAllOpenWindows();
-            }
-            else
-            {
-                MCPForUnityEditorWindow.ShowWindow();
-            }
+            MCPForUnityEditorWindow.ShowWindow();
         }
 
         [MenuItem("Window/MCP For Unity/Local Setup Window", priority = 2)]

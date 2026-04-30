@@ -6,6 +6,7 @@ using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnity.Editor.Tools.Graphics
 {
@@ -124,7 +125,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
                          (addedEffects.Count > 0 ? $" with effects: {string.Join(", ", addedEffects)}" : ""),
                 data = new
                 {
-                    instanceID = go.GetInstanceID(),
+                    instanceID = go.GetInstanceIDCompat(),
                     isGlobal,
                     weight,
                     priority,
@@ -189,7 +190,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
             {
                 success = true,
                 message = $"Added '{effectName}' to Volume '{(volume as Component)?.gameObject.name}'.",
-                data = new { effect = effectName, volumeInstanceID = (volume as Component)?.gameObject.GetInstanceID() }
+                data = new { effect = effectName, volumeInstanceID = (volume as Component)?.gameObject.GetInstanceIDCompat() }
             };
         }
 
@@ -454,11 +455,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
             if (!GraphicsHelpers.HasVolumeSystem)
                 return new { success = true, message = "Volume system not available.", data = new { volumes = new List<object>() } };
 
-#if UNITY_2022_2_OR_NEWER
-            var allVolumes = UnityEngine.Object.FindObjectsByType(GraphicsHelpers.VolumeType, FindObjectsSortMode.None);
-#else
-            var allVolumes = UnityEngine.Object.FindObjectsOfType(GraphicsHelpers.VolumeType);
-#endif
+            var allVolumes = UnityFindObjectsCompat.FindAll(GraphicsHelpers.VolumeType);
             var volumeList = new List<object>();
 
             foreach (Component vol in allVolumes)
@@ -529,7 +526,7 @@ namespace MCPForUnity.Editor.Tools.Graphics
             return new
             {
                 name = comp.gameObject.name,
-                instance_id = comp.gameObject.GetInstanceID(),
+                instance_id = comp.gameObject.GetInstanceIDCompat(),
                 is_global = isGlobal,
                 weight,
                 priority,

@@ -3,6 +3,7 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnity.Editor.Tools.Vfx
 {
@@ -90,7 +91,7 @@ namespace MCPForUnity.Editor.Tools.Vfx
                 success = true,
                 message = $"ParticleSystem ready on '{go.name}'",
                 target = go.name,
-                targetId = go.GetInstanceID(),
+                targetId = go.GetInstanceIDCompat(),
                 createdGameObject,
                 addedParticleSystem,
                 assignedMaterial = renderer?.sharedMaterial?.name

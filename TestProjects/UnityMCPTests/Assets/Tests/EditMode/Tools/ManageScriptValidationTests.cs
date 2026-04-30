@@ -379,6 +379,52 @@ public class Derived : Base
         }
 
         [Test]
+        public void DuplicateMethodCheck_LocalFunctionsInDifferentMethods_NotFlagged()
+        {
+            string code = @"using UnityEngine;
+public class Test : MonoBehaviour
+{
+    void Start()
+    {
+        int ClampScore(int value) { return Mathf.Clamp(value, 0, 100); }
+        Debug.Log(ClampScore(10));
+    }
+
+    void Reset()
+    {
+        int ClampScore(int value) { return Mathf.Clamp(value, 0, 100); }
+        Debug.Log(ClampScore(0));
+    }
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsFalse(HasDuplicateMethodError(errors),
+                "Same-signature local functions in different methods are valid C# and should not be flagged as duplicate class methods");
+        }
+
+        [Test]
+        public void DuplicateMethodCheck_RepeatedMethodInvocations_NotFlagged()
+        {
+            string code = @"using UnityEngine;
+public class Test : MonoBehaviour
+{
+    int First()
+    {
+        return Compute();
+    }
+
+    int Second()
+    {
+        return Compute();
+    }
+
+    int Compute() { return 1; }
+}";
+            var errors = CallValidateScriptSyntaxUnity(code);
+            Assert.IsFalse(HasDuplicateMethodError(errors),
+                "Repeated method invocations inside method bodies should not be treated as duplicate method declarations");
+        }
+
+        [Test]
         public void HandleCommand_PathWithCsExtension_StripsFilename()
         {
             // When path ends with .cs (full file path instead of directory),

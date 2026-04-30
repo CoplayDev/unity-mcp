@@ -21,7 +21,6 @@ namespace MCPForUnity.Editor.Tools.Profiler
 
             UProfiler.enabled = true;
 
-            bool recording = false;
             if (!string.IsNullOrEmpty(logFile))
             {
                 string dir = Path.GetDirectoryName(logFile);
@@ -30,7 +29,6 @@ namespace MCPForUnity.Editor.Tools.Profiler
 
                 UProfiler.logFile = logFile;
                 UProfiler.enableBinaryLog = true;
-                recording = true;
             }
 
             if (enableCallstacks)

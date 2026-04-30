@@ -88,10 +88,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("mcp-for-unity-server")
 
-# Also write logs to a rotating file so logs are available when launched via stdio
+# Also write logs to a rotating file so logs are available when launched via stdio.
+# Location follows OS conventions; override with UNITY_MCP_LOG_DIR.
 try:
-    _log_dir = os.path.join(os.path.expanduser(
-        "~/Library/Application Support/UnityMCP"), "Logs")
+    from utils.log_paths import resolve_log_dir
+    _log_dir = resolve_log_dir()
     os.makedirs(_log_dir, exist_ok=True)
     _file_path = os.path.join(_log_dir, "unity_mcp_server.log")
     _fh = WindowsSafeRotatingFileHandler(

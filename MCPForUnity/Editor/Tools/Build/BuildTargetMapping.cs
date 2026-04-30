@@ -24,8 +24,8 @@ namespace MCPForUnity.Editor.Tools.Build
                 case "webgl": target = BuildTarget.WebGL; return true;
                 case "uwp": target = BuildTarget.WSAPlayer; return true;
                 case "tvos": target = BuildTarget.tvOS; return true;
-                // VisionOS requires a late 2022.3 patch or Unity 6+; guard broadly
-#if UNITY_2022_3_OR_NEWER
+                // BuildTarget.VisionOS exists only in Unity 2023.2+ and late 2022.3 patches
+#if UNITY_2023_2_OR_NEWER
                 case "visionos": target = BuildTarget.VisionOS; return true;
 #endif
                 default:
@@ -50,7 +50,7 @@ namespace MCPForUnity.Editor.Tools.Build
                 case BuildTarget.WebGL: return BuildTargetGroup.WebGL;
                 case BuildTarget.WSAPlayer: return BuildTargetGroup.WSA;
                 case BuildTarget.tvOS: return BuildTargetGroup.tvOS;
-#if UNITY_2022_3_OR_NEWER
+#if UNITY_2023_2_OR_NEWER
                 case BuildTarget.VisionOS: return BuildTargetGroup.VisionOS;
 #endif
                 default: return BuildTargetGroup.Unknown;

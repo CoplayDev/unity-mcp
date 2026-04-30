@@ -91,11 +91,7 @@ namespace MCPForUnity.Runtime.Helpers
 
             try
             {
-#if UNITY_2022_2_OR_NEWER
-                var cams = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None);
-#else
-                var cams = UnityEngine.Object.FindObjectsOfType<Camera>();
-#endif
+                var cams = UnityFindObjectsCompat.FindAll<Camera>();
                 return cams.FirstOrDefault();
             }
             catch
