@@ -10,6 +10,7 @@ using MCPForUnity.Editor.Windows.Components.ClientConfig;
 using MCPForUnity.Editor.Windows.Components.Connection;
 using MCPForUnity.Editor.Windows.Components.Resources;
 using MCPForUnity.Editor.Windows.Components.Tools;
+using MCPForUnity.Editor.Windows.Components.Queue;
 using MCPForUnity.Editor.Setup;
 using MCPForUnity.Editor.Windows.Components.Validation;
 using UnityEditor;
@@ -27,6 +28,7 @@ namespace MCPForUnity.Editor.Windows
         private McpAdvancedSection advancedSection;
         private McpToolsSection toolsSection;
         private McpResourcesSection resourcesSection;
+        private McpQueueSection queueSection;
 
         // UI Elements
         private Label versionLabel;
@@ -38,11 +40,13 @@ namespace MCPForUnity.Editor.Windows
         private ToolbarToggle advancedTabToggle;
         private ToolbarToggle toolsTabToggle;
         private ToolbarToggle resourcesTabToggle;
+        private ToolbarToggle queueTabToggle;
         private VisualElement clientsPanel;
         private VisualElement depsPanel;
         private VisualElement advancedPanel;
         private VisualElement toolsPanel;
         private VisualElement resourcesPanel;
+        private VisualElement queuePanel;
 
         private static readonly HashSet<MCPForUnityEditorWindow> OpenWindows = new();
         private bool guiCreated = false;
@@ -59,7 +63,8 @@ namespace MCPForUnity.Editor.Windows
             Deps,
             Advanced,
             Tools,
-            Resources
+            Resources,
+            Queue
         }
 
         internal static void CloseAllWindows()
@@ -190,13 +195,15 @@ namespace MCPForUnity.Editor.Windows
             advancedPanel = rootVisualElement.Q<VisualElement>("advanced-panel");
             toolsPanel = rootVisualElement.Q<VisualElement>("tools-panel");
             resourcesPanel = rootVisualElement.Q<VisualElement>("resources-panel");
+            queuePanel = rootVisualElement.Q<VisualElement>("queue-panel");
             var clientsContainer = rootVisualElement.Q<VisualElement>("clients-container");
             var depsContainer = rootVisualElement.Q<VisualElement>("deps-container");
             var advancedContainer = rootVisualElement.Q<VisualElement>("advanced-container");
             var toolsContainer = rootVisualElement.Q<VisualElement>("tools-container");
             var resourcesContainer = rootVisualElement.Q<VisualElement>("resources-container");
+            var queueContainer = rootVisualElement.Q<VisualElement>("queue-container");
 
-            if (clientsPanel == null || depsPanel == null || advancedPanel == null || toolsPanel == null || resourcesPanel == null)
+            if (clientsPanel == null || depsPanel == null || advancedPanel == null || toolsPanel == null || resourcesPanel == null || queuePanel == null)
             {
                 McpLog.Error("Failed to find tab panels in UXML");
                 return;
@@ -229,6 +236,12 @@ namespace MCPForUnity.Editor.Windows
             if (resourcesContainer == null)
             {
                 McpLog.Error("Failed to find resources-container in UXML");
+                return;
+            }
+
+            if (queueContainer == null)
+            {
+                McpLog.Error("Failed to find queue-container in UXML");
                 return;
             }
 
@@ -358,6 +371,25 @@ namespace MCPForUnity.Editor.Windows
             else
             {
                 McpLog.Warn("Failed to load resources section UXML. Resource configuration will be unavailable.");
+            }
+
+            // Load and initialize Queue section
+            var queueTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
+                $"{basePath}/Editor/Windows/Components/Queue/McpQueueSection.uxml"
+            );
+            if (queueTree != null)
+            {
+                var queueRoot = queueTree.Instantiate();
+                queueContainer.Add(queueRoot);
+
+                // Load Queue section USS
+                var queueStyleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(
+                    $"{basePath}/Editor/Windows/Components/Queue/McpQueueSection.uss"
+                );
+                if (queueStyleSheet != null)
+                    rootVisualElement.styleSheets.Add(queueStyleSheet);
+
+                queueSection = new McpQueueSection(queueRoot);
             }
 
             // Apply .section-last class to last section in each stack
@@ -534,6 +566,9 @@ namespace MCPForUnity.Editor.Windows
         // Connection status polling every frame caused expensive network checks 60+ times/sec.
         private double _lastEditorUpdateTime;
         private const double EditorUpdateIntervalSeconds = 2.0;
+        private double _lastQueueRefreshTime;
+        private const double QueueRefreshIntervalSeconds = 1.0;
+        private ActivePanel _currentPanel = ActivePanel.Clients;
 
         private void OnEnable()
         {
@@ -561,10 +596,21 @@ namespace MCPForUnity.Editor.Windows
 
         private void OnEditorUpdate()
         {
-            // Throttle to 2-second intervals instead of every frame.
+            double now = EditorApplication.timeSinceStartup;
+
+            // Queue tab: 1-second refresh (faster than the general 2-second throttle)
+            if (_currentPanel == ActivePanel.Queue && queueSection != null)
+            {
+                if (now - _lastQueueRefreshTime >= QueueRefreshIntervalSeconds)
+                {
+                    _lastQueueRefreshTime = now;
+                    queueSection.Refresh();
+                }
+            }
+
+            // Throttle connection status to 2-second intervals instead of every frame.
             // This prevents the expensive IsLocalHttpServerReachable() socket checks from running
             // 60+ times per second, which caused main thread blocking and GC pressure.
-            double now = EditorApplication.timeSinceStartup;
             if (now - _lastEditorUpdateTime < EditorUpdateIntervalSeconds)
             {
                 return;
@@ -605,12 +651,14 @@ namespace MCPForUnity.Editor.Windows
             advancedTabToggle = rootVisualElement.Q<ToolbarToggle>("advanced-tab");
             toolsTabToggle = rootVisualElement.Q<ToolbarToggle>("tools-tab");
             resourcesTabToggle = rootVisualElement.Q<ToolbarToggle>("resources-tab");
+            queueTabToggle = rootVisualElement.Q<ToolbarToggle>("queue-tab");
 
             clientsPanel?.RemoveFromClassList("hidden");
             depsPanel?.RemoveFromClassList("hidden");
             advancedPanel?.RemoveFromClassList("hidden");
             toolsPanel?.RemoveFromClassList("hidden");
             resourcesPanel?.RemoveFromClassList("hidden");
+            queuePanel?.RemoveFromClassList("hidden");
 
             if (clientsTabToggle != null)
             {
@@ -649,6 +697,14 @@ namespace MCPForUnity.Editor.Windows
                 resourcesTabToggle.RegisterValueChangedCallback(evt =>
                 {
                     if (evt.newValue) SwitchPanel(ActivePanel.Resources);
+                });
+            }
+
+            if (queueTabToggle != null)
+            {
+                queueTabToggle.RegisterValueChangedCallback(evt =>
+                {
+                    if (evt.newValue) SwitchPanel(ActivePanel.Queue);
                 });
             }
 
@@ -691,6 +747,11 @@ namespace MCPForUnity.Editor.Windows
                 resourcesPanel.style.display = DisplayStyle.None;
             }
 
+            if (queuePanel != null)
+            {
+                queuePanel.style.display = DisplayStyle.None;
+            }
+
             // Show selected panel
             switch (panel)
             {
@@ -713,6 +774,10 @@ namespace MCPForUnity.Editor.Windows
                     if (resourcesPanel != null) resourcesPanel.style.display = DisplayStyle.Flex;
                     EnsureResourcesLoaded();
                     break;
+                case ActivePanel.Queue:
+                    if (queuePanel != null) queuePanel.style.display = DisplayStyle.Flex;
+                    queueSection?.Refresh();
+                    break;
             }
 
             // Update toggle states
@@ -721,7 +786,9 @@ namespace MCPForUnity.Editor.Windows
             advancedTabToggle?.SetValueWithoutNotify(panel == ActivePanel.Advanced);
             toolsTabToggle?.SetValueWithoutNotify(panel == ActivePanel.Tools);
             resourcesTabToggle?.SetValueWithoutNotify(panel == ActivePanel.Resources);
+            queueTabToggle?.SetValueWithoutNotify(panel == ActivePanel.Queue);
 
+            _currentPanel = panel;
             EditorPrefs.SetString(EditorPrefKeys.EditorWindowActivePanel, panel.ToString());
         }
 

@@ -52,6 +52,12 @@ namespace MCPForUnity.Editor.Tools
         public string PollAction { get; set; } = "status";
 
         /// <summary>
+        /// Execution tier for queue dispatch. Default: Smooth (safe conservative default).
+        /// Instant = read-only, inline. Smooth = non-blocking write. Heavy = exclusive access.
+        /// </summary>
+        public ExecutionTier Tier { get; set; } = ExecutionTier.Smooth;
+
+        /// <summary>
         /// Maximum seconds to poll before timing out. 0 means use the server default.
         /// Useful for long-running operations like builds.
         /// </summary>
