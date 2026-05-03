@@ -897,7 +897,7 @@ namespace MCPForUnity.Editor.Tools
                 Directory.CreateDirectory(resolvedFolderAbs);
                 string playFullPath = Path.Combine(resolvedFolderAbs, resolvedPlayName).Replace('\\', '/');
                 playFullPath = EnsureUniqueFilePath(playFullPath);
-                string playProjectRelPath = ToProjectRelativePathLocal(playFullPath);
+                string playProjectRelPath = ScreenshotUtility.ToProjectRelativePath(playFullPath);
 
                 // ── Case 1: capture is ready ──────────────────────────────────────
                 if (s_pendingCaptureDone && s_pendingCaptureTex != null)
@@ -1153,7 +1153,7 @@ namespace MCPForUnity.Editor.Tools
                 byte[] png = tex.EncodeToPNG();
                 File.WriteAllBytes(fullPath, png);
 
-                string projectRelPath = ToProjectRelativePathLocal(fullPath);
+                string projectRelPath = ScreenshotUtility.ToProjectRelativePath(fullPath);
                 if (ScreenshotUtility.IsUnderAssets(projectRelPath))
                     AssetDatabase.ImportAsset(projectRelPath, ImportAssetOptions.ForceSynchronousImport);
 
@@ -1821,15 +1821,6 @@ namespace MCPForUnity.Editor.Tools
                 counter++;
             } while (File.Exists(candidate));
             return candidate;
-        }
-
-        private static string ToProjectRelativePathLocal(string normalizedFullPath)
-        {
-            string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, "..")).Replace('\\', '/');
-            string normalizedRoot = projectRoot.EndsWith("/") ? projectRoot : projectRoot + "/";
-            return normalizedFullPath.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase)
-                ? normalizedFullPath.Substring(normalizedRoot.Length)
-                : normalizedFullPath;
         }
 
         private static string ColorToHex(Color c)

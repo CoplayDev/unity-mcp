@@ -483,7 +483,9 @@ def build_screenshot_params(
     if screenshot_file_name:
         params["fileName"] = screenshot_file_name
     if output_folder:
-        params["outputFolder"] = output_folder.strip()
+        trimmed_folder = output_folder.strip()
+        if trimmed_folder:
+            params["outputFolder"] = trimmed_folder
     coerced_super_size = coerce_int(screenshot_super_size, default=None)
     if coerced_super_size is not None:
         params["superSize"] = coerced_super_size

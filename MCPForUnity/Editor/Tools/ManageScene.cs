@@ -1097,7 +1097,8 @@ namespace MCPForUnity.Editor.Tools
 
         /// <summary>
         /// Captures a single screenshot from a temporary camera placed at view_position and aimed at view_target.
-        /// Returns inline base64 PNG and also saves the image to &lt;projectRoot&gt;/Captures/.
+        /// Returns inline base64 PNG and also saves the image to the resolved screenshot folder
+        /// (caller's <c>output_folder</c> override -> <c>ScreenshotPreferences.DefaultFolder</c> -> built-in <c>Assets/Screenshots</c>).
         /// </summary>
         private static object CapturePositionedScreenshot(SceneCommand cmd)
         {
@@ -1231,20 +1232,13 @@ namespace MCPForUnity.Editor.Tools
 
         /// <summary>
         /// Resolves the per-call/per-pref/built-in screenshot folder spec to an absolute path.
-        /// Falls back to the built-in default when validation fails (used by paths that just want
-        /// to surface the folder name in metadata without performing a capture).
+        /// Propagates validation errors from <see cref="ScreenshotUtility.ResolveFolderAbsolute"/>
+        /// so callers can surface them rather than silently writing somewhere else.
         /// </summary>
         private static string ResolveAbsoluteOutputFolder(string callerOverride)
         {
             string spec = ScreenshotPreferences.Resolve(callerOverride);
-            try
-            {
-                return ScreenshotUtility.ResolveFolderAbsolute(spec).Replace('\\', '/');
-            }
-            catch
-            {
-                return ScreenshotUtility.ResolveFolderAbsolute(ScreenshotUtility.DefaultFolder).Replace('\\', '/');
-            }
+            return ScreenshotUtility.ResolveFolderAbsolute(spec).Replace('\\', '/');
         }
 
         private static string GetDirectionLabel(float azimuthDeg)

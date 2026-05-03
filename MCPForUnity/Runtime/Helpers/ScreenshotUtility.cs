@@ -595,9 +595,12 @@ namespace MCPForUnity.Runtime.Helpers
             string fullFolder = Path.GetFullPath(combined).Replace('\\', '/').TrimEnd('/');
             string normalizedRoot = projectRoot;
 
-            // Reject paths that escape the project root (case-insensitive on Windows).
-            if (!fullFolder.Equals(normalizedRoot, StringComparison.OrdinalIgnoreCase) &&
-                !fullFolder.StartsWith(normalizedRoot + "/", StringComparison.OrdinalIgnoreCase))
+            // Reject paths that escape the project root (case-insensitive on Windows, exact elsewhere).
+            var rootComparison = Application.platform == RuntimePlatform.WindowsEditor
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+            if (!fullFolder.Equals(normalizedRoot, rootComparison) &&
+                !fullFolder.StartsWith(normalizedRoot + "/", rootComparison))
             {
                 throw new InvalidOperationException(
                     $"Screenshot folder '{folderOverride}' resolves outside the Unity project root ('{fullFolder}'). " +
@@ -607,15 +610,21 @@ namespace MCPForUnity.Runtime.Helpers
             return fullFolder;
         }
 
-        private static string ToProjectRelativePath(string normalizedFullPath)
+        /// <summary>
+        /// Converts an absolute filesystem path inside the project to a project-relative path
+        /// (forward slashes, no leading separator). Returns the input unchanged when it does
+        /// not live under the project root.
+        /// </summary>
+        public static string ToProjectRelativePath(string normalizedFullPath)
         {
+            if (string.IsNullOrEmpty(normalizedFullPath)) return normalizedFullPath;
             string projectRoot = GetProjectRootPath();
-            string relative = normalizedFullPath;
-            if (relative.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
+            string normalized = normalizedFullPath.Replace('\\', '/');
+            if (normalized.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
             {
-                relative = relative.Substring(projectRoot.Length).TrimStart('/');
+                return normalized.Substring(projectRoot.Length).TrimStart('/');
             }
-            return relative;
+            return normalized;
         }
 
         /// <summary>
@@ -650,8 +659,11 @@ namespace MCPForUnity.Runtime.Helpers
 
         private static string SanitizeFileName(string fileName)
         {
+            // GetInvalidFileNameChars() doesn't include '\' or '/' on Unix, so a caller-supplied
+            // name like "foo\bar" would survive and later get spliced into the directory portion.
             var invalidChars = Path.GetInvalidFileNameChars();
-            string cleaned = new string(fileName.Select(ch => invalidChars.Contains(ch) ? '_' : ch).ToArray());
+            string cleaned = new string(
+                fileName.Select(ch => invalidChars.Contains(ch) || ch == '/' || ch == '\\' ? '_' : ch).ToArray());
 
             return string.IsNullOrWhiteSpace(cleaned) ? "screenshot" : cleaned;
         }

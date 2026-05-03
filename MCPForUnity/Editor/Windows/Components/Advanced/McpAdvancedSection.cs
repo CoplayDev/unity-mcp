@@ -543,8 +543,19 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             string normalizedRoot = projectRoot.EndsWith("/") ? projectRoot : projectRoot + "/";
             string normalizedPicked = picked.Replace('\\', '/');
 
-            if (!normalizedPicked.Equals(projectRoot, StringComparison.OrdinalIgnoreCase) &&
-                !normalizedPicked.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase))
+            if (normalizedPicked.Equals(projectRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                // Storing "" would wipe the EditorPrefs key (= "unset"), so reject the project
+                // root rather than silently revert the override the user just chose.
+                EditorUtility.DisplayDialog(
+                    "Pick a Subfolder",
+                    "Please pick a subfolder of the project (for example 'Assets/Screenshots' or 'Captures'). " +
+                    "Selecting the project root would mix screenshots in with your project files.",
+                    "OK");
+                return;
+            }
+
+            if (!normalizedPicked.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase))
             {
                 EditorUtility.DisplayDialog(
                     "Folder Outside Project",
@@ -553,13 +564,11 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
                 return;
             }
 
-            string projectRelative = normalizedPicked.Equals(projectRoot, StringComparison.OrdinalIgnoreCase)
-                ? string.Empty
-                : normalizedPicked.Substring(normalizedRoot.Length);
+            string projectRelative = normalizedPicked.Substring(normalizedRoot.Length);
 
             ScreenshotPreferences.DefaultFolder = projectRelative;
             screenshotsFolderOverride?.SetValueWithoutNotify(projectRelative);
-            McpLog.Info($"Default screenshots folder set to '{(string.IsNullOrEmpty(projectRelative) ? "(project root)" : projectRelative)}'.");
+            McpLog.Info($"Default screenshots folder set to '{projectRelative}'.");
         }
 
         private void OnBrowseDeploySourceClicked()
