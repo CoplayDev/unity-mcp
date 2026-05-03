@@ -108,6 +108,25 @@ unity-mcp component remove "Player" Rigidbody
 
 # Set property
 unity-mcp component set "Player" Rigidbody mass 10
+
+# List valid reference targets for an object reference field
+unity-mcp component get_referenceable "Player" AudioSource clip
+
+# Assign an object reference (project asset by path)
+unity-mcp component set_reference "Player" AudioSource clip \
+  --reference_asset_path "Assets/Audio/BGM.mp3"
+
+# Assign an object reference (scene object by hierarchy path)
+unity-mcp component set_reference "MainCamera" CinemachineCamera Follow \
+  --reference_path "Player"
+
+# Clear an object reference
+unity-mcp component set_reference "Player" AudioSource clip --clear
+
+# Wire multiple references on a component atomically
+unity-mcp component batch_wire "GameManager" GameManager --references \
+  '[{"property_name":"player","reference_path":"Player"},
+    {"property_name":"bgMusic","reference_asset_path":"Assets/Audio/BGM.mp3"}]'
 ```
 
 ### Script Operations

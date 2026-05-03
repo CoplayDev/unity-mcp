@@ -116,6 +116,9 @@ async def manage_components(
     - Remove BoxCollider: action="remove", target=-12345, component_type="BoxCollider"
     - Set single property: action="set_property", target="Enemy", component_type="Rigidbody", property="mass", value=5.0
     - Set multiple properties: action="set_property", target="Enemy", component_type="Rigidbody", properties={"mass": 5.0, "useGravity": false}
+    - List referenceable targets: action="get_referenceable", target="Player", component_type="AudioSource", property="clip"
+    - Set reference (asset): action="set_reference", target="Player", component_type="AudioSource", property="clip", reference_asset_path="Assets/Audio/BGM.mp3"
+    - Wire multiple references: action="batch_wire", target="GameManager", component_type="GameManager", references=[{"property_name": "player", "reference_path": "Player"}]
     """
     unity_instance = await get_unity_instance_from_context(ctx)
 
