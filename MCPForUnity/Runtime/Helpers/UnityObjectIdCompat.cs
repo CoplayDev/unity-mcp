@@ -6,6 +6,8 @@ using UnityEditor;
 
 namespace MCPForUnity.Runtime.Helpers
 {
+    // Part of MCP for Unity's compat-shim family. See UnityCompatShims.cs in this
+    // folder for the full list of shims, the audit policy, and the reflection pattern.
     /// <summary>
     /// Version-gated wrappers for the InstanceID ↔ EntityId migration introduced in Unity 6.5
     /// and tightened in 6.6.

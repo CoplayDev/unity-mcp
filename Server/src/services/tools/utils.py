@@ -473,6 +473,7 @@ def build_screenshot_params(
     orbit_fov: float | str | None = None,
     view_position: list[float] | str | None = None,
     view_rotation: list[float] | str | None = None,
+    output_folder: str | None = None,
 ) -> dict[str, Any] | None:
     """Populate screenshot-related keys in *params* dict. Returns an error dict
     if validation fails, or None on success.
@@ -481,6 +482,8 @@ def build_screenshot_params(
     """
     if screenshot_file_name:
         params["fileName"] = screenshot_file_name
+    if output_folder:
+        params["outputFolder"] = output_folder.strip()
     coerced_super_size = coerce_int(screenshot_super_size, default=None)
     if coerced_super_size is not None:
         params["superSize"] = coerced_super_size

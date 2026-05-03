@@ -860,10 +860,22 @@ namespace MCPForUnity.Editor.Tools
             bool includeImage = p.GetBool("include_image") || p.GetBool("includeImage");
             int maxResolution = p.GetInt("max_resolution") ?? p.GetInt("maxResolution") ?? 640;
             string fileName = p.Get("file_name") ?? p.Get("fileName");
+            string outputFolderOverride = p.Get("output_folder") ?? p.Get("outputFolder");
 
             if (string.IsNullOrEmpty(target) && string.IsNullOrEmpty(uxmlPath))
             {
                 return new ErrorResponse("Either 'target' (GameObject with UIDocument) or 'path' (UXML asset path) is required.");
+            }
+
+            string resolvedFolderSpec = ScreenshotPreferences.Resolve(outputFolderOverride);
+            string resolvedFolderAbs;
+            try
+            {
+                resolvedFolderAbs = ScreenshotUtility.ResolveFolderAbsolute(resolvedFolderSpec);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return new ErrorResponse(ex.Message);
             }
 
             // ── Play-mode capture via ScreenCapture coroutine ──────────────────────
@@ -882,11 +894,10 @@ namespace MCPForUnity.Editor.Tools
                 if (!resolvedPlayName.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                     resolvedPlayName += ".png";
 
-                string playFolder = Path.Combine(Application.dataPath, "Screenshots");
-                Directory.CreateDirectory(playFolder);
-                string playFullPath = Path.Combine(playFolder, resolvedPlayName).Replace('\\', '/');
+                Directory.CreateDirectory(resolvedFolderAbs);
+                string playFullPath = Path.Combine(resolvedFolderAbs, resolvedPlayName).Replace('\\', '/');
                 playFullPath = EnsureUniqueFilePath(playFullPath);
-                string playAssetsRelPath = "Assets/Screenshots/" + Path.GetFileName(playFullPath);
+                string playProjectRelPath = ToProjectRelativePathLocal(playFullPath);
 
                 // ── Case 1: capture is ready ──────────────────────────────────────
                 if (s_pendingCaptureDone && s_pendingCaptureTex != null)
@@ -901,11 +912,12 @@ namespace MCPForUnity.Editor.Tools
                     UnityEngine.Object.DestroyImmediate(captureTex);
 
                     File.WriteAllBytes(playFullPath, capturePng);
-                    AssetDatabase.ImportAsset(playAssetsRelPath, ImportAssetOptions.ForceSynchronousImport);
+                    if (ScreenshotUtility.IsUnderAssets(playProjectRelPath))
+                        AssetDatabase.ImportAsset(playProjectRelPath, ImportAssetOptions.ForceSynchronousImport);
 
                     var playData = new Dictionary<string, object>
                     {
-                        { "path", playAssetsRelPath },
+                        { "path", playProjectRelPath },
                         { "fullPath", playFullPath },
                         { "width", captureW },
                         { "height", captureH },
@@ -944,7 +956,7 @@ namespace MCPForUnity.Editor.Tools
                         }
                     }
 
-                    return new SuccessResponse($"UI render saved to '{playAssetsRelPath}'.", playData);
+                    return new SuccessResponse($"UI render saved to '{playProjectRelPath}'.", playData);
                 }
 
                 // ── Case 2: start a new capture ───────────────────────────────────
@@ -1134,20 +1146,20 @@ namespace MCPForUnity.Editor.Tools
                 if (!resolvedName.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                     resolvedName += ".png";
 
-                string folder = Path.Combine(Application.dataPath, "Screenshots");
-                Directory.CreateDirectory(folder);
-                string fullPath = Path.Combine(folder, resolvedName).Replace('\\', '/');
+                Directory.CreateDirectory(resolvedFolderAbs);
+                string fullPath = Path.Combine(resolvedFolderAbs, resolvedName).Replace('\\', '/');
                 fullPath = EnsureUniqueFilePath(fullPath);
 
                 byte[] png = tex.EncodeToPNG();
                 File.WriteAllBytes(fullPath, png);
 
-                string assetsRelPath = "Assets/Screenshots/" + Path.GetFileName(fullPath);
-                AssetDatabase.ImportAsset(assetsRelPath, ImportAssetOptions.ForceSynchronousImport);
+                string projectRelPath = ToProjectRelativePathLocal(fullPath);
+                if (ScreenshotUtility.IsUnderAssets(projectRelPath))
+                    AssetDatabase.ImportAsset(projectRelPath, ImportAssetOptions.ForceSynchronousImport);
 
                 var data = new Dictionary<string, object>
                 {
-                    { "path", assetsRelPath },
+                    { "path", projectRelPath },
                     { "fullPath", fullPath },
                     { "width", width },
                     { "height", height },
@@ -1191,10 +1203,10 @@ namespace MCPForUnity.Editor.Tools
                 UnityEngine.Object.DestroyImmediate(tex);
 
                 string msg = hasContent
-                    ? $"UI rendered to '{assetsRelPath}'."
+                    ? $"UI rendered to '{projectRelPath}'."
                     : rtJustAssigned
                         ? $"RenderTexture assigned to PanelSettings. Call render_ui again to capture the rendered content."
-                        : $"UI render saved to '{assetsRelPath}' (no visible content detected).";
+                        : $"UI render saved to '{projectRelPath}' (no visible content detected).";
 
                 return new SuccessResponse(msg, data);
             }
@@ -1809,6 +1821,15 @@ namespace MCPForUnity.Editor.Tools
                 counter++;
             } while (File.Exists(candidate));
             return candidate;
+        }
+
+        private static string ToProjectRelativePathLocal(string normalizedFullPath)
+        {
+            string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, "..")).Replace('\\', '/');
+            string normalizedRoot = projectRoot.EndsWith("/") ? projectRoot : projectRoot + "/";
+            return normalizedFullPath.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase)
+                ? normalizedFullPath.Substring(normalizedRoot.Length)
+                : normalizedFullPath;
         }
 
         private static string ColorToHex(Color c)
