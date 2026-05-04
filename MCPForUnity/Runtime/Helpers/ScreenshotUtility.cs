@@ -237,6 +237,84 @@ namespace MCPForUnity.Runtime.Helpers
         }
 
         /// <summary>
+        /// Captures a screenshot using ScreenCapture.CaptureScreenshotAsTexture, which captures the
+        /// final composited frame including UI Toolkit overlays, post-processing, etc.
+        /// Falls back to camera-based capture if ScreenCapture is unavailable.
+        /// </summary>
+        public static ScreenshotCaptureResult CaptureComposited(
+            string fileName = null,
+            int superSize = 1,
+            bool ensureUniqueFileName = true,
+            bool includeImage = false,
+            int maxResolution = 0)
+        {
+            if (!IsScreenCaptureModuleAvailable)
+            {
+                var fallbackCamera = FindAvailableCamera();
+                if (fallbackCamera != null)
+                    return CaptureFromCameraToAssetsFolder(fallbackCamera, fileName, superSize, ensureUniqueFileName, includeImage, maxResolution);
+
+                throw new InvalidOperationException("ScreenCapture module is unavailable and no fallback camera found.");
+            }
+
+            ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, isAsync: false);
+            Texture2D tex = null;
+            Texture2D downscaled = null;
+            string imageBase64 = null;
+            int imgW = 0, imgH = 0;
+            try
+            {
+                tex = ScreenCapture.CaptureScreenshotAsTexture(result.SuperSize);
+                if (tex == null)
+                {
+                    // Fallback to camera-based if ScreenCapture fails
+                    var cam = FindAvailableCamera();
+                    if (cam != null)
+                        return CaptureFromCameraToAssetsFolder(cam, fileName, superSize, ensureUniqueFileName, includeImage, maxResolution);
+                    throw new InvalidOperationException("ScreenCapture.CaptureScreenshotAsTexture returned null and no fallback camera available.");
+                }
+
+                int width = tex.width;
+                int height = tex.height;
+
+                byte[] png = tex.EncodeToPNG();
+                File.WriteAllBytes(result.FullPath, png);
+
+                if (includeImage)
+                {
+                    int targetMax = maxResolution > 0 ? maxResolution : 640;
+                    if (width > targetMax || height > targetMax)
+                    {
+                        downscaled = DownscaleTexture(tex, targetMax);
+                        byte[] smallPng = downscaled.EncodeToPNG();
+                        imageBase64 = System.Convert.ToBase64String(smallPng);
+                        imgW = downscaled.width;
+                        imgH = downscaled.height;
+                    }
+                    else
+                    {
+                        imageBase64 = System.Convert.ToBase64String(png);
+                        imgW = width;
+                        imgH = height;
+                    }
+                }
+            }
+            finally
+            {
+                DestroyTexture(tex);
+                DestroyTexture(downscaled);
+            }
+
+            if (includeImage && imageBase64 != null)
+            {
+                return new ScreenshotCaptureResult(
+                    result.FullPath, result.AssetsRelativePath, result.SuperSize, false,
+                    imageBase64, imgW, imgH);
+            }
+            return result;
+        }
+
+        /// <summary>
         /// Renders a camera to a Texture2D without saving to disk. Used for multi-angle captures.
         /// Returns the base64-encoded PNG, downscaled to fit within <paramref name="maxResolution"/>.
         /// </summary>
