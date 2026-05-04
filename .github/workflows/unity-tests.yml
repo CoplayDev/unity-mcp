@@ -31,6 +31,8 @@ jobs:
   testAllModes:
     name: Test in ${{ matrix.testMode }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     if: >
       github.event_name != 'pull_request_target' ||
       (github.event.pull_request.head.repo.full_name != github.repository &&
@@ -50,6 +52,7 @@ jobs:
         with:
           lfs: true
           ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.ref }}
+          persist-credentials: false
 
       - name: Detect Unity license secrets
         id: detect
@@ -130,7 +133,7 @@ jobs:
           fi
 
       - uses: actions/upload-artifact@v4
-        if: always() && steps.detect.outputs.unity_ok == 'true'
+        if: always() && steps.detect.outputs.unity_ok == 'true' && steps.tests.outcome != 'skipped'
         with:
           name: Test results for ${{ matrix.testMode }}
           path: ${{ steps.tests.outputs.artifactsPath }}
