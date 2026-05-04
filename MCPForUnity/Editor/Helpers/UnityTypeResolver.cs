@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using MCPForUnity.Runtime.Helpers;
 using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
@@ -150,7 +151,7 @@ namespace MCPForUnity.Editor.Helpers
         private static List<Type> FindCandidates(string query, Type requiredBaseType)
         {
             bool isShort = !query.Contains('.');
-            var loaded = AppDomain.CurrentDomain.GetAssemblies();
+            var loaded = UnityAssembliesCompat.GetLoadedAssemblies();
 
 #if UNITY_EDITOR
             // Names of Player (runtime) script assemblies

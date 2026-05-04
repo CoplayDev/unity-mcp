@@ -3,6 +3,7 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Runtime.Helpers;
 
 namespace MCPForUnity.Editor.Tools.Physics
 {
@@ -12,12 +13,7 @@ namespace MCPForUnity.Editor.Tools.Physics
         {
             var gravity3d = UnityEngine.Physics.gravity;
             var gravity2d = Physics2D.gravity;
-
-#if UNITY_2022_2_OR_NEWER
-            var simMode = UnityEngine.Physics.simulationMode.ToString();
-#else
-            var simMode = UnityEngine.Physics.autoSimulation ? "FixedUpdate" : "Script";
-#endif
+            var simMode = UnityPhysicsCompat.GetPhysicsSimulationMode().ToString();
 
             return new
             {
@@ -59,7 +55,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                         queriesHitTriggers = Physics2D.queriesHitTriggers,
                         queriesStartInColliders = Physics2D.queriesStartInColliders,
                         callbacksOnDisable = Physics2D.callbacksOnDisable,
-                        autoSyncTransforms = Physics2D.autoSyncTransforms
+                        autoSyncTransforms = UnityPhysicsCompat.GetPhysics2DAutoSyncTransforms()
                     }
                 };
             }
@@ -68,11 +64,7 @@ namespace MCPForUnity.Editor.Tools.Physics
                 return new ErrorResponse($"Invalid dimension: '{dimension}'. Use '3d' or '2d'.");
 
             var g3 = UnityEngine.Physics.gravity;
-#if UNITY_2022_2_OR_NEWER
-            var simMode = UnityEngine.Physics.simulationMode.ToString();
-#else
-            var simMode = UnityEngine.Physics.autoSimulation ? "FixedUpdate" : "Script";
-#endif
+            var simMode = UnityPhysicsCompat.GetPhysicsSimulationMode().ToString();
 
             return new
             {
@@ -90,7 +82,8 @@ namespace MCPForUnity.Editor.Tools.Physics
                     defaultMaxAngularSpeed = UnityEngine.Physics.defaultMaxAngularSpeed,
                     queriesHitTriggers = UnityEngine.Physics.queriesHitTriggers,
                     queriesHitBackfaces = UnityEngine.Physics.queriesHitBackfaces,
-                    simulationMode = simMode
+                    simulationMode = simMode,
+                    autoSyncTransforms = UnityPhysicsCompat.GetPhysicsAutoSyncTransforms()
                 }
             };
         }
@@ -118,7 +111,8 @@ namespace MCPForUnity.Editor.Tools.Physics
             "gravity", "defaultcontactoffset", "sleepthreshold",
             "defaultsolveriterations", "defaultsolvervelocityiterations",
             "bouncethreshold", "defaultmaxangularspeed",
-            "querieshittriggers", "querieshitbackfaces", "simulationmode"
+            "querieshittriggers", "querieshitbackfaces", "simulationmode",
+            "autosynctransforms"
         };
 
         private static object SetSettings3D(JObject settings)
@@ -184,32 +178,28 @@ namespace MCPForUnity.Editor.Tools.Physics
                         changed.Add("queriesHitBackfaces");
                         break;
                     case "simulationmode":
-#if UNITY_2022_2_OR_NEWER
                     {
                         string modeStr = prop.Value.ToString();
-                        if (System.Enum.TryParse<SimulationMode>(modeStr, true, out var mode))
-                        {
-                            UnityEngine.Physics.simulationMode = mode;
-                            changed.Add("simulationMode");
-                        }
-                        else
+                        if (!System.Enum.TryParse<UnityPhysicsCompat.SimulationMode>(modeStr, true, out var mode)
+                            || mode == UnityPhysicsCompat.SimulationMode.Unknown)
                         {
                             return new ErrorResponse(
                                 $"Invalid simulationMode: '{modeStr}'. Valid: FixedUpdate, Update, Script.");
                         }
-                        break;
-                    }
-#else
-                    {
-                        string modeStr = prop.Value.ToString().ToLowerInvariant();
-                        if (modeStr == "fixedupdate") UnityEngine.Physics.autoSimulation = true;
-                        else if (modeStr == "script") UnityEngine.Physics.autoSimulation = false;
-                        else return new ErrorResponse(
-                            $"Invalid simulationMode: '{prop.Value}'. Valid: FixedUpdate, Script.");
+                        if (!UnityPhysicsCompat.TrySetPhysicsSimulationMode(mode))
+                        {
+                            return new ErrorResponse(
+                                $"simulationMode '{modeStr}' is not supported on this Unity version.");
+                        }
                         changed.Add("simulationMode");
                         break;
                     }
-#endif
+                    case "autosynctransforms":
+                        if (UnityPhysicsCompat.TrySetPhysicsAutoSyncTransforms(prop.Value.Value<bool>()))
+                        {
+                            changed.Add("autoSyncTransforms");
+                        }
+                        break;
                 }
             }
 
@@ -281,8 +271,10 @@ namespace MCPForUnity.Editor.Tools.Physics
                         changed.Add("callbacksOnDisable");
                         break;
                     case "autosynctransforms":
-                        Physics2D.autoSyncTransforms = prop.Value.Value<bool>();
-                        changed.Add("autoSyncTransforms");
+                        if (UnityPhysicsCompat.TrySetPhysics2DAutoSyncTransforms(prop.Value.Value<bool>()))
+                        {
+                            changed.Add("autoSyncTransforms");
+                        }
                         break;
                 }
             }
