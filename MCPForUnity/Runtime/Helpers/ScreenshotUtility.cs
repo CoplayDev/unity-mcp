@@ -252,12 +252,12 @@ namespace MCPForUnity.Runtime.Helpers
             {
                 var fallbackCamera = FindAvailableCamera();
                 if (fallbackCamera != null)
-                    return CaptureFromCameraToAssetsFolder(fallbackCamera, fileName, superSize, ensureUniqueFileName, includeImage, maxResolution);
+                    return CaptureFromCameraToProjectFolder(fallbackCamera, fileName, superSize, ensureUniqueFileName, includeImage, maxResolution);
 
                 throw new InvalidOperationException("ScreenCapture module is unavailable and no fallback camera found.");
             }
 
-            ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, isAsync: false);
+            ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, folderOverride: null, isAsync: false);
             Texture2D tex = null;
             Texture2D downscaled = null;
             string imageBase64 = null;
@@ -270,7 +270,7 @@ namespace MCPForUnity.Runtime.Helpers
                     // Fallback to camera-based if ScreenCapture fails
                     var cam = FindAvailableCamera();
                     if (cam != null)
-                        return CaptureFromCameraToAssetsFolder(cam, fileName, superSize, ensureUniqueFileName, includeImage, maxResolution);
+                        return CaptureFromCameraToProjectFolder(cam, fileName, superSize, ensureUniqueFileName, includeImage, maxResolution);
                     throw new InvalidOperationException("ScreenCapture.CaptureScreenshotAsTexture returned null and no fallback camera available.");
                 }
 
@@ -308,7 +308,7 @@ namespace MCPForUnity.Runtime.Helpers
             if (includeImage && imageBase64 != null)
             {
                 return new ScreenshotCaptureResult(
-                    result.FullPath, result.AssetsRelativePath, result.SuperSize, false,
+                    result.FullPath, result.ProjectRelativePath, result.SuperSize, false,
                     imageBase64, imgW, imgH);
             }
             return result;

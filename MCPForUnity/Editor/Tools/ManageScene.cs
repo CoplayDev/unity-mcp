@@ -598,12 +598,12 @@ namespace MCPForUnity.Editor.Tools
                 {
                     if (!Application.isBatchMode) EnsureGameView();
 
-                    ScreenshotCaptureResult result = ScreenshotUtility.CaptureFromCameraToAssetsFolder(
+                    ScreenshotCaptureResult result = ScreenshotUtility.CaptureFromCameraToProjectFolder(
                         targetCamera, fileName, resolvedSuperSize, ensureUniqueFileName: true,
                         includeImage: includeImage, maxResolution: maxResolution);
 
-                    AssetDatabase.ImportAsset(result.AssetsRelativePath, ImportAssetOptions.ForceSynchronousImport);
-                    string message = $"Screenshot captured to '{result.AssetsRelativePath}' (camera: {targetCamera.name}).";
+                    AssetDatabase.ImportAsset(result.ProjectRelativePath, ImportAssetOptions.ForceSynchronousImport);
+                    string message = $"Screenshot captured to '{result.ProjectRelativePath}' (camera: {targetCamera.name}).";
                     return new SuccessResponse(message, BuildScreenshotResponseData(result, targetCamera.name, includeImage));
                 }
 
@@ -615,9 +615,9 @@ namespace MCPForUnity.Editor.Tools
                         fileName, resolvedSuperSize, ensureUniqueFileName: true,
                         includeImage: true, maxResolution: maxResolution);
 
-                    AssetDatabase.ImportAsset(result.AssetsRelativePath, ImportAssetOptions.ForceSynchronousImport);
+                    AssetDatabase.ImportAsset(result.ProjectRelativePath, ImportAssetOptions.ForceSynchronousImport);
                     string cameraName = Camera.main != null ? Camera.main.name : "composited";
-                    string message = $"Screenshot captured to '{result.AssetsRelativePath}' (camera: {cameraName}).";
+                    string message = $"Screenshot captured to '{result.ProjectRelativePath}' (camera: {cameraName}).";
                     return new SuccessResponse(message, BuildScreenshotResponseData(result, cameraName, includeImage: true));
                 }
 
@@ -747,7 +747,7 @@ namespace MCPForUnity.Editor.Tools
         {
             var data = new Dictionary<string, object>
             {
-                { "path", result.AssetsRelativePath },
+                { "path", result.ProjectRelativePath },
                 { "fullPath", result.FullPath },
                 { "superSize", result.SuperSize },
                 { "isAsync", false },
