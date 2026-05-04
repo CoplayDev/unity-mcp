@@ -2,8 +2,26 @@ name: Unity Tests
 
 on:
   workflow_dispatch: {}
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to test (defaults to the triggering ref)."
+        type: string
+        required: false
+        default: ""
   push:
     branches: ["**"]
+    paths:
+      - TestProjects/UnityMCPTests/**
+      - MCPForUnity/Editor/**
+      - .github/workflows/unity-tests.yml
+  # Fork PRs: maintainer applies the 'safe-to-test' label after reviewing
+  # the diff. The workflow runs with UNITY_LICENSE in scope against the
+  # PR's head SHA. Re-pushed commits do NOT auto-trigger — maintainer must
+  # remove and re-apply the label to re-run after additional review.
+  pull_request_target:
+    types: [labeled]
+    branches: [main, beta]
     paths:
       - TestProjects/UnityMCPTests/**
       - MCPForUnity/Editor/**
@@ -13,6 +31,10 @@ jobs:
   testAllModes:
     name: Test in ${{ matrix.testMode }}
     runs-on: ubuntu-latest
+    if: >
+      github.event_name != 'pull_request_target' ||
+      (github.event.pull_request.head.repo.full_name != github.repository &&
+       github.event.label.name == 'safe-to-test')
     strategy:
       fail-fast: false
       matrix:
@@ -27,6 +49,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           lfs: true
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.ref }}
 
       - name: Detect Unity license secrets
         id: detect
