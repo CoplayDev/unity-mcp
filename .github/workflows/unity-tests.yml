@@ -14,6 +14,7 @@ on:
     paths:
       - TestProjects/UnityMCPTests/**
       - MCPForUnity/Editor/**
+      - MCPForUnity/Runtime/**
       - .github/workflows/unity-tests.yml
   # Fork PRs: maintainer applies the 'safe-to-test' label after reviewing
   # the diff. The workflow runs with UNITY_LICENSE in scope against the
@@ -25,6 +26,7 @@ on:
     paths:
       - TestProjects/UnityMCPTests/**
       - MCPForUnity/Editor/**
+      - MCPForUnity/Runtime/**
       - .github/workflows/unity-tests.yml
 
 jobs:
