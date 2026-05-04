@@ -9,7 +9,40 @@
 
 Before proposing major new features, please reach out to discuss - someone may already be working on it or it may have been considered previously. Open an issue or discussion to coordinate.
 
+Keep PRs focused. A small fix with a clear repro and the exact Unity/package versions is much easier to review than a broad cleanup bundled with behavior changes.
+
+For bug fixes, include:
+
+- Unity version(s) tested
+- package source used (`#beta`, `#main`, tag, fork branch, or `file:`)
+- resolved Git commit from `Packages/packages-lock.json` when the package source is a Git URL
+- commands/tests run locally
+
+Avoid mixing release/version bumps with feature or bug-fix PRs. The release workflows handle package and server version updates.
+
+## Repository Map
+
+- `MCPForUnity/` - the Unity package: Editor UI, C# tool handlers, resources, compatibility shims, package metadata.
+- `Server/` - the Python MCP server, CLI, FastMCP tool/resource registry, transports, and server-side tests.
+- `TestProjects/UnityMCPTests/` - Unity project used for EditMode/PlayMode tests. Its manifest points at `file:../../../MCPForUnity`.
+- `docs/` - user, contributor, release, migration, and reference documentation.
+- `tools/` - release/build helpers, documentation update prompt, stress tools, and publishing scripts.
+- `CustomTools/` - examples and support code for project-defined custom tools.
+
 ## Local Development Setup
+
+### 0. Prepare the Python Server
+
+For server work, use the same setup path as CI:
+
+```bash
+cd Server
+uv sync
+uv pip install -e ".[dev]"
+uv run pytest tests/ -v --tb=short
+```
+
+Most Python unit tests do not need Unity running. Integration tests that talk to the Editor require a Unity instance with the bridge connected.
 
 ### 1. Point Unity to Your Local Server
 
@@ -36,9 +69,53 @@ Options:
 
 After switching, open Package Manager in Unity and Refresh to re-resolve packages.
 
+When testing Unity package changes, prefer **Local workspace**. Do not patch `Library/PackageCache/` directly; Unity may overwrite it on the next resolve.
+
+`#beta` and `#main` are moving branch names. When debugging a package-source issue, check `Packages/packages-lock.json` as well as `Packages/manifest.json`; the lock file tells you the commit Unity actually resolved.
+
+Example Git package lock entry:
+
+```json
+"com.coplaydev.unity-mcp": {
+  "version": "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#beta",
+  "source": "git",
+  "hash": "<resolved-git-commit>"
+}
+```
+
+## Adding or Changing Tools and Resources
+
+Built-in Unity tools usually have two sides:
+
+- a C# handler under `MCPForUnity/Editor/Tools/`
+- a Python-facing tool under `Server/src/services/tools/`
+
+Resources follow the same split:
+
+- C# resources under `MCPForUnity/Editor/Resources/`
+- Python resources under `Server/src/services/resources/`
+
+Use `[McpForUnityTool]` / `[McpForUnityResource]` on the Unity side and `@mcp_for_unity_tool` / `@mcp_for_unity_resource` on the server side. If the tool is long-running, use the existing `PendingResponse` / polling patterns instead of blocking the bridge.
+
+Current server tool groups are:
+
+- `core`
+- `docs`
+- `vfx`
+- `animation`
+- `ui`
+- `scripting_ext`
+- `testing`
+- `probuilder`
+- `profiling`
+
+Tools with `group=None` are server meta-tools and are always visible. The default enabled group is `core`; other groups can be enabled through the Tools tab or `manage_tools`.
+
+When adding, removing, or renaming tools/resources, update the public docs and client metadata. Start with `tools/UPDATE_DOCS_PROMPT.md`, then review the changes manually.
+
 ## Tool Selection & the Meta-Tool
 
-MCP for Unity organizes tools into **groups** (Core, VFX & Shaders, Animation, UI Toolkit, Scripting Extensions, Testing). You can selectively enable or disable tools to control which capabilities are exposed to AI clients — reducing context window usage and focusing the AI on relevant tools.
+MCP for Unity organizes tools into **groups**. You can selectively enable or disable tools to control which capabilities are exposed to AI clients — reducing context window usage and focusing the AI on relevant tools.
 
 ### Using the Tools Tab in the Editor
 
@@ -99,9 +176,19 @@ cd Server
 uv run pytest tests/ -v
 ```
 
+Useful narrower runs:
+
+```bash
+uv run pytest tests/test_manage_camera.py -v
+uv run pytest tests/integration/test_run_tests_async.py -v
+uv run pytest tests/ -v --tb=short
+```
+
 ### Unity C# Tests
 
 Located in `TestProjects/UnityMCPTests/Assets/Tests/`.
+
+The test project consumes the local Unity package from this repo. Use it for package import/compile checks before opening a PR that touches `MCPForUnity/Runtime/`, `MCPForUnity/Editor/`, or package metadata.
 
 **Using the CLI** (requires Unity running with MCP bridge connected):
 
@@ -137,4 +224,18 @@ cd Server
 uv run pytest tests/ --cov --cov-report=html
 open htmlcov/index.html
 ```
+
+## Compatibility Notes
+
+The Unity package currently declares Unity `2021.3` as its minimum version in `MCPForUnity/package.json`. Code that uses Unity API conditionals (`UNITY_2022_3_OR_NEWER`, `UNITY_2023_1_OR_NEWER`, `UNITY_6000_*`) should be tested against the affected editor line, not just the oldest supported version.
+
+For compatibility PRs, note the exact editor versions you tested in the PR body. If a Git package URL is involved, include the resolved `packages-lock.json` hash.
+
+## Troubleshooting During Development
+
+- **Unity still loads an old Git package**: close Unity, check `Packages/packages-lock.json`, then refresh Package Manager. If needed, remove only the stale `Library/PackageCache/com.coplaydev.unity-mcp@<hash>` folder while Unity is closed.
+- **Unity opens in Safe Mode after changing package source**: the package failed to compile before MCP can start. Fix the compile errors first; the MCP server cannot recover from package compile failures.
+- **Server changes are not picked up**: make sure **Server Source Override** points to your local `Server/` directory and **Dev Mode (Force fresh server install)** is enabled.
+- **Stdio tool visibility looks stale**: call `manage_tools(action="sync")` or restart the MCP session. HTTP mode can push `tools/list_changed` notifications automatically.
+- **Multiple Unity editors are open**: use `mcpforunity://instances` and `set_active_instance` to confirm which project the server is targeting.
 
