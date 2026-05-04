@@ -30,6 +30,9 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
         private Toggle devModeForceRefreshToggle;
         private Toggle allowLanHttpBindToggle;
         private Toggle allowInsecureRemoteHttpToggle;
+        private TextField screenshotsFolderOverride;
+        private Button browseScreenshotsFolderButton;
+        private Button clearScreenshotsFolderButton;
         private TextField deploySourcePath;
         private Button browseDeploySourceButton;
         private Button clearDeploySourceButton;
@@ -73,6 +76,9 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             devModeForceRefreshToggle = Root.Q<Toggle>("dev-mode-force-refresh-toggle");
             allowLanHttpBindToggle = Root.Q<Toggle>("allow-lan-http-bind-toggle");
             allowInsecureRemoteHttpToggle = Root.Q<Toggle>("allow-insecure-remote-http-toggle");
+            screenshotsFolderOverride = Root.Q<TextField>("screenshots-folder-override");
+            browseScreenshotsFolderButton = Root.Q<Button>("browse-screenshots-folder-button");
+            clearScreenshotsFolderButton = Root.Q<Button>("clear-screenshots-folder-button");
             deploySourcePath = Root.Q<TextField>("deploy-source-path");
             browseDeploySourceButton = Root.Q<Button>("browse-deploy-source-button");
             clearDeploySourceButton = Root.Q<Button>("clear-deploy-source-button");
@@ -130,6 +136,17 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             }
             if (testConnectionButton != null)
                 testConnectionButton.tooltip = "Test the connection between Unity and the MCP server.";
+            if (screenshotsFolderOverride != null)
+            {
+                screenshotsFolderOverride.tooltip = "Default folder for screenshots from manage_camera / manage_ui. " +
+                    "Project-relative (e.g. 'Assets/Screenshots' or 'Captures'). Empty = built-in default (Assets/Screenshots). " +
+                    "Per-call 'output_folder' parameters always override this.";
+                screenshotsFolderOverride.SetValueWithoutNotify(ScreenshotPreferences.DefaultFolder);
+            }
+            if (browseScreenshotsFolderButton != null)
+                browseScreenshotsFolderButton.tooltip = "Pick a folder inside the project; the path is stored project-relative.";
+            if (clearScreenshotsFolderButton != null)
+                clearScreenshotsFolderButton.tooltip = "Clear override and use the built-in default (Assets/Screenshots).";
             if (deploySourcePath != null)
                 deploySourcePath.tooltip = "Copy a MCPForUnity folder into this project's package location.";
 
@@ -280,6 +297,26 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
                     UpdateDeploymentSection();
                 }
             });
+
+            if (screenshotsFolderOverride != null)
+            {
+                screenshotsFolderOverride.RegisterValueChangedCallback(evt =>
+                {
+                    ScreenshotPreferences.DefaultFolder = evt.newValue;
+                });
+            }
+            if (browseScreenshotsFolderButton != null)
+            {
+                browseScreenshotsFolderButton.clicked += OnBrowseScreenshotsFolderClicked;
+            }
+            if (clearScreenshotsFolderButton != null)
+            {
+                clearScreenshotsFolderButton.clicked += () =>
+                {
+                    ScreenshotPreferences.DefaultFolder = string.Empty;
+                    screenshotsFolderOverride?.SetValueWithoutNotify(string.Empty);
+                };
+            }
 
             browseDeploySourceButton.clicked += OnBrowseDeploySourceClicked;
             clearDeploySourceButton.clicked += OnClearDeploySourceClicked;
@@ -490,6 +527,48 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             }
 
             deployRestoreButton?.SetEnabled(deployService.HasBackup());
+        }
+
+        private void OnBrowseScreenshotsFolderClicked()
+        {
+            // Start the picker at the project's Assets/ since that's the most common target.
+            string startDir = UnityEngine.Application.dataPath;
+            string picked = EditorUtility.OpenFolderPanel("Select Screenshots Folder (inside this project)", startDir, string.Empty);
+            if (string.IsNullOrEmpty(picked))
+            {
+                return;
+            }
+
+            string projectRoot = Path.GetFullPath(Path.Combine(UnityEngine.Application.dataPath, "..")).Replace('\\', '/');
+            string normalizedRoot = projectRoot.EndsWith("/") ? projectRoot : projectRoot + "/";
+            string normalizedPicked = picked.Replace('\\', '/');
+
+            if (normalizedPicked.Equals(projectRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                // Storing "" would wipe the EditorPrefs key (= "unset"), so reject the project
+                // root rather than silently revert the override the user just chose.
+                EditorUtility.DisplayDialog(
+                    "Pick a Subfolder",
+                    "Please pick a subfolder of the project (for example 'Assets/Screenshots' or 'Captures'). " +
+                    "Selecting the project root would mix screenshots in with your project files.",
+                    "OK");
+                return;
+            }
+
+            if (!normalizedPicked.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                EditorUtility.DisplayDialog(
+                    "Folder Outside Project",
+                    $"The selected folder is outside the Unity project root.\n\nPicked: {normalizedPicked}\nProject: {projectRoot}\n\nPlease pick a folder inside the project.",
+                    "OK");
+                return;
+            }
+
+            string projectRelative = normalizedPicked.Substring(normalizedRoot.Length);
+
+            ScreenshotPreferences.DefaultFolder = projectRelative;
+            screenshotsFolderOverride?.SetValueWithoutNotify(projectRelative);
+            McpLog.Info($"Default screenshots folder set to '{projectRelative}'.");
         }
 
         private void OnBrowseDeploySourceClicked()

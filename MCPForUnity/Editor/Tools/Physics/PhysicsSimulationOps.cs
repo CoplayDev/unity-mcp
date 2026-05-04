@@ -29,10 +29,9 @@ namespace MCPForUnity.Editor.Tools.Physics
             else
             {
                 UnityEngine.Physics.SyncTransforms();
-#if UNITY_2022_2_OR_NEWER
-                var prevMode = UnityEngine.Physics.simulationMode;
-                if (prevMode != SimulationMode.Script)
-                    UnityEngine.Physics.simulationMode = SimulationMode.Script;
+                var prevMode = UnityPhysicsCompat.GetPhysicsSimulationMode();
+                if (prevMode != UnityPhysicsCompat.SimulationMode.Script)
+                    UnityPhysicsCompat.TrySetPhysicsSimulationMode(UnityPhysicsCompat.SimulationMode.Script);
                 try
                 {
                     for (int i = 0; i < steps; i++)
@@ -40,22 +39,12 @@ namespace MCPForUnity.Editor.Tools.Physics
                 }
                 finally
                 {
-                    UnityEngine.Physics.simulationMode = prevMode;
+                    if (prevMode != UnityPhysicsCompat.SimulationMode.Unknown
+                        && prevMode != UnityPhysicsCompat.SimulationMode.Script)
+                    {
+                        UnityPhysicsCompat.TrySetPhysicsSimulationMode(prevMode);
+                    }
                 }
-#else
-                bool wasAuto = UnityEngine.Physics.autoSimulation;
-                if (wasAuto)
-                    UnityEngine.Physics.autoSimulation = false;
-                try
-                {
-                    for (int i = 0; i < steps; i++)
-                        UnityEngine.Physics.Simulate(stepSize);
-                }
-                finally
-                {
-                    UnityEngine.Physics.autoSimulation = wasAuto;
-                }
-#endif
             }
 
             // Collect rigidbody states after simulation

@@ -597,7 +597,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             };
             gameViewButton.AddToClassList("tool-action-button");
             gameViewButton.style.marginTop = 4;
-            gameViewButton.tooltip = "Capture a game camera screenshot to Assets/Screenshots.";
+            gameViewButton.tooltip = "Capture a game camera screenshot. Default: Assets/Screenshots (configurable in Advanced).";
 
             var sceneViewButton = new Button(OnSceneViewScreenshotClicked)
             {
@@ -606,7 +606,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             sceneViewButton.AddToClassList("tool-action-button");
             sceneViewButton.style.marginTop = 4;
             sceneViewButton.style.marginLeft = 4;
-            sceneViewButton.tooltip = "Capture the active Scene View viewport to Assets/Screenshots.";
+            sceneViewButton.tooltip = "Capture the active Scene View viewport. Default: Assets/Screenshots (configurable in Advanced).";
 
             var multiviewButton = new Button(OnManageSceneMultiviewClicked)
             {
@@ -615,7 +615,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             multiviewButton.AddToClassList("tool-action-button");
             multiviewButton.style.marginTop = 4;
             multiviewButton.style.marginLeft = 4;
-            multiviewButton.tooltip = "Capture a 6-angle contact sheet around the scene centre and save to Assets/Screenshots.";
+            multiviewButton.tooltip = "Capture a 6-angle contact sheet around the scene centre. Default: Assets/Screenshots (configurable in Advanced).";
 
             var captureLabel = new Label("Capture:");
             captureLabel.style.marginTop = 6;
@@ -739,16 +739,35 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
                     string base64 = json["imageBase64"]?.ToString();
                     if (!string.IsNullOrEmpty(base64))
                     {
-                        string folder = System.IO.Path.Combine(UnityEngine.Application.dataPath, "Screenshots");
+                        string folderSpec = MCPForUnity.Editor.Helpers.ScreenshotPreferences.Resolve(null);
+                        string folder;
+                        try
+                        {
+                            folder = MCPForUnity.Runtime.Helpers.ScreenshotUtility.ResolveFolderAbsolute(folderSpec);
+                        }
+                        catch (System.InvalidOperationException ex)
+                        {
+                            McpLog.Error(ex.Message);
+                            return;
+                        }
                         if (!System.IO.Directory.Exists(folder))
                             System.IO.Directory.CreateDirectory(folder);
 
                         string fileName = $"Multiview_{System.DateTime.Now:yyyyMMdd_HHmmss}.png";
                         string filePath = System.IO.Path.Combine(folder, fileName);
                         System.IO.File.WriteAllBytes(filePath, Convert.FromBase64String(base64));
-                        AssetDatabase.Refresh();
 
-                        McpLog.Info($"Multiview contact sheet saved to Assets/Screenshots/{fileName}");
+                        // Import only when the file landed under Assets/.
+                        string projectRoot = System.IO.Path.GetFullPath(System.IO.Path.Combine(UnityEngine.Application.dataPath, "..")).Replace('\\', '/');
+                        string normalizedFile = filePath.Replace('\\', '/');
+                        string normalizedRoot = projectRoot.EndsWith("/") ? projectRoot : projectRoot + "/";
+                        string projectRelative = normalizedFile.StartsWith(normalizedRoot, System.StringComparison.OrdinalIgnoreCase)
+                            ? normalizedFile.Substring(normalizedRoot.Length)
+                            : normalizedFile;
+                        if (MCPForUnity.Runtime.Helpers.ScreenshotUtility.IsUnderAssets(projectRelative))
+                            AssetDatabase.ImportAsset(projectRelative, ImportAssetOptions.ForceSynchronousImport);
+
+                        McpLog.Info($"Multiview contact sheet saved to {projectRelative}");
                     }
                     else
                     {

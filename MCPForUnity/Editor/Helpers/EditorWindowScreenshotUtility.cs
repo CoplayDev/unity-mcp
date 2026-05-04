@@ -16,7 +16,6 @@ namespace MCPForUnity.Editor.Helpers
     /// </summary>
     internal static class EditorWindowScreenshotUtility
     {
-        private const string ScreenshotsFolderName = "Screenshots";
         // Keep capture synchronous so callers can immediately return the screenshot payload.
         // The short sleep gives Unity a chance to flush repaint work before GrabPixels reads the viewport.
         private const int RepaintSettlingDelayMs = 75;
@@ -40,7 +39,7 @@ namespace MCPForUnity.Editor.Helpers
         /// <param name="maxResolution">Maximum edge length for the inline image payload.</param>
         /// <param name="viewportWidth">Captured viewport width in pixels.</param>
         /// <param name="viewportHeight">Captured viewport height in pixels.</param>
-        public static ScreenshotCaptureResult CaptureSceneViewViewportToAssets(
+        public static ScreenshotCaptureResult CaptureSceneViewViewportToProject(
             SceneView sceneView,
             string fileName,
             int superSize,
@@ -48,7 +47,8 @@ namespace MCPForUnity.Editor.Helpers
             bool includeImage,
             int maxResolution,
             out int viewportWidth,
-            out int viewportHeight)
+            out int viewportHeight,
+            string folderOverride = null)
         {
             if (sceneView == null)
                 throw new ArgumentNullException(nameof(sceneView));
@@ -70,7 +70,7 @@ namespace MCPForUnity.Editor.Helpers
             {
                 captured = CaptureViewRect(sceneView, viewportRectPixels);
 
-                var result = PrepareCaptureResult(fileName, effectiveSuperSize, ensureUniqueFileName);
+                var result = PrepareCaptureResult(fileName, effectiveSuperSize, ensureUniqueFileName, folderOverride);
                 byte[] png = captured.EncodeToPNG();
                 File.WriteAllBytes(result.FullPath, png);
 
@@ -97,7 +97,7 @@ namespace MCPForUnity.Editor.Helpers
 
                     return new ScreenshotCaptureResult(
                         result.FullPath,
-                        result.AssetsRelativePath,
+                        result.ProjectRelativePath,
                         result.SuperSize,
                         false,
                         imageBase64,
@@ -317,11 +317,11 @@ namespace MCPForUnity.Editor.Helpers
             texture.Apply();
         }
 
-        private static ScreenshotCaptureResult PrepareCaptureResult(string fileName, int superSize, bool ensureUniqueFileName)
+        private static ScreenshotCaptureResult PrepareCaptureResult(string fileName, int superSize, bool ensureUniqueFileName, string folderOverride)
         {
             int size = Mathf.Max(1, superSize);
             string resolvedName = BuildFileName(fileName);
-            string folder = Path.Combine(Application.dataPath, ScreenshotsFolderName);
+            string folder = ScreenshotUtility.ResolveFolderAbsolute(folderOverride);
             Directory.CreateDirectory(folder);
 
             string fullPath = Path.Combine(folder, resolvedName);
@@ -331,8 +331,12 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             string normalizedFullPath = fullPath.Replace('\\', '/');
-            string assetsRelativePath = "Assets/" + normalizedFullPath.Substring(Application.dataPath.Length).TrimStart('/');
-            return new ScreenshotCaptureResult(normalizedFullPath, assetsRelativePath, size, false);
+            string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, "..")).Replace('\\', '/');
+            string normalizedRoot = projectRoot.EndsWith("/") ? projectRoot : projectRoot + "/";
+            string projectRelativePath = normalizedFullPath.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase)
+                ? normalizedFullPath.Substring(normalizedRoot.Length)
+                : normalizedFullPath;
+            return new ScreenshotCaptureResult(normalizedFullPath, projectRelativePath, size, false);
         }
 
         private static string BuildFileName(string fileName)

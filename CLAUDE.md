@@ -140,6 +140,11 @@ Use `CommandRegistry.InvokeCommandAsync` to call other tools from within a handl
 var result = await CommandRegistry.InvokeCommandAsync("read_console", consoleParams);
 ```
 
+### Unity API Compatibility Shims
+We support a wide Unity version range (2021+ → 6.x → CoreCLR 6.8). When an API is renamed, deprecated, or removed across versions, **don't sprinkle `#if UNITY_x_y_OR_NEWER` at every call site** — add a shim in `MCPForUnity/Runtime/Helpers/Unity*Compat.cs` and route every caller through it.
+
+The catalog of active shims, the policy for when to add one, what does NOT belong in a shim, and the reflection-cache pattern all live in **`MCPForUnity/Runtime/Helpers/UnityCompatShims.cs`** — the XML doc on that empty marker class is the source of truth and ships inside the UPM package, so end-users can `F12`/Go-to-definition into it. Sources for current deprecations: Unity 6.x upgrade guides and the [CoreCLR 2026 thread](https://discussions.unity.com/t/path-to-coreclr-2026-upgrade-guide/1714279).
+
 ## Commands
 
 ### Running Tests

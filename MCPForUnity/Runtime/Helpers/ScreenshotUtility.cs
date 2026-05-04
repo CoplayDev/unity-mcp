@@ -9,21 +9,21 @@ namespace MCPForUnity.Runtime.Helpers
 {
     public readonly struct ScreenshotCaptureResult
     {
-        public ScreenshotCaptureResult(string fullPath, string assetsRelativePath, int superSize)
-            : this(fullPath, assetsRelativePath, superSize, isAsync: false, imageBase64: null, imageWidth: 0, imageHeight: 0)
+        public ScreenshotCaptureResult(string fullPath, string projectRelativePath, int superSize)
+            : this(fullPath, projectRelativePath, superSize, isAsync: false, imageBase64: null, imageWidth: 0, imageHeight: 0)
         {
         }
 
-        public ScreenshotCaptureResult(string fullPath, string assetsRelativePath, int superSize, bool isAsync)
-            : this(fullPath, assetsRelativePath, superSize, isAsync, imageBase64: null, imageWidth: 0, imageHeight: 0)
+        public ScreenshotCaptureResult(string fullPath, string projectRelativePath, int superSize, bool isAsync)
+            : this(fullPath, projectRelativePath, superSize, isAsync, imageBase64: null, imageWidth: 0, imageHeight: 0)
         {
         }
 
-        public ScreenshotCaptureResult(string fullPath, string assetsRelativePath, int superSize, bool isAsync,
+        public ScreenshotCaptureResult(string fullPath, string projectRelativePath, int superSize, bool isAsync,
             string imageBase64, int imageWidth, int imageHeight)
         {
             FullPath = fullPath;
-            AssetsRelativePath = assetsRelativePath;
+            ProjectRelativePath = projectRelativePath;
             SuperSize = superSize;
             IsAsync = isAsync;
             ImageBase64 = imageBase64;
@@ -32,7 +32,8 @@ namespace MCPForUnity.Runtime.Helpers
         }
 
         public string FullPath { get; }
-        public string AssetsRelativePath { get; }
+        /// <summary>Path relative to the Unity project root (e.g. "Captures/foo.png"). Suitable for ScreenCapture.CaptureScreenshot.</summary>
+        public string ProjectRelativePath { get; }
         public int SuperSize { get; }
         public bool IsAsync { get; }
         /// <summary>Base64-encoded PNG image data. Only populated when include_image is true.</summary>
@@ -43,7 +44,12 @@ namespace MCPForUnity.Runtime.Helpers
 
     public static class ScreenshotUtility
     {
-        private const string ScreenshotsFolderName = "Screenshots";
+        /// <summary>
+        /// Built-in default folder for screenshots, project-relative.
+        /// Callers can override per-call via the <c>folderOverride</c> parameter on capture methods,
+        /// or globally via <c>ScreenshotPreferences</c> in the Editor assembly.
+        /// </summary>
+        public const string DefaultFolder = "Assets/Screenshots";
         private static bool s_loggedLegacyScreenCaptureFallback;
         private static bool? s_screenCaptureModuleAvailable;
         private static System.Reflection.MethodInfo s_captureScreenshotMethod;
@@ -100,25 +106,30 @@ namespace MCPForUnity.Runtime.Helpers
             }
         }
 
-        public static ScreenshotCaptureResult CaptureToAssetsFolder(string fileName = null, int superSize = 1, bool ensureUniqueFileName = true)
+        public static ScreenshotCaptureResult CaptureToProjectFolder(
+            string fileName = null,
+            int superSize = 1,
+            bool ensureUniqueFileName = true,
+            string folderOverride = null)
         {
             // Use reflection to call ScreenCapture.CaptureScreenshot so the code compiles
             // even when the Screen Capture module (com.unity.modules.screencapture) is disabled.
             if (IsScreenCaptureModuleAvailable && s_captureScreenshotMethod != null)
             {
-                ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, isAsync: true);
-                s_captureScreenshotMethod.Invoke(null, new object[] { result.AssetsRelativePath, result.SuperSize });
+                ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, folderOverride, isAsync: true);
+                // ScreenCapture.CaptureScreenshot accepts paths relative to the project root.
+                s_captureScreenshotMethod.Invoke(null, new object[] { result.ProjectRelativePath, result.SuperSize });
                 return result;
             }
             else
             {
                 // Module disabled or unavailable - try camera fallback
                 Debug.LogWarning("[MCP for Unity] " + ScreenCaptureModuleNotAvailableError);
-                return CaptureWithCameraFallback(fileName, superSize, ensureUniqueFileName);
+                return CaptureWithCameraFallback(fileName, superSize, ensureUniqueFileName, folderOverride);
             }
         }
 
-        private static ScreenshotCaptureResult CaptureWithCameraFallback(string fileName, int superSize, bool ensureUniqueFileName)
+        private static ScreenshotCaptureResult CaptureWithCameraFallback(string fileName, int superSize, bool ensureUniqueFileName, string folderOverride)
         {
             if (!s_loggedLegacyScreenCaptureFallback)
             {
@@ -138,7 +149,7 @@ namespace MCPForUnity.Runtime.Helpers
                 );
             }
 
-            return CaptureFromCameraToAssetsFolder(cam, fileName, superSize, ensureUniqueFileName);
+            return CaptureFromCameraToProjectFolder(cam, fileName, superSize, ensureUniqueFileName, folderOverride: folderOverride);
         }
 
         /// <summary>
@@ -146,20 +157,21 @@ namespace MCPForUnity.Runtime.Helpers
         /// When <paramref name="includeImage"/> is true, the result includes a base64-encoded PNG (optionally
         /// downscaled so the longest edge is at most <paramref name="maxResolution"/>).
         /// </summary>
-        public static ScreenshotCaptureResult CaptureFromCameraToAssetsFolder(
+        public static ScreenshotCaptureResult CaptureFromCameraToProjectFolder(
             Camera camera,
             string fileName = null,
             int superSize = 1,
             bool ensureUniqueFileName = true,
             bool includeImage = false,
-            int maxResolution = 0)
+            int maxResolution = 0,
+            string folderOverride = null)
         {
             if (camera == null)
             {
                 throw new ArgumentNullException(nameof(camera));
             }
 
-            ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, isAsync: false);
+            ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, folderOverride, isAsync: false);
             int size = result.SuperSize;
 
             int width = Mathf.Max(1, camera.pixelWidth > 0 ? camera.pixelWidth : Screen.width);
@@ -218,7 +230,7 @@ namespace MCPForUnity.Runtime.Helpers
             if (includeImage && imageBase64 != null)
             {
                 return new ScreenshotCaptureResult(
-                    result.FullPath, result.AssetsRelativePath, result.SuperSize, false,
+                    result.FullPath, result.ProjectRelativePath, result.SuperSize, false,
                     imageBase64, imgW, imgH);
             }
             return result;
@@ -624,34 +636,85 @@ namespace MCPForUnity.Runtime.Helpers
                 UnityEngine.Object.DestroyImmediate(tex);
         }
 
-        private static ScreenshotCaptureResult PrepareCaptureResult(string fileName, int superSize, bool ensureUniqueFileName, bool isAsync)
+        private static ScreenshotCaptureResult PrepareCaptureResult(string fileName, int superSize, bool ensureUniqueFileName, string folderOverride, bool isAsync)
         {
             int size = Mathf.Max(1, superSize);
             string resolvedName = BuildFileName(fileName);
-            string folder = Path.Combine(Application.dataPath, ScreenshotsFolderName);
-            Directory.CreateDirectory(folder);
+            string folderAbsolute = ResolveFolderAbsolute(folderOverride);
+            Directory.CreateDirectory(folderAbsolute);
 
-            string fullPath = Path.Combine(folder, resolvedName);
+            string fullPath = Path.Combine(folderAbsolute, resolvedName);
             if (ensureUniqueFileName)
             {
                 fullPath = EnsureUnique(fullPath);
             }
 
             string normalizedFullPath = fullPath.Replace('\\', '/');
-            string assetsRelativePath = ToAssetsRelativePath(normalizedFullPath);
+            string projectRelativePath = ToProjectRelativePath(normalizedFullPath);
 
-            return new ScreenshotCaptureResult(normalizedFullPath, assetsRelativePath, size, isAsync);
+            return new ScreenshotCaptureResult(normalizedFullPath, projectRelativePath, size, isAsync);
         }
 
-        private static string ToAssetsRelativePath(string normalizedFullPath)
+        /// <summary>
+        /// Resolves a folder spec (which may be project-relative like "Assets/Screenshots",
+        /// absolute, or null/empty) to an absolute filesystem path inside the project root.
+        /// Throws on traversal escape or absolute paths outside the project.
+        /// </summary>
+        public static string ResolveFolderAbsolute(string folderOverride)
         {
-            string projectRoot = GetProjectRootPath();
-            string assetsRelativePath = normalizedFullPath;
-            if (assetsRelativePath.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
+            string projectRoot = GetProjectRootPath().TrimEnd('/');
+            string requested = string.IsNullOrWhiteSpace(folderOverride) ? DefaultFolder : folderOverride.Trim();
+            requested = requested.Replace('\\', '/').TrimEnd('/');
+
+            string combined = Path.IsPathRooted(requested)
+                ? requested
+                : Path.Combine(projectRoot, requested);
+
+            string fullFolder = Path.GetFullPath(combined).Replace('\\', '/').TrimEnd('/');
+            string normalizedRoot = projectRoot;
+
+            // Reject paths that escape the project root (case-insensitive on Windows, exact elsewhere).
+            var rootComparison = Application.platform == RuntimePlatform.WindowsEditor
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+            if (!fullFolder.Equals(normalizedRoot, rootComparison) &&
+                !fullFolder.StartsWith(normalizedRoot + "/", rootComparison))
             {
-                assetsRelativePath = assetsRelativePath.Substring(projectRoot.Length).TrimStart('/');
+                throw new InvalidOperationException(
+                    $"Screenshot folder '{folderOverride}' resolves outside the Unity project root ('{fullFolder}'). " +
+                    $"Use a project-relative path (e.g. 'Assets/Screenshots' or 'Captures').");
             }
-            return assetsRelativePath;
+
+            return fullFolder;
+        }
+
+        /// <summary>
+        /// Converts an absolute filesystem path inside the project to a project-relative path
+        /// (forward slashes, no leading separator). Returns the input unchanged when it does
+        /// not live under the project root.
+        /// </summary>
+        public static string ToProjectRelativePath(string normalizedFullPath)
+        {
+            if (string.IsNullOrEmpty(normalizedFullPath)) return normalizedFullPath;
+            string projectRoot = GetProjectRootPath();
+            string normalized = normalizedFullPath.Replace('\\', '/');
+            if (normalized.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                return normalized.Substring(projectRoot.Length).TrimStart('/');
+            }
+            return normalized;
+        }
+
+        /// <summary>
+        /// True when <paramref name="projectRelativePath"/> lives under the Unity Assets/ folder
+        /// (and therefore should be imported via AssetDatabase).
+        /// </summary>
+        public static bool IsUnderAssets(string projectRelativePath)
+        {
+            if (string.IsNullOrEmpty(projectRelativePath)) return false;
+            string norm = projectRelativePath.Replace('\\', '/').TrimStart('/');
+            return norm.Equals("Assets", StringComparison.OrdinalIgnoreCase)
+                || norm.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string BuildFileName(string fileName)
@@ -674,8 +737,11 @@ namespace MCPForUnity.Runtime.Helpers
 
         private static string SanitizeFileName(string fileName)
         {
+            // GetInvalidFileNameChars() doesn't include '\' or '/' on Unix, so a caller-supplied
+            // name like "foo\bar" would survive and later get spliced into the directory portion.
             var invalidChars = Path.GetInvalidFileNameChars();
-            string cleaned = new string(fileName.Select(ch => invalidChars.Contains(ch) ? '_' : ch).ToArray());
+            string cleaned = new string(
+                fileName.Select(ch => invalidChars.Contains(ch) || ch == '/' || ch == '\\' ? '_' : ch).ToArray());
 
             return string.IsNullOrWhiteSpace(cleaned) ? "screenshot" : cleaned;
         }

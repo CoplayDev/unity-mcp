@@ -40,6 +40,7 @@ namespace MCPForUnity.Editor.Services
         public List<TestJobFailure> FailuresSoFar { get; set; }
         public string Error { get; set; }
         public TestRunResult Result { get; set; }
+        public long InitTimeoutMs { get; set; }
     }
 
     /// <summary>
@@ -50,7 +51,8 @@ namespace MCPForUnity.Editor.Services
         // Keep this small to avoid ballooning payloads during polling.
         private const int FailureCap = 25;
         private const long StuckThresholdMs = 60_000;
-        private const long InitializationTimeoutMs = 15_000; // 15 seconds to call OnRunStarted, else fail
+        private const long DefaultInitializationTimeoutMs = 15_000; // 15 seconds default; override per-job via run_tests init_timeout param
+        private const long MaxInitializationTimeoutMs = 600_000; // 10 minutes hard cap
         private const int MaxJobsToKeep = 10;
         private const long MinPersistIntervalMs = 1000; // Throttle persistence to reduce overhead
 
@@ -139,6 +141,7 @@ namespace MCPForUnity.Editor.Services
             public long? last_finished_unix_ms { get; set; }
             public List<TestJobFailure> failures_so_far { get; set; }
             public string error { get; set; }
+            public long init_timeout_ms { get; set; }
         }
 
         private static TestJobStatus ParseStatus(string status)
@@ -201,6 +204,7 @@ namespace MCPForUnity.Editor.Services
                             LastFinishedUnixMs = pj.last_finished_unix_ms,
                             FailuresSoFar = pj.failures_so_far ?? new List<TestJobFailure>(),
                             Error = pj.error,
+                            InitTimeoutMs = pj.init_timeout_ms,
                             // Intentionally not persisted to avoid ballooning SessionState.
                             Result = null
                         };
@@ -273,7 +277,8 @@ namespace MCPForUnity.Editor.Services
                             last_finished_test_full_name = j.LastFinishedTestFullName,
                             last_finished_unix_ms = j.LastFinishedUnixMs,
                             failures_so_far = (j.FailuresSoFar ?? new List<TestJobFailure>()).Take(FailureCap).ToList(),
-                            error = j.Error
+                            error = j.Error,
+                            init_timeout_ms = j.InitTimeoutMs
                         })
                         .ToList();
 
@@ -294,8 +299,12 @@ namespace MCPForUnity.Editor.Services
             }
         }
 
-        public static string StartJob(TestMode mode, TestFilterOptions filterOptions = null)
+        public static string StartJob(TestMode mode, TestFilterOptions filterOptions = null, long initTimeoutMs = 0)
         {
+            // Clamp to valid range: non-positive values mean "use default", cap at 10 minutes
+            if (initTimeoutMs < 0) initTimeoutMs = 0;
+            if (initTimeoutMs > MaxInitializationTimeoutMs) initTimeoutMs = MaxInitializationTimeoutMs;
+
             string jobId = Guid.NewGuid().ToString("N");
             long started = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             string modeStr = mode.ToString();
@@ -316,7 +325,8 @@ namespace MCPForUnity.Editor.Services
                 LastFinishedUnixMs = null,
                 FailuresSoFar = new List<TestJobFailure>(),
                 Error = null,
-                Result = null
+                Result = null,
+                InitTimeoutMs = initTimeoutMs
             };
 
             // Single lock scope for check-and-set to avoid TOCTOU race
@@ -491,9 +501,10 @@ namespace MCPForUnity.Editor.Services
                 if (job.Status == TestJobStatus.Running && job.TotalTests == null)
                 {
                     long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                    if (!EditorApplication.isCompiling && !EditorApplication.isUpdating && now - job.StartedUnixMs > InitializationTimeoutMs)
+                    long initTimeout = job.InitTimeoutMs > 0 ? job.InitTimeoutMs : DefaultInitializationTimeoutMs;
+                    if (!EditorApplication.isCompiling && !EditorApplication.isUpdating && now - job.StartedUnixMs > initTimeout)
                     {
-                        McpLog.Warn($"[TestJobManager] Job {jobId} failed to initialize within {InitializationTimeoutMs}ms, auto-failing");
+                        McpLog.Warn($"[TestJobManager] Job {jobId} failed to initialize within {initTimeout}ms, auto-failing");
                         job.Status = TestJobStatus.Failed;
                         job.Error = "Test job failed to initialize (tests did not start within timeout)";
                         job.FinishedUnixMs = now;
