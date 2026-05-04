@@ -598,11 +598,14 @@ namespace MCPForUnity.Editor.Tools
                 {
                     if (!Application.isBatchMode) EnsureGameView();
 
+                    string folderOverride = ScreenshotPreferences.Resolve(cmd.outputFolder);
                     ScreenshotCaptureResult result = ScreenshotUtility.CaptureFromCameraToProjectFolder(
                         targetCamera, fileName, resolvedSuperSize, ensureUniqueFileName: true,
-                        includeImage: includeImage, maxResolution: maxResolution);
+                        includeImage: includeImage, maxResolution: maxResolution,
+                        folderOverride: folderOverride);
 
-                    AssetDatabase.ImportAsset(result.ProjectRelativePath, ImportAssetOptions.ForceSynchronousImport);
+                    if (ScreenshotUtility.IsUnderAssets(result.ProjectRelativePath))
+                        AssetDatabase.ImportAsset(result.ProjectRelativePath, ImportAssetOptions.ForceSynchronousImport);
                     string message = $"Screenshot captured to '{result.ProjectRelativePath}' (camera: {targetCamera.name}).";
                     return new SuccessResponse(message, BuildScreenshotResponseData(result, targetCamera.name, includeImage));
                 }
@@ -611,11 +614,14 @@ namespace MCPForUnity.Editor.Tools
                 {
                     if (!Application.isBatchMode) EnsureGameView();
 
+                    string folderOverride = ScreenshotPreferences.Resolve(cmd.outputFolder);
                     ScreenshotCaptureResult result = ScreenshotUtility.CaptureComposited(
                         fileName, resolvedSuperSize, ensureUniqueFileName: true,
-                        includeImage: true, maxResolution: maxResolution);
+                        includeImage: true, maxResolution: maxResolution,
+                        folderOverride: folderOverride);
 
-                    AssetDatabase.ImportAsset(result.ProjectRelativePath, ImportAssetOptions.ForceSynchronousImport);
+                    if (ScreenshotUtility.IsUnderAssets(result.ProjectRelativePath))
+                        AssetDatabase.ImportAsset(result.ProjectRelativePath, ImportAssetOptions.ForceSynchronousImport);
                     string cameraName = Camera.main != null ? Camera.main.name : "composited";
                     string message = $"Screenshot captured to '{result.ProjectRelativePath}' (camera: {cameraName}).";
                     return new SuccessResponse(message, BuildScreenshotResponseData(result, cameraName, includeImage: true));

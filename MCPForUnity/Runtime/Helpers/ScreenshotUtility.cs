@@ -246,18 +246,20 @@ namespace MCPForUnity.Runtime.Helpers
             int superSize = 1,
             bool ensureUniqueFileName = true,
             bool includeImage = false,
-            int maxResolution = 0)
+            int maxResolution = 0,
+            string folderOverride = null)
         {
             if (!IsScreenCaptureModuleAvailable)
             {
                 var fallbackCamera = FindAvailableCamera();
                 if (fallbackCamera != null)
-                    return CaptureFromCameraToProjectFolder(fallbackCamera, fileName, superSize, ensureUniqueFileName, includeImage, maxResolution);
+                    return CaptureFromCameraToProjectFolder(fallbackCamera, fileName, superSize, ensureUniqueFileName,
+                        includeImage, maxResolution, folderOverride: folderOverride);
 
                 throw new InvalidOperationException("ScreenCapture module is unavailable and no fallback camera found.");
             }
 
-            ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, folderOverride: null, isAsync: false);
+            ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, folderOverride: folderOverride, isAsync: false);
             Texture2D tex = null;
             Texture2D downscaled = null;
             string imageBase64 = null;
@@ -270,7 +272,8 @@ namespace MCPForUnity.Runtime.Helpers
                     // Fallback to camera-based if ScreenCapture fails
                     var cam = FindAvailableCamera();
                     if (cam != null)
-                        return CaptureFromCameraToProjectFolder(cam, fileName, superSize, ensureUniqueFileName, includeImage, maxResolution);
+                        return CaptureFromCameraToProjectFolder(cam, fileName, superSize, ensureUniqueFileName,
+                            includeImage, maxResolution, folderOverride: folderOverride);
                     throw new InvalidOperationException("ScreenCapture.CaptureScreenshotAsTexture returned null and no fallback camera available.");
                 }
 
