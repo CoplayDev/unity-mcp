@@ -32,7 +32,11 @@ namespace MCPForUnity.Editor.Services
                 .SelectMany(a =>
                 {
                     try { return a.GetTypes(); }
-                    catch { return new Type[0]; }
+                    catch (Exception ex)
+                    {
+                        McpLog.Warn($"Failed to reflect types from assembly {a.FullName}: {ex.Message}");
+                        return new Type[0];
+                    }
                 })
                 .Where(t => t.GetCustomAttribute<McpForUnityToolAttribute>() != null);
 

@@ -890,7 +890,8 @@ Examples:
         or os.environ.get("UNITY_MCP_PROJECT_SCOPED_TOOLS", "").lower() in ("true", "1", "yes", "on")
     )
 
-    # If not explicitly set, check Unity status files for the default instance
+    # If not explicitly set, check Unity status files for the default instance.
+    # In stdio mode there is typically only one instance, so "first match wins" is fine.
     project_scoped_tools = project_scoped_tools_explicit
     if not project_scoped_tools_explicit:
         try:
@@ -907,7 +908,7 @@ Examples:
                     )
                     break
         except Exception:
-            pass
+            logger.debug("Could not discover Unity instances for project-scoped tool default", exc_info=True)
 
     mcp = create_mcp_server(project_scoped_tools)
 

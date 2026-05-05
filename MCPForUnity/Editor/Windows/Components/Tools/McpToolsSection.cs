@@ -75,7 +75,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             {
                 projectScopedToolsToggle.value = EditorPrefs.GetBool(
                     EditorPrefKeys.ProjectScopedToolsLocalHttp,
-                    true
+                    false
                 );
                 projectScopedToolsToggle.tooltip = "When enabled, register project-scoped tools with HTTP Local and stdio transports. Allows per-project tool customization.";
                 projectScopedToolsToggle.RegisterValueChangedCallback(evt =>
