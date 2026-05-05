@@ -17,7 +17,7 @@
 <!-- Especially important for Unity API compatibility, package-source, or transport changes -->
 - Unity version(s) tested:
 - Package source used (`#beta`, `#main`, tag, branch, or `file:`):
-- Resolved package hash, if using a Git package URL:
+- Resolved commit hash from `Packages/packages-lock.json` (if using a Git package URL):
 
 ## Testing/Screenshots/Recordings
 <!-- If applicable, add screenshots or recordings to demonstrate the changes -->
@@ -25,7 +25,7 @@
 - [ ] Unity EditMode tests
 - [ ] Unity PlayMode tests
 - [ ] Package import/compile check
-- [ ] Not applicable
+- [ ] Not applicable (explain why in Additional Notes)
 
 
 ## Documentation Updates
