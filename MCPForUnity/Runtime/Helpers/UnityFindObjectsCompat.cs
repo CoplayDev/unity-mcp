@@ -58,7 +58,7 @@ namespace MCPForUnity.Runtime.Helpers
 #if UNITY_6000_5_OR_NEWER
             return UObject.FindObjectsByType(type,
                 includeInactive ? UnityEngine.FindObjectsInactive.Include : UnityEngine.FindObjectsInactive.Exclude);
-#elif UNITY_2023_1_OR_NEWER
+#elif UNITY_2022_3_OR_NEWER
             return UObject.FindObjectsByType(type,
                 includeInactive ? UnityEngine.FindObjectsInactive.Include : UnityEngine.FindObjectsInactive.Exclude,
                 UnityEngine.FindObjectsSortMode.None);
