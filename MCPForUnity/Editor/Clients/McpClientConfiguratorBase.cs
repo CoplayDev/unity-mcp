@@ -514,10 +514,9 @@ namespace MCPForUnity.Editor.Clients
             {
                 if (ShouldUseTomlForRemoteAuth())
                 {
-                    string uvx = GetUvxPathOrError();
                     return "# Codex CLI does not currently expose an arbitrary HTTP header flag.\n" +
                            "# For remote-hosted servers with X-API-Key auth, add this TOML to ~/.codex/config.toml:\n" +
-                           CodexConfigHelper.BuildCodexServerBlock(uvx);
+                           CodexConfigHelper.BuildCodexServerBlock(null);
                 }
 
                 bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
@@ -686,7 +685,10 @@ namespace MCPForUnity.Editor.Clients
 
             string existingToml = File.ReadAllText(path);
             string updatedToml = CodexConfigHelper.RemoveCodexServerBlock(existingToml);
-            McpConfigurationHelper.WriteAtomicFile(path, updatedToml);
+            if (!string.Equals(existingToml, updatedToml, StringComparison.Ordinal))
+            {
+                McpConfigurationHelper.WriteAtomicFile(path, updatedToml);
+            }
         }
 
         private static string ResolveCodexCliPath()

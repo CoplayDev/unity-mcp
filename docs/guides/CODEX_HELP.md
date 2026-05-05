@@ -72,6 +72,8 @@ url = "https://your-server.example/mcp"
 http_headers = { "X-API-Key" = "your-api-key" }
 ```
 
+This stores the API key in `~/.codex/config.toml` under `[mcp_servers.unityMCP].http_headers`. Keep that file private and use restrictive file permissions where your platform supports them.
+
 The Unity Editor's `Configure` action writes this TOML form automatically when remote-hosted mode has an API key configured.
 
 ## Troubleshooting
