@@ -1047,6 +1047,11 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 }
                 catch { }
 
+                bool projectScopedTools = EditorPrefs.GetBool(
+                    EditorPrefKeys.ProjectScopedToolsLocalHttp,
+                    true  // default to true so stdio behaves like HTTP Local by default
+                );
+
                 var payload = new
                 {
                     unity_port = currentUnityPort,
@@ -1056,7 +1061,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     project_path = Application.dataPath,
                     project_name = projectName,
                     unity_version = Application.unityVersion,
-                    last_heartbeat = DateTime.UtcNow.ToString("O")
+                    last_heartbeat = DateTime.UtcNow.ToString("O"),
+                    project_scoped_tools = projectScopedTools
                 };
                 File.WriteAllText(filePath, JsonConvert.SerializeObject(payload), new System.Text.UTF8Encoding(false));
             }
