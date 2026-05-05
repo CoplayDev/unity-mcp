@@ -39,6 +39,8 @@ namespace MCPForUnity.Editor.Helpers
                 string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
                 unityMCP["url"] = new TomlString { Value = httpUrl };
 
+                AddRemoteAuthHeaderIfNeeded(unityMCP);
+
                 // Enable Codex's Rust MCP client for HTTP/SSE transport
                 EnsureRmcpClientFeature(table);
             }
@@ -80,6 +82,19 @@ namespace MCPForUnity.Editor.Helpers
 
             using var writer = new StringWriter();
             table.WriteTo(writer);
+            return writer.ToString();
+        }
+
+        public static string RemoveCodexServerBlock(string existingToml)
+        {
+            var root = TryParseToml(existingToml);
+            if (root == null) return existingToml ?? string.Empty;
+
+            RemoveUnityServer(root, "mcp_servers");
+            RemoveUnityServer(root, "mcpServers");
+
+            using var writer = new StringWriter();
+            root.WriteTo(writer);
             return writer.ToString();
         }
 
@@ -151,6 +166,34 @@ namespace MCPForUnity.Editor.Helpers
             return !string.IsNullOrEmpty(command) && args != null;
         }
 
+        public static bool HasCodexHttpHeader(string toml, string headerName, string expectedValue)
+        {
+            if (string.IsNullOrEmpty(headerName)) return false;
+
+            var root = TryParseToml(toml);
+            if (root == null) return false;
+
+            if (!TryGetTable(root, "mcp_servers", out var servers)
+                && !TryGetTable(root, "mcpServers", out servers))
+            {
+                return false;
+            }
+
+            if (!TryGetTable(servers, "unityMCP", out var unity)
+                && !TryGetTable(servers, "UnityMCP", out unity))
+            {
+                return false;
+            }
+
+            if (!TryGetTable(unity, "http_headers", out var headers))
+            {
+                return false;
+            }
+
+            string configuredValue = GetTomlString(headers, headerName);
+            return string.Equals(configuredValue, expectedValue, StringComparison.Ordinal);
+        }
+
         /// <summary>
         /// Safely parses TOML string, returning null on failure
         /// </summary>
@@ -193,6 +236,7 @@ namespace MCPForUnity.Editor.Helpers
                 // HTTP mode: Use url field
                 string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
                 unityMCP["url"] = new TomlString { Value = httpUrl };
+                AddRemoteAuthHeaderIfNeeded(unityMCP);
             }
             else
             {
@@ -227,6 +271,48 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             return unityMCP;
+        }
+
+        private static void AddRemoteAuthHeaderIfNeeded(TomlTable unityMCP)
+        {
+            if (unityMCP == null) return;
+
+            if (!HttpEndpointUtility.IsRemoteScope())
+            {
+                unityMCP.Delete("http_headers");
+                return;
+            }
+
+            string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                unityMCP.Delete("http_headers");
+                return;
+            }
+
+            var headers = new TomlTable { IsInline = true };
+            headers[AuthConstants.ApiKeyHeader] = new TomlString { Value = apiKey };
+            unityMCP["http_headers"] = headers;
+        }
+
+        private static void RemoveUnityServer(TomlTable root, string serverTableName)
+        {
+            if (root == null) return;
+            if (!TryGetTable(root, serverTableName, out var servers)) return;
+
+            foreach (string key in servers.Keys.ToList())
+            {
+                if (string.Equals(key, "unityMCP", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(key, "UnityMCP", StringComparison.OrdinalIgnoreCase))
+                {
+                    servers.Delete(key);
+                }
+            }
+
+            if (servers.ChildrenCount == 0)
+            {
+                root.Delete(serverTableName);
+            }
         }
 
         /// <summary>

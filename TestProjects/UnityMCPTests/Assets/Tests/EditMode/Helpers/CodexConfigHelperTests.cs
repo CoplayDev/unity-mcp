@@ -59,6 +59,12 @@ namespace MCPForUnityTests.Editor.Helpers
         private string _originalGitOverride;
         private bool _hadHttpTransport;
         private bool _originalHttpTransport;
+        private bool _hadHttpTransportScope;
+        private string _originalHttpTransportScope;
+        private bool _hadHttpRemoteBaseUrl;
+        private string _originalHttpRemoteBaseUrl;
+        private bool _hadApiKey;
+        private string _originalApiKey;
         private bool _hadDevForceRefresh;
         private bool _originalDevForceRefresh;
         private IPlatformService _originalPlatformService;
@@ -70,6 +76,12 @@ namespace MCPForUnityTests.Editor.Helpers
             _originalGitOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, string.Empty);
             _hadHttpTransport = EditorPrefs.HasKey(EditorPrefKeys.UseHttpTransport);
             _originalHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            _hadHttpTransportScope = EditorPrefs.HasKey(EditorPrefKeys.HttpTransportScope);
+            _originalHttpTransportScope = EditorPrefs.GetString(EditorPrefKeys.HttpTransportScope, string.Empty);
+            _hadHttpRemoteBaseUrl = EditorPrefs.HasKey(EditorPrefKeys.HttpRemoteBaseUrl);
+            _originalHttpRemoteBaseUrl = EditorPrefs.GetString(EditorPrefKeys.HttpRemoteBaseUrl, string.Empty);
+            _hadApiKey = EditorPrefs.HasKey(EditorPrefKeys.ApiKey);
+            _originalApiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
             _hadDevForceRefresh = EditorPrefs.HasKey(EditorPrefKeys.DevModeForceServerRefresh);
             _originalDevForceRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
             _originalPlatformService = MCPServiceLocator.Platform;
@@ -82,6 +94,8 @@ namespace MCPForUnityTests.Editor.Helpers
             EditorPrefs.DeleteKey(EditorPrefKeys.GitUrlOverride);
             // Default to stdio mode for existing tests unless specified otherwise
             EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
+            EditorPrefs.DeleteKey(EditorPrefKeys.HttpTransportScope);
+            EditorPrefs.DeleteKey(EditorPrefKeys.ApiKey);
             // Ensure deterministic uvx args ordering for these tests regardless of editor settings
             // (dev-mode inserts --no-cache/--refresh, which changes the first args).
             EditorPrefs.SetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
@@ -127,6 +141,33 @@ namespace MCPForUnityTests.Editor.Helpers
             else
             {
                 EditorPrefs.DeleteKey(EditorPrefKeys.UseHttpTransport);
+            }
+
+            if (_hadHttpTransportScope)
+            {
+                EditorPrefs.SetString(EditorPrefKeys.HttpTransportScope, _originalHttpTransportScope);
+            }
+            else
+            {
+                EditorPrefs.DeleteKey(EditorPrefKeys.HttpTransportScope);
+            }
+
+            if (_hadHttpRemoteBaseUrl)
+            {
+                EditorPrefs.SetString(EditorPrefKeys.HttpRemoteBaseUrl, _originalHttpRemoteBaseUrl);
+            }
+            else
+            {
+                EditorPrefs.DeleteKey(EditorPrefKeys.HttpRemoteBaseUrl);
+            }
+
+            if (_hadApiKey)
+            {
+                EditorPrefs.SetString(EditorPrefKeys.ApiKey, _originalApiKey);
+            }
+            else
+            {
+                EditorPrefs.DeleteKey(EditorPrefKeys.ApiKey);
             }
 
             if (_hadDevForceRefresh)
@@ -511,6 +552,43 @@ namespace MCPForUnityTests.Editor.Helpers
             Assert.IsFalse(unityMcp.TryGetNode("command", out _), "HTTP mode should not contain command field");
             Assert.IsFalse(unityMcp.TryGetNode("args", out _), "HTTP mode should not contain args field");
             Assert.IsFalse(unityMcp.TryGetNode("env", out _), "HTTP mode should not contain env field");
+            Assert.IsFalse(unityMcp.TryGetNode("http_headers", out _), "Local HTTP mode should not contain auth headers");
+        }
+
+        [Test]
+        public void BuildCodexServerBlock_RemoteHttpModeWithApiKey_IncludesHttpHeaders()
+        {
+            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
+            EditorPrefs.SetString(EditorPrefKeys.HttpTransportScope, "remote");
+            EditorPrefs.SetString(EditorPrefKeys.HttpRemoteBaseUrl, "https://unity-mcp.example");
+            EditorPrefs.SetString(EditorPrefKeys.ApiKey, "test-api-key");
+            EditorConfigurationCache.Instance.Refresh();
+
+            string result = CodexConfigHelper.BuildCodexServerBlock("uvx");
+
+            TomlTable parsed;
+            using (var reader = new StringReader(result))
+            {
+                parsed = TOML.Parse(reader);
+            }
+
+            var mcpServers = parsed["mcp_servers"] as TomlTable;
+            var unityMcp = mcpServers["unityMCP"] as TomlTable;
+
+            Assert.IsTrue(unityMcp.TryGetNode("url", out var urlNode), "Remote HTTP mode should contain url");
+            Assert.AreEqual("https://unity-mcp.example/mcp", (urlNode as TomlString).Value);
+
+            Assert.IsTrue(unityMcp.TryGetNode("http_headers", out var headersNode), "Remote HTTP mode should include auth headers");
+            Assert.IsInstanceOf<TomlTable>(headersNode);
+            var headers = headersNode as TomlTable;
+            Assert.IsTrue(headers.TryGetNode(AuthConstants.ApiKeyHeader, out var apiKeyNode), "Headers should contain X-API-Key");
+            Assert.AreEqual("test-api-key", (apiKeyNode as TomlString).Value);
+            Assert.IsTrue(
+                CodexConfigHelper.HasCodexHttpHeader(result, AuthConstants.ApiKeyHeader, "test-api-key"),
+                "Header helper should detect the generated X-API-Key");
+            Assert.IsFalse(
+                CodexConfigHelper.HasCodexHttpHeader(result, AuthConstants.ApiKeyHeader, "stale-key"),
+                "Header helper should reject stale X-API-Key values");
         }
 
         [Test]
@@ -590,6 +668,37 @@ namespace MCPForUnityTests.Editor.Helpers
             // Verify command and args are NOT present in HTTP mode
             Assert.IsFalse(unityMcp.TryGetNode("command", out _), "HTTP mode should not contain command field");
             Assert.IsFalse(unityMcp.TryGetNode("args", out _), "HTTP mode should not contain args field");
+        }
+
+        [Test]
+        public void RemoveCodexServerBlock_RemovesUnityServerAndPreservesOtherSections()
+        {
+            string existingToml = string.Join("\n", new[]
+            {
+                "[profile.default]",
+                "model = \"gpt-5.2-codex\"",
+                "",
+                "[mcp_servers.unityMCP]",
+                "url = \"http://127.0.0.1:8080/mcp\"",
+                "",
+                "[mcp_servers.otherServer]",
+                "url = \"http://127.0.0.1:9999/mcp\""
+            });
+
+            string result = CodexConfigHelper.RemoveCodexServerBlock(existingToml);
+
+            TomlTable parsed;
+            using (var reader = new StringReader(result))
+            {
+                parsed = TOML.Parse(reader);
+            }
+
+            Assert.IsTrue(parsed.TryGetNode("profile", out _), "Unrelated sections should be preserved");
+            Assert.IsTrue(parsed.TryGetNode("mcp_servers", out var serversNode), "Other MCP servers should be preserved");
+
+            var servers = serversNode as TomlTable;
+            Assert.IsFalse(servers.TryGetNode("unityMCP", out _), "Unity MCP server should be removed");
+            Assert.IsTrue(servers.TryGetNode("otherServer", out _), "Other MCP servers should remain");
         }
     }
 }

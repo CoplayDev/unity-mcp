@@ -14,7 +14,7 @@
 [![](https://badge.mcpx.dev?status=on 'MCP Enabled')](https://modelcontextprotocol.io/introduction)
 [![](https://img.shields.io/badge/License-MIT-red.svg 'MIT License')](https://opensource.org/licenses/MIT)
 
-**Create your Unity apps with LLMs!** MCP for Unity bridges AI assistants (Claude, Claude Code, Cursor, VS Code, etc.) with your Unity Editor via the [Model Context Protocol](https://modelcontextprotocol.io/introduction). Give your LLM the tools to manage assets, control scenes, edit scripts, and automate tasks.
+**Create your Unity apps with LLMs!** MCP for Unity bridges AI assistants (Claude, Claude Code, Codex, Cursor, VS Code, etc.) with your Unity Editor via the [Model Context Protocol](https://modelcontextprotocol.io/introduction). Give your LLM the tools to manage assets, control scenes, edit scripts, and automate tasks.
 
 <img alt="MCP for Unity building a scene" src="docs/images/building_scene.gif">
 
@@ -47,7 +47,7 @@
 
 * **Unity 2021.3 LTS+** — [Download Unity](https://unity.com/download)
 * **Python 3.10+** and **uv** — [Install uv](https://docs.astral.sh/uv/getting-started/installation/)
-* **An MCP Client** — [Claude Desktop](https://claude.ai/download) | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | [Cursor](https://www.cursor.com/en/downloads) | [VS Code Copilot](https://code.visualstudio.com/docs/copilot/overview) | [GitHub Copilot CLI](https://docs.github.com/en/copilot/concepts/agents/about-copilot-cli) | [OpenClaw](https://openclaw.ai)
+* **An MCP Client** — [Claude Desktop](https://claude.ai/download) | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | [Codex](https://developers.openai.com/codex/mcp) | [Cursor](https://www.cursor.com/en/downloads) | [VS Code Copilot](https://code.visualstudio.com/docs/copilot/overview) | [GitHub Copilot CLI](https://docs.github.com/en/copilot/concepts/agents/about-copilot-cli) | [OpenClaw](https://openclaw.ai)
 
 ### 1. Install the Unity Package
 
@@ -82,7 +82,7 @@ openupm add com.coplaydev.unity-mcp
 2. Click **Start Server** (launches HTTP server on `localhost:8080`)
 3. Select your MCP Client from the dropdown and click **Configure**
 4. Look for 🟢 "Connected ✓"
-5. **Connect your client:** Some clients (Cursor, Antigravity, OpenClaw) require enabling an MCP toggle or plugin in settings. OpenClaw also needs the `openclaw-mcp-bridge` plugin enabled and follows the currently selected MCP for Unity transport (`HTTP` or `stdio`). Others (Claude Desktop, Claude Code) auto-connect after configuration.
+5. **Connect your client:** Some clients (Cursor, Antigravity, OpenClaw) require enabling an MCP toggle or plugin in settings. OpenClaw also needs the `openclaw-mcp-bridge` plugin enabled and follows the currently selected MCP for Unity transport (`HTTP` or `stdio`). Others (Claude Desktop, Claude Code, Codex) pick up the server after configuration or in the next session.
 
 **That's it!** Try a prompt like: *"Create a red, blue and yellow cube"* or *"Build a simple player controller"*
 
@@ -133,6 +133,14 @@ If auto-setup doesn't work, add this to your MCP client's config file:
   }
 }
 ```
+
+**Codex CLI:**
+```bash
+codex mcp add unityMCP --url http://127.0.0.1:8080/mcp
+codex mcp list
+```
+
+Codex stores MCP servers in `~/.codex/config.toml`. If you need remote-hosted mode with `X-API-Key` auth, use the Unity Editor's Configure button or see [CODEX_HELP.md](docs/guides/CODEX_HELP.md) for the TOML form.
 
 <details>
 <summary>Stdio configuration (uvx)</summary>
@@ -213,6 +221,7 @@ For **Strict** validation that catches undefined namespaces, types, and methods:
 **Detailed setup guides:**
 * [Fix Unity MCP and Cursor, VSCode & Windsurf](https://github.com/CoplayDev/unity-mcp/wiki/1.-Fix-Unity-MCP-and-Cursor,-VSCode-&-Windsurf) — uv/Python installation, PATH issues
 * [Fix Unity MCP and Claude Code](https://github.com/CoplayDev/unity-mcp/wiki/2.-Fix-Unity-MCP-and-Claude-Code) — Claude CLI installation
+* [Codex setup help](docs/guides/CODEX_HELP.md) — Codex CLI registration, TOML fallback, and verification
 * [Common Setup Problems](https://github.com/CoplayDev/unity-mcp/wiki/3.-Common-Setup-Problems) — macOS dyld errors, FAQ
 
 Still stuck? [Open an Issue](https://github.com/CoplayDev/unity-mcp/issues) or [Join Discord](https://discord.gg/y4p8KfzrN4)

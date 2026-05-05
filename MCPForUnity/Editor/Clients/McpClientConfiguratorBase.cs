@@ -353,7 +353,12 @@ namespace MCPForUnity.Editor.Clients
     /// <summary>Codex (TOML) configurator.</summary>
     public abstract class CodexMcpConfigurator : McpClientConfiguratorBase
     {
+        private const string CodexServerName = "unityMCP";
+        private const string LegacyCodexServerName = "UnityMCP";
+
         public CodexMcpConfigurator(McpClient client) : base(client) { }
+
+        public override string GetConfigureActionLabel() => client.status == McpStatus.Configured ? "Unregister" : "Configure";
 
         public override string GetConfigPath() => CurrentOsPath();
 
@@ -403,6 +408,16 @@ namespace MCPForUnity.Editor.Clients
                     {
                         // Match against the active scope's URL
                         matches = UrlsEqual(url, HttpEndpointUtility.GetMcpRpcUrl());
+                        if (matches && ShouldUseTomlForRemoteAuth())
+                        {
+                            string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
+                            if (!CodexConfigHelper.HasCodexHttpHeader(toml, AuthConstants.ApiKeyHeader, apiKey))
+                            {
+                                matches = false;
+                                hasVersionMismatch = true;
+                                mismatchReason = "Remote auth header is missing or stale. Re-configure to update Codex.";
+                            }
+                        }
                     }
                     else if (args != null && args.Length > 0)
                     {
@@ -451,13 +466,8 @@ namespace MCPForUnity.Editor.Clients
                     {
                         if (attemptAutoRewrite)
                         {
-                            string result = McpConfigurationHelper.ConfigureCodexClient(path, client);
-                            if (result == "Configured successfully")
-                            {
-                                client.SetStatus(McpStatus.Configured);
-                                client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
-                                return client.status;
-                            }
+                            Register();
+                            return client.status;
                         }
                         client.SetStatus(McpStatus.VersionMismatch, mismatchReason);
                         return client.status;
@@ -470,16 +480,7 @@ namespace MCPForUnity.Editor.Clients
 
                 if (attemptAutoRewrite)
                 {
-                    string result = McpConfigurationHelper.ConfigureCodexClient(path, client);
-                    if (result == "Configured successfully")
-                    {
-                        client.SetStatus(McpStatus.Configured);
-                        client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
-                    }
-                    else
-                    {
-                        client.SetStatus(McpStatus.IncorrectPath);
-                    }
+                    Register();
                 }
                 else
                 {
@@ -497,17 +498,13 @@ namespace MCPForUnity.Editor.Clients
 
         public override void Configure()
         {
-            string path = GetConfigPath();
-            McpConfigurationHelper.EnsureConfigDirectoryExists(path);
-            string result = McpConfigurationHelper.ConfigureCodexClient(path, client);
-            if (result == "Configured successfully")
+            if (client.status == McpStatus.Configured)
             {
-                client.SetStatus(McpStatus.Configured);
-                client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
+                Unregister();
             }
             else
             {
-                throw new InvalidOperationException(result);
+                Register();
             }
         }
 
@@ -515,8 +512,37 @@ namespace MCPForUnity.Editor.Clients
         {
             try
             {
-                string uvx = GetUvxPathOrError();
-                return CodexConfigHelper.BuildCodexServerBlock(uvx);
+                if (ShouldUseTomlForRemoteAuth())
+                {
+                    string uvx = GetUvxPathOrError();
+                    return "# Codex CLI does not currently expose an arbitrary HTTP header flag.\n" +
+                           "# For remote-hosted servers with X-API-Key auth, add this TOML to ~/.codex/config.toml:\n" +
+                           CodexConfigHelper.BuildCodexServerBlock(uvx);
+                }
+
+                bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
+                if (useHttpTransport)
+                {
+                    string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
+                    return "# Register the MCP server with Codex:\n" +
+                           $"codex mcp add {CodexServerName} --url {QuoteCliArg(httpUrl)}\n\n" +
+                           "# Unregister the MCP server:\n" +
+                           $"codex mcp remove {CodexServerName}\n\n" +
+                           "# List configured servers:\n" +
+                           "codex mcp list";
+                }
+
+                var (uvxPath, _, packageName) = AssetPathUtility.GetUvxCommandParts();
+                string devFlags = AssetPathUtility.GetUvxDevFlags();
+                string fromArgs = AssetPathUtility.GetBetaServerFromArgs(quoteFromPath: true);
+                string envArg = GetCodexStdioEnvArg();
+
+                return "# Register the MCP server with Codex:\n" +
+                       $"codex mcp add{envArg} {CodexServerName} -- {QuoteCliArg(uvxPath)} {devFlags}{fromArgs} {packageName} --transport stdio\n\n" +
+                       "# Unregister the MCP server:\n" +
+                       $"codex mcp remove {CodexServerName}\n\n" +
+                       "# List configured servers:\n" +
+                       "codex mcp list";
             }
             catch (Exception ex)
             {
@@ -526,10 +552,209 @@ namespace MCPForUnity.Editor.Clients
 
         public override IList<string> GetInstallationSteps() => new List<string>
         {
-            "Run 'codex config edit' or open the config path",
-            "Paste the TOML",
-            "Save and restart Codex"
+            "Ensure the Codex CLI is installed",
+            "Click Configure to add Unity MCP via 'codex mcp add'",
+            "Codex reads the configuration from ~/.codex/config.toml",
+            "Use Unregister to remove it via 'codex mcp remove'"
         };
+
+        private void Register()
+        {
+            if (ShouldUseTomlForRemoteAuth())
+            {
+                RegisterWithToml();
+                return;
+            }
+
+            string codexPath = ResolveCodexCliPath();
+            if (string.IsNullOrEmpty(codexPath))
+            {
+                McpLog.Warn("Codex CLI not found. Falling back to ~/.codex/config.toml.");
+                RegisterWithToml();
+                return;
+            }
+
+            string args = BuildCodexAddArgs();
+
+            RemoveCodexRegistrations(codexPath);
+
+            if (!ExecPath.TryRun(codexPath, args, null, out var stdout, out var stderr, 15000, GetCodexPathPrepend(codexPath)))
+            {
+                McpLog.Warn($"Codex CLI registration failed. Falling back to ~/.codex/config.toml.\n{stderr}\n{stdout}");
+                RegisterWithToml();
+                return;
+            }
+
+            client.SetStatus(McpStatus.Configured);
+            client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
+            McpLog.Info($"Successfully registered with Codex using {(EditorConfigurationCache.Instance.UseHttpTransport ? "HTTP" : "stdio")} transport.");
+        }
+
+        private void RegisterWithToml()
+        {
+            string path = GetConfigPath();
+            McpConfigurationHelper.EnsureConfigDirectoryExists(path);
+            string result = McpConfigurationHelper.ConfigureCodexClient(path, client);
+            if (result != "Configured successfully")
+            {
+                throw new InvalidOperationException(result);
+            }
+
+            client.SetStatus(McpStatus.Configured);
+            client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
+        }
+
+        private void Unregister()
+        {
+            string codexPath = ResolveCodexCliPath();
+            if (!string.IsNullOrEmpty(codexPath))
+            {
+                RemoveCodexRegistrations(codexPath);
+            }
+
+            RemoveCodexTomlRegistration();
+            client.SetStatus(McpStatus.NotConfigured);
+            client.configuredTransport = Models.ConfiguredTransport.Unknown;
+            McpLog.Info("MCP server successfully unregistered from Codex.");
+        }
+
+        private string BuildCodexAddArgs()
+        {
+            bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
+            if (useHttpTransport)
+            {
+                string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
+                return $"mcp add {CodexServerName} --url {QuoteCliArg(httpUrl)}";
+            }
+
+            var (uvxPath, _, packageName) = AssetPathUtility.GetUvxCommandParts();
+            string devFlags = AssetPathUtility.GetUvxDevFlags();
+            string fromArgs = AssetPathUtility.GetBetaServerFromArgs(quoteFromPath: true);
+            string envArg = GetCodexStdioEnvArg();
+
+            return $"mcp add{envArg} {CodexServerName} -- {QuoteCliArg(uvxPath)} {devFlags}{fromArgs} {packageName} --transport stdio";
+        }
+
+        private static bool ShouldUseTomlForRemoteAuth()
+        {
+            return EditorConfigurationCache.Instance.UseHttpTransport
+                   && HttpEndpointUtility.IsRemoteScope()
+                   && !string.IsNullOrEmpty(EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty));
+        }
+
+        private static string GetCodexStdioEnvArg()
+        {
+            if (Application.platform != RuntimePlatform.WindowsEditor)
+            {
+                return string.Empty;
+            }
+
+            string systemRoot = MCPServiceLocator.Platform.GetSystemRoot();
+            return string.IsNullOrEmpty(systemRoot)
+                ? string.Empty
+                : $" --env SystemRoot={QuoteCliArg(systemRoot)}";
+        }
+
+        private void RemoveCodexRegistrations(string codexPath)
+        {
+            string pathPrepend = GetCodexPathPrepend(codexPath);
+            ExecPath.TryRun(codexPath, $"mcp remove {CodexServerName}", null, out _, out _, 5000, pathPrepend);
+            ExecPath.TryRun(codexPath, $"mcp remove {LegacyCodexServerName}", null, out _, out _, 5000, pathPrepend);
+        }
+
+        private void RemoveCodexTomlRegistration()
+        {
+            string path = GetConfigPath();
+            if (!File.Exists(path)) return;
+
+            string existingToml = File.ReadAllText(path);
+            string updatedToml = CodexConfigHelper.RemoveCodexServerBlock(existingToml);
+            McpConfigurationHelper.WriteAtomicFile(path, updatedToml);
+        }
+
+        private static string ResolveCodexCliPath()
+        {
+            string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) ?? string.Empty;
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) ?? string.Empty;
+                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) ?? string.Empty;
+                string[] candidates =
+                {
+                    Path.Combine(appData, "npm", "codex.cmd"),
+                    Path.Combine(appData, "npm", "codex.ps1"),
+                    Path.Combine(localAppData, "npm", "codex.cmd"),
+                    Path.Combine(localAppData, "npm", "codex.ps1"),
+                    Path.Combine(home, ".local", "bin", "codex.exe"),
+                };
+
+                foreach (string candidate in candidates)
+                {
+                    if (File.Exists(candidate)) return candidate;
+                }
+
+                foreach (string name in new[] { "codex.exe", "codex.cmd", "codex.ps1", "codex" })
+                {
+                    string fromPath = ExecPath.FindInPath(name);
+                    if (!string.IsNullOrEmpty(fromPath)) return fromPath;
+                }
+            }
+            else
+            {
+                string[] candidates =
+                {
+                    "/opt/homebrew/bin/codex",
+                    "/usr/local/bin/codex",
+                    "/usr/bin/codex",
+                    Path.Combine(home, ".local", "bin", "codex"),
+                    Path.Combine(home, ".npm-global", "bin", "codex"),
+                };
+
+                foreach (string candidate in candidates)
+                {
+                    if (File.Exists(candidate)) return candidate;
+                }
+
+                string fromPath = ExecPath.FindInPath("codex", GetDefaultCliPathPrepend());
+                if (!string.IsNullOrEmpty(fromPath)) return fromPath;
+            }
+
+            return null;
+        }
+
+        private static string GetCodexPathPrepend(string codexPath)
+        {
+            string pathPrepend = GetDefaultCliPathPrepend();
+            try
+            {
+                string codexDir = Path.GetDirectoryName(codexPath);
+                if (!string.IsNullOrEmpty(codexDir))
+                {
+                    pathPrepend = string.IsNullOrEmpty(pathPrepend)
+                        ? codexDir
+                        : $"{codexDir}{Path.PathSeparator}{pathPrepend}";
+                }
+            }
+            catch { }
+
+            return pathPrepend;
+        }
+
+        private static string GetDefaultCliPathPrepend()
+        {
+            if (Application.platform == RuntimePlatform.OSXEditor)
+                return "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin";
+            if (Application.platform == RuntimePlatform.LinuxEditor)
+                return "/usr/local/bin:/usr/bin:/bin";
+            return null;
+        }
+
+        private static string QuoteCliArg(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return "\"\"";
+            return "\"" + value.Replace("\"", "\\\"") + "\"";
+        }
     }
 
     /// <summary>CLI-based configurator (Claude Code).</summary>

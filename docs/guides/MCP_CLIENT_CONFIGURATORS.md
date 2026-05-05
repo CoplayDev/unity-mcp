@@ -136,11 +136,14 @@ Some clients cannot be handled by the generic JSON configurator alone.
 ### Codex (TOML-based)
 
 - Uses **`CodexMcpConfigurator`**.
-- Reads and writes a **TOML** config (usually `~/.codex/config.toml`).
+- Uses `codex mcp add` / `codex mcp remove` for local HTTP and stdio setup when the Codex CLI is available.
+- Reads `~/.codex/config.toml` for fast status checks and to detect manual configuration.
+- Falls back to writing TOML directly when the Codex CLI is not available.
+- Writes TOML directly for remote-hosted `X-API-Key` auth because the Codex CLI does not currently expose an arbitrary HTTP header flag.
 - Uses `CodexConfigHelper` to:
   - Parse the existing TOML.
   - Check for a matching Unity MCP server configuration.
-  - Write/patch the Codex server block.
+  - Write/patch/remove the Codex server block.
 - The `CodexConfigurator` class:
   - Only needs to supply a `McpClient` with TOML config paths.
   - Inherits the Codex-specific status and configure behavior from `CodexMcpConfigurator`.
