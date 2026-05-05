@@ -88,7 +88,14 @@ namespace MCPForUnity.Editor.Helpers
         public static string RemoveCodexServerBlock(string existingToml)
         {
             var root = TryParseToml(existingToml);
-            if (root == null) return existingToml ?? string.Empty;
+            if (root == null)
+            {
+                if (!string.IsNullOrWhiteSpace(existingToml))
+                {
+                    McpLog.Warn("Codex config.toml could not be parsed; leaving it unchanged. Manual cleanup of the [mcp_servers.unityMCP] block may be required.");
+                }
+                return existingToml ?? string.Empty;
+            }
 
             RemoveUnityServer(root, "mcp_servers");
             RemoveUnityServer(root, "mcpServers");

@@ -57,10 +57,10 @@ codex mcp add unityMCP -- uvx --from mcpforunityserver mcp-for-unity --transport
 On Windows, if Codex cannot launch the stdio server, add `SystemRoot`:
 
 ```bash
-codex mcp add --env SystemRoot=C:\Windows unityMCP -- uvx --from mcpforunityserver mcp-for-unity --transport stdio
+codex mcp add unityMCP --env "SystemRoot=C:\Windows" -- uvx --from mcpforunityserver mcp-for-unity --transport stdio
 ```
 
-If `uvx` is not on Codex's PATH, use the absolute `uvx` path shown in the MCP for Unity window.
+If `uvx` is not on Codex's PATH, use the absolute `uvx` path shown in the MCP for Unity window. Quote paths that contain spaces.
 
 ## Remote-hosted auth
 

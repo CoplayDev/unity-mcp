@@ -538,7 +538,7 @@ namespace MCPForUnity.Editor.Clients
                 string envArg = GetCodexStdioEnvArg();
 
                 return "# Register the MCP server with Codex:\n" +
-                       $"codex mcp add{envArg} {CodexServerName} -- {QuoteCliArg(uvxPath)} {devFlags}{fromArgs} {packageName} --transport stdio\n\n" +
+                       $"codex mcp add {CodexServerName}{envArg} -- {QuoteCliArg(uvxPath)} {devFlags}{fromArgs} {packageName} --transport stdio\n\n" +
                        "# Unregister the MCP server:\n" +
                        $"codex mcp remove {CodexServerName}\n\n" +
                        "# List configured servers:\n" +
@@ -565,6 +565,8 @@ namespace MCPForUnity.Editor.Clients
                 RegisterWithToml();
                 return;
             }
+
+            WarnIfRemoteHttpHasNoApiKey();
 
             string codexPath = ResolveCodexCliPath();
             if (string.IsNullOrEmpty(codexPath))
@@ -632,7 +634,7 @@ namespace MCPForUnity.Editor.Clients
             string fromArgs = AssetPathUtility.GetBetaServerFromArgs(quoteFromPath: true);
             string envArg = GetCodexStdioEnvArg();
 
-            return $"mcp add{envArg} {CodexServerName} -- {QuoteCliArg(uvxPath)} {devFlags}{fromArgs} {packageName} --transport stdio";
+            return $"mcp add {CodexServerName}{envArg} -- {QuoteCliArg(uvxPath)} {devFlags}{fromArgs} {packageName} --transport stdio";
         }
 
         private static bool ShouldUseTomlForRemoteAuth()
@@ -640,6 +642,21 @@ namespace MCPForUnity.Editor.Clients
             return EditorConfigurationCache.Instance.UseHttpTransport
                    && HttpEndpointUtility.IsRemoteScope()
                    && !string.IsNullOrEmpty(EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty));
+        }
+
+        private static void WarnIfRemoteHttpHasNoApiKey()
+        {
+            if (!EditorConfigurationCache.Instance.UseHttpTransport || !HttpEndpointUtility.IsRemoteScope())
+            {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty)))
+            {
+                return;
+            }
+
+            McpLog.Warn("Codex is being configured for a remote HTTP MCP server without an API key. If that server requires X-API-Key authentication, add the key in MCP for Unity before configuring Codex.");
         }
 
         private static string GetCodexStdioEnvArg()
@@ -652,7 +669,7 @@ namespace MCPForUnity.Editor.Clients
             string systemRoot = MCPServiceLocator.Platform.GetSystemRoot();
             return string.IsNullOrEmpty(systemRoot)
                 ? string.Empty
-                : $" --env SystemRoot={QuoteCliArg(systemRoot)}";
+                : $" --env {QuoteCliArg($"SystemRoot={systemRoot}")}";
         }
 
         private void RemoveCodexRegistrations(string codexPath)

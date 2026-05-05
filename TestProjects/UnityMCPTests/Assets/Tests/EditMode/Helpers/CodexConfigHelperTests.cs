@@ -95,6 +95,7 @@ namespace MCPForUnityTests.Editor.Helpers
             // Default to stdio mode for existing tests unless specified otherwise
             EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
             EditorPrefs.DeleteKey(EditorPrefKeys.HttpTransportScope);
+            EditorPrefs.DeleteKey(EditorPrefKeys.HttpRemoteBaseUrl);
             EditorPrefs.DeleteKey(EditorPrefKeys.ApiKey);
             // Ensure deterministic uvx args ordering for these tests regardless of editor settings
             // (dev-mode inserts --no-cache/--refresh, which changes the first args).
