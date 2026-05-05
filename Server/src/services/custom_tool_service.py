@@ -327,8 +327,6 @@ class CustomToolService:
         return registered, replaced
 
     def register_global_tools(self, tools: list[ToolDefinitionModel]) -> None:
-        if self._project_scoped_tools:
-            return
         builtin_names = self._get_builtin_tool_names()
         for tool in tools:
             if tool.name in builtin_names:
