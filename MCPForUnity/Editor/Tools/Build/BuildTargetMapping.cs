@@ -1,3 +1,4 @@
+using System;
 using UnityEditor;
 using UnityEditor.Build;
 
@@ -5,6 +6,8 @@ namespace MCPForUnity.Editor.Tools.Build
 {
     public static class BuildTargetMapping
     {
+        private const string VisionOSName = "VisionOS";
+
         public static bool TryResolveBuildTarget(string name, out BuildTarget target)
         {
             if (string.IsNullOrEmpty(name))
@@ -24,12 +27,8 @@ namespace MCPForUnity.Editor.Tools.Build
                 case "webgl": target = BuildTarget.WebGL; return true;
                 case "uwp": target = BuildTarget.WSAPlayer; return true;
                 case "tvos": target = BuildTarget.tvOS; return true;
-                // BuildTarget.VisionOS exists only in Unity 2023.2+ and late 2022.3 patches
-#if UNITY_2023_2_OR_NEWER
-                case "visionos": target = BuildTarget.VisionOS; return true;
-#endif
                 default:
-                    if (System.Enum.TryParse(name, true, out target))
+                    if (Enum.TryParse(name, true, out target))
                         return true;
                     target = default;
                     return false;
@@ -50,10 +49,14 @@ namespace MCPForUnity.Editor.Tools.Build
                 case BuildTarget.WebGL: return BuildTargetGroup.WebGL;
                 case BuildTarget.WSAPlayer: return BuildTargetGroup.WSA;
                 case BuildTarget.tvOS: return BuildTargetGroup.tvOS;
-#if UNITY_2023_2_OR_NEWER
-                case BuildTarget.VisionOS: return BuildTargetGroup.VisionOS;
-#endif
-                default: return BuildTargetGroup.Unknown;
+                default:
+                    if (IsVisionOSTarget(target)
+                        && Enum.TryParse(VisionOSName, true, out BuildTargetGroup visionOSGroup))
+                    {
+                        return visionOSGroup;
+                    }
+
+                    return BuildTargetGroup.Unknown;
             }
         }
 
@@ -67,10 +70,47 @@ namespace MCPForUnity.Editor.Tools.Build
             if (!TryResolveBuildTarget(name, out var buildTarget))
             {
                 namedTarget = default;
-                return $"Unknown build target: '{name}'. Valid targets: windows64, osx, linux64, android, ios, webgl, uwp, tvos, visionos";
+                return GetUnknownBuildTargetMessage(name);
             }
-            namedTarget = GetNamedBuildTarget(buildTarget);
+
+            var targetGroup = GetTargetGroup(buildTarget);
+            if (targetGroup == BuildTargetGroup.Unknown)
+            {
+                namedTarget = default;
+                return IsVisionOSTarget(buildTarget)
+                    ? "VisionOS build target is available, but its BuildTargetGroup is not exposed by this Unity editor installation."
+                    : $"Build target group could not be resolved for target '{buildTarget}'.";
+            }
+
+            namedTarget = NamedBuildTarget.FromBuildTargetGroup(targetGroup);
             return null;
+        }
+
+        public static string GetUnknownBuildTargetMessage(string name)
+        {
+            if (string.Equals(name, "visionos", StringComparison.OrdinalIgnoreCase))
+            {
+                return "VisionOS build target is not available in this Unity editor installation. "
+                    + "Install the visionOS build support module or use a Unity version/configuration that exposes BuildTarget.VisionOS.";
+            }
+
+            return $"Unknown build target: '{name}'. Valid targets: {GetValidTargetsList()}.";
+        }
+
+        private static string GetValidTargetsList()
+        {
+            string validTargets = "windows64, osx, linux64, android, ios, webgl, uwp, tvos";
+            if (Enum.TryParse(VisionOSName, true, out BuildTarget _))
+            {
+                validTargets += ", visionos";
+            }
+
+            return validTargets;
+        }
+
+        private static bool IsVisionOSTarget(BuildTarget target)
+        {
+            return string.Equals(target.ToString(), VisionOSName, StringComparison.OrdinalIgnoreCase);
         }
 
         public static string GetDefaultOutputPath(BuildTarget target, string productName)
