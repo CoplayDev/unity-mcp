@@ -19,6 +19,12 @@ namespace MCPForUnity.Tests.EditMode.Tools
         }
 
         [Test]
+        public void TryResolveBuildTarget_NumericInputDoesNotResolve()
+        {
+            Assert.IsFalse(BuildTargetMapping.TryResolveBuildTarget("5", out _));
+        }
+
+        [Test]
         public void TryResolveNamedBuildTarget_UnknownTargetListsOnlyAvailableTargets()
         {
             string error = BuildTargetMapping.TryResolveNamedBuildTarget("not-a-target", out _);
@@ -46,10 +52,9 @@ namespace MCPForUnity.Tests.EditMode.Tools
             if (visionOSAvailable)
             {
                 Assert.IsTrue(BuildTargetMapping.TryResolveBuildTarget("visionos", out _));
-                if (error != null)
-                {
-                    StringAssert.Contains("VisionOS", error);
-                }
+                Assert.IsTrue(
+                    error == null || error.Contains("VisionOS"),
+                    $"Expected no error or a VisionOS-specific error, got: {error}");
             }
             else
             {

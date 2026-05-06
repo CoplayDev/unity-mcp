@@ -28,8 +28,11 @@ namespace MCPForUnity.Editor.Tools.Build
                 case "uwp": target = BuildTarget.WSAPlayer; return true;
                 case "tvos": target = BuildTarget.tvOS; return true;
                 default:
-                    if (Enum.TryParse(name, true, out target))
+                    if (TryParseDefinedBuildTarget(name, out target))
+                    {
                         return true;
+                    }
+
                     target = default;
                     return false;
             }
@@ -100,7 +103,7 @@ namespace MCPForUnity.Editor.Tools.Build
         private static string GetValidTargetsList()
         {
             string validTargets = "windows64, osx, linux64, android, ios, webgl, uwp, tvos";
-            if (Enum.TryParse(VisionOSName, true, out BuildTarget _))
+            if (TryParseDefinedBuildTarget(VisionOSName, out _))
             {
                 validTargets += ", visionos";
             }
@@ -111,6 +114,18 @@ namespace MCPForUnity.Editor.Tools.Build
         private static bool IsVisionOSTarget(BuildTarget target)
         {
             return string.Equals(target.ToString(), VisionOSName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool TryParseDefinedBuildTarget(string name, out BuildTarget target)
+        {
+            target = default;
+            if (int.TryParse(name, out _))
+            {
+                return false;
+            }
+
+            return Enum.TryParse(name, true, out target)
+                && Enum.IsDefined(typeof(BuildTarget), target);
         }
 
         public static string GetDefaultOutputPath(BuildTarget target, string productName)
