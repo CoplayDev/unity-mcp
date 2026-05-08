@@ -17,37 +17,44 @@ namespace MCPForUnity.Editor.Services
     [InitializeOnLoad]
     internal static class HttpAutoStartHandler
     {
-        private const string SessionInitKey = "HttpAutoStartHandler.SessionInitialized";
+        private static bool _autoStartExecuted = false;
+        private static int _retryCount = 0;
+        private const int MaxRetries = 120;
 
         static HttpAutoStartHandler()
         {
-            // SessionState resets on editor process start but persists across domain reloads.
-            // Only run once per session — let HttpBridgeReloadHandler handle reload-resume cases.
-            if (SessionState.GetBool(SessionInitKey, false)) return;
-
             if (Application.isBatchMode &&
                 string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("UNITY_MCP_ALLOW_BATCH")))
             {
                 return;
             }
 
-            // Only check lightweight EditorPrefs here — services like EditorConfigurationCache
-            // and MCPServiceLocator may not be initialized yet on fresh editor launch.
-            bool autoStartEnabled = EditorPrefs.GetBool(EditorPrefKeys.AutoStartOnLoad, false);
-            if (!autoStartEnabled) return;
-
-            SessionState.SetBool(SessionInitKey, true);
-
-            // Delay to let the editor and services finish initialization.
-            EditorApplication.delayCall += OnEditorReady;
+            // EditorPrefs may not be initialized during [InitializeOnLoad] /
+            // EditorApplication.delayCall. Use update to poll until it's ready.
+            _retryCount = 0;
+            _autoStartExecuted = false;
+            EditorApplication.update += TryAutoStartOnce;
         }
 
-        private static void OnEditorReady()
+        private static void TryAutoStartOnce()
         {
+            if (_autoStartExecuted) return;
+
             try
             {
                 bool autoStartEnabled = EditorPrefs.GetBool(EditorPrefKeys.AutoStartOnLoad, false);
-                if (!autoStartEnabled) return;
+                _retryCount++;
+                if (!autoStartEnabled)
+                {
+                    if (_retryCount >= MaxRetries)
+                    {
+                        EditorApplication.update -= TryAutoStartOnce;
+                    }
+                    return;
+                }
+
+                EditorApplication.update -= TryAutoStartOnce;
+                _autoStartExecuted = true;
 
                 bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
                 if (!useHttp) return;
