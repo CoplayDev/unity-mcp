@@ -13,10 +13,14 @@ namespace MCPForUnity.Editor.Setup
 
         private static readonly (string packageId, string version, string dllPath, string dllName)[] NuGetEntries =
         {
-            ("microsoft.codeanalysis.common",    "4.12.0", "lib/netstandard2.0/Microsoft.CodeAnalysis.dll",       "Microsoft.CodeAnalysis.dll"),
-            ("microsoft.codeanalysis.csharp",    "4.12.0", "lib/netstandard2.0/Microsoft.CodeAnalysis.CSharp.dll","Microsoft.CodeAnalysis.CSharp.dll"),
-            ("system.collections.immutable",     "8.0.0",  "lib/netstandard2.0/System.Collections.Immutable.dll", "System.Collections.Immutable.dll"),
-            ("system.reflection.metadata",       "8.0.0",  "lib/netstandard2.0/System.Reflection.Metadata.dll",   "System.Reflection.Metadata.dll"),
+            ("microsoft.codeanalysis.common",         "4.12.0", "lib/netstandard2.0/Microsoft.CodeAnalysis.dll",                   "Microsoft.CodeAnalysis.dll"),
+            ("microsoft.codeanalysis.csharp",         "4.12.0", "lib/netstandard2.0/Microsoft.CodeAnalysis.CSharp.dll",            "Microsoft.CodeAnalysis.CSharp.dll"),
+            ("system.collections.immutable",          "8.0.0",  "lib/netstandard2.0/System.Collections.Immutable.dll",             "System.Collections.Immutable.dll"),
+            ("system.reflection.metadata",            "8.0.0",  "lib/netstandard2.0/System.Reflection.Metadata.dll",               "System.Reflection.Metadata.dll"),
+            // Transitive dep of Microsoft.CodeAnalysis.* on netstandard2.0. Without it, Roslyn's StringTable
+            // static cctor throws FileNotFoundException for v6.0.0.0 and every Roslyn entry point fails to
+            // initialize. Unity ships a v4.x of this assembly which does NOT satisfy the v6 reference.
+            ("system.runtime.compilerservices.unsafe","6.0.0",  "lib/netstandard2.0/System.Runtime.CompilerServices.Unsafe.dll",   "System.Runtime.CompilerServices.Unsafe.dll"),
         };
 
         public static bool IsInstalled()
