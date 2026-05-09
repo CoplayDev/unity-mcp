@@ -1049,7 +1049,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
                 bool projectScopedTools = EditorPrefs.GetBool(
                     EditorPrefKeys.ProjectScopedToolsLocalHttp,
-                    true  // default to true so stdio behaves like HTTP Local by default
+                    false // must match McpToolsSection toggle default so UI and heartbeat agree
                 );
 
                 var payload = new
