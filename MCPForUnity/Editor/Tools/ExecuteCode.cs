@@ -672,7 +672,13 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception e)
             {
-                errors.Add($"Roslyn compilation error: {e.Message}");
+                // Walk to the deepest cause: TargetInvocationException (and friends) wrap the real
+                // failure inside .InnerException, and reporting only e.Message hides everything
+                // useful (e.g. a missing transitive dep manifests as the generic "Exception has been
+                // thrown by the target of an invocation.").
+                Exception root = e;
+                while (root.InnerException != null) root = root.InnerException;
+                errors.Add($"Roslyn compilation error: {root.GetType().Name}: {root.Message}");
                 return null;
             }
         }
