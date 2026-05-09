@@ -257,4 +257,5 @@ This was a big change, and it touches all the repo. So a lot of inefficiencies a
 - ~~Think about a structure of the MCP server some more. The `tools`, `resources` and `registry` folders make sense, but everything else just forms part of the high level repo. It's growing, so some thought about how we create modules will help with scalability.~~
   - This was done, Server folder is much more hierarchical and structured.
 - The way we register tools is a good platform for all tools to be defined by C#. Having all tools in the plugin makes it easier for us to maintain, the community to contribute, and users to modify this project to suit their needs. If all tools are registered from the plugin, we can allow users to select the tools they want to use, giving them even more control of their experience.
-  - Of course, we need some testing of this custom tool architecture to know if it can scale to all tools. Also, custom tool registration is only supported with HTTP, so we'll need to support this feature when the stdio protocol is being used.
+  - Of course, we need some testing of this custom tool architecture to know if it can scale to all tools. ~~Also, custom tool registration is only supported with HTTP, so we'll need to support this feature when the stdio protocol is being used.~~
+  - Custom tools now work in both HTTP and stdio transports.
