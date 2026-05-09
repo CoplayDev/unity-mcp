@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.IO.Compression;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -28,8 +29,29 @@ namespace MCPForUnity.Editor.Setup
             string folder = Path.Combine(Application.dataPath, PluginsRelPath);
             foreach (var entry in NuGetEntries)
             {
-                if (!File.Exists(Path.Combine(folder, entry.dllName)))
+                string path = Path.Combine(folder, entry.dllName);
+                if (!File.Exists(path))
                     return false;
+
+                // Defense-in-depth: a stale DLL whose assembly version is older than what
+                // Roslyn references (e.g. a v4.x System.Runtime.CompilerServices.Unsafe
+                // shadowing the v6 we actually need) would still satisfy file-existence but
+                // leave Roslyn unable to load. Compare the on-disk assembly version against
+                // each entry's declared NuGet version, treating "older or unreadable" as not
+                // installed so Install() can rewrite it.
+                if (Version.TryParse(entry.version, out var requiredVersion))
+                {
+                    try
+                    {
+                        var actual = AssemblyName.GetAssemblyName(path).Version;
+                        if (actual == null || actual < requiredVersion)
+                            return false;
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                }
             }
             return true;
         }
