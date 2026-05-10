@@ -71,5 +71,7 @@ namespace MCPForUnity.Editor.Constants
         internal const string LogRecordEnabled = "MCPForUnity.LogRecordEnabled";
 
         internal const string ExecuteCodeCompiler = "MCPForUnity.ExecuteCode.Compiler";
+
+        internal const string MacOSTerminalApp = "MCPForUnity.MacOSTerminalApp";
     }
 }
