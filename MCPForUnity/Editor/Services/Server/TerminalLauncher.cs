@@ -1,6 +1,8 @@
 using System;
 using System.IO;
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
+using UnityEditor;
 using UnityEngine;
 
 namespace MCPForUnity.Editor.Services.Server
@@ -45,10 +47,12 @@ namespace MCPForUnity.Editor.Services.Server
                 "clear\n" +
                 $"{command}\n");
             ExecPath.TryRun("/bin/chmod", $"+x \"{scriptPath}\"", Application.dataPath, out _, out _, 3000);
+            string terminalApp = EditorPrefs.GetString(EditorPrefKeys.MacOSTerminalApp, "Terminal");
+            if (string.IsNullOrWhiteSpace(terminalApp)) terminalApp = "Terminal";
             return new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "/usr/bin/open",
-                Arguments = $"-a Terminal \"{scriptPath}\"",
+                Arguments = $"-a \"{terminalApp}\" \"{scriptPath}\"",
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
