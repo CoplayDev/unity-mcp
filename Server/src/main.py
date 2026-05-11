@@ -15,10 +15,11 @@ from services.custom_tool_service import (
     resolve_project_id_for_unity_instance,
 )
 from core.config import config
-from starlette.routing import WebSocketRoute
+from starlette.routing import Route, WebSocketRoute
 from starlette.responses import JSONResponse
 import argparse
 import asyncio
+import uvicorn
 
 # Fix to IPV4 Connection Issue #853
 # Will disable features in ProactorEventLoop including subprocess pipes and named pipes
@@ -305,8 +306,10 @@ This server provides tools to interact with the Unity Game Engine Editor.
 
 Targeting Unity instances:
 - Use the resource mcpforunity://instances to list active Unity sessions (Name@hash).
-- When multiple instances are connected, call set_active_instance with the exact Name@hash before using tools/resources to pin routing for the whole session. The server will error if multiple are connected and no active instance is set.
-- Alternatively, pass unity_instance as a parameter on any individual tool call to route just that call (e.g. unity_instance="MyGame@abc123", unity_instance="abc" for a hash prefix, or unity_instance="6401" for a port number in stdio mode). This does not change the session default.
+- The preferred flow is to pass unity_instance on any tool call or resource read to route that request explicitly (e.g. unity_instance="MyGame@abc123", unity_instance="abc" for a hash prefix, or unity_instance="6401" for a port number in stdio mode).
+- HTTP clients can bind a whole MCP session to one Unity editor by connecting to /mcp/instance/{{Name@hash}} instead of the unbound /mcp endpoint.
+- set_active_instance remains available as a compatibility path for simple single-agent workflows, but it should not be the default multi-agent HTTP pattern.
+- When multiple instances are connected and no explicit target or compatibility default is set, Unity-backed calls will return a selection error instead of guessing.
 
 Important Workflows:
 
@@ -365,6 +368,62 @@ def _normalize_instance_token(instance_token: str | None) -> tuple[str | None, s
         name_part, _, hash_part = instance_token.partition("@")
         return (name_part or None), (hash_part or None)
     return None, instance_token
+
+
+def _build_bound_mcp_path(base_path: str) -> str:
+    normalized = "/" + base_path.strip("/")
+    if normalized == "//":
+        normalized = "/"
+    return f"{normalized.rstrip('/')}/instance/{{instance:path}}"
+
+
+def _attach_bound_mcp_route(app) -> str | None:
+    """Expose an HTTP MCP endpoint that binds a session to one Unity instance."""
+    base_path = getattr(app.state, "path", None)
+    if not isinstance(base_path, str) or not base_path:
+        return None
+
+    bound_path = _build_bound_mcp_path(base_path)
+    existing_paths = {
+        getattr(route, "path", None)
+        for route in app.router.routes
+    }
+    if bound_path in existing_paths:
+        return bound_path
+
+    base_route = next(
+        (
+            route for route in app.router.routes
+            if isinstance(route, Route) and route.path == base_path
+        ),
+        None,
+    )
+    if base_route is None:
+        return None
+
+    app.router.routes.append(
+        Route(
+            bound_path,
+            endpoint=base_route.endpoint,
+            methods=base_route.methods,
+            name=f"{base_route.name or 'mcp'}_bound_instance",
+            include_in_schema=False,
+        )
+    )
+    return bound_path
+
+
+def create_http_app(
+    mcp: FastMCP,
+    *,
+    transport: str = "http",
+    path: str | None = None,
+):
+    app = mcp.http_app(path=path, transport=transport)
+    bound_path = _attach_bound_mcp_route(app)
+    if bound_path:
+        logger.info("Registered instance-bound MCP HTTP endpoint at %s", bound_path)
+    return app
 
 
 def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
@@ -892,16 +951,21 @@ Examples:
 
     # Determine transport mode
     if config.transport_mode == 'http':
-        # Use HTTP transport for FastMCP
-        transport = 'http'
-        # Use the parsed host and port from URL/args
         http_url = os.environ.get("UNITY_MCP_HTTP_URL", args.http_url)
         parsed_url = urlparse(http_url)
         host = args.http_host or os.environ.get(
             "UNITY_MCP_HTTP_HOST") or parsed_url.hostname or "127.0.0.1"
         port = args.http_port or _env_port or parsed_url.port or 8080
         logger.info(f"Starting FastMCP with HTTP transport on {host}:{port}")
-        mcp.run(transport=transport, host=host, port=port)
+        app = create_http_app(mcp, transport="http")
+        uvicorn.run(
+            app,
+            host=host,
+            port=port,
+            timeout_graceful_shutdown=0,
+            lifespan="on",
+            ws="websockets-sansio",
+        )
     else:
         # Use stdio transport for traditional MCP
         logger.info("Starting FastMCP with stdio transport")

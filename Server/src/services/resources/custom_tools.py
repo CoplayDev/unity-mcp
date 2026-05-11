@@ -32,7 +32,7 @@ async def get_custom_tools(ctx: Context) -> CustomToolsResourceResponse | MCPRes
     if not unity_instance:
         return MCPResponse(
             success=False,
-            message="No active Unity instance. Call set_active_instance with Name@hash from mcpforunity://instances.",
+            message="No active Unity instance. Pass unity_instance explicitly or call set_active_instance with Name@hash from mcpforunity://instances.",
         )
 
     project_id = resolve_project_id_for_unity_instance(unity_instance)
