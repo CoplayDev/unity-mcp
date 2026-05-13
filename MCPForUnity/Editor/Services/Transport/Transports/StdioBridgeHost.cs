@@ -334,14 +334,12 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private static TcpListener CreateConfiguredListener(int port)
         {
             var newListener = new TcpListener(IPAddress.Loopback, port);
-#if UNITY_EDITOR_OSX
-            // SO_REUSEADDR is intentionally NOT set. On macOS it allows multiple
-            // processes (including AssetImportWorkers) to bind the same port,
-            // causing connections to land on a worker that can't process commands.
-            // The ExclusiveAddressUse flag prevents this; port-busy conflicts are
-            // handled by the retry/fallback logic in Start() and the reload handler.
+            // SO_REUSEADDR allows multiple processes to bind the same port on
+            // Linux/macOS, causing connections to land on a worker/old instance
+            // that can't process commands. ExclusiveAddressUse prevents this;
+            // port-busy conflicts are handled by the retry/fallback logic in
+            // Start() and the reload handler.
             try { newListener.Server.ExclusiveAddressUse = true; } catch { }
-#endif
             try
             {
                 newListener.Server.LingerState = new LingerOption(true, 0);
@@ -412,11 +410,25 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 {
                     dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".unity-mcp");
                 }
-                string statusFile = Path.Combine(dir, $"unity-mcp-status-{ComputeProjectHash(Application.dataPath)}.json");
-                if (File.Exists(statusFile))
+                string projectHash = ComputeProjectHash(Application.dataPath);
+
+                string projectFile = Path.Combine(dir, $"unity-mcp-status-{projectHash}.json");
+                if (File.Exists(projectFile))
                 {
-                    File.Delete(statusFile);
-                    if (IsDebugEnabled()) McpLog.Info($"Deleted status file: {statusFile}");
+                    File.Delete(projectFile);
+                    if (IsDebugEnabled()) McpLog.Info($"Deleted project status file: {projectFile}");
+                }
+
+                // Clean up instance-specific file so stale entries don't accumulate.
+                int pid = s_CachedProcessId;
+                if (pid > 0)
+                {
+                    string instanceFile = Path.Combine(dir, $"unity-mcp-status-{projectHash}-{pid}.json");
+                    if (File.Exists(instanceFile))
+                    {
+                        File.Delete(instanceFile);
+                        if (IsDebugEnabled()) McpLog.Info($"Deleted instance status file: {instanceFile}");
+                    }
                 }
             }
             catch (Exception ex)
@@ -1015,6 +1027,13 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         }
 
 
+        private static readonly int s_CachedProcessId = GetProcessId();
+
+        private static int GetProcessId()
+        {
+            try { return Process.GetCurrentProcess().Id; } catch { return 0; }
+        }
+
         public static void WriteHeartbeat(bool reloading, string reason = null)
         {
             try
@@ -1025,7 +1044,6 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".unity-mcp");
                 }
                 Directory.CreateDirectory(dir);
-                string filePath = Path.Combine(dir, $"unity-mcp-status-{ComputeProjectHash(Application.dataPath)}.json");
 
                 string projectName = "Unknown";
                 try
@@ -1050,6 +1068,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 var payload = new
                 {
                     unity_port = currentUnityPort,
+                    pid = s_CachedProcessId,
                     reloading,
                     reason = reason ?? (reloading ? "reloading" : "ready"),
                     seq = heartbeatSeq,
@@ -1058,7 +1077,21 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     unity_version = Application.unityVersion,
                     last_heartbeat = DateTime.UtcNow.ToString("O")
                 };
-                File.WriteAllText(filePath, JsonConvert.SerializeObject(payload), new System.Text.UTF8Encoding(false));
+                string json = JsonConvert.SerializeObject(payload);
+                byte[] utf8Bytes = new System.Text.UTF8Encoding(false).GetBytes(json);
+
+                // Project-scoped file: used by clients that look for any instance of this project.
+                string projectFile = Path.Combine(dir, $"unity-mcp-status-{ComputeProjectHash(Application.dataPath)}.json");
+                File.WriteAllBytes(projectFile, utf8Bytes);
+
+                // Instance-scoped file: allows clients to discover and select specific
+                // instances when multiple copies of the same project are running.
+                if (s_CachedProcessId > 0)
+                {
+                    string instanceFile = Path.Combine(dir,
+                        $"unity-mcp-status-{ComputeProjectHash(Application.dataPath)}-{s_CachedProcessId}.json");
+                    File.WriteAllBytes(instanceFile, utf8Bytes);
+                }
             }
             catch (Exception)
             {

@@ -6,7 +6,19 @@ on:
     paths:
       - Server/**
       - .github/workflows/python-tests.yml
+  pull_request:
+    branches: [main, beta]
+    paths:
+      - Server/**
+      - .github/workflows/python-tests.yml
   workflow_dispatch: {}
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to test (defaults to the triggering ref)."
+        type: string
+        required: false
+        default: ""
 
 jobs:
   test:
@@ -15,6 +27,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4

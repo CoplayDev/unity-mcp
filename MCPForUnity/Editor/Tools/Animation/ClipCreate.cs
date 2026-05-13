@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Runtime.Helpers;
 using UnityEditor;
 using UnityEngine;
 
@@ -491,7 +492,7 @@ namespace MCPForUnity.Editor.Tools.Animation
             if (type != null) return type;
 
             // Fallback: search all loaded assemblies
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            foreach (var assembly in UnityAssembliesCompat.GetLoadedAssemblies())
             {
                 type = assembly.GetType(typeName);
                 if (type != null) return type;

@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -33,10 +34,13 @@ namespace MCPForUnity.Editor.Helpers
             public int unity_port;
             public string created_date;
             public string project_path;
+            public int pid;
         }
 
         /// <summary>
         /// Get the port to use from storage, or return the default if none has been saved yet.
+        /// When the stored port is in use by another process (multi-instance scenario),
+        /// falls back to the default port instead of returning an occupied port.
         /// </summary>
         /// <returns>Port number to use</returns>
         public static int GetPortWithFallback()
@@ -46,7 +50,15 @@ namespace MCPForUnity.Editor.Helpers
                 storedConfig.unity_port > 0 &&
                 string.Equals(storedConfig.project_path ?? string.Empty, Application.dataPath ?? string.Empty, StringComparison.OrdinalIgnoreCase))
             {
-                return storedConfig.unity_port;
+                // Only return the stored port if it's actually available.
+                // When another instance of the same project is running, the stored
+                // port will be occupied; falling back to DefaultPort lets Start()'s
+                // SocketException handler pick a truly free port via DiscoverNewPort().
+                if (IsPortAvailable(storedConfig.unity_port))
+                {
+                    return storedConfig.unity_port;
+                }
+                if (IsDebugEnabled()) McpLog.Info($"Stored port {storedConfig.unity_port} is occupied, falling back to default");
             }
 
             return DefaultPort;
@@ -122,12 +134,10 @@ namespace MCPForUnity.Editor.Helpers
             try
             {
                 var testListener = new TcpListener(IPAddress.Loopback, port);
-#if UNITY_EDITOR_OSX
-                // On macOS, SO_REUSEADDR (the default) lets multiple processes bind the same
-                // port — including AssetImportWorkers. ExclusiveAddressUse prevents this so
-                // the test bind fails when another process already holds the port.
+                // ExclusiveAddressUse prevents SO_REUSEADDR from allowing multiple
+                // processes (including AssetImportWorkers) to bind the same port.
+                // The test bind fails when another process already holds the port.
                 try { testListener.Server.ExclusiveAddressUse = true; } catch { }
-#endif
                 testListener.Start();
                 testListener.Stop();
             }
@@ -202,23 +212,38 @@ namespace MCPForUnity.Editor.Helpers
         {
             try
             {
+                int pid = 0;
+                try { pid = System.Diagnostics.Process.GetCurrentProcess().Id; } catch { }
+
                 var portConfig = new PortConfig
                 {
                     unity_port = port,
                     created_date = DateTime.UtcNow.ToString("O"),
-                    project_path = Application.dataPath
+                    project_path = Application.dataPath,
+                    pid = pid
                 };
 
                 string registryDir = GetRegistryDirectory();
                 Directory.CreateDirectory(registryDir);
 
-                string registryFile = GetRegistryFilePath();
                 string json = JsonConvert.SerializeObject(portConfig, Formatting.Indented);
+                byte[] utf8Bytes = new System.Text.UTF8Encoding(false).GetBytes(json);
+
                 // Write to hashed, project-scoped file
-                File.WriteAllText(registryFile, json, new System.Text.UTF8Encoding(false));
+                string registryFile = GetRegistryFilePath();
+                File.WriteAllBytes(registryFile, utf8Bytes);
                 // Also write to legacy stable filename to avoid hash/case drift across reloads
                 string legacy = Path.Combine(GetRegistryDirectory(), RegistryFileName);
-                File.WriteAllText(legacy, json, new System.Text.UTF8Encoding(false));
+                File.WriteAllBytes(legacy, utf8Bytes);
+
+                // Write instance-scoped file so multiple instances of the same project
+                // can be tracked independently.
+                if (pid > 0)
+                {
+                    string hash = ComputeProjectHash(Application.dataPath);
+                    string instanceFile = Path.Combine(registryDir, $"unity-mcp-port-{hash}-{pid}.json");
+                    File.WriteAllBytes(instanceFile, utf8Bytes);
+                }
 
                 if (IsDebugEnabled()) McpLog.Info($"Saved port {port} to storage");
             }

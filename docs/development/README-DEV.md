@@ -126,6 +126,7 @@ uv run python -m cli.main editor tests --failed-only
 
 ```
 run_tests(mode="EditMode")
+run_tests(mode="PlayMode", init_timeout=120000)  # PlayMode may need longer init due to domain reload
 get_test_job(job_id="<id>", wait_timeout=60)
 ```
 
