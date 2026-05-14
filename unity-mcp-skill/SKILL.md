@@ -105,8 +105,7 @@ manage_camera(action="screenshot", capture_source="scene_view", view_target="Can
 > var sv = UnityEditor.SceneView.lastActiveSceneView
 >     ?? UnityEditor.EditorWindow.GetWindow<UnityEditor.SceneView>();
 > sv.Focus();
-> sv.LookAt(new Vector3(0, 0, 0), Quaternion.Euler(60, 30, 0), 400f);
-> sv.orthographic = false;
+> sv.LookAt(new Vector3(0, 0, 0), Quaternion.Euler(60, 30, 0), 400f, false, true);
 > UnityEditor.SceneView.RepaintAll();
 > return "positioned";
 > ```
@@ -117,7 +116,7 @@ manage_camera(action="screenshot", capture_source="scene_view", view_target="Can
 > manage_camera(action="screenshot", capture_source="scene_view", include_image=True)
 > ```
 >
-> `LookAt(pivot, rotation, size)`: pivot = world-space orbit point; rotation = Euler angles (x=pitch, y=yaw; 90° pitch = top-down); size = zoom/distance.
+> `LookAt(pivot, rotation, size, ortho, instant)`: pivot = world-space orbit point; rotation = Euler angles (x=pitch, y=yaw; 90° pitch = top-down); size = zoom/distance; ortho = orthographic mode; instant = apply immediately for deterministic screenshots.
 
 **Best practices for AI scene understanding:**
 - Use `include_image=True` when you need to *see* the scene, not just save a file.
