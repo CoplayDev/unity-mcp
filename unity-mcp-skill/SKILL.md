@@ -98,10 +98,30 @@ manage_camera(action="screenshot", capture_source="scene_view", include_image=Tr
 manage_camera(action="screenshot", capture_source="scene_view", view_target="Canvas", include_image=True)
 ```
 
+> **Warning — `scene_view` + `view_position` unsupported:** Passing `view_position` or `view_rotation` with `capture_source="scene_view"` returns an error — these parameters are not valid for scene view capture. To take a positioned Scene View screenshot, first use `execute_code` with `SceneView.LookAt()` to move the Scene View, then capture the Scene View as-is with no framing or position parameters:
+>
+> ```csharp
+> // Run via execute_code to reposition the scene view
+> var sv = UnityEditor.SceneView.lastActiveSceneView
+>     ?? UnityEditor.EditorWindow.GetWindow<UnityEditor.SceneView>();
+> sv.Focus();
+> sv.LookAt(new Vector3(0, 0, 0), Quaternion.Euler(60, 30, 0), 400f, false, true);
+> UnityEditor.SceneView.RepaintAll();
+> return "positioned";
+> ```
+>
+> ```python
+> # Capture the Scene View as-is — do not pass view_target, view_position, or view_rotation,
+> # as view_target would re-frame the viewport and override the LookAt() setup above.
+> manage_camera(action="screenshot", capture_source="scene_view", include_image=True)
+> ```
+>
+> `LookAt(pivot, rotation, size, ortho, instant)`: pivot = world-space orbit point; rotation = Euler angles (x=pitch, y=yaw; 90° pitch = top-down); size = zoom/distance; ortho = orthographic mode; instant = apply immediately for deterministic screenshots.
+
 **Best practices for AI scene understanding:**
 - Use `include_image=True` when you need to *see* the scene, not just save a file.
 - Use `batch="surround"` for a comprehensive overview (6 angles, one command).
-- Use `view_target`/`view_position` to capture from a specific viewpoint without needing a scene camera.
+- Use `view_target`/`view_position` to capture from a specific viewpoint without needing a scene camera. Note: `view_position` and `view_rotation` are **incompatible with `capture_source="scene_view"`** and return an error — use `SceneView.LookAt()` via `execute_code` instead (see warning above). `view_target` is supported with `scene_view`.
 - Use `capture_source="scene_view"` to see the editor viewport (gizmos, wireframes, grid).
 - Keep `max_resolution` at 256–512 to balance quality vs. token cost.
 
