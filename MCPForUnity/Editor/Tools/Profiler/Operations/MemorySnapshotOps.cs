@@ -95,12 +95,13 @@ namespace MCPForUnity.Editor.Tools.Profiler
                     }
                 };
 
-                int paramCount = takeMethod.GetParameters().Length;
-                if (paramCount == 4 && captureFlagsType != null)
+                var takeMethodParams = takeMethod.GetParameters();
+                int paramCount = takeMethodParams.Length;
+                if (paramCount == 4 && takeMethodParams[3].ParameterType == captureFlagsType)
                     takeMethod.Invoke(null, new object[] { snapshotPath, callback, null, Enum.ToObject(captureFlagsType, 0) });
-                else if (paramCount == 3 && captureFlagsType != null)
+                else if (paramCount == 3 && takeMethodParams[2].ParameterType == captureFlagsType)
                     takeMethod.Invoke(null, new object[] { snapshotPath, callback, Enum.ToObject(captureFlagsType, 0) });
-                else if (paramCount == 4)
+                else if (paramCount == 4 && takeMethodParams[3].ParameterType == typeof(uint))
                     takeMethod.Invoke(null, new object[] { snapshotPath, callback, null, 0u });
                 else if (paramCount == 2)
                     takeMethod.Invoke(null, new object[] { snapshotPath, callback });
