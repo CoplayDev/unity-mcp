@@ -36,7 +36,20 @@ namespace MCPForUnity.Editor.Setup
         private void OnEnable()
         {
             var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            _repoUrl = EditorPrefs.GetString(RepoUrlKey, "https://github.com/CoplayDev/unity-mcp");
+            var packageDefaultRepoUrl = SkillSyncService.GetDefaultRepoUrl();
+            var savedRepoUrl = EditorPrefs.GetString(RepoUrlKey, string.Empty);
+            var normalizedSavedRepoUrl = SkillSyncService.NormalizeGitPackageUrl(savedRepoUrl);
+            _repoUrl = string.IsNullOrWhiteSpace(savedRepoUrl) ||
+                       string.Equals(
+                           normalizedSavedRepoUrl,
+                           "https://github.com/CoplayDev/unity-mcp",
+                           StringComparison.OrdinalIgnoreCase) ||
+                       string.Equals(
+                           normalizedSavedRepoUrl,
+                           "https://github.com/CoplayDev/unity-mcp.git",
+                           StringComparison.OrdinalIgnoreCase)
+                ? packageDefaultRepoUrl
+                : savedRepoUrl;
             _targetBranch = EditorPrefs.GetString(BranchKey, "beta");
             if (!BranchOptions.Contains(_targetBranch))
             {
@@ -103,7 +116,7 @@ namespace MCPForUnity.Editor.Setup
                 if (GUILayout.Button($"Sync Latest ({_targetBranch})", GUILayout.Height(32f)))
                 {
                     AppendLineImmediate("Sync task queued...");
-                    AppendLineImmediate("Will use GitHub API to read the remote directory tree and perform incremental sync (no repository clone).");
+                    AppendLineImmediate("Will use the package git source when available; GitHub API is used only for GitHub URLs and falls back to git clone.");
                     RunSyncLatest();
                 }
             }

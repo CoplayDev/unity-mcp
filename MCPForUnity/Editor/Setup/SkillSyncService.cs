@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -14,7 +16,9 @@ namespace MCPForUnity.Editor.Setup
     public static class SkillSyncService
     {
         private const string DefaultRepoUrl = "https://github.com/CoplayDev/unity-mcp";
+        private const string PackageName = "com.coplaydev.unity-mcp";
         private const string SkillSubdir = ".claude/skills/unity-mcp-skill";
+        private const string FallbackSkillSubdir = "unity-mcp-skill";
         private const string SyncOwnershipMarker = ".unity-mcp-skill-sync";
         private const string LastSyncedCommitKeyPrefix = "UnityMcpSkillSync.LastSyncedCommit";
 
@@ -30,11 +34,12 @@ namespace MCPForUnity.Editor.Setup
 
         public static void SyncAsync(string installDir, string branch, Action<string> log, Action<SyncResult> onComplete)
         {
-            SyncAsync(DefaultRepoUrl, installDir, branch, log, onComplete);
+            SyncAsync(GetDefaultRepoUrl(), installDir, branch, log, onComplete);
         }
 
         public static void SyncAsync(string repoUrl, string installDir, string branch, Action<string> log, Action<SyncResult> onComplete)
         {
+            repoUrl = NormalizeGitPackageUrl(string.IsNullOrWhiteSpace(repoUrl) ? GetDefaultRepoUrl() : repoUrl);
             var lastSyncedCommitKey = GetLastSyncedCommitKey(repoUrl, branch);
             var lastSyncedCommit = EditorPrefs.GetString(lastSyncedCommitKey, string.Empty);
 
@@ -65,50 +70,167 @@ namespace MCPForUnity.Editor.Setup
         private static SyncResult RunSync(string repoUrl, string installDir, string branch, string lastSyncedCommit, Action<string> log)
         {
             log?.Invoke("=== Sync Start ===");
+            repoUrl = NormalizeGitPackageUrl(repoUrl);
 
-            if (!TryParseGitHubRepository(repoUrl, out var repoInfo))
+            RemoteSnapshot snapshot = default;
+            GitHubRepoInfo repoInfo = default;
+            try
             {
-                throw new InvalidOperationException($"Repo URL is not a recognized GitHub repository URL: {repoUrl}");
+                if (TryParseGitHubRepository(repoUrl, out repoInfo))
+                {
+                    log?.Invoke($"Target repository: {repoInfo.Owner}/{repoInfo.Repo}@{branch}");
+                    try
+                    {
+                        snapshot = FetchRemoteSnapshot(repoInfo, branch, SkillSubdir, log);
+                    }
+                    catch (Exception ex)
+                    {
+                        log?.Invoke($"GitHub API sync unavailable ({ex.Message}). Falling back to git clone.");
+                        snapshot = FetchGitSnapshot(repoUrl, branch, SkillSubdir, log);
+                    }
+                }
+                else
+                {
+                    log?.Invoke($"Target git repository: {repoUrl}@{branch}");
+                    snapshot = FetchGitSnapshot(repoUrl, branch, SkillSubdir, log);
+                }
+
+                var installPath = ResolveAndValidateInstallPath(installDir);
+
+                if (!Directory.Exists(installPath))
+                {
+                    Directory.CreateDirectory(installPath);
+                }
+
+                var localFiles = ListFiles(installPath);
+                var pathComparison = GetPathComparison(installPath);
+                var pathComparer = GetPathComparer(pathComparison);
+                EnsureManagedInstallRoot(installPath, localFiles.Keys, snapshot.Files.Keys, pathComparer);
+                var plan = BuildPlan(snapshot.Files, localFiles, pathComparer);
+                var commitChanged = !string.Equals(lastSyncedCommit, snapshot.CommitSha, StringComparison.Ordinal);
+
+                log?.Invoke($"Remote Commit: {ShortCommit(lastSyncedCommit)} -> {ShortCommit(snapshot.CommitSha)}");
+                log?.Invoke(commitChanged
+                    ? $"Commit: detected newer commit on {branch}."
+                    : $"Commit: no new commit on {branch} since last sync.");
+                log?.Invoke($"Plan => Added:{plan.Added.Count} Updated:{plan.Updated.Count} Deleted:{plan.Deleted.Count}");
+                LogPlanDetails(plan, log);
+
+                ApplyPlan(repoInfo, snapshot, installPath, plan, pathComparison, log);
+                log?.Invoke("Files mirrored to install directory.");
+
+                ValidateFileHashes(installPath, snapshot.Files, pathComparison, log);
+                log?.Invoke($"Synced to commit: {snapshot.CommitSha}");
+                log?.Invoke("=== Sync Done ===");
+
+                return new SyncResult
+                {
+                    Success = true,
+                    Added = plan.Added.Count,
+                    Updated = plan.Updated.Count,
+                    Deleted = plan.Deleted.Count,
+                    CommitSha = snapshot.CommitSha
+                };
+            }
+            finally
+            {
+                CleanupSnapshot(snapshot, log);
+            }
+        }
+
+        internal static string GetDefaultRepoUrl()
+        {
+            return TryGetPackageRepoUrlFromManifest(out var packageRepoUrl)
+                ? packageRepoUrl
+                : DefaultRepoUrl;
+        }
+
+        internal static string NormalizeGitPackageUrl(string repoUrl)
+        {
+            if (string.IsNullOrWhiteSpace(repoUrl))
+            {
+                return string.Empty;
             }
 
-            log?.Invoke($"Target repository: {repoInfo.Owner}/{repoInfo.Repo}@{branch}");
-            var snapshot = FetchRemoteSnapshot(repoInfo, branch, SkillSubdir, log);
-            var installPath = ResolveAndValidateInstallPath(installDir);
-
-            if (!Directory.Exists(installPath))
+            var trimmed = repoUrl.Trim();
+            var delimiterIndex = -1;
+            foreach (var delimiter in new[] { '?', '#' })
             {
-                Directory.CreateDirectory(installPath);
+                var index = trimmed.IndexOf(delimiter);
+                if (index >= 0 && (delimiterIndex < 0 || index < delimiterIndex))
+                {
+                    delimiterIndex = index;
+                }
             }
 
-            var localFiles = ListFiles(installPath);
-            var pathComparison = GetPathComparison(installPath);
-            var pathComparer = GetPathComparer(pathComparison);
-            EnsureManagedInstallRoot(installPath, localFiles.Keys, snapshot.Files.Keys, pathComparer);
-            var plan = BuildPlan(snapshot.Files, localFiles, pathComparer);
-            var commitChanged = !string.Equals(lastSyncedCommit, snapshot.CommitSha, StringComparison.Ordinal);
+            var withoutPackageSelectors = delimiterIndex >= 0
+                ? trimmed.Substring(0, delimiterIndex)
+                : trimmed;
+            return withoutPackageSelectors.TrimEnd('/');
+        }
 
-            log?.Invoke($"Remote Commit: {ShortCommit(lastSyncedCommit)} -> {ShortCommit(snapshot.CommitSha)}");
-            log?.Invoke(commitChanged
-                ? $"Commit: detected newer commit on {branch}."
-                : $"Commit: no new commit on {branch} since last sync.");
-            log?.Invoke($"Plan => Added:{plan.Added.Count} Updated:{plan.Updated.Count} Deleted:{plan.Deleted.Count}");
-            LogPlanDetails(plan, log);
-
-            ApplyPlan(repoInfo, snapshot.CommitSha, snapshot.SubdirPath, installPath, plan, pathComparison, log);
-            log?.Invoke("Files mirrored to install directory.");
-
-            ValidateFileHashes(installPath, snapshot.Files, pathComparison, log);
-            log?.Invoke($"Synced to commit: {snapshot.CommitSha}");
-            log?.Invoke("=== Sync Done ===");
-
-            return new SyncResult
+        private static bool TryGetPackageRepoUrlFromManifest(out string repoUrl)
+        {
+            repoUrl = string.Empty;
+            try
             {
-                Success = true,
-                Added = plan.Added.Count,
-                Updated = plan.Updated.Count,
-                Deleted = plan.Deleted.Count,
-                CommitSha = snapshot.CommitSha
-            };
+                var manifestPath = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Packages", "manifest.json"));
+                if (!File.Exists(manifestPath))
+                {
+                    return false;
+                }
+
+                var manifest = JObject.Parse(File.ReadAllText(manifestPath));
+                var dependencyValue = manifest["dependencies"]?[PackageName]?.Value<string>();
+                if (string.IsNullOrWhiteSpace(dependencyValue) || !LooksLikeGitPackageUrl(dependencyValue))
+                {
+                    return false;
+                }
+
+                repoUrl = NormalizeGitPackageUrl(dependencyValue);
+                return !string.IsNullOrWhiteSpace(repoUrl);
+            }
+            catch
+            {
+                repoUrl = string.Empty;
+                return false;
+            }
+        }
+
+        private static bool LooksLikeGitPackageUrl(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            var trimmed = value.Trim();
+            if (trimmed.StartsWith("git@", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri))
+            {
+                return false;
+            }
+
+            if (string.Equals(uri.Scheme, "git", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(uri.Scheme, "ssh", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(uri.Scheme, "file", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (!string.Equals(uri.Scheme, "http", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(uri.Scheme, "https", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return uri.AbsolutePath.EndsWith(".git", StringComparison.OrdinalIgnoreCase) ||
+                   uri.Host.IndexOf("github", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   uri.Host.IndexOf("gitlab", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static string GetLastSyncedCommitKey(string repoUrl, string branch)
@@ -128,7 +250,7 @@ namespace MCPForUnity.Editor.Setup
                 return false;
             }
 
-            var trimmed = url.Trim();
+            var trimmed = NormalizeGitPackageUrl(url);
             if (trimmed.StartsWith("git@github.com:", StringComparison.OrdinalIgnoreCase))
             {
                 var repoPath = trimmed.Substring("git@github.com:".Length).Trim('/');
@@ -241,6 +363,95 @@ namespace MCPForUnity.Editor.Setup
 
             log?.Invoke($"Remote file count: {remoteFiles.Count}");
             return new RemoteSnapshot(commitSha, normalizedSubdir, remoteFiles);
+        }
+
+        private static RemoteSnapshot FetchGitSnapshot(string repoUrl, string branch, string subdir, Action<string> log)
+        {
+            if (string.IsNullOrWhiteSpace(repoUrl))
+            {
+                throw new InvalidOperationException("Repo URL is empty.");
+            }
+
+            var tempRoot = Path.Combine(Path.GetTempPath(), $"unity-mcp-skill-sync-{Guid.NewGuid():N}");
+            var repoDir = Path.Combine(tempRoot, "repo");
+            Directory.CreateDirectory(tempRoot);
+
+            try
+            {
+                log?.Invoke("Cloning skill source with git sparse checkout...");
+                RunGit(
+                    $"-c core.longpaths=true clone --depth 1 --filter=blob:none --sparse --branch {QuoteProcessArgument(branch)} --single-branch {QuoteProcessArgument(repoUrl)} {QuoteProcessArgument(repoDir)}",
+                    tempRoot,
+                    log);
+                RunGit(
+                    $"sparse-checkout set {QuoteProcessArgument(SkillSubdir)} {QuoteProcessArgument(FallbackSkillSubdir)}",
+                    repoDir,
+                    log);
+                var commitSha = RunGit("rev-parse HEAD", repoDir, log).Trim();
+                if (string.IsNullOrWhiteSpace(commitSha))
+                {
+                    throw new InvalidOperationException("Failed to resolve cloned repository HEAD.");
+                }
+
+                var normalizedSubdir = NormalizeRemotePath(subdir);
+                var sourceRoot = ResolveExistingSkillSourceRoot(repoDir, normalizedSubdir);
+                var remoteFiles = new Dictionary<string, string>(StringComparer.Ordinal);
+                var sourceRootFullPath = Path.GetFullPath(sourceRoot);
+
+                foreach (var filePath in Directory.GetFiles(sourceRootFullPath, "*", SearchOption.AllDirectories))
+                {
+                    var relativePath = Path.GetRelativePath(sourceRootFullPath, filePath).Replace('\\', '/');
+                    if (!TryNormalizeRelativePath(relativePath, out var safeRelativePath))
+                    {
+                        log?.Invoke($"Skip unsafe git path: {relativePath}");
+                        continue;
+                    }
+
+                    remoteFiles[safeRelativePath] = ComputeGitBlobSha1(filePath);
+                }
+
+                if (remoteFiles.Count == 0)
+                {
+                    throw new InvalidOperationException($"Remote directory not found: {normalizedSubdir}");
+                }
+
+                var selectedSubdir = NormalizeRemotePath(Path.GetRelativePath(repoDir, sourceRootFullPath));
+                log?.Invoke($"Git sparse checkout source: {selectedSubdir}");
+                log?.Invoke($"Remote file count: {remoteFiles.Count}");
+                return new RemoteSnapshot(commitSha, selectedSubdir, remoteFiles, sourceRootFullPath, tempRoot);
+            }
+            catch
+            {
+                TryDeleteDirectory(tempRoot);
+                throw;
+            }
+        }
+
+        private static string ResolveExistingSkillSourceRoot(string repoDir, string preferredSubdir)
+        {
+            var pathComparison = GetPathComparison(repoDir);
+            var candidates = new[]
+            {
+                preferredSubdir,
+                FallbackSkillSubdir
+            };
+
+            foreach (var candidate in candidates)
+            {
+                if (string.IsNullOrWhiteSpace(candidate))
+                {
+                    continue;
+                }
+
+                var sourceRoot = ResolvePathUnderRoot(repoDir, candidate, pathComparison);
+                if (Directory.Exists(sourceRoot))
+                {
+                    return sourceRoot;
+                }
+            }
+
+            throw new InvalidOperationException(
+                $"Remote skill directory not found. Checked: {preferredSubdir}, {FallbackSkillSubdir}");
         }
 
         private static string FetchBranchHeadCommitSha(HttpClient client, GitHubRepoInfo repoInfo, string branch, Action<string> log)
@@ -433,13 +644,15 @@ namespace MCPForUnity.Editor.Setup
             return plan;
         }
 
-        private static void ApplyPlan(GitHubRepoInfo repoInfo, string commitSha, string remoteSubdir, string targetRoot, SyncPlan plan, StringComparison pathComparison, Action<string> log)
+        private static void ApplyPlan(GitHubRepoInfo repoInfo, RemoteSnapshot snapshot, string targetRoot, SyncPlan plan, StringComparison pathComparison, Action<string> log)
         {
-            using var client = CreateGitHubClient();
+            using var client = string.IsNullOrEmpty(snapshot.LocalSourceRoot) ? CreateGitHubClient() : null;
+            var sourcePathComparison = string.IsNullOrEmpty(snapshot.LocalSourceRoot)
+                ? pathComparison
+                : GetPathComparison(snapshot.LocalSourceRoot);
+
             foreach (var relativePath in plan.Added.Concat(plan.Updated))
             {
-                var remoteFilePath = CombineRemotePath(remoteSubdir, relativePath);
-                var downloadUrl = BuildRawFileUrl(repoInfo, commitSha, remoteFilePath);
                 var targetFile = ResolvePathUnderRoot(targetRoot, relativePath, pathComparison);
                 var targetDirectory = Path.GetDirectoryName(targetFile);
                 if (!string.IsNullOrEmpty(targetDirectory))
@@ -447,8 +660,21 @@ namespace MCPForUnity.Editor.Setup
                     Directory.CreateDirectory(targetDirectory);
                 }
 
-                log?.Invoke($"Download: {relativePath}");
-                var bytes = DownloadBytes(client, downloadUrl);
+                byte[] bytes;
+                if (!string.IsNullOrEmpty(snapshot.LocalSourceRoot))
+                {
+                    log?.Invoke($"Copy: {relativePath}");
+                    var sourceFile = ResolvePathUnderRoot(snapshot.LocalSourceRoot, relativePath, sourcePathComparison);
+                    bytes = File.ReadAllBytes(sourceFile);
+                }
+                else
+                {
+                    var remoteFilePath = CombineRemotePath(snapshot.SubdirPath, relativePath);
+                    var downloadUrl = BuildRawFileUrl(repoInfo, snapshot.CommitSha, remoteFilePath);
+                    log?.Invoke($"Download: {relativePath}");
+                    bytes = DownloadBytes(client, downloadUrl);
+                }
+
                 File.WriteAllBytes(targetFile, bytes);
             }
 
@@ -462,6 +688,98 @@ namespace MCPForUnity.Editor.Setup
             }
 
             RemoveEmptyDirectories(targetRoot);
+        }
+
+        private static string RunGit(string arguments, string workingDir, Action<string> log)
+        {
+            return RunProcess("git", arguments, workingDir, log);
+        }
+
+        private static string RunProcess(string fileName, string arguments, string workingDir, Action<string> log)
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                WorkingDirectory = string.IsNullOrEmpty(workingDir) ? Environment.CurrentDirectory : workingDir,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+
+            using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = false };
+            var stdout = new StringBuilder();
+            var stderr = new StringBuilder();
+            process.OutputDataReceived += (_, e) =>
+            {
+                if (e.Data != null)
+                {
+                    stdout.AppendLine(e.Data);
+                }
+            };
+            process.ErrorDataReceived += (_, e) =>
+            {
+                if (e.Data != null)
+                {
+                    stderr.AppendLine(e.Data);
+                }
+            };
+
+            if (!process.Start())
+            {
+                throw new InvalidOperationException($"Failed to start process: {fileName}");
+            }
+
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            if (!process.WaitForExit(120000))
+            {
+                try
+                {
+                    process.Kill();
+                }
+                catch
+                {
+                }
+
+                throw new TimeoutException($"Process timed out: {fileName} {arguments}");
+            }
+
+            process.WaitForExit();
+            var stderrText = stderr.ToString().Trim();
+            if (!string.IsNullOrWhiteSpace(stderrText))
+            {
+                log?.Invoke(stderrText);
+            }
+
+            if (process.ExitCode != 0)
+            {
+                var stdoutText = stdout.ToString().Trim();
+                var details = string.Join("\n", new[] { stdoutText, stderrText }.Where(s => !string.IsNullOrWhiteSpace(s)));
+                throw new InvalidOperationException(
+                    string.IsNullOrWhiteSpace(details)
+                        ? $"Process failed with exit code {process.ExitCode}: {fileName} {arguments}"
+                        : $"Process failed with exit code {process.ExitCode}: {fileName} {arguments}\n{details}");
+            }
+
+            return stdout.ToString();
+        }
+
+        private static string QuoteProcessArgument(string argument)
+        {
+            if (string.IsNullOrEmpty(argument))
+            {
+                return "\"\"";
+            }
+
+            if (argument.IndexOfAny(new[] { ' ', '\t', '\n', '\r', '"' }) < 0)
+            {
+                return argument;
+            }
+
+            return $"\"{argument.Replace("\"", "\\\"")}\"";
         }
 
         private static void ValidateFileHashes(string installRoot, Dictionary<string, string> remoteFiles, StringComparison pathComparison, Action<string> log)
@@ -660,6 +978,33 @@ namespace MCPForUnity.Editor.Setup
             }
         }
 
+        private static void CleanupSnapshot(RemoteSnapshot snapshot, Action<string> log)
+        {
+            if (string.IsNullOrWhiteSpace(snapshot.TempRoot))
+            {
+                return;
+            }
+
+            try
+            {
+                TryDeleteDirectory(snapshot.TempRoot);
+            }
+            catch (Exception ex)
+            {
+                log?.Invoke($"Failed to clean temporary skill sync directory: {ex.Message}");
+            }
+        }
+
+        private static void TryDeleteDirectory(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+            {
+                return;
+            }
+
+            Directory.Delete(path, true);
+        }
+
         internal static string ResolveAndValidateInstallPath(string installDir)
         {
             if (string.IsNullOrWhiteSpace(installDir))
@@ -766,16 +1111,25 @@ namespace MCPForUnity.Editor.Setup
 
         internal readonly struct RemoteSnapshot
         {
-            public RemoteSnapshot(string commitSha, string subdirPath, Dictionary<string, string> files)
+            public RemoteSnapshot(
+                string commitSha,
+                string subdirPath,
+                Dictionary<string, string> files,
+                string localSourceRoot = null,
+                string tempRoot = null)
             {
                 CommitSha = commitSha;
                 SubdirPath = subdirPath;
                 Files = files;
+                LocalSourceRoot = localSourceRoot;
+                TempRoot = tempRoot;
             }
 
             public string CommitSha { get; }
             public string SubdirPath { get; }
             public Dictionary<string, string> Files { get; }
+            public string LocalSourceRoot { get; }
+            public string TempRoot { get; }
         }
 
         [Serializable]
