@@ -244,7 +244,6 @@ namespace MCPForUnity.Runtime.Helpers
         // called synchronously before a frame has been presented returns a blank texture.
         private static Texture2D s_pendingCompositedTex;
         private static bool s_pendingCompositedDone;
-        private static bool s_pendingCompositedStarted;
 
         private sealed class CompositedFrameCapturer : MonoBehaviour
         {
@@ -266,7 +265,6 @@ namespace MCPForUnity.Runtime.Helpers
                     // immediately. The null texture already signals failure to the caller.
                     s_pendingCompositedDone = true;
                 }
-                s_pendingCompositedStarted = false;
                 Destroy(gameObject);
             }
         }
@@ -278,7 +276,6 @@ namespace MCPForUnity.Runtime.Helpers
             // clearing on entry prevents the next call from picking up that stale capture.
             s_pendingCompositedTex = null;
             s_pendingCompositedDone = false;
-            s_pendingCompositedStarted = true;
             var go = new GameObject("__MCP_CompositedFrameCapturer__")
             {
                 hideFlags = HideFlags.HideAndDontSave
@@ -294,7 +291,6 @@ namespace MCPForUnity.Runtime.Helpers
             var tex = s_pendingCompositedTex;
             s_pendingCompositedTex = null;
             s_pendingCompositedDone = false;
-            s_pendingCompositedStarted = false;
             return tex;
         }
 #endif
