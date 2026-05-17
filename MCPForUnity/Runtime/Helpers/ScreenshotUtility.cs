@@ -262,7 +262,9 @@ namespace MCPForUnity.Runtime.Helpers
                 {
                     Debug.LogError($"[MCP for Unity] CaptureScreenshotAsTexture failed: {ex.Message}");
                     s_pendingCompositedTex = null;
-                    s_pendingCompositedDone = false;
+                    // Mark done so the spin loop in CaptureCompositedAfterFrame exits
+                    // immediately. The null texture already signals failure to the caller.
+                    s_pendingCompositedDone = true;
                 }
                 s_pendingCompositedStarted = false;
                 Destroy(gameObject);
@@ -271,15 +273,11 @@ namespace MCPForUnity.Runtime.Helpers
 
         private static Texture2D CaptureCompositedAfterFrame(int superSize, int timeoutSteps = 5)
         {
-            if (s_pendingCompositedStarted)
-            {
-                // Stale state from a previous failed capture; reset rather than refuse so the
-                // tool stays usable across retries.
-                s_pendingCompositedTex = null;
-                s_pendingCompositedDone = false;
-                s_pendingCompositedStarted = false;
-            }
-
+            // Reset state unconditionally. A coroutine from a previous call that timed out
+            // could complete asynchronously and leave a stale texture / done flag behind;
+            // clearing on entry prevents the next call from picking up that stale capture.
+            s_pendingCompositedTex = null;
+            s_pendingCompositedDone = false;
             s_pendingCompositedStarted = true;
             var go = new GameObject("__MCP_CompositedFrameCapturer__")
             {
