@@ -236,6 +236,71 @@ namespace MCPForUnity.Runtime.Helpers
             return result;
         }
 
+#if UNITY_EDITOR
+        // Backing state for CaptureCompositedAfterFrame. A transient MonoBehaviour writes the
+        // composited frame here after yielding WaitForEndOfFrame; the editor-side spin loop
+        // reads it back. This is the only reliable way to capture UI Toolkit overlays since
+        // they are composited after camera render and ScreenCapture.CaptureScreenshotAsTexture
+        // called synchronously before a frame has been presented returns a blank texture.
+        private static Texture2D s_pendingCompositedTex;
+        private static bool s_pendingCompositedDone;
+        private static bool s_pendingCompositedStarted;
+
+        private sealed class CompositedFrameCapturer : MonoBehaviour
+        {
+            public int SuperSize = 1;
+
+            private System.Collections.IEnumerator Start()
+            {
+                yield return new WaitForEndOfFrame();
+                try
+                {
+                    s_pendingCompositedTex = ScreenCapture.CaptureScreenshotAsTexture(SuperSize);
+                    s_pendingCompositedDone = true;
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[MCP for Unity] CaptureScreenshotAsTexture failed: {ex.Message}");
+                    s_pendingCompositedTex = null;
+                    s_pendingCompositedDone = false;
+                }
+                s_pendingCompositedStarted = false;
+                Destroy(gameObject);
+            }
+        }
+
+        private static Texture2D CaptureCompositedAfterFrame(int superSize, int timeoutSteps = 5)
+        {
+            if (s_pendingCompositedStarted)
+            {
+                // Stale state from a previous failed capture; reset rather than refuse so the
+                // tool stays usable across retries.
+                s_pendingCompositedTex = null;
+                s_pendingCompositedDone = false;
+                s_pendingCompositedStarted = false;
+            }
+
+            s_pendingCompositedStarted = true;
+            var go = new GameObject("__MCP_CompositedFrameCapturer__")
+            {
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            var capturer = go.AddComponent<CompositedFrameCapturer>();
+            capturer.SuperSize = Mathf.Max(1, superSize);
+
+            for (int i = 0; i < timeoutSteps && !s_pendingCompositedDone; i++)
+            {
+                UnityEditor.EditorApplication.Step();
+            }
+
+            var tex = s_pendingCompositedTex;
+            s_pendingCompositedTex = null;
+            s_pendingCompositedDone = false;
+            s_pendingCompositedStarted = false;
+            return tex;
+        }
+#endif
+
         /// <summary>
         /// Captures a screenshot using ScreenCapture.CaptureScreenshotAsTexture, which captures the
         /// final composited frame including UI Toolkit overlays, post-processing, etc.
@@ -266,7 +331,22 @@ namespace MCPForUnity.Runtime.Helpers
             int imgW = 0, imgH = 0;
             try
             {
+#if UNITY_EDITOR
+                // In the editor, ScreenCapture.CaptureScreenshotAsTexture called inline reads a
+                // backbuffer that has not yet been presented (UITK overlays are composited at
+                // end-of-frame). Route through a WaitForEndOfFrame coroutine + EditorApplication
+                // .Step() spin so the captured texture actually contains the composited frame.
+                if (Application.isPlaying)
+                {
+                    tex = CaptureCompositedAfterFrame(result.SuperSize);
+                }
+                else
+                {
+                    tex = ScreenCapture.CaptureScreenshotAsTexture(result.SuperSize);
+                }
+#else
                 tex = ScreenCapture.CaptureScreenshotAsTexture(result.SuperSize);
+#endif
                 if (tex == null)
                 {
                     // Fallback to camera-based if ScreenCapture fails
