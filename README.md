@@ -148,6 +148,32 @@ If auto-setup doesn't work, add this to your MCP client's config file:
 }
 ```
 
+**macOS/Linux with a local tool-call guard:**
+```json
+{
+  "mcpServers": {
+    "unityMCP": {
+      "command": "armorer-guard",
+      "args": [
+        "mcp-proxy",
+        "--",
+        "uvx",
+        "--from",
+        "mcpforunityserver",
+        "mcp-for-unity",
+        "--transport",
+        "stdio"
+      ]
+    }
+  }
+}
+```
+
+This optional configuration uses [Armorer Guard](https://github.com/ArmorerLabs/Armorer-Guard)
+as a local MCP proxy to inspect tool-call arguments for prompt injection,
+credential leakage, exfiltration risk, and dangerous actions before forwarding
+safe calls to Unity MCP.
+
 **Windows:**
 ```json
 {
