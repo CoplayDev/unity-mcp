@@ -16,8 +16,9 @@ The window has four areas: Server Status, Unity Bridge, MCP Client Configuration
    - Select the packaged server folder (`Server`) if you want to run the bundled implementation.
    - Install Python and/or uv/uvx if missing so the server can be managed locally.
    - For Claude Code, ensure the `claude` CLI is installed.
+   - For Codex, ensure the `codex` CLI is installed.
 4. Click “Start Bridge” if the Unity Bridge shows “Stopped”.
-5. Use your MCP client (Cursor, VS Code, OpenClaw, Claude Code) to connect.
+5. Use your MCP client (Cursor, VS Code, OpenClaw, Claude Code, Codex) to connect.
 
 ---
 
@@ -47,7 +48,7 @@ The window has four areas: Server Status, Unity Bridge, MCP Client Configuration
 ---
 
 ## MCP Client Configuration
-- Select Client: Choose your target MCP client (e.g., Cursor, VS Code, Windsurf, Claude Code).
+- Select Client: Choose your target MCP client (e.g., Cursor, VS Code, Windsurf, Claude Code, Codex).
 - Per-client actions:
   - Cursor / VS Code / Windsurf:
     - Auto Configure: Writes/updates your config to launch the server via `uvx` with the current package version:
@@ -60,6 +61,11 @@ The window has four areas: Server Status, Unity Bridge, MCP Client Configuration
     - Register with Claude Code / Unregister MCP for Unity with Claude Code.
     - If the CLI isn’t found, click “Choose Claude Install Location”.
     - The window displays the resolved Claude CLI path when detected.
+  - Codex:
+    - Configure / Unregister MCP for Unity with Codex.
+    - Local HTTP and stdio setup use `codex mcp add` / `codex mcp remove` when the Codex CLI is available.
+    - If the CLI is not found, MCP for Unity writes `~/.codex/config.toml` directly.
+    - Remote-hosted setup with `X-API-Key` auth uses TOML because the Codex CLI does not currently expose an arbitrary HTTP header flag.
   - OpenClaw:
     - Uses `~/.openclaw/openclaw.json` and the `openclaw-mcp-bridge` plugin.
     - MCP for Unity writes `plugins.entries.openclaw-mcp-bridge.config.servers.unityMCP`.
@@ -87,6 +93,8 @@ Notes:
   - Help: [Fix MCP for Unity with Cursor, VS Code & Windsurf](https://github.com/CoplayDev/unity-mcp/wiki/1.-Fix-Unity-MCP-and-Cursor,-VSCode-&-Windsurf)
 - Claude CLI not found:
   - Help: [Fix MCP for Unity with Claude Code](https://github.com/CoplayDev/unity-mcp/wiki/2.-Fix-Unity-MCP-and-Claude-Code)
+- Codex not connecting:
+  - Help: [Codex setup help](../docs/guides/CODEX_HELP.md)
 
 ---
 
