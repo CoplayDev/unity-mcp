@@ -50,7 +50,7 @@ async def manage_dots_physics(
     world: Annotated[str, "Target world name"] | None = None,
     page_size: Annotated[int, "Max results to return (default 20)"] | None = None,
 ) -> dict[str, Any]:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     params = {
         "action": action,

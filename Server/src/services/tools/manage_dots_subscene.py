@@ -40,7 +40,7 @@ async def manage_dots_subscene(
     # SubScene identification
     scene_name: Annotated[str, "SubScene name or GameObject name (for load/unload/status/sections)"] | None = None,
 ) -> dict[str, Any]:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     params = {
         "action": action,

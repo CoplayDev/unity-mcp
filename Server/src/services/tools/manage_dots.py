@@ -89,7 +89,7 @@ async def manage_dots(
     page_size: Annotated[int, "Max entities/types to return (default 20, max 200)"] | None = None,
     limit: Annotated[int, "Max archetypes in performance_snapshot (default 20)"] | None = None,
 ) -> dict[str, Any]:
-    unity_instance = get_unity_instance_from_context(ctx)
+    unity_instance = await get_unity_instance_from_context(ctx)
 
     params = {
         "action": action,
