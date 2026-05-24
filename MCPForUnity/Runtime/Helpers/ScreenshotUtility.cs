@@ -243,11 +243,24 @@ namespace MCPForUnity.Runtime.Helpers
         {
             Texture2D result = null;
             bool done = false;
-            ScreenshotCapturer.Begin(superSize, tex => { result = tex; done = true; });
+            bool callerReturned = false;
+            ScreenshotCapturer.Begin(superSize, tex =>
+            {
+                // Late completion after the spin loop timed out: caller will never consume
+                // the texture, so destroy it here to avoid leaking a Unity object.
+                if (callerReturned)
+                {
+                    if (tex != null) DestroyTexture(tex);
+                    return;
+                }
+                result = tex;
+                done = true;
+            });
             for (int i = 0; i < timeoutSteps && !done; i++)
             {
                 UnityEditor.EditorApplication.Step();
             }
+            callerReturned = true;
             return result;
         }
 #endif
