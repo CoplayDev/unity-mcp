@@ -296,18 +296,11 @@ namespace MCPForUnity.Runtime.Helpers
             try
             {
 #if UNITY_EDITOR
-                // In the editor, ScreenCapture.CaptureScreenshotAsTexture called inline reads a
-                // backbuffer that has not yet been presented (UITK overlays are composited at
-                // end-of-frame). Route through a WaitForEndOfFrame coroutine + EditorApplication
-                // .Step() spin so the captured texture actually contains the composited frame.
-                if (Application.isPlaying)
-                {
-                    tex = CaptureCompositedAfterFrame(result.SuperSize);
-                }
-                else
-                {
-                    tex = ScreenCapture.CaptureScreenshotAsTexture(result.SuperSize);
-                }
+                // In play mode, inline ScreenCapture reads a backbuffer before UITK has
+                // composited; route through WaitForEndOfFrame instead.
+                tex = Application.isPlaying
+                    ? CaptureCompositedAfterFrame(result.SuperSize)
+                    : ScreenCapture.CaptureScreenshotAsTexture(result.SuperSize);
 #else
                 tex = ScreenCapture.CaptureScreenshotAsTexture(result.SuperSize);
 #endif
