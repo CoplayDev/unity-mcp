@@ -815,10 +815,8 @@ namespace MCPForUnity.Runtime.Helpers
     }
 
     /// <summary>
-    /// Transient MonoBehaviour that captures the composited frame at end-of-frame via
-    /// ScreenCapture.CaptureScreenshotAsTexture and invokes a callback. Self-destructs.
-    /// Shared by ManageUI.render_ui (two-call pending/ready) and ScreenshotUtility's
-    /// editor synchronous-spin path.
+    /// Transient MonoBehaviour that yields WaitForEndOfFrame, calls
+    /// ScreenCapture.CaptureScreenshotAsTexture, invokes the callback, and self-destructs.
     /// </summary>
     public sealed class ScreenshotCapturer : MonoBehaviour
     {
