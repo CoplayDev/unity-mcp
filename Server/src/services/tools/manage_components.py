@@ -1,6 +1,6 @@
 """
 Tool for managing components on GameObjects in Unity.
-Supports add, remove, and set_property operations.
+Supports add, remove, set_property, get_referenceable, set_reference, and batch_wire operations.
 """
 from typing import Annotated, Any, Literal, Optional
 
@@ -15,8 +15,9 @@ from services.tools.preflight import preflight
 
 @mcp_for_unity_tool(
     description=(
-        "Add, remove, or set properties on components attached to GameObjects. "
-        "Actions: add, remove, set_property. Requires target (instance ID or name) and component_type. "
+        "Add, remove, set properties, inspect referenceable targets, or wire object references on "
+        "components attached to GameObjects. Actions: add, remove, set_property, get_referenceable, "
+        "set_reference, batch_wire. Requires target (instance ID or name) and component_type. "
         "For READING component data, use the mcpforunity://scene/gameobject/{id}/components resource "
         "or mcpforunity://scene/gameobject/{id}/component/{name} for a single component. "
         "For creating/deleting GameObjects themselves, use manage_gameobject instead."
@@ -25,8 +26,10 @@ from services.tools.preflight import preflight
 async def manage_components(
     ctx: Context,
     action: Annotated[
-        Literal["add", "remove", "set_property"],
-        "Action to perform: add (add component), remove (remove component), set_property (set component property)"
+        Literal["add", "remove", "set_property", "get_referenceable", "set_reference", "batch_wire"],
+        "Action to perform: add (add component), remove (remove component), set_property (set component property), "
+        "get_referenceable (list valid object reference targets), set_reference (assign or clear an object reference), "
+        "batch_wire (assign multiple object references)"
     ],
     target: Annotated[
         str | int,
@@ -60,6 +63,42 @@ async def manage_components(
         "Zero-based index to select which component when multiple of the same type exist. "
         "Use the components resource to discover indices. If omitted, targets the first instance."
     ] = None,
+    reference_path: Annotated[
+        Optional[str],
+        "Path to the reference target GameObject (for set_reference or batch_wire)"
+    ] = None,
+    reference_asset_path: Annotated[
+        Optional[str],
+        "Asset path to the reference target asset (for set_reference or batch_wire)"
+    ] = None,
+    reference_instance_id: Annotated[
+        Optional[int],
+        "Instance ID of the reference target object (for set_reference or batch_wire)"
+    ] = None,
+    references: Annotated[
+        Optional[list[dict]],
+        "Batch wiring list for batch_wire, each item containing property_name and one reference selector"
+    ] = None,
+    include_scene: Annotated[
+        Optional[bool],
+        "Whether to include matching scene objects for get_referenceable"
+    ] = True,
+    include_assets: Annotated[
+        Optional[bool],
+        "Whether to include matching project assets for get_referenceable"
+    ] = True,
+    limit: Annotated[
+        Optional[int],
+        "Maximum number of get_referenceable results to return"
+    ] = None,
+    clear: Annotated[
+        Optional[bool],
+        "Clear the object reference instead of assigning a new target"
+    ] = None,
+    atomic: Annotated[
+        Optional[bool],
+        "Whether batch_wire should validate all references before applying any changes"
+    ] = True,
 ) -> dict[str, Any]:
     """
     Manage components on GameObjects.
@@ -68,12 +107,18 @@ async def manage_components(
     - add: Add a new component to a GameObject
     - remove: Remove a component from a GameObject  
     - set_property: Set one or more properties on a component
+    - get_referenceable: List valid reference targets for an object reference property
+    - set_reference: Assign or clear an object reference property
+    - batch_wire: Assign or clear multiple object reference properties
 
     Examples:
     - Add Rigidbody: action="add", target="Player", component_type="Rigidbody"
     - Remove BoxCollider: action="remove", target=-12345, component_type="BoxCollider"
     - Set single property: action="set_property", target="Enemy", component_type="Rigidbody", property="mass", value=5.0
     - Set multiple properties: action="set_property", target="Enemy", component_type="Rigidbody", properties={"mass": 5.0, "useGravity": false}
+    - List referenceable targets: action="get_referenceable", target="Player", component_type="AudioSource", property="clip"
+    - Set reference (asset): action="set_reference", target="Player", component_type="AudioSource", property="clip", reference_asset_path="Assets/Audio/BGM.mp3"
+    - Wire multiple references: action="batch_wire", target="GameManager", component_type="GameManager", references=[{"property_name": "player", "reference_path": "Player"}]
     """
     unity_instance = await get_unity_instance_from_context(ctx)
 
@@ -84,7 +129,7 @@ async def manage_components(
     if not action:
         return {
             "success": False,
-            "message": "Missing required parameter 'action'. Valid actions: add, remove, set_property"
+            "message": "Missing required parameter 'action'. Valid actions: add, remove, set_property, get_referenceable, set_reference, batch_wire"
         }
 
     if not target:
@@ -130,6 +175,33 @@ async def manage_components(
 
         if action == "add" and properties:
             params["properties"] = properties
+
+        if action in ("get_referenceable", "set_reference", "batch_wire") and property:
+            params["property"] = property
+
+        if action in ("set_reference", "batch_wire"):
+            if reference_path is not None:
+                params["reference_path"] = reference_path
+            if reference_asset_path is not None:
+                params["reference_asset_path"] = reference_asset_path
+            if reference_instance_id is not None:
+                params["reference_instance_id"] = reference_instance_id
+            if clear is not None:
+                params["clear"] = clear
+
+        if action == "get_referenceable":
+            if include_scene is not None:
+                params["include_scene"] = include_scene
+            if include_assets is not None:
+                params["include_assets"] = include_assets
+            if limit is not None:
+                params["limit"] = limit
+
+        if action == "batch_wire":
+            if references is not None:
+                params["references"] = references
+            if atomic is not None:
+                params["atomic"] = atomic
 
         response = await send_with_unity_instance(
             async_send_command_with_retry,
