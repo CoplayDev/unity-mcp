@@ -237,61 +237,18 @@ namespace MCPForUnity.Runtime.Helpers
         }
 
 #if UNITY_EDITOR
-        // Backing state for CaptureCompositedAfterFrame. A transient MonoBehaviour writes the
-        // composited frame here after yielding WaitForEndOfFrame; the editor-side spin loop
-        // reads it back. This is the only reliable way to capture UI Toolkit overlays since
-        // they are composited after camera render and ScreenCapture.CaptureScreenshotAsTexture
-        // called synchronously before a frame has been presented returns a blank texture.
-        private static Texture2D s_pendingCompositedTex;
-        private static bool s_pendingCompositedDone;
-
-        private sealed class CompositedFrameCapturer : MonoBehaviour
-        {
-            public int SuperSize = 1;
-
-            private System.Collections.IEnumerator Start()
-            {
-                yield return new WaitForEndOfFrame();
-                try
-                {
-                    s_pendingCompositedTex = ScreenCapture.CaptureScreenshotAsTexture(SuperSize);
-                    s_pendingCompositedDone = true;
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"[MCP for Unity] CaptureScreenshotAsTexture failed: {ex.Message}");
-                    s_pendingCompositedTex = null;
-                    // Mark done so the spin loop in CaptureCompositedAfterFrame exits
-                    // immediately. The null texture already signals failure to the caller.
-                    s_pendingCompositedDone = true;
-                }
-                Destroy(gameObject);
-            }
-        }
-
+        // Synchronously drive a WaitForEndOfFrame ScreenshotCapturer by pumping the editor's
+        // player loop. Play-mode only; EditorApplication.Step is a no-op in edit mode.
         private static Texture2D CaptureCompositedAfterFrame(int superSize, int timeoutSteps = 5)
         {
-            // Reset state unconditionally. A coroutine from a previous call that timed out
-            // could complete asynchronously and leave a stale texture / done flag behind;
-            // clearing on entry prevents the next call from picking up that stale capture.
-            s_pendingCompositedTex = null;
-            s_pendingCompositedDone = false;
-            var go = new GameObject("__MCP_CompositedFrameCapturer__")
-            {
-                hideFlags = HideFlags.HideAndDontSave
-            };
-            var capturer = go.AddComponent<CompositedFrameCapturer>();
-            capturer.SuperSize = Mathf.Max(1, superSize);
-
-            for (int i = 0; i < timeoutSteps && !s_pendingCompositedDone; i++)
+            Texture2D result = null;
+            bool done = false;
+            ScreenshotCapturer.Begin(superSize, tex => { result = tex; done = true; });
+            for (int i = 0; i < timeoutSteps && !done; i++)
             {
                 UnityEditor.EditorApplication.Step();
             }
-
-            var tex = s_pendingCompositedTex;
-            s_pendingCompositedTex = null;
-            s_pendingCompositedDone = false;
-            return tex;
+            return result;
         }
 #endif
 
@@ -854,6 +811,37 @@ namespace MCPForUnity.Runtime.Helpers
                 root += "/";
             }
             return root;
+        }
+    }
+
+    /// <summary>
+    /// Transient MonoBehaviour that captures the composited frame at end-of-frame via
+    /// ScreenCapture.CaptureScreenshotAsTexture and invokes a callback. Self-destructs.
+    /// Shared by ManageUI.render_ui (two-call pending/ready) and ScreenshotUtility's
+    /// editor synchronous-spin path.
+    /// </summary>
+    public sealed class ScreenshotCapturer : MonoBehaviour
+    {
+        private int _superSize = 1;
+        private Action<Texture2D> _onComplete;
+
+        /// <summary>Spawns a hidden GameObject, attaches a capturer, returns immediately.</summary>
+        public static void Begin(int superSize, Action<Texture2D> onComplete)
+        {
+            var go = new GameObject("__MCP_ScreenshotCapturer__") { hideFlags = HideFlags.HideAndDontSave };
+            var c = go.AddComponent<ScreenshotCapturer>();
+            c._superSize = Mathf.Max(1, superSize);
+            c._onComplete = onComplete;
+        }
+
+        private System.Collections.IEnumerator Start()
+        {
+            yield return new WaitForEndOfFrame();
+            Texture2D tex = null;
+            try { tex = ScreenCapture.CaptureScreenshotAsTexture(_superSize); }
+            catch (Exception ex) { Debug.LogError($"[MCP for Unity] CaptureScreenshotAsTexture failed: {ex.Message}"); }
+            _onComplete?.Invoke(tex);
+            Destroy(gameObject);
         }
     }
 }
