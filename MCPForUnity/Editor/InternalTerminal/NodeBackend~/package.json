@@ -1,0 +1,15 @@
+{
+  "name": "wtl-internal-terminal-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test-screen-runs.js"
+  },
+  "dependencies": {
+    "@xterm/headless": "^5.5.0",
+    "node-pty": "^1.1.0",
+    "ws": "^8.16.0"
+  }
+}
