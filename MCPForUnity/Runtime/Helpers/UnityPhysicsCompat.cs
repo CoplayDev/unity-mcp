@@ -17,10 +17,15 @@ namespace MCPForUnity.Runtime.Helpers
     ///
     /// We use reflection rather than direct property access so calls stay clean of
     /// CS0618 warnings AND survive eventual removal of the obsolete property without
-    /// a recompile of this package.
+    /// a recompile of this package. Type lookups go through <see cref="Type.GetType(string)"/>
+    /// so this file compiles even when the Physics 2D built-in module is disabled in
+    /// the Package Manager.
     /// </summary>
     public static class UnityPhysicsCompat
     {
+        // Assembly-qualified name — resolved at runtime so the file compiles when the
+        // Physics 2D built-in module is disabled in the Package Manager.
+        private const string Physics2DTypeName = "UnityEngine.Physics2D, UnityEngine.Physics2DModule";
         /// <summary>
         /// Cross-version description of the 3D physics simulation mode.
         /// On 2022.2+ this maps onto <c>UnityEngine.SimulationMode</c>; on older
@@ -46,9 +51,13 @@ namespace MCPForUnity.Runtime.Helpers
                 if (!_physics2DProbed)
                 {
                     _physics2DProbed = true;
-                    _physics2DAutoSync = typeof(Physics2D).GetProperty(
-                        "autoSyncTransforms",
-                        BindingFlags.Public | BindingFlags.Static);
+                    var physics2DType = Type.GetType(Physics2DTypeName);
+                    if (physics2DType != null)
+                    {
+                        _physics2DAutoSync = physics2DType.GetProperty(
+                            "autoSyncTransforms",
+                            BindingFlags.Public | BindingFlags.Static);
+                    }
                 }
                 return _physics2DAutoSync;
             }

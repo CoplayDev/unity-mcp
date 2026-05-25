@@ -53,6 +53,7 @@ namespace MCPForUnity.Runtime.Helpers
         private static bool s_loggedLegacyScreenCaptureFallback;
         private static bool? s_screenCaptureModuleAvailable;
         private static System.Reflection.MethodInfo s_captureScreenshotMethod;
+        private static System.Reflection.MethodInfo s_captureScreenshotAsTextureMethod;
 
         /// <summary>
         /// Checks if the Screen Capture module (com.unity.modules.screencapture) is enabled.
@@ -72,6 +73,8 @@ namespace MCPForUnity.Runtime.Helpers
                     {
                         s_captureScreenshotMethod = screenCaptureType.GetMethod("CaptureScreenshot",
                             new Type[] { typeof(string), typeof(int) });
+                        s_captureScreenshotAsTextureMethod = screenCaptureType.GetMethod("CaptureScreenshotAsTexture",
+                            new Type[] { typeof(int) });
                     }
                 }
                 return s_screenCaptureModuleAvailable.Value;
@@ -249,7 +252,7 @@ namespace MCPForUnity.Runtime.Helpers
             int maxResolution = 0,
             string folderOverride = null)
         {
-            if (!IsScreenCaptureModuleAvailable)
+            if (!IsScreenCaptureModuleAvailable || s_captureScreenshotAsTextureMethod == null)
             {
                 var fallbackCamera = FindAvailableCamera();
                 if (fallbackCamera != null)
@@ -266,7 +269,9 @@ namespace MCPForUnity.Runtime.Helpers
             int imgW = 0, imgH = 0;
             try
             {
-                tex = ScreenCapture.CaptureScreenshotAsTexture(result.SuperSize);
+                // Reflective call to ScreenCapture.CaptureScreenshotAsTexture so the file compiles
+                // even when the Screen Capture module (com.unity.modules.screencapture) is disabled.
+                tex = s_captureScreenshotAsTextureMethod.Invoke(null, new object[] { result.SuperSize }) as Texture2D;
                 if (tex == null)
                 {
                     // Fallback to camera-based if ScreenCapture fails
