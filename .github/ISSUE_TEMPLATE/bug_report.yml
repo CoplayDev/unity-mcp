@@ -1,0 +1,122 @@
+name: Bug report
+description: Something isn't working as expected
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. The more specific you can be, the faster we can help.
+
+        **Before filing:**
+        - Search [existing issues](https://github.com/CoplayDev/unity-mcp/issues?q=is%3Aissue) to avoid duplicates
+        - Check the [troubleshooting docs](https://coplaydev.github.io/unity-mcp/guides/troubleshooting) and [setup wiki](https://github.com/CoplayDev/unity-mcp/wiki)
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Clear, concrete description. What did you expect? What did you get?
+      placeholder: When I run X, I expect Y, but I see Z.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Numbered steps. Include the exact prompt or command if relevant.
+      placeholder: |
+        1. Open Window > MCP for Unity
+        2. Click Start Server
+        3. In Claude Desktop, prompt: "create a red cube"
+        4. Observe error in console: ...
+    validations:
+      required: true
+
+  - type: input
+    id: unity-version
+    attributes:
+      label: Unity version
+      placeholder: "6000.0.34f1, 2022.3.42f1, etc."
+    validations:
+      required: true
+
+  - type: input
+    id: package-version
+    attributes:
+      label: MCP for Unity package version
+      description: Found under Window > Package Manager → MCP for Unity.
+      placeholder: "9.6.3"
+    validations:
+      required: true
+
+  - type: input
+    id: server-version
+    attributes:
+      label: Python server version
+      description: Run `uv pip show mcpforunityserver` or check the bundled wheel.
+      placeholder: "9.6.3"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: client
+    attributes:
+      label: MCP client
+      options:
+        - Claude Desktop
+        - Claude Code
+        - Cursor
+        - VS Code (Copilot)
+        - Windsurf
+        - Cline
+        - GitHub Copilot CLI
+        - Codex
+        - Qwen Code
+        - Gemini CLI
+        - OpenClaw
+        - Other (specify in description)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Transport
+      options:
+        - HTTP (default)
+        - stdio
+        - Don't know
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options:
+        - macOS
+        - Windows
+        - Linux
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / console output
+      description: Editor console, MCP for Unity log, client log. Strip secrets.
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and did not find a duplicate
+          required: true
+        - label: I included logs / steps to reproduce
+          required: true

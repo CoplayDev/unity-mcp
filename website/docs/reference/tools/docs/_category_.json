@@ -1,0 +1,8 @@
+{
+  "label": "docs",
+  "link": {
+    "type": "doc",
+    "id": "reference/tools/docs/index"
+  },
+  "collapsed": true
+}

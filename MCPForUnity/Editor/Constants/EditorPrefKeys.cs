@@ -49,6 +49,7 @@ namespace MCPForUnity.Editor.Constants
         internal const string ResourceFoldoutStatePrefix = "MCPForUnity.ResourceFoldout.";
         internal const string EditorWindowActivePanel = "MCPForUnity.EditorWindow.ActivePanel";
         internal const string LastSelectedClientId = "MCPForUnity.LastSelectedClientId";
+        internal const string ClientDetailsFoldoutOpen = "MCPForUnity.ClientConfig.DetailsFoldoutOpen";
 
         internal const string SetupCompleted = "MCPForUnity.SetupCompleted";
         internal const string SetupDismissed = "MCPForUnity.SetupDismissed";

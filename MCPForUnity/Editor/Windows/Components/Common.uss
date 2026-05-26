@@ -241,6 +241,61 @@
     background-color: rgba(80, 80, 80, 0.5);
 }
 
+/* Primary one-click action — flagged as the recommended path. */
+.primary-button {
+    width: 100%;
+    height: 34px;
+    margin-top: 4px;
+    margin-bottom: 4px;
+    background-color: rgba(0, 175, 110, 1);
+    color: rgba(255, 255, 255, 1);
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: rgba(0, 145, 90, 1);
+    font-size: 13px;
+    -unity-font-style: bold;
+    letter-spacing: 0.3px;
+}
+
+.primary-button:hover {
+    background-color: rgba(0, 200, 130, 1);
+    border-color: rgba(0, 170, 105, 1);
+}
+
+.primary-button:active {
+    background-color: rgba(0, 150, 90, 1);
+    border-color: rgba(0, 125, 75, 1);
+}
+
+.primary-button:disabled {
+    background-color: rgba(70, 100, 85, 0.5);
+    color: rgba(220, 220, 220, 0.6);
+    border-color: rgba(70, 100, 85, 0.5);
+}
+
+/* Foldout that hides the per-client (single-target) controls. */
+.client-details-foldout {
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
+
+.client-details-foldout > .unity-foldout__toggle {
+    -unity-font-style: bold;
+    font-size: 11px;
+    padding: 4px;
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 3px;
+}
+
+.client-details-foldout > .unity-foldout__content {
+    margin-top: 6px;
+    padding-left: 4px;
+}
+
+.unity-theme-light .client-details-foldout > .unity-foldout__toggle {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
 /* Manual Configuration */
 .manual-config-content {
     padding: 8px;

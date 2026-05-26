@@ -39,8 +39,6 @@ namespace MCPForUnity.Editor.Tools.Vfx
             return new { success = false, message = "VFX Graph package (com.unity.visualeffectgraph) not installed" };
         }
 #else
-        private static readonly string[] SupportedVfxGraphVersions = { "12.1" };
-
         /// <summary>
         /// Creates a new VFX Graph asset file from a template.
         /// </summary>
@@ -486,54 +484,17 @@ namespace MCPForUnity.Editor.Tools.Vfx
 
         private static string ValidateVfxGraphVersion()
         {
+            // UNITY_VFX_GRAPH is set by the asmdef versionDefines whenever the package is
+            // installed, so reaching this branch already implies presence. Keep a runtime
+            // double-check for the rare window during install/uninstall where the compile
+            // gate and the package state can briefly disagree.
             var info = UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.visualeffectgraph");
             if (info == null)
             {
                 return "VFX Graph package (com.unity.visualeffectgraph) not installed";
             }
 
-            if (IsVersionSupported(info.version))
-            {
-                return null;
-            }
-
-            string supported = string.Join(", ", SupportedVfxGraphVersions.Select(version => $"{version}.x"));
-            return $"Unsupported VFX Graph version {info.version}. Supported versions: {supported}.";
-        }
-
-        private static bool IsVersionSupported(string installedVersion)
-        {
-            if (string.IsNullOrEmpty(installedVersion))
-            {
-                return false;
-            }
-
-            string normalized = installedVersion;
-            int suffixIndex = normalized.IndexOfAny(new[] { '-', '+' });
-            if (suffixIndex >= 0)
-            {
-                normalized = normalized.Substring(0, suffixIndex);
-            }
-
-            if (!Version.TryParse(normalized, out Version installed))
-            {
-                return false;
-            }
-
-            foreach (string supported in SupportedVfxGraphVersions)
-            {
-                if (!Version.TryParse(supported, out Version target))
-                {
-                    continue;
-                }
-
-                if (installed.Major == target.Major && installed.Minor == target.Minor)
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return null;
         }
 
         private static string TryGetAssetPathFromFileSystem(string templatePath)

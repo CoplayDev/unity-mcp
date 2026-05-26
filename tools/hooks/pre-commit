@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Pre-commit hook: regenerate the Docusaurus tool/resource reference when
+# any tool/resource module is part of the commit. Installed by
+# tools/install-hooks.sh; opt-in (devs without the hook see no behavior change).
+# To bypass for a single commit: git commit --no-verify
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+GENERATOR="${REPO_ROOT}/tools/generate_docs_reference.py"
+
+if [[ ! -f "$GENERATOR" ]]; then
+  echo "pre-commit: $GENERATOR missing; skipping docs regeneration." >&2
+  exit 0
+fi
+
+relevant_paths='^Server/src/services/(tools|resources|registry)/'
+
+# Look at the staged change set only — exclude pure deletions.
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+if ! grep -qE "$relevant_paths" <<<"$staged"; then
+  exit 0
+fi
+
+echo "pre-commit: tool/resource module changes detected — regenerating /website/docs/reference/"
+
+# Prefer uv if available (matches how the Server's deps are pinned). Fall back
+# to system python — the generator handles its own sys.path setup.
+if command -v uv >/dev/null 2>&1 && [[ -f "${REPO_ROOT}/Server/pyproject.toml" ]]; then
+  (cd "${REPO_ROOT}/Server" && uv run python "$GENERATOR")
+else
+  python3 "$GENERATOR"
+fi
+
+# Stage any reference files that changed so the commit captures them.
+if ! git diff --quiet -- "website/docs/reference"; then
+  echo "pre-commit: staging regenerated reference pages."
+  git add website/docs/reference
+fi
+
+exit 0

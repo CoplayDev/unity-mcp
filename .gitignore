@@ -5,6 +5,9 @@
 .codeiumignore
 .kiro
 
+# Local worktrees for parallel feature work
+.worktrees/
+
 # Code-copy related files
 .clipignore
 
@@ -59,6 +62,9 @@ reports/
 # Local testing harness
 scripts/local-test/
 .claude/settings.local.json
+
+# Per-version logs from tools/check-unity-versions.{sh,ps1}
+tools/.unity-check-logs/
 
 # Ignore the .claude directory, since it might contain local/project-level setting such as deny and allowlist.
 /.claude

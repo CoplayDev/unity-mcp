@@ -327,8 +327,9 @@ class CustomToolService:
         return registered, replaced
 
     def register_global_tools(self, tools: list[ToolDefinitionModel]) -> None:
-        if self._project_scoped_tools:
-            return
+        # Global custom tools are always registered, even when project-scoped tools
+        # are enabled. Project-scoped tools can override globals by name, but
+        # disabling globals entirely would break shared tooling that projects expect.
         builtin_names = self._get_builtin_tool_names()
         for tool in tools:
             if tool.name in builtin_names:

@@ -1,0 +1,42 @@
+.copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ifm-color-emphasis-700);
+  background: transparent;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0;
+  cursor: pointer;
+  transition: color 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
+}
+
+.copy:hover {
+  color: var(--ifm-color-primary);
+  border-color: var(--ifm-color-primary);
+  background: var(--ifm-background-color);
+}
+
+.copied {
+  color: #10b981;
+  border-color: #10b981;
+}
+.copied:hover {
+  color: #10b981;
+  border-color: #10b981;
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
+}
+
+.label {
+  line-height: 1;
+}

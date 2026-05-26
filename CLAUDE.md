@@ -145,6 +145,8 @@ We support a wide Unity version range (2021+ → 6.x → CoreCLR 6.8). When an A
 
 The catalog of active shims, the policy for when to add one, what does NOT belong in a shim, and the reflection-cache pattern all live in **`MCPForUnity/Runtime/Helpers/UnityCompatShims.cs`** — the XML doc on that empty marker class is the source of truth and ships inside the UPM package, so end-users can `F12`/Go-to-definition into it. Sources for current deprecations: Unity 6.x upgrade guides and the [CoreCLR 2026 thread](https://discussions.unity.com/t/path-to-coreclr-2026-upgrade-guide/1714279).
 
+When you touch a shim or anything else gated by `#if UNITY_*_OR_NEWER`, run `tools/check-unity-versions.sh` to compile-check across the CI matrix locally before committing — the matrix lives in `tools/unity-versions.json`.
+
 ## Commands
 
 ### Running Tests
@@ -159,6 +161,10 @@ cd Server && uv run pytest tests/test_manage_material.py -v
 cd Server && uv run pytest tests/ -k "test_create_material" -v
 
 # Unity - open TestProjects/UnityMCPTests in Unity, use Test Runner window
+
+# Local multi-version compile check (parity with CI matrix, see tools/unity-versions.json)
+tools/check-unity-versions.sh           # compile-only across installed Unity Hub editors
+tools/check-unity-versions.sh --full    # full EditMode test run
 ```
 
 ### Local Development
