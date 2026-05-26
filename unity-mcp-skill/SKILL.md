@@ -27,6 +27,50 @@ Before applying a template:
 5. Verify results         → read_console, manage_camera(action="screenshot"), resources
 ```
 
+## Internal Terminal Dragged Context
+
+The Unity internal terminal can paste Unity context into terminal agents. Treat these pasted snippets as structured references, not shell commands.
+
+### `@unity(...)` References
+
+Examples:
+
+```text
+@unity(type:"script", path:"Assets/Scripts/PlayerController.cs")
+@unity(type:"gameObject", path:"SampleScene/Player", gid:"GlobalObjectId_V1-...")
+@unity(type:"component", path:"SampleScene/Player:UnityEngine.Rigidbody[0]", gid:"GlobalObjectId_V1-...")
+```
+
+Use them as starting points:
+- `type` tells whether the reference is an asset, folder, scene, prefab, GameObject, or component.
+- `path` is usually an `Assets/...` project path, scene object path, or scene object plus component type.
+- `gid` is a stable Unity object reference when present; prefer it for disambiguation, but still verify the target through resources or tools before modifying it.
+
+Recommended flow:
+1. Read `mcpforunity://editor/state` first if you will call Unity tools.
+2. For asset paths, inspect or edit the file directly, or use `manage_asset`/script tools as appropriate.
+3. For scene objects/components, use `find_gameobjects`, scene resources, or the relevant manage tool to resolve the current object before changing it.
+4. If a pasted reference is stale or ambiguous, ask for clarification or search by name/path before acting.
+
+### `<unity-console>` Blocks
+
+The internal terminal can also paste Unity Console context:
+
+```text
+<unity-console generated:"2026-05-26T12:00:00+08:00" count:"1">
+--- entry 1/1 ---
+level: Error
+file: Assets/Scripts/PlayerController.cs
+line: 42
+message:
+...
+stack:
+...
+</unity-console>
+```
+
+Use console context to diagnose the exact failing file, line, message, and stack trace. For compile errors, inspect the referenced script, edit with `script_apply_edits` or normal file edits, wait for compilation, then call `read_console` to confirm the error cleared.
+
 ## Critical Best Practices
 
 ### 1. After Writing/Editing Scripts: Wait for Compilation and Check Console
