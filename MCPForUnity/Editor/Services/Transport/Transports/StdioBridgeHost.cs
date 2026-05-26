@@ -328,24 +328,35 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     }
                     catch (SocketException se) when (se.SocketErrorCode == SocketError.AddressAlreadyInUse)
                     {
-                        // Port is busy. Try switching to a new port once; if that also fails,
-                        // let the reload handler retry with async backoff instead of blocking here.
-                        int oldPort = currentUnityPort;
-                        currentUnityPort = PortManager.DiscoverNewPort();
-
-                        try
+                        bool reboundOriginalPort = false;
+                        if (PortManager.WaitForPortRelease(currentUnityPort, 1500))
                         {
-                            EditorPrefs.SetInt(EditorPrefKeys.UnitySocketPort, currentUnityPort);
-                        }
-                        catch { }
-
-                        if (IsDebugEnabled())
-                        {
-                            McpLog.Info($"Port {oldPort} occupied, switching to port {currentUnityPort}");
+                            listener = CreateConfiguredListener(currentUnityPort);
+                            listener.Start();
+                            reboundOriginalPort = true;
                         }
 
-                        listener = CreateConfiguredListener(currentUnityPort);
-                        listener.Start();
+                        if (!reboundOriginalPort)
+                        {
+                            // Port is busy. Try switching to a new port once; if that also fails,
+                            // let the reload handler retry with async backoff instead of blocking here.
+                            int oldPort = currentUnityPort;
+                            currentUnityPort = PortManager.DiscoverNewPort();
+
+                            try
+                            {
+                                EditorPrefs.SetInt(EditorPrefKeys.UnitySocketPort, currentUnityPort);
+                            }
+                            catch { }
+
+                            if (IsDebugEnabled())
+                            {
+                                McpLog.Info($"Port {oldPort} occupied, switching to port {currentUnityPort}");
+                            }
+
+                            listener = CreateConfiguredListener(currentUnityPort);
+                            listener.Start();
+                        }
                     }
 
                     isRunning = true;

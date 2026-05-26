@@ -170,7 +170,7 @@ namespace MCPForUnity.Editor.Helpers
         /// Used to bridge the gap during domain reload when the old listener
         /// hasn't released the socket yet.
         /// </summary>
-        private static bool WaitForPortRelease(int port, int timeoutMs)
+        public static bool WaitForPortRelease(int port, int timeoutMs)
         {
             int waited = 0;
             const int step = 100;

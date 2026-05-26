@@ -143,9 +143,7 @@ namespace WTL.InternalTerminal.Editor
             EnsureUnityTcpLease();
             if (!IsBackendUsingCurrentUnityTcp(existingPort))
             {
-                ReleaseUnityTcpLease();
-                RequestBackendShutdown(existingPort);
-                return false;
+                EmitLog("Reconnected terminal backend; Unity MCP bridge port changed, so this shell keeps its previous agent environment until the terminal is restarted.");
             }
 
             port = existingPort;

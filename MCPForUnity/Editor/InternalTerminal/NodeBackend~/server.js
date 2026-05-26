@@ -168,7 +168,7 @@ function handleClientMessage(socket, terminalSession, message) {
   }
 
   if (message.type === 'mouseWheel') {
-    handleMouseWheel(socket, terminal, term, message);
+    handleMouseWheel(socket, terminalSession, message);
   }
 
   if (message.type === 'scrollTo') {
@@ -300,13 +300,15 @@ function buildShellEnvironment() {
   return env;
 }
 
-function handleMouseWheel(socket, terminal, term, message) {
+function handleMouseWheel(socket, terminalSession, message) {
+  const { terminal, term } = terminalSession;
   const lines = clamp(Number(message.lines), -MAX_SCROLL_LINES, MAX_SCROLL_LINES);
   if (!lines) {
     return;
   }
 
-  if (terminal.modes.mouseTrackingMode !== 'none' && triggerMouseWheel(terminal, message, lines)) {
+  if (terminal.modes.mouseTrackingMode !== 'none'
+    && triggerMouseWheel(terminal, message, lines)) {
     return;
   }
 
