@@ -53,6 +53,7 @@ namespace MCPForUnity.Runtime.Helpers
         private static bool s_loggedLegacyScreenCaptureFallback;
         private static bool? s_screenCaptureModuleAvailable;
         private static System.Reflection.MethodInfo s_captureScreenshotMethod;
+        private static System.Reflection.MethodInfo s_captureScreenshotAsTextureMethod;
 
         /// <summary>
         /// Checks if the Screen Capture module (com.unity.modules.screencapture) is enabled.
@@ -72,10 +73,24 @@ namespace MCPForUnity.Runtime.Helpers
                     {
                         s_captureScreenshotMethod = screenCaptureType.GetMethod("CaptureScreenshot",
                             new Type[] { typeof(string), typeof(int) });
+                        s_captureScreenshotAsTextureMethod = screenCaptureType.GetMethod("CaptureScreenshotAsTexture",
+                            new Type[] { typeof(int) });
                     }
                 }
                 return s_screenCaptureModuleAvailable.Value;
             }
+        }
+
+        /// <summary>
+        /// Reflective invocation of ScreenCapture.CaptureScreenshotAsTexture(int). Returns
+        /// null when the Screen Capture module is disabled. Centralised so the only direct
+        /// reference to ScreenCapture lives here.
+        /// </summary>
+        internal static Texture2D InvokeCaptureScreenshotAsTexture(int superSize)
+        {
+            if (!IsScreenCaptureModuleAvailable || s_captureScreenshotAsTextureMethod == null)
+                return null;
+            return s_captureScreenshotAsTextureMethod.Invoke(null, new object[] { superSize }) as Texture2D;
         }
 
         /// <summary>
@@ -278,7 +293,7 @@ namespace MCPForUnity.Runtime.Helpers
             int maxResolution = 0,
             string folderOverride = null)
         {
-            if (!IsScreenCaptureModuleAvailable)
+            if (!IsScreenCaptureModuleAvailable || s_captureScreenshotAsTextureMethod == null)
             {
                 var fallbackCamera = FindAvailableCamera();
                 if (fallbackCamera != null)
@@ -300,9 +315,9 @@ namespace MCPForUnity.Runtime.Helpers
                 // composited; route through WaitForEndOfFrame instead.
                 tex = Application.isPlaying
                     ? CaptureCompositedAfterFrame(result.SuperSize)
-                    : ScreenCapture.CaptureScreenshotAsTexture(result.SuperSize);
+                    : InvokeCaptureScreenshotAsTexture(result.SuperSize);
 #else
-                tex = ScreenCapture.CaptureScreenshotAsTexture(result.SuperSize);
+                tex = InvokeCaptureScreenshotAsTexture(result.SuperSize);
 #endif
                 if (tex == null)
                 {
@@ -842,7 +857,7 @@ namespace MCPForUnity.Runtime.Helpers
         {
             yield return new WaitForEndOfFrame();
             Texture2D tex = null;
-            try { tex = ScreenCapture.CaptureScreenshotAsTexture(_superSize); }
+            try { tex = ScreenshotUtility.InvokeCaptureScreenshotAsTexture(_superSize); }
             catch (Exception ex) { Debug.LogError($"[MCP for Unity] CaptureScreenshotAsTexture failed: {ex.Message}"); }
             _onComplete?.Invoke(tex);
             Destroy(gameObject);
