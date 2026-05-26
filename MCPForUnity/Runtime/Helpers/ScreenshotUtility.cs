@@ -50,57 +50,6 @@ namespace MCPForUnity.Runtime.Helpers
         /// or globally via <c>ScreenshotPreferences</c> in the Editor assembly.
         /// </summary>
         public const string DefaultFolder = "Assets/Screenshots";
-        private static bool s_loggedLegacyScreenCaptureFallback;
-        private static bool? s_screenCaptureModuleAvailable;
-        private static System.Reflection.MethodInfo s_captureScreenshotMethod;
-        private static System.Reflection.MethodInfo s_captureScreenshotAsTextureMethod;
-
-        /// <summary>
-        /// Checks if the Screen Capture module (com.unity.modules.screencapture) is enabled.
-        /// This module can be disabled in Package Manager > Built-in, which removes the ScreenCapture class.
-        /// </summary>
-        public static bool IsScreenCaptureModuleAvailable
-        {
-            get
-            {
-                if (!s_screenCaptureModuleAvailable.HasValue)
-                {
-                    // Check if ScreenCapture type exists (module might be disabled in Package Manager > Built-in)
-                    var screenCaptureType = Type.GetType("UnityEngine.ScreenCapture, UnityEngine.ScreenCaptureModule")
-                        ?? Type.GetType("UnityEngine.ScreenCapture, UnityEngine.CoreModule");
-                    s_screenCaptureModuleAvailable = screenCaptureType != null;
-                    if (screenCaptureType != null)
-                    {
-                        s_captureScreenshotMethod = screenCaptureType.GetMethod("CaptureScreenshot",
-                            new Type[] { typeof(string), typeof(int) });
-                        s_captureScreenshotAsTextureMethod = screenCaptureType.GetMethod("CaptureScreenshotAsTexture",
-                            new Type[] { typeof(int) });
-                    }
-                }
-                return s_screenCaptureModuleAvailable.Value;
-            }
-        }
-
-        /// <summary>
-        /// Reflective invocation of ScreenCapture.CaptureScreenshotAsTexture(int). Returns
-        /// null when the Screen Capture module is disabled. Centralised so the only direct
-        /// reference to ScreenCapture lives here.
-        /// </summary>
-        internal static Texture2D InvokeCaptureScreenshotAsTexture(int superSize)
-        {
-            if (!IsScreenCaptureModuleAvailable || s_captureScreenshotAsTextureMethod == null)
-                return null;
-            return s_captureScreenshotAsTextureMethod.Invoke(null, new object[] { superSize }) as Texture2D;
-        }
-
-        /// <summary>
-        /// Error message to display when Screen Capture module is not available.
-        /// </summary>
-        public const string ScreenCaptureModuleNotAvailableError =
-            "The Screen Capture module (com.unity.modules.screencapture) is not enabled. " +
-            "To use screenshot capture with ScreenCapture API, please enable it in Unity: " +
-            "Window > Package Manager > Built-in > Screen Capture > Enable. " +
-            "Alternatively, MCP for Unity will use camera-based capture as a fallback if a Camera exists in the scene.";
 
         private static Camera FindAvailableCamera()
         {
@@ -127,44 +76,10 @@ namespace MCPForUnity.Runtime.Helpers
             bool ensureUniqueFileName = true,
             string folderOverride = null)
         {
-            // Use reflection to call ScreenCapture.CaptureScreenshot so the code compiles
-            // even when the Screen Capture module (com.unity.modules.screencapture) is disabled.
-            if (IsScreenCaptureModuleAvailable && s_captureScreenshotMethod != null)
-            {
-                ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, folderOverride, isAsync: true);
-                // ScreenCapture.CaptureScreenshot accepts paths relative to the project root.
-                s_captureScreenshotMethod.Invoke(null, new object[] { result.ProjectRelativePath, result.SuperSize });
-                return result;
-            }
-            else
-            {
-                // Module disabled or unavailable - try camera fallback
-                Debug.LogWarning("[MCP for Unity] " + ScreenCaptureModuleNotAvailableError);
-                return CaptureWithCameraFallback(fileName, superSize, ensureUniqueFileName, folderOverride);
-            }
-        }
-
-        private static ScreenshotCaptureResult CaptureWithCameraFallback(string fileName, int superSize, bool ensureUniqueFileName, string folderOverride)
-        {
-            if (!s_loggedLegacyScreenCaptureFallback)
-            {
-                Debug.Log("[MCP for Unity] Using camera-based screenshot capture. " +
-                    "This requires a Camera in the scene. For best results on Unity 2022.1+, ensure the Screen Capture module is enabled: " +
-                    "Window > Package Manager > Built-in > Screen Capture > Enable.");
-                s_loggedLegacyScreenCaptureFallback = true;
-            }
-
-            var cam = FindAvailableCamera();
-            if (cam == null)
-            {
-                throw new InvalidOperationException(
-                    "No camera found to capture screenshot. Camera-based capture requires a Camera in the scene. " +
-                    "Either add a Camera to your scene, or enable the Screen Capture module: " +
-                    "Window > Package Manager > Built-in > Screen Capture > Enable."
-                );
-            }
-
-            return CaptureFromCameraToProjectFolder(cam, fileName, superSize, ensureUniqueFileName, folderOverride: folderOverride);
+            ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, folderOverride, isAsync: true);
+            // ScreenCapture.CaptureScreenshot accepts paths relative to the project root.
+            ScreenCapture.CaptureScreenshot(result.ProjectRelativePath, result.SuperSize);
+            return result;
         }
 
         /// <summary>
@@ -283,7 +198,7 @@ namespace MCPForUnity.Runtime.Helpers
         /// <summary>
         /// Captures a screenshot using ScreenCapture.CaptureScreenshotAsTexture, which captures the
         /// final composited frame including UI Toolkit overlays, post-processing, etc.
-        /// Falls back to camera-based capture if ScreenCapture is unavailable.
+        /// Falls back to camera-based capture if ScreenCapture returns null at runtime.
         /// </summary>
         public static ScreenshotCaptureResult CaptureComposited(
             string fileName = null,
@@ -293,16 +208,6 @@ namespace MCPForUnity.Runtime.Helpers
             int maxResolution = 0,
             string folderOverride = null)
         {
-            if (!IsScreenCaptureModuleAvailable || s_captureScreenshotAsTextureMethod == null)
-            {
-                var fallbackCamera = FindAvailableCamera();
-                if (fallbackCamera != null)
-                    return CaptureFromCameraToProjectFolder(fallbackCamera, fileName, superSize, ensureUniqueFileName,
-                        includeImage, maxResolution, folderOverride: folderOverride);
-
-                throw new InvalidOperationException("ScreenCapture module is unavailable and no fallback camera found.");
-            }
-
             ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, folderOverride: folderOverride, isAsync: false);
             Texture2D tex = null;
             Texture2D downscaled = null;
@@ -315,9 +220,9 @@ namespace MCPForUnity.Runtime.Helpers
                 // composited; route through WaitForEndOfFrame instead.
                 tex = Application.isPlaying
                     ? CaptureCompositedAfterFrame(result.SuperSize)
-                    : InvokeCaptureScreenshotAsTexture(result.SuperSize);
+                    : ScreenCapture.CaptureScreenshotAsTexture(result.SuperSize);
 #else
-                tex = InvokeCaptureScreenshotAsTexture(result.SuperSize);
+                tex = ScreenCapture.CaptureScreenshotAsTexture(result.SuperSize);
 #endif
                 if (tex == null)
                 {
@@ -857,7 +762,7 @@ namespace MCPForUnity.Runtime.Helpers
         {
             yield return new WaitForEndOfFrame();
             Texture2D tex = null;
-            try { tex = ScreenshotUtility.InvokeCaptureScreenshotAsTexture(_superSize); }
+            try { tex = ScreenCapture.CaptureScreenshotAsTexture(_superSize); }
             catch (Exception ex) { Debug.LogError($"[MCP for Unity] CaptureScreenshotAsTexture failed: {ex.Message}"); }
             _onComplete?.Invoke(tex);
             Destroy(gameObject);
