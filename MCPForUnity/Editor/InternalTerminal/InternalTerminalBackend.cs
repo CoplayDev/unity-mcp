@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using MCPForUnity.Editor.Services.Transport.Transports;
 using UnityEditor;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
@@ -15,6 +16,7 @@ namespace WTL.InternalTerminal.Editor
         private int port;
         private bool dependenciesInstalled;
         private bool attached;
+        private IDisposable unityTcpLease;
 
         public bool IsRunning => process != null && !process.HasExited || attached && port > 0;
         public int Port => port;
@@ -46,21 +48,48 @@ namespace WTL.InternalTerminal.Editor
                 InternalTerminalPaths.BackendRoot,
                 true);
 
-            process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
-            process.OutputDataReceived += (_, e) => EmitLog(e.Data);
-            process.ErrorDataReceived += (_, e) => EmitLog(e.Data);
-            process.Exited += (_, _) => EditorApplication.delayCall += () => Exited?.Invoke();
+            try
+            {
+                EnsureUnityTcpLease();
+                var mcpConfig = InternalTerminalMcpConfig.Prepare(StdioBridgeHost.GetCurrentPort());
+                InjectUnityTcpEnvironment(startInfo);
+                InternalTerminalMcpConfig.Inject(startInfo, mcpConfig);
 
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-            attached = false;
+                process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
+                var startedProcess = process;
+                process.OutputDataReceived += (_, e) => EmitLog(e.Data);
+                process.ErrorDataReceived += (_, e) => EmitLog(e.Data);
+                process.Exited += (_, _) => EditorApplication.delayCall += () => OnProcessExited(startedProcess);
+
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+                attached = false;
+            }
+            catch
+            {
+                try
+                {
+                    if (process != null && !process.HasExited)
+                    {
+                        process.Kill();
+                        process.WaitForExit(1500);
+                    }
+                }
+                catch { }
+                try { process?.Dispose(); } catch { }
+                process = null;
+                ReleaseUnityTcpLease();
+                throw;
+            }
 
             EmitLog($"Started terminal backend on {Url}");
         }
 
         public void Stop()
         {
+            ReleaseUnityTcpLease();
+
             if (process == null)
             {
                 if (attached && port > 0)
@@ -111,6 +140,14 @@ namespace WTL.InternalTerminal.Editor
                 return false;
             }
 
+            EnsureUnityTcpLease();
+            if (!IsBackendUsingCurrentUnityTcp(existingPort))
+            {
+                ReleaseUnityTcpLease();
+                RequestBackendShutdown(existingPort);
+                return false;
+            }
+
             port = existingPort;
             attached = true;
             EmitLog($"Reconnected terminal backend on {Url}");
@@ -120,6 +157,62 @@ namespace WTL.InternalTerminal.Editor
         private static string BuildShellArgument(string shellExecutable)
         {
             return string.IsNullOrWhiteSpace(shellExecutable) ? string.Empty : $" --shell \"{shellExecutable}\"";
+        }
+
+        private static void InjectUnityTcpEnvironment(ProcessStartInfo startInfo)
+        {
+            startInfo.EnvironmentVariables["UNITY_MCP_INTERNAL_HOST"] = "127.0.0.1";
+            startInfo.EnvironmentVariables["UNITY_MCP_INTERNAL_PORT"] = StdioBridgeHost.GetCurrentPort().ToString();
+            startInfo.EnvironmentVariables["UNITY_MCP_INTERNAL_ROLE"] = "internal";
+            startInfo.EnvironmentVariables["UNITY_MCP_INTERNAL_CLIENT_ID"] = "wtl-internal-terminal";
+            startInfo.EnvironmentVariables["UNITY_MCP_LEGACY_PORT"] = StdioBridgeHost.GetCurrentPort().ToString();
+        }
+
+        private static bool IsBackendUsingCurrentUnityTcp(int candidatePort)
+        {
+            try
+            {
+                var request = WebRequest.CreateHttp($"http://127.0.0.1:{candidatePort}/health");
+                request.Timeout = 500;
+                using (var response = (HttpWebResponse)request.GetResponse())
+                using (var reader = new StreamReader(response.GetResponseStream()))
+                {
+                    var body = reader.ReadToEnd();
+                    return body.Contains("\"UNITY_MCP_INTERNAL_PORT\"")
+                        && body.Contains("\"" + StdioBridgeHost.GetCurrentPort() + "\"");
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void EnsureUnityTcpLease()
+        {
+            unityTcpLease ??= StdioBridgeHost.AcquireInternalLease();
+        }
+
+        private void ReleaseUnityTcpLease()
+        {
+            unityTcpLease?.Dispose();
+            unityTcpLease = null;
+        }
+
+        private void OnProcessExited(Process exitedProcess)
+        {
+            if (!ReferenceEquals(process, exitedProcess))
+            {
+                try { exitedProcess?.Dispose(); } catch { }
+                return;
+            }
+
+            ReleaseUnityTcpLease();
+            try { exitedProcess?.Dispose(); } catch { }
+            process = null;
+            attached = false;
+            port = 0;
+            Exited?.Invoke();
         }
 
         private static bool IsPortFree(int candidatePort)

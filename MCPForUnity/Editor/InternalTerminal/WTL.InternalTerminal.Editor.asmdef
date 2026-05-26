@@ -1,7 +1,9 @@
 {
   "name": "WTL.InternalTerminal.Editor",
   "rootNamespace": "WTL.InternalTerminal.Editor",
-  "references": [],
+  "references": [
+    "MCPForUnity.Editor"
+  ],
   "includePlatforms": [
     "Editor"
   ],

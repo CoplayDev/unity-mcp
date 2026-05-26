@@ -33,7 +33,9 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         public Task StopAsync()
         {
             StdioBridgeHost.Stop();
-            _state = TransportState.Disconnected("stdio");
+            _state = StdioBridgeHost.HasInternalLease && StdioBridgeHost.IsRunning
+                ? TransportState.Disconnected("stdio", "Reserved for internal terminal")
+                : TransportState.Disconnected("stdio");
             return Task.CompletedTask;
         }
 

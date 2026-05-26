@@ -154,7 +154,231 @@ namespace MCPForUnityTests.Editor.Services
             }
         }
 
+        [UnityTest]
+        public IEnumerator InternalClient_WhilePrimaryConnected_DoesNotClosePrimary()
+        {
+            if (!StdioBridgeHost.IsRunning)
+            {
+                Assert.Ignore("StdioBridgeHost is not running; skipping reconnect test.");
+                yield break;
+            }
+
+            int port = StdioBridgeHost.GetCurrentPort();
+
+            using (var primary = new TcpClient())
+            using (var internalClient = new TcpClient())
+            {
+                Assert.IsTrue(primary.ConnectAsync("127.0.0.1", port).Wait(ConnectTimeoutMs),
+                    "Primary client connect timed out");
+                primary.ReceiveTimeout = ReadTimeoutMs;
+                var primaryStream = primary.GetStream();
+                string primaryHandshake = ReadLine(primaryStream, ReadTimeoutMs);
+                Assert.That(primaryHandshake, Does.Contain("FRAMING=1"), "Primary client should receive handshake");
+
+                SendFrame(primaryStream, Encoding.UTF8.GetBytes("ping"));
+                byte[] primaryPong = ReadFrame(primaryStream, ReadTimeoutMs);
+                Assert.That(Encoding.UTF8.GetString(primaryPong), Does.Contain("pong"));
+
+                Assert.IsTrue(internalClient.ConnectAsync("127.0.0.1", port).Wait(ConnectTimeoutMs),
+                    "Internal client connect timed out");
+                internalClient.ReceiveTimeout = ReadTimeoutMs;
+                var internalStream = internalClient.GetStream();
+                string internalHandshake = ReadLine(internalStream, ReadTimeoutMs);
+                Assert.That(internalHandshake, Does.Contain("FRAMING=1"), "Internal client should receive handshake");
+
+                SendFrame(internalStream, Encoding.UTF8.GetBytes(
+                    "{\"type\":\"hello\",\"role\":\"internal\",\"client_id\":\"test-terminal\"}"));
+                byte[] helloBytes = ReadFrame(internalStream, ReadTimeoutMs);
+                Assert.That(Encoding.UTF8.GetString(helloBytes), Does.Contain("ready"));
+
+                SendFrame(internalStream, Encoding.UTF8.GetBytes("ping"));
+                byte[] internalPong = ReadFrame(internalStream, ReadTimeoutMs);
+                Assert.That(Encoding.UTF8.GetString(internalPong), Does.Contain("pong"));
+
+                yield return null;
+
+                SendFrame(primaryStream, Encoding.UTF8.GetBytes("ping"));
+                byte[] secondPrimaryPong = ReadFrame(primaryStream, ReadTimeoutMs);
+                Assert.That(Encoding.UTF8.GetString(secondPrimaryPong), Does.Contain("pong"),
+                    "Primary client should remain connected after internal client connects");
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator Stop_WithInternalLease_ClosesPrimaryButKeepsInternalClient()
+        {
+            if (!StdioBridgeHost.IsRunning)
+            {
+                Assert.Ignore("StdioBridgeHost is not running; skipping reconnect test.");
+                yield break;
+            }
+
+            int port = StdioBridgeHost.GetCurrentPort();
+
+            bool restoreBridge = false;
+            try
+            {
+                using (var lease = StdioBridgeHost.AcquireInternalLease())
+                using (var primary = new TcpClient())
+                using (var internalClient = new TcpClient())
+                {
+                    Assert.IsTrue(primary.ConnectAsync("127.0.0.1", port).Wait(ConnectTimeoutMs),
+                        "Primary client connect timed out");
+                    primary.ReceiveTimeout = ReadTimeoutMs;
+                    var primaryStream = primary.GetStream();
+                    Assert.That(ReadLine(primaryStream, ReadTimeoutMs), Does.Contain("FRAMING=1"));
+                    SendFrame(primaryStream, Encoding.UTF8.GetBytes("ping"));
+                    Assert.That(Encoding.UTF8.GetString(ReadFrame(primaryStream, ReadTimeoutMs)), Does.Contain("pong"));
+
+                    Assert.IsTrue(internalClient.ConnectAsync("127.0.0.1", port).Wait(ConnectTimeoutMs),
+                        "Internal client connect timed out");
+                    internalClient.ReceiveTimeout = ReadTimeoutMs;
+                    var internalStream = internalClient.GetStream();
+                    Assert.That(ReadLine(internalStream, ReadTimeoutMs), Does.Contain("FRAMING=1"));
+                    SendFrame(internalStream, Encoding.UTF8.GetBytes(
+                        "{\"type\":\"hello\",\"role\":\"internal\",\"client_id\":\"lease-test\"}"));
+                    Assert.That(Encoding.UTF8.GetString(ReadFrame(internalStream, ReadTimeoutMs)), Does.Contain("ready"));
+
+                    StdioBridgeHost.Stop();
+                    restoreBridge = true;
+                    yield return null;
+
+                    bool primaryDisconnected = false;
+                    try
+                    {
+                        SendFrame(primaryStream, Encoding.UTF8.GetBytes("ping"));
+                        ReadFrame(primaryStream, 2000);
+                    }
+                    catch
+                    {
+                        primaryDisconnected = true;
+                    }
+
+                    Assert.IsTrue(primaryDisconnected, "Primary client should be closed when stdio transport stops");
+
+                    SendFrame(internalStream, Encoding.UTF8.GetBytes("ping"));
+                    Assert.That(Encoding.UTF8.GetString(ReadFrame(internalStream, ReadTimeoutMs)), Does.Contain("pong"),
+                        "Internal client should remain connected while lease is active");
+                }
+            }
+            finally
+            {
+                if (restoreBridge)
+                {
+                    StdioBridgeHost.Start();
+                }
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator MultipleInternalClients_WithSameClientId_RemainConnected()
+        {
+            if (!StdioBridgeHost.IsRunning)
+            {
+                Assert.Ignore("StdioBridgeHost is not running; skipping reconnect test.");
+                yield break;
+            }
+
+            int port = StdioBridgeHost.GetCurrentPort();
+
+            using (var first = new TcpClient())
+            using (var second = new TcpClient())
+            {
+                Assert.IsTrue(first.ConnectAsync("127.0.0.1", port).Wait(ConnectTimeoutMs),
+                    "First internal client connect timed out");
+                first.ReceiveTimeout = ReadTimeoutMs;
+                var firstStream = first.GetStream();
+                Assert.That(ReadLine(firstStream, ReadTimeoutMs), Does.Contain("FRAMING=1"));
+                SendFrame(firstStream, Encoding.UTF8.GetBytes(
+                    "{\"type\":\"hello\",\"role\":\"internal\",\"client_id\":\"shared-terminal\"}"));
+                Assert.That(Encoding.UTF8.GetString(ReadFrame(firstStream, ReadTimeoutMs)), Does.Contain("ready"));
+
+                Assert.IsTrue(second.ConnectAsync("127.0.0.1", port).Wait(ConnectTimeoutMs),
+                    "Second internal client connect timed out");
+                second.ReceiveTimeout = ReadTimeoutMs;
+                var secondStream = second.GetStream();
+                Assert.That(ReadLine(secondStream, ReadTimeoutMs), Does.Contain("FRAMING=1"));
+                SendFrame(secondStream, Encoding.UTF8.GetBytes(
+                    "{\"type\":\"hello\",\"role\":\"internal\",\"client_id\":\"shared-terminal\"}"));
+                Assert.That(Encoding.UTF8.GetString(ReadFrame(secondStream, ReadTimeoutMs)), Does.Contain("ready"));
+
+                yield return null;
+
+                SendFrame(firstStream, Encoding.UTF8.GetBytes("ping"));
+                Assert.That(Encoding.UTF8.GetString(ReadFrame(firstStream, ReadTimeoutMs)), Does.Contain("pong"),
+                    "First internal client should remain connected after a second internal client with the same id connects");
+
+                SendFrame(secondStream, Encoding.UTF8.GetBytes("ping"));
+                Assert.That(Encoding.UTF8.GetString(ReadFrame(secondStream, ReadTimeoutMs)), Does.Contain("pong"),
+                    "Second internal client should remain connected");
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator InternalLease_WhenItStartsBridge_StopsBridgeOnDispose()
+        {
+            bool wasRunning = StdioBridgeHost.IsRunning;
+            try
+            {
+                if (wasRunning)
+                {
+                    StdioBridgeHost.Stop(true);
+                    yield return null;
+                }
+
+                Assert.IsFalse(StdioBridgeHost.IsRunning, "Bridge should be stopped before testing lease-owned startup");
+
+                int leasedPort;
+                using (StdioBridgeHost.AcquireInternalLease())
+                {
+                    Assert.IsTrue(StdioBridgeHost.IsRunning, "Acquiring an internal lease should start the bridge when it is stopped");
+                    leasedPort = StdioBridgeHost.GetCurrentPort();
+
+                    using (var internalClient = new TcpClient())
+                    {
+                        Assert.IsTrue(internalClient.ConnectAsync("127.0.0.1", leasedPort).Wait(ConnectTimeoutMs),
+                            "Internal client connect timed out");
+                        internalClient.ReceiveTimeout = ReadTimeoutMs;
+                        var stream = internalClient.GetStream();
+                        Assert.That(ReadLine(stream, ReadTimeoutMs), Does.Contain("FRAMING=1"));
+                        SendFrame(stream, Encoding.UTF8.GetBytes(
+                            "{\"type\":\"hello\",\"role\":\"internal\",\"client_id\":\"lease-owner\"}"));
+                        Assert.That(Encoding.UTF8.GetString(ReadFrame(stream, ReadTimeoutMs)), Does.Contain("ready"));
+                    }
+                }
+
+                yield return null;
+                Assert.IsFalse(StdioBridgeHost.IsRunning,
+                    "Releasing the final lease should stop a bridge that was started only for the internal terminal");
+
+                Assert.IsFalse(CanConnect(leasedPort, 500),
+                    "Lease-owned bridge should no longer accept connections after the lease is disposed");
+            }
+            finally
+            {
+                if (wasRunning && !StdioBridgeHost.IsRunning)
+                {
+                    StdioBridgeHost.Start();
+                }
+            }
+        }
+
         #region Frame protocol helpers
+
+        private static bool CanConnect(int port, int timeoutMs)
+        {
+            using (var probe = new TcpClient())
+            {
+                try
+                {
+                    return probe.ConnectAsync("127.0.0.1", port).Wait(timeoutMs);
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+        }
 
         private static string ReadLine(NetworkStream stream, int timeoutMs)
         {

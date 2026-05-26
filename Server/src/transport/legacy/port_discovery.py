@@ -32,6 +32,66 @@ class PortDiscovery:
     CONNECT_TIMEOUT = 0.3  # seconds, keep this snappy during discovery
 
     @staticmethod
+    def _get_internal_port() -> int | None:
+        raw_port = (
+            os.environ.get("UNITY_MCP_INTERNAL_PORT")
+            or os.environ.get("UNITY_MCP_LEGACY_PORT")
+            or ""
+        ).strip()
+        if not raw_port:
+            return None
+        try:
+            port = int(raw_port)
+            return port if 0 < port <= 65535 else None
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _is_internal_mode() -> bool:
+        return os.environ.get("UNITY_MCP_INTERNAL_ROLE", "").strip().lower() == "internal"
+
+    @staticmethod
+    def _get_internal_hello_payload() -> bytes | None:
+        if not PortDiscovery._is_internal_mode():
+            return None
+
+        client_id = (
+            os.environ.get("UNITY_MCP_INTERNAL_CLIENT_ID", "").strip()
+            or "mcp-for-unity-internal"
+        )
+        return json.dumps({
+            "type": "hello",
+            "role": "internal",
+            "client_id": client_id,
+        }).encode("utf-8")
+
+    @staticmethod
+    def _send_framed(sock: socket.socket, payload: bytes) -> None:
+        sock.sendall(struct.pack(">Q", len(payload)) + payload)
+
+    @staticmethod
+    def _recv_exact(sock: socket.socket, expected: int) -> bytes | None:
+        chunks = bytearray()
+        while len(chunks) < expected:
+            chunk = sock.recv(expected - len(chunks))
+            if not chunk:
+                return None
+            chunks.extend(chunk)
+        return bytes(chunks)
+
+    @staticmethod
+    def _recv_framed(sock: socket.socket, max_length: int = 10000) -> bytes | None:
+        response_header = PortDiscovery._recv_exact(sock, 8)
+        if response_header is None:
+            return None
+
+        response_length = struct.unpack(">Q", response_header)[0]
+        if response_length > max_length:
+            return None
+
+        return PortDiscovery._recv_exact(sock, response_length)
+
+    @staticmethod
     def get_registry_path() -> Path:
         """Get the path to the port registry file"""
         return PortDiscovery.get_registry_dir() / PortDiscovery.REGISTRY_FILE
@@ -79,30 +139,24 @@ class PortDiscovery:
 
                     # 2. Send framed ping command
                     # Frame format: 8-byte length header (big-endian uint64) + payload
+                    hello_payload = PortDiscovery._get_internal_hello_payload()
+                    if hello_payload is not None:
+                        PortDiscovery._send_framed(s, hello_payload)
+                        hello_response = PortDiscovery._recv_framed(s)
+                        if hello_response is None:
+                            return False
+                        try:
+                            hello_json = json.loads(hello_response.decode("utf-8"))
+                            if hello_json.get("status") != "success":
+                                return False
+                        except Exception:
+                            return False
+
                     payload = b"ping"
-                    header = struct.pack('>Q', len(payload))
-                    s.sendall(header + payload)
+                    PortDiscovery._send_framed(s, payload)
 
                     # 3. Receive framed response
-                    # Helper to receive exact number of bytes
-                    def _recv_exact(expected: int) -> bytes | None:
-                        chunks = bytearray()
-                        while len(chunks) < expected:
-                            chunk = s.recv(expected - len(chunks))
-                            if not chunk:
-                                return None
-                            chunks.extend(chunk)
-                        return bytes(chunks)
-
-                    response_header = _recv_exact(8)
-                    if response_header is None:
-                        return False
-
-                    response_length = struct.unpack('>Q', response_header)[0]
-                    if response_length > 10000:  # Sanity check
-                        return False
-
-                    response = _recv_exact(response_length)
+                    response = PortDiscovery._recv_framed(s)
                     if response is None:
                         return False
                     return b'"message":"pong"' in response
@@ -140,6 +194,20 @@ class PortDiscovery:
         Returns:
             Port number to connect to
         """
+        internal_port = PortDiscovery._get_internal_port()
+        if PortDiscovery._is_internal_mode():
+            if internal_port:
+                if PortDiscovery._try_probe_unity_mcp(internal_port):
+                    logger.info(f"Using Unity internal bridge port from environment: {internal_port}")
+                else:
+                    logger.warning(
+                        f"Unity internal bridge port {internal_port} did not respond during discovery"
+                    )
+                return internal_port
+
+            logger.warning("UNITY_MCP_INTERNAL_ROLE=internal but no internal port was provided")
+            return PortDiscovery.DEFAULT_PORT
+
         # Prefer the latest heartbeat status if it points to a responsive port
         status = PortDiscovery._read_latest_status()
         if status:
@@ -230,6 +298,23 @@ class PortDiscovery:
         Returns:
             List of UnityInstanceInfo objects for all discovered instances
         """
+        internal_port = PortDiscovery._get_internal_port()
+        if PortDiscovery._is_internal_mode():
+            if not internal_port:
+                logger.warning("UNITY_MCP_INTERNAL_ROLE=internal but no internal port was provided")
+                return []
+
+            instance = UnityInstanceInfo(
+                id=f"InternalTerminal@{internal_port}",
+                name="InternalTerminal",
+                path="",
+                hash=str(internal_port),
+                port=internal_port,
+                status="running" if PortDiscovery._try_probe_unity_mcp(internal_port) else "unknown",
+                last_heartbeat=datetime.now(),
+            )
+            return [instance]
+
         instances_by_port: dict[int, tuple[UnityInstanceInfo, datetime]] = {}
         base = PortDiscovery.get_registry_dir()
 

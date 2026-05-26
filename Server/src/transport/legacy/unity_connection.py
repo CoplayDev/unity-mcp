@@ -50,6 +50,37 @@ class UnityConnection:
         except OSError as exc:
             logger.debug(f"Unable to set TCP_NODELAY: {exc}")
 
+    def _internal_hello_payload(self) -> bytes | None:
+        role = os.environ.get("UNITY_MCP_INTERNAL_ROLE", "").strip().lower()
+        if role != "internal":
+            return None
+
+        client_id = (
+            os.environ.get("UNITY_MCP_INTERNAL_CLIENT_ID", "").strip()
+            or "mcp-for-unity-internal"
+        )
+        return json.dumps({
+            "type": "hello",
+            "role": "internal",
+            "client_id": client_id,
+        }).encode("utf-8")
+
+    def _send_internal_hello_if_needed(self) -> None:
+        payload = self._internal_hello_payload()
+        if payload is None:
+            return
+        if not self.use_framing:
+            raise ConnectionError("Internal Unity MCP clients require FRAMING=1")
+
+        self.sock.sendall(struct.pack(">Q", len(payload)))
+        self.sock.sendall(payload)
+        response_data = self.receive_full_response(self.sock)
+        response = json.loads(response_data.decode("utf-8"))
+        if response.get("status") != "success":
+            raise ConnectionError(
+                response.get("error") or "Unity TCP bridge rejected internal client"
+            )
+
     def connect(self) -> bool:
         """Establish a connection to the Unity Editor."""
         if self.sock:
@@ -93,6 +124,7 @@ class UnityConnection:
                         self.use_framing = True
                         logger.debug(
                             'MCP for Unity handshake received: FRAMING=1 (strict)')
+                        self._send_internal_hello_if_needed()
                     else:
                         if require_framing:
                             # Best-effort plain-text advisory for legacy peers

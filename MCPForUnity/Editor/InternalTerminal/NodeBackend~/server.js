@@ -1,4 +1,6 @@
+const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const http = require('http');
 const WebSocket = require('ws');
 const pty = require('node-pty');
@@ -30,7 +32,17 @@ if (!port) {
 const server = http.createServer((request, response) => {
   if (request.url === '/health') {
     response.writeHead(200, { 'content-type': 'application/json' });
-    response.end(JSON.stringify({ ok: true, shell, cwd }));
+    response.end(JSON.stringify({
+      ok: true,
+      shell,
+      cwd,
+      env: {
+        UNITY_MCP_INTERNAL_HOST: process.env.UNITY_MCP_INTERNAL_HOST || '',
+        UNITY_MCP_INTERNAL_PORT: process.env.UNITY_MCP_INTERNAL_PORT || '',
+        UNITY_MCP_INTERNAL_ROLE: process.env.UNITY_MCP_INTERNAL_ROLE || '',
+        UNITY_MCP_INTERNAL_CLIENT_ID: process.env.UNITY_MCP_INTERNAL_CLIENT_ID || ''
+      }
+    }));
     return;
   }
 
@@ -92,11 +104,7 @@ function getSession() {
     cols: terminal.cols,
     rows: terminal.rows,
     cwd,
-    env: {
-      ...process.env,
-      TERM: 'xterm-256color',
-      COLORTERM: 'truecolor'
-    }
+    env: buildShellEnvironment()
   });
 
   session = { terminal, term, screenTimer: null };
@@ -276,6 +284,20 @@ function handleScroll(socket, terminal, term, lines) {
 
   terminal.scrollLines(lines);
   sendScreen(socket, terminal);
+}
+
+function buildShellEnvironment() {
+  const env = {
+    ...process.env,
+    TERM: 'xterm-256color',
+    COLORTERM: 'truecolor'
+  };
+
+  if (process.platform === 'win32') {
+    ensureWindowsEnvironment(env);
+  }
+
+  return env;
 }
 
 function handleMouseWheel(socket, terminal, term, message) {
@@ -518,15 +540,18 @@ function parseArgs(argv) {
 
 function defaultShell() {
   if (process.platform === 'win32') {
-    if (findOnPath('pwsh.exe')) {
-      return { file: 'pwsh.exe', args: ['-NoLogo'] };
+    const pwsh = findExecutable('pwsh.exe');
+    if (pwsh) {
+      return { file: pwsh, args: ['-NoLogo'] };
     }
 
-    if (findOnPath('powershell.exe')) {
-      return { file: 'powershell.exe', args: ['-NoLogo'] };
+    const powershell = findExecutable('powershell.exe');
+    if (powershell) {
+      return { file: powershell, args: ['-NoLogo'] };
     }
 
-    return { file: process.env.ComSpec || 'cmd.exe', args: ['/K', 'chcp 65001 > nul'] };
+    const cmd = findExecutable('cmd.exe') || process.env.ComSpec || 'cmd.exe';
+    return { file: cmd, args: ['/K', 'chcp.com 65001 > nul'] };
   }
 
   return {
@@ -552,21 +577,85 @@ function clamp(value, min, max) {
 }
 
 function findOnPath(executable) {
-  const pathValue = process.env.PATH || '';
-  const directories = pathValue.split(path.delimiter);
-  for (const directory of directories) {
+  return Boolean(findExecutable(executable));
+}
+
+function findExecutable(executable) {
+  for (const directory of getSearchDirectories()) {
     if (!directory) {
       continue;
     }
 
     try {
-      if (require('fs').existsSync(path.join(directory, executable))) {
-        return true;
+      const candidate = path.join(directory, executable);
+      if (fs.existsSync(candidate)) {
+        return candidate;
       }
     } catch {
       // Ignore invalid PATH entries.
     }
   }
 
-  return false;
+  return null;
+}
+
+function getSearchDirectories() {
+  const directories = [];
+  const seen = new Set();
+  addPathEntries(directories, seen, process.env.PATH || process.env.Path || process.env.path || '');
+
+  if (process.platform === 'win32') {
+    const systemRoot = process.env.SystemRoot || process.env.windir || 'C:\\Windows';
+    addDirectory(directories, seen, process.env.ComSpec ? path.dirname(process.env.ComSpec) : '');
+    addDirectory(directories, seen, path.join(systemRoot, 'System32'));
+    addDirectory(directories, seen, path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0'));
+    addDirectory(directories, seen, path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WindowsApps'));
+    addDirectory(directories, seen, path.join(process.env.ProgramFiles || 'C:\\Program Files', 'nodejs'));
+    addDirectory(directories, seen, path.join(process.env.APPDATA || '', 'npm'));
+  }
+
+  return directories;
+}
+
+function addPathEntries(directories, seen, value) {
+  for (const entry of String(value || '').split(path.delimiter)) {
+    addDirectory(directories, seen, entry);
+  }
+}
+
+function addDirectory(directories, seen, directory) {
+  if (!directory) {
+    return;
+  }
+
+  const normalized = path.resolve(directory);
+  const key = process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+  if (!seen.has(key)) {
+    seen.add(key);
+    directories.push(normalized);
+  }
+}
+
+function ensureWindowsEnvironment(env) {
+  const systemRoot = env.SystemRoot || env.windir || 'C:\\Windows';
+  env.SystemRoot = systemRoot;
+  env.windir = env.windir || systemRoot;
+  env.ComSpec = env.ComSpec || path.join(systemRoot, 'System32', 'cmd.exe');
+  env.PATHEXT = env.PATHEXT || '.COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.CPL';
+
+  const pathValue = env.PATH || env.Path || env.path || '';
+  const directories = [];
+  const seen = new Set();
+  addPathEntries(directories, seen, pathValue);
+  addDirectory(directories, seen, path.join(systemRoot, 'System32'));
+  addDirectory(directories, seen, systemRoot);
+  addDirectory(directories, seen, path.join(systemRoot, 'System32', 'Wbem'));
+  addDirectory(directories, seen, path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0'));
+  addDirectory(directories, seen, path.join(systemRoot, 'System32', 'OpenSSH'));
+  addDirectory(directories, seen, path.join(process.env.ProgramFiles || 'C:\\Program Files', 'nodejs'));
+  addDirectory(directories, seen, path.join(env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'npm'));
+
+  const updatedPath = directories.join(path.delimiter);
+  env.PATH = updatedPath;
+  env.Path = updatedPath;
 }

@@ -29,6 +29,13 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         public long EnqueuedAtMs;
     }
 
+    class ConnectedBridgeClient
+    {
+        public TcpClient Client;
+        public string Role;
+        public string ClientId;
+    }
+
     [InitializeOnLoad]
     public static class StdioBridgeHost
     {
@@ -37,7 +44,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private static readonly object lockObj = new();
         private static readonly object startStopLock = new();
         private static readonly object clientsLock = new();
-        private static readonly HashSet<TcpClient> activeClients = new();
+        private static readonly Dictionary<TcpClient, ConnectedBridgeClient> activeClients = new();
         private static CancellationTokenSource cts;
         private static Task listenerTask;
         private static int processingCommands = 0;
@@ -56,6 +63,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         private static readonly Stopwatch _uptime = Stopwatch.StartNew();
         private static volatile int _consecutiveTimeouts = 0;
         private static bool _processCommandsHooked = false;
+        private static int internalLeaseCount = 0;
+        private static bool internalLeaseOwnsListener = false;
 
         private static void IoInfo(string s) { McpLog.Info(s, always: false); }
 
@@ -75,15 +84,50 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         public static bool IsRunning => isRunning;
         public static int GetCurrentPort() => currentUnityPort;
         public static bool IsAutoConnectMode() => isAutoConnectMode;
+        public static bool HasInternalLease => internalLeaseCount > 0;
+
+        public static IDisposable AcquireInternalLease()
+        {
+            lock (startStopLock)
+            {
+                bool startedForLease = false;
+                if (!IsRunning)
+                {
+                    Start();
+                    if (!IsRunning)
+                    {
+                        throw new InvalidOperationException("Unable to acquire internal Unity MCP bridge lease because the stdio bridge failed to start.");
+                    }
+
+                    startedForLease = true;
+                }
+
+                Interlocked.Increment(ref internalLeaseCount);
+
+                if (startedForLease)
+                {
+                    internalLeaseOwnsListener = true;
+                }
+
+                return new InternalBridgeLease();
+            }
+        }
 
         public static void StartAutoConnect()
         {
-            Stop();
+            if (!HasInternalLease || !IsRunning)
+            {
+                Stop(force: true);
+            }
 
             try
             {
-                currentUnityPort = PortManager.GetPortWithFallback();
-                Start();
+                if (!IsRunning)
+                {
+                    currentUnityPort = PortManager.GetPortWithFallback();
+                    Start();
+                }
+
                 isAutoConnectMode = true;
 
                 TelemetryHelper.RecordBridgeStartup();
@@ -132,7 +176,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     EditorApplication.update += EnsureStartedOnEditorIdle;
                 }
             }
-            EditorApplication.quitting += Stop;
+            EditorApplication.quitting += StopForEditorQuit;
             EditorApplication.playModeStateChanged += _ =>
             {
                 if (ShouldAutoStartBridge())
@@ -317,8 +361,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                         _processCommandsHooked = true;
                         EditorApplication.update += ProcessCommands;
                     }
-                    try { EditorApplication.quitting -= Stop; } catch { }
-                    try { EditorApplication.quitting += Stop; } catch { }
+                    try { EditorApplication.quitting -= StopForEditorQuit; } catch { }
+                    try { EditorApplication.quitting += StopForEditorQuit; } catch { }
                     heartbeatSeq++;
                     WriteHeartbeat(false, "ready");
                     nextHeartbeatAt = EditorApplication.timeSinceStartup + 0.5f;
@@ -354,40 +398,74 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
         public static void Stop()
         {
+            Stop(force: false);
+        }
+
+        public static void Stop(bool force)
+        {
             Task toWait = null;
+            bool preserveInternalListener = false;
             lock (startStopLock)
             {
-                if (!isRunning)
+                if (!force && HasInternalLease)
+                {
+                    preserveInternalListener = true;
+                    isAutoConnectMode = false;
+                    if (IsDebugEnabled())
+                    {
+                        McpLog.Info("StdioBridgeHost preserving internal terminal listener while stopping primary stdio clients.", always: false);
+                    }
+                }
+
+                if (!preserveInternalListener && !isRunning)
                 {
                     return;
                 }
 
-                try
+                if (!preserveInternalListener)
                 {
-                    isRunning = false;
+                    internalLeaseOwnsListener = false;
+                    try
+                    {
+                        isRunning = false;
 
-                    var cancel = cts;
-                    cts = null;
-                    try { cancel?.Cancel(); } catch { }
+                        var cancel = cts;
+                        cts = null;
+                        try { cancel?.Cancel(); } catch { }
 
-                    try { listener?.Stop(); } catch { }
-                    try { listener?.Server?.Dispose(); } catch { }
-                    listener = null;
+                        try { listener?.Stop(); } catch { }
+                        try { listener?.Server?.Dispose(); } catch { }
+                        listener = null;
 
-                    toWait = listenerTask;
-                    listenerTask = null;
-                }
-                catch (Exception ex)
-                {
-                    McpLog.Error($"Error stopping StdioBridgeHost: {ex.Message}");
+                        toWait = listenerTask;
+                        listenerTask = null;
+                    }
+                    catch (Exception ex)
+                    {
+                        McpLog.Error($"Error stopping StdioBridgeHost: {ex.Message}");
+                    }
                 }
             }
 
             TcpClient[] toClose;
             lock (clientsLock)
             {
-                toClose = activeClients.ToArray();
-                activeClients.Clear();
+                if (preserveInternalListener)
+                {
+                    toClose = activeClients.Values
+                        .Where(client => client.Role == "primary" || string.IsNullOrEmpty(client.Role))
+                        .Select(client => client.Client)
+                        .ToArray();
+                    foreach (var client in toClose)
+                    {
+                        activeClients.Remove(client);
+                    }
+                }
+                else
+                {
+                    toClose = activeClients.Keys.ToArray();
+                    activeClients.Clear();
+                }
             }
             foreach (var c in toClose)
             {
@@ -400,10 +478,17 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 try { toWait.Wait(500); } catch { }
             }
 
+            if (preserveInternalListener)
+            {
+                internalLeaseOwnsListener = true;
+                if (IsDebugEnabled()) McpLog.Info("StdioBridgeHost primary stdio clients stopped; internal listener preserved.");
+                return;
+            }
+
             // ProcessCommands stays permanently hooked (guarded by _processCommandsHooked)
             // to eliminate the registration gap between Stop and Start during domain reload.
             // ProcessCommands already exits early when !isRunning.
-            try { EditorApplication.quitting -= Stop; } catch { }
+            try { EditorApplication.quitting -= StopForEditorQuit; } catch { }
 
             try
             {
@@ -473,7 +558,10 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 int clientCount;
                 lock (clientsLock)
                 {
-                    activeClients.Add(client);
+                    activeClients[client] = new ConnectedBridgeClient
+                    {
+                        Client = client
+                    };
                     clientCount = activeClients.Count;
                 }
                 try
@@ -507,23 +595,6 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                         return;
                     }
 
-                    // In stdio transport there is only ever one active Python server.
-                    // A new connection means the old one is dead — close stale clients so
-                    // their hung ReadFrameAsUtf8Async calls throw and exit cleanly.
-                    TcpClient[] staleClients;
-                    lock (clientsLock)
-                    {
-                        staleClients = activeClients.Where(c => c != client).ToArray();
-                    }
-                    if (staleClients.Length > 0)
-                    {
-                        McpLog.Info($"Closing {staleClients.Length} stale client(s) after new connection", always: false);
-                        foreach (var stale in staleClients)
-                        {
-                            try { stale.Close(); } catch { }
-                        }
-                    }
-
                     while (isRunning && !token.IsCancellationRequested)
                     {
                         try
@@ -539,6 +610,14 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                                 }
                             }
                             catch { }
+
+                            if (await TryHandleClientHelloAsync(client, commandText, stream, token).ConfigureAwait(false))
+                            {
+                                continue;
+                            }
+
+                            EnsureClientClassified(client, "primary", null);
+
                             string commandId = Guid.NewGuid().ToString();
                             var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -651,6 +730,128 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     lock (clientsLock) { remaining = activeClients.Count; }
                     McpLog.Info($"Client handler exited (remaining clients: {remaining})", always: false);
                 }
+            }
+        }
+
+        private static void StopForEditorQuit()
+        {
+            Stop(force: true);
+        }
+
+        private sealed class InternalBridgeLease : IDisposable
+        {
+            private int disposed;
+
+            public void Dispose()
+            {
+                if (Interlocked.Exchange(ref disposed, 1) == 1)
+                {
+                    return;
+                }
+
+                int remainingLeases = Interlocked.Decrement(ref internalLeaseCount);
+                if (remainingLeases <= 0)
+                {
+                    Interlocked.Exchange(ref internalLeaseCount, 0);
+                    if (internalLeaseOwnsListener && IsRunning && !isAutoConnectMode)
+                    {
+                        Stop(force: true);
+                    }
+                }
+            }
+        }
+
+        private static async Task<bool> TryHandleClientHelloAsync(TcpClient client, string commandText, NetworkStream stream, CancellationToken token)
+        {
+            ConnectedBridgeClient state;
+            lock (clientsLock)
+            {
+                if (!activeClients.TryGetValue(client, out state) || !string.IsNullOrEmpty(state.Role))
+                {
+                    return false;
+                }
+            }
+
+            JObject hello;
+            try
+            {
+                hello = JObject.Parse(commandText);
+            }
+            catch
+            {
+                return false;
+            }
+
+            if (!string.Equals(hello.Value<string>("type"), "hello", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var role = hello.Value<string>("role");
+            if (!string.Equals(role, "internal", StringComparison.OrdinalIgnoreCase))
+            {
+                role = "primary";
+            }
+
+            var clientId = hello.Value<string>("client_id") ?? hello.Value<string>("clientId");
+            EnsureClientClassified(client, role, clientId);
+
+            var response = new
+            {
+                status = "success",
+                result = new
+                {
+                    message = "ready",
+                    role,
+                    port = currentUnityPort
+                }
+            };
+
+            var responseBytes = System.Text.Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(response));
+            await WriteFrameAsync(stream, responseBytes, token).ConfigureAwait(false);
+            return true;
+        }
+
+        private static void EnsureClientClassified(TcpClient client, string role, string clientId)
+        {
+            TcpClient[] clientsToClose;
+            lock (clientsLock)
+            {
+                if (!activeClients.TryGetValue(client, out var state))
+                {
+                    return;
+                }
+
+                if (string.IsNullOrEmpty(state.Role))
+                {
+                    state.Role = string.Equals(role, "internal", StringComparison.OrdinalIgnoreCase)
+                        ? "internal"
+                        : "primary";
+                    state.ClientId = string.IsNullOrWhiteSpace(clientId) ? null : clientId;
+                }
+
+                if (state.Role == "internal")
+                {
+                    clientsToClose = Array.Empty<TcpClient>();
+                }
+                else
+                {
+                    clientsToClose = activeClients.Values
+                        .Where(other => other.Client != client && other.Role == "primary")
+                        .Select(other => other.Client)
+                        .ToArray();
+                }
+            }
+
+            if (clientsToClose.Length == 0)
+            {
+                return;
+            }
+
+            McpLog.Info($"Closing {clientsToClose.Length} stale {role} client(s) after new connection", always: false);
+            foreach (var stale in clientsToClose)
+            {
+                try { stale.Close(); } catch { }
             }
         }
 
