@@ -53,13 +53,21 @@ namespace WTL.InternalTerminal.Editor
                 throw new InvalidOperationException("Unity Console entry accessors were not found.");
             }
 
-            var selectedRows = activeOnly ? GetActiveRows() : GetSelectedRows(logEntriesType);
+            var selectedRows = activeOnly ? GetSelectedRows(logEntriesType) : new List<int>();
             var rowCount = Convert.ToInt32(getCount.Invoke(null, null));
             if (selectedRows.Count == 0)
             {
-                for (var row = 0; row < rowCount; row++)
+                if (activeOnly)
                 {
-                    selectedRows.Add(row);
+                    selectedRows = GetActiveRows(logEntriesType);
+                }
+
+                if (selectedRows.Count == 0 && !activeOnly)
+                {
+                    for (var row = 0; row < rowCount; row++)
+                    {
+                        selectedRows.Add(row);
+                    }
                 }
             }
 
@@ -98,7 +106,12 @@ namespace WTL.InternalTerminal.Editor
 
         private static List<int> GetSelectedRows(Type logEntriesType)
         {
-            var rows = new List<int>();
+            var rows = GetSelectedRowsFromConsoleWindows();
+            if (rows.Count > 0)
+            {
+                return rows;
+            }
+
             var getFirstSelectedEntryPos = logEntriesType.GetMethod("GetFirstSelectedEntryPos", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
             var getNextSelectedEntryPos = logEntriesType.GetMethod("GetNextSelectedEntryPos", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
             if (getFirstSelectedEntryPos == null || getNextSelectedEntryPos == null)
@@ -116,7 +129,7 @@ namespace WTL.InternalTerminal.Editor
             return rows;
         }
 
-        private static List<int> GetActiveRows()
+        private static List<int> GetSelectedRowsFromConsoleWindows()
         {
             var rows = new List<int>();
             var consoleWindowType = typeof(EditorWindow).Assembly.GetType("UnityEditor.ConsoleWindow");
@@ -128,23 +141,83 @@ namespace WTL.InternalTerminal.Editor
             var windows = Resources.FindObjectsOfTypeAll(consoleWindowType);
             foreach (var window in windows)
             {
-                var lastActiveEntryIndex = GetInt(window, "m_LastActiveEntryIndex");
-                if (lastActiveEntryIndex >= 0)
+                var listView = GetFieldValue(window, "m_ListView");
+                var selectedItems = listView == null ? null : GetFieldValue(listView, "selectedItems") as bool[];
+                if (selectedItems == null)
                 {
-                    rows.Add(lastActiveEntryIndex);
-                    return rows;
+                    continue;
                 }
 
-                var listView = GetFieldValue(window, "m_ListView");
-                var row = listView == null ? -1 : GetInt(listView, "row");
-                if (row >= 0)
+                for (var row = 0; row < selectedItems.Length; row++)
                 {
-                    rows.Add(row);
+                    if (selectedItems[row])
+                    {
+                        rows.Add(row);
+                    }
+                }
+
+                if (rows.Count > 0)
+                {
                     return rows;
                 }
             }
 
             return rows;
+        }
+
+        private static List<int> GetActiveRows(Type logEntriesType)
+        {
+            var rows = new List<int>();
+            var consoleWindowType = typeof(EditorWindow).Assembly.GetType("UnityEditor.ConsoleWindow");
+            if (consoleWindowType == null)
+            {
+                return rows;
+            }
+
+            var windows = Resources.FindObjectsOfTypeAll(consoleWindowType);
+            foreach (var window in windows)
+            {
+                var listView = GetFieldValue(window, "m_ListView");
+                var row = listView == null ? -1 : GetIntOrDefault(listView, "row", -1);
+                if (row >= 0)
+                {
+                    rows.Add(row);
+                    return rows;
+                }
+
+                var lastActiveEntryIndex = GetIntOrDefault(window, "m_LastActiveEntryIndex", -1);
+                var activeRow = GetRowIndexFromGlobalIndex(logEntriesType, lastActiveEntryIndex);
+                if (activeRow >= 0)
+                {
+                    rows.Add(activeRow);
+                    return rows;
+                }
+            }
+
+            return rows;
+        }
+
+        private static int GetRowIndexFromGlobalIndex(Type logEntriesType, int globalLineIndex)
+        {
+            if (globalLineIndex < 0)
+            {
+                return -1;
+            }
+
+            var getEntryRowIndex = logEntriesType.GetMethod("GetEntryRowIndex", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (getEntryRowIndex == null)
+            {
+                return -1;
+            }
+
+            try
+            {
+                return Convert.ToInt32(getEntryRowIndex.Invoke(null, new object[] { globalLineIndex, -1 }));
+            }
+            catch (TargetParameterCountException)
+            {
+                return Convert.ToInt32(getEntryRowIndex.Invoke(null, new object[] { globalLineIndex }));
+            }
         }
 
         private static ConsoleEntry ConvertEntry(object entryObject)
@@ -212,14 +285,19 @@ namespace WTL.InternalTerminal.Editor
 
         private static int GetInt(object target, string name)
         {
+            return GetIntOrDefault(target, name, 0);
+        }
+
+        private static int GetIntOrDefault(object target, string name, int defaultValue)
+        {
             var field = target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             if (field == null)
             {
-                return 0;
+                return defaultValue;
             }
 
             var value = field.GetValue(target);
-            return value == null ? 0 : Convert.ToInt32(value);
+            return value == null ? defaultValue : Convert.ToInt32(value);
         }
 
         private static object GetFieldValue(object target, string name)
