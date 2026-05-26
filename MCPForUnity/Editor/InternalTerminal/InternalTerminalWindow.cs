@@ -33,8 +33,9 @@ namespace WTL.InternalTerminal.Editor
         private bool selecting;
         private Vector2Int selectionAnchor = new Vector2Int(-1, -1);
         private Vector2Int selectionFocus = new Vector2Int(-1, -1);
-        private string imeText = string.Empty;
-        private string imeControlName = "WTL_InternalTerminal_IME";
+        private bool imeComposing;
+        private Vector2Int imeAnchorCell = new Vector2Int(-1, -1);
+        private bool imeEndedThisGui;
         private bool imeModeCaptured;
         private IMECompositionMode previousImeMode;
 
@@ -136,10 +137,12 @@ namespace WTL.InternalTerminal.Editor
 
             var terminalRect = new Rect(0, EditorGUIUtility.singleLineHeight + 6, position.width, position.height - EditorGUIUtility.singleLineHeight - 6);
             var contentRect = NeedsScrollBar ? new Rect(terminalRect.x, terminalRect.y, terminalRect.width - 14f, terminalRect.height) : terminalRect;
+            RefreshImeCompositionState();
             HandleKeyboard(contentRect);
             DrawTerminal(contentRect);
             DrawImeBridge(contentRect);
             DrawScrollBar(terminalRect, contentRect);
+            imeEndedThisGui = false;
         }
 
         private void DrawToolbar()
@@ -176,7 +179,11 @@ namespace WTL.InternalTerminal.Editor
 
             DrawTextRuns(cols, rows);
 
-            if (buffer.CursorVisible && terminalFocused && EditorWindow.focusedWindow == this && (DateTime.Now.Millisecond / 500) % 2 == 0)
+            if (buffer.CursorVisible
+                && !IsImeComposing()
+                && terminalFocused
+                && EditorWindow.focusedWindow == this
+                && (DateTime.Now.Millisecond / 500) % 2 == 0)
             {
                 var cursorRect = CellRect(buffer.CursorX, buffer.CursorY, 1);
                 var cell = GetCellAtCursor();
@@ -232,7 +239,6 @@ namespace WTL.InternalTerminal.Editor
 
                 SetTerminalFocused(true);
                 Focus();
-                GUI.FocusControl(imeControlName);
                 if (current.button == 0)
                 {
                     selectionAnchor = MouseToCell(current.mousePosition, terminalRect);
@@ -329,18 +335,29 @@ namespace WTL.InternalTerminal.Editor
                 return;
             }
 
-            if (TrySendCommittedText(current, false))
+            if (TrySendCommittedImeCharacter(current))
             {
                 current.Use();
                 return;
             }
 
-            if (!string.IsNullOrEmpty(Input.compositionString))
+            if (IsImeComposing())
             {
+                if (!ShouldPassThroughToUnityInput(current))
+                {
+                    current.Use();
+                }
+
                 return;
             }
 
-            if (TrySendCommittedText(current, true))
+            if (imeEndedThisGui && IsImeConfirmationKey(current))
+            {
+                current.Use();
+                return;
+            }
+
+            if (TrySendPlainText(current))
             {
                 current.Use();
                 return;
@@ -386,7 +403,6 @@ namespace WTL.InternalTerminal.Editor
             DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
             SetTerminalFocused(true);
             Focus();
-            GUI.FocusControl(imeControlName);
 
             if (current.type == EventType.DragPerform)
             {
@@ -544,7 +560,6 @@ namespace WTL.InternalTerminal.Editor
             StartOrReconnectForPaste();
             SetTerminalFocused(true);
             Focus();
-            GUI.FocusControl(imeControlName);
 
             if (client != null && client.IsConnected)
             {
@@ -713,41 +728,15 @@ namespace WTL.InternalTerminal.Editor
 
             EnableImeMode();
 
+            RefreshImeCompositionState();
+
+            var anchorCell = imeComposing ? imeAnchorCell : CurrentCursorCell();
             var imeRect = new Rect(
-                terminalRect.x + terminalPadding.x + Mathf.Clamp(buffer.CursorX, 0, Mathf.Max(0, buffer.Cols - 1)) * cellSize.x,
-                terminalRect.y + terminalPadding.y + Mathf.Clamp(buffer.CursorY, 0, Mathf.Max(0, buffer.Rows - 1)) * cellSize.y,
+                terminalRect.x + terminalPadding.x + anchorCell.x * cellSize.x,
+                terminalRect.y + terminalPadding.y + anchorCell.y * cellSize.y,
                 Mathf.Max(cellSize.x, 2f),
                 Mathf.Max(cellSize.y, 2f));
             Input.compositionCursorPos = GUIUtility.GUIToScreenPoint(new Vector2(imeRect.x, imeRect.yMax));
-
-            GUI.SetNextControlName(imeControlName);
-            var previousColor = GUI.color;
-            GUI.color = new Color(0f, 0f, 0f, 0.01f);
-            var nextText = GUI.TextField(imeRect, imeText, GUIStyle.none);
-            GUI.color = previousColor;
-
-            if (GUI.GetNameOfFocusedControl() != imeControlName)
-            {
-                GUI.FocusControl(imeControlName);
-            }
-
-            if (nextText != imeText)
-            {
-                if (!string.IsNullOrEmpty(Input.compositionString))
-                {
-                    imeText = nextText;
-                }
-                else
-                {
-                    var committed = nextText;
-                    imeText = string.Empty;
-                    if (!string.IsNullOrEmpty(committed))
-                    {
-                        client?.SendText(committed);
-                    }
-                }
-            }
-
             DrawCompositionPreview(imeRect);
         }
 
@@ -1044,28 +1033,6 @@ namespace WTL.InternalTerminal.Editor
             return false;
         }
 
-        private bool TrySendCommittedText(Event current, bool allowAscii)
-        {
-            if (current.type != EventType.KeyDown
-                || current.control
-                || current.command
-                || current.alt
-                || current.character == '\0'
-                || char.IsControl(current.character))
-            {
-                return false;
-            }
-
-            if (!allowAscii && current.character <= 0x7f)
-            {
-                return false;
-            }
-
-            client?.SendText(current.character.ToString());
-            imeText = string.Empty;
-            return true;
-        }
-
         private void DrawCompositionPreview(Rect imeRect)
         {
             var composition = Input.compositionString;
@@ -1086,7 +1053,7 @@ namespace WTL.InternalTerminal.Editor
             }
 
             terminalFocused = focused;
-            imeText = string.Empty;
+            EndImeComposition();
             if (focused)
             {
                 EnableImeMode();
@@ -1119,6 +1086,55 @@ namespace WTL.InternalTerminal.Editor
             imeModeCaptured = false;
         }
 
+        private Vector2Int CurrentCursorCell()
+        {
+            return new Vector2Int(
+                Mathf.Clamp(buffer.CursorX, 0, Mathf.Max(0, buffer.Cols - 1)),
+                Mathf.Clamp(buffer.CursorY, 0, Mathf.Max(0, buffer.Rows - 1)));
+        }
+
+        private void BeginImeComposition()
+        {
+            imeComposing = true;
+            imeAnchorCell = CurrentCursorCell();
+        }
+
+        private void EndImeComposition()
+        {
+            if (imeComposing)
+            {
+                imeEndedThisGui = true;
+            }
+
+            imeComposing = false;
+            imeAnchorCell = new Vector2Int(-1, -1);
+        }
+
+        private bool IsImeComposing()
+        {
+            return imeComposing
+                || !string.IsNullOrEmpty(Input.compositionString);
+        }
+
+        private void RefreshImeCompositionState()
+        {
+            var composition = Input.compositionString;
+            if (!string.IsNullOrEmpty(composition))
+            {
+                if (!imeComposing)
+                {
+                    BeginImeComposition();
+                }
+
+                return;
+            }
+
+            if (imeComposing)
+            {
+                EndImeComposition();
+            }
+        }
+
         private bool TrySendTerminalKey(Event current)
         {
             var keyName = KeyName(current.keyCode);
@@ -1128,8 +1144,60 @@ namespace WTL.InternalTerminal.Editor
                 return false;
             }
 
-            client?.SendKey(keyName, text, current.shift, current.control || current.command, current.alt);
+            SendTerminalKey(keyName, text, current.shift, current.control || current.command, current.alt);
             return true;
+        }
+
+        private bool TrySendPlainText(Event current)
+        {
+            if (!IsPlainPrintableKey(current))
+            {
+                return false;
+            }
+
+            client?.SendText(current.character.ToString());
+            return true;
+        }
+
+        private bool TrySendCommittedImeCharacter(Event current)
+        {
+            if (current.type != EventType.KeyDown
+                || current.control
+                || current.command
+                || current.alt
+                || current.character == '\0'
+                || char.IsControl(current.character)
+                || current.character <= 0x7f)
+            {
+                return false;
+            }
+
+            client?.SendText(current.character.ToString());
+            EndImeComposition();
+            return true;
+        }
+
+        private void SendTerminalKey(string keyName, string text, bool shift, bool ctrl, bool alt)
+        {
+            client?.SendKey(keyName, text, shift, ctrl, alt);
+        }
+
+        private static bool IsPlainPrintableKey(Event current)
+        {
+            return current.type == EventType.KeyDown
+                && !current.control
+                && !current.command
+                && !current.alt
+                && current.character != '\0'
+                && !char.IsControl(current.character);
+        }
+
+        private static bool IsImeConfirmationKey(Event current)
+        {
+            return current.type == EventType.KeyDown
+                && (current.keyCode == KeyCode.Return
+                    || current.keyCode == KeyCode.KeypadEnter
+                    || current.keyCode == KeyCode.Space);
         }
 
         private static bool IsModifierOnly(KeyCode keyCode)
