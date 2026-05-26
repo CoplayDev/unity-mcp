@@ -927,12 +927,6 @@ namespace MCPForUnity.Editor.Tools
                 }
 
                 // ── Case 2: start a new capture ───────────────────────────────────
-                // Verify the ScreenCapture module is enabled before attempting capture.
-                if (!ScreenshotUtility.IsScreenCaptureModuleAvailable)
-                {
-                    return new ErrorResponse(ScreenshotUtility.ScreenCaptureModuleNotAvailableError);
-                }
-
                 // Only one capture in flight at a time.  If one is already pending,
                 // reject rather than silently overwriting the state.
                 if (s_pendingCaptureStarted)
