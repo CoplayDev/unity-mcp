@@ -24,13 +24,9 @@ namespace MCPForUnity.Editor.Tools.Vfx
 
             RendererHelpers.EnsureMaterial(tr);
 
-#if UNITY_2021_1_OR_NEWER
             Vector3 pos = ManageVfxCommon.ParseVector3(@params["position"]);
             tr.AddPosition(pos);
             return new { success = true, message = $"Emitted at ({pos.x}, {pos.y}, {pos.z})" };
-#else
-            return new { success = false, message = "AddPosition requires Unity 2021.1+" };
-#endif
         }
     }
 }

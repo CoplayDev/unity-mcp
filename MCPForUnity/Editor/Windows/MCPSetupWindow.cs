@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
+using MCPForUnity.Editor.Clients;
 using MCPForUnity.Editor.Dependencies;
 using MCPForUnity.Editor.Dependencies.Models;
 using MCPForUnity.Editor.Helpers;
+using MCPForUnity.Editor.Services;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -27,6 +30,14 @@ namespace MCPForUnity.Editor.Windows
         private Button openUvLinkButton;
         private Button refreshButton;
         private Button doneButton;
+
+        // Step 2 (Configure Clients) UI elements
+        private VisualElement stepDeps;
+        private VisualElement stepClients;
+        private VisualElement clientsList;
+        private Button skipClientsButton;
+        private Button configureSelectedButton;
+        private readonly List<(IMcpClientConfigurator client, Toggle toggle)> clientToggles = new();
 
         private DependencyCheckResult _dependencyResult;
 
@@ -69,12 +80,19 @@ namespace MCPForUnity.Editor.Windows
             openUvLinkButton = rootVisualElement.Q<Button>("open-uv-link-button");
             refreshButton = rootVisualElement.Q<Button>("refresh-button");
             doneButton = rootVisualElement.Q<Button>("done-button");
+            stepDeps = rootVisualElement.Q<VisualElement>("step-deps");
+            stepClients = rootVisualElement.Q<VisualElement>("step-clients");
+            clientsList = rootVisualElement.Q<VisualElement>("clients-list");
+            skipClientsButton = rootVisualElement.Q<Button>("skip-clients-button");
+            configureSelectedButton = rootVisualElement.Q<Button>("configure-selected-button");
 
             // Register callbacks
             refreshButton.clicked += OnRefreshClicked;
             doneButton.clicked += OnDoneClicked;
             openPythonLinkButton.clicked += OnOpenPythonInstallClicked;
             openUvLinkButton.clicked += OnOpenUvInstallClicked;
+            skipClientsButton.clicked += OnSkipClientsClicked;
+            configureSelectedButton.clicked += OnConfigureSelectedClicked;
 
             // Initial update
             UpdateUI();
@@ -96,6 +114,83 @@ namespace MCPForUnity.Editor.Windows
 
         private void OnDoneClicked()
         {
+            if (_dependencyResult != null && _dependencyResult.IsSystemReady)
+            {
+                ShowClientsStep();
+            }
+            else
+            {
+                Setup.SetupWindowService.MarkSetupDismissed();
+                Close();
+            }
+        }
+
+        private void ShowClientsStep()
+        {
+            stepDeps.style.display = DisplayStyle.None;
+            stepClients.style.display = DisplayStyle.Flex;
+            PopulateClientsList();
+        }
+
+        private void PopulateClientsList()
+        {
+            clientsList.Clear();
+            clientToggles.Clear();
+            foreach (var c in McpClientRegistry.All)
+            {
+                if (!c.IsInstalled) continue;
+                var toggle = new Toggle(c.DisplayName)
+                {
+                    value = true,
+                    tooltip = c.GetConfigPath()
+                };
+                clientToggles.Add((c, toggle));
+                clientsList.Add(toggle);
+            }
+            if (clientToggles.Count == 0)
+            {
+                clientsList.Add(new Label("No supported MCP clients detected on this machine. You can configure clients later from Tools → MCP for Unity."));
+                configureSelectedButton.SetEnabled(false);
+            }
+        }
+
+        private void OnSkipClientsClicked()
+        {
+            Setup.SetupWindowService.MarkSetupCompleted();
+            Close();
+        }
+
+        private void OnConfigureSelectedClicked()
+        {
+            int success = 0, failure = 0;
+            var messages = new List<string>();
+            foreach (var (c, toggle) in clientToggles)
+            {
+                if (!toggle.value) continue;
+                try
+                {
+                    MCPServiceLocator.Client.ConfigureClient(c);
+                    success++;
+                    messages.Add($"✓ {c.DisplayName}");
+                }
+                catch (System.Exception ex)
+                {
+                    failure++;
+                    messages.Add($"⚠ {c.DisplayName}: {ex.Message}");
+                }
+            }
+            if (success == 0 && failure == 0)
+            {
+                EditorUtility.DisplayDialog(
+                    "Client Configuration",
+                    "No clients were selected. Tick at least one client to continue, or close the window to skip setup.",
+                    "OK");
+                return;
+            }
+            EditorUtility.DisplayDialog(
+                "Client Configuration",
+                $"{success} configured, {failure} failed.\n\n{string.Join("\n", messages)}",
+                "OK");
             Setup.SetupWindowService.MarkSetupCompleted();
             Close();
         }

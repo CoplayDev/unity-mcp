@@ -1,0 +1,28 @@
+{
+  "$comment": "Single source of truth for Unity versions exercised by CI and tools/check-unity-versions.* local script. Versions are pinned to specific patch releases (no floating tags) per acceptance criteria in CoplayDev/unity-mcp#1107. Every id MUST have a corresponding GameCI Docker image at unityci/editor:ubuntu-<id>-base-3 since both CI (game-ci/unity-test-runner@v4) and local --docker mode pull from there. Verify availability before bumping: https://hub.docker.com/v2/repositories/unityci/editor/tags/?name=<id>",
+  "$coverageGap": "UNITY_6000_5_OR_NEWER and UNITY_6000_6_OR_NEWER branches are NOT exercised by this matrix because GameCI has not yet published Docker images for Unity 6000.5+/6000.6+. Bump the 'rolling' row to a 6000.5+/6000.6+ patch once https://hub.docker.com/r/unityci/editor publishes one. Tracked branches in code: UnityObjectIdCompat.cs (EntityId path).",
+  "defaultVersion": "6000.0.75f1",
+  "$defaultVersionComment": "Unity version used when CI runs the narrow matrix (default PR feedback path). Must be one of the ids in 'versions' below. Today's pick is 6.0 LTS — the version most users target. The 'floor' role still identifies the package's minimum supported version separately.",
+  "versions": [
+    {
+      "id": "2021.3.45f2",
+      "role": "floor",
+      "notes": "Package minimum (matches MCPForUnity/package.json 'unity' field and TestProjects/UnityMCPTests/ProjectSettings/ProjectVersion.txt). Legacy branch: all UNITY_2022_*/UNITY_6000_* flags OFF."
+    },
+    {
+      "id": "2022.3.62f1",
+      "role": "lts",
+      "notes": "Last 2022 LTS. Exercises UNITY_2022_1/2/3_OR_NEWER branches; UNITY_2023_*/UNITY_6000_* OFF. Catches FindObjectsByType-style regressions (the #1105 path)."
+    },
+    {
+      "id": "6000.0.75f1",
+      "role": "lts",
+      "notes": "Unity 6.0 LTS (latest patch on GameCI). UNITY_6000_0_OR_NEWER ON (27 files), UNITY_2023_*_OR_NEWER ON, UNITY_6000_3/4/5/6 OFF."
+    },
+    {
+      "id": "6000.4.8f1",
+      "role": "rolling",
+      "notes": "Latest 6.x available on GameCI. UNITY_6000_0/1/2/3/4_OR_NEWER ON; UNITY_6000_5/6 OFF (no GameCI image yet — see $coverageGap)."
+    }
+  ]
+}

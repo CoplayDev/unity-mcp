@@ -481,7 +481,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     try
                     {
                         var ep = client.Client?.RemoteEndPoint?.ToString() ?? "unknown";
-                        McpLog.Info($"Client connected {ep} (active clients: {clientCount})");
+                        McpLog.Info($"Client connected {ep} (active clients: {clientCount})", always: false);
                     }
                     catch { }
                     try
@@ -517,7 +517,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     }
                     if (staleClients.Length > 0)
                     {
-                        McpLog.Info($"Closing {staleClients.Length} stale client(s) after new connection");
+                        McpLog.Info($"Closing {staleClients.Length} stale client(s) after new connection", always: false);
                         foreach (var stale in staleClients)
                         {
                             try { stale.Close(); } catch { }
@@ -649,7 +649,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     lock (clientsLock) { activeClients.Remove(client); }
                     int remaining;
                     lock (clientsLock) { remaining = activeClients.Count; }
-                    McpLog.Info($"Client handler exited (remaining clients: {remaining})");
+                    McpLog.Info($"Client handler exited (remaining clients: {remaining})", always: false);
                 }
             }
         }
@@ -1047,6 +1047,11 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 }
                 catch { }
 
+                bool projectScopedTools = EditorPrefs.GetBool(
+                    EditorPrefKeys.ProjectScopedToolsLocalHttp,
+                    false // must match McpToolsSection toggle default so UI and heartbeat agree
+                );
+
                 var payload = new
                 {
                     unity_port = currentUnityPort,
@@ -1056,7 +1061,8 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     project_path = Application.dataPath,
                     project_name = projectName,
                     unity_version = Application.unityVersion,
-                    last_heartbeat = DateTime.UtcNow.ToString("O")
+                    last_heartbeat = DateTime.UtcNow.ToString("O"),
+                    project_scoped_tools = projectScopedTools
                 };
                 File.WriteAllText(filePath, JsonConvert.SerializeObject(payload), new System.Text.UTF8Encoding(false));
             }

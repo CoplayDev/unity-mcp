@@ -267,7 +267,12 @@ namespace MCPForUnity.Runtime.Serialization
     }
 
     // Converter for UnityEngine.Object references (GameObjects, Components, Materials, Textures, etc.)
-    public class UnityEngineObjectConverter : JsonConverter<UnityEngine.Object>
+    // Intentionally internal: this converter is meant for MCP-internal serialization only.
+    // Leaving it public lets third-party Newtonsoft converter scanners (e.g. jillejr's
+    // newtonsoft-json-for-unity converters) instantiate it via reflection and bind it into
+    // JsonConvert.DefaultSettings, which silently rewrites any UnityEngine.Object reference in
+    // unrelated project code as an asset path string. See issue #1138.
+    internal class UnityEngineObjectConverter : JsonConverter<UnityEngine.Object>
     {
         public override bool CanRead => true; // We need to implement ReadJson
         public override bool CanWrite => true;

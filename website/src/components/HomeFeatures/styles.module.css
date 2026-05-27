@@ -1,0 +1,141 @@
+/* HomeFeatures — numbered "index card" treatment. Hairline borders only,
+ * no fills, mono kickers (01/02/03 + label). Cards feel like spec entries
+ * in a datasheet, not bouncy marketing cards. */
+
+.section {
+  padding: 5rem 1.5rem 7rem;
+}
+
+.inner {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.header {
+  margin-bottom: 2.5rem;
+}
+
+.eyebrow {
+  display: block;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ifm-color-primary);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--ifm-heading-color);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  border-left: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 1.75rem 1.6rem 1.6rem;
+  border-right: 1px solid var(--ifm-color-emphasis-200);
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  text-decoration: none;
+  color: inherit;
+  background: var(--ifm-background-color);
+  transition: background-color 0.18s ease;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid transparent;
+  pointer-events: none;
+  transition: border-color 0.18s ease;
+}
+
+.card:hover {
+  text-decoration: none;
+  color: inherit;
+  background: var(--ifm-color-emphasis-100);
+}
+
+.card:hover::before {
+  border-color: var(--ifm-color-primary);
+}
+
+.cardHead {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-bottom: 1.5rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cardNum {
+  color: var(--ifm-color-emphasis-500);
+  font-weight: 500;
+}
+
+.cardKicker {
+  color: var(--ifm-color-primary);
+  font-weight: 600;
+}
+
+.cardTitle {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.75rem;
+  color: var(--ifm-heading-color);
+  line-height: 1.25;
+}
+
+.cardBody {
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--ifm-color-emphasis-700);
+  margin: 0 0 1.5rem;
+  flex: 1;
+}
+
+.cardCta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  color: var(--ifm-heading-color);
+  text-transform: uppercase;
+}
+
+.cardArrow {
+  transition: transform 0.18s ease;
+}
+
+.card:hover .cardArrow {
+  transform: translateX(3px);
+  color: var(--ifm-color-primary);
+}
+
+@media (max-width: 996px) {
+  .grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 640px) {
+  .grid { grid-template-columns: 1fr; }
+}

@@ -816,39 +816,6 @@ namespace MCPForUnity.Editor.Tools
         private static bool s_pendingCaptureDone;
         private static bool s_pendingCaptureStarted;
 
-        // MonoBehaviour that captures a screenshot at end-of-frame in play mode.
-        private sealed class MCP_ScreenCapturer : MonoBehaviour
-        {
-            private System.Collections.IEnumerator Start()
-            {
-                yield return new WaitForEndOfFrame();
-
-                if (!ScreenshotUtility.IsScreenCaptureModuleAvailable)
-                {
-                    Debug.LogError("[MCP] " + ScreenshotUtility.ScreenCaptureModuleNotAvailableError);
-                    ManageUI.s_pendingCaptureTex = null;
-                    ManageUI.s_pendingCaptureDone = false;
-                    ManageUI.s_pendingCaptureStarted = false;
-                    Destroy(gameObject);
-                    yield break;
-                }
-
-                try
-                {
-                    ManageUI.s_pendingCaptureTex = ScreenCapture.CaptureScreenshotAsTexture();
-                    ManageUI.s_pendingCaptureDone = true;
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"[MCP] ScreenCapture failed: {ex.Message}");
-                    ManageUI.s_pendingCaptureTex = null;
-                    ManageUI.s_pendingCaptureDone = false;
-                }
-                ManageUI.s_pendingCaptureStarted = false;
-                Destroy(gameObject);
-            }
-        }
-
         private static object RenderUI(JObject @params)
         {
             var p = new ToolParams(@params);
@@ -960,12 +927,6 @@ namespace MCPForUnity.Editor.Tools
                 }
 
                 // ── Case 2: start a new capture ───────────────────────────────────
-                // Verify the ScreenCapture module is enabled before attempting capture.
-                if (!ScreenshotUtility.IsScreenCaptureModuleAvailable)
-                {
-                    return new ErrorResponse(ScreenshotUtility.ScreenCaptureModuleNotAvailableError);
-                }
-
                 // Only one capture in flight at a time.  If one is already pending,
                 // reject rather than silently overwriting the state.
                 if (s_pendingCaptureStarted)
@@ -978,11 +939,12 @@ namespace MCPForUnity.Editor.Tools
                 s_pendingCaptureDone = false;
                 s_pendingCaptureTex = null;
                 s_pendingCaptureStarted = true;
-                var captureGo = new GameObject("__MCP_ScreenCapturer__")
+                ScreenshotCapturer.Begin(1, tex =>
                 {
-                    hideFlags = HideFlags.HideAndDontSave
-                };
-                captureGo.AddComponent<MCP_ScreenCapturer>();
+                    s_pendingCaptureTex = tex;
+                    s_pendingCaptureDone = true;
+                    s_pendingCaptureStarted = false;
+                });
 
                 return new SuccessResponse(
                     "Play-mode screenshot capture queued (WaitForEndOfFrame). Call render_ui again to retrieve the rendered image.",

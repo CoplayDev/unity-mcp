@@ -309,7 +309,8 @@ class PortDiscovery:
                     status="reloading" if is_reloading else "running",
                     last_heartbeat=last_heartbeat,
                     # May not be available in current version
-                    unity_version=data.get('unity_version')
+                    unity_version=data.get('unity_version'),
+                    project_scoped_tools=data.get('project_scoped_tools', False),
                 )
 
                 instances_by_port[port] = (instance, freshness)
