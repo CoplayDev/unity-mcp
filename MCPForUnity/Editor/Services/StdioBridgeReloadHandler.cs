@@ -70,7 +70,9 @@ namespace MCPForUnity.Editor.Services
                     // Stop only stdio before reload. This is centralized here so resume-flag updates
                     // and teardown cannot race each other via separate beforeAssemblyReload handlers.
                     var stopTask = MCPServiceLocator.TransportManager.StopAsync(TransportMode.Stdio);
-                    try { stopTask.Wait(500); } catch { }
+                    // Match StdioBridgeHost.Stop's 2s socket-release wait; 500ms is too short on
+                    // Windows and lets the next reload bind the same port before the OS frees it.
+                    try { stopTask.Wait(2000); } catch { }
 
                     // Legacy safety: stdio may have been started outside TransportManager state.
                     try { StdioBridgeHost.Stop(); } catch { }

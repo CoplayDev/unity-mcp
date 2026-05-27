@@ -396,8 +396,10 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
 
             if (toWait != null)
             {
-                // CTS is already cancelled; give the listener task a brief moment to exit.
-                try { toWait.Wait(500); } catch { }
+                // Windows needs the full 2s for the socket to release after Dispose; with 500ms
+                // the next Start() can hit AddressAlreadyInUse and silently fall back to a new
+                // port, orphaning the listener. See #1173 / #688.
+                try { toWait.Wait(2000); } catch { }
             }
 
             // ProcessCommands stays permanently hooked (guarded by _processCommandsHooked)
