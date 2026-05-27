@@ -275,34 +275,57 @@ namespace MCPForUnity.Editor.Tools
             // CodeDom needs the netstandard-aware filtered paths
             var filtered = FilterAssemblyPathsForCodeDom(assemblyPaths);
 
-            using (var provider = new CSharpCodeProvider())
+            // CSharpCodeProvider turns every ReferencedAssemblies entry into a literal /r:"..." flag
+            // on the csc command line. Projects with ~100+ asmdefs blow past Windows' 32 KB
+            // CreateProcess argument limit and fail with "The filename or extension is too long."
+            // Route references through a response file (@responsefile is supported by both mcs and
+            // Roslyn csc) so we pass exactly one short argument regardless of reference count.
+            string responseFilePath = Path.Combine(Path.GetTempPath(), $"mcp-codedom-{Guid.NewGuid():N}.rsp");
+
+            try
             {
-                var parameters = new CompilerParameters
+                using (var writer = new StreamWriter(responseFilePath, append: false, Encoding.UTF8))
                 {
-                    GenerateInMemory = true,
-                    GenerateExecutable = false,
-                    TreatWarningsAsErrors = false,
-                };
-
-                foreach (var path in filtered)
-                    parameters.ReferencedAssemblies.Add(path);
-
-                var results = provider.CompileAssemblyFromSource(parameters, source);
-
-                if (results.Errors.HasErrors)
-                {
-                    foreach (CompilerError error in results.Errors)
+                    foreach (var path in filtered)
                     {
-                        if (!error.IsWarning)
-                        {
-                            int userLine = Math.Max(1, error.Line - WrapperLineOffset);
-                            errors.Add($"Line {userLine}: {error.ErrorText}");
-                        }
+                        writer.Write("/r:\"");
+                        writer.Write(path);
+                        writer.WriteLine("\"");
                     }
-                    return null;
                 }
 
-                return results.CompiledAssembly;
+                using (var provider = new CSharpCodeProvider())
+                {
+                    var parameters = new CompilerParameters
+                    {
+                        GenerateInMemory = true,
+                        GenerateExecutable = false,
+                        TreatWarningsAsErrors = false,
+                        CompilerOptions = "@\"" + responseFilePath + "\"",
+                    };
+
+                    var results = provider.CompileAssemblyFromSource(parameters, source);
+
+                    if (results.Errors.HasErrors)
+                    {
+                        foreach (CompilerError error in results.Errors)
+                        {
+                            if (!error.IsWarning)
+                            {
+                                int userLine = Math.Max(1, error.Line - WrapperLineOffset);
+                                errors.Add($"Line {userLine}: {error.ErrorText}");
+                            }
+                        }
+                        return null;
+                    }
+
+                    return results.CompiledAssembly;
+                }
+            }
+            finally
+            {
+                try { if (File.Exists(responseFilePath)) File.Delete(responseFilePath); }
+                catch { /* best effort */ }
             }
         }
 
@@ -672,7 +695,13 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception e)
             {
-                errors.Add($"Roslyn compilation error: {e.Message}");
+                // Walk to the deepest cause: TargetInvocationException (and friends) wrap the real
+                // failure inside .InnerException, and reporting only e.Message hides everything
+                // useful (e.g. a missing transitive dep manifests as the generic "Exception has been
+                // thrown by the target of an invocation.").
+                Exception root = e;
+                while (root.InnerException != null) root = root.InnerException;
+                errors.Add($"Roslyn compilation error: {root.GetType().Name}: {root.Message}");
                 return null;
             }
         }

@@ -1,0 +1,343 @@
+/*
+ * MCP for Unity — docs theme.
+ *
+ * Typography:
+ *   - Body / headings: Satoshi (Fontshare)
+ *   - Monospace: JetBrains Mono (Google Fonts)
+ *   Both load via stylesheet links in docusaurus.config.js.
+ *
+ * Design language: modern minimalist. More whitespace, lighter type,
+ * cleaner code blocks, subtle borders, no decorative accents.
+ */
+
+:root {
+  --ifm-font-family-base:
+    'Satoshi', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --ifm-font-family-monospace:
+    'JetBrains Mono', 'SFMono-Regular', Menlo, Monaco, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
+  --ifm-heading-font-family: var(--ifm-font-family-base);
+  --ifm-heading-font-weight: 700;
+  --ifm-font-weight-bold: 700;
+  --ifm-font-size-base: 16px;
+
+  --ifm-line-height-base: 1.7;
+  --ifm-heading-line-height: 1.2;
+
+  --ifm-color-primary: #4f46e5;
+  --ifm-color-primary-dark: #4338ca;
+  --ifm-color-primary-darker: #3730a3;
+  --ifm-color-primary-darkest: #312e81;
+  --ifm-color-primary-light: #6366f1;
+  --ifm-color-primary-lighter: #818cf8;
+  --ifm-color-primary-lightest: #a5b4fc;
+
+  /* Pin a few Docusaurus variables that default to transparent / inherit.
+   * --ifm-heading-color defaults to 'inherit' and --ifm-background-color
+   * defaults to '#0000' (transparent black). When components used those
+   * for solid fills (button bg, contrast text) the result rendered as
+   * transparent. Pin both explicitly for both themes. */
+  --ifm-heading-color: #0a0a0b;
+  --ifm-background-color: #ffffff;
+
+  --ifm-code-font-size: 90%;
+  --ifm-code-padding-vertical: 0.15rem;
+  --ifm-code-padding-horizontal: 0.4rem;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.07);
+
+  /* Tighter, calmer navbar */
+  --ifm-navbar-height: 4rem;
+  --ifm-navbar-padding-vertical: 0.5rem;
+  --ifm-navbar-shadow: none;
+
+  --ifm-toc-border-color: transparent;
+  --ifm-hr-border-color: var(--ifm-color-emphasis-200);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #818cf8;
+  --ifm-color-primary-dark: #6366f1;
+  --ifm-color-primary-darker: #4f46e5;
+  --ifm-color-primary-darkest: #4338ca;
+  --ifm-color-primary-light: #a5b4fc;
+  --ifm-color-primary-lighter: #c7d2fe;
+  --ifm-color-primary-lightest: #e0e7ff;
+  --docusaurus-highlighted-code-line-bg: rgba(255, 255, 255, 0.08);
+  --ifm-background-color: #0a0a0b;
+  --ifm-background-surface-color: #111113;
+  --ifm-heading-color: #fafafa;
+}
+
+/* Headings — tighter, more confident hierarchy */
+h1, h2, h3, h4, h5, h6 {
+  letter-spacing: -0.012em;
+}
+h1 {
+  font-size: 2.2rem;
+  letter-spacing: -0.022em;
+  margin-top: 0;
+  margin-bottom: 1.25rem;
+}
+h2 {
+  font-size: 1.45rem;
+  letter-spacing: -0.015em;
+  margin-top: 3rem;
+  margin-bottom: 1rem;
+}
+h3 {
+  font-size: 1.12rem;
+  margin-top: 2rem;
+  margin-bottom: 0.6rem;
+}
+
+/* Paragraphs — generous breathing room */
+.markdown > p {
+  margin-bottom: 1.15rem;
+}
+
+/* Inline code — sits flush with Satoshi baseline */
+:not(pre) > code {
+  font-size: 0.88em;
+  border-radius: 4px;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  background: var(--ifm-color-emphasis-100);
+}
+
+/* Code blocks — subtler, no garish shadow */
+.theme-code-block {
+  box-shadow: none;
+  border: 1px solid var(--ifm-color-emphasis-200);
+}
+[data-theme='dark'] .theme-code-block {
+  border-color: var(--ifm-color-emphasis-300);
+}
+
+/* Tables — cleaner, less heavy borders */
+.markdown table {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.markdown table thead {
+  background: var(--ifm-color-emphasis-100);
+}
+.markdown table th,
+.markdown table td {
+  border: none;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  padding: 0.6rem 0.9rem;
+  font-size: 0.95rem;
+}
+.markdown table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Navbar — no shadow, subtle bottom border */
+.navbar {
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+}
+.navbar__inner {
+  position: relative;
+}
+.navbar__title {
+  letter-spacing: -0.012em;
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.navbar__items .navbar__link {
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+/* Center the search input in the navbar (desktop only). Targets the
+ * local-search container by class-name substring so the CSS survives
+ * Docusaurus's hashed class suffixes. */
+@media (min-width: 997px) {
+  [class*='navbarSearchContainer'] {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+  }
+  [class*='navbarSearchContainer'] .navbar__search-input {
+    width: 360px;
+    /* Right padding leaves room for the ⌘K hint without text overlap. */
+    padding-right: 4rem !important;
+    transition: width 0.2s ease, background-color 0.2s ease;
+  }
+  [class*='navbarSearchContainer'] .navbar__search-input:focus {
+    width: 460px;
+  }
+}
+
+/* ⌘K / Ctrl+K hint inside the search input.
+ * @easyops-cn/docusaurus-search-local renders `<kbd>⌘</kbd><kbd>K</kbd>`
+ * with chunky default browser kbd styling that clashes with the
+ * minimalist aesthetic. Replace with small refined mono pills.
+ *
+ * Target via [class*=] substring match so the CSS module hash on
+ * `.searchHintContainer` and `.searchHint` doesn't matter. */
+[class*='searchHintContainer'] {
+  gap: 3px !important;
+  right: 8px !important;
+}
+
+[class*='searchHintContainer'] kbd,
+[class*='searchHint'] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  /* System font: macOS / iOS render the ⌘ glyph crisply only when using
+   * the platform UI font. JetBrains Mono and most webfonts ship a fuzzy
+   * outlined version of it that looks blurry at small sizes. */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ifm-color-emphasis-800);
+  background: var(--ifm-color-emphasis-0);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-bottom-width: 2px;  /* hint of physicality, like Linear / Vercel */
+  border-radius: 5px;
+  box-shadow: none;
+  text-shadow: none;
+  /* Crisp text rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+[data-theme='dark'] [class*='searchHintContainer'] kbd,
+[data-theme='dark'] [class*='searchHint'] {
+  color: var(--ifm-color-emphasis-700);
+  background: var(--ifm-color-emphasis-200);
+  border-color: var(--ifm-color-emphasis-300);
+}
+
+/* When the search input is focused, fade the hint out — it's a discoverability
+ * affordance, not something to keep in your face once you're typing. */
+[class*='searchBarContainer'][class*='focused'] [class*='searchHintContainer'] {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+/* Hide sidebar items flagged with sidebar_class_name: sidebar-hidden.
+ * Used for docs that ARE the link of a parent category (e.g. the Tools
+ * catalog index) — Docusaurus's autogenerated still lists them as a
+ * sibling child, which creates an undesired duplicate. The doc remains
+ * reachable via its URL and the parent category's click. */
+.menu__list-item:has(> .menu__list-item-collapsible > .sidebar-hidden),
+.menu__list-item:has(> .sidebar-hidden) {
+  display: none;
+}
+
+/* Sidebar — lighter and more spacious */
+.menu {
+  font-size: 0.92rem;
+  padding: 1rem;
+}
+.menu__link {
+  padding: 0.4rem 0.65rem;
+  border-radius: 6px;
+  font-weight: 400;
+}
+.menu__link--active {
+  font-weight: 600;
+}
+.menu__list-item-collapsible .menu__link {
+  font-weight: 600;
+}
+
+/* Breadcrumbs — subtle, lighter */
+.breadcrumbs {
+  font-size: 0.85rem;
+  margin-bottom: 1.5rem;
+}
+.breadcrumbs__link {
+  color: var(--ifm-color-emphasis-600);
+}
+
+/* Hide the homepage's auto-generated breadcrumb (we render our own hero) */
+.docMainContainer_TBSr .container.padding-top--md.padding-bottom--lg article header h1.markdown {
+  /* placeholder for fine-tuning */
+}
+
+/* Navbar icon links — GitHub + Discord.
+ * Implementation: mask-image + currentColor. This renders the icon as
+ * a vector silhouette painted by the text color, so it inherits theme
+ * for free with no filter-blur artifacts. Crisp at any size.
+ *
+ * Docusaurus's .navbar__link rule injects horizontal padding that would
+ * push the mask off-center inside our 44px box — we explicitly zero it.
+ */
+.navbar__link.header-icon-link {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  /* Unified spacing for the right-side cluster: github / discord /
+   * color-mode toggle all share the same margin so they sit on an even
+   * rhythm regardless of which Docusaurus default each one inherits. */
+  margin: 0 0.2rem;
+  color: var(--ifm-navbar-link-color);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+/* Match the toggle wrapper to the icon-link cluster: same size, same margin. */
+.navbar__items--right [class*='colorModeToggle'] {
+  width: 40px;
+  height: 40px;
+  margin: 0 0.2rem;
+}
+.navbar__items--right [class*='colorModeToggle'] [class*='toggleButton'] {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+}
+.navbar__items--right [class*='colorModeToggle'] [class*='toggleIcon'] svg {
+  width: 20px;
+  height: 20px;
+}
+.navbar__link.header-icon-link:hover {
+  background: var(--ifm-color-emphasis-100);
+  color: var(--ifm-color-primary);
+}
+.navbar__link.header-icon-link::before {
+  content: '';
+  width: 22px;
+  height: 22px;
+  display: block;
+  background-color: currentColor;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+}
+.navbar__link.header-icon-link::after {
+  /* Docusaurus injects ::after on .navbar__link for the dropdown caret;
+   * suppress it on icon links so it doesn't add unwanted glyphs. */
+  display: none !important;
+}
+
+.header-github-link::before {
+  mask-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/%3E%3C/svg%3E");
+}
+
+.header-discord-link::before {
+  mask-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 127.14 96.36'%3E%3Cpath d='M107.7 8.07A105.15 105.15 0 0 0 81.47 0a72.06 72.06 0 0 0-3.36 6.83 97.68 97.68 0 0 0-29.11 0A72.37 72.37 0 0 0 45.64 0a105.89 105.89 0 0 0-26.25 8.09C2.79 32.65-1.71 56.6.54 80.21a105.73 105.73 0 0 0 32.17 16.15 77.7 77.7 0 0 0 6.89-11.11 68.42 68.42 0 0 1-10.85-5.18c.91-.66 1.8-1.34 2.66-2a75.57 75.57 0 0 0 64.32 0c.87.71 1.76 1.39 2.66 2a68.68 68.68 0 0 1-10.87 5.19 77 77 0 0 0 6.89 11.1 105.25 105.25 0 0 0 32.19-16.14c2.64-27.38-4.51-51.11-18.9-72.15zM42.45 65.69C36.18 65.69 31 60 31 53s5-12.74 11.43-12.74S54 46 53.89 53s-5.05 12.69-11.44 12.69zm42.24 0C78.41 65.69 73.25 60 73.25 53s5-12.74 11.44-12.74S96.23 46 96.12 53s-5.04 12.69-11.43 12.69z'/%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 127.14 96.36'%3E%3Cpath d='M107.7 8.07A105.15 105.15 0 0 0 81.47 0a72.06 72.06 0 0 0-3.36 6.83 97.68 97.68 0 0 0-29.11 0A72.37 72.37 0 0 0 45.64 0a105.89 105.89 0 0 0-26.25 8.09C2.79 32.65-1.71 56.6.54 80.21a105.73 105.73 0 0 0 32.17 16.15 77.7 77.7 0 0 0 6.89-11.11 68.42 68.42 0 0 1-10.85-5.18c.91-.66 1.8-1.34 2.66-2a75.57 75.57 0 0 0 64.32 0c.87.71 1.76 1.39 2.66 2a68.68 68.68 0 0 1-10.87 5.19 77 77 0 0 0 6.89 11.1 105.25 105.25 0 0 0 32.19-16.14c2.64-27.38-4.51-51.11-18.9-72.15zM42.45 65.69C36.18 65.69 31 60 31 53s5-12.74 11.43-12.74S54 46 53.89 53s-5.05 12.69-11.44 12.69zm42.24 0C78.41 65.69 73.25 60 73.25 53s5-12.74 11.43-12.74S96.23 46 96.12 53s-5.04 12.69-11.43 12.69z'/%3E%3C/svg%3E");
+}

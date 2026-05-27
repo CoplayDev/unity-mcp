@@ -3,56 +3,72 @@
     <Style src="MCPSetupWindow.uss" />
     <ui:ScrollView name="root-container" mode="Vertical">
         <ui:Label text="MCP for Unity Setup" name="title" class="title" />
-        
-        <ui:VisualElement class="section">
-            <ui:Label text="System Requirements" class="section-title" />
-            <ui:VisualElement class="section-content">
-                <ui:Label text="MCP for Unity requires Python 3.10+ and UV package manager to function." class="help-text description-text" />
-                
-                <!-- Dependency Status -->
-                <ui:VisualElement name="dependency-list">
-                    <!-- Python Status -->
-                    <ui:VisualElement class="dependency-item">
-                        <ui:VisualElement class="dependency-row">
-                            <ui:Label text="Python" class="dependency-name" />
-                            <ui:Label name="python-version" text="..." class="setting-value" />
-                            <ui:VisualElement name="python-indicator" class="status-indicator-small" />
+
+        <ui:VisualElement name="step-deps">
+            <ui:VisualElement class="section">
+                <ui:Label text="System Requirements" class="section-title" />
+                <ui:VisualElement class="section-content">
+                    <ui:Label text="MCP for Unity requires Python 3.10+ and UV package manager to function." class="help-text description-text" />
+
+                    <!-- Dependency Status -->
+                    <ui:VisualElement name="dependency-list">
+                        <!-- Python Status -->
+                        <ui:VisualElement class="dependency-item">
+                            <ui:VisualElement class="dependency-row">
+                                <ui:Label text="Python" class="dependency-name" />
+                                <ui:Label name="python-version" text="..." class="setting-value" />
+                                <ui:VisualElement name="python-indicator" class="status-indicator-small" />
+                            </ui:VisualElement>
+                            <ui:Label name="python-details" class="help-text dependency-details" />
                         </ui:VisualElement>
-                        <ui:Label name="python-details" class="help-text dependency-details" />
-                    </ui:VisualElement>
-                    
-                    <!-- UV Status -->
-                    <ui:VisualElement class="dependency-item">
-                        <ui:VisualElement class="dependency-row">
-                            <ui:Label text="UV Package Manager" class="dependency-name" />
-                            <ui:Label name="uv-version" text="..." class="setting-value" />
-                            <ui:VisualElement name="uv-indicator" class="status-indicator-small" />
+
+                        <!-- UV Status -->
+                        <ui:VisualElement class="dependency-item">
+                            <ui:VisualElement class="dependency-row">
+                                <ui:Label text="UV Package Manager" class="dependency-name" />
+                                <ui:Label name="uv-version" text="..." class="setting-value" />
+                                <ui:VisualElement name="uv-indicator" class="status-indicator-small" />
+                            </ui:VisualElement>
+                            <ui:Label name="uv-details" class="help-text dependency-details" />
                         </ui:VisualElement>
-                        <ui:Label name="uv-details" class="help-text dependency-details" />
                     </ui:VisualElement>
-                </ui:VisualElement>
-                
-                <!-- Overall Status Message -->
-                <ui:VisualElement name="status-message-container">
-                    <ui:Label name="status-message" class="help-text" />
-                </ui:VisualElement>
-                
-                <!-- Installation Instructions (shown when dependencies missing) -->
-                <ui:VisualElement name="installation-section" class="installation-container">
-                    <ui:Label text="Installation Instructions" class="installation-title" />
-                    <ui:Label name="installation-instructions" class="help-text" />
-                    <ui:VisualElement class="install-links-row">
-                        <ui:Button name="open-python-link-button" text="Open Python Install Page" class="secondary-button install-link-button" />
-                        <ui:Button name="open-uv-link-button" text="Open UV Install Page" class="secondary-button install-link-button" />
+
+                    <!-- Overall Status Message -->
+                    <ui:VisualElement name="status-message-container">
+                        <ui:Label name="status-message" class="help-text" />
+                    </ui:VisualElement>
+
+                    <!-- Installation Instructions (shown when dependencies missing) -->
+                    <ui:VisualElement name="installation-section" class="installation-container">
+                        <ui:Label text="Installation Instructions" class="installation-title" />
+                        <ui:Label name="installation-instructions" class="help-text" />
+                        <ui:VisualElement class="install-links-row">
+                            <ui:Button name="open-python-link-button" text="Open Python Install Page" class="secondary-button install-link-button" />
+                            <ui:Button name="open-uv-link-button" text="Open UV Install Page" class="secondary-button install-link-button" />
+                        </ui:VisualElement>
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
+
+            <!-- Action Buttons -->
+            <ui:VisualElement class="button-container">
+                <ui:Button name="refresh-button" text="Refresh" class="setup-button secondary-button" />
+                <ui:Button name="done-button" text="Done" class="setup-button action-button" />
+            </ui:VisualElement>
         </ui:VisualElement>
-        
-        <!-- Action Buttons -->
-        <ui:VisualElement class="button-container">
-            <ui:Button name="refresh-button" text="Refresh" class="setup-button secondary-button" />
-            <ui:Button name="done-button" text="Done" class="setup-button action-button" />
+
+        <ui:VisualElement name="step-clients" style="display: none;">
+            <ui:VisualElement class="section">
+                <ui:Label text="Configure MCP Clients" class="section-title" />
+                <ui:Label text="We found the following MCP clients on your machine. Select which to configure:" class="help-text description-text" />
+                <ui:ScrollView name="clients-scroll" mode="Vertical" style="max-height: 240px;">
+                    <ui:VisualElement name="clients-list" />
+                </ui:ScrollView>
+            </ui:VisualElement>
+            <ui:VisualElement class="button-container">
+                <ui:Button name="skip-clients-button" text="Skip" class="setup-button secondary-button" />
+                <ui:Button name="configure-selected-button" text="Configure Selected" class="setup-button action-button" />
+            </ui:VisualElement>
         </ui:VisualElement>
     </ui:ScrollView>
 </ui:UXML>

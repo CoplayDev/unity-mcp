@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Pre-push hook: runs the local Unity-version parity check in compile-only mode.
+# Installed by tools/install-hooks.sh; opt-in (devs without the hook see no behavior change).
+# To bypass for a single push: git push --no-verify
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+SCRIPT="${REPO_ROOT}/tools/check-unity-versions.sh"
+
+if [[ ! -x "$SCRIPT" ]]; then
+  echo "pre-push: $SCRIPT missing or not executable; skipping Unity-version check." >&2
+  exit 0
+fi
+
+# Skip if the push touches nothing relevant. We approximate "relevant" with the same path filters
+# the CI workflow uses, so the hook fires for the same scope of changes.
+relevant_paths='^(MCPForUnity/(Editor|Runtime)/|TestProjects/UnityMCPTests/|tools/unity-versions\.json$|\.github/workflows/unity-tests\.yml$)'
+
+# Git's empty-tree SHA — fallback that always exists. Used when we can't find a sensible merge
+# base (shallow clone, fresh fork with no origin/beta or origin/main, etc.) so the hook still
+# runs the check instead of silently skipping it.
+EMPTY_TREE=4b825dc642cb6eb9a060e54bf8d69288fbee4904
+
+# stdin format from git: <local-ref> <local-sha> <remote-ref> <remote-sha> (one line per ref being pushed)
+relevant=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [[ -z "$local_sha" || "$local_sha" == "0000000000000000000000000000000000000000" ]] && continue
+
+  if [[ "$remote_sha" == "0000000000000000000000000000000000000000" ]]; then
+    # New branch on remote — diff against the default branch, or the empty tree as a guaranteed-valid fallback.
+    base=$(git merge-base "$local_sha" origin/beta 2>/dev/null \
+        || git merge-base "$local_sha" origin/main 2>/dev/null \
+        || echo "$EMPTY_TREE")
+  else
+    base="$remote_sha"
+  fi
+
+  if git diff --name-only "$base..$local_sha" 2>/dev/null | grep -qE "$relevant_paths"; then
+    relevant=1
+    break
+  fi
+done
+
+if [[ $relevant -eq 0 ]]; then
+  echo "pre-push: no Unity-relevant changes detected; skipping check."
+  exit 0
+fi
+
+exec "$SCRIPT" --pre-push

@@ -884,10 +884,32 @@ Examples:
     if args.http_port:
         logger.info(f"HTTP port override: {http_port}")
 
-    project_scoped_tools = (
+    # Explicit CLI/env overrides always win
+    project_scoped_tools_explicit = (
         bool(args.project_scoped_tools)
         or os.environ.get("UNITY_MCP_PROJECT_SCOPED_TOOLS", "").lower() in ("true", "1", "yes", "on")
     )
+
+    # If not explicitly set, check Unity status files for the default instance.
+    # In stdio mode there is typically only one instance, so "first match wins" is fine.
+    project_scoped_tools = project_scoped_tools_explicit
+    if not project_scoped_tools_explicit:
+        try:
+            from transport.legacy.unity_connection import get_unity_connection_pool
+            pool = get_unity_connection_pool()
+            instances = pool.discover_all_instances()
+            # If ANY discovered instance requests project-scoped tools, enable them
+            for inst in instances:
+                if getattr(inst, "project_scoped_tools", False):
+                    project_scoped_tools = True
+                    logger.info(
+                        "Enabling project-scoped tools because Unity instance %s requested it",
+                        inst.id,
+                    )
+                    break
+        except Exception:
+            logger.debug("Could not discover Unity instances for project-scoped tool default", exc_info=True)
+
     mcp = create_mcp_server(project_scoped_tools)
 
     # Determine transport mode

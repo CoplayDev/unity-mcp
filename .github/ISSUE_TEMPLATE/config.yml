@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discord — chat with maintainers
+    url: https://discord.gg/y4p8KfzrN4
+    about: Best for quick questions, troubleshooting, and design discussion.
+  - name: Documentation
+    url: https://coplaydev.github.io/unity-mcp/
+    about: Getting Started, guides, tool reference, and architecture notes.
+  - name: Security vulnerability
+    url: https://github.com/CoplayDev/unity-mcp/security/advisories/new
+    about: Report privately via GitHub Security Advisories or email security@coplay.dev. Do NOT open a public issue.
+  - name: Discussion / design idea
+    url: https://github.com/CoplayDev/unity-mcp/discussions
+    about: Broad questions, design conversations, show-and-tell.

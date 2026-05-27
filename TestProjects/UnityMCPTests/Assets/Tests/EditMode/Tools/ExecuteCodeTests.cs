@@ -332,6 +332,41 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsFalse(result.Value<bool>("success"), result.ToString());
         }
 
+        // ──────────────────── CodeDom backend ────────────────────
+
+        // Regression for CoplayDev/unity-mcp#1144: large projects (~100+ asmdefs) blew past the
+        // Windows 32 KB CreateProcess limit because every reference became an inline /r: flag.
+        // The fix routes references through a @responsefile, so this just verifies that the
+        // codedom path still compiles and runs end-to-end.
+        [Test]
+        public void Execute_CodedomBackend_CompilesAndRuns()
+        {
+            var result = ToJObject(ExecuteCode.HandleCommand(new JObject
+            {
+                ["action"] = "execute",
+                ["code"] = "return 1 + 1;",
+                ["compiler"] = "codedom"
+            }));
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.AreEqual(2, result["data"]["result"].Value<int>());
+            Assert.AreEqual("codedom", result["data"]["compiler"].Value<string>());
+        }
+
+        [Test]
+        public void Execute_CodedomBackend_ResolvesUnityTypes()
+        {
+            var result = ToJObject(ExecuteCode.HandleCommand(new JObject
+            {
+                ["action"] = "execute",
+                ["code"] = "return UnityEngine.Application.unityVersion;",
+                ["compiler"] = "codedom"
+            }));
+
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            Assert.IsNotNull(result["data"]["result"]);
+        }
+
         // ──────────────────── Helpers ────────────────────
 
         private static JObject Execute(string code)

@@ -30,6 +30,14 @@ namespace MCPForUnity.Editor.Clients
         public McpStatus Status => client.status;
         public ConfiguredTransport ConfiguredTransport => client.configuredTransport;
         public virtual bool SupportsAutoConfigure => true;
+        // Default to a filesystem check on the configured path. Concrete configurators
+        // whose presence isn't path-based (CLI binaries, etc.) override this. This makes
+        // any future configurator that forgets to override fail-closed rather than be
+        // treated as "detected" by ConfigureAllDetectedClients.
+        public virtual bool IsInstalled => ParentDirectoryExists(GetConfigPath());
+        private static readonly ConfiguredTransport[] DefaultTransports =
+            { ConfiguredTransport.Stdio, ConfiguredTransport.Http };
+        public virtual IReadOnlyList<ConfiguredTransport> SupportedTransports => DefaultTransports;
         public virtual bool SupportsSkills => false;
         public virtual string GetConfigureActionLabel() => "Configure";
         public virtual string GetSkillInstallPath() => null;
@@ -37,6 +45,11 @@ namespace MCPForUnity.Editor.Clients
         public abstract string GetConfigPath();
         public abstract McpStatus CheckStatus(bool attemptAutoRewrite = true);
         public abstract void Configure();
+
+        /// <summary>Default Unregister is a no-op. Override in JsonFileMcpConfigurator /
+        /// ClaudeCliMcpConfigurator etc. where removal has a concrete implementation.</summary>
+        public virtual void Unregister() { }
+
         public abstract string GetManualSnippet();
         public abstract IList<string> GetInstallationSteps();
 
@@ -57,6 +70,17 @@ namespace MCPForUnity.Editor.Clients
             if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
                 return client.macConfigPath;
             return client.linuxConfigPath;
+        }
+
+        protected static bool ParentDirectoryExists(string configPath)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(configPath)) return false;
+                string parent = Path.GetDirectoryName(configPath);
+                return !string.IsNullOrEmpty(parent) && Directory.Exists(parent);
+            }
+            catch { return false; }
         }
 
         protected bool UrlsEqual(string a, string b)
@@ -131,6 +155,8 @@ namespace MCPForUnity.Editor.Clients
 
         public override string GetConfigPath() => CurrentOsPath();
 
+        public override bool IsInstalled => ParentDirectoryExists(GetConfigPath());
+
         public override McpStatus CheckStatus(bool attemptAutoRewrite = true)
         {
             try
@@ -148,41 +174,35 @@ namespace MCPForUnity.Editor.Clients
                 string configuredUrl = null;
                 bool configExists = false;
 
-                if (client.IsVsCodeLayout)
                 {
-                    var vsConfig = JsonConvert.DeserializeObject<JToken>(configJson) as JObject;
-                    if (vsConfig != null)
+                    var rootConfig = JsonConvert.DeserializeObject<JToken>(configJson) as JObject;
+                    JToken unityToken = null;
+                    if (rootConfig != null)
                     {
-                        var unityToken =
-                            vsConfig["servers"]?["unityMCP"]
-                            ?? vsConfig["mcp"]?["servers"]?["unityMCP"];
-
-                        if (unityToken is JObject unityObj)
-                        {
-                            configExists = true;
-
-                            var argsToken = unityObj["args"];
-                            if (argsToken is JArray)
-                            {
-                                args = argsToken.ToObject<string[]>();
-                            }
-
-                            var urlToken = unityObj["url"] ?? unityObj["serverUrl"];
-                            if (urlToken != null && urlToken.Type != JTokenType.Null)
-                            {
-                                configuredUrl = urlToken.ToString();
-                            }
-                        }
+                        unityToken = client.IsVsCodeLayout
+                            ? rootConfig["servers"]?["unityMCP"]
+                                ?? rootConfig["mcp"]?["servers"]?["unityMCP"]
+                            : rootConfig["mcpServers"]?["unityMCP"];
                     }
-                }
-                else
-                {
-                    McpConfig standardConfig = JsonConvert.DeserializeObject<McpConfig>(configJson);
-                    if (standardConfig?.mcpServers?.unityMCP != null)
+
+                    if (unityToken is JObject unityObj)
                     {
-                        args = standardConfig.mcpServers.unityMCP.args;
-                        configuredUrl = standardConfig.mcpServers.unityMCP.url;
                         configExists = true;
+
+                        var argsToken = unityObj["args"];
+                        if (argsToken is JArray)
+                        {
+                            args = argsToken.ToObject<string[]>();
+                        }
+
+                        // Clients diverge on the HTTP URL property name: "url" (Cursor/VSCode/Claude),
+                        // "serverUrl" (Antigravity/Windsurf), "httpUrl" (Gemini CLI). Accept all three
+                        // so CheckStatus matches what Configure() actually wrote.
+                        var urlToken = unityObj["url"] ?? unityObj["serverUrl"] ?? unityObj["httpUrl"];
+                        if (urlToken != null && urlToken.Type != JTokenType.Null)
+                        {
+                            configuredUrl = urlToken.ToString();
+                        }
                     }
                 }
 
@@ -319,6 +339,9 @@ namespace MCPForUnity.Editor.Clients
 
         public override void Configure()
         {
+            // Always idempotent-write. The per-client UI button routes through Unregister
+            // when the user clicks while the client is already Configured; the bulk
+            // "Configure All" path calls this directly and expects an unconditional write.
             string path = GetConfigPath();
             McpConfigurationHelper.EnsureConfigDirectoryExists(path);
             string result = McpConfigurationHelper.WriteMcpConfiguration(path, client);
@@ -330,6 +353,59 @@ namespace MCPForUnity.Editor.Clients
             else
             {
                 throw new InvalidOperationException(result);
+            }
+        }
+
+        public override string GetConfigureActionLabel()
+            => client.status == McpStatus.Configured ? "Unregister" : "Configure";
+
+        /// <summary>
+        /// Removes the unityMCP entry from the client's JSON config (both VS Code-style
+        /// `servers` / `mcp.servers` layouts and the standard `mcpServers` layout). Leaves
+        /// the file in place so we don't clobber other servers the user has configured.
+        /// </summary>
+        public override void Unregister()
+        {
+            string path = GetConfigPath();
+            try
+            {
+                if (!File.Exists(path))
+                {
+                    client.SetStatus(McpStatus.NotConfigured);
+                    client.configuredTransport = Models.ConfiguredTransport.Unknown;
+                    return;
+                }
+
+                var root = JsonConvert.DeserializeObject<JToken>(File.ReadAllText(path)) as JObject;
+                if (root == null)
+                {
+                    client.SetStatus(McpStatus.NotConfigured);
+                    client.configuredTransport = Models.ConfiguredTransport.Unknown;
+                    return;
+                }
+
+                bool removed = false;
+                if (client.IsVsCodeLayout)
+                {
+                    if ((root["servers"] as JObject)?.Remove("unityMCP") == true) removed = true;
+                    if ((root["mcp"]?["servers"] as JObject)?.Remove("unityMCP") == true) removed = true;
+                }
+                else
+                {
+                    if ((root["mcpServers"] as JObject)?.Remove("unityMCP") == true) removed = true;
+                }
+
+                if (removed)
+                {
+                    File.WriteAllText(path, root.ToString(Formatting.Indented));
+                }
+
+                client.SetStatus(McpStatus.NotConfigured);
+                client.configuredTransport = Models.ConfiguredTransport.Unknown;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to unregister: {ex.Message}", ex);
             }
         }
 
@@ -356,6 +432,8 @@ namespace MCPForUnity.Editor.Clients
         public CodexMcpConfigurator(McpClient client) : base(client) { }
 
         public override string GetConfigPath() => CurrentOsPath();
+
+        public override bool IsInstalled => ParentDirectoryExists(GetConfigPath());
 
         public override McpStatus CheckStatus(bool attemptAutoRewrite = true)
         {
@@ -541,6 +619,8 @@ namespace MCPForUnity.Editor.Clients
         public override string GetConfigureActionLabel() => client.status == McpStatus.Configured ? "Unregister" : "Configure";
 
         public override string GetConfigPath() => "Managed via Claude CLI";
+
+        public override bool IsInstalled => MCPServiceLocator.Paths.IsClaudeCliDetected();
 
         /// <summary>
         /// Returns the project directory that CLI-based configurators will use as the working directory
@@ -945,7 +1025,7 @@ namespace MCPForUnity.Editor.Clients
             client.configuredTransport = HttpEndpointUtility.GetCurrentServerTransport();
         }
 
-        private void Unregister()
+        public override void Unregister()
         {
             var pathService = MCPServiceLocator.Paths;
             string claudePath = pathService.GetClaudeCliPath();

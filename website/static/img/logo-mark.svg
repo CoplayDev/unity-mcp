@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 16" fill="none" aria-hidden="true">
+  <title>MCP for Unity</title>
+  <rect x="1" y="1" width="14" height="14" fill="#0a0a0b" />
+  <line x1="15" y1="8" x2="25" y2="8" stroke="#0a0a0b" stroke-width="2.4" />
+  <rect x="25" y="1" width="14" height="14" stroke="#0a0a0b" stroke-width="2.4" />
+</svg>

@@ -809,14 +809,25 @@ namespace MCPForUnityTests.Editor.Tools
             // USS is CSS-like, not XML — validation should be skipped
             string content = "This is not valid XML <broken>";
 
-            var result = ToJObject(ManageUI.HandleCommand(new JObject
+            // Unity 6000.4+'s USS importer logs an error on this content; the test only
+            // verifies that ManageUI itself doesn't pre-validate .uss as UXML, not the
+            // downstream importer's behavior.
+            LogAssert.ignoreFailingMessages = true;
+            try
             {
-                ["action"] = "create",
-                ["path"] = path,
-                ["contents"] = content,
-            }));
+                var result = ToJObject(ManageUI.HandleCommand(new JObject
+                {
+                    ["action"] = "create",
+                    ["path"] = path,
+                    ["contents"] = content,
+                }));
 
-            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+                Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = false;
+            }
         }
 
         // ---- Path traversal validation ----
