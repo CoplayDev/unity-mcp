@@ -102,15 +102,35 @@ async def configured_plugin_hub(plugin_registry):
 # SESSION MANAGEMENT & ROUTING TESTS
 # ============================================================================
 
+def _make_ctx(session_id: str | None = None) -> Mock:
+    """Build a minimal Context shim with FastMCP-compatible session state.
+
+    Each ctx has its own private ``state`` dict, so isolation tests can prove
+    that two ctxs cannot read each other's writes — which is the FastMCP
+    invariant we now rely on (state keyed by ``ctx.session_id`` in production).
+    """
+    state: dict[str, object] = {}
+    ctx = Mock()
+    ctx.session_id = session_id or "test-session"
+    ctx.set_state = AsyncMock(side_effect=lambda k, v: state.__setitem__(k, v))
+    ctx.get_state = AsyncMock(side_effect=lambda k: state.get(k))
+    ctx.delete_state = AsyncMock(side_effect=lambda k: state.pop(k, None))
+    return ctx
+
+
 class TestUnityInstanceMiddlewareSessionManagement:
-    """Test instance routing and per-session state management."""
+    """Test instance routing and per-session state management.
+
+    The middleware now delegates persistence to FastMCP's session-scoped
+    state store (``ctx.set_state`` / ``ctx.get_state``), which is keyed by
+    ``ctx.session_id`` (the MCP-Session-Id header on HTTP, a per-subprocess
+    UUID on stdio). The tests below validate that contract from the
+    middleware's perspective.
+    """
 
     @pytest.mark.asyncio
     async def test_middleware_stores_instance_per_session(self, mock_context):
-        """
-        Current behavior: Middleware maintains independent instance selection
-        per session using get_session_key() derivation.
-        """
+        """A single ctx round-trips set/get correctly via session state."""
         middleware = UnityInstanceMiddleware()
         instance_id = "TestProject@abc123def456"
 
@@ -121,51 +141,20 @@ class TestUnityInstanceMiddlewareSessionManagement:
             "Middleware must store and retrieve instance per session"
 
     @pytest.mark.asyncio
-    async def test_middleware_uses_client_id_over_session_id(self):
-        """
-        Current behavior: get_session_key() prioritizes client_id for stability,
-        falling back to 'global' when unavailable.
-        """
-        middleware = UnityInstanceMiddleware()
-
-        ctx = Mock()
-        ctx.client_id = "stable-client-id"
-        ctx.session_id = "unstable-session-id"
-
-        key = await middleware.get_session_key(ctx)
-        assert key == "stable-client-id"
-
-    @pytest.mark.asyncio
-    async def test_middleware_falls_back_to_global_key(self):
-        """
-        Current behavior: When client_id is None/missing, use 'global' key.
-        This allows single-user local mode to work without session tracking.
-        """
-        middleware = UnityInstanceMiddleware()
-
-        ctx = Mock()
-        ctx.client_id = None
-        ctx.session_id = "session-id"
-        ctx.get_state = AsyncMock(return_value=None)
-
-        key = await middleware.get_session_key(ctx)
-        assert key == "global"
-
-    @pytest.mark.asyncio
     async def test_middleware_isolates_multiple_sessions(self):
         """
-        Current behavior: Different sessions (different client_ids) maintain
-        separate instance selections.
+        Two independent ctxs must not see each other's selection.
+
+        This is the regression test for #1023: previously the middleware keyed
+        on the peer-supplied client_id and collapsed multiple clients onto the
+        same record. The new implementation defers to FastMCP session state,
+        which is isolated per ``ctx.session_id`` — modelled here as two ctxs
+        each holding their own private state dict.
         """
         middleware = UnityInstanceMiddleware()
 
-        ctx1 = Mock()
-        ctx1.client_id = "client-1"
-        ctx1.session_id = "session-1"
-
-        ctx2 = Mock()
-        ctx2.client_id = "client-2"
-        ctx2.session_id = "session-2"
+        ctx1 = _make_ctx("session-1")
+        ctx2 = _make_ctx("session-2")
 
         await middleware.set_active_instance(ctx1, "Project1@hash1")
         await middleware.set_active_instance(ctx2, "Project2@hash2")
@@ -175,10 +164,7 @@ class TestUnityInstanceMiddlewareSessionManagement:
 
     @pytest.mark.asyncio
     async def test_middleware_clear_instance(self, mock_context):
-        """
-        Current behavior: clear_active_instance() removes stored instance
-        for the session, allowing reset to None.
-        """
+        """clear_active_instance() resets the per-session selection to None."""
         middleware = UnityInstanceMiddleware()
         instance_id = "TestProject@xyz"
 
@@ -189,22 +175,14 @@ class TestUnityInstanceMiddlewareSessionManagement:
         assert await middleware.get_active_instance(mock_context) is None
 
     @pytest.mark.asyncio
-    async def test_middleware_thread_safe_updates(self):
-        """
-        Current behavior: Middleware uses RLock to serialize access to
-        _active_by_key dictionary.
-        """
+    async def test_middleware_repeated_updates_settle_to_latest(self):
+        """Sequential writes within one session leave the latest value in place."""
         middleware = UnityInstanceMiddleware()
-        ctx = Mock()
-        ctx.client_id = "client-123"
-        ctx.session_id = "session-123"
+        ctx = _make_ctx("session-123")
 
-        # Rapidly update instances (would race without locking)
         for i in range(10):
-            instance = f"Project{i}@hash{i}"
-            await middleware.set_active_instance(ctx, instance)
+            await middleware.set_active_instance(ctx, f"Project{i}@hash{i}")
 
-        # Final state should be consistent
         assert await middleware.get_active_instance(ctx) == "Project9@hash9"
 
 
@@ -1458,22 +1436,6 @@ class TestTransportEdgeCases:
                     instance = await middleware._maybe_autoselect_instance(mock_context)
 
         assert instance is None
-
-    @pytest.mark.asyncio
-    async def test_middleware_handles_client_id_false_but_not_none(self):
-        """
-        Current behavior: get_session_key checks isinstance(client_id, str) AND len,
-        so falsy non-string values fall through to 'global'.
-        """
-        middleware = UnityInstanceMiddleware()
-
-        ctx = Mock()
-        ctx.client_id = ""  # Empty string
-        ctx.session_id = "session-id"
-        ctx.get_state = AsyncMock(return_value=None)
-
-        key = await middleware.get_session_key(ctx)
-        assert key == "global"  # Empty string doesn't pass isinstance+truthy check
 
     def test_plugin_hub_encoding_is_json(self):
         """
