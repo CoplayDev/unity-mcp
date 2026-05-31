@@ -777,6 +777,91 @@ def _is_reloading_response(resp: object) -> bool:
     return _extract_response_reason(resp) == "reloading"
 
 
+def _is_editor_offline_error(exc: BaseException) -> bool:
+    """Return True for connection failures that mean the Unity Editor is offline."""
+    text = str(exc).lower()
+    if not text:
+        return False
+
+    offline_markers = (
+        "no unity editor instances found",
+        "failed to connect to unity instance",
+        "could not connect to unity",
+        "connection refused",
+        "actively refused",
+        "no connection could be made",
+    )
+    return any(marker in text for marker in offline_markers)
+
+
+def _editor_offline_response(detail: str, retry_after_ms: int = 1000) -> MCPResponse:
+    return MCPResponse(
+        success=False,
+        error="editor_offline",
+        message="Unity Editor is offline or the MCP bridge is not ready.",
+        hint="retry",
+        data={
+            "reason": "editor_offline",
+            "retry_after_ms": int(retry_after_ms),
+            "detail": detail,
+        },
+    )
+
+
+def _get_editor_reconnect_max_wait_s() -> float:
+    raw_value = os.environ.get("UNITY_MCP_EDITOR_RECONNECT_MAX_WAIT_S", "2.0")
+    try:
+        wait_s = float(raw_value)
+    except ValueError:
+        logger.warning(
+            "Invalid UNITY_MCP_EDITOR_RECONNECT_MAX_WAIT_S=%r, using default 2.0",
+            raw_value,
+        )
+        wait_s = 2.0
+    return max(0.0, min(wait_s, 30.0))
+
+
+def _get_connection_with_editor_reconnect(
+    instance_id: str | None,
+    command_type: str,
+) -> UnityConnection | MCPResponse:
+    """Resolve a Unity connection, waiting briefly for editor restart recovery."""
+    max_wait_s = _get_editor_reconnect_max_wait_s()
+    deadline = time.monotonic() + max_wait_s
+    last_error: BaseException | None = None
+    attempt = 0
+
+    while True:
+        try:
+            return get_unity_connection(instance_id)
+        except Exception as exc:
+            if not _is_editor_offline_error(exc):
+                raise
+
+            last_error = exc
+            now = time.monotonic()
+            if max_wait_s <= 0 or now >= deadline:
+                logger.info(
+                    "Unity editor offline for command=%s instance=%s: %s",
+                    command_type,
+                    instance_id or "default",
+                    exc,
+                )
+                return _editor_offline_response(str(last_error))
+
+            attempt += 1
+            remaining_s = max(0.0, deadline - now)
+            sleep_s = min(remaining_s, 0.25 * (2 ** min(attempt - 1, 2)))
+            logger.debug(
+                "Unity editor offline; waiting %.3fs before reconnect attempt %d for command=%s instance=%s",
+                sleep_s,
+                attempt + 1,
+                command_type,
+                instance_id or "default",
+            )
+            time.sleep(sleep_s)
+
+
 def send_command_with_retry(
     command_type: str,
     params: dict[str, Any],
@@ -806,7 +891,10 @@ def send_command_with_retry(
     t_retry_start = time.time()
     logger.info("[TIMING-STDIO] send_command_with_retry START command=%s", command_type)
     t_get_conn = time.time()
-    conn = get_unity_connection(instance_id)
+    conn_or_response = _get_connection_with_editor_reconnect(instance_id, command_type)
+    if isinstance(conn_or_response, MCPResponse):
+        return conn_or_response
+    conn = conn_or_response
     logger.info("[TIMING-STDIO] get_unity_connection took %.3fs command=%s", time.time() - t_get_conn, command_type)
     if max_retries is None:
         max_retries = getattr(config, "reload_max_retries", 40)
