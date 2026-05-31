@@ -627,37 +627,47 @@ namespace MCPForUnity.Editor.Tools
 
         private static object SearchAssets(JObject @params)
         {
-            string searchPattern = @params["searchPattern"]?.ToString();
-            string filterType = @params["filterType"]?.ToString();
-            string pathScope = @params["path"]?.ToString(); // Use path as folder scope
-            string filterDateAfterStr = @params["filterDateAfter"]?.ToString();
+            string searchPattern = @params["searchPattern"]?.ToString()?.Trim();
+            string filterType = @params["filterType"]?.ToString()?.Trim();
+            string pathScope = @params["path"]?.ToString()?.Trim(); // Use path as folder scope
+            string filterDateAfterStr = @params["filterDateAfter"]?.ToString()?.Trim();
             int pageSize = @params["pageSize"]?.ToObject<int?>() ?? 50; // Default page size
             int pageNumber = @params["pageNumber"]?.ToObject<int?>() ?? 1; // Default page number (1-based)
             bool generatePreview = @params["generatePreview"]?.ToObject<bool>() ?? false;
 
             List<string> searchFilters = new List<string>();
-            if (!string.IsNullOrEmpty(searchPattern))
+            if (!string.IsNullOrWhiteSpace(searchPattern))
                 searchFilters.Add(searchPattern);
-            if (!string.IsNullOrEmpty(filterType))
+            if (!string.IsNullOrWhiteSpace(filterType))
                 searchFilters.Add($"t:{filterType}");
 
             string[] folderScope = null;
-            if (!string.IsNullOrEmpty(pathScope))
+            if (!string.IsNullOrWhiteSpace(pathScope))
             {
                 folderScope = new string[] { AssetPathUtility.SanitizeAssetPath(pathScope) };
                 if (!AssetDatabase.IsValidFolder(folderScope[0]))
                 {
-                    // Maybe the user provided a file path instead of a folder?
-                    // We could search in the containing folder, or return an error.
-                    McpLog.Warn(
-                        $"Search path '{folderScope[0]}' is not a valid folder. Searching entire project."
+                    return new ErrorResponse(
+                        $"Search path '{folderScope[0]}' is not a valid folder. "
+                        + "Use a valid folder scope in 'path' or put the query in 'searchPattern'."
                     );
-                    folderScope = null; // Search everywhere if path isn't a folder
                 }
             }
 
+            if (searchFilters.Count == 0 && folderScope == null)
+            {
+                return new ErrorResponse(
+                    "manage_asset search requires a valid folder scope in 'path' or a search filter such as 'searchPattern' or 'filterType'."
+                );
+            }
+
+            if (pageSize <= 0)
+                return new ErrorResponse("'pageSize' must be greater than zero.");
+            if (pageNumber <= 0)
+                return new ErrorResponse("'pageNumber' must be greater than zero.");
+
             DateTime? filterDateAfter = null;
-            if (!string.IsNullOrEmpty(filterDateAfterStr))
+            if (!string.IsNullOrWhiteSpace(filterDateAfterStr))
             {
                 if (
                     DateTime.TryParse(
@@ -684,7 +694,7 @@ namespace MCPForUnity.Editor.Tools
                     string.Join(" ", searchFilters),
                     folderScope
                 );
-                List<object> results = new List<object>();
+                List<string> matchingPaths = new List<string>();
                 int totalFound = 0;
 
                 foreach (string guid in guids)
@@ -706,12 +716,16 @@ namespace MCPForUnity.Editor.Tools
                     }
 
                     totalFound++; // Count matching assets before pagination
-                    results.Add(GetAssetData(assetPath, generatePreview));
+                    matchingPaths.Add(assetPath);
                 }
 
                 // Apply pagination
                 int startIndex = (pageNumber - 1) * pageSize;
-                var pagedResults = results.Skip(startIndex).Take(pageSize).ToList();
+                var pagedResults = matchingPaths
+                    .Skip(startIndex)
+                    .Take(pageSize)
+                    .Select(assetPath => GetAssetData(assetPath, generatePreview))
+                    .ToList();
 
                 return new SuccessResponse(
                     $"Found {totalFound} asset(s). Returning page {pageNumber} ({pagedResults.Count} assets).",
