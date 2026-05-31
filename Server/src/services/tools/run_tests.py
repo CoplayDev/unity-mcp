@@ -13,6 +13,11 @@ from pydantic import BaseModel
 from models import MCPResponse
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
+from services.tools.editor_operation_lease import (
+    operation_busy_response,
+    operation_owner_from_context,
+    try_acquire_editor_operation_lease,
+)
 from services.tools.preflight import preflight
 import transport.unity_transport as unity_transport
 from transport.legacy.unity_connection import async_send_command_with_retry
@@ -175,49 +180,60 @@ async def run_tests(
         return MCPResponse(success=False, error="init_timeout must be a positive integer (milliseconds) or None")
 
     unity_instance = await get_unity_instance_from_context(ctx)
-
-    gate = await preflight(ctx, requires_no_tests=True, wait_for_no_compile=True, refresh_if_dirty=True)
-    if isinstance(gate, MCPResponse):
-        return gate
-
-    def _coerce_string_list(value) -> list[str] | None:
-        if value is None:
-            return None
-        if isinstance(value, str):
-            return [value] if value.strip() else None
-        if isinstance(value, list):
-            result = [str(v).strip() for v in value if v and str(v).strip()]
-            return result if result else None
-        return None
-
-    params: dict[str, Any] = {"mode": mode}
-    if (t := _coerce_string_list(test_names)):
-        params["testNames"] = t
-    if (g := _coerce_string_list(group_names)):
-        params["groupNames"] = g
-    if (c := _coerce_string_list(category_names)):
-        params["categoryNames"] = c
-    if (a := _coerce_string_list(assembly_names)):
-        params["assemblyNames"] = a
-    if include_failed_tests:
-        params["includeFailedTests"] = True
-    if include_details:
-        params["includeDetails"] = True
-    if init_timeout is not None and init_timeout > 0:
-        params["initTimeout"] = init_timeout
-
-    response = await unity_transport.send_with_unity_instance(
-        async_send_command_with_retry,
+    lease, busy_lease = try_acquire_editor_operation_lease(
         unity_instance,
         "run_tests",
-        params,
+        owner=operation_owner_from_context(ctx),
     )
+    if busy_lease is not None:
+        return operation_busy_response(busy_lease)
 
-    if isinstance(response, dict):
-        if not response.get("success", True):
-            return MCPResponse(**response)
-        return RunTestsStartResponse(**response)
-    return MCPResponse(success=False, error=str(response))
+    try:
+        gate = await preflight(ctx, requires_no_tests=True, wait_for_no_compile=True, refresh_if_dirty=True)
+        if isinstance(gate, MCPResponse):
+            return gate
+
+        def _coerce_string_list(value) -> list[str] | None:
+            if value is None:
+                return None
+            if isinstance(value, str):
+                return [value] if value.strip() else None
+            if isinstance(value, list):
+                result = [str(v).strip() for v in value if v and str(v).strip()]
+                return result if result else None
+            return None
+
+        params: dict[str, Any] = {"mode": mode}
+        if (t := _coerce_string_list(test_names)):
+            params["testNames"] = t
+        if (g := _coerce_string_list(group_names)):
+            params["groupNames"] = g
+        if (c := _coerce_string_list(category_names)):
+            params["categoryNames"] = c
+        if (a := _coerce_string_list(assembly_names)):
+            params["assemblyNames"] = a
+        if include_failed_tests:
+            params["includeFailedTests"] = True
+        if include_details:
+            params["includeDetails"] = True
+        if init_timeout is not None and init_timeout > 0:
+            params["initTimeout"] = init_timeout
+
+        response = await unity_transport.send_with_unity_instance(
+            async_send_command_with_retry,
+            unity_instance,
+            "run_tests",
+            params,
+        )
+
+        if isinstance(response, dict):
+            if not response.get("success", True):
+                return MCPResponse(**response)
+            return RunTestsStartResponse(**response)
+        return MCPResponse(success=False, error=str(response))
+    finally:
+        if lease is not None:
+            lease.release()
 
 
 @mcp_for_unity_tool(
