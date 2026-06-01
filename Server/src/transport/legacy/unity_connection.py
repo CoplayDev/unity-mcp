@@ -636,13 +636,19 @@ class UnityConnectionPool:
             f"Check mcpforunity://instances resource for all instances."
         )
 
-    def get_connection(self, instance_identifier: str | None = None) -> UnityConnection:
+    def get_connection(
+        self,
+        instance_identifier: str | None = None,
+        *,
+        force_refresh: bool = False,
+    ) -> UnityConnection:
         """
         Get or create a connection to a Unity instance.
 
         Args:
             instance_identifier: Optional identifier (name, hash, name@hash, etc.)
                                 If None, uses default or most recent instance
+            force_refresh: If True, bypasses the cached discovery result
 
         Returns:
             UnityConnection to the specified instance
@@ -651,7 +657,7 @@ class UnityConnectionPool:
             ConnectionError: If instance cannot be found or connected
         """
         # Refresh instance list if cache expired
-        instances = self.discover_all_instances()
+        instances = self.discover_all_instances(force_refresh=force_refresh)
 
         # Resolve identifier to specific instance
         target = self._resolve_instance_id(instance_identifier, instances)
@@ -715,12 +721,17 @@ def get_unity_connection_pool() -> UnityConnectionPool:
 
 
 # Backwards compatibility: keep old single-connection function
-def get_unity_connection(instance_identifier: str | None = None) -> UnityConnection:
+def get_unity_connection(
+    instance_identifier: str | None = None,
+    *,
+    force_refresh: bool = False,
+) -> UnityConnection:
     """Retrieve or establish a Unity connection.
 
     Args:
         instance_identifier: Optional identifier for specific Unity instance.
                            If None, uses default or most recent instance.
+        force_refresh: If True, bypasses the cached discovery result.
 
     Returns:
         UnityConnection to the specified or default Unity instance
@@ -728,7 +739,7 @@ def get_unity_connection(instance_identifier: str | None = None) -> UnityConnect
     Note: This function now uses the connection pool internally.
     """
     pool = get_unity_connection_pool()
-    return pool.get_connection(instance_identifier)
+    return pool.get_connection(instance_identifier, force_refresh=force_refresh)
 
 
 # -----------------------------
@@ -833,7 +844,7 @@ def _get_connection_with_editor_reconnect(
 
     while True:
         try:
-            return get_unity_connection(instance_id)
+            return get_unity_connection(instance_id, force_refresh=attempt > 0)
         except Exception as exc:
             if not _is_editor_offline_error(exc):
                 raise
