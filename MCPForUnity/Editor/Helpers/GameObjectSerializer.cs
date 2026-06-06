@@ -131,6 +131,73 @@ namespace MCPForUnity.Editor.Helpers
             return false;
         }
 
+        // Type full names that are known to crash the Editor when accessed via reflection.
+        // Photon Fusion uses IL weaving to inject fields with these types into NetworkBehaviour
+        // subclasses. They contain native/unmanaged memory and cannot be safely serialized.
+        private static readonly HashSet<string> _crashingTypeNames = new HashSet<string>
+        {
+            "Fusion.NetworkBehaviourBuffer",
+            "Fusion.NetworkBehaviourCallbackBuffer",
+            "Fusion.Networked+Internals",
+            "Fusion.Changed`1",
+        };
+        private static readonly PropertyInfo _isByRefLikeProperty = typeof(Type).GetProperty("IsByRefLike");
+
+        /// <summary>
+        /// Checks if a type is unsafe to access via reflection or serialize.
+        /// Returns true for ref structs (Span, ReadOnlySpan), pointer types,
+        /// by-ref types, and known IL-weaved types that crash the Editor.
+        /// </summary>
+        private static bool IsUnsafeType(Type type)
+        {
+            return IsUnsafeType(type, new HashSet<Type>());
+        }
+
+        private static bool IsUnsafeType(Type type, HashSet<Type> visitedTypes)
+        {
+            if (type == null) return false;
+            if (!visitedTypes.Add(type)) return false;
+
+            // Pointer and by-ref types cannot be serialized
+            if (type.IsPointer || type.IsByRef)
+                return true;
+
+            // Ref structs (Span<>, ReadOnlySpan<>, etc.) cannot be boxed. Use reflection
+            // so Unity versions without Type.IsByRefLike still compile.
+            if (type.IsValueType && _isByRefLikeProperty != null && (bool)_isByRefLikeProperty.GetValue(type, null))
+                return true;
+
+            // Check the type and its generic definition against the blacklist
+            string fullName = type.FullName;
+            if (fullName != null && _crashingTypeNames.Contains(fullName))
+                return true;
+
+            if (type.IsGenericType)
+            {
+                string genericFullName = type.GetGenericTypeDefinition()?.FullName;
+                if (genericFullName != null && _crashingTypeNames.Contains(genericFullName))
+                    return true;
+            }
+
+            // Catch-all for Fusion buffer types injected by IL weaving
+            if (fullName != null && fullName.StartsWith("Fusion.") && fullName.Contains("Buffer"))
+                return true;
+
+            // Arrays and generic containers can wrap unsafe Fusion/ref-like types.
+            // Newtonsoft.Json would still recurse into those values during serialization.
+            Type elementType = type.GetElementType();
+            if (elementType != null && IsUnsafeType(elementType, visitedTypes))
+                return true;
+
+            foreach (Type genericArgument in type.GetGenericArguments())
+            {
+                if (IsUnsafeType(genericArgument, visitedTypes))
+                    return true;
+            }
+
+            return false;
+        }
+
         /// <summary>
         /// Serializes a UnityEngine.Object reference to a dictionary with name, instanceID, and assetPath.
         /// Used for consistent serialization of asset references in special-case component handlers.
@@ -352,6 +419,9 @@ namespace MCPForUnity.Editor.Helpers
                     {
                         // Basic filtering (readable, not indexer, not transform which is handled elsewhere)
                         if (!propInfo.CanRead || propInfo.GetIndexParameters().Length > 0 || propInfo.Name == "transform") continue;
+                        // Skip properties whose return type would crash when accessed via reflection
+                        // (e.g. Fusion IL-weaved types, Span<>, ReadOnlySpan<>, pointers)
+                        if (IsUnsafeType(propInfo.PropertyType)) continue;
                         // Add if not already added (handles overrides - keep the most derived version)
                         if (!propertiesToCache.Any(p => p.Name == propInfo.Name))
                         {
@@ -367,6 +437,9 @@ namespace MCPForUnity.Editor.Helpers
                     foreach (var fieldInfo in declaredFields)
                     {
                         if (fieldInfo.Name.EndsWith("k__BackingField")) continue; // Skip backing fields
+                        // Skip fields whose type would crash when accessed via reflection
+                        // (e.g. Fusion IL-weaved types, Span<>, ReadOnlySpan<>, pointers)
+                        if (IsUnsafeType(fieldInfo.FieldType)) continue;
 
                         // Add if not already added (handles hiding - keep the most derived version)
                         if (fieldsToCache.Any(f => f.Name == fieldInfo.Name)) continue;
