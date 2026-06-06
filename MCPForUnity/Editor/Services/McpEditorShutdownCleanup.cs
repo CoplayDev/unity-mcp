@@ -51,6 +51,7 @@ namespace MCPForUnity.Editor.Services
                 bool httpLocalSelected =
                     useHttp &&
                     (string.Equals(scope, "local", StringComparison.OrdinalIgnoreCase)
+                     || string.Equals(scope, "lan", StringComparison.OrdinalIgnoreCase)
                      || (string.IsNullOrEmpty(scope) && MCPServiceLocator.Server.IsLocalUrl()));
 
                 if (httpLocalSelected)

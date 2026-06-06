@@ -19,8 +19,12 @@ namespace MCPForUnity.Editor.Helpers
     {
         private const string LocalPrefKey = EditorPrefKeys.HttpBaseUrl;
         private const string RemotePrefKey = EditorPrefKeys.HttpRemoteBaseUrl;
+        private const string LanPublicPrefKey = EditorPrefKeys.HttpLanPublicBaseUrl;
+        private const string LanBindPrefKey = EditorPrefKeys.HttpLanBindBaseUrl;
         private const string DefaultLocalBaseUrl = "http://127.0.0.1:8080";
         private const string DefaultRemoteBaseUrl = "";
+        private const string DefaultLanPublicBaseUrl = "http://192.168.1.10:8090";
+        private const string DefaultLanBindBaseUrl = "http://0.0.0.0:8090";
 
         /// <summary>
         /// Returns the normalized base URL for the currently active HTTP scope.
@@ -28,7 +32,9 @@ namespace MCPForUnity.Editor.Helpers
         /// </summary>
         public static string GetBaseUrl()
         {
-            return IsRemoteScope() ? GetRemoteBaseUrl() : GetLocalBaseUrl();
+            if (IsRemoteScope()) return GetRemoteBaseUrl();
+            if (IsLanScope()) return GetLanPublicBaseUrl();
+            return GetLocalBaseUrl();
         }
 
         /// <summary>
@@ -39,6 +45,10 @@ namespace MCPForUnity.Editor.Helpers
             if (IsRemoteScope())
             {
                 SaveRemoteBaseUrl(userValue);
+            }
+            else if (IsLanScope())
+            {
+                SaveLanPublicBaseUrl(userValue);
             }
             else
             {
@@ -79,6 +89,47 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
+        /// Returns the normalized LAN public URL that remote clients should use.
+        /// </summary>
+        public static string GetLanPublicBaseUrl()
+        {
+            string stored = EditorPrefs.GetString(LanPublicPrefKey, DefaultLanPublicBaseUrl);
+            return NormalizeBaseUrl(stored, DefaultLanPublicBaseUrl, remoteScope: false);
+        }
+
+        /// <summary>
+        /// Saves the LAN public URL and keeps the bind URL on 0.0.0.0 with the same port.
+        /// </summary>
+        public static void SaveLanPublicBaseUrl(string userValue)
+        {
+            string normalized = NormalizeBaseUrl(userValue, DefaultLanPublicBaseUrl, remoteScope: false);
+            EditorPrefs.SetString(LanPublicPrefKey, normalized);
+
+            if (Uri.TryCreate(normalized, UriKind.Absolute, out var uri) && uri.Port > 0)
+            {
+                EditorPrefs.SetString(LanBindPrefKey, $"http://0.0.0.0:{uri.Port}");
+            }
+        }
+
+        /// <summary>
+        /// Returns the LAN bind URL used to launch the local server.
+        /// </summary>
+        public static string GetLanBindBaseUrl()
+        {
+            string stored = EditorPrefs.GetString(LanBindPrefKey, DefaultLanBindBaseUrl);
+            return NormalizeBaseUrl(stored, DefaultLanBindBaseUrl, remoteScope: false);
+        }
+
+        /// <summary>
+        /// Returns the URL used to launch/probe/stop the local server process.
+        /// LAN mode binds all interfaces while exposing a separate public client URL.
+        /// </summary>
+        public static string GetLocalServerLaunchBaseUrl()
+        {
+            return IsLanScope() ? GetLanBindBaseUrl() : GetLocalBaseUrl();
+        }
+
+        /// <summary>
         /// Saves a user-provided URL to the remote HTTP pref.
         /// </summary>
         public static void SaveRemoteBaseUrl(string userValue)
@@ -109,6 +160,14 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
+        /// Builds the LAN public JSON-RPC endpoint (public base + /mcp).
+        /// </summary>
+        public static string GetLanMcpRpcUrl()
+        {
+            return AppendPathSegment(GetLanPublicBaseUrl(), "mcp");
+        }
+
+        /// <summary>
         /// Builds the remote JSON-RPC endpoint (remote base + /mcp).
         /// Returns empty string if no remote URL is configured.
         /// </summary>
@@ -136,6 +195,15 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
+        /// Returns true if the active HTTP transport scope is "lan".
+        /// </summary>
+        public static bool IsLanScope()
+        {
+            string scope = EditorConfigurationCache.Instance.HttpTransportScope;
+            return string.Equals(scope, "lan", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
         /// Returns the <see cref="ConfiguredTransport"/> that matches the current server-side
         /// transport selection (Stdio, Http, or HttpRemote).
         /// Centralises the 3-way determination so callers avoid duplicated logic.
@@ -144,6 +212,7 @@ namespace MCPForUnity.Editor.Helpers
         {
             bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
             if (!useHttp) return ConfiguredTransport.Stdio;
+            if (IsLanScope()) return ConfiguredTransport.HttpLan;
             return IsRemoteScope() ? ConfiguredTransport.HttpRemote : ConfiguredTransport.Http;
         }
 
@@ -246,6 +315,46 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             error = "HTTP Local requires a loopback URL (localhost/127.0.0.1/::1).";
+            return false;
+        }
+
+        /// <summary>
+        /// Returns true when the URL is acceptable for LAN HTTP launch.
+        /// LAN mode intentionally binds all interfaces for trusted private networks.
+        /// </summary>
+        public static bool IsHttpLanUrlAllowedForLaunch(string url, out string error)
+        {
+            error = null;
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                error = "LAN HTTP requires a bind URL such as http://0.0.0.0:8090.";
+                return false;
+            }
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            {
+                error = $"Invalid LAN HTTP bind URL: {url}";
+                return false;
+            }
+
+            if (!uri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase))
+            {
+                error = "LAN HTTP bind URL must use http://.";
+                return false;
+            }
+
+            if (uri.Port <= 0)
+            {
+                error = "LAN HTTP bind URL requires an explicit port.";
+                return false;
+            }
+
+            if (IsBindAllInterfacesHost(uri.Host))
+            {
+                return true;
+            }
+
+            error = "LAN HTTP server bind host must be 0.0.0.0 or ::.";
             return false;
         }
 

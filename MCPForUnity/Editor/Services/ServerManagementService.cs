@@ -256,7 +256,7 @@ namespace MCPForUnity.Editor.Services
             // If the port is still occupied, don't start and explain why (avoid confusing "refusing to stop" warnings).
             try
             {
-                string httpUrl = HttpEndpointUtility.GetLocalBaseUrl();
+                string httpUrl = HttpEndpointUtility.GetLocalServerLaunchBaseUrl();
                 if (Uri.TryCreate(httpUrl, UriKind.Absolute, out var uri) && uri.Port > 0)
                 {
                     var remaining = GetListeningProcessIdsForPort(uri.Port);
@@ -280,7 +280,7 @@ namespace MCPForUnity.Editor.Services
             // Note: Dev mode cache-busting is handled by `uvx --no-cache --refresh` in the generated command.
 
             // Create a per-launch token + pidfile path so Stop can be deterministic without relying on port/PID heuristics.
-            string baseUrlForPid = HttpEndpointUtility.GetLocalBaseUrl();
+            string baseUrlForPid = HttpEndpointUtility.GetLocalServerLaunchBaseUrl();
             Uri.TryCreate(baseUrlForPid, UriKind.Absolute, out var uriForPid);
             int portForPid = uriForPid?.Port ?? 0;
             string instanceToken = Guid.NewGuid().ToString("N");
@@ -359,7 +359,7 @@ namespace MCPForUnity.Editor.Services
             int port = 0;
             if (!TryGetPortFromPidFilePath(pidFilePath, out port) || port <= 0)
             {
-                string baseUrl = HttpEndpointUtility.GetLocalBaseUrl();
+                string baseUrl = HttpEndpointUtility.GetLocalServerLaunchBaseUrl();
                 if (IsLocalUrl(baseUrl)
                     && Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri)
                     && uri.Port > 0)
@@ -380,7 +380,7 @@ namespace MCPForUnity.Editor.Services
         {
             try
             {
-                string httpUrl = HttpEndpointUtility.GetLocalBaseUrl();
+                string httpUrl = HttpEndpointUtility.GetLocalServerLaunchBaseUrl();
                 if (!IsLocalUrl(httpUrl))
                 {
                     return false;
@@ -442,7 +442,7 @@ namespace MCPForUnity.Editor.Services
         {
             try
             {
-                string httpUrl = HttpEndpointUtility.GetLocalBaseUrl();
+                string httpUrl = HttpEndpointUtility.GetLocalServerLaunchBaseUrl();
                 if (!IsLocalUrl(httpUrl))
                 {
                     return false;
@@ -543,7 +543,7 @@ namespace MCPForUnity.Editor.Services
 
         private bool StopLocalHttpServerInternal(bool quiet, int? portOverride = null, bool allowNonLocalUrl = false)
         {
-            string httpUrl = HttpEndpointUtility.GetLocalBaseUrl();
+            string httpUrl = HttpEndpointUtility.GetLocalServerLaunchBaseUrl();
             if (!allowNonLocalUrl && !IsLocalUrl(httpUrl))
             {
                 if (!quiet)
@@ -898,7 +898,7 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         public bool IsLocalUrl()
         {
-            string httpUrl = HttpEndpointUtility.GetLocalBaseUrl();
+            string httpUrl = HttpEndpointUtility.GetLocalServerLaunchBaseUrl();
             return IsLocalUrl(httpUrl);
         }
 
@@ -933,8 +933,10 @@ namespace MCPForUnity.Editor.Services
                 return false;
             }
 
-            string httpUrl = HttpEndpointUtility.GetLocalBaseUrl();
-            return HttpEndpointUtility.IsHttpLocalUrlAllowedForLaunch(httpUrl, out _);
+            string httpUrl = HttpEndpointUtility.GetLocalServerLaunchBaseUrl();
+            return HttpEndpointUtility.IsLanScope()
+                ? HttpEndpointUtility.IsHttpLanUrlAllowedForLaunch(httpUrl, out _)
+                : HttpEndpointUtility.IsHttpLocalUrlAllowedForLaunch(httpUrl, out _);
         }
 
         private System.Diagnostics.ProcessStartInfo CreateTerminalProcessStartInfo(string command)

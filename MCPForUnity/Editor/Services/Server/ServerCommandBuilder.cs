@@ -30,8 +30,12 @@ namespace MCPForUnity.Editor.Services.Server
                 return false;
             }
 
-            string httpUrl = HttpEndpointUtility.GetLocalBaseUrl();
-            if (!HttpEndpointUtility.IsHttpLocalUrlAllowedForLaunch(httpUrl, out string localUrlError))
+            string httpUrl = HttpEndpointUtility.GetLocalServerLaunchBaseUrl();
+            string localUrlError;
+            bool launchUrlAllowed = HttpEndpointUtility.IsLanScope()
+                ? HttpEndpointUtility.IsHttpLanUrlAllowedForLaunch(httpUrl, out localUrlError)
+                : HttpEndpointUtility.IsHttpLocalUrlAllowedForLaunch(httpUrl, out localUrlError);
+            if (!launchUrlAllowed)
             {
                 error = string.IsNullOrEmpty(localUrlError)
                     ? $"The configured URL ({httpUrl}) is not allowed for HTTP Local launch."
