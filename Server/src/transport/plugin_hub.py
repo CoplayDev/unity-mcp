@@ -351,6 +351,7 @@ class PluginHub(WebSocketEndpoint):
                     hash=session.project_hash,
                     unity_version=session.unity_version,
                     connected_at=session.connected_at.isoformat(),
+                    project_path=session.project_path,
                 )
                 for session_id, session in sessions.items()
             }
