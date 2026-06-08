@@ -181,6 +181,65 @@ namespace MCPForUnityTests.Editor.Services.Server
 
         #endregion
 
+        #region macOS Terminal App Resolution Tests
+
+        [Test]
+        public void ResolveMacTerminalApp_NullOrEmpty_FallsBackToTerminal()
+        {
+            Assert.AreEqual("Terminal", TerminalLauncher.ResolveMacTerminalApp(null));
+            Assert.AreEqual("Terminal", TerminalLauncher.ResolveMacTerminalApp(string.Empty));
+        }
+
+        [Test]
+        public void ResolveMacTerminalApp_WhitespaceOnly_FallsBackToTerminal()
+        {
+            Assert.AreEqual("Terminal", TerminalLauncher.ResolveMacTerminalApp("   "));
+            Assert.AreEqual("Terminal", TerminalLauncher.ResolveMacTerminalApp("\t\n"));
+        }
+
+        [Test]
+        public void ResolveMacTerminalApp_CustomValue_IsUsed()
+        {
+            Assert.AreEqual("iTerm", TerminalLauncher.ResolveMacTerminalApp("iTerm"));
+            Assert.AreEqual("Warp", TerminalLauncher.ResolveMacTerminalApp("Warp"));
+        }
+
+        [Test]
+        public void ResolveMacTerminalApp_TrimsSurroundingWhitespace()
+        {
+            Assert.AreEqual("iTerm", TerminalLauncher.ResolveMacTerminalApp("  iTerm  "));
+        }
+
+        [Test]
+        public void BuildMacOpenArguments_DefaultsToTerminal_WhenUnset()
+        {
+            string args = TerminalLauncher.BuildMacOpenArguments("", "/tmp/mcp-terminal.command");
+            Assert.AreEqual("-a \"Terminal\" \"/tmp/mcp-terminal.command\"", args);
+        }
+
+        [Test]
+        public void BuildMacOpenArguments_QuotesCustomApp()
+        {
+            string args = TerminalLauncher.BuildMacOpenArguments("iTerm", "/tmp/mcp-terminal.command");
+            Assert.AreEqual("-a \"iTerm\" \"/tmp/mcp-terminal.command\"", args);
+        }
+
+        [Test]
+        public void BuildMacOpenArguments_QuotingHandlesAppNameWithSpaces()
+        {
+            string args = TerminalLauncher.BuildMacOpenArguments("iTerm 2", "/tmp/mcp-terminal.command");
+            Assert.AreEqual("-a \"iTerm 2\" \"/tmp/mcp-terminal.command\"", args);
+        }
+
+        [Test]
+        public void BuildMacOpenArguments_QuotingHandlesScriptPathWithSpaces()
+        {
+            string args = TerminalLauncher.BuildMacOpenArguments("Terminal", "/Users/me/My Project/mcp-terminal.command");
+            Assert.AreEqual("-a \"Terminal\" \"/Users/me/My Project/mcp-terminal.command\"", args);
+        }
+
+        #endregion
+
         #region Platform-Specific Behavior Tests
 
         [Test]
